@@ -1,23 +1,43 @@
 #!/usr/bin/env python3
 
+import argparse
 import json
 from pathlib import Path
-
-import json
-
-
-def load_catalog():
-    """Load examples catalog."""
-    catalog_path = Path(__file__).parent.parent / "examples-catalog.json"
-    with open(catalog_path) as f:
-        return json.load(f)
+from typing import Any
 
 
-def generate_sam_template():
-    """Generate SAM template for all examples."""
-    catalog = load_catalog()
+def load_catalog() -> dict[str, Any]:
+    """Load the examples catalog."""
+    catalog_path = Path(__file__).resolve().parent.parent / "examples-catalog.json"
+    with catalog_path.open() as file:
+        return json.load(file)
 
-    template = {
+
+def to_logical_id(handler_name: str) -> str:
+    """Convert a handler module name to a CloudFormation logical id."""
+    handler_base = handler_name.replace(".handler", "")
+    return "".join(word.capitalize() for word in handler_base.split("_"))
+
+
+def build_template(
+    examples: list[dict[str, Any]], *, include_function_name_parameter: bool
+) -> dict[str, Any]:
+    """Build a SAM template for one or more examples."""
+    parameters: dict[str, Any] = {
+        "LambdaEndpoint": {
+            "Type": "String",
+            "Default": "https://lambda.us-west-2.amazonaws.com",
+        }
+    }
+    if include_function_name_parameter:
+        parameters["FunctionName"] = {"Type": "String"}
+    else:
+        parameters["FunctionNamePrefix"] = {
+            "Type": "String",
+            "Default": "",
+        }
+
+    template: dict[str, Any] = {
         "AWSTemplateFormatVersion": "2010-09-09",
         "Transform": "AWS::Serverless-2016-10-31",
         "Globals": {
@@ -30,12 +50,7 @@ def generate_sam_template():
                 },
             }
         },
-        "Parameters": {
-            "LambdaEndpoint": {
-                "Type": "String",
-                "Default": "https://lambda.us-west-2.amazonaws.com",
-            }
-        },
+        "Parameters": parameters,
         "Resources": {
             "DurableFunctionRole": {
                 "Type": "AWS::IAM::Role",
@@ -76,31 +91,86 @@ def generate_sam_template():
         },
     }
 
-    for example in catalog["examples"]:
-        # Convert handler name to PascalCase (e.g., hello_world -> HelloWorld)
-        handler_base = example["handler"].replace(".handler", "")
-        function_name = "".join(word.capitalize() for word in handler_base.split("_"))
-        template["Resources"][function_name] = {
-            "Type": "AWS::Serverless::Function",
-            "Properties": {
-                "CodeUri": "build/",
-                "Handler": example["handler"],
-                "Description": example["description"],
-                "Role": {"Fn::GetAtt": ["DurableFunctionRole", "Arn"]},
-            },
+    for example in examples:
+        logical_id = to_logical_id(example["handler"])
+        properties: dict[str, Any] = {
+            "CodeUri": "build/",
+            "Handler": example["handler"],
+            "Description": example["description"],
+            "Role": {"Fn::GetAtt": ["DurableFunctionRole", "Arn"]},
         }
 
+        if include_function_name_parameter:
+            properties["FunctionName"] = {"Ref": "FunctionName"}
+        else:
+            properties["FunctionName"] = {
+                "Fn::Sub": f"${{FunctionNamePrefix}}{logical_id}"
+            }
         if "durableConfig" in example:
-            template["Resources"][function_name]["Properties"]["DurableConfig"] = (
-                example["durableConfig"]
-            )
+            properties["DurableConfig"] = example["durableConfig"]
 
-    template_path = Path(__file__).parent.parent / "template.yaml"
-    with open(template_path, "w") as f:
-        json.dump(template, f, sort_keys=False, indent=2)
+        template["Resources"][logical_id] = {
+            "Type": "AWS::Serverless::Function",
+            "Properties": properties,
+        }
 
+    return template
+
+
+def generate_sam_template(
+    *, example_name: str | None = None, output_path: Path | None = None
+) -> Path:
+    """Generate a SAM template for either the full catalog or one example."""
+    catalog = load_catalog()
+    selected_examples = catalog["examples"]
+
+    if example_name is not None:
+        selected_examples = [
+            example
+            for example in catalog["examples"]
+            if example["name"].lower() == example_name.lower()
+        ]
+        if not selected_examples:
+            msg = f"Example not found in catalog: {example_name}"
+            raise SystemExit(msg)
+        selected_examples = [selected_examples[0]]
+
+    template = build_template(
+        selected_examples,
+        include_function_name_parameter=example_name is not None,
+    )
+
+    template_path = output_path or (
+        Path(__file__).resolve().parent.parent / "template.yaml"
+    )
+    template_path.parent.mkdir(parents=True, exist_ok=True)
+    with template_path.open("w") as file:
+        json.dump(template, file, sort_keys=False, indent=2)
+        file.write("\n")
+
+    return template_path
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Generate a SAM template for examples")
+    parser.add_argument(
+        "--example-name",
+        help="Generate a template for a single catalog example",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Write the generated template to this path",
+    )
+    args = parser.parse_args()
+
+    template_path = generate_sam_template(
+        example_name=args.example_name,
+        output_path=args.output,
+    )
     print(f"Generated SAM template at {template_path}")
+    return 0
 
 
 if __name__ == "__main__":
-    generate_sam_template()
+    raise SystemExit(main())

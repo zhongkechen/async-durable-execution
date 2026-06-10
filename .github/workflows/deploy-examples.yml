@@ -2,7 +2,7 @@ name: Deploy Python Examples
 
 on:
   pull_request:
-    branches: [ "main", "development"]
+    branches: ["main"]
     paths:
       - 'packages/aws-durable-execution-sdk-python/src/**'
       - 'packages/aws-durable-execution-sdk-python-examples/**'
@@ -17,28 +17,8 @@ permissions:
   contents: read
 
 jobs:
-  setup:
-    runs-on: ubuntu-latest
-    outputs:
-      examples: ${{ steps.get-examples.outputs.examples }}
-    steps:
-    - uses: actions/checkout@v6
-    
-    - name: Get examples from catalog
-      id: get-examples
-      working-directory: ./packages/aws-durable-execution-sdk-python-examples
-      run: |
-        echo "examples=$(jq -c '.examples | map(select(.integration == true))' examples-catalog.json)" >> $GITHUB_OUTPUT
-
   integration-test:
-    needs: setup
     runs-on: ubuntu-latest
-    name: ${{ matrix.example.name }}
-    strategy:
-      matrix:
-        example: ${{ fromJson(needs.setup.outputs.examples) }}
-      fail-fast: false
-    
     steps:
     - uses: actions/checkout@v6
     
@@ -57,80 +37,85 @@ jobs:
 
     - name: Install Hatch
       run: pip install hatch
+    - name: Setup SAM CLI
+      uses: aws-actions/setup-sam@v2
+
     - name: Build examples
       run: |
         hatch run -- examples:pip install -e packages/aws-durable-execution-sdk-python packages/aws-durable-execution-sdk-python-otel packages/aws-durable-execution-sdk-python-testing
         hatch run examples:build
 
-    - name: Deploy Lambda function - ${{ matrix.example.name }}
+    - name: Deploy all examples with SAM
       id: deploy
       env:
-        AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
         LAMBDA_ENDPOINT: "https://lambda.us-west-2.amazonaws.com"
-        KMS_KEY_ARN: ${{ secrets.KMS_KEY_ARN }}
       run: |
-        # Build function name
-        EXAMPLE_NAME_CLEAN=$(echo "${{ matrix.example.name }}" | sed 's/ //g')
         if [ "${{ github.event_name }}" = "pull_request" ]; then
-          FUNCTION_NAME="${EXAMPLE_NAME_CLEAN}-Python-PR-${{ github.event.number }}"
+          STACK_NAME="python-examples-pr-${{ github.event.number }}"
+          FUNCTION_NAME_PREFIX="PythonPr${{ github.event.number }}-"
         else
-          FUNCTION_NAME="${EXAMPLE_NAME_CLEAN}-Python"
+          STACK_NAME="python-examples"
+          FUNCTION_NAME_PREFIX="Python-"
         fi
-        
-        # Clean up existing function if present to avoid conflicts
-        echo "Cleaning up existing function if present..."
-        aws lambda delete-function \
-          --function-name "$FUNCTION_NAME" \
-          --endpoint-url "$LAMBDA_ENDPOINT" \
-          --region "$AWS_REGION" 2>/dev/null || echo "No existing function to clean up"
-        
-        # Give AWS time to process the deletion
-        sleep 5
-        
-        echo "Deploying ${{ matrix.example.name }} as $FUNCTION_NAME"
-        hatch run examples:deploy "${{ matrix.example.name }}" --function-name "$FUNCTION_NAME"
-        
-        # $LATEST is also a qualified version
-        QUALIFIED_FUNCTION_NAME="${FUNCTION_NAME}:\$LATEST"
-        
-        # Store both names for later steps
-        echo "FUNCTION_NAME=$FUNCTION_NAME" >> $GITHUB_ENV
-        echo "QUALIFIED_FUNCTION_NAME=$QUALIFIED_FUNCTION_NAME" >> $GITHUB_ENV
-        echo "VERSION=$VERSION" >> $GITHUB_ENV
-        echo "DEPLOYED_FUNCTION_NAME=$FUNCTION_NAME" >> $GITHUB_OUTPUT
-        echo "QUALIFIED_FUNCTION_NAME=$QUALIFIED_FUNCTION_NAME" >> $GITHUB_OUTPUT
 
-    - name: Run Integration Tests - ${{ matrix.example.name }}
+        STACK_NAME=$(echo "$STACK_NAME" | tr -cd '[:alnum:]-' | cut -c1-128)
+
+        echo "Building SAM application"
+        sam build --template-file packages/aws-durable-execution-sdk-python-examples/template.yaml
+
+        echo "Deploying stack $STACK_NAME with function prefix $FUNCTION_NAME_PREFIX"
+        sam deploy \
+          --template-file .aws-sam/build/template.yaml \
+          --stack-name "$STACK_NAME" \
+          --resolve-s3 \
+          --capabilities CAPABILITY_IAM \
+          --no-confirm-changeset \
+          --no-fail-on-empty-changeset \
+          --region "$AWS_REGION" \
+          --parameter-overrides \
+            FunctionNamePrefix="$FUNCTION_NAME_PREFIX" \
+            LambdaEndpoint="$LAMBDA_ENDPOINT"
+
+        PYTEST_FUNCTION_NAME_MAP=$(
+          python - <<'PY'
+import json
+import os
+from pathlib import Path
+
+catalog_path = Path("packages/aws-durable-execution-sdk-python-examples/examples-catalog.json")
+catalog = json.loads(catalog_path.read_text())
+prefix = os.environ["FUNCTION_NAME_PREFIX"]
+
+mapping = {}
+for example in catalog["examples"]:
+    handler_base = example["handler"].replace(".handler", "")
+    logical_id = "".join(word.capitalize() for word in handler_base.split("_"))
+    mapping[example["name"]] = f"{prefix}{logical_id}:$LATEST"
+
+print(json.dumps(mapping, separators=(",", ":")))
+PY
+        )
+
+        echo "PYTEST_FUNCTION_NAME_MAP=$PYTEST_FUNCTION_NAME_MAP" >> $GITHUB_ENV
+        echo "STACK_NAME=$STACK_NAME" >> $GITHUB_ENV
+
+    - name: Run Integration Tests
       env:
         AWS_REGION: ${{ env.AWS_REGION }}
         LAMBDA_ENDPOINT: "https://lambda.us-west-2.amazonaws.com"
-        QUALIFIED_FUNCTION_NAME: ${{ env.QUALIFIED_FUNCTION_NAME }}
-        LAMBDA_FUNCTION_TEST_NAME: ${{ matrix.example.name }}
+        PYTEST_FUNCTION_NAME_MAP: ${{ env.PYTEST_FUNCTION_NAME_MAP }}
       run: |
-        echo "Running integration tests for ${{ matrix.example.name }}"
-        echo "Function name: ${{ steps.deploy.outputs.DEPLOYED_FUNCTION_NAME }}"
-        echo "Qualified function name: ${QUALIFIED_FUNCTION_NAME}"
+        echo "Running integration tests for all deployed examples"
         echo "AWS Region: ${AWS_REGION}"
         echo "Lambda Endpoint: ${LAMBDA_ENDPOINT}"
-        
-        # Convert example name to test name: "Hello World" -> "test_hello_world"
-        TEST_NAME="test_$(echo "${{ matrix.example.name }}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_')"
-        echo "Test name: ${TEST_NAME}"
-        
-        # Run integration tests from repo root
+        echo "Configured function map: ${PYTEST_FUNCTION_NAME_MAP}"
+
         hatch run test:examples-integration
 
-        # Wait for function to be ready
-        echo "Waiting for function to be active..."
-        aws lambda wait function-active --function-name "$QUALIFIED_FUNCTION_NAME" --endpoint-url "$LAMBDA_ENDPOINT" --region "$AWS_REGION"
-
-    # - name: Cleanup Lambda function
-    #   if: always()
-    #   env:
-    #     LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT_BETA }}
-    #   run: |
-    #     echo "Deleting function: $FUNCTION_NAME"
-    #     aws lambda delete-function \
-    #       --function-name "$FUNCTION_NAME" \
-    #       --endpoint-url "$LAMBDA_ENDPOINT" \
-    #       --region "${{ env.AWS_REGION }}" || echo "Function already deleted or doesn't exist"
+    - name: Cleanup deployed stack
+      if: always()
+      run: |
+        if [ -n "$STACK_NAME" ]; then
+          echo "Deleting stack: $STACK_NAME"
+          aws cloudformation delete-stack --stack-name "$STACK_NAME" --region "${{ env.AWS_REGION }}"
+        fi
