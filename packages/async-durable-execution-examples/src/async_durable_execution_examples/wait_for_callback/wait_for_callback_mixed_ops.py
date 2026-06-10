@@ -1,0 +1,53 @@
+"""Demonstrates waitForCallback combined with steps, waits, and other operations."""
+
+import asyncio
+from typing import Any
+
+from async_durable_execution.config import Duration
+from async_durable_execution.context import DurableContext
+from async_durable_execution.execution import durable_execution
+
+
+@durable_execution
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+    """Handler demonstrating waitForCallback mixed with other operations."""
+    # Mix waitForCallback with other operation types
+    context.wait(Duration.from_seconds(1), name="initial-wait")
+
+    async def fetch_user_data(_) -> dict[str, Any]:
+        return {"userId": 123, "name": "John Doe"}
+
+    step_result: dict[str, Any] = context.step(
+        fetch_user_data,
+        name="fetch-user-data",
+    )
+
+    async def submitter(_callback_id, _context) -> None:
+        """Submitter uses data from previous step."""
+        await asyncio.sleep(0.1)
+        return None
+
+    callback_result: str = context.wait_for_callback(
+        submitter,
+        name="wait-for-callback",
+    )
+
+    context.wait(Duration.from_seconds(2), name="final-wait")
+
+    async def finalize_processing(_) -> dict[str, Any]:
+        return {
+            "status": "completed",
+            "timestamp": 1_717_894_400_000,
+        }
+
+    final_step: dict[str, Any] = context.step(
+        finalize_processing,
+        name="finalize-processing",
+    )
+
+    return {
+        "stepResult": step_result,
+        "callbackResult": callback_result,
+        "finalStep": final_step,
+        "workflowCompleted": True,
+    }

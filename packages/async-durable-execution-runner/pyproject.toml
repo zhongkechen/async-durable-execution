@@ -1,0 +1,143 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Modified fork metadata for async-durable-execution; upstream Apache-2.0 notices are preserved in the repository LICENSE and NOTICE files.
+[project]
+name = "async-durable-execution-runner"
+dynamic = ["version"]
+description = "Community-maintained durable execution local and cloud test runner for Python"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+keywords = []
+authors = [{ name = "Zhongke Chen" }]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = [
+  "boto3>=1.42.1",
+  "async-durable-execution>=1.0.0",
+]
+
+[project.urls]
+Documentation = "https://github.com/zhongkechen/async-durable-execution#readme"
+Issues = "https://github.com/zhongkechen/async-durable-execution/issues"
+Source = "https://github.com/zhongkechen/async-durable-execution"
+
+[project.scripts]
+dex-local-runner = "async_durable_execution_runner.cli:main"
+
+[tool.hatch.build.targets.sdist]
+packages = ["src/async_durable_execution_runner"]
+
+[tool.hatch.build.targets.sdist.force-include]
+"../../LICENSE" = "LICENSE"
+"../../NOTICE" = "NOTICE"
+"../../VERSION.py" = "VERSION.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/async_durable_execution_runner"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"../../LICENSE" = "LICENSE"
+"../../NOTICE" = "NOTICE"
+"../../VERSION.py" = "VERSION.py"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.version]
+path = "../../VERSION.py"
+
+# [tool.hatch.envs.default]
+# dependencies=["pytest"]
+
+# [tool.hatch.envs.default.scripts]
+# test="pytest"
+
+[tool.hatch.envs.test]
+dependencies = [
+  "coverage[toml]",
+  "pytest",
+  "pytest-cov",
+  "ruff",
+  "async-durable-execution>=1.0.0",
+]
+
+[tool.hatch.envs.test.scripts]
+test = "pytest tests/ -v"
+cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/async_durable_execution_runner --cov-fail-under=95"
+
+[tool.hatch.envs.types]
+extra-dependencies = ["mypy>=1.0.0", "pytest"]
+[tool.hatch.envs.types.scripts]
+check = "mypy --install-types --non-interactive {args:src/async_durable_execution_runner tests}"
+
+[tool.coverage.run]
+source_pkgs = ["async_durable_execution_runner"]
+branch = true
+parallel = true
+omit = ["src/async_durable_execution_runner/__about__.py", "tests/*"]
+
+[tool.coverage.paths]
+async_durable_execution_runner = [
+  "src/async_durable_execution_runner",
+  "*/async-durable-execution-runner/src/async_durable_execution_runner",
+]
+tests = ["tests", "*/async-durable-execution-runner/tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+  "@abstractmethod",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+preview = false
+select = ["TID252"]  # Enforce absolute imports (ban relative imports)
+
+[tool.ruff.lint.isort]
+known-first-party = ["async_durable_execution_runner"]
+force-single-line = false
+lines-after-imports = 2
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+  "ARG001",
+  "ARG002",
+  "ARG005",
+  "S101",
+  "PLR2004",
+  "SIM117",
+  "TRY301",
+]
+"src/async_durable_execution_runner/invoker.py" = [
+  "A002", # Argument `input` is shadowing a Python builtin
+]
+
+[tool.pytest.ini_options]
+# Declare custom markers to avoid warnings with --strict-markers
+markers = [
+  # Used for test selection with -m example
+  "example: marks tests as example tests (deselect with '-m \"not example\"')",
+  # Used for configuration - passes handler to the durable_runner fixture
+  "durable_execution: marks tests that use the durable_runner fixture (not used for test selection)",
+]
+# Default test discovery paths
+testpaths = ["tests"]
+# Default options for all test runs
+addopts = "-v --strict-markers"

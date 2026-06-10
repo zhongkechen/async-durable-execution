@@ -1,1 +1,8 @@
 Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+
+This repository is a modified fork of software originally released by
+Amazon.com, Inc. or its affiliates under the Apache License 2.0.
+
+Fork modifications and continued maintenance:
+Copyright 2026 Zhongke Chen
+Repository: https://github.com/zhongkechen/async-durable-execution

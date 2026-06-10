@@ -1,17 +1,21 @@
-# AWS Durable Execution SDK for Python
+# Async Durable Execution for Python
 
-[![Build](https://github.com/aws/aws-durable-execution-sdk-python/actions/workflows/ci.yml/badge.svg)](https://github.com/aws/aws-durable-execution-sdk-python/actions/workflows/ci.yml)
-[![PyPI - Version](https://img.shields.io/pypi/v/aws-durable-execution-sdk-python.svg)](https://pypi.org/project/aws-durable-execution-sdk-python)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/aws-durable-execution-sdk-python.svg)](https://pypi.org/project/aws-durable-execution-sdk-python)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/aws/aws-durable-execution-sdk-python/badge)](https://scorecard.dev/viewer/?uri=github.com/aws/aws-durable-execution-sdk-python)
+[![Build](https://github.com/zhongkechen/async-durable-execution/actions/workflows/build.yml/badge.svg)](https://github.com/zhongkechen/async-durable-execution/actions/workflows/build.yml)
+[![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 -----
 
 Build reliable, long-running AWS Lambda workflows with checkpointed steps, waits, callbacks, and parallel execution.
 
+This repository is a community-maintained fork of the original Apache-2.0 licensed AWS project and continues to ship under Apache License 2.0 with the upstream notices preserved.
+
+This fork is specifically focused on making async Python work naturally with durable functions. The public API remains synchronous at the durable operation boundary, but the examples, helpers, and package direction here prioritize `async def` handlers, steps, child contexts, callback submitters, and condition checks.
+
 ## ✨ Key Features
 
+- **Async-first fork** - This fork prioritizes making `async def` workflows feel natural with durable functions
 - **Automatic checkpointing** - Resume execution after Lambda pauses or restarts
 - **Durable steps** - Run work with retry strategies and deterministic replay
 - **Waits and callbacks** - Pause for time or external signals without blocking Lambda
@@ -25,35 +29,43 @@ Build reliable, long-running AWS Lambda workflows with checkpointed steps, waits
 
 | Package | Description | Version |
 | --- | --- | --- |
-| `aws-durable-execution-sdk-python` | Execution SDK for Lambda durable functions | [![PyPI - Version](https://img.shields.io/pypi/v/aws-durable-execution-sdk-python.svg)](https://pypi.org/project/aws-durable-execution-sdk-python) |
-| `aws-durable-execution-sdk-python-testing` | Local/cloud test runner and pytest helpers | [![PyPI - Version](https://img.shields.io/pypi/v/aws-durable-execution-sdk-python-testing.svg)](https://pypi.org/project/aws-durable-execution-sdk-python-testing) |
+| `async-durable-execution` | Execution SDK for Lambda durable functions | [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution) |
+| `async-durable-execution-runner` | Local/cloud test runner and pytest helpers | [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution-runner.svg)](https://pypi.org/project/async-durable-execution-runner) |
+| `async-durable-execution-examples` | Example durable functions and integration tests for local and cloud workflows | Shared repo version |
 
 ## 🚀 Quick Start
+
+This fork recommends writing new durable workflows with async callables by default.
 
 Install the execution SDK:
 
 ```console
-pip install aws-durable-execution-sdk-python
+pip install async-durable-execution
 ```
 
 Create a durable Lambda handler:
 
 ```python
-from aws_durable_execution_sdk_python import (
+import asyncio
+
+from async_durable_execution import (
     DurableContext,
     StepContext,
     durable_execution,
     durable_step,
 )
-from aws_durable_execution_sdk_python.config import Duration
+from async_durable_execution.config import Duration
+
 
 @durable_step
-def validate_order(step_ctx: StepContext, order_id: str) -> dict:
+async def validate_order(step_ctx: StepContext, order_id: str) -> dict:
+    await asyncio.sleep(0)
     step_ctx.logger.info("Validating order", extra={"order_id": order_id})
     return {"order_id": order_id, "valid": True}
 
+
 @durable_execution
-def handler(event: dict, context: DurableContext) -> dict:
+async def handler(event: dict, context: DurableContext) -> dict:
     order_id = event["order_id"]
     context.logger.info("Starting workflow", extra={"order_id": order_id})
 
@@ -67,23 +79,25 @@ def handler(event: dict, context: DurableContext) -> dict:
     return {"status": "approved", "order_id": order_id}
 ```
 
-Async callables are supported anywhere the SDK accepts user code, including `map()` item functions and `parallel()` branches. The public Durable APIs stay synchronous, so async work is awaited transparently for you:
+Async callables are supported anywhere the SDK accepts user code, including `map()` item functions, `parallel()` branches, child contexts, callback submitters, and wait-for-condition checks. The public Durable APIs stay synchronous, so async work is awaited transparently for you:
 
 ```python
 import asyncio
 
-from aws_durable_execution_sdk_python import (
+from async_durable_execution import (
     DurableContext,
     StepContext,
     durable_execution,
     durable_step,
 )
 
+
 @durable_step
 async def fetch_order(step_ctx: StepContext, order_id: str) -> dict:
     await asyncio.sleep(0)
     step_ctx.logger.info("Fetched order", extra={"order_id": order_id})
     return {"order_id": order_id, "status": "ready"}
+
 
 @durable_execution
 async def handler(event: dict, context: DurableContext) -> dict:
@@ -100,9 +114,9 @@ The complete documentation for the AWS Durable Execution SDK for Python lives on
 
 ## 💬 Feedback & Support
 
-- [Bug report](https://github.com/aws/aws-durable-execution-sdk-python/issues/new?template=bug_report.yml)
-- [Feature request](https://github.com/aws/aws-durable-execution-sdk-python/issues/new?template=feature_request.yml)
-- [Documentation feedback](https://github.com/aws/aws-durable-execution-sdk-python/issues/new?template=documentation.yml)
+- [Bug report](https://github.com/zhongkechen/async-durable-execution/issues/new?template=bug_report.yml)
+- [Feature request](https://github.com/zhongkechen/async-durable-execution/issues/new?template=feature_request.yml)
+- [Documentation feedback](https://github.com/zhongkechen/async-durable-execution/issues/new?template=documentation.yml)
 - [Contributing guide](CONTRIBUTING.md)
 
 ## 📄 License

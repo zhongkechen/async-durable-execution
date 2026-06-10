@@ -1,7 +1,10 @@
 [project]
-name = "aws-durable-execution-sdk-python-monorepo"
-version = "0.0.0"
+name = "async-durable-execution-monorepo"
+dynamic = ["version"]
 requires-python = ">=3.11"
+
+[tool.hatch.version]
+path = "VERSION.py"
 
 [tool.hatch.envs.default]
 workspace.members = ["packages/*"]
@@ -12,28 +15,25 @@ dependencies = [
   "coverage[toml]",
   "pytest",
   "pytest-cov",
-  "opentelemetry-sdk>=1.20.0",
-  "aws-durable-execution-sdk-python-testing",
 ]
 
 [tool.hatch.envs.test.scripts]
 all = "pytest {args}"
 cov = "pytest --cov-report=term-missing --cov {args}"
-examples-integration = "pytest --runner-mode=cloud -m example packages/aws-durable-execution-sdk-python-examples/test/ -v {args}"
+examples-integration = "pytest --runner-mode=cloud -m example packages/async-durable-execution-examples/test/ -v {args}"
 
 [tool.pytest.ini_options]
 # Declare custom markers to avoid warnings with --strict-markers
 addopts = "-v --strict-markers --import-mode=importlib"
 testpaths = [
-    "packages/aws-durable-execution-sdk-python/tests",
-    "packages/aws-durable-execution-sdk-python-otel/tests",
-    "packages/aws-durable-execution-sdk-python-testing/tests",
-    "packages/aws-durable-execution-sdk-python-examples/test",
+    "packages/async-durable-execution/tests",
+    "packages/async-durable-execution-runner/tests",
+    "packages/async-durable-execution-examples/test",
 ]
 markers = [
   # Used for test selection with -m example
   "example: marks tests as example tests (deselect with '-m \"not example\"')",
-  # Used for configuration - passes handler and lambda_function_name to durable_runner fixture
+  # Used for configuration - passes handler to the durable_runner fixture
   "durable_execution: marks tests that use the durable_runner fixture (not used for test selection)",
 ]
 
@@ -45,43 +45,27 @@ extra-dependencies = ["mypy>=1.0.0", "pytest", "boto3-stubs[lambda]"]
 check = "mypy --install-types --non-interactive {args}"
 
 [tool.hatch.envs.dev-core]
-workspace.members = ["packages/aws-durable-execution-sdk-python"]
+workspace.members = [
+  "packages/async-durable-execution",
+  "packages/async-durable-execution-runner",
+]
 dependencies = [
   "pytest",
   "pytest-cov",
   "coverage[toml]",
-  "aws-durable-execution-sdk-python-testing",
   "mypy>=1.0.0",
   "boto3-stubs[lambda]",
 ]
 
 [tool.hatch.envs.dev-core.scripts]
-test = "pytest packages/aws-durable-execution-sdk-python/tests {args}"
-cov = "pytest --cov-report=term-missing --cov-config=packages/aws-durable-execution-sdk-python/pyproject.toml --cov=packages/aws-durable-execution-sdk-python/src/aws_durable_execution_sdk_python --cov-fail-under=98 packages/aws-durable-execution-sdk-python/tests {args}"
-typecheck = "mypy --install-types --non-interactive packages/aws-durable-execution-sdk-python/src/aws_durable_execution_sdk_python packages/aws-durable-execution-sdk-python/tests"
-
-[tool.hatch.envs.dev-otel]
-workspace.members = [
-  "packages/aws-durable-execution-sdk-python",
-  "packages/aws-durable-execution-sdk-python-otel",
-]
-dependencies = [
-  "pytest",
-  "pytest-cov",
-  "coverage[toml]",
-  "opentelemetry-sdk>=1.20.0",
-  "mypy>=1.0.0",
-]
-
-[tool.hatch.envs.dev-otel.scripts]
-test = "pytest packages/aws-durable-execution-sdk-python-otel/tests {args}"
-cov = "pytest --cov-report=term-missing --cov-config=packages/aws-durable-execution-sdk-python-otel/pyproject.toml --cov=packages/aws-durable-execution-sdk-python-otel/src/aws_durable_execution_sdk_python_otel packages/aws-durable-execution-sdk-python-otel/tests {args}"
-typecheck = "mypy --install-types --non-interactive packages/aws-durable-execution-sdk-python-otel/src/aws_durable_execution_sdk_python_otel packages/aws-durable-execution-sdk-python-otel/tests"
+test = "pytest packages/async-durable-execution/tests {args}"
+cov = "pytest --cov-report=term-missing --cov-config=packages/async-durable-execution/pyproject.toml --cov=packages/async-durable-execution/src/async_durable_execution --cov-fail-under=98 packages/async-durable-execution/tests {args}"
+typecheck = "mypy --install-types --non-interactive packages/async-durable-execution/src/async_durable_execution packages/async-durable-execution/tests"
 
 [tool.hatch.envs.dev-testing]
 workspace.members = [
-  "packages/aws-durable-execution-sdk-python",
-  "packages/aws-durable-execution-sdk-python-testing",
+  "packages/async-durable-execution",
+  "packages/async-durable-execution-runner",
 ]
 dependencies = [
   "pytest",
@@ -91,64 +75,49 @@ dependencies = [
 ]
 
 [tool.hatch.envs.dev-testing.scripts]
-test = "pytest packages/aws-durable-execution-sdk-python-testing/tests {args}"
-cov = "pytest --cov-report=term-missing --cov-config=packages/aws-durable-execution-sdk-python-testing/pyproject.toml --cov=packages/aws-durable-execution-sdk-python-testing/src/aws_durable_execution_sdk_python_testing --cov-fail-under=95 packages/aws-durable-execution-sdk-python-testing/tests {args}"
-typecheck = "mypy --install-types --non-interactive packages/aws-durable-execution-sdk-python-testing/src/aws_durable_execution_sdk_python_testing packages/aws-durable-execution-sdk-python-testing/tests"
+test = "pytest packages/async-durable-execution-runner/tests {args}"
+cov = "pytest --cov-report=term-missing --cov-config=packages/async-durable-execution-runner/pyproject.toml --cov=packages/async-durable-execution-runner/src/async_durable_execution_runner --cov-fail-under=95 packages/async-durable-execution-runner/tests {args}"
+typecheck = "mypy --install-types --non-interactive packages/async-durable-execution-runner/src/async_durable_execution_runner packages/async-durable-execution-runner/tests"
 
 [tool.hatch.envs.dev-examples]
 workspace.members = [
-  "packages/aws-durable-execution-sdk-python",
-  "packages/aws-durable-execution-sdk-python-examples",
-  "packages/aws-durable-execution-sdk-python-otel",
-  "packages/aws-durable-execution-sdk-python-testing",
+  "packages/async-durable-execution",
+  "packages/async-durable-execution-examples",
+  "packages/async-durable-execution-runner",
 ]
 dependencies = [
   "pytest",
-  "aws-durable-execution-sdk-python-testing",
 ]
 
 [tool.hatch.envs.dev-examples.scripts]
-test = "pytest packages/aws-durable-execution-sdk-python-examples/test {args}"
-
-[tool.hatch.envs.test-pypi-otel]
-dependencies = [
-  "aws-durable-execution-sdk-python",
-  "opentelemetry-sdk>=1.20.0",
-  "pytest",
-  "pytest-cov",
-  "coverage[toml]",
-]
-pre-install-commands = [
-  "pip install -e packages/aws-durable-execution-sdk-python-otel",
-]
-
-[tool.hatch.envs.test-pypi-otel.scripts]
-test = "pytest packages/aws-durable-execution-sdk-python-otel/tests {args}"
+test = "pytest packages/async-durable-execution-examples/test {args}"
 
 [tool.hatch.envs.test-pypi-examples]
 dependencies = [
-  "aws-durable-execution-sdk-python",
-  "aws-durable-execution-sdk-python-testing",
+  "async-durable-execution",
   "pytest",
 ]
 pre-install-commands = [
-  "pip install -e packages/aws-durable-execution-sdk-python-examples",
+  "pip install -e packages/async-durable-execution-runner",
+  "pip install -e packages/async-durable-execution-examples",
 ]
 
 [tool.hatch.envs.test-pypi-examples.scripts]
-test = "pytest packages/aws-durable-execution-sdk-python-examples/test {args}"
+test = "pytest packages/async-durable-execution-examples/test {args}"
 
 [tool.hatch.envs.examples]
 workspace.members = [
-  "packages/aws-durable-execution-sdk-python",
-  "packages/aws-durable-execution-sdk-python-examples",
-  "packages/aws-durable-execution-sdk-python-otel",
+  "packages/async-durable-execution",
+  "packages/async-durable-execution-examples",
+  "packages/async-durable-execution-runner",
 ]
 
 [tool.hatch.envs.examples.scripts]
-generate-sam-template = "python packages/aws-durable-execution-sdk-python-examples/scripts/generate_sam_template.py {args}"
-build = "python packages/aws-durable-execution-sdk-python-examples/scripts/build_examples.py"
-clean = "rm -rf packages/aws-durable-execution-sdk-python-examples/build packages/aws-durable-execution-sdk-python-examples/.aws-sam packages/aws-durable-execution-sdk-python-examples/*.zip packages/aws-durable-execution-sdk-python-examples/template.generated.json"
+pip = "python -m pip {args}"
+generate-examples-catalog = "python packages/async-durable-execution-examples/scripts/generate_examples_catalog.py {args}"
+generate-sam-template = "python packages/async-durable-execution-examples/scripts/generate_sam_template.py {args}"
+build = "python packages/async-durable-execution-examples/scripts/build_examples.py"
+clean = "rm -rf packages/async-durable-execution-examples/build packages/async-durable-execution-examples/.aws-sam packages/async-durable-execution-examples/*.zip packages/async-durable-execution-examples/template.generated.json"
 
 [tool.ruff]
 line-length = 88
@@ -161,9 +130,9 @@ select = ["TID252"]  # Enforce absolute imports (ban relative imports)
 
 [tool.ruff.lint.isort]
 known-first-party = [
-  "aws_durable_execution_sdk_python",
-  "aws_durable_execution_sdk_python_otel",
-  "aws_durable_execution_sdk_python_testing",
+  "async_durable_execution",
+  "async_durable_execution_examples",
+  "async_durable_execution_runner",
 ]
 force-single-line = false
 lines-after-imports = 2

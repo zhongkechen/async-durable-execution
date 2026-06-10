@@ -33,7 +33,7 @@ dist/
 
 **/build/
 **/*.zip
-packages/aws-durable-execution-sdk-python-examples/template.yaml
+packages/async-durable-execution-examples/template.yaml
 **/template.generated.json
 
 .env
