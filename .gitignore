@@ -33,6 +33,8 @@ dist/
 
 **/build/
 **/*.zip
+packages/aws-durable-execution-sdk-python-examples/template.yaml
 **/template.generated.json
 
 .env
+*.egg-info

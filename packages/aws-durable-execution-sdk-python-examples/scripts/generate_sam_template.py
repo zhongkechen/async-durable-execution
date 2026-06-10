@@ -141,7 +141,7 @@ def generate_sam_template(
     )
 
     template_path = output_path or (
-        Path(__file__).resolve().parent.parent / "template.yaml"
+        Path(__file__).resolve().parent.parent / "template.generated.json"
     )
     template_path.parent.mkdir(parents=True, exist_ok=True)
     with template_path.open("w") as file:
