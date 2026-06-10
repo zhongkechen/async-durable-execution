@@ -74,18 +74,32 @@ class CustomBatchSerDes(SerDes[BatchResult]):
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Execute parallel tasks with custom batch-level serialization."""
 
     # Use custom serdes for the entire BatchResult, default JSON for individual functions
     config = ParallelConfig(serdes=CustomBatchSerDes(), item_serdes=JsonSerDes())
 
+    async def branch1(ctx: DurableContext) -> int:
+        async def run(_) -> int:
+            return 100
+
+        return ctx.step(run, name="branch1")
+
+    async def branch2(ctx: DurableContext) -> int:
+        async def run(_) -> int:
+            return 200
+
+        return ctx.step(run, name="branch2")
+
+    async def branch3(ctx: DurableContext) -> int:
+        async def run(_) -> int:
+            return 300
+
+        return ctx.step(run, name="branch3")
+
     results = context.parallel(
-        functions=[
-            lambda ctx: ctx.step(lambda _: 100, name="branch1"),
-            lambda ctx: ctx.step(lambda _: 200, name="branch2"),
-            lambda ctx: ctx.step(lambda _: 300, name="branch3"),
-        ],
+        functions=[branch1, branch2, branch3],
         name="parallel_with_batch_serdes",
         config=config,
     )

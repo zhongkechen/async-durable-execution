@@ -10,13 +10,17 @@ from aws_durable_execution_sdk_python.context import (
 from aws_durable_execution_sdk_python.execution import durable_execution
 
 
+async def noop_submitter(_callback_id: str, _context: DurableContext) -> None:
+    return None
+
+
 @durable_with_child_context
-def inner_child_context(inner_child_ctx: DurableContext) -> dict[str, Any]:
+async def inner_child_context(inner_child_ctx: DurableContext) -> dict[str, Any]:
     """Inner child context with deep nested callback."""
     inner_child_ctx.wait(Duration.from_seconds(5), name="deep-wait")
 
     nested_callback_result: str = inner_child_ctx.wait_for_callback(
-        lambda _callback_id, _context: None,
+        noop_submitter,
         name="nested-callback-op",
     )
 
@@ -27,10 +31,10 @@ def inner_child_context(inner_child_ctx: DurableContext) -> dict[str, Any]:
 
 
 @durable_with_child_context
-def outer_child_context(outer_child_ctx: DurableContext) -> dict[str, Any]:
+async def outer_child_context(outer_child_ctx: DurableContext) -> dict[str, Any]:
     """Outer child context with inner callback and nested context."""
     inner_result: str = outer_child_ctx.wait_for_callback(
-        lambda _callback_id, _context: None,
+        noop_submitter,
         name="inner-callback-op",
     )
 
@@ -48,10 +52,10 @@ def outer_child_context(outer_child_ctx: DurableContext) -> dict[str, Any]:
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating nested waitForCallback operations across multiple levels."""
     outer_result: str = context.wait_for_callback(
-        lambda _callback_id, _context: None,
+        noop_submitter,
         name="outer-callback-op",
     )
 

@@ -7,6 +7,7 @@ import logging
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, TypeVar
 
+from aws_durable_execution_sdk_python.async_tools import invoke_callable
 from aws_durable_execution_sdk_python.concurrency.executor import ConcurrentExecutor
 from aws_durable_execution_sdk_python.concurrency.models import Executable
 from aws_durable_execution_sdk_python.config import (
@@ -96,7 +97,7 @@ class ParallelExecutor(ConcurrentExecutor[Callable, R]):
 
     def execute_item(self, child_context, executable: Executable[Callable]) -> R:  # noqa: PLR6301
         logger.debug("🔀 Processing parallel branch: %s", executable.index)
-        result: R = executable.func(child_context)
+        result: R = invoke_callable(executable.func, child_context)
         logger.debug("✅ Processed parallel branch: %s", executable.index)
         return result
 

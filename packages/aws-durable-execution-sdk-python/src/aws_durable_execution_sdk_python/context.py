@@ -502,7 +502,10 @@ class DurableContext(DurableContextProtocol):
     def map(
         self,
         inputs: Sequence[U],
-        func: Callable[[DurableContext, U | BatchedInput[Any, U], int, Sequence[U]], T],
+        func: Callable[
+            [DurableContext, U | BatchedInput[Any, U], int, Sequence[U]],
+            T | Awaitable[T],
+        ],
         name: str | None = None,
         config: MapConfig | None = None,
     ) -> BatchResult[R]:
@@ -550,7 +553,9 @@ class DurableContext(DurableContextProtocol):
 
     def parallel(
         self,
-        functions: Sequence[Callable[[DurableContext], T] | ParallelBranch[T]],
+        functions: Sequence[
+            Callable[[DurableContext], T | Awaitable[T]] | ParallelBranch[T]
+        ],
         name: str | None = None,
         config: ParallelConfig | None = None,
     ) -> BatchResult[T]:

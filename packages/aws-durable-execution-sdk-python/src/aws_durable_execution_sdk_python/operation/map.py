@@ -7,6 +7,7 @@ import logging
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Generic, TypeVar
 
+from aws_durable_execution_sdk_python.async_tools import invoke_callable
 from aws_durable_execution_sdk_python.concurrency.executor import ConcurrentExecutor
 from aws_durable_execution_sdk_python.concurrency.models import (
     BatchResult,
@@ -101,7 +102,9 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
     def execute_item(self, child_context, executable: Executable[Callable]) -> R:
         logger.debug("🗺️ Processing map item: %s", executable.index)
         item = self.items[executable.index]
-        result: R = executable.func(child_context, item, executable.index, self.items)
+        result: R = invoke_callable(
+            executable.func, child_context, item, executable.index, self.items
+        )
         logger.debug("✅ Processed map item: %s", executable.index)
         return result
 

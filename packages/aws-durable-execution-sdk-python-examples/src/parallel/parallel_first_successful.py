@@ -6,15 +6,29 @@ from aws_durable_execution_sdk_python.execution import durable_execution
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> str:
+async def handler(_event: Any, context: DurableContext) -> str:
     # Parallel execution with first_successful completion strategy
     config = ParallelConfig(completion_config=CompletionConfig.first_successful())
 
-    functions = [
-        lambda ctx: ctx.step(lambda _: "Task 1", name="task1"),
-        lambda ctx: ctx.step(lambda _: "Task 2", name="task2"),
-        lambda ctx: ctx.step(lambda _: "Task 3", name="task3"),
-    ]
+    async def task1(ctx: DurableContext) -> str:
+        async def run(_) -> str:
+            return "Task 1"
+
+        return ctx.step(run, name="task1")
+
+    async def task2(ctx: DurableContext) -> str:
+        async def run(_) -> str:
+            return "Task 2"
+
+        return ctx.step(run, name="task2")
+
+    async def task3(ctx: DurableContext) -> str:
+        async def run(_) -> str:
+            return "Task 3"
+
+        return ctx.step(run, name="task3")
+
+    functions = [task1, task2, task3]
 
     results = context.parallel(
         functions, name="first_successful_parallel", config=config

@@ -1,5 +1,6 @@
 """Tests for the parallel operation module."""
 
+import asyncio
 import importlib
 import json
 from collections.abc import Mapping
@@ -146,6 +147,27 @@ def test_parallel_executor_execute_item():
 
     child_context = "test-context"
     result = executor.execute_item(child_context, executable)
+
+    assert result == "processed-test-context"
+
+
+def test_parallel_executor_execute_item_with_async_callable():
+    async def test_func(ctx):
+        await asyncio.sleep(0)
+        return f"processed-{ctx}"
+
+    executable = Executable(index=0, func=test_func)
+    executor = ParallelExecutor(
+        executables=[executable],
+        max_concurrency=None,
+        completion_config=CompletionConfig.all_successful(),
+        top_level_sub_type=OperationSubType.PARALLEL,
+        iteration_sub_type=OperationSubType.PARALLEL_BRANCH,
+        name_prefix="test-",
+        serdes=None,
+    )
+
+    result = executor.execute_item("test-context", executable)
 
     assert result == "processed-test-context"
 

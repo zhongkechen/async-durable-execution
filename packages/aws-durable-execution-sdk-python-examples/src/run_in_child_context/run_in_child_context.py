@@ -8,14 +8,18 @@ from aws_durable_execution_sdk_python.context import (
 from aws_durable_execution_sdk_python.execution import durable_execution
 
 
-def multiply_by_two(value: int) -> int:
+async def multiply_by_two(value: int) -> int:
     return value * 2
 
 
 @durable_with_child_context
 async def child_operation(ctx: DurableContext, value: int) -> int:
     await asyncio.sleep(0)
-    return ctx.step(lambda _: multiply_by_two(value), name="multiply")
+
+    async def multiply(_) -> int:
+        return await multiply_by_two(value)
+
+    return ctx.step(multiply, name="multiply")
 
 
 @durable_execution

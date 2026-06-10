@@ -13,7 +13,7 @@ from aws_durable_execution_sdk_python.retries import RetryStrategyConfig
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Execute tasks with failure tolerance."""
 
     # Tolerate up to 2 failures
@@ -24,24 +24,38 @@ def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     # Disable retries so failures happen immediately
     step_config = StepConfig(retry_strategy=RetryStrategyConfig(max_attempts=1))
 
+    async def task1(ctx: DurableContext) -> str:
+        async def run(_) -> str:
+            return "success 1"
+
+        return ctx.step(run, name="task1", config=step_config)
+
+    async def task2(ctx: DurableContext) -> str:
+        async def run(_) -> str:
+            return await _failing_task(2)
+
+        return ctx.step(run, name="task2", config=step_config)
+
+    async def task3(ctx: DurableContext) -> str:
+        async def run(_) -> str:
+            return "success 3"
+
+        return ctx.step(run, name="task3", config=step_config)
+
+    async def task4(ctx: DurableContext) -> str:
+        async def run(_) -> str:
+            return await _failing_task(4)
+
+        return ctx.step(run, name="task4", config=step_config)
+
+    async def task5(ctx: DurableContext) -> str:
+        async def run(_) -> str:
+            return "success 5"
+
+        return ctx.step(run, name="task5", config=step_config)
+
     results = context.parallel(
-        functions=[
-            lambda ctx: ctx.step(
-                lambda _: "success 1", name="task1", config=step_config
-            ),
-            lambda ctx: ctx.step(
-                lambda _: _failing_task(2), name="task2", config=step_config
-            ),
-            lambda ctx: ctx.step(
-                lambda _: "success 3", name="task3", config=step_config
-            ),
-            lambda ctx: ctx.step(
-                lambda _: _failing_task(4), name="task4", config=step_config
-            ),
-            lambda ctx: ctx.step(
-                lambda _: "success 5", name="task5", config=step_config
-            ),
-        ],
+        functions=[task1, task2, task3, task4, task5],
         name="parallel_with_tolerance",
         config=config,
     )
@@ -54,6 +68,6 @@ def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     }
 
 
-def _failing_task(task_num: int) -> str:
+async def _failing_task(task_num: int) -> str:
     """Task that always fails."""
     raise ValueError(f"Task {task_num} failed")

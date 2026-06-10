@@ -1,5 +1,6 @@
 """Example demonstrating map with min_successful completion config."""
 
+import asyncio
 from typing import Any
 
 from aws_durable_execution_sdk_python.config import CompletionConfig, MapConfig
@@ -8,7 +9,7 @@ from aws_durable_execution_sdk_python.execution import durable_execution
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Process items with min_successful threshold."""
     items = list(range(1, 11))  # [1, 2, 3, ..., 10]
 
@@ -18,11 +19,17 @@ def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         completion_config=CompletionConfig(min_successful=6),
     )
 
+    async def process_item(ctx: DurableContext, item: int, index: int, _) -> int:
+        await asyncio.sleep(0)
+
+        async def run(_) -> int:
+            return await _process_item(item)
+
+        return ctx.step(run, name=f"item_{index}")
+
     results = context.map(
         inputs=items,
-        func=lambda ctx, item, index, _: ctx.step(
-            lambda _: _process_item(item), name=f"item_{index}"
-        ),
+        func=process_item,
         name="map_min_successful",
         config=config,
     )
@@ -36,7 +43,7 @@ def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     }
 
 
-def _process_item(item: int) -> int:
+async def _process_item(item: int) -> int:
     """Process item - fails for items 7, 8, 9."""
     if item in [7, 8, 9]:
         raise ValueError(f"Item {item} failed")

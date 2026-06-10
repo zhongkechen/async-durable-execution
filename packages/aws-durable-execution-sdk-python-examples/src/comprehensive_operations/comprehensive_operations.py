@@ -8,13 +8,40 @@ from aws_durable_execution_sdk_python.config import Duration
 
 
 @durable_execution
-def handler(event: dict[str, Any], context: DurableContext) -> dict[str, Any]:
+async def handler(event: dict[str, Any], context: DurableContext) -> dict[str, Any]:
     """Comprehensive example demonstrating all major durable operations."""
     print(f"Starting comprehensive operations example with event: {event}")
 
+    async def run_step_one(_) -> str:
+        return "Step 1 completed successfully"
+
+    async def map_item(ctx: DurableContext, item: int, index: int, _) -> int:
+        async def get_item(_) -> int:
+            return item
+
+        return ctx.step(get_item, name=f"map-step-{index}")
+
+    async def fruit_step_1(ctx: DurableContext) -> str:
+        async def get_fruit(_) -> str:
+            return "apple"
+
+        return ctx.step(get_fruit, name="fruit-step-1")
+
+    async def fruit_step_2(ctx: DurableContext) -> str:
+        async def get_fruit(_) -> str:
+            return "banana"
+
+        return ctx.step(get_fruit, name="fruit-step-2")
+
+    async def fruit_step_3(ctx: DurableContext) -> str:
+        async def get_fruit(_) -> str:
+            return "orange"
+
+        return ctx.step(get_fruit, name="fruit-step-3")
+
     # Step 1: ctx.step - Simple step that returns a result
     step1_result: str = context.step(
-        lambda _: "Step 1 completed successfully",
+        run_step_one,
         name="step1",
     )
 
@@ -26,20 +53,14 @@ def handler(event: dict[str, Any], context: DurableContext) -> dict[str, Any]:
 
     map_results = context.map(
         inputs=map_input,
-        func=lambda ctx, item, index, _: ctx.step(
-            lambda _: item, name=f"map-step-{index}"
-        ),
+        func=map_item,
         name="map-numbers",
     ).to_dict()
 
     # Step 4: ctx.parallel - 3 branches, each returning a fruit name
 
     parallel_results = context.parallel(
-        functions=[
-            lambda ctx: ctx.step(lambda _: "apple", name="fruit-step-1"),
-            lambda ctx: ctx.step(lambda _: "banana", name="fruit-step-2"),
-            lambda ctx: ctx.step(lambda _: "orange", name="fruit-step-3"),
-        ]
+        functions=[fruit_step_1, fruit_step_2, fruit_step_3]
     ).to_dict()
 
     # Final result combining all operations

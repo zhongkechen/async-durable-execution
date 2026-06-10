@@ -10,21 +10,25 @@ from aws_durable_execution_sdk_python.execution import durable_execution
 from aws_durable_execution_sdk_python.config import Duration
 
 
-def generate_large_string(size_in_kb: int) -> str:
+async def generate_large_string(size_in_kb: int) -> str:
     """Generate a string of approximately the specified size in KB."""
     return "A" * 1024 * size_in_kb
 
 
 @durable_with_child_context
-def large_data_processor(child_context: DurableContext) -> dict[str, Any]:
+async def large_data_processor(child_context: DurableContext) -> dict[str, Any]:
     """Process large data in child context."""
     # Generate data using a loop - each step returns ~50KB of data (under the step limit)
     step_results: list[str] = []
     step_sizes: list[int] = []
 
     for i in range(1, 6):  # 1 to 5
+
+        async def build_chunk(_, size_in_kb: int = 50) -> str:
+            return await generate_large_string(size_in_kb)
+
         step_result: str = child_context.step(
-            lambda _: generate_large_string(50),  # 50KB
+            build_chunk,  # 50KB
             name=f"generate-data-{i}",
         )
 
@@ -43,7 +47,7 @@ def large_data_processor(child_context: DurableContext) -> dict[str, Any]:
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating runInChildContext with large data."""
     # Use runInChildContext to handle large data that would exceed 256k step limit
     large_data_result: dict[str, Any] = context.run_in_child_context(

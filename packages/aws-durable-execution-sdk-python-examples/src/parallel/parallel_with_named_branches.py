@@ -1,5 +1,6 @@
 """Example demonstrating all parallel branch patterns."""
 
+import asyncio
 from typing import Any
 
 from aws_durable_execution_sdk_python.config import ParallelBranch, ParallelConfig
@@ -11,26 +12,52 @@ from aws_durable_execution_sdk_python.execution import durable_execution
 
 
 @durable_parallel_branch(name="fetch-orders")
-def fetch_orders(ctx: DurableContext) -> str:
-    return ctx.step(lambda _: "orders-loaded", name="load_orders")
+async def fetch_orders(ctx: DurableContext) -> str:
+    await asyncio.sleep(0)
+
+    async def load_orders(_) -> str:
+        return "orders-loaded"
+
+    return ctx.step(load_orders, name="load_orders")
 
 
 @durable_parallel_branch()
-def fetch_preferences(ctx: DurableContext) -> str:
-    return ctx.step(lambda _: "prefs-loaded", name="load_prefs")
+async def fetch_preferences(ctx: DurableContext) -> str:
+    await asyncio.sleep(0)
+
+    async def load_prefs(_) -> str:
+        return "prefs-loaded"
+
+    return ctx.step(load_prefs, name="load_prefs")
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> list[str]:
+async def handler(_event: Any, context: DurableContext) -> list[str]:
     """Execute parallel branches using all supported patterns."""
+
+    async def fetch_user_data(ctx: DurableContext) -> str:
+        async def load_user(_) -> str:
+            return "user-data-loaded"
+
+        return ctx.step(load_user, name="load_user")
+
+    async def fetch_metrics(ctx: DurableContext) -> str:
+        async def load_metrics(_) -> str:
+            return "metrics-loaded"
+
+        return ctx.step(load_metrics, name="load_metrics")
+
+    async def load_config(ctx: DurableContext) -> str:
+        async def load_value(_) -> str:
+            return "config-loaded"
+
+        return ctx.step(load_value, name="load_config")
 
     return context.parallel(
         functions=[
             # 1. Named parallel branch with ParallelBranch
             ParallelBranch(
-                func=lambda ctx: ctx.step(
-                    lambda _: "user-data-loaded", name="load_user"
-                ),
+                func=fetch_user_data,
                 name="fetch-user-data",
             ),
             # 2. Named parallel branch with decorator
@@ -39,12 +66,10 @@ def handler(_event: Any, context: DurableContext) -> list[str]:
             fetch_preferences(),
             # 4. Unnamed parallel branch with ParallelBranch
             ParallelBranch(
-                func=lambda ctx: ctx.step(
-                    lambda _: "metrics-loaded", name="load_metrics"
-                ),
+                func=fetch_metrics,
             ),
             # 5. No wrapper, just a raw callable
-            lambda ctx: ctx.step(lambda _: "config-loaded", name="load_config"),
+            load_config,
         ],
         name="load_all_data",
         config=ParallelConfig(max_concurrency=3),

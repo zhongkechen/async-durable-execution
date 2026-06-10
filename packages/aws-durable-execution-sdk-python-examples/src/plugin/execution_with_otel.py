@@ -22,12 +22,12 @@ otel = DurableExecutionOtelPlugin(tracer_provider)
 
 
 @durable_step
-def add_numbers(_step_context: StepContext, a: int, b: int) -> int:
+async def add_numbers(_step_context: StepContext, a: int, b: int) -> int:
     return a + b
 
 
 @durable_with_child_context
-def add_numbers_in_child(child_context: DurableContext, a: int, b: int):
+async def add_numbers_in_child(child_context: DurableContext, a: int, b: int):
     result: int = child_context.step(
         add_numbers(a, b),
         name=f"step-{b}",
@@ -40,7 +40,7 @@ def add_numbers_in_child(child_context: DurableContext, a: int, b: int):
 
 
 @durable_execution(plugins=[otel])
-def handler(_event: Any, context: DurableContext) -> int:
+async def handler(_event: Any, context: DurableContext) -> int:
     result = 0
     for i in range(3):
         result += context.run_in_child_context(

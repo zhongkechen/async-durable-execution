@@ -8,30 +8,37 @@ from aws_durable_execution_sdk_python.execution import durable_execution
 from aws_durable_execution_sdk_python.config import Duration
 
 
-def generate_large_string(size_in_kb: int) -> str:
+async def generate_large_string(size_in_kb: int) -> str:
     """Generate a string of approximately the specified size in KB."""
     return "A" * 1024 * size_in_kb
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating large scale map with substantial data."""
     # Create array of 50 items (more manageable for testing)
     items = list(range(1, 51))  # 1 to 50
 
     config = MapConfig(max_concurrency=10)  # Process 10 items concurrently
-    data = generate_large_string(100)
-    results = context.map(
-        inputs=items,
-        func=lambda ctx, item, index, _: ctx.step(
-            lambda _: {
+    data = await generate_large_string(100)
+
+    async def process_item(
+        ctx: DurableContext, item: int, index: int, _
+    ) -> dict[str, Any]:
+        async def build_result(_) -> dict[str, Any]:
+            return {
                 "itemId": item,
                 "index": index,
                 "dataSize": len(data),
                 "data": data,
                 "processed": True,
             }
-        ),
+
+        return ctx.step(build_result)
+
+    results = context.map(
+        inputs=items,
+        func=process_item,
         name="large-scale-map",
         config=config,
     )

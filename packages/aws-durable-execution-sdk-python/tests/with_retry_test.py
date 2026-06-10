@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, TypeVar
 from unittest.mock import MagicMock
@@ -149,6 +150,28 @@ def test_function_fails_then_succeeds_returns_successful_result():
     assert len(ctx.wait_calls) == 2
 
 
+def test_async_function_fails_then_succeeds_returns_successful_result():
+    """Async retry body is awaited inside the retry loop."""
+    ctx = MockDurableContext()
+    config = _make_config(max_attempts=3, wrap_with_run_in_child_context=False)
+
+    call_count = 0
+
+    async def failing_then_succeeding(ctx: DurableContext, attempt: int) -> str:
+        nonlocal call_count
+        await asyncio.sleep(0)
+        call_count += 1
+        if attempt < 3:
+            raise ValueError(f"fail on attempt {attempt}")
+        return "eventual success"
+
+    result = with_retry(ctx, failing_then_succeeding, config)
+
+    assert result == "eventual success"
+    assert call_count == 3
+    assert len(ctx.wait_calls) == 2
+
+
 def test_retry_strategy_returns_should_retry_false_reraises_exception():
     """Retry strategy returns should_retry=False re-raises exception."""
     ctx = MockDurableContext()
@@ -176,6 +199,21 @@ def test_suspend_execution_is_reraised_immediately():
         with_retry(ctx, raises_suspend, config)
 
     # No waits should have been called - strategy was never invoked
+    assert len(ctx.wait_calls) == 0
+
+
+def test_async_suspend_execution_is_reraised_immediately():
+    """Async retry body re-raises SuspendExecution without retrying."""
+    ctx = MockDurableContext()
+    config = _make_config(max_attempts=5, wrap_with_run_in_child_context=False)
+
+    async def raises_suspend(ctx: DurableContext, attempt: int) -> None:
+        await asyncio.sleep(0)
+        raise SuspendExecution("suspending")
+
+    with pytest.raises(SuspendExecution, match="suspending"):
+        with_retry(ctx, raises_suspend, config)
+
     assert len(ctx.wait_calls) == 0
 
 

@@ -11,7 +11,7 @@ from aws_durable_execution_sdk_python.config import Duration
 
 
 @durable_with_child_context
-def nested_block(ctx: DurableContext) -> str:
+async def nested_block(ctx: DurableContext) -> str:
     """Nested block with its own child context."""
     # Wait in the nested block
     ctx.wait(Duration.from_seconds(1))
@@ -19,11 +19,15 @@ def nested_block(ctx: DurableContext) -> str:
 
 
 @durable_with_child_context
-def parent_block(ctx: DurableContext) -> dict[str, str]:
+async def parent_block(ctx: DurableContext) -> dict[str, str]:
     """Parent block with nested operations."""
+
+    async def build_nested_result(_) -> str:
+        return "nested step result"
+
     # Nested step
     nested_result: str = ctx.step(
-        lambda _: "nested step result",
+        build_nested_result,
         name="nested_step",
     )
 
@@ -37,7 +41,7 @@ def parent_block(ctx: DurableContext) -> dict[str, str]:
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, str]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, str]:
     """Handler demonstrating nested child contexts."""
     # Run parent block which contains nested operations
     result: dict[str, str] = context.run_in_child_context(

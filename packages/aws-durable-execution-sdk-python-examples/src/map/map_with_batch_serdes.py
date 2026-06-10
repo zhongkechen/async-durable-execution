@@ -1,5 +1,6 @@
 """Example demonstrating map with batch-level serdes."""
 
+import asyncio
 import json
 from typing import Any
 
@@ -73,18 +74,24 @@ class CustomBatchSerDes(SerDes[BatchResult]):
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Process items with custom batch-level serialization."""
     items = [10, 20, 30, 40]
 
     # Use custom serdes for the entire BatchResult, default JSON for individual items
     config = MapConfig(serdes=CustomBatchSerDes(), item_serdes=JsonSerDes())
 
+    async def process_item(ctx: DurableContext, item: int, index: int, _) -> int:
+        await asyncio.sleep(0)
+
+        async def double(_) -> int:
+            return item * 2
+
+        return ctx.step(double, name=f"double_{index}")
+
     results = context.map(
         inputs=items,
-        func=lambda ctx, item, index, _: ctx.step(
-            lambda _: item * 2, name=f"double_{index}"
-        ),
+        func=process_item,
         name="map_with_batch_serdes",
         config=config,
     )

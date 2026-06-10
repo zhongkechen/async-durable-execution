@@ -20,20 +20,20 @@ if TYPE_CHECKING:
 
 
 @durable_step
-def step_1(step_context: StepContext) -> None:
+async def step_1(step_context: StepContext) -> None:
     """First step that logs a message."""
     step_context.logger.info("Hello from step1")
 
 
 @durable_step
-def step_2(step_context: StepContext, status_code: int) -> str:
+async def step_2(step_context: StepContext, status_code: int) -> str:
     """Second step that returns a message."""
     step_context.logger.info("Returning message with status code: %d", status_code)
     return f"Hello from Durable Lambda! (status: {status_code})"
 
 
 @durable_execution
-def handler(event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(event: Any, context: DurableContext) -> dict[str, Any]:
     """Durable Lambda handler with steps, waits, and logging.
 
     Args:

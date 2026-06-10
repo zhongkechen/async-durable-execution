@@ -1,5 +1,6 @@
 """Example demonstrating map with failure tolerance."""
 
+import asyncio
 from typing import Any
 
 from aws_durable_execution_sdk_python.config import (
@@ -13,7 +14,7 @@ from aws_durable_execution_sdk_python.retries import RetryStrategyConfig
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Process items with failure tolerance."""
     items = list(range(1, 11))  # [1, 2, 3, ..., 10]
 
@@ -26,13 +27,21 @@ def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     # Disable retries so failures happen immediately
     step_config = StepConfig(retry_strategy=RetryStrategyConfig(max_attempts=1))
 
-    results = context.map(
-        inputs=items,
-        func=lambda ctx, item, index, _: ctx.step(
-            lambda _: _process_with_failures(item),
+    async def process_item(ctx: DurableContext, item: int, index: int, _) -> int:
+        await asyncio.sleep(0)
+
+        async def run(_) -> int:
+            return await _process_with_failures(item)
+
+        return ctx.step(
+            run,
             name=f"item_{index}",
             config=step_config,
-        ),
+        )
+
+    results = context.map(
+        inputs=items,
+        func=process_item,
         name="map_with_tolerance",
         config=config,
     )
@@ -46,7 +55,7 @@ def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     }
 
 
-def _process_with_failures(item: int) -> int:
+async def _process_with_failures(item: int) -> int:
     """Process item - fails for items 3, 6, 9."""
     if item % 3 == 0:
         raise ValueError(f"Item {item} failed")

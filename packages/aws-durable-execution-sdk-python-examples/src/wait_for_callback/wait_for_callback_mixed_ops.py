@@ -1,6 +1,6 @@
 """Demonstrates waitForCallback combined with steps, waits, and other operations."""
 
-import time
+import asyncio
 from typing import Any
 
 from aws_durable_execution_sdk_python.config import Duration
@@ -9,19 +9,22 @@ from aws_durable_execution_sdk_python.execution import durable_execution
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating waitForCallback mixed with other operations."""
     # Mix waitForCallback with other operation types
     context.wait(Duration.from_seconds(1), name="initial-wait")
 
+    async def fetch_user_data(_) -> dict[str, Any]:
+        return {"userId": 123, "name": "John Doe"}
+
     step_result: dict[str, Any] = context.step(
-        lambda _: {"userId": 123, "name": "John Doe"},
+        fetch_user_data,
         name="fetch-user-data",
     )
 
-    def submitter(_callback_id, _context) -> None:
+    async def submitter(_callback_id, _context) -> None:
         """Submitter uses data from previous step."""
-        time.sleep(0.1)
+        await asyncio.sleep(0.1)
         return None
 
     callback_result: str = context.wait_for_callback(
@@ -31,11 +34,14 @@ def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
 
     context.wait(Duration.from_seconds(2), name="final-wait")
 
-    final_step: dict[str, Any] = context.step(
-        lambda _: {
+    async def finalize_processing(_) -> dict[str, Any]:
+        return {
             "status": "completed",
-            "timestamp": int(time.time() * 1000),
-        },
+            "timestamp": 1_717_894_400_000,
+        }
+
+    final_step: dict[str, Any] = context.step(
+        finalize_processing,
         name="finalize-processing",
     )
 

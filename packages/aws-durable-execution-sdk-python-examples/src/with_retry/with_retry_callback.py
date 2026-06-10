@@ -19,7 +19,7 @@ from aws_durable_execution_sdk_python.retries import (
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating with_retry around a wait_for_callback.
 
     The external system may fail to process the callback multiple times.
@@ -27,7 +27,7 @@ def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     with exponential backoff between attempts.
     """
 
-    def retryable_callback_flow(ctx: DurableContext, attempt: int) -> str:
+    async def retryable_callback_flow(ctx: DurableContext, attempt: int) -> str:
         """The retryable block: create a callback and wait for the result."""
 
         def submitter(callback_id: str, _callback_ctx) -> None:

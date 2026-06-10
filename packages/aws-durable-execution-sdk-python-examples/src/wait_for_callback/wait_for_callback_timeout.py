@@ -8,14 +8,14 @@ from aws_durable_execution_sdk_python.execution import durable_execution
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating waitForCallback timeout."""
 
     config = WaitForCallbackConfig(
         timeout=Duration.from_seconds(1), heartbeat_timeout=Duration.from_seconds(2)
     )
 
-    def submitter(_callback_id, _context) -> None:
+    async def submitter(_callback_id, _context) -> None:
         """Submitter succeeds but callback never completes."""
         return None
 

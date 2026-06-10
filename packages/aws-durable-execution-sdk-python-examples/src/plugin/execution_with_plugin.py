@@ -38,12 +38,12 @@ class MyPlugin(DurableInstrumentationPlugin):
 
 
 @durable_step
-def add_numbers(_step_context: StepContext, a: int, b: int) -> int:
+async def add_numbers(_step_context: StepContext, a: int, b: int) -> int:
     return a + b
 
 
 @durable_with_child_context
-def add_numbers_in_child(child_context: DurableContext, a: int, b: int):
+async def add_numbers_in_child(child_context: DurableContext, a: int, b: int):
     result: int = child_context.step(
         add_numbers(a, b),
         name="add-a-and-b",
@@ -52,7 +52,7 @@ def add_numbers_in_child(child_context: DurableContext, a: int, b: int):
 
 
 @durable_execution(plugins=[MyPlugin()])
-def handler(_event: Any, context: DurableContext) -> int:
+async def handler(_event: Any, context: DurableContext) -> int:
     result: int = context.run_in_child_context(
         add_numbers_in_child(6, 4),
         name="add-6-and-4",
