@@ -94,7 +94,7 @@ hatch build
 
 # Examples deployment (from repo root)
 hatch run examples:build
-python packages/aws-durable-execution-sdk-python-examples/scripts/generate_sam_template.py --example-name "Hello World" --output packages/aws-durable-execution-sdk-python-examples/template.generated.json
+hatch run examples:generate-sam-template -- --example-name "Hello World"
 sam build --template-file packages/aws-durable-execution-sdk-python-examples/template.generated.json
 sam deploy \
   --template-file .aws-sam/build/template.yaml \
@@ -327,13 +327,11 @@ hatch run dev-examples:test
 # Build the shared example bundle with vendored dependencies
 hatch run examples:build
 
-# Generate the checked-in SAM template for the full catalog
+# Generate a SAM template for the full catalog
 hatch run examples:generate-sam-template
 
 # Generate a one-example SAM template for deployment
-python packages/aws-durable-execution-sdk-python-examples/scripts/generate_sam_template.py \
-  --example-name "Hello World" \
-  --output packages/aws-durable-execution-sdk-python-examples/template.generated.json
+hatch run examples:generate-sam-template -- --example-name "Hello World"
 
 # Build and deploy that example with SAM
 sam build --template-file packages/aws-durable-execution-sdk-python-examples/template.generated.json

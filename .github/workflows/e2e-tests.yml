@@ -1,12 +1,15 @@
-name: Deploy Python Examples
+name: E2E Tests
 
 on:
+  push:
+    branches: [ main ]
+
   pull_request:
     branches: ["main"]
     paths:
       - 'packages/aws-durable-execution-sdk-python/src/**'
       - 'packages/aws-durable-execution-sdk-python-examples/**'
-      - '.github/workflows/deploy-examples.yml'
+      - '.github/workflows/e2e-tests.yml'
   workflow_dispatch:
 
 env:
@@ -16,16 +19,24 @@ permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: cloud-test
+  cancel-in-progress: false
+
 jobs:
-  integration-test:
+  e2e-tests:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13", "3.14"]
     steps:
     - uses: actions/checkout@v6
     
     - name: Setup Python
       uses: actions/setup-python@v6
       with:
-        python-version: '3.13'
+        python-version: ${{ matrix.python-version }}
 
     - name: Configure AWS credentials
       if: github.event_name != 'workflow_dispatch' || github.actor != 'nektos/act'
@@ -45,23 +56,25 @@ jobs:
         hatch run -- examples:pip install -e packages/aws-durable-execution-sdk-python packages/aws-durable-execution-sdk-python-otel packages/aws-durable-execution-sdk-python-testing
         hatch run examples:build
 
+    - name: Generate SAM template
+      run: |
+        python packages/aws-durable-execution-sdk-python-examples/scripts/generate_sam_template.py \
+          --output packages/aws-durable-execution-sdk-python-examples/template.generated.json
+
     - name: Deploy all examples with SAM
       id: deploy
       env:
         LAMBDA_ENDPOINT: "https://lambda.us-west-2.amazonaws.com"
       run: |
-        if [ "${{ github.event_name }}" = "pull_request" ]; then
-          STACK_NAME="python-examples-pr-${{ github.event.number }}"
-          FUNCTION_NAME_PREFIX="PythonPr${{ github.event.number }}-"
-        else
-          STACK_NAME="python-examples"
-          FUNCTION_NAME_PREFIX="Python-"
-        fi
+        PYTHON_VERSION_TAG=$(echo "${{ matrix.python-version }}" | tr -d '.')
+
+        STACK_NAME="python-examples-py${PYTHON_VERSION_TAG}"
+        FUNCTION_NAME_PREFIX="PythonPy${PYTHON_VERSION_TAG}-"
 
         STACK_NAME=$(echo "$STACK_NAME" | tr -cd '[:alnum:]-' | cut -c1-128)
 
         echo "Building SAM application"
-        sam build --template-file packages/aws-durable-execution-sdk-python-examples/template.yaml
+        sam build --template-file packages/aws-durable-execution-sdk-python-examples/template.generated.json
 
         echo "Deploying stack $STACK_NAME with function prefix $FUNCTION_NAME_PREFIX"
         sam deploy \
@@ -76,25 +89,7 @@ jobs:
             FunctionNamePrefix="$FUNCTION_NAME_PREFIX" \
             LambdaEndpoint="$LAMBDA_ENDPOINT"
 
-        PYTEST_FUNCTION_NAME_MAP=$(
-          python - <<'PY'
-import json
-import os
-from pathlib import Path
-
-catalog_path = Path("packages/aws-durable-execution-sdk-python-examples/examples-catalog.json")
-catalog = json.loads(catalog_path.read_text())
-prefix = os.environ["FUNCTION_NAME_PREFIX"]
-
-mapping = {}
-for example in catalog["examples"]:
-    handler_base = example["handler"].replace(".handler", "")
-    logical_id = "".join(word.capitalize() for word in handler_base.split("_"))
-    mapping[example["name"]] = f"{prefix}{logical_id}:$LATEST"
-
-print(json.dumps(mapping, separators=(",", ":")))
-PY
-        )
+        PYTEST_FUNCTION_NAME_MAP=$(python packages/aws-durable-execution-sdk-python-examples/scripts/generate_function_name_map.py --prefix "$FUNCTION_NAME_PREFIX")
 
         echo "PYTEST_FUNCTION_NAME_MAP=$PYTEST_FUNCTION_NAME_MAP" >> $GITHUB_ENV
         echo "STACK_NAME=$STACK_NAME" >> $GITHUB_ENV
@@ -111,11 +106,3 @@ PY
         echo "Configured function map: ${PYTEST_FUNCTION_NAME_MAP}"
 
         hatch run test:examples-integration
-
-    - name: Cleanup deployed stack
-      if: always()
-      run: |
-        if [ -n "$STACK_NAME" ]; then
-          echo "Deleting stack: $STACK_NAME"
-          aws cloudformation delete-stack --stack-name "$STACK_NAME" --region "${{ env.AWS_REGION }}"
-        fi

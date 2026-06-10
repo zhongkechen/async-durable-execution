@@ -34,9 +34,7 @@ Tests run against actual AWS Lambda functions using `DurableFunctionCloudTestRun
 hatch run examples:build
 
 # Generate a one-example SAM template
-python packages/aws-durable-execution-sdk-python-examples/scripts/generate_sam_template.py \
-  --example-name "Hello World" \
-  --output packages/aws-durable-execution-sdk-python-examples/template.generated.json
+hatch run examples:generate-sam-template -- --example-name "Hello World"
 
 # Deploy the function with SAM
 sam build --template-file packages/aws-durable-execution-sdk-python-examples/template.generated.json
@@ -112,11 +110,11 @@ def test_my_example(durable_runner):
 
 Tests automatically run in CI/CD after deployment:
 
-1. `deploy-examples.yml` deploys functions
+1. `cloud-test.yml` generates the SAM template and deploys functions
 2. Integration tests run against deployed functions
 3. Results reported in GitHub Actions
 
-See `.github/workflows/deploy-examples.yml` for details.
+See `.github/workflows/cloud-test.yml` for details.
 
 ## Troubleshooting
 
