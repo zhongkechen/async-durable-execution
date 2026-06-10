@@ -19,6 +19,10 @@
     "LambdaEndpoint": {
       "Type": "String",
       "Default": "https://lambda.us-west-2.amazonaws.com"
+    },
+    "FunctionNamePrefix": {
+      "Type": "String",
+      "Default": ""
     }
   },
   "Resources": {
@@ -72,6 +76,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}HelloWorld"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -89,6 +96,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}Step"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -108,6 +118,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}StepWithName"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -125,6 +138,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}StepWithRetry"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -144,6 +160,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}Wait"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -161,6 +180,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}MultipleWait"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -180,6 +202,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}Callback"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -197,6 +222,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}WaitForCallback"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -216,6 +244,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}WaitForCallbackAnonymous"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -233,6 +264,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}WaitForCallbackHeartbeat"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -252,6 +286,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}WaitForCallbackChild"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -269,6 +306,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}WaitForCallbackMixedOps"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -288,6 +328,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}WaitForCallbackMultipleInvocations"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -305,6 +348,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}WaitForCallbackSubmitterFailureCatchable"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -324,6 +370,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}WaitForCallbackSubmitterFailure"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -341,6 +390,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}WaitForCallbackSerdes"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -360,6 +412,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}WaitForCallbackNested"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -377,6 +432,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}RunInChildContext"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -396,6 +454,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}Parallel"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -413,6 +474,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}MapOperations"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -432,6 +496,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}MapOperationsFlat"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -449,6 +516,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}MapWithLargeScale"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -468,6 +538,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}BlockExample"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -485,6 +558,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}LoggerExample"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -504,6 +580,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}StepsWithRetry"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -521,6 +600,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}WaitForCondition"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -540,6 +622,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}RunInChildContextLargeData"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -557,6 +642,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}SimpleExecution"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -576,6 +664,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}MapWithMaxConcurrency"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -593,6 +684,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}MapWithMinSuccessful"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -612,6 +706,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}MapWithFailureTolerance"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -629,6 +726,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}MapCompletion"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -648,6 +748,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}ParallelWithMaxConcurrency"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -665,6 +768,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}ParallelWithWait"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -684,6 +790,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}ParallelWithFailureTolerance"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -701,6 +810,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}MapWithCustomSerdes"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -720,6 +832,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}MapWithBatchSerdes"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -737,6 +852,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}ParallelWithCustomSerdes"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -756,6 +874,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}ParallelWithBatchSerdes"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -773,6 +894,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}HandlerError"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -792,6 +916,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}NoneResults"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -809,6 +936,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}CallbackSimple"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -828,6 +958,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}CallbackHeartbeat"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -845,6 +978,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}CallbackMixedOps"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -864,6 +1000,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}CallbackSerdes"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -881,6 +1020,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}NoReplayExecution"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -900,6 +1042,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}RunInChildContextStepFailure"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -917,6 +1062,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}ComprehensiveOperations"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -936,6 +1084,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}CallbackConcurrency"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -953,6 +1104,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}MapWithItemNamer"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -972,6 +1126,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}ParallelWithNamedBranches"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -989,6 +1146,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}WithRetryCallback"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
@@ -1008,6 +1168,9 @@
             "Arn"
           ]
         },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}ExecutionWithPlugin"
+        },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,
           "ExecutionTimeout": 300
@@ -1025,6 +1188,9 @@
             "DurableFunctionRole",
             "Arn"
           ]
+        },
+        "FunctionName": {
+          "Fn::Sub": "${FunctionNamePrefix}ExecutionWithOtel"
         },
         "DurableConfig": {
           "RetentionPeriodInDays": 7,

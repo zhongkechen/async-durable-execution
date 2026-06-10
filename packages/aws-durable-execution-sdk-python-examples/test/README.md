@@ -30,8 +30,25 @@ Tests run against actual AWS Lambda functions using `DurableFunctionCloudTestRun
 - ⚠️ Requires deployed functions
 
 ```bash
-# Deploy function first (from repo root)
-hatch run examples:deploy "hello world" --function-name HelloWorld-Test
+# Build the example bundle first (from repo root)
+hatch run examples:build
+
+# Generate a one-example SAM template
+python packages/aws-durable-execution-sdk-python-examples/scripts/generate_sam_template.py \
+  --example-name "Hello World" \
+  --output packages/aws-durable-execution-sdk-python-examples/template.generated.json
+
+# Deploy the function with SAM
+sam build --template-file packages/aws-durable-execution-sdk-python-examples/template.generated.json
+sam deploy \
+  --template-file .aws-sam/build/template.yaml \
+  --stack-name hello-world-test \
+  --resolve-s3 \
+  --capabilities CAPABILITY_IAM \
+  --no-confirm-changeset \
+  --parameter-overrides \
+    FunctionName=HelloWorld-Test \
+    LambdaEndpoint=https://lambda.us-west-2.amazonaws.com
 
 # Set environment variables for cloud testing
 export AWS_REGION=us-west-2

@@ -234,16 +234,41 @@ def _get_deployed_function_name(
 ) -> str:
     """Get the deployed function name from environment variables.
 
-    Required environment variables:
+    Preferred environment variables:
+    - PYTEST_FUNCTION_NAME_MAP: JSON mapping of test names to qualified function names
+
+    Legacy environment variables:
     - QUALIFIED_FUNCTION_NAME: The qualified function ARN (e.g., "MyFunction:$LATEST")
     - LAMBDA_FUNCTION_TEST_NAME: The lambda function name to match against test markers
 
-    Tests are skipped if the test's lambda_function_name doesn't match LAMBDA_FUNCTION_TEST_NAME.
+    Tests are skipped if the test's lambda_function_name is not present in the
+    configured mapping.
     """
     if not lambda_function_name:
         pytest.fail("lambda_function_name is required for cloud mode tests")
 
-    # Get from environment variables
+    function_map_json = os.environ.get("PYTEST_FUNCTION_NAME_MAP")
+    if function_map_json:
+        try:
+            function_map = json.loads(function_map_json)
+        except json.JSONDecodeError as exc:
+            pytest.fail(f"Invalid PYTEST_FUNCTION_NAME_MAP JSON: {exc}")
+
+        normalized_name = lambda_function_name.lower()
+        for configured_name, configured_function in function_map.items():
+            if configured_name.lower() == normalized_name:
+                logger.info(
+                    "Using function ARN: %s for lambda function: %s",
+                    configured_function,
+                    configured_name,
+                )
+                return configured_function
+
+        pytest.skip(
+            f"Test '{lambda_function_name}' is not present in PYTEST_FUNCTION_NAME_MAP"
+        )
+
+    # Fall back to the original single-function environment variables.
     function_arn = os.environ.get("QUALIFIED_FUNCTION_NAME")
     env_function_name = os.environ.get("LAMBDA_FUNCTION_TEST_NAME")
 
