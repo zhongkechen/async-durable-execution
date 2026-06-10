@@ -9,7 +9,7 @@ from aws_durable_execution_sdk_python.execution import durable_execution
 
 
 @durable_execution
-def handler(event: Any, _context: DurableContext) -> dict[str, Any]:
+async def handler(event: Any, _context: DurableContext) -> dict[str, Any]:
     """Handler that executes without any durable operations."""
     return {
         "received": json.dumps(event),

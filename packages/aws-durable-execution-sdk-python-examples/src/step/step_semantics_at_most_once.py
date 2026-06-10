@@ -6,13 +6,12 @@ from aws_durable_execution_sdk_python.execution import durable_execution
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> str:
+async def handler(_event: Any, context: DurableContext) -> str:
     # Step with AT_MOST_ONCE_PER_RETRY semantics
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
 
-    result = context.step(
-        lambda _: "AT_MOST_ONCE_PER_RETRY semantics",
-        name="at_most_once_step",
-        config=config,
-    )
+    async def at_most_once_step(_) -> str:
+        return "AT_MOST_ONCE_PER_RETRY semantics"
+
+    result = context.step(at_most_once_step, name="at_most_once_step", config=config)
     return f"Result: {result}"

@@ -5,7 +5,10 @@ from aws_durable_execution_sdk_python.execution import durable_execution
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> str:
+async def handler(_event: Any, context: DurableContext) -> str:
     # Step without explicit name - should use function name
-    result = context.step(lambda _: "Step without name")
+    async def unnamed_step(_) -> str:
+        return "Step without name"
+
+    result = context.step(unnamed_step)
     return f"Result: {result}"

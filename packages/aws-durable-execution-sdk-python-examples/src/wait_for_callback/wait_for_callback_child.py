@@ -10,13 +10,17 @@ from aws_durable_execution_sdk_python.context import (
 from aws_durable_execution_sdk_python.execution import durable_execution
 
 
+async def noop_submitter(_callback_id: str, _context: DurableContext) -> None:
+    return None
+
+
 @durable_with_child_context
-def child_context_with_callback(child_context: DurableContext) -> dict[str, Any]:
+async def child_context_with_callback(child_context: DurableContext) -> dict[str, Any]:
     """Child context containing wait and callback operations."""
     child_context.wait(Duration.from_seconds(1), name="child-wait")
 
     child_callback_result: str = child_context.wait_for_callback(
-        lambda _callback_id, _context: None, name="child-callback-op"
+        noop_submitter, name="child-callback-op"
     )
 
     return {
@@ -26,10 +30,10 @@ def child_context_with_callback(child_context: DurableContext) -> dict[str, Any]
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating waitForCallback within child contexts."""
     parent_result: str = context.wait_for_callback(
-        lambda _callback_id, _context: None, name="parent-callback-op"
+        noop_submitter, name="parent-callback-op"
     )
 
     child_context_result: dict[str, Any] = context.run_in_child_context(

@@ -1,5 +1,6 @@
 """Unit tests for context."""
 
+import asyncio
 import hashlib
 import json
 import random
@@ -2313,6 +2314,20 @@ def test_durable_parallel_branch_is_compatible_with_parallel_functions_arg():
     assert isinstance(functions[0], ParallelBranch)
     assert callable(functions[0])
     assert callable(functions[1])
+
+
+def test_durable_parallel_branch_supports_async_branches():
+    @durable_parallel_branch(name="async-branch")
+    async def async_branch(ctx: DurableContext, value: int) -> int:
+        await asyncio.sleep(0)
+        return value * 3
+
+    branch = async_branch(7)
+    mock_ctx = Mock(spec=DurableContext)
+
+    result = asyncio.run(branch(mock_ctx))
+
+    assert result == 21
 
 
 # endregion durable_parallel_branch

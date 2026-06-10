@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Generic, TypeVar
 
+from aws_durable_execution_sdk_python.async_tools import invoke_callable
 from aws_durable_execution_sdk_python.config import Duration, JitterStrategy
 from aws_durable_execution_sdk_python.exceptions import SuspendExecution
 
@@ -211,7 +212,8 @@ class WithRetryConfig(Generic[T]):
 
 def with_retry(
     context: DurableContext,
-    func: Callable[[DurableContext, int], T],
+    func: Callable[[DurableContext, int], T]
+    | Callable[[DurableContext, int], Awaitable[T]],
     config: WithRetryConfig[T],
     name: str | None = None,
 ) -> T:
@@ -257,7 +259,7 @@ def with_retry(
         while True:
             attempt += 1
             try:
-                return func(ctx, attempt)
+                return invoke_callable(func, ctx, attempt)
             except SuspendExecution:
                 raise  # SDK control flow - never intercept
             except Exception as err:

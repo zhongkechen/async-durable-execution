@@ -25,7 +25,7 @@ class CustomItemSerDes(SerDes[dict[str, Any]]):
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Execute parallel tasks with custom item serialization.
 
     This example demonstrates using item_serdes to customize serialization
@@ -37,18 +37,26 @@ def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     # The BatchResult will use default JSON serialization
     config = ParallelConfig(item_serdes=CustomItemSerDes())
 
+    async def task1(ctx: DurableContext) -> dict[str, Any]:
+        async def run(_) -> dict[str, Any]:
+            return {"task": "task1", "value": 100}
+
+        return ctx.step(run, name="task1")
+
+    async def task2(ctx: DurableContext) -> dict[str, Any]:
+        async def run(_) -> dict[str, Any]:
+            return {"task": "task2", "value": 200}
+
+        return ctx.step(run, name="task2")
+
+    async def task3(ctx: DurableContext) -> dict[str, Any]:
+        async def run(_) -> dict[str, Any]:
+            return {"task": "task3", "value": 300}
+
+        return ctx.step(run, name="task3")
+
     results = context.parallel(
-        functions=[
-            lambda ctx: ctx.step(
-                lambda _: {"task": "task1", "value": 100}, name="task1"
-            ),
-            lambda ctx: ctx.step(
-                lambda _: {"task": "task2", "value": 200}, name="task2"
-            ),
-            lambda ctx: ctx.step(
-                lambda _: {"task": "task3", "value": 300}, name="task3"
-            ),
-        ],
+        functions=[task1, task2, task3],
         name="parallel_with_custom_serdes",
         config=config,
     )

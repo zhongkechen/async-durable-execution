@@ -8,13 +8,13 @@ from aws_durable_execution_sdk_python.execution import durable_execution
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating multiple invocations with waitForCallback operations."""
     # First invocation - wait operation
     context.wait(Duration.from_seconds(1), name="wait-invocation-1")
 
     # First callback operation
-    def first_submitter(callback_id: str, _context) -> None:
+    async def first_submitter(callback_id: str, _context) -> None:
         """Submitter for first callback."""
         print(f"First callback submitted with ID: {callback_id}")
         return None
@@ -24,9 +24,12 @@ def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         name="first-callback",
     )
 
+    async def process_callback_data(_) -> dict[str, Any]:
+        return {"processed": True, "step": 1}
+
     # Step operation between callbacks
     step_result: dict[str, Any] = context.step(
-        lambda _: {"processed": True, "step": 1},
+        process_callback_data,
         name="process-callback-data",
     )
 
@@ -34,7 +37,7 @@ def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     context.wait(Duration.from_seconds(1), name="wait-invocation-2")
 
     # Second callback operation
-    def second_submitter(callback_id: str, _context) -> None:
+    async def second_submitter(callback_id: str, _context) -> None:
         """Submitter for second callback."""
         print(f"Second callback submitted with ID: {callback_id}")
         return None

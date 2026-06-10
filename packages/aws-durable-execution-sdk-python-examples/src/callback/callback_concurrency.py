@@ -8,12 +8,12 @@ from aws_durable_execution_sdk_python.execution import durable_execution
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating multiple concurrent callback operations."""
 
     callback_config = CallbackConfig(timeout=Duration.from_seconds(30))
 
-    def callback_branch_1(ctx: DurableContext) -> str:
+    async def callback_branch_1(ctx: DurableContext) -> str:
         """First callback branch."""
         callback = ctx.create_callback(
             name="api-call-1",
@@ -21,7 +21,7 @@ def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         )
         return callback.result()
 
-    def callback_branch_2(ctx: DurableContext) -> str:
+    async def callback_branch_2(ctx: DurableContext) -> str:
         """Second callback branch."""
         callback = ctx.create_callback(
             name="api-call-2",
@@ -29,7 +29,7 @@ def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         )
         return callback.result()
 
-    def callback_branch_3(ctx: DurableContext) -> str:
+    async def callback_branch_3(ctx: DurableContext) -> str:
         """Third callback branch."""
         callback = ctx.create_callback(
             name="api-call-3",

@@ -6,7 +6,7 @@ from aws_durable_execution_sdk_python.config import Duration
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> str:
+async def handler(_event: Any, context: DurableContext) -> str:
     # Wait with explicit name
     context.wait(Duration.from_seconds(2), name="custom_wait")
     return "Wait with name completed"

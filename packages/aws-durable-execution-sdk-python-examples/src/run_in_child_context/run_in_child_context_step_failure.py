@@ -12,10 +12,10 @@ from aws_durable_execution_sdk_python.retries import (
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, bool]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, bool]:
     """Handler demonstrating runInChildContext with failing step."""
 
-    def child_with_failure(ctx: DurableContext) -> None:
+    async def child_with_failure(ctx: DurableContext) -> None:
         """Child context with a failing step."""
 
         retry_config = RetryStrategyConfig(

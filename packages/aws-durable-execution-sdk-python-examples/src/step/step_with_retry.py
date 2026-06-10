@@ -19,7 +19,7 @@ _attempts = count(1)  # starts from 1
 
 
 @durable_step
-def unreliable_operation(
+async def unreliable_operation(
     _step_context: StepContext,
 ) -> str:
     # Use counter for deterministic behavior
@@ -32,7 +32,7 @@ def unreliable_operation(
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> str:
+async def handler(_event: Any, context: DurableContext) -> str:
     retry_config = RetryStrategyConfig(
         max_attempts=3,
         retryable_error_types=[RuntimeError],

@@ -10,7 +10,7 @@ from aws_durable_execution_sdk_python.retries import (
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> str:
+async def handler(_event: Any, context: DurableContext) -> str:
     # Step with exponential backoff retry strategy
     retry_config = RetryStrategyConfig(
         max_attempts=3,
@@ -21,7 +21,8 @@ def handler(_event: Any, context: DurableContext) -> str:
 
     step_config = StepConfig(retry_strategy=create_retry_strategy(retry_config))
 
-    result = context.step(
-        lambda _: "Step with exponential backoff", name="retry_step", config=step_config
-    )
+    async def retry_step(_) -> str:
+        return "Step with exponential backoff"
+
+    result = context.step(retry_step, name="retry_step", config=step_config)
     return f"Result: {result}"

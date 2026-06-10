@@ -1,5 +1,6 @@
 """Tests for map operation."""
 
+import asyncio
 import importlib
 import json
 from unittest.mock import Mock, patch
@@ -146,6 +147,25 @@ def test_map_executor_execute_item_with_context():
     result = executor.execute_item("mock_context", executable)
 
     assert result == 5  # 2 * 2 + 1
+
+
+def test_map_executor_execute_item_with_async_callable():
+    items = ["hello"]
+
+    async def callable_func(ctx, item, idx, items):
+        await asyncio.sleep(0)
+        return f"{ctx}-{item}-{idx}-{len(items)}"
+
+    executor = MapExecutor.from_items(
+        items,
+        callable_func,
+        MapConfig(),
+    )
+    executable = executor.executables[0]
+
+    result = executor.execute_item("mock_context", executable)
+
+    assert result == "mock_context-hello-0-1"
 
 
 def test_map_handler():

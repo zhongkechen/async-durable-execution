@@ -1,6 +1,5 @@
 """Demonstrates createCallback mixed with steps, waits, and other operations."""
 
-import time
 from typing import Any
 
 from aws_durable_execution_sdk_python.config import CallbackConfig, Duration
@@ -9,11 +8,14 @@ from aws_durable_execution_sdk_python.execution import durable_execution
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating createCallback mixed with other operations."""
 
+    async def fetch_data(_) -> dict[str, Any]:
+        return {"userId": 123, "name": "John Doe"}
+
     step_result: dict[str, Any] = context.step(
-        lambda _: {"userId": 123, "name": "John Doe"},
+        fetch_data,
         name="fetch-data",
     )
 

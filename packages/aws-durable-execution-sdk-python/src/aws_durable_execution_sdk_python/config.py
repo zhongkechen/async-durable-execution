@@ -16,7 +16,7 @@ T = TypeVar("T")
 U = TypeVar("U")
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
     from concurrent.futures import Future
 
     from aws_durable_execution_sdk_python.lambda_service import OperationSubType
@@ -273,10 +273,10 @@ class ParallelBranch(Generic[T]):
         )
     """
 
-    func: Callable
+    func: Callable[..., T | Awaitable[T]]
     name: str | None = None
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs) -> T | Awaitable[T]:
         """Delegate to the wrapped function, making ParallelBranch itself callable."""
         return self.func(*args, **kwargs)
 

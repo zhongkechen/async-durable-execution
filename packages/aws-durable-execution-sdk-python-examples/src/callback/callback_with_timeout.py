@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> str:
+async def handler(_event: Any, context: DurableContext) -> str:
     # Callback with custom timeout configuration
     config = CallbackConfig(
         timeout=Duration.from_seconds(60), heartbeat_timeout=Duration.from_seconds(30)

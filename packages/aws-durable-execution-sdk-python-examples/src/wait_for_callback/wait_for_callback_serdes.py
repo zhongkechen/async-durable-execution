@@ -64,8 +64,12 @@ class CustomSerdes(SerDes[CustomData]):
         )
 
 
+async def noop_submitter(_callback_id: str, _context: DurableContext) -> None:
+    return None
+
+
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with custom serdes."""
 
     config = WaitForCallbackConfig(
@@ -75,13 +79,13 @@ def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     )
 
     result: CustomData = context.wait_for_callback(
-        lambda _callback_id, _context: None,
+        noop_submitter,
         name="custom-serdes-callback",
         config=config,
     )
 
     isDateObject = isinstance(result["timestamp"], datetime)
-    # convert timestamp to isoformat because lambda only accepts default json type as result
+    # Convert timestamp to ISO format because the Lambda result must remain JSON-serializable.
     result["timestamp"] = result["timestamp"].isoformat()
 
     return {

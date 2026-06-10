@@ -56,7 +56,7 @@ class CustomDataSerDes(SerDes[CustomData]):
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating createCallback with custom serdes."""
     callback_config = CallbackConfig(
         timeout=Duration.from_seconds(30),

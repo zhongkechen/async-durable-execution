@@ -17,7 +17,7 @@ from aws_durable_execution_sdk_python.retries import (
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating map with completion config issue."""
     # Test data: Items 2 and 4 will fail (40% failure rate)
     items = [
@@ -41,7 +41,7 @@ def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         f"Items pattern: {', '.join(['FAIL' if i['shouldFail'] else 'SUCCESS' for i in items])}"
     )
 
-    def process_item(
+    async def process_item(
         ctx: DurableContext, item: dict[str, Any], index: int, _
     ) -> dict[str, Any]:
         """Process each item in the map."""
@@ -56,7 +56,7 @@ def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         )
         step_config = StepConfig(retry_strategy=create_retry_strategy(retry_config))
 
-        def step_function(_: DurableContext) -> dict[str, Any]:
+        async def step_function(_: DurableContext) -> dict[str, Any]:
             """Step that processes or fails based on item."""
             if item["shouldFail"]:
                 raise Exception(f"Processing failed for item {item['id']}")

@@ -67,7 +67,7 @@ def handler(event: dict, context: DurableContext) -> dict:
     return {"status": "approved", "order_id": order_id}
 ```
 
-Async callables are supported anywhere the SDK accepts user code. The public Durable APIs stay synchronous, so async work is awaited transparently for you:
+Async callables are supported anywhere the SDK accepts user code, including `map()` item functions and `parallel()` branches. The public Durable APIs stay synchronous, so async work is awaited transparently for you:
 
 ```python
 import asyncio

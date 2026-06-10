@@ -13,10 +13,10 @@ from aws_durable_execution_sdk_python.retries import (
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with failing submitter."""
 
-    def submitter(_callback_id, _context) -> None:
+    async def submitter(_callback_id, _context) -> None:
         """Submitter function that fails after a delay."""
         time.sleep(0.5)
         # Submitter fails

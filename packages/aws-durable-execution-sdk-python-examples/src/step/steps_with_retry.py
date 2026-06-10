@@ -16,7 +16,9 @@ from aws_durable_execution_sdk_python.retries import (
 _attempts = count(1)  # starts from 1
 
 
-def simulated_get_item(_step_context: StepContext, name: str) -> dict[str, Any] | None:
+async def simulated_get_item(
+    _step_context: StepContext, name: str
+) -> dict[str, Any] | None:
     """Simulate getting an item with deterministic counter-based behavior."""
     # Use counter for deterministic behavior
     attempt = next(_attempts)
@@ -35,7 +37,7 @@ def simulated_get_item(_step_context: StepContext, name: str) -> dict[str, Any] 
 
 
 @durable_execution
-def handler(event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating polling with retry logic."""
     name = event.get("name", "test-item")
 
@@ -55,9 +57,12 @@ def handler(event: Any, context: DurableContext) -> dict[str, Any]:
         while poll_count < max_polls:
             poll_count += 1
 
+            async def get_item(step_context: StepContext, item_name: str = name):
+                return await simulated_get_item(step_context, item_name)
+
             # Try to get the item with retry
             get_response = context.step(
-                lambda _, n=name: simulated_get_item(_, n),
+                get_item,
                 name=f"get_item_poll_{poll_count}",
                 config=step_config,
             )

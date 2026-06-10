@@ -11,18 +11,19 @@ from aws_durable_execution_sdk_python.config import Duration
 
 
 @durable_with_child_context
-def parent_context(ctx: DurableContext) -> None:
+async def parent_context(ctx: DurableContext) -> None:
     """Parent context that returns None."""
     return None
 
 
 @durable_execution
-def handler(_event: Any, context: DurableContext) -> str:
+async def handler(_event: Any, context: DurableContext) -> str:
     """Handler demonstrating operations with undefined/None results."""
-    context.step(
-        lambda _: None,
-        name="fetch-user",
-    )
+
+    async def fetch_user(_) -> None:
+        return None
+
+    context.step(fetch_user, name="fetch-user")
 
     context.run_in_child_context(parent_context(), name="parent")
 
