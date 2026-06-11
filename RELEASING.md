@@ -37,14 +37,14 @@ Update `__version__` in `VERSION.py`. Commit and merge to `main`.
 
 ### Tagging Convention
 
-The tag should match the shared monorepo version:
+The tag should match the shared monorepo version exactly:
 
-- **All packages:** `v<version>` (for example, `v2.0.0-a1`)
+- **All packages:** `v<version>` (for example, `v2.0.0a1`)
 
 Examples:
 
 ```text
-v2.0.0-a1
+v2.0.0a1
 ```
 
 ## How Publishing Works
@@ -59,12 +59,28 @@ The workflow runs on the `release: [published]` event, so it fires whenever a re
 
 > **Note:** The current workflow publishes `async-durable-execution` and `async-durable-execution-runner` to PyPI. The examples package still shares the same repo version in `VERSION.py`, but it is not part of the current publish matrix.
 
+### Trusted Publisher Configuration
+
+PyPI trusted publishing is configured per project, so both `async-durable-execution` and `async-durable-execution-runner` need their own matching publisher entry in PyPI.
+
+For the current workflow, each PyPI project should trust the following GitHub Actions publisher settings:
+
+- Owner: `zhongkechen`
+- Repository: `async-durable-execution`
+- Workflow file: `.github/workflows/pypi-publish.yml`
+- Environment for `async-durable-execution`: `async-durable-execution`
+- Environment for `async-durable-execution-runner`: `async-durable-execution-runner`
+
+If PyPI returns `invalid-publisher`, compare the failing job's OIDC claims with the PyPI project settings first. A mismatch in repository name, workflow filename, or environment name is the most common cause.
+
+> **Tip:** The OIDC subject includes the GitHub environment name. If PyPI expects `async-durable-execution` or `async-durable-execution-runner` but the workflow emits a different environment, trusted publishing will fail with `invalid-publisher`.
+
 ## Release Notes Format
 
 Release notes should document the monorepo version being released. Use the following structure:
 
 ```markdown
-## async-durable-execution v2.0.0-a1
+## async-durable-execution v2.0.0a1
 
 ### Features
 - Added support for X
@@ -87,4 +103,5 @@ Before publishing a release:
 - [ ] Changes merged to `main`
 - [ ] CI checks pass on `main`
 - [ ] Release notes written for the version being released
-- [ ] Tag follows the naming convention (`vX.Y.Z` or `vX.Y.Z-aN`)
+- [ ] Tag follows the naming convention (`vX.Y.Z` or `vX.Y.ZaN`)
+- [ ] Trusted publisher exists on both PyPI projects with repository `zhongkechen/async-durable-execution`, workflow `.github/workflows/pypi-publish.yml`, and the package-specific environment name
