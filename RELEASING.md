@@ -1,6 +1,6 @@
 # Releasing
 
-This document describes how to cut a release for packages in this monorepo and how the automated PyPI publishing workflow is triggered.
+This document describes how to cut a release for this monorepo and how the automated PyPI publishing workflow is triggered.
 
 ## Packages
 
@@ -8,27 +8,27 @@ This monorepo contains the following packages:
 
 | Package | Path | Tag Prefix |
 |---------|------|------------|
-| `aws-durable-execution-sdk-python` | `packages/aws-durable-execution-sdk-python` | `sdk` |
-| `aws-durable-execution-sdk-python-otel` | `packages/aws-durable-execution-sdk-python-otel` | `otel` |
+| `async-durable-execution` | `packages/async-durable-execution` | `v` |
+| `async-durable-execution-runner` | `packages/async-durable-execution-runner` | `v` |
+| `async-durable-execution-examples` | `packages/async-durable-execution-examples` | `v` |
 
 ## Versioning
 
-Each package maintains its own version in its respective `__about__.py` file:
+All packages share a single version number defined in the repository root:
 
-- SDK: `packages/aws-durable-execution-sdk-python/src/aws_durable_execution_sdk_python/__about__.py`
-- OTel: `packages/aws-durable-execution-sdk-python-otel/src/aws_durable_execution_sdk_python_otel/__about__.py`
+- Shared version source: `VERSION.py`
 
-Bump the version in the appropriate `__about__.py` file(s) and merge to `main` before creating a release.
+Package metadata reads from `VERSION.py`, so bumping that file updates the SDK, runner, and examples package together.
 
 ## Cutting a Release
 
 ### 1. Bump the version
 
-Update the `__version__` string in the relevant `__about__.py` file(s). Commit and merge to `main`.
+Update `__version__` in `VERSION.py`. Commit and merge to `main`.
 
 ### 2. Create a GitHub Release
 
-1. Go to the [Releases page](https://github.com/aws/aws-durable-execution-sdk-python/releases) on GitHub.
+1. Go to the [Releases page](https://github.com/zhongkechen/async-durable-execution/releases) on GitHub.
 2. Click **Draft a new release**.
 3. Create a new tag following the tagging convention below.
 4. Set the release title (typically the same as the tag).
@@ -37,40 +37,34 @@ Update the `__version__` string in the relevant `__about__.py` file(s). Commit a
 
 ### Tagging Convention
 
-The tag should be the version of the package being bumped, prepended with a descriptive prefix:
+The tag should match the shared monorepo version:
 
-- **SDK only:** `sdk-v<version>` (e.g., `sdk-v1.6.0`)
-- **OTel only:** `otel-v<version>` (e.g., `otel-v0.3.0`)
-- **Both packages in a single release:** comma-separate the sub-tags (e.g., `sdk-1.6.0,otel-0.3.0`)
+- **All packages:** `v<version>` (for example, `v2.0.0-a1`)
 
 Examples:
 
+```text
+v2.0.0-a1
 ```
-sdk-1.6.0
-otel-0.3.0
-sdk-1.6.0,otel-0.3.0
-```
-
-If additional packages are added to the monorepo in the future, follow the same pattern: choose a short descriptive prefix for the package and use `<prefix>-<version>`.
 
 ## How Publishing Works
 
 Creating a GitHub Release triggers the [`pypi-publish.yml`](.github/workflows/pypi-publish.yml) workflow automatically. The workflow:
 
-1. **Builds** both packages using [Hatch](https://hatch.pypa.io/) (`hatch build`).
+1. **Builds** the SDK and runner packages using [Hatch](https://hatch.pypa.io/) (`hatch build`).
 2. **Uploads** the built distributions as artifacts.
-3. **Publishes** each package to [PyPI](https://pypi.org/) using trusted publishing (OIDC-based, no API tokens required).
+3. **Publishes** both packages to [PyPI](https://pypi.org/) using trusted publishing (OIDC-based, no API tokens required).
 
 The workflow runs on the `release: [published]` event, so it fires whenever a release is published on GitHub — no manual intervention is needed beyond creating the release.
 
-> **Note:** The workflow builds and publishes all packages in the matrix. Ensure the version in each package's `__about__.py` is correct before publishing. If only one package has a version bump, PyPI will reject the re-upload of the unchanged package (which is expected and harmless since `fail-fast: false` is set).
+> **Note:** The current workflow publishes `async-durable-execution` and `async-durable-execution-runner` to PyPI. The examples package still shares the same repo version in `VERSION.py`, but it is not part of the current publish matrix.
 
 ## Release Notes Format
 
-Release notes should maintain separate timelines for each package. Use the following structure:
+Release notes should document the monorepo version being released. Use the following structure:
 
 ```markdown
-## aws-durable-execution-sdk-python v1.6.0
+## async-durable-execution v2.0.0-a1
 
 ### Features
 - Added support for X
@@ -81,26 +75,16 @@ Release notes should maintain separate timelines for each package. Use the follo
 
 ### Breaking Changes
 - Removed deprecated `bar()` method
-
----
-
-## aws-durable-execution-sdk-python-otel v0.3.0
-
-### Features
-- Added tracing for `map` operations
-
-### Bug Fixes
-- Fixed span context propagation in child contexts
 ```
 
-If only one package is being released, include only that package's section. Each package's changelog should be self-contained so users can follow the history of the package they depend on independently.
+Keep each release note section self-contained so users can follow the release history easily.
 
 ## Checklist
 
 Before publishing a release:
 
-- [ ] Version bumped in the relevant `__about__.py` file(s)
+- [ ] Version bumped in `VERSION.py`
 - [ ] Changes merged to `main`
 - [ ] CI checks pass on `main`
-- [ ] Release notes written with separate sections per package
-- [ ] Tag follows the naming convention (`sdk-X.Y.Z`, `otel-X.Y.Z`, or comma-separated)
+- [ ] Release notes written for the version being released
+- [ ] Tag follows the naming convention (`vX.Y.Z` or `vX.Y.Z-aN`)

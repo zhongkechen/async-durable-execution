@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Ask a question
-    url: https://github.com/aws/aws-durable-execution-sdk-python/discussions/new
+    url: https://github.com/zhongkechen/async-durable-execution/discussions/new
     about: Ask a general question about Lambda Powertools

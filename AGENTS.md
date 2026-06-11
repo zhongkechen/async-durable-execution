@@ -8,8 +8,9 @@ AWS Lambda durable functions extend Lambda's programming model to build multi-st
 
 **Packages:**
 
-- **JavaScript/TypeScript**: `@aws/durable-execution-sdk-js` (testing: `@aws/durable-execution-sdk-js-testing`)
-- **Python**: `aws-durable-execution-sdk-python` (testing: `aws-durable-execution-sdk-python-testing`)
+- **Python SDK**: `async-durable-execution`
+- **Python test runner**: `async-durable-execution-runner`
+- **Python examples**: `async-durable-execution-examples`
 
 **Core Primitives:**
 
@@ -27,20 +28,6 @@ Durable functions use a "replay" execution model. On replay (after wait/failure/
 
 ALL code outside steps MUST be deterministic.
 
-**TypeScript:**
-
-```typescript
-// ❌ WRONG: Non-deterministic code outside steps
-const id = uuid.v4(); // Different on each replay!
-const timestamp = Date.now(); // Different on each replay!
-
-// ✅ CORRECT: Non-deterministic code inside steps
-const id = await context.step("generate-id", async () => uuid.v4());
-const timestamp = await context.step("get-time", async () => Date.now());
-```
-
-**Python:**
-
 ```python
 # ❌ WRONG: Non-deterministic code outside steps
 id = str(uuid.uuid4())           # Different on each replay!
@@ -51,38 +38,20 @@ id = context.step(lambda _: str(uuid.uuid4()), name="generate-id")
 timestamp = context.step(lambda _: time.time(), name="get-time")
 ```
 
-**Must be in steps:** `Date.now()`, `new Date()`, `time.time()`, `Math.random()`, `random.random()`, UUID generation, API calls, database queries, file system operations.
+**Must be in steps:** `time.time()`, `random.random()`, UUID generation, API calls, database queries, file system operations.
 
 ### Rule 2: No Nested Durable Operations
 
 You CANNOT call durable operations inside a step function.
 
-**TypeScript:**
-
-```typescript
-// ❌ WRONG: Nested durable operations
-await context.step("process", async () => {
-  await context.wait({ seconds: 1 });  // ERROR!
-  await context.step(async () => ...); // ERROR!
-});
-
-// ✅ CORRECT: Use runInChildContext for grouping
-await context.runInChildContext("process", async (childCtx) => {
-  await childCtx.wait({ seconds: 1 });
-  await childCtx.step(async () => ...);
-});
-```
-
-**Python:**
-
 ```python
 # ❌ WRONG: Nested durable operations
 @durable_step
-def process(step_ctx: StepContext):
+async def process(step_ctx: StepContext):
     context.wait(duration=Duration.from_seconds(1))  # ERROR!
 
 # ✅ CORRECT: Use run_in_child_context for grouping
-def process(child_ctx: DurableContext):
+async def process(child_ctx: DurableContext):
     child_ctx.wait(duration=Duration.from_seconds(1))
     child_ctx.step(some_step())
 
@@ -93,27 +62,11 @@ context.run_in_child_context(process, name="process")
 
 Variables mutated inside steps are NOT preserved across replays.
 
-**TypeScript:**
-
-```typescript
-// ❌ WRONG: Counter mutations lost
-let counter = 0;
-await context.step(async () => {
-  counter++;
-});
-console.log(counter); // 0 on replay!
-
-// ✅ CORRECT: Return values from steps
-counter = await context.step(async () => counter + 1);
-```
-
-**Python:**
-
 ```python
 # ❌ WRONG: Counter mutations lost
 counter = 0
 @durable_step
-def increment(step_ctx: StepContext):
+async def increment(step_ctx: StepContext):
     nonlocal counter
     counter += 1
 context.step(increment())
@@ -128,20 +81,6 @@ counter = context.step(lambda _: counter + 1, name="increment")
 Side effects (logging, API calls) outside steps happen on EVERY replay.
 
 **Exception:** `context.logger` is replay-aware and safe to use anywhere.
-
-**TypeScript:**
-
-```typescript
-// ❌ WRONG
-console.log("Starting");  // Logs multiple times!
-await sendEmail(...);     // Sends multiple emails!
-
-// ✅ CORRECT
-context.logger.info("Starting");  // Deduplicated automatically
-await context.step("email", async () => sendEmail(...));
-```
-
-**Python:**
 
 ```python
 # ❌ WRONG
@@ -243,64 +182,29 @@ aws lambda invoke \
 
 ### Handler Wrapper
 
-**TypeScript:**
-
-```typescript
-import {
-  withDurableExecution,
-  DurableContext,
-} from "@aws/durable-execution-sdk-js";
-
-export const handler = withDurableExecution(
-  async (event: any, context: DurableContext) => {
-    // Your durable workflow
-    return result;
-  },
-);
-```
-
-**Python:**
-
 ```python
-from aws_durable_execution_sdk_python import DurableContext, durable_execution
+from async_durable_execution import DurableContext, durable_execution
+
 
 @durable_execution
-def handler(event: dict, context: DurableContext) -> dict:
+async def handler(event: dict, context: DurableContext) -> dict:
     # Your durable workflow
     return result
 ```
 
 ### Steps - Atomic Operations
 
-**TypeScript:**
-
-```typescript
-// Basic step
-const result = await context.step(async () => fetchData());
-
-// Named step (recommended)
-const result = await context.step("fetch-user", async () => fetchData());
-
-// With retry configuration
-const result = await context.step("api-call", async () => callAPI(), {
-  retryStrategy: (error, attemptCount) => ({
-    shouldRetry: attemptCount < 3,
-    delay: { seconds: Math.pow(2, attemptCount) },
-  }),
-});
-```
-
-**Python:**
-
 ```python
-from aws_durable_execution_sdk_python import durable_step, StepContext
-from aws_durable_execution_sdk_python.config import StepConfig
-from aws_durable_execution_sdk_python.retries import RetryStrategyConfig, create_retry_strategy
+from async_durable_execution import durable_step, StepContext
+from async_durable_execution.config import StepConfig
+from async_durable_execution.retries import RetryStrategyConfig, create_retry_strategy
+
 
 # Define step function with decorator
 @durable_step
-def fetch_user(step_ctx: StepContext, user_id: str) -> dict:
+async def fetch_user(step_ctx: StepContext, user_id: str) -> dict:
     return {"id": user_id, "name": "Jane"}
+
 
 # Execute step (uses function name automatically)
 result = context.step(fetch_user(user_id))
@@ -322,18 +226,8 @@ result = context.step(
 
 ### Wait - Pause Execution
 
-**TypeScript:**
-
-```typescript
-await context.wait({ seconds: 30 });
-await context.wait({ hours: 1, minutes: 30 });
-await context.wait("rate-limit-delay", { days: 7 });
-```
-
-**Python:**
-
 ```python
-from aws_durable_execution_sdk_python.config import Duration
+from async_durable_execution.config import Duration
 
 context.wait(duration=Duration.from_seconds(30))
 context.wait(duration=Duration.from_hours(1))
@@ -343,18 +237,6 @@ context.wait(duration=Duration.from_days(7), name="rate-limit-delay")
 ### Invoke - Call Other Functions
 
 Invoke another durable Lambda function. **Must use qualified function name** (with version or alias).
-
-**TypeScript:**
-
-```typescript
-const result = await context.invoke(
-  "process-payment",
-  process.env.PAYMENT_PROCESSOR_ARN!, // e.g., arn:...function:name:$LATEST
-  { amount: 100, currency: "USD" },
-);
-```
-
-**Python:**
 
 ```python
 import os
@@ -368,28 +250,8 @@ result = context.invoke(
 
 ### Child Context - Group Operations
 
-**TypeScript:**
-
-```typescript
-const result = await context.runInChildContext(
-  "process-order",
-  async (childCtx) => {
-    const validated = await childCtx.step("validate", async () =>
-      validate(data),
-    );
-    await childCtx.wait({ seconds: 1 });
-    const processed = await childCtx.step("process", async () =>
-      process(validated),
-    );
-    return processed;
-  },
-);
-```
-
-**Python:**
-
 ```python
-def process_order(child_ctx: DurableContext) -> dict:
+async def process_order(child_ctx: DurableContext) -> dict:
     validated = child_ctx.step(validate_step(data), name="validate")
     child_ctx.wait(duration=Duration.from_seconds(1))
     processed = child_ctx.step(process_step(validated), name="process")
@@ -400,25 +262,13 @@ result = context.run_in_child_context(process_order, name="process-order")
 
 ### Wait for Callback - External Integration
 
-**TypeScript:**
-
-```typescript
-const result = await context.waitForCallback(
-  "wait-for-approval",
-  async (callbackId, ctx) => {
-    await sendApprovalEmail(callbackId);
-  },
-  { timeout: { hours: 24 } },
-);
-```
-
-**Python:**
-
 ```python
-from aws_durable_execution_sdk_python.waits import WaitForCallbackConfig
+from async_durable_execution.waits import WaitForCallbackConfig
 
-def submit_approval(callback_id: str):
+
+async def submit_approval(callback_id: str):
     send_approval_email(callback_id)
+
 
 result = context.wait_for_callback(
     submitter=submit_approval,
@@ -429,33 +279,14 @@ result = context.wait_for_callback(
 
 ### Wait for Condition - Polling
 
-**TypeScript:**
-
-```typescript
-const finalState = await context.waitForCondition(
-  "wait-for-job",
-  async (currentState, ctx) => {
-    const status = await checkJobStatus(currentState.jobId);
-    return { ...currentState, status };
-  },
-  {
-    initialState: { jobId: "job-123", status: "pending" },
-    waitStrategy: (state, attempt) => ({
-      shouldContinue: state.status !== "completed",
-      delay: { seconds: Math.min(attempt * 2, 60) },
-    }),
-  },
-);
-```
-
-**Python:**
-
 ```python
-from aws_durable_execution_sdk_python.waits import WaitForConditionConfig, ExponentialBackoff
+from async_durable_execution.waits import WaitForConditionConfig, ExponentialBackoff
 
-def check_job(state: dict, check_ctx) -> dict:
+
+async def check_job(state: dict, check_ctx) -> dict:
     status = get_job_status(state["job_id"])
     return {"job_id": state["job_id"], "status": status}
+
 
 result = context.wait_for_condition(
     check=check_job,
@@ -470,36 +301,14 @@ result = context.wait_for_condition(
 
 ### Map - Process Arrays
 
-**TypeScript:**
-
-```typescript
-const results = await context.map(
-  "process-items",
-  items,
-  async (ctx, item, index) => {
-    return await ctx.step(`process-${index}`, async () => process(item));
-  },
-  {
-    maxConcurrency: 5,
-    completionConfig: {
-      minSuccessful: 8,
-      toleratedFailureCount: 2,
-    },
-  },
-);
-
-results.throwIfError();
-const allResults = results.getResults();
-```
-
-**Python:**
-
 ```python
 from collections.abc import Sequence
-from aws_durable_execution_sdk_python.concurrency import MapConfig, CompletionConfig
+from async_durable_execution.concurrency import MapConfig, CompletionConfig
 
-def process_item(ctx: DurableContext, item: dict, index: int, items: Sequence[dict]) -> dict:
+
+async def process_item(ctx: DurableContext, item: dict, index: int, items: Sequence[dict]) -> dict:
     return ctx.step(lambda _: process(item), name=f"process-{index}")
+
 
 results = context.map(
     items=items,
@@ -520,29 +329,17 @@ all_results = results.get_results()
 
 ### Parallel - Parallel Branches
 
-**TypeScript:**
-
-```typescript
-const results = await context.parallel(
-  "parallel-ops",
-  [
-    { name: "task1", func: async (ctx) => ctx.step(async () => fetchData1()) },
-    { name: "task2", func: async (ctx) => ctx.step(async () => fetchData2()) },
-  ],
-  { maxConcurrency: 2 },
-);
-```
-
-**Python:**
-
 ```python
-from aws_durable_execution_sdk_python.concurrency import ParallelConfig
+from async_durable_execution.concurrency import ParallelConfig
 
-def task1(ctx: DurableContext):
+
+async def task1(ctx: DurableContext):
     return ctx.step(lambda _: fetch_data1(), name="fetch1")
 
-def task2(ctx: DurableContext):
+
+async def task2(ctx: DurableContext):
     return ctx.step(lambda _: fetch_data2(), name="fetch2")
+
 
 results = context.parallel(
     branches=[
@@ -556,50 +353,17 @@ results = context.parallel(
 
 ## Testing Reference
 
-### TypeScript Setup
-
-```bash
-npm install --save-dev @aws/durable-execution-sdk-js-testing
-```
-
-```typescript
-import {
-  LocalDurableTestRunner,
-  OperationType,
-  OperationStatus,
-} from "@aws/durable-execution-sdk-js-testing";
-
-describe("My Durable Function", () => {
-  beforeAll(() =>
-    LocalDurableTestRunner.setupTestEnvironment({ skipTime: true }),
-  );
-  afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
-
-  it("should execute workflow", async () => {
-    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
-    const execution = await runner.run({ payload: { userId: "123" } });
-
-    expect(execution.getStatus()).toBe("SUCCEEDED");
-    expect(execution.getResult()).toEqual({ success: true });
-
-    // Get operations BY NAME (not by index!)
-    const fetchStep = runner.getOperation("fetch-user");
-    expect(fetchStep.getType()).toBe(OperationType.STEP);
-    expect(fetchStep.getStatus()).toBe(OperationStatus.SUCCEEDED);
-  });
-});
-```
-
 ### Python Setup
 
 ```bash
-pip install aws-durable-execution-sdk-python-testing
+pip install async-durable-execution-runner
 ```
 
 ```python
 import pytest
-from aws_durable_execution_sdk_python_testing import InvocationStatus
+from async_durable_execution_runner import InvocationStatus
 from my_module import handler
+
 
 @pytest.mark.durable_execution(
     handler=handler,
@@ -620,37 +384,18 @@ def test_workflow(durable_runner):
 
 ### Testing Key Points
 
-- ✅ Use `runner.getOperation("name")` (JS) or `result.get_step("name")` (Python) - not by index
+- ✅ Use `result.get_step("name")` - not by index
 - ✅ Name all operations for test reliability
-- ✅ JSON.stringify callback parameters (JS) / ensure JSON-serializable (Python)
-- ✅ Parse callback results (they're JSON strings)
-- ✅ Wrap event data in `payload: {}` (JS) or `input={}` (Python)
+- ✅ Ensure callback parameters and step inputs are JSON-serializable
+- ✅ Wrap event data in `input={}`
 
 ## Common Patterns
 
 ### Multi-Step Workflow
 
-**TypeScript:**
-
-```typescript
-export const handler = withDurableExecution(async (event, context) => {
-  const validated = await context.step("validate", async () =>
-    validateInput(event),
-  );
-  const processed = await context.step("process", async () =>
-    processData(validated),
-  );
-  await context.wait("cooldown", { seconds: 30 });
-  await context.step("notify", async () => sendNotification(processed));
-  return { success: true, data: processed };
-});
-```
-
-**Python:**
-
 ```python
 @durable_execution
-def handler(event: dict, context: DurableContext) -> dict:
+async def handler(event: dict, context: DurableContext) -> dict:
     validated = context.step(validate_input(event), name="validate")
     processed = context.step(process_data(validated), name="process")
     context.wait(duration=Duration.from_seconds(30), name="cooldown")
@@ -660,32 +405,9 @@ def handler(event: dict, context: DurableContext) -> dict:
 
 ### GenAI Agent (Agentic Loop)
 
-**TypeScript:**
-
-```typescript
-export const handler = withDurableExecution(async (event, context) => {
-  const messages = [{ role: "user", content: event.prompt }];
-
-  while (true) {
-    const { response, tool } = await context.step("invoke-model", async () =>
-      invokeAIModel(messages),
-    );
-
-    if (tool == null) return response;
-
-    const toolResult = await context.step(`tool-${tool.name}`, async () =>
-      executeTool(tool, response),
-    );
-    messages.push({ role: "assistant", content: toolResult });
-  }
-});
-```
-
-**Python:**
-
 ```python
 @durable_execution
-def handler(event: dict, context: DurableContext) -> str:
+async def handler(event: dict, context: DurableContext) -> str:
     messages = [{"role": "user", "content": event["prompt"]}]
 
     while True:
@@ -707,37 +429,12 @@ def handler(event: dict, context: DurableContext) -> str:
 
 ### Human-in-the-Loop Approval
 
-**TypeScript:**
-
-```typescript
-export const handler = withDurableExecution(async (event, context) => {
-  const plan = await context.step("generate-plan", async () =>
-    generatePlan(event),
-  );
-
-  const answer = await context.waitForCallback(
-    "wait-for-approval",
-    async (callbackId) =>
-      sendApprovalEmail(event.approverEmail, plan, callbackId),
-    { timeout: { hours: 24 } },
-  );
-
-  if (answer === "APPROVED") {
-    await context.step("execute", async () => performAction(plan));
-    return { status: "completed" };
-  }
-  return { status: "rejected" };
-});
-```
-
-**Python:**
-
 ```python
 @durable_execution
-def handler(event: dict, context: DurableContext) -> dict:
+async def handler(event: dict, context: DurableContext) -> dict:
     plan = context.step(generate_plan(event), name="generate-plan")
 
-    def submit_approval(callback_id: str):
+    async def submit_approval(callback_id: str):
         send_approval_email(event["approver_email"], plan, callback_id)
 
     answer = context.wait_for_callback(
@@ -754,40 +451,9 @@ def handler(event: dict, context: DurableContext) -> dict:
 
 ### Saga Pattern (Compensating Transactions)
 
-**TypeScript:**
-
-```typescript
-export const handler = withDurableExecution(async (event, context) => {
-  const compensations: Array<{ name: string; fn: () => Promise<void> }> = [];
-
-  try {
-    await context.step("book-flight", async () => flightClient.book(event));
-    compensations.push({
-      name: "cancel-flight",
-      fn: () => flightClient.cancel(event),
-    });
-
-    await context.step("book-hotel", async () => hotelClient.book(event));
-    compensations.push({
-      name: "cancel-hotel",
-      fn: () => hotelClient.cancel(event),
-    });
-
-    return { success: true };
-  } catch (error) {
-    for (const comp of compensations.reverse()) {
-      await context.step(comp.name, async () => comp.fn());
-    }
-    throw error;
-  }
-});
-```
-
-**Python:**
-
 ```python
 @durable_execution
-def handler(event: dict, context: DurableContext) -> dict:
+async def handler(event: dict, context: DurableContext) -> dict:
     compensations = []
 
     try:
@@ -806,7 +472,7 @@ def handler(event: dict, context: DurableContext) -> dict:
 
 ## Infrastructure as Code
 
-Deploy durable functions using CloudFormation, CDK, or SAM. All require:
+Deploy durable functions using CloudFormation or SAM. All require:
 
 1. Enable durable execution on the function
 2. Grant checkpoint permissions to the execution role
@@ -834,12 +500,12 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: myDurableFunction
-      Runtime: nodejs22.x # or python3.14
+      Runtime: python3.14
       Handler: index.handler
       Role: !GetAtt DurableFunctionRole.Arn
       Code:
         ZipFile: |
-          // Your durable function code
+          # Your durable function code
       DurableConfig:
         ExecutionTimeout: 3600
         RetentionPeriodInDays: 7
@@ -857,33 +523,6 @@ Resources:
       Name: prod
 ```
 
-### AWS CDK (TypeScript)
-
-```typescript
-import * as cdk from "aws-cdk-lib";
-import * as lambda from "aws-cdk-lib/aws-lambda";
-import * as iam from "aws-cdk-lib/aws-iam";
-
-const durableFunction = new lambda.Function(this, "DurableFunction", {
-  runtime: lambda.Runtime.NODEJS_22_X, // or PYTHON_3_12
-  handler: "index.handler",
-  code: lambda.Code.fromAsset("lambda"),
-  durableConfig: {
-    executionTimeout: cdk.Duration.hours(1),
-    retentionPeriod: cdk.Duration.days(7),
-  },
-});
-
-// CDK automatically adds checkpoint permissions when durableConfig is set
-
-// Create version and alias
-const version = durableFunction.currentVersion;
-const alias = new lambda.Alias(this, "ProdAlias", {
-  aliasName: "prod",
-  version: version,
-});
-```
-
 ### AWS SAM
 
 ```yaml
@@ -895,7 +534,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: myDurableFunction
-      Runtime: nodejs22.x # or python3.14
+      Runtime: python3.14
       Handler: index.handler
       CodeUri: ./src
       DurableConfig:
@@ -916,14 +555,9 @@ Resources:
 - [Deploy with IaC](https://docs.aws.amazon.com/lambda/latest/dg/durable-getting-started-iac.html)
 - [AWSLambdaBasicDurableExecutionRolePolicy](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AWSLambdaBasicDurableExecutionRolePolicy.html)
 
-**JavaScript/TypeScript SDK:**
-
-- [SDK Repository](https://github.com/aws/aws-durable-execution-sdk-js)
-- [SDK README](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/packages/aws-durable-execution-sdk-js/README.md)
-- [Concepts & Use Cases](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/packages/aws-durable-execution-sdk-js/src/documents/CONCEPTS.md)
-- [Testing SDK](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/packages/aws-durable-execution-sdk-js-testing/README.md)
-
 **Python SDK:**
 
-- [SDK Repository](https://github.com/aws/aws-durable-execution-sdk-python)
-- [AWS Durable Execution Documentation](https://docs.aws.amazon.com/durable-execution/)
+- [SDK Repository](https://github.com/zhongkechen/async-durable-execution)
+- [SDK README](https://github.com/zhongkechen/async-durable-execution/blob/main/packages/async-durable-execution/README.md)
+- [Runner README](https://github.com/zhongkechen/async-durable-execution/blob/main/packages/async-durable-execution-runner/README.md)
+- [Examples Package](https://github.com/zhongkechen/async-durable-execution/tree/main/packages/async-durable-execution-examples)

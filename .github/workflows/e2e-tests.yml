@@ -7,8 +7,8 @@ on:
   pull_request:
     branches: ["main"]
     paths:
-      - 'packages/aws-durable-execution-sdk-python/src/**'
-      - 'packages/aws-durable-execution-sdk-python-examples/**'
+      - 'packages/async-durable-execution/src/**'
+      - 'packages/async-durable-execution-examples/**'
       - '.github/workflows/e2e-tests.yml'
   workflow_dispatch:
 
@@ -52,14 +52,12 @@ jobs:
       uses: aws-actions/setup-sam@v3
 
     - name: Build examples
-      run: |
-        hatch run -- examples:pip install -e packages/aws-durable-execution-sdk-python packages/aws-durable-execution-sdk-python-otel packages/aws-durable-execution-sdk-python-testing
-        hatch run examples:build
+      run: hatch run examples:build
 
     - name: Generate SAM template
       run: |
-        python packages/aws-durable-execution-sdk-python-examples/scripts/generate_sam_template.py \
-          --output packages/aws-durable-execution-sdk-python-examples/template.generated.json
+        python packages/async-durable-execution-examples/scripts/generate_sam_template.py \
+          --output packages/async-durable-execution-examples/template.generated.json
 
     - name: Deploy all examples with SAM
       id: deploy
@@ -69,12 +67,12 @@ jobs:
         PYTHON_VERSION_TAG=$(echo "${{ matrix.python-version }}" | tr -d '.')
 
         STACK_NAME="python-examples-py${PYTHON_VERSION_TAG}"
-        FUNCTION_NAME_PREFIX="PythonPy${PYTHON_VERSION_TAG}-"
+        FUNCTION_NAME_PREFIX="py${PYTHON_VERSION_TAG}-"
 
         STACK_NAME=$(echo "$STACK_NAME" | tr -cd '[:alnum:]-' | cut -c1-128)
 
         echo "Building SAM application"
-        sam build --template-file packages/aws-durable-execution-sdk-python-examples/template.generated.json
+        sam build --template-file packages/async-durable-execution-examples/template.generated.json
 
         echo "Deploying stack $STACK_NAME with function prefix $FUNCTION_NAME_PREFIX"
         sam deploy \
@@ -89,7 +87,7 @@ jobs:
             FunctionNamePrefix="$FUNCTION_NAME_PREFIX" \
             LambdaEndpoint="$LAMBDA_ENDPOINT"
 
-        PYTEST_FUNCTION_NAME_MAP=$(python packages/aws-durable-execution-sdk-python-examples/scripts/generate_function_name_map.py --prefix "$FUNCTION_NAME_PREFIX")
+        PYTEST_FUNCTION_NAME_MAP=$(python packages/async-durable-execution-examples/scripts/generate_function_name_map.py --prefix "$FUNCTION_NAME_PREFIX")
 
         echo "PYTEST_FUNCTION_NAME_MAP=$PYTEST_FUNCTION_NAME_MAP" >> $GITHUB_ENV
         echo "STACK_NAME=$STACK_NAME" >> $GITHUB_ENV

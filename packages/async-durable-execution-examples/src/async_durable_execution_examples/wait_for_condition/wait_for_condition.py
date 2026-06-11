@@ -1,0 +1,34 @@
+"""Example demonstrating wait-for-condition pattern."""
+
+import asyncio
+from typing import Any
+
+from async_durable_execution.context import DurableContext
+from async_durable_execution.execution import durable_execution
+from async_durable_execution.config import Duration
+from async_durable_execution.waits import (
+    WaitForConditionConfig,
+    WaitForConditionDecision,
+)
+
+
+@durable_execution
+async def handler(_event: Any, context: DurableContext) -> int:
+    """Handler demonstrating wait-for-condition pattern."""
+
+    async def condition_function(state: int, _) -> int:
+        """Increment state by 1."""
+        await asyncio.sleep(0)
+        return state + 1
+
+    def wait_strategy(state: int, attempt: int) -> dict[str, Any]:
+        """Wait strategy that continues until state reaches 3."""
+        if state >= 3:
+            return WaitForConditionDecision.stop_polling()
+        return WaitForConditionDecision.continue_waiting(Duration.from_seconds(1))
+
+    config = WaitForConditionConfig(wait_strategy=wait_strategy, initial_state=0)
+
+    result = context.wait_for_condition(check=condition_function, config=config)
+
+    return result

@@ -15,15 +15,15 @@ This is a monorepo containing multiple packages under the `packages/` directory:
 
 ```
 packages/
-├── aws-durable-execution-sdk-python/              # Core SDK
+├── async-durable-execution/                       # Core SDK
 │   ├── pyproject.toml
 │   ├── src/
 │   └── tests/
-├── aws-durable-execution-sdk-python-otel/         # OpenTelemetry instrumentation
+├── async-durable-execution-runner/                # Local/cloud runner and pytest helpers
 │   ├── pyproject.toml
 │   ├── src/
 │   └── tests/
-└── aws-durable-execution-sdk-python-examples/     # Example functions and tests
+└── async-durable-execution-examples/              # Example functions and tests
     ├── pyproject.toml
     ├── src/
     └── test/
@@ -61,22 +61,21 @@ hatch run dev-core:test        # run core SDK tests only
 hatch run dev-core:cov         # run core SDK tests with coverage
 hatch run dev-core:typecheck   # type check core SDK only
 
-# OpenTelemetry package
-hatch run dev-otel:test        # run otel tests only
-hatch run dev-otel:cov         # run otel tests with coverage
-hatch run dev-otel:typecheck   # type check otel only
-
 # Examples
 hatch run dev-examples:test    # run examples tests only
+
+# Runner
+hatch run dev-testing:test     # run runner tests only
+hatch run dev-testing:cov      # run runner tests with coverage
+hatch run dev-testing:typecheck
 ```
 
 ### PyPI release testing
 
-To verify packages work against the published PyPI version of the core SDK (rather than the local workspace):
+To verify the examples package works against the published PyPI SDK while still using the local runner package from this repo:
 
 ```bash
-hatch run test-pypi-otel:test       # test otel against PyPI core SDK
-hatch run test-pypi-examples:test   # test examples against PyPI core SDK
+hatch run test-pypi-examples:test   # test examples against the PyPI SDK
 ```
 
 ### Package-level commands
@@ -84,7 +83,7 @@ hatch run test-pypi-examples:test   # test examples against PyPI core SDK
 Some commands still run from within a package directory:
 
 ```bash
-cd packages/aws-durable-execution-sdk-python
+cd packages/async-durable-execution
 
 # Static analysis with auto-fix
 hatch fmt
@@ -95,7 +94,7 @@ hatch build
 # Examples deployment (from repo root)
 hatch run examples:build
 hatch run examples:generate-sam-template -- --example-name "Hello World"
-sam build --template-file packages/aws-durable-execution-sdk-python-examples/template.generated.json
+sam build --template-file packages/async-durable-execution-examples/template.generated.json
 sam deploy \
   --template-file .aws-sam/build/template.yaml \
   --stack-name hello-world-python-dev \
@@ -220,7 +219,7 @@ You can find the path to the hatch Python interpreter like this:
 ```
 # From the repo root — use the dev environment for the package you're working on
 hatch env find dev-core
-hatch env find dev-otel
+hatch env find dev-testing
 hatch env find dev-examples
 ```
 
@@ -275,18 +274,18 @@ hatch run test:all
 To run tests for a specific package:
 ```
 hatch run dev-core:test
-hatch run dev-otel:test
+hatch run dev-testing:test
 hatch run dev-examples:test
 ```
 
 To run a single test file:
 ```
-hatch run dev-core:test packages/aws-durable-execution-sdk-python/tests/path_to_test_module.py
+hatch run dev-core:test packages/async-durable-execution/tests/path_to_test_module.py
 ```
 
 To run a specific test in a module:
 ```
-hatch run dev-core:test packages/aws-durable-execution-sdk-python/tests/path_to_test_module.py::test_mytestmethod
+hatch run dev-core:test packages/async-durable-execution/tests/path_to_test_module.py::test_mytestmethod
 ```
 
 To run a subset of tests by pattern:
@@ -309,7 +308,7 @@ This will drop you into the Python debugger on the failed test.
 ### Writing tests
 Place test files in the `tests/` directory, using file names that end with `_test`.
 
-Mimic the package structure in the src/aws_durable_execution_sdk_python directory.
+Mimic the package structure in the src/async_durable_execution directory.
 Name your module so that src/mypackage/mymodule.py has a dedicated unit test file
 tests/mypackage/mymodule_test.py
 
@@ -324,8 +323,16 @@ hatch run dev-examples:test
 
 ### Build and Deploy Examples
 ```bash
+# Refresh the examples env with local editable packages when needed
+hatch run -- examples:pip install -e packages/async-durable-execution
+hatch run -- examples:pip install -e packages/async-durable-execution-runner
+hatch run -- examples:pip install -e packages/async-durable-execution-examples
+
 # Build the shared example bundle with vendored dependencies
 hatch run examples:build
+
+# Preview the generated examples catalog
+hatch run examples:generate-examples-catalog
 
 # Generate a SAM template for the full catalog
 hatch run examples:generate-sam-template
@@ -334,7 +341,7 @@ hatch run examples:generate-sam-template
 hatch run examples:generate-sam-template -- --example-name "Hello World"
 
 # Build and deploy that example with SAM
-sam build --template-file packages/aws-durable-execution-sdk-python-examples/template.generated.json
+sam build --template-file packages/async-durable-execution-examples/template.generated.json
 sam deploy \
   --template-file .aws-sam/build/template.yaml \
   --stack-name hello-world-python-dev \
@@ -358,7 +365,7 @@ hatch run test:cov
 
 # Per-package coverage
 hatch run dev-core:cov
-hatch run dev-otel:cov
+hatch run dev-testing:cov
 ```
 
 ## Linting and type checks
@@ -471,13 +478,11 @@ Looking at the existing issues is a great way to find something to contribute on
 
 
 ## Code of Conduct
-This project has adopted the [Amazon Open Source Code of Conduct](https://aws.github.io/code-of-conduct).
-For more information see the [Code of Conduct FAQ](https://aws.github.io/code-of-conduct-faq) or contact
-opensource-codeofconduct@amazon.com with any additional questions or comments.
+Please see [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations and participation guidelines.
 
 
 ## Security issue notifications
-If you discover a potential security issue in this project we ask that you notify AWS/Amazon Security via our [vulnerability reporting page](http://aws.amazon.com/security/vulnerability-reporting/). Please do **not** create a public github issue.
+If you discover a potential security issue, please do **not** create a public GitHub issue. Contact the repository maintainers privately through an available non-public channel.
 
 
 ## Licensing

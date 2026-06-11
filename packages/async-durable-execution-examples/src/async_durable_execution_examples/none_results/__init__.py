@@ -1,0 +1,1 @@
+"""None results examples package."""

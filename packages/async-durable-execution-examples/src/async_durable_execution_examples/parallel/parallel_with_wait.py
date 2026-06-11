@@ -1,0 +1,32 @@
+"""Example demonstrating parallel with wait operations."""
+
+from typing import Any
+
+from async_durable_execution.context import DurableContext
+from async_durable_execution.execution import durable_execution
+from async_durable_execution.config import Duration
+
+
+@durable_execution
+async def handler(_event: Any, context: DurableContext) -> str:
+    """Execute parallel waits."""
+
+    async def wait_1_second(ctx: DurableContext) -> None:
+        ctx.wait(Duration.from_seconds(1), name="wait_1_second")
+        return None
+
+    async def wait_2_seconds(ctx: DurableContext) -> None:
+        ctx.wait(Duration.from_seconds(2), name="wait_2_seconds")
+        return None
+
+    async def wait_5_seconds(ctx: DurableContext) -> None:
+        ctx.wait(Duration.from_seconds(5), name="wait_5_seconds")
+        return None
+
+    # Call get_results() to extract data and avoid BatchResult serialization
+    context.parallel(
+        functions=[wait_1_second, wait_2_seconds, wait_5_seconds],
+        name="parallel_waits",
+    ).get_results()
+
+    return "Completed waits"
