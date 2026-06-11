@@ -11,6 +11,7 @@ name: Upload PyPI Package
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -59,14 +60,16 @@ jobs:
       matrix:
         package:
           - artifact_name: async-durable-execution
+            environment_name: async-durable-execution
             publish_url: https://pypi.org/project/async-durable-execution/
           - artifact_name: async-durable-execution-runner
+            environment_name: async-durable-execution-runner
             publish_url: https://pypi.org/project/async-durable-execution-runner/
     permissions:
       id-token: write
 
     environment:
-      name: pypi
+      name: ${{ matrix.package.environment_name }}
       url: ${{ matrix.package.publish_url }}
 
     steps:
