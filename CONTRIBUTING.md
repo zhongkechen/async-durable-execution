@@ -1,490 +1,243 @@
 # Contributing Guidelines
 
-Thank you for your interest in contributing to our project. Whether it's a bug report, new feature, correction, or additional
-documentation, we greatly value feedback and contributions from our community.
+Thanks for your interest in contributing to `async-durable-execution`.
+We welcome bug fixes, documentation improvements, examples, test coverage,
+and new features that fit the goals of the project.
 
-Please read through this document before submitting any issues or pull requests to ensure we have all the necessary
-information to effectively respond to your bug report or contribution.
+This guide focuses on the repository-specific workflow so it is easy to get
+started without having to reverse-engineer the toolchain.
 
-## Dependencies
-Install [hatch](https://hatch.pypa.io/dev/install/).
+## Getting Started
+
+Install [Hatch](https://hatch.pypa.io/dev/install/). All shared development
+commands in this repository are run through Hatch from the repository root.
 
 ## Repository Structure
 
-This is a monorepo containing multiple packages under the `packages/` directory:
+This repository is a monorepo with three Python packages under `packages/`:
 
-```
+```text
 packages/
-├── async-durable-execution/                       # Core SDK
-│   ├── pyproject.toml
-│   ├── src/
-│   └── tests/
-├── async-durable-execution-runner/                # Local/cloud runner and pytest helpers
-│   ├── pyproject.toml
-│   ├── src/
-│   └── tests/
-└── async-durable-execution-examples/              # Example functions and tests
-    ├── pyproject.toml
-    ├── src/
-    └── test/
+├── async-durable-execution/           # Core SDK
+├── async-durable-execution-runner/    # Local/cloud runner and pytest helpers
+└── async-durable-execution-examples/  # Example functions and tests
 ```
 
-The root `pyproject.toml` defines all shared Hatch environments for testing, type checking, and development. Each package's `pyproject.toml` contains only build metadata, publishing configuration, and package-local tool settings (ruff, coverage, pytest markers).
+The root `pyproject.toml` defines shared Hatch environments for testing,
+typing, and examples. Each package-level `pyproject.toml` contains the
+package metadata and package-local tool configuration.
 
-Shared files (`.github/`, `LICENSE`, `CONTRIBUTING.md`, etc.) live at the repository root.
+## Development Workflow
 
-## Developer workflow
+Run commands from the repository root unless a command explicitly says
+otherwise.
 
-All test, type checking, and development commands are run from the **repository root**:
+### Common commands
 
 ```bash
 # Run all tests across all packages
 hatch run test:all
 
-# Run tests with coverage
+# Run all tests with coverage
 hatch run test:cov
 
-# Type checking across all packages
+# Type check the repo
 hatch run types:check
-
-# Static analysis (per-package, since ruff config is package-local)
-for pkg in packages/*/; do (cd "$pkg" && hatch fmt --check); done
 ```
 
-### Per-package development environments
-
-For focused work on a single package, use the `dev-*` environments from the repo root:
+### Focused package development
 
 ```bash
 # Core SDK
-hatch run dev-core:test        # run core SDK tests only
-hatch run dev-core:cov         # run core SDK tests with coverage
-hatch run dev-core:typecheck   # type check core SDK only
-
-# Examples
-hatch run dev-examples:test    # run examples tests only
+hatch run dev-core:test
+hatch run dev-core:cov
+hatch run dev-core:typecheck
 
 # Runner
-hatch run dev-testing:test     # run runner tests only
-hatch run dev-testing:cov      # run runner tests with coverage
+hatch run dev-testing:test
+hatch run dev-testing:cov
 hatch run dev-testing:typecheck
+
+# Examples
+hatch run dev-examples:test
 ```
 
-### PyPI release testing
+### Formatting and linting
 
-To verify the examples package works against the published PyPI SDK while still using the local runner package from this repo:
-
-```bash
-hatch run test-pypi-examples:test   # test examples against the PyPI SDK
-```
-
-### Package-level commands
-
-Some commands still run from within a package directory:
+Ruff configuration is package-local, so run formatting checks from the package
+directory you are working in:
 
 ```bash
 cd packages/async-durable-execution
+hatch fmt --check
 
-# Static analysis with auto-fix
+# Or apply formatting fixes
 hatch fmt
-
-# Build distribution
-hatch build
-
-# Examples deployment (from repo root)
-hatch run examples:build
-hatch run examples:generate-sam-template -- --example-name "Hello World"
-sam build --template-file packages/async-durable-execution-examples/template.generated.json
-sam deploy \
-  --template-file .aws-sam/build/template.yaml \
-  --stack-name hello-world-python-dev \
-  --resolve-s3 \
-  --capabilities CAPABILITY_IAM \
-  --no-confirm-changeset \
-  --parameter-overrides FunctionName=HelloWorld-Python LambdaEndpoint=https://lambda.us-west-2.amazonaws.com
 ```
 
-### CI checks script
+### Testing examples against PyPI
 
-There is a convenience script that runs all checks (tests, types, lint) from the root of the repo:
-```
-.github/scripts/ci-checks.sh
-```
-
-This script also validates your commit messages against the [Conventional Commits](https://www.conventionalcommits.org/) format.
-Commit all your changes before you run the check. If your working directory is dirty the script will skip commit message validation with a warning. 
-
-You can also run the commit message check independently:
-```
-hatch run python .github/scripts/lintcommit.py
-```
-
-## Coding Standards
-Consistency is important for maintainability. Please adhere to the house-style of the repo, unless there's a really
-good reason to break pattern.
-
-### General style
-1. Follow the [Python Style Guide by Google](https://google.github.io/styleguide/pyguide.html) in general.
-2. Standardize to [ruff](https://docs.astral.sh/ruff/) formatting and linting rules. CI checks enforce these too.
-3. Avoid pulling in extra runtime dependencies. The only dependency is [boto3](https://boto3.amazonaws.com/). The
-   reason is that this SDK adds size to the AWS Lambda function of the consumer, so we should keep it as light as
-   possible.
-4. Never use `RLock` when `Lock` would do. The reason is to highlight recursive calls that have the potential for deadlocking
-   immediately, so that RLock is a deliberate and considered decision after having considered deadlocking concerns, rather
-   than just the default.
-
-### Organization
-1. Do not allow circular references, even if you can get away with it by using `if TYPE_CHECKING`. Circular references are a
-   sign that the structure of the code is not clear enough. It makes for inefficient memory management and it makes the
-   code harder to understand and follow. Do use `config` and `types` as the lowest-level import if you run into circular
-   reference issues.
-2. Do not use `__init__` files for any meaningful code or even just type declarations. Why? Because the purpose of init is not
-   to serve as a grab-bag of code that doesn't otherwise have a home.
-3. Do not introduce `utils` or `helper` style modules as a grab-bag of ad hoc functions. Introduce domain-specific classes to
-   encapsulate and model logic.
-
-### Data Structures & Typing
-1. Model data structure with immutable classes and precise type hints. (In other words, use frozen dataclasses with exact,
-   narrow type hints.) Do not rely on unstructured dicts. Why immutable? These are inherently thread-safe, and it forces you
-   to think carefully about when and where you need to mutate values.
-
-2. A rare exception to the general rule to prefer immutable classes wherever possible, is `state.ExecutionState`, which maintains
-   the state of the on-going Durable Execution and encapsulates thread-safe state mutations as the execution progresses.
-
-3. Rely on exact and explicit type declarations rather than duck typing. Why? Yes, duck typing is very pythonic. However, this
-   is a complex code-base, and exact and explicit type declarations signal intent clearly so that the type checker can help
-   you catch errors more quickly. LLMs have an easier time understanding the intent of the code with the type hints, and it makes
-   it easier for you to spot mistaken assumptions that the LLMs might make about the code. The other reason is that it makes the
-   experience of developers much easier with intelligent and context-aware autocomplete hints in an IDE.
-
-4. Declare a type definition wherever you declare a variable, even within a function scope and even where it's implied. For example,
-   even though the `str` might be _implied_ because of the `call` return type, make it explicit:
-
-```
-def my_function() -> str:
-  my_var: str = arb.call(1, 2, 3)
-  return f"arb result: {my_var}"
-```
-
-5. To update a field in a frozen dataclass, prefer to use a `clone` or `with_field` class method constructor or reinitialization,
-   rather than dataclass `replace`. There is no big technical reason for this, it's more a soft pattern. The philosophy of an update
-   should be more about thoughfully and purposefully creating a _new_ instance than "in-place editing" an existing one.
-
-
-### Initialization and conversion
-1. Class constructors must be light and not do more than initialize the class. In a dataclass you shouldn't even need an `__init__`.
-   Use a `@classmethod` factory method instead to encapsulate more advanced logic. For example, if a class depends on logic that
-   might fail, encapsulate this in a `create` classmethod:
-
-```python
-@dataclass(frozen=True)
-class MyClass:
-    id: str
-    name: str
-    timeout: int
-    
-    @classmethod
-    def create(cls, name: str, timeout: int = 30) -> Config:
-        """Factory contains """
-        if timeout <= 0:
-            raise ValueError("timeout must be positive")
-        
-        # Generate unique ID
-        config_id: str = f"cfg_{uuid.uuid4().hex[:8]}"
-        
-        return cls(id=config_id, name=name, timeout=timeout)
-```
-
-2. Encapsulate conversion logic in a `from_x` factory and `to_x` method on a class.
-
-```python
-@dataclass(frozen=True)
-class WaitOptions:
-    wait_seconds: int = 0
-
-    @classmethod
-    def from_dict(cls, data: MutableMapping[str, Any]) -> WaitOptions:
-        return cls(wait_seconds=data.get("WaitSeconds", 0))
-
-    def to_dict(self) -> MutableMapping[str, Any]:
-        return {"WaitSeconds": self.wait_seconds}
-```
-
-## Set up your IDE
-Point your IDE at the hatch virtual environment to have it recognize dependencies
-and imports. You can use either the root environment (for cross-package work) or a
-per-package dev environment (for focused work).
-
-You can find the path to the hatch Python interpreter like this:
-```
-# From the repo root — use the dev environment for the package you're working on
-hatch env find dev-core
-hatch env find dev-testing
-hatch env find dev-examples
-```
-
-### VS Code
-#### Interpreter
-If you're using VS Code, "Python: Select Interpreter" and use the hatch venv Python interpreter
-as found with the `hatch env find` command.
-
-Kiro and VS Code mangles the interpreter path if it contains spaces, which results in
-errors finding the interpreter. You can create a local .venv file symlink _without_ spaces
-in the path:
+To verify the examples package against the published SDK while still using the
+local runner package:
 
 ```bash
-# From the repo root — symlink the dev environment you want to use
-rm -rf .venv && ln -s "$(hatch env find dev-core)" .venv
+hatch run test-pypi-examples:test
 ```
 
-When you "Select Interpreter", enter path `./.venv/bin/python`.
+## Coding Expectations
 
-You'll have to rerun this command whenever you recreate your hatch envs.
+Please optimize for readability, maintainability, and consistency with the
+existing codebase.
 
-#### Linting
-Hatch uses Ruff for static analysis.
+- Follow the established patterns in nearby code.
+- Use Ruff and mypy feedback to guide formatting and type hints.
+- Prefer small, focused pull requests over broad refactors.
+- Keep runtime dependencies lightweight unless there is a strong reason to add
+  one.
+- Add or update tests when changing behavior.
 
-You might want to install the [Ruff extension for VS Code](https://github.com/astral-sh/ruff-vscode)
-to have your IDE interactively warn of the same linting and formatting rules.
+Strong typing and dataclasses are used heavily across the project, but the goal
+is clarity rather than rigid style for its own sake. Use the amount of typing
+and structure that makes the code easier to understand and maintain.
 
-These `settings.json` settings are useful:
-```
-{
-  "[python]": {
-    "editor.formatOnSave": true,
-    "editor.codeActionsOnSave": {
-      "source.fixAll": "explicit",
-      "source.organizeImports": "explicit"
-    },
-    "editor.defaultFormatter": "charliermarsh.ruff"
-  },
-  "ruff.nativeServer": "on"
-}
-```
+## Writing and Running Tests
 
-## Testing
-### How to run tests
-Run these commands from the **repository root**:
+### Running tests
 
-To run all tests across all packages:
-```
+```bash
+# Entire repo
 hatch run test:all
-```
 
-To run tests for a specific package:
-```
+# One package
 hatch run dev-core:test
-hatch run dev-testing:test
-hatch run dev-examples:test
-```
 
-To run a single test file:
-```
+# A single test file
 hatch run dev-core:test packages/async-durable-execution/tests/path_to_test_module.py
+
+# A single test
+hatch run dev-core:test packages/async-durable-execution/tests/path_to_test_module.py::test_name
+
+# Filter by pattern
+hatch run test:all -k pattern
 ```
 
-To run a specific test in a module:
-```
-hatch run dev-core:test packages/async-durable-execution/tests/path_to_test_module.py::test_mytestmethod
-```
+### Debugging tests
 
-To run a subset of tests by pattern:
-```
-hatch run test:all -k TEST_PATTERN
+```bash
+hatch run test:all --pdb
 ```
 
-This will run tests which contain names that match the given string expression (case-insensitive),
-which can include Python operators that use filenames, class names and function names as variables.
+### Test layout
 
-### Debug
-To debug failing tests:
-
-```
-$ hatch test --pdb
-```
-
-This will drop you into the Python debugger on the failed test.
-
-### Writing tests
-Place test files in the `tests/` directory, using file names that end with `_test`.
-
-Mimic the package structure in the src/async_durable_execution directory.
-Name your module so that src/mypackage/mymodule.py has a dedicated unit test file
-tests/mypackage/mymodule_test.py
+- Put tests in the package `tests/` or `test/` directory that matches the code
+  you are changing.
+- Use filenames ending in `_test.py`.
+- Prefer adding focused unit tests near the affected area, and add integration
+  coverage when behavior spans multiple components.
 
 ## Examples and Deployment
 
-Run these commands from the **repository root**.
+Run example-related commands from the repository root:
 
-To run examples tests from the repo root:
 ```bash
+# Run example tests
 hatch run dev-examples:test
-```
 
-### Build and Deploy Examples
-```bash
-# Refresh the examples env with local editable packages when needed
+# Refresh editable installs in the examples environment when needed
 hatch run -- examples:pip install -e packages/async-durable-execution
 hatch run -- examples:pip install -e packages/async-durable-execution-runner
 hatch run -- examples:pip install -e packages/async-durable-execution-examples
 
-# Build the shared example bundle with vendored dependencies
+# Build the shared example bundle
 hatch run examples:build
 
-# Preview the generated examples catalog
+# Generate the examples catalog
 hatch run examples:generate-examples-catalog
 
-# Generate a SAM template for the full catalog
+# Generate a SAM template for all examples
 hatch run examples:generate-sam-template
 
-# Generate a one-example SAM template for deployment
+# Generate a SAM template for one example
 hatch run examples:generate-sam-template -- --example-name "Hello World"
 
-# Build and deploy that example with SAM
-sam build --template-file packages/async-durable-execution-examples/template.generated.json
-sam deploy \
-  --template-file .aws-sam/build/template.yaml \
-  --stack-name hello-world-python-dev \
-  --resolve-s3 \
-  --capabilities CAPABILITY_IAM \
-  --no-confirm-changeset \
-  --parameter-overrides \
-    FunctionName=HelloWorld-Python \
-    LambdaEndpoint=https://lambda.us-west-2.amazonaws.com
-
-# Clean build artifacts
+# Clean generated artifacts
 hatch run examples:clean
 ```
 
-## Coverage
+## Pull Requests
 
-From the repository root:
-```
-# All packages combined
-hatch run test:cov
+Contributions through pull requests are appreciated.
 
-# Per-package coverage
-hatch run dev-core:cov
-hatch run dev-testing:cov
-```
+Before opening a pull request:
 
-## Linting and type checks
-Type checking (from repo root):
-```
-hatch run types:check
-```
+1. Make sure your branch is based on the latest relevant source.
+2. Check whether an issue or PR already covers the work.
+3. For larger changes, open an issue or discussion first so we can align on
+   scope before you invest a lot of time.
+4. Run the relevant tests and checks locally.
 
-Static analysis (from within a package directory, with auto-fix):
-```
-hatch fmt
-```
+When preparing a pull request:
 
-To do static analysis without auto-fixes:
-```
-hatch fmt --check
-```
+1. Keep the change focused.
+2. Explain the problem and the approach clearly.
+3. Mention any follow-up work or known limitations.
+4. Stay engaged with CI results and review feedback.
 
-## Reporting Bugs/Feature Requests
+### Pull request titles and commit messages
 
-We welcome you to use the GitHub issue tracker to report bugs or suggest features.
+We use [Conventional Commits](https://www.conventionalcommits.org/) for pull
+request titles and prefer the same style for commit messages:
 
-When filing an issue, please check existing open, or recently closed, issues to make sure somebody else hasn't already
-reported the issue. Please try to include as much information as you can. Details like these are incredibly useful:
-
-* A reproducible test case or series of steps
-* The version of our code being used
-* Any modifications you've made relevant to the bug
-* Anything unusual about your environment or deployment
-
-
-## Contributing via Pull Requests
-Contributions via pull requests are much appreciated. Before sending us a pull request, please ensure that:
-
-1. You are working against the latest source on the *main* branch.
-2. You check existing open, and recently merged, pull requests to make sure someone else hasn't addressed the problem already.
-3. You open an issue to discuss any significant work - we would hate for your time to be wasted.
-
-To send us a pull request, please:
-
-1. Fork the repository.
-2. Modify the source; please focus on the specific change you are contributing. If you also reformat all the code, it will be hard for us to focus on your change.
-3. Ensure local tests pass.
-4. Commit to your fork using clear commit messages.
-5. Send us a pull request, answering any default questions in the pull request interface.
-6. Pay attention to any automated CI failures reported in the pull request, and stay involved in the conversation.
-
-### Pull Request Title and Commit Message Format
-
-We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification for PR titles and commit messages. This helps us maintain a clear project history and enables automated tooling.
-
-**Format:** `type: subject`
-
-- **type**: The type of change (required)  
-- **subject**: Brief description of the change (required, max 50 characters)
-
-**Valid types:**
-- `feat`: New features
-- `fix`: Bug fixes
-- `docs`: Documentation changes
-- `test`: Adding or updating tests
-- `refactor`: Code refactoring without functional changes
-- `perf`: Performance improvements
-- `style`: Code style/formatting changes
-- `chore`: Maintenance tasks
-- `ci`: CI/CD changes
-- `build`: Build system changes
-- `deps`: Dependency updates
-
-**Examples:**
-```
-feat: add retry mechanism for operations
-fix: resolve memory leak in execution state
-docs: update API documentation for context
-test: add integration tests for parallel exec
-feat(sdk): implement new callback functionality
-fix(examples): correct timeout handling
+```text
+type: short description
 ```
 
-**Requirements:**
-- Subject line must be 50 characters or less
-- Body text should wrap at 72 characters for good terminal display
-- Use lowercase for type and scope
-- Use imperative mood in subject ("add" not "added" or "adds")
-- No period at the end of the subject line
-- Use conventional commit message format with clear, concise descriptions
-- Body should provide detailed explanation of changes with bullet points when helpful
+Common types include:
 
-**Full commit message example:**
+- `feat`
+- `fix`
+- `docs`
+- `test`
+- `refactor`
+- `perf`
+- `style`
+- `chore`
+- `ci`
+- `build`
+- `deps`
+
+Examples:
+
+```text
+feat: add retry support for callback polling
+fix: preserve child context summary on replay
+docs: clarify local runner setup
 ```
-feat: add retry mechanism for operations
 
-- Implement exponential backoff strategy for transient failures
-- Add configurable retry limits and timeout settings
-- Include comprehensive error logging for debugging
-- Update documentation with retry configuration examples
+## Reporting Bugs and Requesting Features
 
-Resolves issue with intermittent network failures causing
-execution interruptions in production environments.
-```
+GitHub issues are the best place to report bugs, request features, or suggest
+documentation improvements. Before opening a new issue, please check for an
+existing one first.
 
-The PR title will be used as the commit message when your PR is merged, so please ensure it follows this format.
+Helpful issue details include:
 
-GitHub provides additional document on [forking a repository](https://help.github.com/articles/fork-a-repo/) and
-[creating a pull request](https://help.github.com/articles/creating-a-pull-request/).
-
-
-## Finding contributions to work on
-Looking at the existing issues is a great way to find something to contribute on. As our projects, by default, use the default GitHub issue labels (enhancement/bug/duplicate/help wanted/invalid/question/wontfix), looking at any 'help wanted' issues is a great place to start.
-
+- a reproducible example or clear reproduction steps
+- the package and version involved
+- relevant logs or error messages
+- environment details that might matter
 
 ## Code of Conduct
-Please see [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations and participation guidelines.
 
+Please read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations.
 
-## Security issue notifications
-If you discover a potential security issue, please do **not** create a public GitHub issue. Contact the repository maintainers privately through an available non-public channel.
+## Security
 
+If you discover a potential security issue, please do not open a public GitHub
+issue. Contact the maintainers privately through an available non-public
+channel.
 
 ## Licensing
 
-See the [LICENSE](LICENSE) file for our project's licensing. We will ask you to confirm the licensing of your contribution.
+See [LICENSE](LICENSE) for project licensing. By contributing, you agree that
+your contributions may be distributed under the same license.
