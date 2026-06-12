@@ -8,7 +8,6 @@ from async_durable_execution.lambda_service import (
     OperationUpdate,
     StateOutput,
 )
-
 from async_durable_execution_runner.checkpoint.processor import (
     CheckpointProcessor,
 )

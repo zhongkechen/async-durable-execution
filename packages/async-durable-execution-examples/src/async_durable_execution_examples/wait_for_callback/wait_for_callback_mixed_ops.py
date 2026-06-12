@@ -1,8 +1,7 @@
 """Demonstrates waitForCallback combined with steps, waits, and other operations."""
 
-from datetime import timedelta
-
 import asyncio
+from datetime import timedelta
 from typing import Any
 
 from async_durable_execution.context import DurableContext
@@ -26,7 +25,6 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     async def submitter(_callback_id, _context) -> None:
         """Submitter uses data from previous step."""
         await asyncio.sleep(0.1)
-        return None
 
     callback_result: str = context.wait_for_callback(
         submitter,

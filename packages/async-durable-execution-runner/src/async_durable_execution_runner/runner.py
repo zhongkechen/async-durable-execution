@@ -2,27 +2,21 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 from dataclasses import dataclass, field
 from typing import (
     TYPE_CHECKING,
     Any,
-    Concatenate,
-    ParamSpec,
     Protocol,
     Self,
     TypeVar,
     cast,
 )
 
-import async_durable_execution
 import boto3  # type: ignore
 from botocore.exceptions import ClientError  # type: ignore
-from async_durable_execution.execution import (
-    InvocationStatus,
-    durable_execution,
-)
+
+from async_durable_execution.execution import InvocationStatus
 from async_durable_execution.lambda_service import (
     ErrorObject,
     OperationPayload,
@@ -31,7 +25,7 @@ from async_durable_execution.lambda_service import (
     OperationType,
 )
 from async_durable_execution.lambda_service import Operation as SvcOperation
-
+from async_durable_execution.serdes import ExtendedTypeSerDes
 from async_durable_execution_runner.checkpoint.processor import (
     CheckpointProcessor,
 )
@@ -74,15 +68,29 @@ if TYPE_CHECKING:
     import datetime
     from collections.abc import Callable, MutableMapping
 
-    from async_durable_execution.context import DurableContext
-    from async_durable_execution.execution import InvocationStatus
-
     from async_durable_execution_runner.execution import Execution
-    from async_durable_execution_runner.web.server import WebServiceConfig
     from async_durable_execution_runner.model import Event
+    from async_durable_execution_runner.web.server import WebServiceConfig
 
 
 logger = logging.getLogger(__name__)
+
+
+def _deserialize_operation_payload(
+    payload: OperationPayload | None,
+    serdes: ExtendedTypeSerDes | None = None,
+) -> Any:
+    """Deserialize an operation payload using the provided or default serializer."""
+    if not payload:
+        return None
+
+    if serdes is None:
+        serdes = ExtendedTypeSerDes()
+
+    try:
+        return serdes.deserialize(payload)
+    except Exception:
+        return json.loads(payload)
 
 
 @dataclass(frozen=True)
@@ -121,7 +129,6 @@ class Operation:
 
 
 T = TypeVar("T", bound=Operation)
-P = ParamSpec("P")
 
 
 class OperationFactory(Protocol):
@@ -208,22 +215,26 @@ class ContextOperation(Operation):
         raise DurableFunctionsTestError(msg)
 
     def get_step(self, name: str) -> StepOperation:
-        return cast(StepOperation, self.get_operation_by_name(name))
+        return cast("StepOperation", self.get_operation_by_name(name))
 
     def get_wait(self, name: str) -> WaitOperation:
-        return cast(WaitOperation, self.get_operation_by_name(name))
+        return cast("WaitOperation", self.get_operation_by_name(name))
 
     def get_context(self, name: str) -> ContextOperation:
-        return cast(ContextOperation, self.get_operation_by_name(name))
+        return cast("ContextOperation", self.get_operation_by_name(name))
 
     def get_callback(self, name: str) -> CallbackOperation:
-        return cast(CallbackOperation, self.get_operation_by_name(name))
+        return cast("CallbackOperation", self.get_operation_by_name(name))
 
     def get_invoke(self, name: str) -> InvokeOperation:
-        return cast(InvokeOperation, self.get_operation_by_name(name))
+        return cast("InvokeOperation", self.get_operation_by_name(name))
 
     def get_execution(self, name: str) -> ExecutionOperation:
-        return cast(ExecutionOperation, self.get_operation_by_name(name))
+        return cast("ExecutionOperation", self.get_operation_by_name(name))
+
+    def get_deserialized_result(self, serdes: ExtendedTypeSerDes | None = None) -> Any:
+        """Return the deserialized operation result."""
+        return _deserialize_operation_payload(self.result, serdes)
 
 
 @dataclass(frozen=True)
@@ -374,6 +385,10 @@ class InvokeOperation(Operation):
             if operation.chained_invoke_details
             else None,
         )
+
+    def get_deserialized_result(self, serdes: ExtendedTypeSerDes | None = None) -> Any:
+        """Return the deserialized operation result."""
+        return _deserialize_operation_payload(self.result, serdes)
 
 
 OPERATION_FACTORIES: MutableMapping[OperationType, type[OperationFactory]] = {
@@ -540,22 +555,26 @@ class DurableFunctionTestResult:
         raise DurableFunctionsTestError(msg)
 
     def get_step(self, name: str) -> StepOperation:
-        return cast(StepOperation, self.get_operation_by_name(name))
+        return cast("StepOperation", self.get_operation_by_name(name))
 
     def get_wait(self, name: str) -> WaitOperation:
-        return cast(WaitOperation, self.get_operation_by_name(name))
+        return cast("WaitOperation", self.get_operation_by_name(name))
 
     def get_context(self, name: str) -> ContextOperation:
-        return cast(ContextOperation, self.get_operation_by_name(name))
+        return cast("ContextOperation", self.get_operation_by_name(name))
 
     def get_callback(self, name: str) -> CallbackOperation:
-        return cast(CallbackOperation, self.get_operation_by_name(name))
+        return cast("CallbackOperation", self.get_operation_by_name(name))
 
     def get_invoke(self, name: str) -> InvokeOperation:
-        return cast(InvokeOperation, self.get_operation_by_name(name))
+        return cast("InvokeOperation", self.get_operation_by_name(name))
 
     def get_execution(self, name: str) -> ExecutionOperation:
-        return cast(ExecutionOperation, self.get_operation_by_name(name))
+        return cast("ExecutionOperation", self.get_operation_by_name(name))
+
+    def get_deserialized_result(self, serdes: ExtendedTypeSerDes | None = None) -> Any:
+        """Return the deserialized execution result."""
+        return _deserialize_operation_payload(self.result, serdes)
 
     def get_all_operations(self) -> list[Operation]:
         """Recursively get all operations including nested ones."""
@@ -570,12 +589,27 @@ class DurableFunctionTestResult:
         return all_ops
 
 
-class DurableFunctionTestRunner:
-    def __init__(self, handler: Callable, poll_interval: float = 1.0):
+class DurableFunctionLocalTestRunner:
+    def __init__(
+        self,
+        handler: Callable,
+        poll_interval: float = 1.0,
+        input: Any = None,  # noqa: A002
+        timeout: int = 900,
+        function_name: str = "test-function",
+        execution_name: str = "execution-name",
+        account_id: str = "123456789012",
+    ):
         self._scheduler: Scheduler = Scheduler()
         self._scheduler.start()
         self._store = InMemoryExecutionStore()
+        self.mode = "local"
         self.poll_interval = poll_interval
+        self._default_input = input
+        self._default_timeout = timeout
+        self._function_name = function_name
+        self._execution_name = execution_name
+        self._account_id = account_id
         self._checkpoint_processor = CheckpointProcessor(
             store=self._store, scheduler=self._scheduler
         )
@@ -602,21 +636,11 @@ class DurableFunctionTestRunner:
 
     def run(
         self,
-        input: str | None = None,  # noqa: A002
-        timeout: int = 900,
-        function_name: str = "test-function",
-        execution_name: str = "execution-name",
-        account_id: str = "123456789012",
     ) -> DurableFunctionTestResult:
-        execution_arn = self.run_async(
-            input=input,
-            timeout=timeout,
-            function_name=function_name,
-            execution_name=execution_name,
-            account_id=account_id,
+        execution_arn = self.run_async()
+        return self.wait_for_result(
+            execution_arn=execution_arn, timeout=self._default_timeout
         )
-
-        return self.wait_for_result(execution_arn=execution_arn, timeout=timeout)
 
     def send_callback_success(
         self, callback_id: str, result: bytes | None = None
@@ -633,23 +657,18 @@ class DurableFunctionTestRunner:
 
     def run_async(
         self,
-        input: str | None = None,  # noqa: A002
-        timeout: int = 900,
-        function_name: str = "test-function",
-        execution_name: str = "execution-name",
-        account_id: str = "123456789012",
     ) -> str:
         start_input = StartDurableExecutionInput(
-            account_id=account_id,
-            function_name=function_name,
+            account_id=self._account_id,
+            function_name=self._function_name,
             function_qualifier="$LATEST",
-            execution_name=execution_name,
-            execution_timeout_seconds=timeout,
+            execution_name=self._execution_name,
+            execution_timeout_seconds=self._default_timeout,
             execution_retention_period_days=7,
             invocation_id="inv-12345678-1234-1234-1234-123456789012",
             trace_fields={"trace_id": "abc123", "span_id": "def456"},
             tenant_id="tenant-001",
-            input=input,
+            input=self._default_input,
         )
 
         output: StartDurableExecutionOutput = self._executor.start_execution(
@@ -688,7 +707,7 @@ class DurableFunctionTestRunner:
                 )
                 if callback_id:
                     return callback_id
-            except ResourceNotFoundException as e:
+            except ResourceNotFoundException:
                 pass
             except Exception as e:
                 msg = f"Failed to fetch execution history: {e}"
@@ -703,21 +722,59 @@ class DurableFunctionTestRunner:
         raise TimeoutError(msg)
 
 
-class DurableChildContextTestRunner(DurableFunctionTestRunner):
-    """Test a durable block, annotated with @durable_with_child_context, in isolation."""
+def create_runner(
+    *,
+    mode: str,
+    handler: Callable | None = None,
+    function_name: str | None = None,
+    region: str = "us-west-2",
+    lambda_endpoint: str | None = None,
+    poll_interval: float = 1.0,
+    input: Any = None,  # noqa: A002
+    timeout: int = 60,
+) -> DurableFunctionLocalTestRunner | DurableFunctionCloudTestRunner:
+    """Create a configured local or cloud durable function runner.
 
-    def __init__(
-        self,
-        context_function: Callable[Concatenate[DurableContext, P], Any],
-        *args,
-        **kwargs,
-    ):
-        # wrap the durable context around a durable execution handler as a convenience to run directly
-        @durable_execution
-        def handler(event: Any, context: DurableContext):  # noqa: ARG001
-            return context_function(*args, **kwargs)(context)
+    Args:
+        mode: Runner mode, either ``local`` or ``cloud``.
+        handler: Durable handler to run locally. Required when ``mode='local'``.
+        function_name: Qualified Lambda function name. Required when ``mode='cloud'``.
+        region: AWS region for cloud mode.
+        lambda_endpoint: Optional Lambda endpoint for cloud mode.
+        poll_interval: Poll interval used by the underlying runner.
+        input: Default input for ``run()`` and ``run_async()``.
+        timeout: Default timeout for ``run()`` and ``run_async()``.
 
-        super().__init__(handler)
+    Returns:
+        A configured runner that can be used as a context manager.
+    """
+    if mode == "local":
+        if handler is None:
+            msg = "handler is required when mode='local'"
+            raise InvalidParameterValueException(msg)
+        runner = DurableFunctionLocalTestRunner(
+            handler=handler,
+            poll_interval=poll_interval,
+            input=input,
+            timeout=timeout,
+        )
+    elif mode == "cloud":
+        if function_name is None:
+            msg = "function_name is required when mode='cloud'"
+            raise InvalidParameterValueException(msg)
+        runner = DurableFunctionCloudTestRunner(
+            function_name=function_name,
+            region=region,
+            lambda_endpoint=lambda_endpoint,
+            poll_interval=poll_interval,
+            input=input,
+            timeout=timeout,
+        )
+    else:
+        msg = f"Unsupported runner mode: {mode}"
+        raise InvalidParameterValueException(msg)
+
+    return runner
 
 
 class WebRunner:
@@ -869,7 +926,7 @@ class DurableFunctionCloudTestRunner:
     """Test runner that executes durable functions against actual AWS Lambda backend.
 
     This runner invokes deployed Lambda functions and polls for execution completion,
-    providing the same interface as DurableFunctionTestRunner for seamless test
+    providing the same interface as DurableFunctionLocalTestRunner for seamless test
     compatibility between local and cloud modes.
 
     Example:
@@ -877,7 +934,7 @@ class DurableFunctionCloudTestRunner:
         ...     function_name="HelloWorld-Python-PR-123", region="us-west-2"
         ... )
         >>> with runner:
-        ...     result = runner.run(input={"name": "World"}, timeout=60)
+        ...     result = runner.run()
         >>> assert result.current_status == InvocationStatus.SUCCEEDED
     """
 
@@ -887,12 +944,17 @@ class DurableFunctionCloudTestRunner:
         region: str = "us-west-2",
         lambda_endpoint: str | None = None,
         poll_interval: float = 1.0,
+        input: Any = None,  # noqa: A002
+        timeout: int = 60,
     ):
         """Initialize cloud test runner."""
+        self.mode = "cloud"
         self.function_name = function_name
         self.region = region
         self.lambda_endpoint = lambda_endpoint
         self.poll_interval = poll_interval
+        self._default_input = input
+        self._default_timeout = timeout
 
         client_config = boto3.session.Config(parameter_validation=False)
         self.lambda_client = boto3.client(
@@ -904,16 +966,16 @@ class DurableFunctionCloudTestRunner:
 
     def run(
         self,
-        input: str | None = None,  # noqa: A002
-        timeout: int = 60,
     ) -> DurableFunctionTestResult:
         """Execute function on AWS Lambda and wait for completion."""
         logger.info(
-            "Invoking Lambda function: %s (timeout: %ds)", self.function_name, timeout
+            "Invoking Lambda function: %s (timeout: %ds)",
+            self.function_name,
+            self._default_timeout,
         )
 
         # JSON encode input
-        payload = json.dumps(input)
+        payload = json.dumps(self._default_input)
 
         # Invoke Lambda function
         try:
@@ -953,18 +1015,20 @@ class DurableFunctionCloudTestRunner:
             )
             raise DurableFunctionsTestError(msg)
 
-        return self.wait_for_result(execution_arn=execution_arn, timeout=timeout)
+        return self.wait_for_result(
+            execution_arn=execution_arn, timeout=self._default_timeout
+        )
 
     def run_async(
         self,
-        input: str | None = None,  # noqa: A002
-        timeout: int = 60,
     ) -> str:
         """Execute function on AWS Lambda asynchronously"""
         logger.info(
-            "Invoking Lambda function: %s (timeout: %ds)", self.function_name, timeout
+            "Invoking Lambda function: %s (timeout: %ds)",
+            self.function_name,
+            self._default_timeout,
         )
-        payload = json.dumps(input)
+        payload = json.dumps(self._default_input)
         try:
             response = self.lambda_client.invoke(
                 FunctionName=self.function_name,

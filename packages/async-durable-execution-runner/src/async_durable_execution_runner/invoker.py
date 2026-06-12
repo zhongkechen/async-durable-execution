@@ -15,7 +15,6 @@ from async_durable_execution.execution import (
     DurableExecutionInvocationOutput,
     InitialExecutionState,
 )
-
 from async_durable_execution_runner.exceptions import (
     DurableFunctionsTestError,
     InvalidParameterValueException,

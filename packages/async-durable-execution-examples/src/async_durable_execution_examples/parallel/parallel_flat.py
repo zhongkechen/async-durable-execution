@@ -1,10 +1,9 @@
 """Example demonstrating parallel operations for concurrent execution."""
 
 from datetime import timedelta
-
 from typing import Any
 
-from async_durable_execution.config import ParallelConfig, NestingType
+from async_durable_execution.config import NestingType, ParallelConfig
 from async_durable_execution.context import DurableContext
 from async_durable_execution.execution import durable_execution
 

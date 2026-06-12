@@ -1,7 +1,6 @@
 """Example demonstrating multiple steps with retry logic."""
 
 from datetime import timedelta
-
 from itertools import count
 from typing import Any
 

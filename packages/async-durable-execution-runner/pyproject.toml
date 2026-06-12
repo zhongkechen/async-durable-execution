@@ -73,26 +73,29 @@ dependencies = [
 ]
 
 [tool.hatch.envs.test.scripts]
-test = "pytest tests/ -v"
+test = "pytest tests_async_durable_execution_runner/ -v"
 cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/async_durable_execution_runner --cov-fail-under=95"
 
 [tool.hatch.envs.types]
 extra-dependencies = ["mypy>=1.0.0", "pytest"]
 [tool.hatch.envs.types.scripts]
-check = "mypy --install-types --non-interactive {args:src/async_durable_execution_runner tests}"
+check = "mypy --install-types --non-interactive {args:src/async_durable_execution_runner tests_async_durable_execution_runner}"
 
 [tool.coverage.run]
 source_pkgs = ["async_durable_execution_runner"]
 branch = true
 parallel = true
-omit = ["src/async_durable_execution_runner/__about__.py", "tests/*"]
+omit = ["src/async_durable_execution_runner/__about__.py", "tests_async_durable_execution_runner/*"]
 
 [tool.coverage.paths]
 async_durable_execution_runner = [
   "src/async_durable_execution_runner",
   "*/async-durable-execution-runner/src/async_durable_execution_runner",
 ]
-tests = ["tests", "*/async-durable-execution-runner/tests"]
+tests = [
+  "tests_async_durable_execution_runner",
+  "*/async-durable-execution-runner/tests_async_durable_execution_runner",
+]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -108,7 +111,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 preview = false
-select = ["TID252"]  # Enforce absolute imports (ban relative imports)
+select = []
 
 [tool.ruff.lint.isort]
 known-first-party = ["async_durable_execution_runner"]
@@ -116,7 +119,7 @@ force-single-line = false
 lines-after-imports = 2
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = [
+"tests_async_durable_execution_runner/**" = [
   "ARG001",
   "ARG002",
   "ARG005",
@@ -130,14 +133,7 @@ lines-after-imports = 2
 ]
 
 [tool.pytest.ini_options]
-# Declare custom markers to avoid warnings with --strict-markers
-markers = [
-  # Used for test selection with -m example
-  "example: marks tests as example tests (deselect with '-m \"not example\"')",
-  # Used for configuration - passes handler to the durable_runner fixture
-  "durable_execution: marks tests that use the durable_runner fixture (not used for test selection)",
-]
 # Default test discovery paths
-testpaths = ["tests"]
+testpaths = ["tests_async_durable_execution_runner"]
 # Default options for all test runs
 addopts = "-v --strict-markers"

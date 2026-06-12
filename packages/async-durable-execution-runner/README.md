@@ -102,17 +102,22 @@ async def function_under_test(event: Any, context: DurableContext) -> list[str]:
 
 ```python
 from async_durable_execution.execution import InvocationStatus
-from async_durable_execution_runner.runner import (
+from async_durable_execution_runner import (
     ContextOperation,
+    create_runner,
     DurableFunctionTestResult,
-    DurableFunctionTestRunner,
     StepOperation,
 )
 
 
 def test_my_durable_functions():
-    with DurableFunctionTestRunner(handler=function_under_test) as runner:
-        result: DurableFunctionTestResult = runner.run(input="input str", timeout=10)
+    with create_runner(
+        mode="local",
+        handler=function_under_test,
+        input="input str",
+        timeout=10,
+    ) as runner:
+        result: DurableFunctionTestResult = runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.result == '["1 2", "3 4 4 3", "5 6"]'

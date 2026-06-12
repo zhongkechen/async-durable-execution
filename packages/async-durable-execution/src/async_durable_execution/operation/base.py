@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 
 from async_durable_execution.exceptions import InvalidStateError
 
+
 if TYPE_CHECKING:
     from async_durable_execution.state import CheckpointedResult
 

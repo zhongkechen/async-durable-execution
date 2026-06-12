@@ -8,10 +8,11 @@ import logging
 import queue
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from threading import Lock
-from typing import TYPE_CHECKING, Callable, Any
+from typing import TYPE_CHECKING
 
 from async_durable_execution.async_tools import resolve_awaitable
 from async_durable_execution.exceptions import (
@@ -33,13 +34,12 @@ from async_durable_execution.lambda_service import (
     OperationType,
     OperationUpdate,
     StateOutput,
-    OperationSubType,
 )
 from async_durable_execution.plugin import (
     PluginExecutor,
-    UserFunctionStartInfo,
 )
 from async_durable_execution.threading import CompletionEvent, OrderedLock
+
 
 if TYPE_CHECKING:
     import datetime

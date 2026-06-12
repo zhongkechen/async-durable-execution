@@ -1,7 +1,6 @@
 """Demonstrates multiple concurrent createCallback operations using context.parallel."""
 
 from datetime import timedelta
-
 from typing import Any
 
 from async_durable_execution.config import CallbackConfig

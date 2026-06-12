@@ -1,7 +1,6 @@
 """Test map with 50 iterations, each returning 100KB data."""
 
 from datetime import timedelta
-
 from typing import Any
 
 from async_durable_execution.config import MapConfig

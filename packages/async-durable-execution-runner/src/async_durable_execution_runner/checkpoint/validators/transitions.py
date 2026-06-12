@@ -8,7 +8,6 @@ from async_durable_execution.lambda_service import (
     OperationAction,
     OperationType,
 )
-
 from async_durable_execution_runner.checkpoint.validators.operations.callback import (
     VALID_ACTIONS_FOR_CALLBACK,
 )

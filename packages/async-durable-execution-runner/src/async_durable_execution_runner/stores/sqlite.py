@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any, cast
 
 from async_durable_execution_runner.exceptions import (
-    ResourceNotFoundException,
     InvalidParameterValueException,
+    ResourceNotFoundException,
     RuntimeException,
 )
 from async_durable_execution_runner.execution import Execution
@@ -195,7 +195,7 @@ class SQLiteExecutionStore(ExecutionStore):
             if limit_exists:
                 data_query: str = f"SELECT durable_execution_arn, data {base_query} {order_clause} LIMIT ? OFFSET ?"
                 params_with_limit: list[str | float | int] = params + [
-                    cast(int, limit),
+                    cast("int", limit),
                     offset,
                 ]
             else:

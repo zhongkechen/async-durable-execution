@@ -112,10 +112,10 @@ hatch run test:all
 hatch run dev-core:test
 
 # A single test file
-hatch run dev-core:test packages/async-durable-execution/tests/path_to_test_module.py
+hatch run dev-core:test packages/async-durable-execution/tests_async_durable_execution/path_to_test_module.py
 
 # A single test
-hatch run dev-core:test packages/async-durable-execution/tests/path_to_test_module.py::test_name
+hatch run dev-core:test packages/async-durable-execution/tests_async_durable_execution/path_to_test_module.py::test_name
 
 # Filter by pattern
 hatch run test:all -k pattern

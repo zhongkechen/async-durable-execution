@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import time
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -14,27 +13,25 @@ from async_durable_execution.execution import (
     InvocationStatus,
 )
 from async_durable_execution.lambda_service import (
+    CallbackOptions,
     CallbackTimeoutType,
     ErrorObject,
     Operation,
-    OperationUpdate,
     OperationStatus,
     OperationType,
-    CallbackOptions,
+    OperationUpdate,
 )
-
 from async_durable_execution_runner.exceptions import (
-    ExecutionAlreadyStartedException,
     IllegalStateException,
     InvalidParameterValueException,
     ResourceNotFoundException,
 )
 from async_durable_execution_runner.execution import Execution
 from async_durable_execution_runner.model import (
+    TERMINAL_STATUSES,
     CheckpointDurableExecutionResponse,
     CheckpointUpdatedExecutionState,
     EventCreationContext,
-    EventType,
     GetDurableExecutionHistoryResponse,
     GetDurableExecutionResponse,
     GetDurableExecutionStateResponse,
@@ -46,7 +43,6 @@ from async_durable_execution_runner.model import (
     StartDurableExecutionInput,
     StartDurableExecutionOutput,
     StopDurableExecutionResponse,
-    TERMINAL_STATUSES,
 )
 from async_durable_execution_runner.model import (
     Event as HistoryEvent,
@@ -192,17 +188,13 @@ class Executor(ExecutionObserver):
             durable_execution_name=execution.start_input.execution_name,
             function_arn=f"arn:aws:lambda:us-east-1:123456789012:function:{execution.start_input.function_name}",
             status=status,
-            start_timestamp=execution_op.start_timestamp
-            if execution_op.start_timestamp
-            else datetime.now(UTC),
+            start_timestamp=execution_op.start_timestamp or datetime.now(UTC),
             input_payload=execution_op.execution_details.input_payload
             if execution_op.execution_details
             else None,
             result=result,
             error=error,
-            end_timestamp=execution_op.end_timestamp
-            if execution_op.end_timestamp
-            else None,
+            end_timestamp=execution_op.end_timestamp or None,
             version="1.0",
         )
 
@@ -445,9 +437,7 @@ class Executor(ExecutionObserver):
 
         # Generate all events first (without final event IDs)
         for op in ops:
-            operation_update: OperationUpdate | None = updates_dict.get(
-                op.operation_id, None
-            )
+            operation_update: OperationUpdate | None = updates_dict.get(op.operation_id)
 
             if op.status is OperationStatus.PENDING:
                 if (

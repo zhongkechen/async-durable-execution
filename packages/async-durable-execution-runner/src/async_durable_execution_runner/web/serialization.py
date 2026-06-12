@@ -7,11 +7,9 @@ along with AWS-compatible implementations using boto's rest-json serializers.
 from __future__ import annotations
 
 import json
-import os
-from typing import Any, Protocol
 from datetime import datetime
+from typing import Any, Protocol
 
-import async_durable_execution
 import botocore.loaders  # type: ignore
 from botocore.model import ServiceModel  # type: ignore
 from botocore.parsers import create_parser  # type: ignore
@@ -70,11 +68,11 @@ class JSONSerializer:
             return json_string.encode("utf-8")
         except (TypeError, ValueError) as e:
             raise InvalidParameterValueException(
-                f"Failed to serialize data to JSON: {str(e)}"
+                f"Failed to serialize data to JSON: {e!s}"
             )
 
     def _default_handler(self, obj: Any) -> float:
-        """Handle non-permitive objects."""
+        """Handle non-primitive objects."""
         if isinstance(obj, datetime):
             return obj.timestamp()
         # Raise TypeError for unsupported types

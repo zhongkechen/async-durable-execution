@@ -6,7 +6,6 @@ with exponential backoff between attempts.
 """
 
 from datetime import timedelta
-
 from typing import Any
 
 from async_durable_execution.config import WaitForCallbackConfig
@@ -36,7 +35,6 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
             """Submit the callback ID to an external system."""
             # In real usage, this would send the callback_id to an external
             # system (e.g., via API call, SQS message, etc.)
-            pass
 
         config = WaitForCallbackConfig(
             timeout=timedelta(seconds=30),

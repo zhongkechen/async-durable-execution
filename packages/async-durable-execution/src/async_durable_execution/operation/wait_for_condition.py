@@ -24,6 +24,7 @@ from async_durable_execution.suspend import (
 )
 from async_durable_execution.types import WaitForConditionCheckContext
 
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 

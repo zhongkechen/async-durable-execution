@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Self, TypedDict
 
+
 BAD_REQUEST_ERROR: int = 400
 TOO_MANY_REQUESTS_ERROR: int = 429
 SERVICE_ERROR: int = 500

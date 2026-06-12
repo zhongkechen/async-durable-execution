@@ -17,6 +17,7 @@ from async_durable_execution.exceptions import (
 from async_durable_execution.lambda_service import ErrorObject
 from async_durable_execution.types import BatchResult as BatchResultProtocol
 
+
 if TYPE_CHECKING:
     from concurrent.futures import Future
 

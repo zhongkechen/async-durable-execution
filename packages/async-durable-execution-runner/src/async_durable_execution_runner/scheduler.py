@@ -182,7 +182,7 @@ class Scheduler:
                             msg: str = "error in scheduled task"
                             logger.exception(msg)
                         raise
-            except asyncio.CancelledError:  # noqa: TRY302
+            except asyncio.CancelledError:  # noqa: TRY203
                 # might want to handle more things here
                 raise
 

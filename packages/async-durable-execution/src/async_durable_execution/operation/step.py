@@ -13,19 +13,16 @@ from async_durable_execution.exceptions import (
     ExecutionError,
     InvalidStateError,
     StepInterruptedError,
-    SuspendExecution,
 )
 from async_durable_execution.lambda_service import (
     ErrorObject,
     OperationUpdate,
-    OperationType,
 )
 from async_durable_execution.logger import Logger, LogInfo
 from async_durable_execution.operation.base import (
     CheckResult,
     OperationExecutor,
 )
-from async_durable_execution.plugin import UserFunctionStartInfo
 from async_durable_execution.retries import RetryDecision, RetryPresets
 from async_durable_execution.serdes import deserialize, serialize
 from async_durable_execution.suspend import (
@@ -33,6 +30,7 @@ from async_durable_execution.suspend import (
     suspend_with_optional_resume_timestamp,
 )
 from async_durable_execution.types import StepContext
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable

@@ -1,7 +1,6 @@
 """Demonstrates handling of operations that return undefined values during replay."""
 
 from datetime import timedelta
-
 from typing import Any
 
 from async_durable_execution.context import (

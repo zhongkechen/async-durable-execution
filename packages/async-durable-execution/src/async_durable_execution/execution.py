@@ -9,33 +9,31 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-
 from async_durable_execution.async_tools import invoke_callable
 from async_durable_execution.context import DurableContext
 from async_durable_execution.exceptions import (
     BackgroundThreadError,
     BotoClientError,
     CheckpointError,
-    DurableExecutionsError,
     ExecutionError,
     InvocationError,
     SuspendExecution,
 )
 from async_durable_execution.lambda_service import (
+    DurableExecutionInvocationOutput,
     DurableServiceClient,
     ErrorObject,
+    InvocationStatus,
     LambdaClient,
     Operation,
-    OperationType,
     OperationUpdate,
-    InvocationStatus,
-    DurableExecutionInvocationOutput,
 )
 from async_durable_execution.plugin import (
     DurableInstrumentationPlugin,
     PluginExecutor,
 )
 from async_durable_execution.state import ExecutionState, ReplayStatus
+
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, MutableMapping

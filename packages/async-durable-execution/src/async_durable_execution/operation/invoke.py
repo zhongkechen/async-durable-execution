@@ -23,6 +23,7 @@ from async_durable_execution.serdes import (
 )
 from async_durable_execution.suspend import suspend_with_optional_resume_delay
 
+
 if TYPE_CHECKING:
     from async_durable_execution.config import InvokeConfig
     from async_durable_execution.identifier import OperationIdentifier

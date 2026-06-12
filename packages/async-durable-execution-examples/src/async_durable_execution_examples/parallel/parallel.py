@@ -1,7 +1,6 @@
 """Example demonstrating parallel operations for concurrent execution."""
 
 from datetime import timedelta
-
 from typing import Any
 
 from async_durable_execution.config import ParallelConfig
