@@ -1,8 +1,9 @@
 """Demonstrates multiple invocations tracking with waitForCallback operations across different invocations."""
 
+from datetime import timedelta
+
 from typing import Any
 
-from async_durable_execution.config import Duration
 from async_durable_execution.context import DurableContext
 from async_durable_execution.execution import durable_execution
 
@@ -11,7 +12,7 @@ from async_durable_execution.execution import durable_execution
 async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating multiple invocations with waitForCallback operations."""
     # First invocation - wait operation
-    context.wait(Duration.from_seconds(1), name="wait-invocation-1")
+    context.wait(timedelta(seconds=1), name="wait-invocation-1")
 
     # First callback operation
     async def first_submitter(callback_id: str, _context) -> None:
@@ -34,7 +35,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     )
 
     # Second invocation - another wait operation
-    context.wait(Duration.from_seconds(1), name="wait-invocation-2")
+    context.wait(timedelta(seconds=1), name="wait-invocation-2")
 
     # Second callback operation
     async def second_submitter(callback_id: str, _context) -> None:

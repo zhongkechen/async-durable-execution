@@ -1,11 +1,12 @@
 """Test map with 50 iterations, each returning 100KB data."""
 
+from datetime import timedelta
+
 from typing import Any
 
 from async_durable_execution.config import MapConfig
 from async_durable_execution.context import DurableContext
 from async_durable_execution.execution import durable_execution
-from async_durable_execution.config import Duration
 
 
 async def generate_large_string(size_in_kb: int) -> str:
@@ -43,7 +44,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         config=config,
     )
 
-    context.wait(Duration.from_seconds(1), name="wait1")
+    context.wait(timedelta(seconds=1), name="wait1")
 
     # Process results immediately after map operation
     # Note: After wait operations, the BatchResult may be summarized
@@ -62,7 +63,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         "allItemsProcessed": all_items_processed,
     }
 
-    context.wait(Duration.from_seconds(1), name="wait2")
+    context.wait(timedelta(seconds=1), name="wait2")
 
     return {
         "success": True,

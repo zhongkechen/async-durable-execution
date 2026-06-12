@@ -1,11 +1,12 @@
 """Tests for retry strategies and jitter implementations."""
 
+from datetime import timedelta
+
 import re
 from unittest.mock import patch
 
 import pytest
 
-from async_durable_execution.config import Duration
 from async_durable_execution.retries import (
     JitterStrategy,
     RetryDecision,
@@ -77,7 +78,7 @@ def test_invalid_jitter_strategy():
 
 def test_retry_factory():
     """Test retry factory method."""
-    decision = RetryDecision.retry(Duration.from_seconds(30))
+    decision = RetryDecision.retry(timedelta(seconds=30))
     assert decision.should_retry is True
     assert decision.delay_seconds == 30
 
@@ -168,7 +169,7 @@ def test_exponential_backoff_calculation(mock_random):
     """Test exponential backoff delay calculation with jitter."""
     mock_random.return_value = 0.5
     config = RetryStrategyConfig(
-        initial_delay=Duration.from_seconds(2),
+        initial_delay=timedelta(seconds=2),
         backoff_rate=2.0,
         jitter_strategy=JitterStrategy.FULL,
     )
@@ -188,8 +189,8 @@ def test_exponential_backoff_calculation(mock_random):
 def test_max_delay_cap():
     """Test delay is capped at max_delay_seconds."""
     config = RetryStrategyConfig(
-        initial_delay=Duration.from_seconds(100),
-        max_delay=Duration.from_seconds(50),
+        initial_delay=timedelta(seconds=100),
+        max_delay=timedelta(seconds=50),
         backoff_rate=2.0,
         jitter_strategy=JitterStrategy.NONE,
     )
@@ -203,7 +204,7 @@ def test_max_delay_cap():
 def test_minimum_delay_one_second():
     """Test delay is at least 1 second."""
     config = RetryStrategyConfig(
-        initial_delay=Duration.from_seconds(0), jitter_strategy=JitterStrategy.NONE
+        initial_delay=timedelta(seconds=0), jitter_strategy=JitterStrategy.NONE
     )
     strategy = create_retry_strategy(config)
 
@@ -216,7 +217,7 @@ def test_delay_ceiling_applied():
     """Test delay is rounded up using math.ceil."""
     with patch("random.random", return_value=0.3):
         config = RetryStrategyConfig(
-            initial_delay=Duration.from_seconds(3),
+            initial_delay=timedelta(seconds=3),
             jitter_strategy=JitterStrategy.FULL,
         )
         strategy = create_retry_strategy(config)
@@ -321,7 +322,7 @@ def test_full_jitter_integration(mock_random):
     """Test full jitter integration in retry strategy."""
     mock_random.return_value = 0.8
     config = RetryStrategyConfig(
-        initial_delay=Duration.from_seconds(10), jitter_strategy=JitterStrategy.FULL
+        initial_delay=timedelta(seconds=10), jitter_strategy=JitterStrategy.FULL
     )
     strategy = create_retry_strategy(config)
 
@@ -336,7 +337,7 @@ def test_half_jitter_integration(mock_random):
     """Test half jitter integration in retry strategy."""
     mock_random.return_value = 0.6
     config = RetryStrategyConfig(
-        initial_delay=Duration.from_seconds(10), jitter_strategy=JitterStrategy.HALF
+        initial_delay=timedelta(seconds=10), jitter_strategy=JitterStrategy.HALF
     )
     strategy = create_retry_strategy(config)
 
@@ -351,7 +352,7 @@ def test_half_jitter_integration_corrected(mock_random):
     """Test half jitter with minimum random value."""
     mock_random.return_value = 0.0  # Minimum jitter
     config = RetryStrategyConfig(
-        initial_delay=Duration.from_seconds(10), jitter_strategy=JitterStrategy.HALF
+        initial_delay=timedelta(seconds=10), jitter_strategy=JitterStrategy.HALF
     )
     strategy = create_retry_strategy(config)
 
@@ -364,7 +365,7 @@ def test_half_jitter_integration_corrected(mock_random):
 def test_none_jitter_integration():
     """Test no jitter integration in retry strategy."""
     config = RetryStrategyConfig(
-        initial_delay=Duration.from_seconds(10), jitter_strategy=JitterStrategy.NONE
+        initial_delay=timedelta(seconds=10), jitter_strategy=JitterStrategy.NONE
     )
     strategy = create_retry_strategy(config)
 
@@ -505,7 +506,7 @@ def test_none_config():
 def test_zero_backoff_rate():
     """Test behavior with zero backoff rate."""
     config = RetryStrategyConfig(
-        initial_delay=Duration.from_seconds(5),
+        initial_delay=timedelta(seconds=5),
         backoff_rate=0,
         jitter_strategy=JitterStrategy.NONE,
     )
@@ -520,7 +521,7 @@ def test_zero_backoff_rate():
 def test_fractional_backoff_rate():
     """Test behavior with fractional backoff rate."""
     config = RetryStrategyConfig(
-        initial_delay=Duration.from_seconds(8),
+        initial_delay=timedelta(seconds=8),
         backoff_rate=0.5,
         jitter_strategy=JitterStrategy.NONE,
     )

@@ -1,5 +1,7 @@
 """Unit tests for config module."""
 
+from datetime import timedelta
+
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import Mock
 
@@ -8,7 +10,6 @@ from async_durable_execution.config import (
     CallbackConfig,
     ChildConfig,
     CompletionConfig,
-    Duration,
     InvokeConfig,
     ItemBatcher,
     ItemsPerBatchUnit,
@@ -86,7 +87,7 @@ def test_parallel_config_defaults():
 
 def test_wait_for_condition_decision_continue():
     """Test WaitForConditionDecision.continue_waiting factory method."""
-    decision = WaitForConditionDecision.continue_waiting(Duration.from_seconds(30))
+    decision = WaitForConditionDecision.continue_waiting(timedelta(seconds=30))
     assert decision.should_continue is True
     assert decision.delay_seconds == 30
 
@@ -102,7 +103,7 @@ def test_wait_for_condition_config():
     """Test WaitForConditionConfig with custom values."""
 
     def wait_strategy(state, attempt):
-        return WaitForConditionDecision.continue_waiting(Duration.from_seconds(10))
+        return WaitForConditionDecision.continue_waiting(timedelta(seconds=10))
 
     serdes = Mock()
     config = WaitForConditionConfig(
@@ -228,8 +229,8 @@ def test_callback_config_with_values():
     """Test CallbackConfig with custom values."""
     serdes = Mock()
     config = CallbackConfig(
-        timeout=Duration.from_seconds(30),
-        heartbeat_timeout=Duration.from_seconds(10),
+        timeout=timedelta(seconds=30),
+        heartbeat_timeout=timedelta(seconds=10),
         serdes=serdes,
     )
     assert config.timeout_seconds == 30

@@ -1,8 +1,9 @@
 """Demonstrates waitForCallback operations within child contexts."""
 
+from datetime import timedelta
+
 from typing import Any
 
-from async_durable_execution.config import Duration
 from async_durable_execution.context import (
     DurableContext,
     durable_with_child_context,
@@ -17,7 +18,7 @@ async def noop_submitter(_callback_id: str, _context: DurableContext) -> None:
 @durable_with_child_context
 async def child_context_with_callback(child_context: DurableContext) -> dict[str, Any]:
     """Child context containing wait and callback operations."""
-    child_context.wait(Duration.from_seconds(1), name="child-wait")
+    child_context.wait(timedelta(seconds=1), name="child-wait")
 
     child_callback_result: str = child_context.wait_for_callback(
         noop_submitter, name="child-callback-op"

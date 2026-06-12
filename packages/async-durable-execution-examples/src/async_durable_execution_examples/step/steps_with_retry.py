@@ -1,9 +1,11 @@
 """Example demonstrating multiple steps with retry logic."""
 
+from datetime import timedelta
+
 from itertools import count
 from typing import Any
 
-from async_durable_execution.config import Duration, StepConfig
+from async_durable_execution.config import StepConfig
 from async_durable_execution.context import DurableContext, StepContext
 from async_durable_execution.execution import durable_execution
 from async_durable_execution.retries import (
@@ -73,7 +75,7 @@ async def handler(event: Any, context: DurableContext) -> dict[str, Any]:
                 break
 
             # Wait 1 second until next poll
-            context.wait(Duration.from_seconds(1))
+            context.wait(timedelta(seconds=1))
 
     except RuntimeError as e:
         # Retries exhausted

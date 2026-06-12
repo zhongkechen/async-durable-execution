@@ -1,10 +1,11 @@
 """Complex multi-operation example demonstrating all major operations."""
 
+from datetime import timedelta
+
 from typing import Any
 
 from async_durable_execution.context import DurableContext
 from async_durable_execution.execution import durable_execution
-from async_durable_execution.config import Duration
 
 
 @durable_execution
@@ -46,7 +47,7 @@ async def handler(event: dict[str, Any], context: DurableContext) -> dict[str, A
     )
 
     # Step 2: ctx.wait - Wait for 1 second
-    context.wait(Duration.from_seconds(1))
+    context.wait(timedelta(seconds=1))
 
     # Step 3: ctx.map - Map with 5 iterations returning numbers 1 to 5
     map_input = [1, 2, 3, 4, 5]

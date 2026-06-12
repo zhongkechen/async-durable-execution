@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar
 
 
@@ -14,7 +15,6 @@ if TYPE_CHECKING:
         BatchedInput,
         CallbackConfig,
         ChildConfig,
-        Duration,
         MapConfig,
         ParallelBranch,
         ParallelConfig,
@@ -139,7 +139,7 @@ class DurableContext(Protocol):
         ...  # pragma: no cover
 
     @abstractmethod
-    def wait(self, duration: Duration, name: str | None = None) -> None:
+    def wait(self, duration: timedelta, name: str | None = None) -> None:
         """Wait for a specified amount of time."""
         ...  # pragma: no cover
 

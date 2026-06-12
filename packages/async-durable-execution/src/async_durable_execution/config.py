@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
+from datetime import timedelta
 from enum import Enum, StrEnum
 from typing import TYPE_CHECKING, Generic, TypeVar
 
@@ -28,40 +29,13 @@ if TYPE_CHECKING:
 Numeric = int | float  # deliberately leaving off complex
 
 
-@dataclass(frozen=True)
-class Duration:
-    """Represents a duration stored as total seconds."""
-
-    seconds: int = 0
-
-    def __post_init__(self):
-        if self.seconds < 0:
-            msg = "Duration seconds must be positive"
-            raise ValidationError(msg)
-
-    def to_seconds(self) -> int:
-        """Convert the duration to total seconds."""
-        return self.seconds
-
-    @classmethod
-    def from_seconds(cls, value: float) -> Duration:
-        """Create a Duration from total seconds."""
-        return cls(seconds=int(value))
-
-    @classmethod
-    def from_minutes(cls, value: float) -> Duration:
-        """Create a Duration from minutes."""
-        return cls(seconds=int(value * 60))
-
-    @classmethod
-    def from_hours(cls, value: float) -> Duration:
-        """Create a Duration from hours."""
-        return cls(seconds=int(value * 3600))
-
-    @classmethod
-    def from_days(cls, value: float) -> Duration:
-        """Create a Duration from days."""
-        return cls(seconds=int(value * 86400))
+def duration_to_seconds(duration: timedelta, field_name: str = "duration") -> int:
+    """Convert a timedelta to whole seconds after validating it is non-negative."""
+    total_seconds = duration.total_seconds()
+    if total_seconds < 0:
+        msg = f"{field_name} must be non-negative"
+        raise ValidationError(msg)
+    return int(total_seconds)
 
 
 @dataclass(frozen=True)
@@ -498,34 +472,41 @@ class InvokeConfig(Generic[P, R]):
     """
 
     # retry_strategy: Callable[[Exception, int], RetryDecision] | None = None
-    timeout: Duration = field(default_factory=Duration)
+    timeout: timedelta = field(default_factory=timedelta)
     serdes_payload: SerDes[P] | None = None
     serdes_result: SerDes[R] | None = None
     tenant_id: str | None = None
 
+    def __post_init__(self):
+        duration_to_seconds(self.timeout, "timeout")
+
     @property
     def timeout_seconds(self) -> int:
         """Get timeout in seconds."""
-        return self.timeout.to_seconds()
+        return duration_to_seconds(self.timeout, "timeout")
 
 
 @dataclass(frozen=True)
 class CallbackConfig:
     """Configuration for callbacks."""
 
-    timeout: Duration = field(default_factory=Duration)
-    heartbeat_timeout: Duration = field(default_factory=Duration)
+    timeout: timedelta = field(default_factory=timedelta)
+    heartbeat_timeout: timedelta = field(default_factory=timedelta)
     serdes: SerDes | None = None
+
+    def __post_init__(self):
+        duration_to_seconds(self.timeout, "timeout")
+        duration_to_seconds(self.heartbeat_timeout, "heartbeat_timeout")
 
     @property
     def timeout_seconds(self) -> int:
         """Get timeout in seconds."""
-        return self.timeout.to_seconds()
+        return duration_to_seconds(self.timeout, "timeout")
 
     @property
     def heartbeat_timeout_seconds(self) -> int:
         """Get heartbeat timeout in seconds."""
-        return self.heartbeat_timeout.to_seconds()
+        return duration_to_seconds(self.heartbeat_timeout, "heartbeat_timeout")
 
 
 @dataclass(frozen=True)

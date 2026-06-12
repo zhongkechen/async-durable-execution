@@ -5,10 +5,14 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from async_durable_execution.async_tools import invoke_callable
-from async_durable_execution.config import Duration, JitterStrategy
+from async_durable_execution.config import (
+    JitterStrategy,
+    duration_to_seconds,
+)
 from async_durable_execution.exceptions import SuspendExecution
 
 
@@ -31,45 +35,52 @@ class RetryDecision:
     """Decision about whether to retry a step and with what delay."""
 
     should_retry: bool
-    delay: Duration
+    delay: timedelta
+
+    def __post_init__(self):
+        duration_to_seconds(self.delay)
 
     @property
     def delay_seconds(self) -> int:
         """Get delay in seconds."""
-        return self.delay.to_seconds()
+        return duration_to_seconds(self.delay)
 
     @classmethod
-    def retry(cls, delay: Duration) -> RetryDecision:
+    def retry(cls, delay: timedelta) -> RetryDecision:
         """Create a retry decision."""
         return cls(should_retry=True, delay=delay)
 
     @classmethod
     def no_retry(cls) -> RetryDecision:
         """Create a no-retry decision."""
-        return cls(should_retry=False, delay=Duration())
+        return cls(should_retry=False, delay=timedelta())
 
 
 @dataclass
 class RetryStrategyConfig:
     max_attempts: int = 3
-    initial_delay: Duration = field(default_factory=lambda: Duration.from_seconds(5))
-    max_delay: Duration = field(
-        default_factory=lambda: Duration.from_minutes(5)
+    initial_delay: timedelta = field(default_factory=lambda: timedelta(seconds=5))
+    max_delay: timedelta = field(
+        default_factory=lambda: timedelta(minutes=5)
     )  # 5 minutes
     backoff_rate: Numeric = 2.0
     jitter_strategy: JitterStrategy = field(default=JitterStrategy.FULL)
     retryable_errors: list[str | re.Pattern] | None = None
     retryable_error_types: list[type[Exception]] | None = None
 
+    def __post_init__(self):
+        duration_to_seconds(self.initial_delay, "initial_delay")
+        duration_to_seconds(self.max_delay, "max_delay")
+
     @property
     def initial_delay_seconds(self) -> int:
         """Get initial delay in seconds."""
-        return self.initial_delay.to_seconds()
+        return duration_to_seconds(self.initial_delay, "initial_delay")
 
     @property
     def max_delay_seconds(self) -> int:
         """Get max delay in seconds."""
-        return self.max_delay.to_seconds()
+        return duration_to_seconds(self.max_delay, "max_delay")
 
 
 def create_retry_strategy(
@@ -121,7 +132,7 @@ def create_retry_strategy(
         # Round up and ensure minimum of 1 second
         final_delay: int = max(1, math.ceil(delay_with_jitter))
 
-        return RetryDecision.retry(Duration(seconds=final_delay))
+        return RetryDecision.retry(timedelta(seconds=final_delay))
 
     return retry_strategy
 
@@ -140,8 +151,8 @@ class RetryPresets:
         return create_retry_strategy(
             RetryStrategyConfig(
                 max_attempts=6,
-                initial_delay=Duration.from_seconds(5),
-                max_delay=Duration.from_minutes(1),
+                initial_delay=timedelta(seconds=5),
+                max_delay=timedelta(minutes=1),
                 backoff_rate=2,
                 jitter_strategy=JitterStrategy.FULL,
             )
@@ -162,8 +173,8 @@ class RetryPresets:
         return create_retry_strategy(
             RetryStrategyConfig(
                 max_attempts=5,
-                initial_delay=Duration.from_seconds(5),
-                max_delay=Duration.from_minutes(5),
+                initial_delay=timedelta(seconds=5),
+                max_delay=timedelta(minutes=5),
                 backoff_rate=2,
             )
         )
@@ -174,8 +185,8 @@ class RetryPresets:
         return create_retry_strategy(
             RetryStrategyConfig(
                 max_attempts=10,
-                initial_delay=Duration.from_seconds(1),
-                max_delay=Duration.from_minutes(1),
+                initial_delay=timedelta(seconds=1),
+                max_delay=timedelta(minutes=1),
                 backoff_rate=1.5,
                 jitter_strategy=JitterStrategy.NONE,
             )

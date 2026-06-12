@@ -1,5 +1,7 @@
 """Unit tests for callback handler."""
 
+from datetime import timedelta
+
 import math
 from unittest.mock import ANY, Mock, patch
 
@@ -7,7 +9,6 @@ import pytest
 
 from async_durable_execution.config import (
     CallbackConfig,
-    Duration,
     StepConfig,
     WaitForCallbackConfig,
 )
@@ -66,7 +67,7 @@ def test_create_callback_handler_new_operation_with_config():
     ]
 
     config = CallbackConfig(
-        timeout=Duration.from_minutes(5), heartbeat_timeout=Duration.from_minutes(1)
+        timeout=timedelta(minutes=5), heartbeat_timeout=timedelta(minutes=1)
     )
 
     result = create_callback_handler(
@@ -371,10 +372,10 @@ def test_create_callback_handler_with_none_operation_in_result():
 
 def test_create_callback_handler_with_negative_timeouts():
     """Test create_callback_handler with negative timeout values in config."""
-    # Duration now validates that all values must be positive
-    with pytest.raises(ValidationError, match="Duration seconds must be positive"):
+    with pytest.raises(ValidationError, match="timeout must be non-negative"):
         CallbackConfig(
-            timeout=Duration(seconds=-100), heartbeat_timeout=Duration(seconds=-50)
+            timeout=timedelta(seconds=-100),
+            heartbeat_timeout=timedelta(seconds=-50),
         )
 
 
@@ -535,7 +536,7 @@ def test_create_callback_handler_config_with_zero_timeouts():
     ]
 
     config = CallbackConfig(
-        timeout=Duration.from_seconds(0), heartbeat_timeout=Duration.from_seconds(0)
+        timeout=timedelta(seconds=0), heartbeat_timeout=timedelta(seconds=0)
     )
 
     result = create_callback_handler(
@@ -579,8 +580,8 @@ def test_create_callback_handler_config_with_large_timeouts():
     ]
 
     config = CallbackConfig(
-        timeout=Duration.from_days(1),
-        heartbeat_timeout=Duration.from_hours(1),
+        timeout=timedelta(days=1),
+        heartbeat_timeout=timedelta(hours=1),
     )
 
     result = create_callback_handler(
@@ -730,7 +731,7 @@ def test_wait_for_callback_handler_config_propagation():
     mock_submitter = Mock()
 
     config = WaitForCallbackConfig(
-        timeout=Duration.from_minutes(2), heartbeat_timeout=Duration.from_seconds(30)
+        timeout=timedelta(minutes=2), heartbeat_timeout=timedelta(seconds=30)
     )
 
     result = wait_for_callback_handler(
@@ -821,7 +822,7 @@ def test_callback_lifecycle_complete_flow():
     mock_context.create_callback.return_value = mock_callback
 
     config = WaitForCallbackConfig(
-        timeout=Duration.from_minutes(5), heartbeat_timeout=Duration.from_minutes(1)
+        timeout=timedelta(minutes=5), heartbeat_timeout=timedelta(minutes=1)
     )
     callback_id = create_callback_handler(
         state=mock_state,
@@ -905,8 +906,8 @@ def test_callback_timeout_configuration():
         ]
 
         config = CallbackConfig(
-            timeout=Duration.from_seconds(timeout_seconds),
-            heartbeat_timeout=Duration.from_seconds(heartbeat_timeout_seconds),
+            timeout=timedelta(seconds=timeout_seconds),
+            heartbeat_timeout=timedelta(seconds=heartbeat_timeout_seconds),
         )
 
         callback_id = create_callback_handler(
@@ -1080,7 +1081,7 @@ def test_callback_operation_update_creation(mock_operation_update):
     ]
 
     config = CallbackConfig(
-        timeout=Duration.from_minutes(10), heartbeat_timeout=Duration.from_minutes(2)
+        timeout=timedelta(minutes=10), heartbeat_timeout=timedelta(minutes=2)
     )
 
     create_callback_handler(
@@ -1568,7 +1569,7 @@ def test_callback_immediate_response_with_config():
     mock_state.get_checkpoint_result.side_effect = [not_found, succeeded]
 
     config = CallbackConfig(
-        timeout=Duration.from_minutes(5), heartbeat_timeout=Duration.from_minutes(1)
+        timeout=timedelta(minutes=5), heartbeat_timeout=timedelta(minutes=1)
     )
 
     result = create_callback_handler(

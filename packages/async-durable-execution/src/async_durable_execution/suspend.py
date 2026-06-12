@@ -66,7 +66,7 @@ def suspend_with_optional_resume_delay(
 
     Args:
         msg: Descriptive message for the suspension
-        delay_seconds: Duration to suspend in seconds, or None for indefinite
+        delay_seconds: Number of seconds to suspend, or None for indefinite
 
     Raises:
         TimedSuspendExecution: When delay_seconds when delay_seconds is not None

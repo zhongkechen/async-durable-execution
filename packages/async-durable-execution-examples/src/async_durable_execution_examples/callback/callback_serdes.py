@@ -1,10 +1,10 @@
 """Demonstrates createCallback with custom serialization/deserialization for Date objects."""
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from async_durable_execution.config import CallbackConfig, Duration
+from async_durable_execution.config import CallbackConfig
 from async_durable_execution.context import DurableContext
 from async_durable_execution.execution import durable_execution
 from async_durable_execution.serdes import SerDes, SerDesContext
@@ -59,7 +59,7 @@ class CustomDataSerDes(SerDes[CustomData]):
 async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating createCallback with custom serdes."""
     callback_config = CallbackConfig(
-        timeout=Duration.from_seconds(30),
+        timeout=timedelta(seconds=30),
         serdes=CustomDataSerDes(),
     )
 

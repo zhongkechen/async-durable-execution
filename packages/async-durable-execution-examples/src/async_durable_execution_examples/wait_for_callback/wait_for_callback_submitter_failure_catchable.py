@@ -1,9 +1,11 @@
 """Demonstrates waitForCallback with submitter function that fails."""
 
+from datetime import timedelta
+
 import time
 from typing import Any
 
-from async_durable_execution.config import Duration, WaitForCallbackConfig
+from async_durable_execution.config import WaitForCallbackConfig
 from async_durable_execution.context import DurableContext
 from async_durable_execution.execution import durable_execution
 from async_durable_execution.retries import (
@@ -23,13 +25,13 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         raise Exception("Submitter failed")
 
     config = WaitForCallbackConfig(
-        timeout=Duration.from_seconds(10),
-        heartbeat_timeout=Duration.from_seconds(20),
+        timeout=timedelta(seconds=10),
+        heartbeat_timeout=timedelta(seconds=20),
         retry_strategy=create_retry_strategy(
             config=RetryStrategyConfig(
                 max_attempts=3,
-                initial_delay=Duration.from_seconds(1),
-                max_delay=Duration.from_seconds(1),
+                initial_delay=timedelta(seconds=1),
+                max_delay=timedelta(seconds=1),
             )
         ),
     )

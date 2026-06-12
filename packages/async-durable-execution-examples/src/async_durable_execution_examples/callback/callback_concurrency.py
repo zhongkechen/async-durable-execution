@@ -1,8 +1,10 @@
 """Demonstrates multiple concurrent createCallback operations using context.parallel."""
 
+from datetime import timedelta
+
 from typing import Any
 
-from async_durable_execution.config import CallbackConfig, Duration
+from async_durable_execution.config import CallbackConfig
 from async_durable_execution.context import DurableContext
 from async_durable_execution.execution import durable_execution
 
@@ -11,7 +13,7 @@ from async_durable_execution.execution import durable_execution
 async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating multiple concurrent callback operations."""
 
-    callback_config = CallbackConfig(timeout=Duration.from_seconds(30))
+    callback_config = CallbackConfig(timeout=timedelta(seconds=30))
 
     async def callback_branch_1(ctx: DurableContext) -> str:
         """First callback branch."""

@@ -1,9 +1,10 @@
 """Demonstrates waitForCallback combined with steps, waits, and other operations."""
 
+from datetime import timedelta
+
 import asyncio
 from typing import Any
 
-from async_durable_execution.config import Duration
 from async_durable_execution.context import DurableContext
 from async_durable_execution.execution import durable_execution
 
@@ -12,7 +13,7 @@ from async_durable_execution.execution import durable_execution
 async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating waitForCallback mixed with other operations."""
     # Mix waitForCallback with other operation types
-    context.wait(Duration.from_seconds(1), name="initial-wait")
+    context.wait(timedelta(seconds=1), name="initial-wait")
 
     async def fetch_user_data(_) -> dict[str, Any]:
         return {"userId": 123, "name": "John Doe"}
@@ -32,7 +33,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         name="wait-for-callback",
     )
 
-    context.wait(Duration.from_seconds(2), name="final-wait")
+    context.wait(timedelta(seconds=2), name="final-wait")
 
     async def finalize_processing(_) -> dict[str, Any]:
         return {

@@ -9,9 +9,10 @@ This example demonstrates:
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from typing import TYPE_CHECKING, Any
 
-from async_durable_execution.config import Duration
 from async_durable_execution.context import DurableContext, durable_step
 from async_durable_execution.execution import durable_execution
 
@@ -48,7 +49,7 @@ async def handler(event: Any, context: DurableContext) -> dict[str, Any]:
 
     # Pause for 10 seconds without consuming CPU cycles or incurring usage charges
     # The execution will suspend here and resume after 10 seconds
-    context.wait(Duration.from_seconds(10))
+    context.wait(timedelta(seconds=10))
 
     context.logger.info("Waited for 10 seconds")
 

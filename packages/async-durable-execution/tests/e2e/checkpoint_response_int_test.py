@@ -6,12 +6,14 @@ that's implemented via the OperationExecutor base class pattern.
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from typing import TYPE_CHECKING
 from unittest.mock import Mock, patch
 
 import pytest
 
-from async_durable_execution.config import ChildConfig, Duration
+from async_durable_execution.config import ChildConfig
 from async_durable_execution.context import DurableContext, durable_step
 from async_durable_execution.exceptions import InvocationError
 from async_durable_execution.execution import (
@@ -203,7 +205,7 @@ def test_end_to_end_wait_operation_with_double_check():
 
     @durable_execution
     def my_handler(event, context: DurableContext) -> str:
-        context.wait(Duration.from_seconds(5))
+        context.wait(timedelta(seconds=5))
         return "completed"
 
     with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:

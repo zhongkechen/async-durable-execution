@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import json
 from unittest.mock import Mock, patch
 
 import pytest
 
-from async_durable_execution.config import Duration, InvokeConfig
+from async_durable_execution.config import InvokeConfig
 from async_durable_execution.exceptions import (
     CallableRuntimeError,
     ExecutionError,
@@ -232,7 +234,7 @@ def test_invoke_handler_already_started_with_timeout(status):
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    config = InvokeConfig[str, str](timeout=Duration.from_seconds(30))
+    config = InvokeConfig[str, str](timeout=timedelta(seconds=30))
 
     with pytest.raises(TimedSuspendExecution):
         invoke_handler(
@@ -261,7 +263,7 @@ def test_invoke_handler_new_operation():
     started = CheckpointedResult.create_from_operation(started_op)
     mock_state.get_checkpoint_result.side_effect = [not_found, started]
 
-    config = InvokeConfig[str, str](timeout=Duration.from_minutes(1))
+    config = InvokeConfig[str, str](timeout=timedelta(minutes=1))
 
     with pytest.raises(
         SuspendExecution, match="Invoke invoke8 started, suspending for completion"
@@ -302,7 +304,7 @@ def test_invoke_handler_new_operation_with_timeout():
     started = CheckpointedResult.create_from_operation(started_op)
     mock_state.get_checkpoint_result.side_effect = [not_found, started]
 
-    config = InvokeConfig[str, str](timeout=Duration.from_seconds(30))
+    config = InvokeConfig[str, str](timeout=timedelta(seconds=30))
 
     with pytest.raises(TimedSuspendExecution):
         invoke_handler(
@@ -330,7 +332,7 @@ def test_invoke_handler_new_operation_no_timeout():
     started = CheckpointedResult.create_from_operation(started_op)
     mock_state.get_checkpoint_result.side_effect = [not_found, started]
 
-    config = InvokeConfig[str, str](timeout=Duration.from_seconds(0))
+    config = InvokeConfig[str, str](timeout=timedelta(seconds=0))
 
     with pytest.raises(SuspendExecution):
         invoke_handler(
@@ -1083,7 +1085,7 @@ def test_invoke_immediate_response_with_timeout_immediate_success():
     succeeded = CheckpointedResult.create_from_operation(succeeded_op)
     mock_state.get_checkpoint_result.side_effect = [not_found, succeeded]
 
-    config = InvokeConfig[str, str](timeout=Duration.from_seconds(30))
+    config = InvokeConfig[str, str](timeout=timedelta(seconds=30))
 
     result = invoke_handler(
         function_name="test_function",
@@ -1118,7 +1120,7 @@ def test_invoke_immediate_response_with_timeout_no_immediate_response():
     started = CheckpointedResult.create_from_operation(started_op)
     mock_state.get_checkpoint_result.side_effect = [not_found, started]
 
-    config = InvokeConfig[str, str](timeout=Duration.from_seconds(30))
+    config = InvokeConfig[str, str](timeout=timedelta(seconds=30))
 
     # Verify operation suspends with timeout
     with pytest.raises(TimedSuspendExecution):

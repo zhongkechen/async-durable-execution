@@ -1,5 +1,7 @@
 """Unit tests for context."""
 
+from datetime import timedelta
+
 import asyncio
 import hashlib
 import json
@@ -12,7 +14,6 @@ import pytest
 from async_durable_execution.config import (
     CallbackConfig,
     ChildConfig,
-    Duration,
     InvokeConfig,
     MapConfig,
     ParallelBranch,
@@ -637,7 +638,7 @@ def test_invoke_with_name_and_config(mock_executor_class):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    config = InvokeConfig[str, str](timeout=Duration.from_seconds(30))
+    config = InvokeConfig[str, str](timeout=timedelta(seconds=30))
 
     context = create_test_context(state=mock_state)
     [context._create_step_id() for _ in range(5)]  # Set counter to 5 # noqa: SLF001
@@ -783,7 +784,7 @@ def test_invoke_with_custom_serdes(mock_executor_class):
     config = InvokeConfig[dict, dict](
         serdes_payload=payload_serdes,
         serdes_result=result_serdes,
-        timeout=Duration.from_minutes(1),
+        timeout=timedelta(minutes=1),
     )
 
     context = create_test_context(state=mock_state)
@@ -831,7 +832,7 @@ def test_wait_basic(mock_executor_class):
     operation_ids = operation_id_sequence()
     expected_operation_id = next(operation_ids)
 
-    context.wait(Duration.from_seconds(30))
+    context.wait(timedelta(seconds=30))
 
     mock_executor_class.assert_called_once_with(
         state=mock_state,
@@ -858,7 +859,7 @@ def test_wait_with_name(mock_executor_class):
     context = create_test_context(state=mock_state)
     [context._create_step_id() for _ in range(5)]  # Set counter to 5 # noqa: SLF001
 
-    context.wait(Duration.from_minutes(1), name="test_wait")
+    context.wait(timedelta(minutes=1), name="test_wait")
 
     seq = operation_id_sequence()
     [next(seq) for _ in range(5)]
@@ -889,7 +890,7 @@ def test_wait_with_parent_id(mock_executor_class):
     context = create_test_context(state=mock_state, parent_id="parent123")
     [context._create_step_id() for _ in range(2)]  # Set counter to 2 # noqa: SLF001
 
-    context.wait(Duration.from_seconds(45))
+    context.wait(timedelta(seconds=45))
 
     seq = operation_id_sequence("parent123")
     [next(seq) for _ in range(2)]
@@ -920,8 +921,8 @@ def test_wait_increments_counter(mock_executor_class):
     context = create_test_context(state=mock_state)
     [context._create_step_id() for _ in range(10)]  # Set counter to 10 # noqa: SLF001
 
-    context.wait(Duration.from_seconds(15))
-    context.wait(Duration.from_seconds(25))
+    context.wait(timedelta(seconds=15))
+    context.wait(timedelta(seconds=25))
 
     seq = operation_id_sequence()
     [next(seq) for _ in range(10)]
@@ -951,7 +952,7 @@ def test_wait_returns_none(mock_executor_class):
 
     context = create_test_context(state=mock_state)
 
-    result = context.wait(Duration.from_seconds(10))
+    result = context.wait(timedelta(seconds=10))
 
     assert result is None
 
@@ -971,7 +972,7 @@ def test_wait_with_time_less_than_one(mock_executor_class):
     context = create_test_context(state=mock_state)
 
     with pytest.raises(ValidationError):
-        context.wait(Duration.from_seconds(0))
+        context.wait(timedelta(seconds=0))
 
 
 # endregion wait

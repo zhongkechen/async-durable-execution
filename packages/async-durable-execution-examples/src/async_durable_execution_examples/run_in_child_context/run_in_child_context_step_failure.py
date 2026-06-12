@@ -1,10 +1,12 @@
 """Demonstrates runInChildContext with a failing step followed by a successful wait."""
 
+from datetime import timedelta
+
 from typing import Any
 
 from async_durable_execution.context import DurableContext
 from async_durable_execution.execution import durable_execution
-from async_durable_execution.config import StepConfig, Duration
+from async_durable_execution.config import StepConfig
 from async_durable_execution.retries import (
     RetryStrategyConfig,
     create_retry_strategy,
@@ -20,8 +22,8 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, bool]:
 
         retry_config = RetryStrategyConfig(
             max_attempts=3,
-            initial_delay=Duration.from_seconds(1),
-            max_delay=Duration.from_seconds(10),
+            initial_delay=timedelta(seconds=1),
+            max_delay=timedelta(seconds=10),
             backoff_rate=2.0,
         )
         step_config = StepConfig(retry_strategy=create_retry_strategy(retry_config))
@@ -45,6 +47,6 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, bool]:
         # Catch and ignore child context and step errors
         result = {"success": True, "error": str(error)}
 
-    context.wait(Duration.from_seconds(1), name="wait-after-failure")
+    context.wait(timedelta(seconds=1), name="wait-after-failure")
 
     return result

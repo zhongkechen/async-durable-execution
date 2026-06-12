@@ -346,7 +346,7 @@ class TimedSuspendExecution(SuspendExecution):
 
         Args:
             message: Descriptive message for the suspension
-            delay_seconds: Duration to suspend in seconds from current time
+            delay_seconds: Number of seconds to suspend from current time
 
         Returns:
             TimedSuspendExecution: Instance with calculated resume time

@@ -1,8 +1,9 @@
 """Demonstrates nested waitForCallback operations across multiple child context levels."""
 
+from datetime import timedelta
+
 from typing import Any
 
-from async_durable_execution.config import Duration
 from async_durable_execution.context import (
     DurableContext,
     durable_with_child_context,
@@ -17,7 +18,7 @@ async def noop_submitter(_callback_id: str, _context: DurableContext) -> None:
 @durable_with_child_context
 async def inner_child_context(inner_child_ctx: DurableContext) -> dict[str, Any]:
     """Inner child context with deep nested callback."""
-    inner_child_ctx.wait(Duration.from_seconds(5), name="deep-wait")
+    inner_child_ctx.wait(timedelta(seconds=5), name="deep-wait")
 
     nested_callback_result: str = inner_child_ctx.wait_for_callback(
         noop_submitter,
