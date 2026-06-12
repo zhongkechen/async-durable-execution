@@ -5,9 +5,11 @@ retries the entire callback flow (including creating a new callback each attempt
 with exponential backoff between attempts.
 """
 
+from datetime import timedelta
+
 from typing import Any
 
-from async_durable_execution.config import Duration, WaitForCallbackConfig
+from async_durable_execution.config import WaitForCallbackConfig
 from async_durable_execution.context import DurableContext
 from async_durable_execution.execution import durable_execution
 from async_durable_execution.retries import (
@@ -37,8 +39,8 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
             pass
 
         config = WaitForCallbackConfig(
-            timeout=Duration.from_seconds(30),
-            heartbeat_timeout=Duration.from_seconds(60),
+            timeout=timedelta(seconds=30),
+            heartbeat_timeout=timedelta(seconds=60),
         )
 
         return ctx.wait_for_callback(
@@ -49,7 +51,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         retry_strategy=create_retry_strategy(
             RetryStrategyConfig(
                 max_attempts=5,
-                initial_delay=Duration.from_seconds(2),
+                initial_delay=timedelta(seconds=2),
                 backoff_rate=1.0,
             )
         ),

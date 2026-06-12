@@ -47,6 +47,7 @@ Create a durable Lambda handler:
 
 ```python
 import asyncio
+from datetime import timedelta
 
 from async_durable_execution import (
     DurableContext,
@@ -54,7 +55,6 @@ from async_durable_execution import (
     durable_execution,
     durable_step,
 )
-from async_durable_execution.config import Duration
 
 
 @durable_step
@@ -74,7 +74,7 @@ async def handler(event: dict, context: DurableContext) -> dict:
         return {"status": "rejected", "order_id": order_id}
 
     # simulate approval (real world: use wait_for_callback)
-    context.wait(duration=Duration.from_seconds(5), name="await_confirmation")
+    context.wait(duration=timedelta(seconds=5), name="await_confirmation")
 
     return {"status": "approved", "order_id": order_id}
 ```

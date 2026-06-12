@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, TypeVar
@@ -9,7 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from async_durable_execution.config import Duration, JitterStrategy
+from async_durable_execution.config import JitterStrategy
 from async_durable_execution.exceptions import SuspendExecution
 from async_durable_execution.retries import (
     RetryStrategyConfig,
@@ -35,7 +37,7 @@ _T = TypeVar("_T")
 class WaitCall:
     """Record of a wait() call."""
 
-    duration: Duration
+    duration: timedelta
     name: str | None
 
 
@@ -55,7 +57,7 @@ class MockDurableContext:
     wait_calls: list[WaitCall] = field(default_factory=list)
     child_context_calls: list[RunInChildContextCall] = field(default_factory=list)
 
-    def wait(self, duration: Duration, name: str | None = None) -> None:
+    def wait(self, duration: timedelta, name: str | None = None) -> None:
         self.wait_calls.append(WaitCall(duration=duration, name=name))
 
     def run_in_child_context(
@@ -91,7 +93,7 @@ class MockDurableContext:
 
 def _make_config(
     max_attempts: int = 3,
-    initial_delay: Duration | None = None,
+    initial_delay: timedelta | None = None,
     wrap_with_run_in_child_context: bool = True,
     child_context_config: ChildConfig | None = None,
 ) -> WithRetryConfig:
@@ -100,7 +102,7 @@ def _make_config(
         retry_strategy=create_retry_strategy(
             RetryStrategyConfig(
                 max_attempts=max_attempts,
-                initial_delay=initial_delay or Duration.from_seconds(1),
+                initial_delay=initial_delay or timedelta(seconds=1),
                 jitter_strategy=JitterStrategy.NONE,
             )
         ),
@@ -353,7 +355,7 @@ def test_integration_with_create_retry_strategy():
         retry_strategy=create_retry_strategy(
             RetryStrategyConfig(
                 max_attempts=4,
-                initial_delay=Duration.from_seconds(2),
+                initial_delay=timedelta(seconds=2),
                 backoff_rate=2.0,
                 jitter_strategy=JitterStrategy.NONE,
             )
@@ -377,9 +379,9 @@ def test_integration_with_create_retry_strategy():
 
     # Verify backoff delays: 2*2^0=2, 2*2^1=4, 2*2^2=8
     assert len(ctx.wait_calls) == 3
-    assert ctx.wait_calls[0].duration.to_seconds() == 2
-    assert ctx.wait_calls[1].duration.to_seconds() == 4
-    assert ctx.wait_calls[2].duration.to_seconds() == 8
+    assert ctx.wait_calls[0].duration.total_seconds() == 2
+    assert ctx.wait_calls[1].duration.total_seconds() == 4
+    assert ctx.wait_calls[2].duration.total_seconds() == 8
 
 
 def test_integration_retries_exhausted_raises_last_exception():
@@ -390,7 +392,7 @@ def test_integration_retries_exhausted_raises_last_exception():
         retry_strategy=create_retry_strategy(
             RetryStrategyConfig(
                 max_attempts=3,
-                initial_delay=Duration.from_seconds(1),
+                initial_delay=timedelta(seconds=1),
                 jitter_strategy=JitterStrategy.NONE,
             )
         ),

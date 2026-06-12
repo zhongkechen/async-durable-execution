@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import TYPE_CHECKING, Generic
 
-from async_durable_execution.config import Duration, JitterStrategy, T
+from async_durable_execution.config import (
+    JitterStrategy,
+    T,
+    duration_to_seconds,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -21,52 +26,61 @@ class WaitDecision:
     """Decision about whether to wait a step and with what delay."""
 
     should_wait: bool
-    delay: Duration
+    delay: timedelta
+
+    def __post_init__(self):
+        duration_to_seconds(self.delay)
 
     @property
     def delay_seconds(self) -> int:
         """Get delay in seconds."""
-        return self.delay.to_seconds()
+        return duration_to_seconds(self.delay)
 
     @classmethod
-    def wait(cls, delay: Duration) -> WaitDecision:
+    def wait(cls, delay: timedelta) -> WaitDecision:
         """Create a wait decision."""
         return cls(should_wait=True, delay=delay)
 
     @classmethod
     def no_wait(cls) -> WaitDecision:
         """Create a no-wait decision."""
-        return cls(should_wait=False, delay=Duration())
+        return cls(should_wait=False, delay=timedelta())
 
 
 @dataclass
 class WaitStrategyConfig(Generic[T]):
     should_continue_polling: Callable[[T], bool]
     max_attempts: int = 60
-    initial_delay: Duration = field(default_factory=lambda: Duration.from_seconds(5))
-    max_delay: Duration = field(
-        default_factory=lambda: Duration.from_minutes(5)
+    initial_delay: timedelta = field(default_factory=lambda: timedelta(seconds=5))
+    max_delay: timedelta = field(
+        default_factory=lambda: timedelta(minutes=5)
     )  # 5 minutes
     backoff_rate: Numeric = 1.5
     jitter_strategy: JitterStrategy = field(default=JitterStrategy.FULL)
-    timeout: Duration | None = None  # Not implemented yet
+    timeout: timedelta | None = None  # Not implemented yet
+
+    def __post_init__(self):
+        duration_to_seconds(self.initial_delay, "initial_delay")
+        duration_to_seconds(self.max_delay, "max_delay")
+        if self.timeout is not None:
+            duration_to_seconds(self.timeout, "timeout")
 
     @property
     def initial_delay_seconds(self) -> int:
         """Get initial delay in seconds."""
-        return self.initial_delay.to_seconds()
+        return duration_to_seconds(self.initial_delay, "initial_delay")
 
     @property
     def max_delay_seconds(self) -> int:
         """Get max delay in seconds."""
-        return self.max_delay.to_seconds()
+        return duration_to_seconds(self.max_delay, "max_delay")
 
     @property
     def timeout_seconds(self) -> int | None:
         """Get timeout in seconds."""
         if self.timeout is None:
             return None
-        return self.timeout.to_seconds()
+        return duration_to_seconds(self.timeout, "timeout")
 
 
 def create_wait_strategy(
@@ -93,7 +107,7 @@ def create_wait_strategy(
         # Round up and ensure minimum of 1 second
         final_delay: int = max(1, math.ceil(delay_with_jitter))
 
-        return WaitDecision.wait(Duration(seconds=final_delay))
+        return WaitDecision.wait(timedelta(seconds=final_delay))
 
     return wait_strategy
 
@@ -103,22 +117,25 @@ class WaitForConditionDecision:
     """Decision about whether to continue waiting."""
 
     should_continue: bool
-    delay: Duration
+    delay: timedelta
+
+    def __post_init__(self):
+        duration_to_seconds(self.delay)
 
     @property
     def delay_seconds(self) -> int:
         """Get delay in seconds."""
-        return self.delay.to_seconds()
+        return duration_to_seconds(self.delay)
 
     @classmethod
-    def continue_waiting(cls, delay: Duration) -> WaitForConditionDecision:
+    def continue_waiting(cls, delay: timedelta) -> WaitForConditionDecision:
         """Create a decision to continue waiting for delay_seconds."""
         return cls(should_continue=True, delay=delay)
 
     @classmethod
     def stop_polling(cls) -> WaitForConditionDecision:
         """Create a decision to stop polling."""
-        return cls(should_continue=False, delay=Duration())
+        return cls(should_continue=False, delay=timedelta())
 
 
 @dataclass(frozen=True)

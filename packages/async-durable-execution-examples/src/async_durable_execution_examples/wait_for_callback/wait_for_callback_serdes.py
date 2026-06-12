@@ -1,10 +1,10 @@
 """Demonstrates waitForCallback with custom serialization/deserialization."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Optional, TypedDict
 
-from async_durable_execution.config import Duration, WaitForCallbackConfig
+from async_durable_execution.config import WaitForCallbackConfig
 from async_durable_execution.context import DurableContext
 from async_durable_execution.execution import durable_execution
 from async_durable_execution.serdes import SerDes
@@ -73,8 +73,8 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with custom serdes."""
 
     config = WaitForCallbackConfig(
-        timeout=Duration.from_seconds(10),
-        heartbeat_timeout=Duration.from_seconds(20),
+        timeout=timedelta(seconds=10),
+        heartbeat_timeout=timedelta(seconds=20),
         serdes=CustomSerdes(),
     )
 

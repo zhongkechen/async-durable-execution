@@ -48,11 +48,11 @@ You CANNOT call durable operations inside a step function.
 # ❌ WRONG: Nested durable operations
 @durable_step
 async def process(step_ctx: StepContext):
-    context.wait(duration=Duration.from_seconds(1))  # ERROR!
+    context.wait(duration=timedelta(seconds=1))  # ERROR!
 
 # ✅ CORRECT: Use run_in_child_context for grouping
 async def process(child_ctx: DurableContext):
-    child_ctx.wait(duration=Duration.from_seconds(1))
+    child_ctx.wait(duration=timedelta(seconds=1))
     child_ctx.step(some_step())
 
 context.run_in_child_context(process, name="process")
@@ -227,11 +227,11 @@ result = context.step(
 ### Wait - Pause Execution
 
 ```python
-from async_durable_execution.config import Duration
+from datetime import timedelta
 
-context.wait(duration=Duration.from_seconds(30))
-context.wait(duration=Duration.from_hours(1))
-context.wait(duration=Duration.from_days(7), name="rate-limit-delay")
+context.wait(duration=timedelta(seconds=30))
+context.wait(duration=timedelta(hours=1))
+context.wait(duration=timedelta(days=7), name="rate-limit-delay")
 ```
 
 ### Invoke - Call Other Functions
@@ -253,7 +253,7 @@ result = context.invoke(
 ```python
 async def process_order(child_ctx: DurableContext) -> dict:
     validated = child_ctx.step(validate_step(data), name="validate")
-    child_ctx.wait(duration=Duration.from_seconds(1))
+    child_ctx.wait(duration=timedelta(seconds=1))
     processed = child_ctx.step(process_step(validated), name="process")
     return processed
 
@@ -272,7 +272,7 @@ async def submit_approval(callback_id: str):
 
 result = context.wait_for_callback(
     submitter=submit_approval,
-    config=WaitForCallbackConfig(timeout=Duration.from_hours(24)),
+    config=WaitForCallbackConfig(timeout=timedelta(hours=24)),
     name="wait-for-approval"
 )
 ```
@@ -293,7 +293,7 @@ result = context.wait_for_condition(
     config=WaitForConditionConfig(
         initial_state={"job_id": "job-123", "status": "pending"},
         condition=lambda state: state["status"] == "completed",
-        wait_strategy=ExponentialBackoff(initial_wait=Duration.from_seconds(2))
+        wait_strategy=ExponentialBackoff(initial_wait=timedelta(seconds=2))
     ),
     name="wait-for-job"
 )
@@ -398,7 +398,7 @@ def test_workflow(durable_runner):
 async def handler(event: dict, context: DurableContext) -> dict:
     validated = context.step(validate_input(event), name="validate")
     processed = context.step(process_data(validated), name="process")
-    context.wait(duration=Duration.from_seconds(30), name="cooldown")
+    context.wait(duration=timedelta(seconds=30), name="cooldown")
     context.step(send_notification(processed), name="notify")
     return {"success": True, "data": processed}
 ```
@@ -439,7 +439,7 @@ async def handler(event: dict, context: DurableContext) -> dict:
 
     answer = context.wait_for_callback(
         submitter=submit_approval,
-        config=WaitForCallbackConfig(timeout=Duration.from_hours(24)),
+        config=WaitForCallbackConfig(timeout=timedelta(hours=24)),
         name="wait-for-approval"
     )
 

@@ -1,11 +1,12 @@
 """Example demonstrating parallel operations for concurrent execution."""
 
+from datetime import timedelta
+
 from typing import Any
 
 from async_durable_execution.config import ParallelConfig
 from async_durable_execution.context import DurableContext
 from async_durable_execution.execution import durable_execution
-from async_durable_execution.config import Duration
 
 
 @durable_execution
@@ -25,7 +26,7 @@ async def handler(_event: Any, context: DurableContext) -> list[str]:
         return ctx.step(run, name="task2")
 
     async def task3(ctx: DurableContext) -> str:
-        ctx.wait(Duration.from_seconds(1), name="wait_in_task3")
+        ctx.wait(timedelta(seconds=1), name="wait_in_task3")
         return "task 3 completed after wait"
 
     # Use context.parallel() to execute functions concurrently and extract results immediately

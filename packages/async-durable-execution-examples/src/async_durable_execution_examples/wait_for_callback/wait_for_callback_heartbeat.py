@@ -1,9 +1,11 @@
 """Demonstrates sending heartbeats during long-running callback processing."""
 
+from datetime import timedelta
+
 import time
 from typing import Any
 
-from async_durable_execution.config import Duration, WaitForCallbackConfig
+from async_durable_execution.config import WaitForCallbackConfig
 from async_durable_execution.context import (
     DurableContext,
     WaitForCallbackContext,
@@ -22,7 +24,7 @@ async def handler(event: dict[str, Any], context: DurableContext) -> dict[str, A
     """Handler demonstrating waitForCallback with heartbeat timeout."""
 
     config = WaitForCallbackConfig(
-        timeout=Duration.from_seconds(120), heartbeat_timeout=Duration.from_seconds(15)
+        timeout=timedelta(seconds=120), heartbeat_timeout=timedelta(seconds=15)
     )
 
     result: str = context.wait_for_callback(submitter, config=config)

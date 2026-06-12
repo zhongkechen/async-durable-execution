@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from typing import TYPE_CHECKING, Any
 from unittest.mock import Mock, patch
 
 import pytest
 
-from async_durable_execution.config import Duration
 from async_durable_execution.context import (
     DurableContext,
     durable_step,
@@ -285,7 +286,7 @@ def test_wait_inside_run_in_childcontext():
     @durable_with_child_context
     def func(child_context: DurableContext, a: int, b: int):
         mock_inside_child(a, b)
-        child_context.wait(Duration.from_seconds(1))
+        child_context.wait(timedelta(seconds=1))
 
     @durable_execution
     def my_handler(event, context):
@@ -438,7 +439,7 @@ def test_wait_not_caught_by_exception():
     @durable_execution
     def my_handler(event: Any, context: DurableContext):
         try:
-            context.wait(Duration.from_seconds(1))
+            context.wait(timedelta(seconds=1))
         except Exception as err:
             msg = "This should not be caught"
             raise CustomError(msg) from err

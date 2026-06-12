@@ -2,12 +2,12 @@
 
 import datetime
 import json
+from datetime import timedelta
 from unittest.mock import Mock, patch
 
 import pytest
 
 from async_durable_execution.config import (
-    Duration,
     StepConfig,
     StepSemantics,
 )
@@ -319,7 +319,7 @@ def test_step_handler_retry_success():
     mock_state.durable_execution_arn = "test_arn"
 
     mock_retry_strategy = Mock(
-        return_value=RetryDecision(should_retry=True, delay=Duration.from_seconds(5))
+        return_value=RetryDecision(should_retry=True, delay=timedelta(seconds=5))
     )
     config = StepConfig(retry_strategy=mock_retry_strategy)
     mock_callable = Mock(side_effect=RuntimeError("Test error"))
@@ -363,7 +363,7 @@ def test_step_handler_retry_exhausted():
     mock_state.durable_execution_arn = "test_arn"
 
     mock_retry_strategy = Mock(
-        return_value=RetryDecision(should_retry=False, delay=Duration.from_seconds(0))
+        return_value=RetryDecision(should_retry=False, delay=timedelta(seconds=0))
     )
     config = StepConfig(retry_strategy=mock_retry_strategy)
     mock_callable = Mock(side_effect=RuntimeError("Test error"))
@@ -407,7 +407,7 @@ def test_step_handler_retry_interrupted_error():
     mock_state.durable_execution_arn = "test_arn"
 
     mock_retry_strategy = Mock(
-        return_value=RetryDecision(should_retry=False, delay=Duration.from_seconds(0))
+        return_value=RetryDecision(should_retry=False, delay=timedelta(seconds=0))
     )
     config = StepConfig(retry_strategy=mock_retry_strategy)
     interrupted_error = StepInterruptedError("Step interrupted")
@@ -447,7 +447,7 @@ def test_step_handler_retry_with_existing_attempts():
     mock_state.durable_execution_arn = "test_arn"
 
     mock_retry_strategy = Mock(
-        return_value=RetryDecision(should_retry=True, delay=Duration.from_seconds(10))
+        return_value=RetryDecision(should_retry=True, delay=timedelta(seconds=10))
     )
     config = StepConfig(retry_strategy=mock_retry_strategy)
     mock_callable = Mock(side_effect=RuntimeError("Test error"))
@@ -483,7 +483,7 @@ def test_step_handler_pending_without_existing_attempts():
     mock_state.durable_execution_arn = "test_arn"
 
     mock_retry_strategy = Mock(
-        return_value=RetryDecision(should_retry=True, delay=Duration.from_seconds(10))
+        return_value=RetryDecision(should_retry=True, delay=timedelta(seconds=10))
     )
     config = StepConfig(retry_strategy=mock_retry_strategy)
     mock_callable = Mock(side_effect=RuntimeError("Test error"))
@@ -781,7 +781,7 @@ def test_step_immediate_response_immediate_failure():
 
     # Configure retry strategy to not retry
     mock_retry_strategy = Mock(
-        return_value=RetryDecision(should_retry=False, delay=Duration.from_seconds(0))
+        return_value=RetryDecision(should_retry=False, delay=timedelta(seconds=0))
     )
     config = StepConfig(
         step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY,

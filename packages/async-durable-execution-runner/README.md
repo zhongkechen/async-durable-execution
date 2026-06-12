@@ -38,6 +38,7 @@ before you deploy it.
 
 ```python
 import asyncio
+from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
@@ -46,7 +47,6 @@ from async_durable_execution import (
     durable_step,
     durable_with_child_context,
 )
-from async_durable_execution.config import Duration
 
 
 @durable_step
@@ -87,7 +87,7 @@ async def function_under_test(event: Any, context: DurableContext) -> list[str]:
     result_one: str = context.step(one(1, 2))
     results.append(result_one)
 
-    context.wait(duration=Duration.from_seconds(1))
+    context.wait(duration=timedelta(seconds=1))
 
     result_two: str = context.run_in_child_context(two(3, 4))
     results.append(result_two)

@@ -1,5 +1,7 @@
 """Test runInChildContext with large data exceeding individual step limits."""
 
+from datetime import timedelta
+
 from typing import Any
 
 from async_durable_execution.context import (
@@ -7,7 +9,6 @@ from async_durable_execution.context import (
     durable_with_child_context,
 )
 from async_durable_execution.execution import durable_execution
-from async_durable_execution.config import Duration
 
 
 async def generate_large_string(size_in_kb: int) -> str:
@@ -55,7 +56,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     )
 
     # Add a wait after runInChildContext to test persistence across invocations
-    context.wait(Duration.from_seconds(1), name="post-processing-wait")
+    context.wait(timedelta(seconds=1), name="post-processing-wait")
 
     # Verify the data is still intact after the wait
     data_integrity_check = (

@@ -1,12 +1,13 @@
 """Reproduces issue where map with minSuccessful loses failure count."""
 
+from datetime import timedelta
+
 from typing import Any
 
 from async_durable_execution.config import (
     CompletionConfig,
     MapConfig,
     StepConfig,
-    Duration,
 )
 from async_durable_execution.context import DurableContext
 from async_durable_execution.execution import durable_execution
@@ -51,8 +52,8 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
 
         retry_config = RetryStrategyConfig(
             max_attempts=2,
-            initial_delay=Duration.from_seconds(1),
-            max_delay=Duration.from_seconds(1),
+            initial_delay=timedelta(seconds=1),
+            max_delay=timedelta(seconds=1),
         )
         step_config = StepConfig(retry_strategy=create_retry_strategy(retry_config))
 

@@ -1,11 +1,12 @@
 """Example demonstrating wait-for-condition pattern."""
 
+from datetime import timedelta
+
 import asyncio
 from typing import Any
 
 from async_durable_execution.context import DurableContext
 from async_durable_execution.execution import durable_execution
-from async_durable_execution.config import Duration
 from async_durable_execution.waits import (
     WaitForConditionConfig,
     WaitForConditionDecision,
@@ -25,7 +26,7 @@ async def handler(_event: Any, context: DurableContext) -> int:
         """Wait strategy that continues until state reaches 3."""
         if state >= 3:
             return WaitForConditionDecision.stop_polling()
-        return WaitForConditionDecision.continue_waiting(Duration.from_seconds(1))
+        return WaitForConditionDecision.continue_waiting(timedelta(seconds=1))
 
     config = WaitForConditionConfig(wait_strategy=wait_strategy, initial_state=0)
 

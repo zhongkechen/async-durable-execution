@@ -2,11 +2,11 @@
 
 import datetime
 import json
+from datetime import timedelta
 from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.config import Duration
 from async_durable_execution.exceptions import (
     CallableRuntimeError,
     InvocationError,
@@ -107,7 +107,7 @@ def test_wait_for_condition_first_execution_condition_not_met():
     mock_state.wrap_user_function.return_value = check_func
 
     def wait_strategy(state, attempt):
-        return WaitForConditionDecision.continue_waiting(Duration.from_seconds(30))
+        return WaitForConditionDecision.continue_waiting(timedelta(seconds=30))
 
     config = WaitForConditionConfig(initial_state=5, wait_strategy=wait_strategy)
 
@@ -466,7 +466,7 @@ def test_wait_for_condition_delay_seconds_none():
     mock_state.wrap_user_function.return_value = check_func
 
     def wait_strategy(state, attempt):
-        return WaitForConditionDecision(should_continue=True, delay=Duration())
+        return WaitForConditionDecision(should_continue=True, delay=timedelta())
 
     config = WaitForConditionConfig(initial_state=5, wait_strategy=wait_strategy)
 
@@ -600,7 +600,7 @@ def test_wait_for_condition_custom_delay_seconds():
 
     def wait_strategy(state, attempt):
         return WaitForConditionDecision(
-            should_continue=True, delay=Duration.from_minutes(1)
+            should_continue=True, delay=timedelta(minutes=1)
         )
 
     config = WaitForConditionConfig(initial_state=5, wait_strategy=wait_strategy)
@@ -885,7 +885,7 @@ def test_wait_for_condition_zero_delay_seconds():
 
     def wait_strategy(state, attempt):
         return WaitForConditionDecision(
-            should_continue=True, delay=Duration.from_seconds(0)
+            should_continue=True, delay=timedelta(seconds=0)
         )
 
     config = WaitForConditionConfig(initial_state=5, wait_strategy=wait_strategy)
@@ -1362,7 +1362,7 @@ def test_wait_for_condition_executes_check_when_checkpoint_not_terminal():
 
     def mock_wait_strategy(state, attempt):
         return WaitForConditionDecision(
-            should_continue=False, delay=Duration.from_seconds(0)
+            should_continue=False, delay=timedelta(seconds=0)
         )
 
     executor = WaitForConditionOperationExecutor(
@@ -1407,7 +1407,7 @@ def test_wait_for_condition_executes_check_when_checkpoint_not_terminal_duplicat
     mock_logger.with_log_info.return_value = mock_logger
 
     def mock_wait_strategy(state, attempt):
-        return WaitForConditionDecision(should_continue=False, delay=None)
+        return WaitForConditionDecision.stop_polling()
 
     executor = WaitForConditionOperationExecutor(
         check=mock_check_function,

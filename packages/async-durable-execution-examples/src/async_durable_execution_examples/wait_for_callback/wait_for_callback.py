@@ -1,7 +1,9 @@
+from datetime import timedelta
+
 import asyncio
 from typing import Any
 
-from async_durable_execution.config import Duration, WaitForCallbackConfig
+from async_durable_execution.config import WaitForCallbackConfig
 from async_durable_execution.context import (
     DurableContext,
     WaitForCallbackContext,
@@ -21,7 +23,7 @@ async def external_system_call(
 @durable_execution
 async def handler(_event: Any, context: DurableContext) -> str:
     config = WaitForCallbackConfig(
-        timeout=Duration.from_seconds(120), heartbeat_timeout=Duration.from_seconds(60)
+        timeout=timedelta(seconds=120), heartbeat_timeout=timedelta(seconds=60)
     )
 
     result = context.wait_for_callback(

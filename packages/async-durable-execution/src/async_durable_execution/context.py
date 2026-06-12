@@ -3,19 +3,20 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Concatenate, Generic, ParamSpec, TypeVar
 
 from async_durable_execution.config import (
     BatchedInput,
     CallbackConfig,
     ChildConfig,
-    Duration,
     InvokeConfig,
     MapConfig,
     ParallelBranch,
     ParallelConfig,
     StepConfig,
     WaitForCallbackConfig,
+    duration_to_seconds,
 )
 from async_durable_execution.exceptions import (
     CallbackError,
@@ -676,21 +677,20 @@ class DurableContext(DurableContextProtocol):
         self.state.track_replay(operation_id=operation_id)
         return result
 
-    def wait(self, duration: Duration, name: str | None = None) -> None:
+    def wait(self, duration: timedelta, name: str | None = None) -> None:
         """Wait for a specified amount of time.
 
         Args:
-            duration: Duration to wait
+            duration: Length of time to wait
             name: Optional name for the wait step
         """
-        seconds = duration.to_seconds()
+        seconds = duration_to_seconds(duration)
         if seconds < 1:
             msg = "duration must be at least 1 second"
             raise ValidationError(msg)
         operation_id = self._create_step_id()
-        wait_seconds = duration.seconds
         executor: WaitOperationExecutor = WaitOperationExecutor(
-            seconds=wait_seconds,
+            seconds=seconds,
             state=self.state,
             operation_identifier=OperationIdentifier(
                 operation_id=operation_id,

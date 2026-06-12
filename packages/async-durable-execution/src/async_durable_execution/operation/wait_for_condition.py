@@ -11,8 +11,6 @@ from async_durable_execution.exceptions import (
 from async_durable_execution.lambda_service import (
     ErrorObject,
     OperationUpdate,
-    OperationType,
-    OperationSubType,
 )
 from async_durable_execution.logger import LogInfo
 from async_durable_execution.operation.base import (
