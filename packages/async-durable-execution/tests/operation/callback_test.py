@@ -17,6 +17,7 @@ from async_durable_execution.identifier import OperationIdentifier
 from async_durable_execution.lambda_service import (
     CallbackDetails,
     CallbackOptions,
+    CallbackTimeoutType,
     ErrorObject,
     Operation,
     OperationAction,
@@ -1311,6 +1312,76 @@ def test_callback_result_raises_error_for_timed_out_callbacks():
 
     # Verify that result() raises CallbackError
     with pytest.raises(CallbackError, match="Callback timed out"):
+        callback.result()
+
+
+def test_callback_result_appends_timeout_type_from_error_metadata():
+    """Test that timeout subtype is preserved when only ErrorType carries it."""
+
+    mock_state = Mock(spec=ExecutionState)
+
+    error = ErrorObject(
+        message="Callback timed out",
+        type=CallbackTimeoutType.TIMEOUT.value,
+        data=None,
+        stack_trace=None,
+    )
+    callback_details = CallbackDetails(
+        callback_id="cb_timed_out_with_type", result=None, error=error
+    )
+    timed_out_op = Operation(
+        operation_id="callback_timed_out_with_type",
+        operation_type=OperationType.CALLBACK,
+        status=OperationStatus.TIMED_OUT,
+        callback_details=callback_details,
+    )
+    mock_state.get_checkpoint_result.return_value = (
+        CheckpointedResult.create_from_operation(timed_out_op)
+    )
+
+    callback = Callback(
+        callback_id="cb_timed_out_with_type",
+        operation_id="callback_timed_out_with_type",
+        state=mock_state,
+        serdes=None,
+    )
+
+    with pytest.raises(CallbackError, match="Callback timed out: Callback.Timeout"):
+        callback.result()
+
+
+def test_callback_result_does_not_duplicate_timeout_type_in_message():
+    """Test that timeout subtype is not appended twice."""
+
+    mock_state = Mock(spec=ExecutionState)
+
+    error = ErrorObject(
+        message="Callback timed out: Callback.Timeout",
+        type=CallbackTimeoutType.TIMEOUT.value,
+        data=None,
+        stack_trace=None,
+    )
+    callback_details = CallbackDetails(
+        callback_id="cb_timed_out_full_message", result=None, error=error
+    )
+    timed_out_op = Operation(
+        operation_id="callback_timed_out_full_message",
+        operation_type=OperationType.CALLBACK,
+        status=OperationStatus.TIMED_OUT,
+        callback_details=callback_details,
+    )
+    mock_state.get_checkpoint_result.return_value = (
+        CheckpointedResult.create_from_operation(timed_out_op)
+    )
+
+    callback = Callback(
+        callback_id="cb_timed_out_full_message",
+        operation_id="callback_timed_out_full_message",
+        state=mock_state,
+        serdes=None,
+    )
+
+    with pytest.raises(CallbackError, match="^Callback timed out: Callback.Timeout$"):
         callback.result()
 
 
