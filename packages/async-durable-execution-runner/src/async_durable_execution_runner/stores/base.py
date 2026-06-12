@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from async_durable_execution.lambda_service import Operation
-
     from async_durable_execution_runner.execution import Execution
 
 

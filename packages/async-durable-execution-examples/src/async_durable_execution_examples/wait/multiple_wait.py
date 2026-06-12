@@ -1,7 +1,6 @@
 """Example demonstrating multiple sequential wait operations."""
 
 from datetime import timedelta
-
 from typing import Any
 
 from async_durable_execution.context import DurableContext

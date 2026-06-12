@@ -1,7 +1,6 @@
 """Demonstrates waitForCallback operations within child contexts."""
 
 from datetime import timedelta
-
 from typing import Any
 
 from async_durable_execution.context import (

@@ -10,11 +10,11 @@ This example demonstrates:
 from __future__ import annotations
 
 from datetime import timedelta
-
 from typing import TYPE_CHECKING, Any
 
 from async_durable_execution.context import DurableContext, durable_step
 from async_durable_execution.execution import durable_execution
+
 
 if TYPE_CHECKING:
     from async_durable_execution.types import StepContext

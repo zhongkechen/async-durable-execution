@@ -27,7 +27,6 @@ from async_durable_execution.identifier import OperationIdentifier
 from async_durable_execution.lambda_service import (
     CallbackTimeoutType,
     OperationSubType,
-    OperationType,
 )
 from async_durable_execution.logger import Logger, LogInfo
 from async_durable_execution.operation.callback import (
@@ -48,7 +47,7 @@ from async_durable_execution.serdes import (
     SerDes,
     deserialize,
 )
-from async_durable_execution.state import ExecutionState  # noqa: TCH001
+from async_durable_execution.state import ExecutionState  # noqa: TC001
 from async_durable_execution.threading import OrderedCounter
 from async_durable_execution.types import Callback as CallbackProtocol
 from async_durable_execution.types import (

@@ -6,7 +6,6 @@ from async_durable_execution.lambda_service import (
     OperationAction,
     OperationUpdate,
 )
-
 from async_durable_execution_runner.exceptions import (
     InvalidParameterValueException,
 )

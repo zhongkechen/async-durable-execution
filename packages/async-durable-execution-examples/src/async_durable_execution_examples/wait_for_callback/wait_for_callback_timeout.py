@@ -1,7 +1,6 @@
 """Demonstrates waitForCallback timeout scenarios."""
 
 from datetime import timedelta
-
 from typing import Any
 
 from async_durable_execution.config import WaitForCallbackConfig

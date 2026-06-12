@@ -10,7 +10,6 @@ from async_durable_execution.lambda_service import (
     OperationUpdate,
     StateOutput,
 )
-
 from async_durable_execution_runner.checkpoint.transformer import (
     OperationTransformer,
 )

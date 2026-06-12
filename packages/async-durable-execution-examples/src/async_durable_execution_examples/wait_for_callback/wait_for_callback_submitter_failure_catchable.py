@@ -1,8 +1,7 @@
 """Demonstrates waitForCallback with submitter function that fails."""
 
-from datetime import timedelta
-
 import time
+from datetime import timedelta
 from typing import Any
 
 from async_durable_execution.config import WaitForCallbackConfig

@@ -1,0 +1,43 @@
+"""Tests for undefined_results."""
+
+from async_durable_execution.execution import InvocationStatus
+from async_durable_execution_examples.none_results import none_results
+
+
+def test_handle_step_operations_with_undefined_result_after_replay(durable_runner):
+    """Test handling of step operations with undefined result after replay."""
+    with durable_runner(handler=none_results.handler, input=None, timeout=10) as runner:
+        result = runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+
+    # Verify execution completed successfully despite undefined operation results
+    assert result.get_deserialized_result() == "result"
+
+    # Verify all operations were tracked even with undefined results
+    operations = result.operations
+    assert len(operations) == 3  # step + context + wait
+
+    # Verify step operation with undefined result
+    step_ops = [
+        op
+        for op in operations
+        if op.operation_type.value == "STEP" and op.name == "fetch-user"
+    ]
+    assert len(step_ops) == 1
+    step_op = step_ops[0]
+    assert step_op.get_deserialized_result() is None
+
+    # Verify child context operation with undefined result
+    context_ops = [
+        op
+        for op in operations
+        if op.operation_type.value == "CONTEXT" and op.name == "parent"
+    ]
+    assert len(context_ops) == 1
+    context_op = context_ops[0]
+    assert context_op.get_deserialized_result() is None
+
+    # Verify wait operation completed normally
+    wait_op = operations[2]
+    assert wait_op.operation_type.value == "WAIT"

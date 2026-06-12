@@ -19,22 +19,22 @@ class MyPlugin(DurableInstrumentationPlugin):
     logger = logging.getLogger("MyPlugin")
 
     def on_operation_start(self, info):
-        self.logger.info(f"Operation started: {info}")
+        self.logger.info("Operation started: %s", info)
 
     def on_operation_end(self, info):
-        self.logger.info(f"Operation ended: {info}")
+        self.logger.info("Operation ended: %s", info)
 
     def on_invocation_start(self, info):
-        self.logger.info(f"Invocation started: {info}")
+        self.logger.info("Invocation started: %s", info)
 
     def on_invocation_end(self, info):
-        self.logger.info(f"Invocation ended: {info}")
+        self.logger.info("Invocation ended: %s", info)
 
     def on_user_function_start(self, info) -> None:
-        self.logger.info(f"User function started: {info}")
+        self.logger.info("User function started: %s", info)
 
     def on_user_function_end(self, info) -> None:
-        self.logger.info(f"User function ended: {info}")
+        self.logger.info("User function ended: %s", info)
 
 
 @durable_step

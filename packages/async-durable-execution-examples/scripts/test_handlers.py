@@ -3,6 +3,7 @@
 import ast
 from pathlib import Path
 
+
 EXAMPLES_IMPORT_PREFIX = "async_durable_execution_examples"
 HANDLER_SUFFIX = ".handler"
 

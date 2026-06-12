@@ -1,7 +1,6 @@
 """Demonstrates createCallback mixed with steps, waits, and other operations."""
 
 from datetime import timedelta
-
 from typing import Any
 
 from async_durable_execution.config import CallbackConfig

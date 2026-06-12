@@ -13,6 +13,7 @@ from async_durable_execution.config import (
     duration_to_seconds,
 )
 
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 

@@ -2,25 +2,27 @@ import contextlib
 import datetime
 import functools
 import logging
+from collections.abc import Callable, MutableMapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, MutableMapping
+from typing import Any
 
 from async_durable_execution.exceptions import SuspendExecution
 from async_durable_execution.identifier import OperationIdentifier
 from async_durable_execution.lambda_service import (
-    OperationType,
-    OperationStatus,
-    OperationAction,
-    OperationSubType,
+    DurableExecutionInvocationOutput,
     ErrorObject,
     InvocationStatus,
     Operation,
+    OperationAction,
+    OperationStatus,
+    OperationSubType,
+    OperationType,
     OperationUpdate,
-    DurableExecutionInvocationOutput,
 )
 from async_durable_execution.types import LambdaContext
+
 
 logger = logging.getLogger(__name__)
 
@@ -56,10 +58,9 @@ class UserFunctionOutcome(Enum):
     def from_error(cls, error: ErrorObject | None) -> "UserFunctionOutcome":
         if error is None:
             return cls(cls.SUCCEEDED)
-        elif error.type == SuspendExecution.__name__:
+        if error.type == SuspendExecution.__name__:
             return cls(cls.PENDING)
-        else:
-            return cls(cls.FAILED)
+        return cls(cls.FAILED)
 
 
 @dataclass(frozen=True)
@@ -146,7 +147,6 @@ class DurableInstrumentationPlugin:
         Args:
             info: Information about the invocation.
         """
-        pass
 
     def on_invocation_end(self, info: InvocationEndInfo) -> None:
         """Called when an invocation ends. This is called within the thread that runs user function handler.
@@ -154,7 +154,6 @@ class DurableInstrumentationPlugin:
         Args:
             info: Information about the invocation.
         """
-        pass
 
     def on_operation_start(self, info: OperationStartInfo) -> None:
         """
@@ -164,7 +163,6 @@ class DurableInstrumentationPlugin:
             info: Information about the operation.
 
         """
-        pass
 
     def on_operation_end(self, info: OperationEndInfo) -> None:
         """
@@ -173,7 +171,6 @@ class DurableInstrumentationPlugin:
         Args:
             info: Information about the operation.
         """
-        pass
 
     def on_user_function_start(self, info: UserFunctionStartInfo) -> None:
         """Called when an operation starts to execute user provided function. This is called within the thread that runs user provided function.
@@ -181,7 +178,6 @@ class DurableInstrumentationPlugin:
         Args:
             info: Information about the operation attempt.
         """
-        pass
 
     def on_user_function_end(self, info: UserFunctionEndInfo) -> None:
         """Called when an operation finishes executing user provided function. This is called within the thread that runs user provided function.
@@ -189,9 +185,8 @@ class DurableInstrumentationPlugin:
         Args:
             info: Information about the operation attempt.
         """
-        pass
 
-    # Todo: further discussions required to finalize the following interface
+    # TODO: further discussions required to finalize the following interface
     # def enrich_log_context(self, info: OperationStartInfo | None) -> Dict[str, Any] | None: pass
 
 
@@ -318,7 +313,7 @@ class PluginExecutor:
         Args:
             update: the operation update that is checkpointed
         """
-        # todo: this could be called more than once for step when it's retried
+        # TODO: this could be called more than once for step when it's retried
         if update.action is OperationAction.START:
             # we handle only START action here because on_operation_update may not be able to see a STARTED update
             # when START is checkpointed in batch with terminal status updates.

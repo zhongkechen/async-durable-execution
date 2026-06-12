@@ -86,15 +86,15 @@ class RequestHandler(BaseHTTPRequestHandler):
         )  # Access shared handlers
         super().__init__(request, client_address, server)
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         """Handle GET requests."""
         self._handle_request("GET")
 
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
         """Handle POST requests."""
         self._handle_request("POST")
 
-    def do_PUT(self) -> None:  # noqa: N802
+    def do_PUT(self) -> None:
         """Handle PUT requests."""
         self._handle_request("PUT")
 

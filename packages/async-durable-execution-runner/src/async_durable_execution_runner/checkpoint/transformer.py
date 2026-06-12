@@ -9,7 +9,6 @@ from async_durable_execution.lambda_service import (
     OperationType,
     OperationUpdate,
 )
-
 from async_durable_execution_runner.checkpoint.processors.callback import (
     CallbackProcessor,
 )
@@ -55,7 +54,7 @@ class OperationTransformer:
         self,
         processors: MutableMapping[OperationType, OperationProcessor] | None = None,
     ):
-        self.processors = processors if processors else self._DEFAULT_PROCESSORS
+        self.processors = processors or self._DEFAULT_PROCESSORS
 
     def process_updates(
         self,

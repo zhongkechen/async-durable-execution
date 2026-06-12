@@ -1,7 +1,6 @@
 """Example demonstrating parallel with wait operations."""
 
 from datetime import timedelta
-
 from typing import Any
 
 from async_durable_execution.context import DurableContext
@@ -14,15 +13,12 @@ async def handler(_event: Any, context: DurableContext) -> str:
 
     async def wait_1_second(ctx: DurableContext) -> None:
         ctx.wait(timedelta(seconds=1), name="wait_1_second")
-        return None
 
     async def wait_2_seconds(ctx: DurableContext) -> None:
         ctx.wait(timedelta(seconds=2), name="wait_2_seconds")
-        return None
 
     async def wait_5_seconds(ctx: DurableContext) -> None:
         ctx.wait(timedelta(seconds=5), name="wait_5_seconds")
-        return None
 
     # Call get_results() to extract data and avoid BatchResult serialization
     context.parallel(

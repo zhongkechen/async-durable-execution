@@ -6,13 +6,13 @@ import datetime
 from typing import TYPE_CHECKING
 
 from async_durable_execution.lambda_service import (
+    CallbackDetails,
+    CallbackOptions,
     Operation,
     OperationAction,
     OperationStatus,
-    OperationUpdate,
-    CallbackDetails,
     OperationType,
-    CallbackOptions,
+    OperationUpdate,
 )
 from async_durable_execution_runner.checkpoint.processors.base import (
     OperationProcessor,
@@ -21,6 +21,7 @@ from async_durable_execution_runner.exceptions import (
     InvalidParameterValueException,
 )
 from async_durable_execution_runner.token import CallbackToken
+
 
 if TYPE_CHECKING:
     from async_durable_execution_runner.observer import ExecutionNotifier
@@ -33,8 +34,8 @@ class CallbackProcessor(OperationProcessor):
         self,
         update: OperationUpdate,
         current_op: Operation | None,
-        notifier: ExecutionNotifier,  # noqa: ARG002
-        execution_arn: str,  # noqa: ARG002
+        notifier: ExecutionNotifier,
+        execution_arn: str,
     ) -> Operation:
         """Process CALLBACK operation update with scheduler integration for activities."""
         match update.action:

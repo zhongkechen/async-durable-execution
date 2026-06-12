@@ -365,14 +365,14 @@ from async_durable_execution_runner import InvocationStatus
 from my_module import handler
 
 
-@pytest.mark.durable_execution(
-    handler=handler,
-    lambda_function_name="my_function",
-)
 def test_workflow(durable_runner):
     """Test durable function workflow."""
-    with durable_runner:
-        result = durable_runner.run(input={"user_id": "123"}, timeout=10)
+    with durable_runner(
+        handler=handler,
+        input={"user_id": "123"},
+        timeout=10,
+    ) as runner:
+        result = runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.result == {"success": True}

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import json
 import logging
 from abc import ABC, abstractmethod
@@ -26,7 +25,6 @@ from async_durable_execution_runner.model import (
     ListDurableExecutionsResponse,
     SendDurableExecutionCallbackFailureRequest,
     SendDurableExecutionCallbackFailureResponse,
-    SendDurableExecutionCallbackHeartbeatRequest,
     SendDurableExecutionCallbackHeartbeatResponse,
     SendDurableExecutionCallbackSuccessResponse,
     StartDurableExecutionInput,
@@ -340,7 +338,7 @@ class GetDurableExecutionHandler(EndpointHandler):
             HTTPResponse: The HTTP response to send to the client
         """
         try:
-            route = cast(GetDurableExecutionRoute, parsed_route)
+            route = cast("GetDurableExecutionRoute", parsed_route)
 
             execution_response = self.executor.get_execution_details(route.arn)
 
@@ -371,7 +369,7 @@ class CheckpointDurableExecutionHandler(EndpointHandler):
         try:
             body_data: dict[str, Any] = self._parse_json_body(request)
 
-            checkpoint_route = cast(CheckpointDurableExecutionRoute, parsed_route)
+            checkpoint_route = cast("CheckpointDurableExecutionRoute", parsed_route)
             execution_arn: str = checkpoint_route.arn
 
             checkpoint_request: CheckpointDurableExecutionRequest = (
@@ -413,7 +411,7 @@ class StopDurableExecutionHandler(EndpointHandler):
         try:
             body_data: dict[str, Any] = self._parse_json_body_optional(request)
 
-            stop_route = cast(StopDurableExecutionRoute, parsed_route)
+            stop_route = cast("StopDurableExecutionRoute", parsed_route)
             execution_arn: str = stop_route.arn
 
             body_data["DurableExecutionArn"] = execution_arn
@@ -449,7 +447,7 @@ class GetDurableExecutionStateHandler(EndpointHandler):
             HTTPResponse: The HTTP response to send to the client
         """
         try:
-            state_route = cast(GetDurableExecutionStateRoute, parsed_route)
+            state_route = cast("GetDurableExecutionStateRoute", parsed_route)
             execution_arn: str = state_route.arn
 
             state_response: GetDurableExecutionStateResponse = (
@@ -480,7 +478,7 @@ class GetDurableExecutionHistoryHandler(EndpointHandler):
             HTTPResponse: The HTTP response to send to the client
         """
         try:
-            history_route = cast(GetDurableExecutionHistoryRoute, parsed_route)
+            history_route = cast("GetDurableExecutionHistoryRoute", parsed_route)
             execution_arn: str = history_route.arn
 
             max_items: str | None = self._parse_query_param(request, "MaxItems")
@@ -580,7 +578,7 @@ class ListDurableExecutionsByFunctionHandler(EndpointHandler):
         Returns:
             HTTPResponse: The HTTP response to send to the client
         """
-        function_route = cast(ListDurableExecutionsByFunctionRoute, parsed_route)
+        function_route = cast("ListDurableExecutionsByFunctionRoute", parsed_route)
         function_name: str = function_route.function_name
 
         # Validate function name before processing
@@ -632,7 +630,7 @@ class SendDurableExecutionCallbackSuccessHandler(EndpointHandler):
             HTTPResponse: The HTTP response to send to the client
         """
         try:
-            callback_route = cast(CallbackSuccessRoute, parsed_route)
+            callback_route = cast("CallbackSuccessRoute", parsed_route)
             callback_id: str = callback_route.callback_id
 
             result_bytes: bytes = self._parse_callback_result_payload(request)
@@ -676,7 +674,7 @@ class SendDurableExecutionCallbackFailureHandler(EndpointHandler):
             HTTPResponse: The HTTP response to send to the client
         """
         try:
-            callback_route = cast(CallbackFailureRoute, parsed_route)
+            callback_route = cast("CallbackFailureRoute", parsed_route)
             callback_id: str = callback_route.callback_id
 
             body_data: dict[str, Any] = self._parse_json_body_optional(request)
@@ -724,7 +722,7 @@ class SendDurableExecutionCallbackHeartbeatHandler(EndpointHandler):
         """
         try:
             # Heartbeat requests don't have a body, only callback_id from URL
-            callback_route = cast(CallbackHeartbeatRoute, parsed_route)
+            callback_route = cast("CallbackHeartbeatRoute", parsed_route)
             callback_id: str = callback_route.callback_id
 
             callback_response: SendDurableExecutionCallbackHeartbeatResponse = (  # noqa: F841

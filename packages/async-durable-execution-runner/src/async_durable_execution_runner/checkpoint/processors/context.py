@@ -10,7 +10,6 @@ from async_durable_execution.lambda_service import (
     OperationStatus,
     OperationUpdate,
 )
-
 from async_durable_execution_runner.checkpoint.processors.base import (
     OperationProcessor,
 )

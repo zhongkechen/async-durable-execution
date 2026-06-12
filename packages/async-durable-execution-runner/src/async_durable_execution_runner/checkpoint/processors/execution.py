@@ -10,7 +10,6 @@ from async_durable_execution.lambda_service import (
     OperationAction,
     OperationUpdate,
 )
-
 from async_durable_execution_runner.checkpoint.processors.base import (
     OperationProcessor,
 )
@@ -38,12 +37,8 @@ class ExecutionProcessor(OperationProcessor):
                 )
             case _:
                 # intentional. actual service will fail any EXECUTION update that is not SUCCEED.
-                error = (
-                    update.error
-                    if update.error
-                    else ErrorObject.from_message(
-                        "There is no error details but EXECUTION checkpoint action is not SUCCEED."
-                    )
+                error = update.error or ErrorObject.from_message(
+                    "There is no error details but EXECUTION checkpoint action is not SUCCEED."
                 )
                 # All EXECUTION failures go through normal fail path
                 # Timeout/Stop status is set by executor based on the operation that caused it

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from async_durable_execution.types import LoggerInterface
 
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, MutableMapping
 

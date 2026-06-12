@@ -22,6 +22,7 @@ from async_durable_execution.operation.base import (
 )
 from async_durable_execution.serdes import deserialize, serialize
 
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -155,7 +156,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
             self.operation_identifier.name,
         )
         try:
-            # todo: fix attempt (checkpointed_result.is_existent is always True)
+            # TODO: fix attempt (checkpointed_result.is_existent is always True)
             wrapped_user_func = self.state.wrap_user_function(
                 self.func,
                 self.operation_identifier,

@@ -3,6 +3,7 @@
 import hashlib
 import re
 
+
 HANDLER_PACKAGE_PREFIX = "async_durable_execution_examples."
 LAMBDA_FUNCTION_NAME_MAX_LENGTH = 64
 DEFAULT_FUNCTION_NAME_PREFIX_HEADROOM = 16

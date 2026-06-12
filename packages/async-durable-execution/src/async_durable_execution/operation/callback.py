@@ -16,6 +16,7 @@ from async_durable_execution.operation.base import (
 )
 from async_durable_execution.types import WaitForCallbackContext
 
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 

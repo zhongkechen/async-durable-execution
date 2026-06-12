@@ -39,6 +39,7 @@ from async_durable_execution.exceptions import (
     SerDesError,
 )
 
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")

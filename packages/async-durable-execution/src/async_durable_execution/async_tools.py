@@ -5,7 +5,7 @@ import inspect
 import queue
 import threading
 from collections.abc import Awaitable, Callable
-from typing import Any, TypeVar, cast
+from typing import TypeVar, cast
 
 
 T = TypeVar("T")
@@ -13,7 +13,7 @@ T = TypeVar("T")
 
 def resolve_awaitable(value: T | Awaitable[T]) -> T:
     if inspect.isawaitable(value):
-        return run_awaitable(cast(Awaitable[T], value))
+        return run_awaitable(cast("Awaitable[T]", value))
     return value
 
 
@@ -45,5 +45,5 @@ def _run_awaitable_in_thread(awaitable: Awaitable[T]) -> T:
     thread.join()
 
     if success:
-        return cast(T, payload)
-    raise cast(BaseException, payload)
+        return cast("T", payload)
+    raise cast("BaseException", payload)

@@ -1,7 +1,6 @@
 """Test runInChildContext with large data exceeding individual step limits."""
 
 from datetime import timedelta
-
 from typing import Any
 
 from async_durable_execution.context import (

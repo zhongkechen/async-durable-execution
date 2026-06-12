@@ -1,7 +1,6 @@
 """Demonstrates waitForCallback with submitter retry strategy using exponential backoff (0.5s, 1s, 2s)."""
 
 from datetime import timedelta
-
 from typing import Any
 
 from async_durable_execution.config import WaitForCallbackConfig

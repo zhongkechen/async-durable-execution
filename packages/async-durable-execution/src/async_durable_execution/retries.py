@@ -286,5 +286,4 @@ def with_retry(
             name=name,
             config=config.child_context_config,
         )
-    else:
-        return run_loop(context)
+    return run_loop(context)

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from async_durable_execution.exceptions import OrderedLockError
 
+
 if TYPE_CHECKING:
     from typing import Self
 

@@ -2,7 +2,7 @@
 
 import json
 from datetime import datetime, timedelta
-from typing import Any, Optional, TypedDict
+from typing import Any, TypedDict
 
 from async_durable_execution.config import WaitForCallbackConfig
 from async_durable_execution.context import DurableContext

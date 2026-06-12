@@ -1,0 +1,35 @@
+"""Tests for wait_for_callback_anonymous."""
+
+import json
+
+from async_durable_execution.execution import InvocationStatus
+from async_durable_execution_examples.wait_for_callback import (
+    wait_for_callback_anonymous,
+)
+
+
+def test_handle_basic_wait_for_callback_with_anonymous_submitter(durable_runner):
+    """Test basic waitForCallback with anonymous submitter."""
+    with durable_runner(
+        handler=wait_for_callback_anonymous.handler, input=None, timeout=30
+    ) as runner:
+        execution_arn = runner.run_async()
+        callback_id = runner.wait_for_callback(execution_arn=execution_arn)
+        callback_result = json.dumps({"data": "callback_completed"})
+        runner.send_callback_success(
+            callback_id=callback_id, result=callback_result.encode()
+        )
+
+        result = runner.wait_for_result(execution_arn=execution_arn)
+
+    assert result.status is InvocationStatus.SUCCEEDED
+
+    result_data = result.get_deserialized_result()
+
+    assert result_data == {
+        "callbackResult": callback_result,
+        "completed": True,
+    }
+
+    # Verify operations were tracked
+    assert len(result.operations) > 0

@@ -17,13 +17,11 @@ import sys
 import uuid
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urljoin
-
-import async_durable_execution
-import boto3  # type: ignore
 from urllib.error import HTTPError, URLError
+from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
+import boto3  # type: ignore
 from botocore.exceptions import ConnectionError  # type: ignore
 
 from async_durable_execution_runner.exceptions import (

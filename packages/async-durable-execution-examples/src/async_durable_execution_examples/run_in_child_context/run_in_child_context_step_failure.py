@@ -1,12 +1,11 @@
 """Demonstrates runInChildContext with a failing step followed by a successful wait."""
 
 from datetime import timedelta
-
 from typing import Any
 
+from async_durable_execution.config import StepConfig
 from async_durable_execution.context import DurableContext
 from async_durable_execution.execution import durable_execution
-from async_durable_execution.config import StepConfig
 from async_durable_execution.retries import (
     RetryStrategyConfig,
     create_retry_strategy,

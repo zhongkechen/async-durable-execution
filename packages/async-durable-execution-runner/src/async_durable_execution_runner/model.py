@@ -8,6 +8,8 @@ from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any
 
+from dateutil.tz import UTC
+
 from async_durable_execution.execution import DurableExecutionInvocationOutput
 
 # Import existing types from the main SDK - REUSE EVERYTHING POSSIBLE
@@ -35,8 +37,6 @@ from async_durable_execution.lambda_service import (
 from async_durable_execution.types import (
     LambdaContext as LambdaContextProtocol,
 )
-from dateutil.tz import UTC
-
 from async_durable_execution_runner.exceptions import (
     InvalidParameterValueException,
 )
@@ -148,7 +148,7 @@ class StartDurableExecutionInput:
             trace_fields=data.get("TraceFields"),
             tenant_id=data.get("TenantId"),
             input=data.get("Input"),
-            lambda_endpoint=data.get("LambdaEndpoint", None),
+            lambda_endpoint=data.get("LambdaEndpoint"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -327,11 +327,8 @@ class Execution:
             function_arn=f"arn:aws:lambda:us-east-1:123456789012:function:{execution.start_input.function_name}",
             status=status,
             start_timestamp=execution_op.start_timestamp
-            if execution_op.start_timestamp
-            else datetime.datetime.now(datetime.UTC),
-            end_timestamp=execution_op.end_timestamp
-            if execution_op.end_timestamp
-            else None,
+            or datetime.datetime.now(datetime.UTC),
+            end_timestamp=execution_op.end_timestamp or None,
         )
 
 
@@ -368,7 +365,7 @@ class ListDurableExecutionsRequest:
 
         status_filter = data.get("StatusFilter")
         if isinstance(status_filter, list):
-            status_filter = status_filter if status_filter else None
+            status_filter = status_filter or None
         elif status_filter:
             status_filter = [status_filter]
 
@@ -1287,7 +1284,7 @@ class EventCreationContext:
     start_durable_execution_input: StartDurableExecutionInput
     durable_execution_invocation_output: DurableExecutionInvocationOutput | None = None
     operation_update: OperationUpdate | None = None
-    include_execution_data: bool = False  # noqa: FBT001, FBT002
+    include_execution_data: bool = False
 
     @classmethod
     def create(
@@ -2664,7 +2661,7 @@ def events_to_operations(events: list[Event]) -> list[Operation]:
             name=event.name,
             parent_id=event.parent_id,
             sub_type=sub_type,
-            start_timestamp=datetime.datetime.now(tz=datetime.timezone.utc),
+            start_timestamp=datetime.datetime.now(tz=datetime.UTC),
         )
 
         # Merge with previous operation if it exists
@@ -2942,7 +2939,7 @@ class ListDurableExecutionsByFunctionRequest:
 
         status_filter = data.get("StatusFilter") or data.get("statusFilter")
         if isinstance(status_filter, list):
-            status_filter = status_filter if status_filter else None
+            status_filter = status_filter or None
         elif status_filter:
             status_filter = [status_filter]
 

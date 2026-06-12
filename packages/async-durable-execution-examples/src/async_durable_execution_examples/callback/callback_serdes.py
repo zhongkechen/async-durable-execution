@@ -1,8 +1,8 @@
 """Demonstrates createCallback with custom serialization/deserialization for Date objects."""
 
 import json
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import datetime, timedelta
+from typing import Any
 
 from async_durable_execution.config import CallbackConfig
 from async_durable_execution.context import DurableContext
@@ -39,15 +39,13 @@ class CustomData:
 class CustomDataSerDes(SerDes[CustomData]):
     """Custom serializer for CustomData that handles datetime conversion."""
 
-    def serialize(self, value: Optional[CustomData], _: SerDesContext) -> Optional[str]:
+    def serialize(self, value: CustomData | None, _: SerDesContext) -> str | None:
         """Serialize CustomData to JSON string."""
         if value is None:
             return None
         return json.dumps(value.to_dict())
 
-    def deserialize(
-        self, payload: Optional[str], _: SerDesContext
-    ) -> Optional[CustomData]:
+    def deserialize(self, payload: str | None, _: SerDesContext) -> CustomData | None:
         """Deserialize JSON string to CustomData."""
         if payload is None:
             return None

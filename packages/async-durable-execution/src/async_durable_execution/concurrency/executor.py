@@ -30,7 +30,7 @@ from async_durable_execution.exceptions import (
     TimedSuspendExecution,
 )
 from async_durable_execution.identifier import OperationIdentifier
-from async_durable_execution.lambda_service import ErrorObject, OperationType
+from async_durable_execution.lambda_service import ErrorObject
 from async_durable_execution.operation.child import child_handler
 
 

@@ -19,7 +19,6 @@ from async_durable_execution.lambda_service import (
     OperationType,
     OperationUpdate,
 )
-
 from async_durable_execution_runner.exceptions import (
     IllegalStateException,
     InvalidParameterValueException,
@@ -143,7 +142,7 @@ class Execution:
             for item in data.get("InvocationCompletions", [])
         ]
         execution.used_tokens = set(data["UsedTokens"])
-        execution._token_sequence = data["TokenSequence"]  # noqa: SLF001
+        execution._token_sequence = data["TokenSequence"]
         execution.is_complete = data["IsComplete"]
         execution.result = (
             DurableExecutionInvocationOutput.from_dict(data["Result"])

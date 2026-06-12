@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+
 PACKAGE_NAME = "DurableExecutionsPythonExamples-1.0"
 PACKAGE_PREFIX = "async_durable_execution_examples"
 DEFAULT_DURABLE_CONFIG = {

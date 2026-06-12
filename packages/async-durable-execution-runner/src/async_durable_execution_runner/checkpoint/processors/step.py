@@ -12,7 +12,6 @@ from async_durable_execution.lambda_service import (
     OperationUpdate,
     StepDetails,
 )
-
 from async_durable_execution_runner.checkpoint.processors.base import (
     OperationProcessor,
 )
