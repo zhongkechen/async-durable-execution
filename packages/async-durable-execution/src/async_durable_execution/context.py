@@ -24,6 +24,7 @@ from async_durable_execution.exceptions import (
 )
 from async_durable_execution.identifier import OperationIdentifier
 from async_durable_execution.lambda_service import (
+    CallbackTimeoutType,
     OperationSubType,
     OperationType,
 )
@@ -78,6 +79,23 @@ Params = ParamSpec("Params")
 logger = logging.getLogger(__name__)
 
 PASS_THROUGH_SERDES: SerDes[Any] = PassThroughSerDes()
+
+
+def _format_callback_error_message(checkpointed_result: CheckpointedResult) -> str:
+    """Build a stable callback error message from checkpoint state."""
+    error = checkpointed_result.error
+    if not error or not error.message:
+        return "Callback failed"
+
+    message = error.message
+    if (
+        checkpointed_result.is_timed_out()
+        and error.type in {timeout.value for timeout in CallbackTimeoutType}
+        and error.type not in message
+    ):
+        return f"{message}: {error.type}"
+
+    return message
 
 
 @dataclass(frozen=True)
@@ -256,11 +274,7 @@ class Callback(Generic[T], CallbackProtocol[T]):  # noqa: PYI059
             or checkpointed_result.is_timed_out()
             or checkpointed_result.is_stopped()
         ):
-            msg = (
-                checkpointed_result.error.message
-                if checkpointed_result.error and checkpointed_result.error.message
-                else "Callback failed"
-            )
+            msg = _format_callback_error_message(checkpointed_result)
             raise CallbackError(message=msg, callback_id=self.callback_id)
 
         if checkpointed_result.is_succeeded():
