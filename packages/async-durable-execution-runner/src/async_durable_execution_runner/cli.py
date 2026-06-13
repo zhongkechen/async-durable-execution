@@ -152,8 +152,6 @@ class CliApp:
 
         return parser
 
-    # region parsers
-
     def _create_start_server_parser(self, subparsers) -> None:
         """Create the start-server command parser."""
         start_server_parser = subparsers.add_parser(
@@ -249,10 +247,6 @@ class CliApp:
             help="Durable execution ARN (required)",
         )
         get_history_parser.set_defaults(func=self.get_durable_execution_history_command)
-
-    # endregion parsers
-
-    # region commands
 
     def start_server_command(self, args: argparse.Namespace) -> int:
         """Execute the start-server command.
@@ -452,8 +446,6 @@ class CliApp:
         except Exception:
             logger.exception("General error")
             return 1
-
-    # endregion commands
 
     def _create_boto3_client(
         self, endpoint_url: str | None = None, region_name: str | None = None

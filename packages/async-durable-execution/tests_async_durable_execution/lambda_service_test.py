@@ -2621,7 +2621,6 @@ def test_operation_json_dict_preserves_non_timestamp_fields():
     assert result["ChainedInvokeDetails"]["Result"] == "invoke_result"
 
 
-# region TimestampConverter Tests
 def test_timestamp_converter_to_unix_millis_valid_datetime():
     """Test converting valid datetime to Unix timestamp in milliseconds."""
     # Test epoch
@@ -2837,6 +2836,3 @@ def test_timestamp_converter_millisecond_boundaries():
         result_dt = TimestampConverter.from_unix_millis(result_ms)
         # Should be equal within millisecond precision
         assert abs((result_dt - dt).total_seconds()) < 0.001
-
-
-# endregion

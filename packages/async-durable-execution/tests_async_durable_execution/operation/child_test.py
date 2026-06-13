@@ -26,7 +26,6 @@ from async_durable_execution.types import SummaryGenerator
 from ..serdes_test import CustomDictSerDes
 
 
-# region child_handler
 @pytest.mark.parametrize(
     ("config", "expected_sub_type"),
     [
@@ -523,9 +522,6 @@ def test_child_handler_custom_serdes_already_succeeded() -> None:
     assert actual_result == expected_checkpoointed_result
     # Verify get_checkpoint_result called once
     assert mock_state.get_checkpoint_result.call_count == 1
-
-
-# endregion child_handler
 
 
 # large payload with summary generator

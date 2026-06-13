@@ -173,7 +173,6 @@ class OrderedLock:
         with self._lock:
             return self._is_broken
 
-    # region Context Manager
     def __enter__(self) -> Self:
         """Acquire lock."""
         self.acquire()
@@ -191,8 +190,6 @@ class OrderedLock:
                     waiter.set()
 
         self.release()
-
-    # endregion Context Manager
 
 
 class OrderedCounter:

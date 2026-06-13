@@ -528,9 +528,6 @@ class StepFuture(Generic[T]):
         return self.future.result(timeout=timeout_seconds)
 
 
-# region Jitter
-
-
 class JitterStrategy(StrEnum):
     """
     Jitter strategies are used to introduce noise when attempting to retry
@@ -569,6 +566,3 @@ class JitterStrategy(StrEnum):
             case _:  # default is FULL
                 # Full jitter: random(0, delay)
                 return random.random() * delay  # noqa: S311
-
-
-# endregion Jitter

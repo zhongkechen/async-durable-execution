@@ -54,8 +54,6 @@ from async_durable_execution.plugin import DurableInstrumentationPlugin
 
 LARGE_RESULT = "large_success" * 1024 * 1024
 
-# region Models
-
 
 def test_durable_execution_invocation_input_from_dict():
     """Test that DurableExecutionInvocationInput.from_dict works correctly"""
@@ -339,11 +337,6 @@ def test_durable_execution_invocation_output_from_dict_no_result():
     assert result.status == InvocationStatus.PENDING
     assert result.result is None
     assert result.error is None
-
-
-# endregion Models
-
-# region durable_execution
 
 
 def test_durable_execution_client_selection_env_normal_result():
@@ -1034,9 +1027,6 @@ def test_durable_execution_checkpoint_error_in_background_thread():
     response = test_handler(invocation_input, lambda_context)
     assert response["Status"] == InvocationStatus.FAILED.value
     assert response["Error"]["ErrorType"] == "CheckpointError"
-
-
-# endregion durable_execution
 
 
 def test_durable_execution_checkpoint_execution_error_stops_background():
@@ -2860,9 +2850,6 @@ def test_durable_execution_retryable_initial_pagination_error_raises():
         )
 
 
-# region Plugin Integration Tests
-
-
 class _RecordingPlugin(DurableInstrumentationPlugin):
     """Plugin that records all hook calls for assertion."""
 
@@ -3206,6 +3193,3 @@ def test_durable_execution_decorator_with_plugins_and_boto3_client():
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
     assert "invocation_start" in plugin.calls
-
-
-# endregion Plugin Integration Tests

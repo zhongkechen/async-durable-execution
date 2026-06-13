@@ -53,7 +53,6 @@ def create_mock_operation(
     return op
 
 
-# region execution-tests
 def test_create_execution_started():
     from unittest.mock import Mock
 
@@ -251,10 +250,6 @@ def test_create_execution_invalid_status():
         Event.create_execution_event(context)
 
 
-# endregion execution-tests
-
-
-# region context-tests
 def test_create_context_started():
     operation = create_mock_operation(
         "ctx-1", "test_context", status=OperationStatus.STARTED
@@ -352,10 +347,6 @@ def test_create_context_invalid_status():
         Event.create_context_event(context)
 
 
-# endregion context-tests
-
-
-# region wait-tests
 def test_create_wait_started():
     operation = create_mock_operation("wait-1", status=OperationStatus.STARTED)
     operation.start_timestamp = datetime.fromisoformat("2024-01-01T12:00:00Z")
@@ -464,10 +455,6 @@ def test_create_wait_invalid_status():
         Event.create_wait_event(context)
 
 
-# endregion wait-tests
-
-
-# region step-tests
 def test_create_step_started():
     operation = create_mock_operation(
         "step-1", "test_step", status=OperationStatus.STARTED
@@ -565,10 +552,6 @@ def test_create_step_invalid_status():
         Event.create_step_event(context)
 
 
-# endregion step-tests
-
-
-# region chained_invoke
 def test_create_chained_invoke_started():
     operation = create_mock_operation(
         "invoke-1", "test_invoke", status=OperationStatus.STARTED
@@ -592,12 +575,6 @@ def test_create_chained_invoke_started():
     assert event.operation_id == "invoke-1"
     assert event.name == "test_invoke"
     assert event.chained_invoke_started_details is not None
-
-
-# endregion callback
-
-
-# endregion helpers-test
 
 
 def test_create_chained_invoke_succeeded():
@@ -729,10 +706,6 @@ def test_create_chained_invoke_invalid_status():
         Event.create_chained_invoke_event(context)
 
 
-# endregion chained_invoke
-
-
-# region callback-tests
 def test_create_callback_started():
     operation = create_mock_operation(
         "callback-1", "test_callback", status=OperationStatus.STARTED
@@ -862,10 +835,6 @@ def test_create_callback_invalid_status():
         Event.create_callback_event(context)
 
 
-# endregion callback-tests
-
-
-# region model-tests
 def test_lambda_context():
     context = LambdaContext(aws_request_id="test-123")
     assert context.aws_request_id == "test-123"
@@ -1030,10 +999,6 @@ def test_checkpoint_durable_execution_request_from_dict():
     assert request.updates[0].operation_id == "op-1"
 
 
-# endregion model-tests
-
-
-# region from_operation_started_tests
 class TestFromOperationStarted:
     """Tests for Event.from_operation_started method."""
 
@@ -1319,10 +1284,6 @@ class TestFromOperationStarted:
             Event.create_event_started(context)
 
 
-# endregion from_operation_started_tests
-
-
-# region from_operation_finished_tests
 class TestFromOperationFinished:
     """Tests for Event.from_operation_finished method."""
 
@@ -1834,9 +1795,6 @@ class TestFromOperationFinished:
 
         assert event.event_type == "StepSucceeded"
         assert event.step_succeeded_details.result is None
-
-
-# endregion from_operation_finished_tests
 
 
 def test_chained_invoke_pending_details_from_dict():

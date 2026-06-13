@@ -103,7 +103,6 @@ class LambdaContext(LambdaContextProtocol):
         pass  # No-op for testing
 
 
-# region web_api_models
 # Web API specific models (not in Smithy but needed for web interface)
 @dataclass(frozen=True)
 class StartDurableExecutionInput:
@@ -204,10 +203,6 @@ class StartDurableExecutionOutput:
         return result
 
 
-# endregion web_api_models
-
-
-# region smithy_api_models
 # Smithy-based API models
 @dataclass(frozen=True)
 class GetDurableExecutionRequest:
@@ -553,10 +548,6 @@ class GetDurableExecutionStateResponse:
         return result
 
 
-# endregion smithy_api_models
-
-
-# region event_structures
 # Event-related structures from Smithy model
 @dataclass(frozen=True)
 class EventInput:
@@ -1274,9 +1265,6 @@ class InvocationCompletedDetails:
         }
 
 
-# endregion event_structures
-
-
 @dataclass(frozen=True)
 class EventCreationContext:
     operation: Operation
@@ -1345,7 +1333,6 @@ class EventCreationContext:
         )
 
 
-# region event_class
 @dataclass(frozen=True)
 class Event:
     """Event structure from Smithy model."""
@@ -1629,7 +1616,6 @@ class Event:
             )
         return result
 
-    # region execution
     @classmethod
     def create_execution_event_started(cls, context: EventCreationContext) -> Event:
         execution_details: ExecutionDetails | None = context.operation.execution_details
@@ -1758,9 +1744,6 @@ class Event:
                 msg = f"Operation status {context.operation.status} is not valid for execution operations. Valid statuses are: STARTED, SUCCEEDED, FAILED, TIMED_OUT, STOPPED"
                 raise InvalidParameterValueException(msg)
 
-    # endregion execution
-
-    # region context
     @classmethod
     def create_context_event_started(cls, context: EventCreationContext) -> Event:
         return cls(
@@ -1827,9 +1810,6 @@ class Event:
                 )
                 raise InvalidParameterValueException(msg)
 
-    # endregion context
-
-    # region wait
     @classmethod
     def create_wait_event_started(cls, context: EventCreationContext) -> Event:
         wait_details: WaitDetails | None = context.operation.wait_details
@@ -1926,9 +1906,6 @@ class Event:
                 )
                 raise InvalidParameterValueException(msg)
 
-    # endregion wait
-
-    # region step
     @classmethod
     def create_step_event_started(cls, context: EventCreationContext) -> Event:
         return cls(
@@ -2005,9 +1982,6 @@ class Event:
                 )
                 raise InvalidParameterValueException(msg)
 
-    # endregion step
-
-    # region chained_invoke
     @classmethod
     def create_chained_invoke_event_pending(
         cls, context: EventCreationContext
@@ -2173,9 +2147,6 @@ class Event:
                 )
                 raise InvalidParameterValueException(msg)
 
-    # endregion chained_invoke
-
-    # region callback
     @classmethod
     def create_callback_event_started(cls, context: EventCreationContext) -> Event:
         callback_details: CallbackDetails | None = context.operation.callback_details
@@ -2280,9 +2251,6 @@ class Event:
                 )
                 raise InvalidParameterValueException(msg)
 
-    # endregion callback
-
-    # region invocation_completed
     @classmethod
     def create_invocation_completed(
         cls,
@@ -2303,8 +2271,6 @@ class Event:
                 request_id=request_id,
             ),
         )
-
-    # endregion invocation_completed
 
     @classmethod
     def create_event_started(cls, context: EventCreationContext) -> Event:
@@ -2397,10 +2363,6 @@ class Event:
                 raise InvalidParameterValueException(msg)
 
 
-# endregion event_class
-
-
-# region history_models
 @dataclass(frozen=True)
 class HistoryEventTypeConfig:
     """Configuration for how to process a specific event type."""
@@ -3030,10 +2992,6 @@ class ListDurableExecutionsByFunctionResponse:
         return result
 
 
-# endregion history_models
-
-
-# region callback_models
 # Callback-related models
 @dataclass(frozen=True)
 class SendDurableExecutionCallbackSuccessRequest:
@@ -3110,10 +3068,6 @@ class SendDurableExecutionCallbackHeartbeatResponse:
     """Response from sending callback heartbeat."""
 
 
-# endregion callback_models
-
-
-# region checkpoint_models
 # Checkpoint-related models
 @dataclass(frozen=True)
 class CheckpointUpdatedExecutionState:
@@ -3240,10 +3194,6 @@ class CheckpointDurableExecutionResponse:
         return result
 
 
-# endregion checkpoint_models
-
-
-# region error_models
 # Error response structure for consistent error handling
 @dataclass(frozen=True)
 class ErrorResponse:
@@ -3289,6 +3239,3 @@ class ErrorResponse:
             error_data["requestId"] = self.request_id
 
         return {"error": error_data}
-
-
-# endregion error_models

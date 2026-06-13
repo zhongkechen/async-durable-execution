@@ -76,7 +76,6 @@ class EncodedValue:
     value: Any
 
 
-# region codecs
 class Codec(Protocol):
     """Protocol for type-specific codecs."""
 
@@ -336,9 +335,6 @@ class TypeCodec(Codec):
 
 
 TYPE_CODEC = TypeCodec()
-
-
-# endregion
 
 
 @dataclass(frozen=True)

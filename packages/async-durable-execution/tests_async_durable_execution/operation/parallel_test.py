@@ -1250,9 +1250,6 @@ def test_parallel_custom_serdes_serializes_batch_result():
         importlib.reload(child)
 
 
-# region ParallelBranch and branch naming tests
-
-
 def test_parallel_branch_is_callable():
     """ParallelBranch instances are callable."""
     from async_durable_execution.config import ParallelBranch
@@ -1403,6 +1400,3 @@ def test_parallel_branch_execute_item():
 
     result = executor.execute_item("test-ctx", executable)
     assert result == "result-test-ctx"
-
-
-# endregion

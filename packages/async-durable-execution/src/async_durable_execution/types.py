@@ -166,8 +166,6 @@ class LambdaContext(Protocol):  # pragma: no cover
     def log(self, msg) -> None: ...
 
 
-# region Summary
-
 """Summary generators for concurrent operations.
 
 Summary generators create compact JSON representations of large BatchResult objects
@@ -181,6 +179,3 @@ the child context to be re-executed during replay to reconstruct the full result
 
 class SummaryGenerator(Protocol[C_contra]):
     def __call__(self, result: C_contra) -> str: ...  # pragma: no cover
-
-
-# endregion Summary

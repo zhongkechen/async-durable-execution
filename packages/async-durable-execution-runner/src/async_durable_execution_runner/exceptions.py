@@ -76,7 +76,6 @@ from __future__ import annotations
 from typing import Any
 
 
-# region Local Runner
 class DurableFunctionsLocalRunnerError(Exception):
     """Base class for Durable Executions exceptions"""
 
@@ -97,22 +96,14 @@ class UnknownRouteError(DurableFunctionsLocalRunnerError):
         super().__init__(message)
 
 
-# endregion Local Runner
-
-
 class SerializationError(DurableFunctionsLocalRunnerError):
     """Exception for serialization errors."""
 
 
-# region Testing
 class DurableFunctionsTestError(Exception):
     """Base class for testing errors."""
 
 
-# endregion Testing
-
-
-# region AWS API Exceptions
 class AwsApiException(DurableFunctionsLocalRunnerError):  # noqa: N818
     """Base class for AWS API-style exceptions that can be serialized to AWS format."""
 
@@ -283,6 +274,3 @@ class IllegalArgumentException(AwsApiException):
     def to_dict(self) -> dict[str, Any]:
         """Serialize to AWS-compliant JSON structure (maps to InvalidParameterValueException)."""
         return {"Type": "InvalidParameterValueException", "message": self.message}
-
-
-# endregion AWS API Exceptions

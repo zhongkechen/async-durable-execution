@@ -79,7 +79,6 @@ class ExecutionNotifier:
         for observer in observers:
             getattr(observer, method.__name__)(*args, **kwargs)
 
-    # region event emitters
     def notify_completed(self, execution_arn: str, result: str | None = None) -> None:
         """Notify observers about execution completion."""
         self._notify_observers(
@@ -141,5 +140,3 @@ class ExecutionNotifier:
             callback_options=callback_options,
             callback_token=callback_token,
         )
-
-    # endregion event emitters

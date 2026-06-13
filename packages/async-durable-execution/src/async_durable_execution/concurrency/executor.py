@@ -54,7 +54,6 @@ CallableType = TypeVar("CallableType")
 ResultType = TypeVar("ResultType")
 
 
-# region concurrency logic
 class TimerScheduler:
     """Manage timed suspend tasks with a background timer thread."""
 
@@ -484,6 +483,3 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
             batch_item = BatchItem(executable.index, status, result=result, error=error)
             items.append(batch_item)
         return BatchResult.from_items(items, self.completion_config)
-
-
-# endregion concurrency logic

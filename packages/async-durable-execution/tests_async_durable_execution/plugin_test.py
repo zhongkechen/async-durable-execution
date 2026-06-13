@@ -24,9 +24,6 @@ from async_durable_execution.plugin import (
     UserFunctionStartInfo,
 )
 
-
-# region Dataclass Tests
-
 ERROR = ErrorObject(message="boom", type="Error", data=None, stack_trace=None)
 START_TS = datetime.datetime(2025, 1, 1, tzinfo=datetime.UTC)
 END_TS = datetime.datetime(2025, 1, 2, tzinfo=datetime.UTC)
@@ -152,10 +149,6 @@ class TestDataClasses(unittest.TestCase):
         self.assertEqual(USER_FUNCTION_END_INFO.error.message, "boom")
 
 
-# endregion Dataclass Tests
-
-
-# region DurableInstrumentationPlugin Tests
 class TestDurableInstrumentationPlugin(unittest.TestCase):
     def test_default_methods_are_noop(self):
         """All default hook methods should be callable and return None."""
@@ -177,12 +170,6 @@ class TestDurableInstrumentationPlugin(unittest.TestCase):
         self.assertEqual(
             ["invocation_start:req-1", "operation_start:op-2"], plugin.calls
         )
-
-
-# endregion DurableInstrumentationPlugin Tests
-
-
-# region PluginExecutor Tests
 
 
 class TestPluginExecutorInit(unittest.TestCase):
@@ -711,12 +698,6 @@ class TestPluginExecutorIsTerminalStatus(unittest.TestCase):
         self.assertFalse(PluginExecutor._is_terminal_status(OperationStatus.READY))
 
 
-# endregion PluginExecutor Tests
-
-
-# region Helper Classes
-
-
 class _NoOpPlugin(DurableInstrumentationPlugin):
     """Concrete subclass that inherits all default no-op methods."""
 
@@ -772,9 +753,6 @@ class _FailingPlugin(DurableInstrumentationPlugin):
 
     def on_operation_attempt_end(self, info):
         raise RuntimeError("boom")
-
-
-# endregion Helper Classes
 
 
 if __name__ == "__main__":

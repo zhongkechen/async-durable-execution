@@ -49,7 +49,6 @@ logger = logging.getLogger(__name__)
 LAMBDA_RESPONSE_SIZE_LIMIT = 6 * 1024 * 1024 - 50
 
 
-# region Invocation models
 @dataclass(frozen=True)
 class InitialExecutionState:
     operations: list[Operation]
@@ -153,9 +152,6 @@ class DurableExecutionInvocationInputWithClient(DurableExecutionInvocationInput)
             initial_execution_state=invocation_input.initial_execution_state,
             service_client=service_client,
         )
-
-
-# endregion Invocation models
 
 
 def durable_execution(
