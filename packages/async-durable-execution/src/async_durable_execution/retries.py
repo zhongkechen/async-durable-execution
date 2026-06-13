@@ -17,7 +17,7 @@ from async_durable_execution.exceptions import SuspendExecution
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
     from async_durable_execution.config import ChildConfig
     from async_durable_execution.types import DurableContext

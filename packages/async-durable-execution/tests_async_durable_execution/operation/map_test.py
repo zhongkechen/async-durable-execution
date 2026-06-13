@@ -4,6 +4,8 @@ import asyncio
 import importlib
 import inspect
 import json
+from collections.abc import Mapping
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
@@ -40,7 +42,9 @@ def _invoke_maybe_async(func, *args, **kwargs):
     return result
 
 
-def _mock_call_kwargs_by_operation_id(mock: Mock) -> dict[str, dict]:
+def _mock_call_kwargs_by_operation_id(
+    mock: Mock,
+) -> dict[str, Mapping[str, Any]]:
     return {call.kwargs["operation_id"]: call.kwargs for call in mock.call_args_list}
 
 

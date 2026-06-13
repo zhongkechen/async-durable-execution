@@ -14,6 +14,7 @@ from typing import (
 )
 
 import boto3  # type: ignore
+from botocore.config import Config  # type: ignore
 from botocore.exceptions import ClientError  # type: ignore
 
 from async_durable_execution.execution import InvocationStatus
@@ -748,6 +749,7 @@ def create_runner(
     Returns:
         A configured runner that can be used as a context manager.
     """
+    runner: DurableFunctionLocalTestRunner | DurableFunctionCloudTestRunner
     if mode == "local":
         if handler is None:
             msg = "handler is required when mode='local'"
@@ -956,7 +958,7 @@ class DurableFunctionCloudTestRunner:
         self._default_input = input
         self._default_timeout = timeout
 
-        client_config = boto3.session.Config(parameter_validation=False)
+        client_config = Config(parameter_validation=False)
         self.lambda_client = boto3.client(
             "lambda",
             endpoint_url=lambda_endpoint,
@@ -1067,7 +1069,8 @@ class DurableFunctionCloudTestRunner:
     ) -> None:
         try:
             self.lambda_client.send_durable_execution_callback_success(
-                CallbackId=callback_id, Result=result
+                CallbackId=callback_id,
+                Result=cast(Any, result),
             )
         except Exception as e:
             msg = f"Failed to send callback success for {self.function_name}, callback_id {callback_id}: {e}"
@@ -1078,7 +1081,8 @@ class DurableFunctionCloudTestRunner:
     ) -> None:
         try:
             self.lambda_client.send_durable_execution_callback_failure(
-                CallbackId=callback_id, Error=error.to_dict() if error else None
+                CallbackId=callback_id,
+                Error=cast(Any, error.to_dict() if error else None),
             )
         except Exception as e:
             msg = f"Failed to send callback failure for {self.function_name}, callback_id {callback_id}: {e}"

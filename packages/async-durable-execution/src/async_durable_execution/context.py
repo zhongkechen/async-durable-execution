@@ -529,7 +529,7 @@ class DurableContext(DurableContextProtocol):
         ],
         name: str | None = None,
         config: MapConfig | None = None,
-    ) -> BatchResult[R]:
+    ) -> BatchResult[T]:
         """Execute a callable for each item in parallel."""
         assert_async_callable(func)
         map_name: str | None = self._resolve_step_name(name, func)
@@ -543,7 +543,7 @@ class DurableContext(DurableContextProtocol):
         )
         map_context = self.create_child_context(operation_id=operation_id)
 
-        async def map_in_child_context() -> BatchResult[R]:
+        async def map_in_child_context() -> BatchResult[T]:
             # map_context is a child_context of the context upon which `.map`
             # was called. We are calling it `map_context` to make it explicit
             # that any operations happening from hereon are done on the context
@@ -557,7 +557,7 @@ class DurableContext(DurableContextProtocol):
                 operation_identifier=operation_identifier,
             )
 
-        result: BatchResult[R] = child_handler(
+        result: BatchResult[T] = child_handler(
             func=map_in_child_context,
             state=self.state,
             operation_identifier=operation_identifier,

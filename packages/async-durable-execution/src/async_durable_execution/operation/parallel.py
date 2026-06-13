@@ -62,7 +62,9 @@ class ParallelExecutor(ConcurrentExecutor[Callable, R]):
     @classmethod
     def from_callables(
         cls,
-        callables: Sequence[Callable[[object], Awaitable[R]] | ParallelBranch],
+        callables: Sequence[
+            Callable[[DurableContext], Awaitable[R]] | ParallelBranch[R]
+        ],
         config: ParallelConfig,
     ) -> ParallelExecutor:
         """Create ParallelExecutor from a sequence of callables or ParallelBranch instances.
@@ -103,7 +105,7 @@ class ParallelExecutor(ConcurrentExecutor[Callable, R]):
 
 
 def parallel_handler(
-    callables: Sequence[Callable[[object], Awaitable[R]] | ParallelBranch],
+    callables: Sequence[Callable[[DurableContext], Awaitable[R]] | ParallelBranch[R]],
     config: ParallelConfig | None,
     execution_state: ExecutionState,
     parallel_context: DurableContext,

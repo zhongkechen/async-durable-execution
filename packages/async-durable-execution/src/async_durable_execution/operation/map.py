@@ -70,7 +70,7 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
     def from_items(
         cls,
         items: Sequence[T],
-        func: Callable[[object, T, int, Sequence[T]], Awaitable[R]],
+        func: Callable[[DurableContext, T, int, Sequence[T]], Awaitable[R]],
         config: MapConfig[T],
     ) -> MapExecutor[T, R]:
         """Create MapExecutor from items and a callable."""
@@ -111,7 +111,7 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
 
 def map_handler(
     items: Sequence[T],
-    func: Callable[[object, T, int, Sequence[T]], Awaitable[R]],
+    func: Callable[[DurableContext, T, int, Sequence[T]], Awaitable[R]],
     config: MapConfig | None,
     execution_state: ExecutionState,
     map_context: DurableContext,

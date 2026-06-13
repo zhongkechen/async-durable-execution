@@ -879,7 +879,7 @@ def test_get_durable_execution_command_handles_connection_error() -> None:
         mock_client.exceptions.ServiceException = ServiceException
 
         mock_client.get_durable_execution.side_effect = ConnectionError(
-            error="Mocked connection error"
+            error=Exception("Mocked connection error")
         )
 
         with patch("async_durable_execution_runner.cli.logger") as mock_logger:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any
@@ -238,7 +239,7 @@ class GetDurableExecutionResponse:
     version: str | None = None
 
     @classmethod
-    def from_dict(cls, data: dict) -> GetDurableExecutionResponse:
+    def from_dict(cls, data: Mapping[str, Any]) -> GetDurableExecutionResponse:
         error = None
         if error_data := data.get("Error"):
             error = ErrorObject.from_dict(error_data)
@@ -2888,7 +2889,7 @@ class GetDurableExecutionHistoryResponse:
     next_marker: str | None = None
 
     @classmethod
-    def from_dict(cls, data: dict) -> GetDurableExecutionHistoryResponse:
+    def from_dict(cls, data: Mapping[str, Any]) -> GetDurableExecutionHistoryResponse:
         events = [Event.from_dict(event_data) for event_data in data.get("Events", [])]
         return cls(
             events=events,
