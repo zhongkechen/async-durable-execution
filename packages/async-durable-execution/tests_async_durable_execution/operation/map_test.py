@@ -2,6 +2,7 @@
 
 import asyncio
 import importlib
+import inspect
 import json
 from unittest.mock import Mock, patch
 
@@ -30,6 +31,17 @@ from async_durable_execution.serdes import serialize
 from async_durable_execution.state import ExecutionState
 
 from ..serdes_test import CustomStrSerDes
+
+
+def _invoke_maybe_async(func, *args, **kwargs):
+    result = func(*args, **kwargs)
+    if inspect.isawaitable(result):
+        return asyncio.run(result)
+    return result
+
+
+def _mock_call_kwargs_by_operation_id(mock: Mock) -> dict[str, dict]:
+    return {call.kwargs["operation_id"]: call.kwargs for call in mock.call_args_list}
 
 
 def create_test_context(
@@ -76,7 +88,7 @@ def test_map_executor_from_items():
     """Test MapExecutor.from_items class method."""
     items = ["a", "b", "c"]
 
-    def callable_func(ctx, item, idx, items):
+    async def callable_func(ctx, item, idx, items):
         return item.upper()
 
     config = MapConfig(max_concurrency=3, nesting_type=NestingType.FLAT)
@@ -94,7 +106,7 @@ def test_map_executor_from_items_default_config():
     """Test MapExecutor.from_items with default config."""
     items = ["x"]
 
-    def callable_func(ctx, item, idx, items):
+    async def callable_func(ctx, item, idx, items):
         return item
 
     executor = MapExecutor.from_items(
@@ -113,7 +125,7 @@ def test_map_executor_execute_item(mock_logger):
     """Test MapExecutor.execute_item method with logging."""
     items = ["hello", "world"]
 
-    def callable_func(ctx, item, idx, items):
+    async def callable_func(ctx, item, idx, items):
         return f"{item}_{idx}"
 
     executor = MapExecutor.from_items(
@@ -135,7 +147,7 @@ def test_map_executor_execute_item_with_context():
     """Test MapExecutor.execute_item with context usage."""
     items = [1, 2, 3]
 
-    def callable_func(ctx, item, idx, items):
+    async def callable_func(ctx, item, idx, items):
         return item * 2 + idx
 
     executor = MapExecutor.from_items(
@@ -173,7 +185,7 @@ def test_map_handler():
     """Test map_handler function."""
     items = ["a", "b"]
 
-    def callable_func(ctx, item, idx, items):
+    async def callable_func(ctx, item, idx, items):
         return item.upper()
 
     def mock_run_in_child_context(func, name, config):
@@ -208,7 +220,7 @@ def test_map_handler_with_none_config():
     """Test map_handler with None config creates default MapConfig."""
     items = ["test"]
 
-    def callable_func(ctx, item, idx, items):
+    async def callable_func(ctx, item, idx, items):
         return item
 
     def mock_run_in_child_context(func, name, config):
@@ -244,7 +256,7 @@ def test_map_executor_execute_item_accesses_all_parameters():
     """Test that execute_item passes all parameters correctly."""
     items = ["first", "second", "third"]
 
-    def callable_func(ctx, item, idx, items_list):
+    async def callable_func(ctx, item, idx, items_list):
         # Verify all parameters are passed correctly
         assert ctx == "test_context"
         assert item in items_list
@@ -268,7 +280,7 @@ def test_map_executor_from_items_empty_list():
     """Test MapExecutor.from_items with empty items list."""
     items = []
 
-    def callable_func(ctx, item, idx, items):
+    async def callable_func(ctx, item, idx, items):
         return item
 
     executor = MapExecutor.from_items(
@@ -285,7 +297,7 @@ def test_map_executor_from_items_single_item():
     """Test MapExecutor.from_items with single item."""
     items = ["only"]
 
-    def callable_func(ctx, item, idx, items):
+    async def callable_func(ctx, item, idx, items):
         return f"processed_{item}"
 
     executor = MapExecutor.from_items(
@@ -303,7 +315,7 @@ def test_map_executor_inheritance():
     """Test that MapExecutor properly inherits from ConcurrentExecutor."""
     items = ["test"]
 
-    def callable_func(ctx, item, idx, items):
+    async def callable_func(ctx, item, idx, items):
         return item
 
     executor = MapExecutor.from_items(
@@ -322,7 +334,7 @@ def test_map_handler_calls_executor_execute():
     """Test that map_handler calls executor.execute method."""
     items = ["test_item"]
 
-    def callable_func(ctx, item, idx, items):
+    async def callable_func(ctx, item, idx, items):
         return f"result_{item}"
 
     mock_batch_result = BatchResult(
@@ -370,7 +382,7 @@ def test_map_handler_with_none_config_creates_default():
     """Test that map_handler creates default MapConfig when config is None."""
     items = ["test"]
 
-    def callable_func(ctx, item, idx, items):
+    async def callable_func(ctx, item, idx, items):
         return item
 
     # Mock MapExecutor.from_items to verify it's called with default config
@@ -428,13 +440,15 @@ def test_map_handler_with_serdes():
     """Test that map_handler with serdes"""
     items = ["test_item"]
 
-    def callable_func(ctx, item, idx, items):
+    async def callable_func(ctx, item, idx, items):
         return f"RESULT_{item.upper()}"
 
     executor_context = Mock()
     executor_context._create_step_id_for_logical_step = lambda *args: "1"  # noqa SLF001
     child_context = Mock()
-    child_context.state.wrap_user_function = lambda func, *args, **kwargs: func
+    child_context.state.wrap_user_function = lambda func, *args, **kwargs: (
+        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+    )
     executor_context.create_child_context = lambda *args, **kwargs: child_context
 
     class MockExecutionState:
@@ -466,7 +480,7 @@ def test_map_handler_with_summary_generator():
     """Test that map_handler calls executor_context methods correctly."""
     items = ["item1", "item2"]
 
-    def callable_func(ctx, item, idx, items):
+    async def callable_func(ctx, item, idx, items):
         return f"large_result_{item}" * 1000  # Create a large result
 
     def mock_summary_generator(result):
@@ -513,7 +527,7 @@ def test_map_executor_from_items_with_summary_generator():
     """Test MapExecutor.from_items preserves summary_generator."""
     items = ["item1"]
 
-    def callable_func(ctx, item, idx, items):
+    async def callable_func(ctx, item, idx, items):
         return f"result_{item}"
 
     def mock_summary_generator(result):
@@ -531,7 +545,7 @@ def test_map_handler_default_summary_generator():
     """Test that map_handler calls executor_context methods correctly with default config."""
     items = ["item1"]
 
-    def callable_func(ctx, item, idx, items):
+    async def callable_func(ctx, item, idx, items):
         return f"result_{item}"
 
     executor_context = Mock()
@@ -594,7 +608,7 @@ def test_map_executor_init_with_summary_generator():
 def test_map_handler_with_explicit_none_summary_generator():
     """Test that map_handler calls executor_context methods correctly with explicit None summary_generator."""
 
-    def func(ctx, item, index, array):
+    async def func(ctx, item, index, array):
         return f"processed_{item}"
 
     items = ["item1", "item2", "item3"]
@@ -636,7 +650,7 @@ def test_map_handler_replay_mechanism():
     """Test that map_handler uses replay when operation has already succeeded."""
     items = ["item1", "item2"]
 
-    def callable_func(ctx, item, idx, items):
+    async def callable_func(ctx, item, idx, items):
         return f"result_{item}"
 
     # Mock execution state that indicates operation already succeeded
@@ -700,7 +714,7 @@ def test_map_handler_replay_with_replay_children():
     """Test map_handler replay when children need to be re-executed."""
     items = ["item1"]
 
-    def callable_func(ctx, item, idx, items):
+    async def callable_func(ctx, item, idx, items):
         return f"result_{item}"
 
     # Mock execution state that indicates operation succeeded but children need replay
@@ -787,7 +801,7 @@ def test_map_config_default_summary_generator_behavior():
 def test_map_handler_first_execution_then_replay_integration():
     """Test map_handler called twice - first calls execute, second calls replay."""
 
-    def test_func(ctx, item, idx, items):
+    async def test_func(ctx, item, idx, items):
         return f"processed_{item}"
 
     items = ["a", "b"]
@@ -890,7 +904,9 @@ def test_map_item_serialize(mock_serialize, item_serdes, batch_serdes):
     mock_state.durable_execution_arn = "arn:test"
     mock_state.get_checkpoint_result = Mock(side_effect=get_checkpoint)
     mock_state.create_checkpoint = Mock()
-    mock_state.wrap_user_function = lambda func, *args, **kwargs: func
+    mock_state.wrap_user_function = lambda func, *args, **kwargs: (
+        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+    )
 
     context_map = {}
 
@@ -907,19 +923,22 @@ def test_map_item_serialize(mock_serialize, item_serdes, batch_serdes):
 
     with patch.object(DurableContext, "_create_step_id_for_logical_step", create_id):
         context = create_test_context(state=mock_state)
+
+        async def map_item(ctx, item, idx, items):
+            return item
+
         context.map(
             ["a", "b"],
-            lambda ctx, item, idx, items: item,
+            map_item,
             config=MapConfig(serdes=batch_serdes, item_serdes=item_serdes),
         )
 
     expected = item_serdes or batch_serdes
-    assert mock_serialize.call_args_list[0][1]["serdes"] is expected
-    assert mock_serialize.call_args_list[0][1]["operation_id"] == "child-0"
-    assert mock_serialize.call_args_list[1][1]["serdes"] is expected
-    assert mock_serialize.call_args_list[1][1]["operation_id"] == "child-1"
-    assert mock_serialize.call_args_list[2][1]["serdes"] is batch_serdes
-    assert mock_serialize.call_args_list[2][1]["operation_id"] == "parent"
+    call_kwargs = _mock_call_kwargs_by_operation_id(mock_serialize)
+
+    assert call_kwargs["child-0"]["serdes"] is expected
+    assert call_kwargs["child-1"]["serdes"] is expected
+    assert call_kwargs["parent"]["serdes"] is batch_serdes
 
 
 @pytest.mark.parametrize(
@@ -953,7 +972,9 @@ def test_map_item_deserialize(mock_deserialize, item_serdes, batch_serdes):
     mock_state.durable_execution_arn = "arn:test"
     mock_state.get_checkpoint_result = Mock(side_effect=get_checkpoint)
     mock_state.create_checkpoint = Mock()
-    mock_state.wrap_user_function = lambda func, *args, **kwargs: func
+    mock_state.wrap_user_function = lambda func, *args, **kwargs: (
+        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+    )
 
     context_map = {}
 
@@ -970,17 +991,21 @@ def test_map_item_deserialize(mock_deserialize, item_serdes, batch_serdes):
 
     with patch.object(DurableContext, "_create_step_id_for_logical_step", create_id):
         context = create_test_context(state=mock_state)
+
+        async def map_item(ctx, item, idx, items):
+            return item
+
         context.map(
             ["a", "b"],
-            lambda ctx, item, idx, items: item,
+            map_item,
             config=MapConfig(serdes=batch_serdes, item_serdes=item_serdes),
         )
 
     expected = item_serdes or batch_serdes
-    assert mock_deserialize.call_args_list[0][1]["serdes"] is expected
-    assert mock_deserialize.call_args_list[0][1]["operation_id"] == "child-0"
-    assert mock_deserialize.call_args_list[1][1]["serdes"] is expected
-    assert mock_deserialize.call_args_list[1][1]["operation_id"] == "child-1"
+    call_kwargs = _mock_call_kwargs_by_operation_id(mock_deserialize)
+
+    assert call_kwargs["child-0"]["serdes"] is expected
+    assert call_kwargs["child-1"]["serdes"] is expected
 
 
 def test_map_result_serialization_roundtrip():
@@ -988,7 +1013,7 @@ def test_map_result_serialization_roundtrip():
 
     items = ["a", "b", "c"]
 
-    def func(ctx, item, idx, items):
+    async def func(ctx, item, idx, items):
         return {"item": item.upper(), "index": idx}
 
     class MockExecutionState:
@@ -1003,7 +1028,9 @@ def test_map_result_serialization_roundtrip():
     map_context = Mock()
     map_context._create_step_id_for_logical_step = Mock(side_effect=["1", "2", "3"])  # noqa SLF001
     child_context = Mock()
-    child_context.state.wrap_user_function = lambda func, *args, **kwargs: func
+    child_context.state.wrap_user_function = lambda func, *args, **kwargs: (
+        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+    )
     map_context.create_child_context = Mock(return_value=child_context)
     operation_identifier = OperationIdentifier(
         "test_op", OperationSubType.MAP, "parent", "test_map"
@@ -1059,7 +1086,9 @@ def test_map_handler_serializes_batch_result():
             mock_state.durable_execution_arn = "arn:test"
             mock_state.get_checkpoint_result = Mock(side_effect=get_checkpoint)
             mock_state.create_checkpoint = Mock()
-            mock_state.wrap_user_function = lambda func, *args, **kwargs: func
+            mock_state.wrap_user_function = lambda func, *args, **kwargs: (
+                lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+            )
 
             context_map = {}
 
@@ -1078,7 +1107,11 @@ def test_map_handler_serializes_batch_result():
                 DurableContext, "_create_step_id_for_logical_step", create_id
             ):
                 context = create_test_context(state=mock_state)
-                result = context.map(["a", "b"], lambda ctx, item, idx, items: item)
+
+                async def map_item(ctx, item, idx, items):
+                    return item
+
+                result = context.map(["a", "b"], map_item)
 
             assert len(mock_serdes_serialize.call_args_list) == 3
             parent_call = mock_serdes_serialize.call_args_list[2]
@@ -1118,7 +1151,9 @@ def test_map_default_serdes_serializes_batch_result():
             mock_state.durable_execution_arn = "arn:test"
             mock_state.get_checkpoint_result = Mock(side_effect=get_checkpoint)
             mock_state.create_checkpoint = Mock()
-            mock_state.wrap_user_function = lambda func, *args, **kwargs: func
+            mock_state.wrap_user_function = lambda func, *args, **kwargs: (
+                lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+            )
 
             context_map = {}
 
@@ -1137,7 +1172,11 @@ def test_map_default_serdes_serializes_batch_result():
                 DurableContext, "_create_step_id_for_logical_step", create_id
             ):
                 context = create_test_context(state=mock_state)
-                result = context.map(["a", "b"], lambda ctx, item, idx, items: item)
+
+                async def map_item(ctx, item, idx, items):
+                    return item
+
+                result = context.map(["a", "b"], map_item)
 
             assert isinstance(result, BatchResult)
             assert len(mock_serialize.call_args_list) == 3
@@ -1182,7 +1221,9 @@ def test_map_custom_serdes_serializes_batch_result():
             mock_state.durable_execution_arn = "arn:test"
             mock_state.get_checkpoint_result = Mock(side_effect=get_checkpoint)
             mock_state.create_checkpoint = Mock()
-            mock_state.wrap_user_function = lambda func, *args, **kwargs: func
+            mock_state.wrap_user_function = lambda func, *args, **kwargs: (
+                lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+            )
 
             context_map = {}
 
@@ -1201,9 +1242,13 @@ def test_map_custom_serdes_serializes_batch_result():
                 DurableContext, "_create_step_id_for_logical_step", create_id
             ):
                 context = create_test_context(state=mock_state)
+
+                async def map_item(ctx, item, idx, items):
+                    return item
+
                 result = context.map(
                     ["a", "b"],
-                    lambda ctx, item, idx, items: item,
+                    map_item,
                     config=MapConfig(serdes=custom_serdes),
                 )
 
@@ -1221,7 +1266,7 @@ def test_map_with_empty_list_should_exit_early():
     """Test that map with empty list completes without crashing."""
     items = []
 
-    def map_func(ctx, item, idx, items):
+    async def map_func(ctx, item, idx, items):
         return f"processed_{item}"
 
     mock_state = Mock()
@@ -1234,7 +1279,9 @@ def test_map_with_empty_list_should_exit_early():
 
     mock_state.get_checkpoint_result = Mock(return_value=parent_checkpoint)
     mock_state.create_checkpoint = Mock()
-    mock_state.wrap_user_function = lambda func, *args, **kwargs: func
+    mock_state.wrap_user_function = lambda func, *args, **kwargs: (
+        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+    )
 
     context = create_test_context(state=mock_state)
 

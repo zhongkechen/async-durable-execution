@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Concatenate, Generic, ParamSpec, TypeVar
 
+from async_durable_execution.async_tools import assert_async_callable
 from async_durable_execution.config import (
     BatchedInput,
     CallbackConfig,
@@ -113,13 +114,14 @@ class ExecutionContext:
 
 
 def durable_step(
-    func: Callable[Concatenate[StepContext, Params], T | Awaitable[T]],
-) -> Callable[Params, Callable[[StepContext], T | Awaitable[T]]]:
+    func: Callable[Concatenate[StepContext, Params], Awaitable[T]],
+) -> Callable[Params, Callable[[StepContext], Awaitable[T]]]:
     """Wrap your callable into a named function that a Durable step can run."""
+    assert_async_callable(func)
 
     def wrapper(*args, **kwargs):
-        def function_with_arguments(context: StepContext):
-            return func(context, *args, **kwargs)
+        async def function_with_arguments(context: StepContext):
+            return await func(context, *args, **kwargs)
 
         function_with_arguments._original_name = func.__name__  # noqa: SLF001
         return function_with_arguments
@@ -128,13 +130,14 @@ def durable_step(
 
 
 def durable_with_child_context(
-    func: Callable[Concatenate[DurableContext, Params], T | Awaitable[T]],
-) -> Callable[Params, Callable[[DurableContext], T | Awaitable[T]]]:
+    func: Callable[Concatenate[DurableContext, Params], Awaitable[T]],
+) -> Callable[Params, Callable[[DurableContext], Awaitable[T]]]:
     """Wrap your callable into a Durable child context."""
+    assert_async_callable(func)
 
     def wrapper(*args, **kwargs):
-        def function_with_arguments(child_context: DurableContext):
-            return func(child_context, *args, **kwargs)
+        async def function_with_arguments(child_context: DurableContext):
+            return await func(child_context, *args, **kwargs)
 
         function_with_arguments._original_name = func.__name__  # noqa: SLF001
         return function_with_arguments
@@ -145,7 +148,7 @@ def durable_with_child_context(
 def durable_parallel_branch(
     name: str | None = None,
 ) -> Callable[
-    [Callable[Concatenate[DurableContext, Params], T | Awaitable[T]]],
+    [Callable[Concatenate[DurableContext, Params], Awaitable[T]]],
     Callable[Params, ParallelBranch[T]],
 ]:
     """Wrap your callable into a named ParallelBranch for use with context.parallel().
@@ -175,11 +178,13 @@ def durable_parallel_branch(
     """
 
     def decorator(
-        func: Callable[Concatenate[DurableContext, Params], T | Awaitable[T]],
+        func: Callable[Concatenate[DurableContext, Params], Awaitable[T]],
     ) -> Callable[Params, ParallelBranch[T]]:
+        assert_async_callable(func)
+
         def wrapper(*args, **kwargs) -> ParallelBranch[T]:
-            def function_with_arguments(ctx: DurableContext) -> T:
-                return func(ctx, *args, **kwargs)
+            async def function_with_arguments(ctx: DurableContext) -> T:
+                return await func(ctx, *args, **kwargs)
 
             return ParallelBranch(func=function_with_arguments, name=name)
 
@@ -189,8 +194,8 @@ def durable_parallel_branch(
 
 
 def durable_wait_for_callback(
-    func: Callable[Concatenate[str, WaitForCallbackContext, Params], T | Awaitable[T]],
-) -> Callable[Params, Callable[[str, WaitForCallbackContext], T | Awaitable[T]]]:
+    func: Callable[Concatenate[str, WaitForCallbackContext, Params], Awaitable[T]],
+) -> Callable[Params, Callable[[str, WaitForCallbackContext], Awaitable[T]]]:
     """Wrap your callable into a wait_for_callback submitter function.
 
     This decorator allows you to define a submitter function with additional
@@ -223,10 +228,13 @@ def durable_wait_for_callback(
             submit_to_external_system("my_task", priority=5)
         )
     """
+    assert_async_callable(func)
 
     def wrapper(*args, **kwargs):
-        def submitter_with_arguments(callback_id: str, context: WaitForCallbackContext):
-            return func(callback_id, context, *args, **kwargs)
+        async def submitter_with_arguments(
+            callback_id: str, context: WaitForCallbackContext
+        ):
+            return await func(callback_id, context, *args, **kwargs)
 
         submitter_with_arguments._original_name = func.__name__  # noqa: SLF001
         return submitter_with_arguments
@@ -517,13 +525,13 @@ class DurableContext(DurableContextProtocol):
         self,
         inputs: Sequence[U],
         func: Callable[
-            [DurableContext, U | BatchedInput[Any, U], int, Sequence[U]],
-            T | Awaitable[T],
+            [DurableContext, U | BatchedInput[Any, U], int, Sequence[U]], Awaitable[T]
         ],
         name: str | None = None,
         config: MapConfig | None = None,
     ) -> BatchResult[R]:
         """Execute a callable for each item in parallel."""
+        assert_async_callable(func)
         map_name: str | None = self._resolve_step_name(name, func)
 
         operation_id = self._create_step_id()
@@ -535,7 +543,7 @@ class DurableContext(DurableContextProtocol):
         )
         map_context = self.create_child_context(operation_id=operation_id)
 
-        def map_in_child_context() -> BatchResult[R]:
+        async def map_in_child_context() -> BatchResult[R]:
             # map_context is a child_context of the context upon which `.map`
             # was called. We are calling it `map_context` to make it explicit
             # that any operations happening from hereon are done on the context
@@ -568,12 +576,16 @@ class DurableContext(DurableContextProtocol):
     def parallel(
         self,
         functions: Sequence[
-            Callable[[DurableContext], T | Awaitable[T]] | ParallelBranch[T]
+            Callable[[DurableContext], Awaitable[T]] | ParallelBranch[T]
         ],
         name: str | None = None,
         config: ParallelConfig | None = None,
     ) -> BatchResult[T]:
         """Execute multiple callables in parallel."""
+        for index, function in enumerate(functions):
+            target = function.func if isinstance(function, ParallelBranch) else function
+            assert_async_callable(target, label=f"functions[{index}]")
+
         # _create_step_id() is thread-safe. rest of method is safe, since using local copy of parent id
         operation_id = self._create_step_id()
         parallel_context = self.create_child_context(operation_id=operation_id)
@@ -584,7 +596,7 @@ class DurableContext(DurableContextProtocol):
             name=name,
         )
 
-        def parallel_in_child_context() -> BatchResult[T]:
+        async def parallel_in_child_context() -> BatchResult[T]:
             # parallel_context is a child_context of the context upon which `.map`
             # was called. We are calling it `parallel_context` to make it explicit
             # that any operations happening from hereon are done on the context
@@ -615,7 +627,7 @@ class DurableContext(DurableContextProtocol):
 
     def run_in_child_context(
         self,
-        func: Callable[[DurableContext], T | Awaitable[T]],
+        func: Callable[[DurableContext], Awaitable[T]],
         name: str | None = None,
         config: ChildConfig | None = None,
     ) -> T:
@@ -631,6 +643,7 @@ class DurableContext(DurableContextProtocol):
         Returns:
             T: The result of the callable.
         """
+        assert_async_callable(func)
         step_name: str | None = self._resolve_step_name(name, func)
         # _create_step_id() is thread-safe. rest of method is safe, since using local copy of parent id
         operation_id = self._create_step_id()
@@ -642,8 +655,8 @@ class DurableContext(DurableContextProtocol):
 
         is_virtual: bool = config.is_virtual if config else False
 
-        def callable_with_child_context():
-            return func(
+        async def callable_with_child_context():
+            return await func(
                 self.create_child_context(
                     operation_id=operation_id, is_virtual=is_virtual
                 )
@@ -665,10 +678,11 @@ class DurableContext(DurableContextProtocol):
 
     def step(
         self,
-        func: Callable[[StepContext], T | Awaitable[T]],
+        func: Callable[[StepContext], Awaitable[T]],
         name: str | None = None,
         config: StepConfig | None = None,
     ) -> T:
+        assert_async_callable(func)
         step_name = self._resolve_step_name(name, func)
         logger.debug("Step name: %s", step_name)
         if not config:
@@ -717,14 +731,15 @@ class DurableContext(DurableContextProtocol):
 
     def wait_for_callback(
         self,
-        submitter: Callable[[str, WaitForCallbackContext], Any],
+        submitter: Callable[[str, WaitForCallbackContext], Awaitable[Any]],
         name: str | None = None,
         config: WaitForCallbackConfig | None = None,
     ) -> Any:
+        assert_async_callable(submitter, label="submitter")
         step_name: str | None = self._resolve_step_name(name, submitter)
         logger.debug("wait_for_callback name: %s", step_name)
 
-        def wait_in_child_context(context: DurableContext):
+        async def wait_in_child_context(context: DurableContext):
             return wait_for_callback_handler(context, submitter, step_name, config)
 
         return self.run_in_child_context(
@@ -734,7 +749,7 @@ class DurableContext(DurableContextProtocol):
 
     def wait_for_condition(
         self,
-        check: Callable[[T, WaitForConditionCheckContext], T | Awaitable[T]],
+        check: Callable[[T, WaitForConditionCheckContext], Awaitable[T]],
         config: WaitForConditionConfig[T],
         name: str | None = None,
     ) -> T:
@@ -754,6 +769,7 @@ class DurableContext(DurableContextProtocol):
         if not config:
             msg = "`config` is required for wait_for_condition"
             raise ValidationError(msg)
+        assert_async_callable(check, label="check")
 
         operation_id = self._create_step_id()
         executor: WaitForConditionOperationExecutor[T] = (

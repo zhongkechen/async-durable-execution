@@ -18,7 +18,7 @@ from async_durable_execution.types import WaitForCallbackContext
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
     from async_durable_execution.config import (
         CallbackConfig,
@@ -150,7 +150,7 @@ class CallbackOperationExecutor(OperationExecutor[str]):
 
 def wait_for_callback_handler(
     context: DurableContext,
-    submitter: Callable[[str, WaitForCallbackContext], Any],
+    submitter: Callable[[str, WaitForCallbackContext], Awaitable[Any]],
     name: str | None = None,
     config: WaitForCallbackConfig | None = None,
 ) -> Any:
@@ -163,8 +163,8 @@ def wait_for_callback_handler(
         name=f"{name_with_space}create callback id", config=config
     )
 
-    def submitter_step(step_context: StepContext):
-        return submitter(
+    async def submitter_step(step_context: StepContext):
+        return await submitter(
             callback.callback_id, WaitForCallbackContext(logger=step_context.logger)
         )
 

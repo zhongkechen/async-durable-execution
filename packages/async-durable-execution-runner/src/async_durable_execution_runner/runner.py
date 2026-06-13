@@ -964,6 +964,20 @@ class DurableFunctionCloudTestRunner:
             config=client_config,
         )
 
+    def __enter__(self) -> Self:
+        """Return self for context manager compatibility with local runner."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Close underlying resources when leaving a context manager block."""
+        self.close()
+
+    def close(self) -> None:
+        """Close the underlying boto3 client when supported."""
+        close = getattr(self.lambda_client, "close", None)
+        if callable(close):
+            close()
+
     def run(
         self,
     ) -> DurableFunctionTestResult:

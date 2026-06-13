@@ -434,7 +434,7 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
             name=name,
         )
 
-        def run_in_child_handler() -> ResultType:
+        async def run_in_child_handler() -> ResultType:
             return self.execute_item(child_context, executable)
 
         result: ResultType = child_handler(

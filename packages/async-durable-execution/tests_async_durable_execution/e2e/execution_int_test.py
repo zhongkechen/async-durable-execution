@@ -79,19 +79,19 @@ def create_mock_checkpoint_with_operations():
 
 
 def test_step_different_ways_to_pass_args():
-    def step_plain(step_context: StepContext) -> str:
+    async def step_plain(step_context: StepContext) -> str:
         return "from step plain"
 
     @durable_step
-    def step_no_args(step_context: StepContext) -> str:
+    async def step_no_args(step_context: StepContext) -> str:
         return "from step no args"
 
     @durable_step
-    def step_with_args(step_context: StepContext, a: int, b: str) -> str:
+    async def step_with_args(step_context: StepContext, a: int, b: str) -> str:
         return f"from step {a} {b}"
 
     @durable_execution
-    def my_handler(event, context: DurableContext) -> list[str]:
+    async def my_handler(event, context: DurableContext) -> list[str]:
         results: list[str] = []
         result: str = context.step(step_with_args(a=123, b="str"))
         assert result == "from step 123 str"
@@ -184,12 +184,12 @@ def test_step_with_logger():
     my_logger = Mock(spec=LoggerInterface)
 
     @durable_step
-    def mystep(step_context: StepContext, a: int, b: str) -> str:
+    async def mystep(step_context: StepContext, a: int, b: str) -> str:
         step_context.logger.info("from step %s %s", a, b)
         return "result"
 
     @durable_execution
-    def my_handler(event, context: DurableContext):
+    async def my_handler(event, context: DurableContext):
         context.set_logger(my_logger)
         result: str = context.step(mystep(a=123, b="str"))
         assert result == "result"
@@ -284,12 +284,12 @@ def test_wait_inside_run_in_childcontext():
     mock_inside_child = Mock()
 
     @durable_with_child_context
-    def func(child_context: DurableContext, a: int, b: int):
+    async def func(child_context: DurableContext, a: int, b: int):
         mock_inside_child(a, b)
         child_context.wait(timedelta(seconds=1))
 
     @durable_execution
-    def my_handler(event, context):
+    async def my_handler(event, context):
         context.run_in_child_context(func(10, 20))
 
     # Mock the lambda client
@@ -374,11 +374,11 @@ def test_step_checkpoint_failure_propagates_error():
     """
 
     @durable_step
-    def failing_step(step_context: StepContext) -> str:
+    async def failing_step(step_context: StepContext) -> str:
         return "this should checkpoint but fail"
 
     @durable_execution
-    def my_handler(event, context: DurableContext):
+    async def my_handler(event, context: DurableContext):
         # This step will trigger a checkpoint that fails
         result: str = context.step(failing_step())
         return result
@@ -437,7 +437,7 @@ def test_wait_not_caught_by_exception():
     """Do not catch Suspend exceptions."""
 
     @durable_execution
-    def my_handler(event: Any, context: DurableContext):
+    async def my_handler(event: Any, context: DurableContext):
         try:
             context.wait(timedelta(seconds=1))
         except Exception as err:
@@ -503,12 +503,12 @@ def test_durable_wait_for_callback_decorator():
     mock_submitter = Mock()
 
     @durable_wait_for_callback
-    def submit_to_external_system(callback_id, context, task_name, priority):
+    async def submit_to_external_system(callback_id, context, task_name, priority):
         mock_submitter(callback_id, task_name, priority)
         context.logger.info("Submitting %s with callback %s", task_name, callback_id)
 
     @durable_execution
-    def my_handler(event, context):
+    async def my_handler(event, context):
         context.wait_for_callback(submit_to_external_system("my_task", priority=5))
 
     with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:

@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from async_durable_execution.async_tools import invoke_callable
+from async_durable_execution.async_tools import assert_async_callable, invoke_callable
 from async_durable_execution.context import DurableContext
 from async_durable_execution.exceptions import (
     BackgroundThreadError,
@@ -159,11 +159,7 @@ class DurableExecutionInvocationInputWithClient(DurableExecutionInvocationInput)
 
 
 def durable_execution(
-    func: (
-        Callable[[Any, DurableContext], Any]
-        | Callable[[Any, DurableContext], Awaitable[Any]]
-        | None
-    ) = None,
+    func: Callable[[Any, DurableContext], Awaitable[Any]] | None = None,
     *,
     boto3_client: Boto3LambdaClient | None = None,
     plugins: list[DurableInstrumentationPlugin] | None = None,
@@ -185,6 +181,7 @@ def durable_execution(
         )
 
     logger.debug("Starting durable execution handler...")
+    assert_async_callable(func, label="func")
 
     if plugins:
         warnings.warn(

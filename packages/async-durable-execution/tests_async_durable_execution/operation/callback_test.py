@@ -1,8 +1,9 @@
 """Unit tests for callback handler."""
 
+import asyncio
 import math
 from datetime import timedelta
-from unittest.mock import ANY, Mock, patch
+from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
 
@@ -330,13 +331,14 @@ def test_wait_for_callback_handler_submitter_called_with_callback_id():
     mock_callback.callback_id = "callback_test_id"
     mock_callback.result.return_value = "test_result"
     mock_context.create_callback.return_value = mock_callback
-    mock_submitter = Mock()
+
+    mock_submitter = AsyncMock(return_value=None)
 
     def capture_step_call(func, name, config=None):
         # Execute the step callable to verify submitter is called correctly
         step_context = Mock(spec=StepContext)
         step_context.logger = Mock()
-        func(step_context)
+        asyncio.run(func(step_context))
 
     mock_context.step.side_effect = capture_step_call
 
@@ -385,12 +387,13 @@ def test_wait_for_callback_handler_with_none_callback_id():
     mock_callback.callback_id = None
     mock_callback.result.return_value = "result_with_none_id"
     mock_context.create_callback.return_value = mock_callback
-    mock_submitter = Mock()
+
+    mock_submitter = AsyncMock(return_value=None)
 
     def execute_step(func, name, config=None):
         step_context = Mock(spec=StepContext)
         step_context.logger = Mock()
-        return func(step_context)
+        return asyncio.run(func(step_context))
 
     mock_context.step.side_effect = execute_step
 
@@ -411,12 +414,13 @@ def test_wait_for_callback_handler_with_empty_string_callback_id():
     mock_callback.callback_id = ""
     mock_callback.result.return_value = "result_with_empty_id"
     mock_context.create_callback.return_value = mock_callback
-    mock_submitter = Mock()
+
+    mock_submitter = AsyncMock(return_value=None)
 
     def execute_step(func, name, config=None):
         step_context = Mock(spec=StepContext)
         step_context.logger = Mock()
-        return func(step_context)
+        return asyncio.run(func(step_context))
 
     mock_context.step.side_effect = execute_step
 
@@ -640,14 +644,14 @@ def test_wait_for_callback_handler_submitter_exception_handling():
     mock_callback.result.return_value = "exception_result"
     mock_context.create_callback.return_value = mock_callback
 
-    def failing_submitter(callback_id, context):
+    async def failing_submitter(callback_id, context):
         msg = "Submitter failed"
         raise ValueError(msg)
 
     def step_side_effect(func, name, config=None):
         step_context = Mock(spec=StepContext)
         step_context.logger = Mock()
-        func(step_context)
+        asyncio.run(func(step_context))
 
     mock_context.step.side_effect = step_side_effect
 
@@ -833,7 +837,7 @@ def test_callback_lifecycle_complete_flow():
 
     assert callback_id == "lifecycle_cb123"
 
-    def mock_submitter(cb_id, context):
+    async def mock_submitter(cb_id, context):
         assert cb_id == "lifecycle_cb123"
         assert hasattr(context, "logger")
         return "submitted"
@@ -841,7 +845,7 @@ def test_callback_lifecycle_complete_flow():
     def execute_step(func, name, config=None):
         step_context = Mock(spec=StepContext)
         step_context.logger = Mock()
-        return func(step_context)
+        return asyncio.run(func(step_context))
 
     mock_context.step.side_effect = execute_step
 
@@ -961,7 +965,7 @@ def test_callback_with_complex_submitter():
 
     submission_log = []
 
-    def complex_submitter(callback_id, context):
+    async def complex_submitter(callback_id, context):
         submission_log.append(f"received_id: {callback_id}")
         if callback_id == "complex_cb789":
             submission_log.append("api_call_success")
@@ -974,7 +978,7 @@ def test_callback_with_complex_submitter():
     def execute_step(func, name, config):
         step_context = Mock(spec=StepContext)
         step_context.logger = Mock()
-        return func(step_context)
+        return asyncio.run(func(step_context))
 
     mock_context.step.side_effect = execute_step
 

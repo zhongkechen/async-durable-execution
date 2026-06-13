@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from async_durable_execution.async_tools import invoke_callable
@@ -70,7 +70,7 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
     def from_items(
         cls,
         items: Sequence[T],
-        func: Callable,
+        func: Callable[[object, T, int, Sequence[T]], Awaitable[R]],
         config: MapConfig[T],
     ) -> MapExecutor[T, R]:
         """Create MapExecutor from items and a callable."""
@@ -111,7 +111,7 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
 
 def map_handler(
     items: Sequence[T],
-    func: Callable,
+    func: Callable[[object, T, int, Sequence[T]], Awaitable[R]],
     config: MapConfig | None,
     execution_state: ExecutionState,
     map_context: DurableContext,

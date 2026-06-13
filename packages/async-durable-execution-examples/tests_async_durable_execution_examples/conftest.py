@@ -1,7 +1,6 @@
 """Pytest configuration and fixtures for durable execution tests."""
 
 import inspect
-import json
 import logging
 import os
 import sys
@@ -18,10 +17,15 @@ from async_durable_execution_runner import create_runner
 examples_src = Path(__file__).parent.parent / "src"
 if str(examples_src) not in sys.path:
     sys.path.insert(0, str(examples_src))
+examples_scripts = Path(__file__).parent.parent / "scripts"
+if str(examples_scripts) not in sys.path:
+    sys.path.insert(0, str(examples_scripts))
 
 EXAMPLES_PACKAGE_PREFIX = "async_durable_execution_examples"
 
 logger = logging.getLogger(__name__)
+
+from function_naming import to_function_name_suffix
 
 
 class RunnerMode(StrEnum):
@@ -50,7 +54,8 @@ def durable_runner(request):
         Environment variables (required):
             AWS_REGION: AWS region for Lambda invocation (default: us-west-2)
             LAMBDA_ENDPOINT: Optional Lambda endpoint URL
-            PYTEST_FUNCTION_NAME_MAP: JSON mapping of handler identifiers to deployed function names
+            PYTEST_FUNCTION_NAME_PREFIX: Prefix used when examples are deployed
+                with generated function names
         
         CLI option:
             --runner-mode=cloud (or local, default: local)
@@ -58,7 +63,7 @@ def durable_runner(request):
         Example:
             AWS_REGION=us-west-2 \
             LAMBDA_ENDPOINT=https://lambda.us-west-2.amazonaws.com \
-            PYTEST_FUNCTION_NAME_MAP='{"async_durable_execution_examples.hello_world.handler":"HelloWorld:$LATEST"}' \
+            PYTEST_FUNCTION_NAME_PREFIX="py313-" \
             pytest --runner-mode=cloud -k test_hello_world
 
     Usage in tests:
@@ -165,31 +170,20 @@ def _get_deployed_function_name(handler_identifier: str) -> str:
     """Get the deployed function name from environment variables.
 
     Preferred environment variable:
-    - PYTEST_FUNCTION_NAME_MAP: JSON mapping of handler identifiers to qualified
-      function names
+    - PYTEST_FUNCTION_NAME_PREFIX: Prefix used with deterministic function naming
 
     Fallback environment variable:
     - QUALIFIED_FUNCTION_NAME: The qualified function ARN for single-function runs
     """
-    function_map_json = os.environ.get("PYTEST_FUNCTION_NAME_MAP")
-    if function_map_json:
-        try:
-            function_map = json.loads(function_map_json)
-        except json.JSONDecodeError as exc:
-            pytest.fail(f"Invalid PYTEST_FUNCTION_NAME_MAP JSON: {exc}")
-
-        configured_function = function_map.get(handler_identifier)
-        if configured_function:
-            logger.info(
-                "Using function ARN: %s for handler: %s",
-                configured_function,
-                handler_identifier,
-            )
-            return configured_function
-
-        pytest.skip(
-            f"Handler '{handler_identifier}' is not present in PYTEST_FUNCTION_NAME_MAP"
+    function_name_prefix = os.environ.get("PYTEST_FUNCTION_NAME_PREFIX")
+    if function_name_prefix:
+        configured_function = f"{function_name_prefix}{to_function_name_suffix(handler_identifier)}:$LATEST"
+        logger.info(
+            "Using derived function ARN: %s for handler: %s",
+            configured_function,
+            handler_identifier,
         )
+        return configured_function
 
     function_arn = os.environ.get("QUALIFIED_FUNCTION_NAME")
     if function_arn:
@@ -201,6 +195,6 @@ def _get_deployed_function_name(handler_identifier: str) -> str:
         return function_arn
 
     pytest.fail(
-        "Cloud mode requires PYTEST_FUNCTION_NAME_MAP or QUALIFIED_FUNCTION_NAME\n"
-        'Example: PYTEST_FUNCTION_NAME_MAP=\'{"async_durable_execution_examples.hello_world.handler":"HelloWorld:$LATEST"}\' pytest --runner-mode=cloud'
+        "Cloud mode requires PYTEST_FUNCTION_NAME_PREFIX or QUALIFIED_FUNCTION_NAME\n"
+        'Example: PYTEST_FUNCTION_NAME_PREFIX="py313-" pytest --runner-mode=cloud'
     )

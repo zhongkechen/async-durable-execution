@@ -21,7 +21,7 @@ from async_durable_execution.retries import (
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
     from async_durable_execution.config import ChildConfig
     from async_durable_execution.types import DurableContext
@@ -61,11 +61,11 @@ class MockDurableContext:
 
     def run_in_child_context(
         self,
-        func: Callable[[DurableContext], _T],
+        func: Callable[[DurableContext], Awaitable[_T]],
         name: str | None = None,
         config: ChildConfig | None = None,
     ) -> _T:
-        result: _T = func(self)  # type: ignore[arg-type]
+        result: _T = asyncio.run(func(self))  # type: ignore[arg-type]
         self.child_context_calls.append(
             RunInChildContextCall(name=name, config=config, result=result)
         )
@@ -121,7 +121,7 @@ def test_success_on_first_attempt_returns_result_without_retry():
     ctx = MockDurableContext()
     config = _make_config(wrap_with_run_in_child_context=False)
 
-    def tracking_func(ctx: DurableContext, attempt: int) -> str:
+    async def tracking_func(ctx: DurableContext, attempt: int) -> str:
         return "success"
 
     result = with_retry(ctx, tracking_func, config)
@@ -137,7 +137,7 @@ def test_function_fails_then_succeeds_returns_successful_result():
 
     call_count = 0
 
-    def failing_then_succeeding(ctx: DurableContext, attempt: int) -> str:
+    async def failing_then_succeeding(ctx: DurableContext, attempt: int) -> str:
         nonlocal call_count
         call_count += 1
         if attempt < 3:
@@ -179,7 +179,7 @@ def test_retry_strategy_returns_should_retry_false_reraises_exception():
     # max_attempts=1 means the strategy will return should_retry=False on first failure
     config = _make_config(max_attempts=1, wrap_with_run_in_child_context=False)
 
-    def always_fails(ctx: DurableContext, attempt: int) -> None:
+    async def always_fails(ctx: DurableContext, attempt: int) -> None:
         raise RuntimeError("permanent failure")
 
     with pytest.raises(RuntimeError, match="permanent failure"):
@@ -193,7 +193,7 @@ def test_suspend_execution_is_reraised_immediately():
     ctx = MockDurableContext()
     config = _make_config(max_attempts=5, wrap_with_run_in_child_context=False)
 
-    def raises_suspend(ctx: DurableContext, attempt: int) -> None:
+    async def raises_suspend(ctx: DurableContext, attempt: int) -> None:
         raise SuspendExecution("suspending")
 
     with pytest.raises(SuspendExecution, match="suspending"):
@@ -223,7 +223,7 @@ def test_default_config_wraps_in_child_context():
     ctx = MockDurableContext()
     config = _make_config(wrap_with_run_in_child_context=True)
 
-    def simple_func(ctx: DurableContext, attempt: int) -> str:
+    async def simple_func(ctx: DurableContext, attempt: int) -> str:
         return "child result"
 
     result = with_retry(ctx, simple_func, config)
@@ -237,7 +237,7 @@ def test_wrap_with_run_in_child_context_false_skips_child_context():
     ctx = MockDurableContext()
     config = _make_config(wrap_with_run_in_child_context=False)
 
-    def simple_func(ctx: DurableContext, attempt: int) -> str:
+    async def simple_func(ctx: DurableContext, attempt: int) -> str:
         return "direct result"
 
     result = with_retry(ctx, simple_func, config)
@@ -253,7 +253,7 @@ def test_no_name_creates_anonymous_child_context_and_anonymous_waits():
 
     call_count = 0
 
-    def fails_once(ctx: DurableContext, attempt: int) -> str:
+    async def fails_once(ctx: DurableContext, attempt: int) -> str:
         nonlocal call_count
         call_count += 1
         if attempt == 1:
@@ -278,7 +278,7 @@ def test_name_is_forwarded_to_child_context_and_backoff_waits():
 
     call_count = 0
 
-    def fails_twice(ctx: DurableContext, attempt: int) -> str:
+    async def fails_twice(ctx: DurableContext, attempt: int) -> str:
         nonlocal call_count
         call_count += 1
         if attempt <= 2:
@@ -309,7 +309,7 @@ def test_child_context_config_is_forwarded():
         child_context_config=mock_child_config,
     )
 
-    def simple_func(ctx: DurableContext, attempt: int) -> str:
+    async def simple_func(ctx: DurableContext, attempt: int) -> str:
         return "result"
 
     with_retry(ctx, simple_func, config, name="test")
@@ -325,7 +325,7 @@ def test_attempt_number_starts_at_1_and_increments():
 
     recorded_attempts: list[int] = []
 
-    def record_attempts(ctx: DurableContext, attempt: int) -> str:
+    async def record_attempts(ctx: DurableContext, attempt: int) -> str:
         recorded_attempts.append(attempt)
         if attempt < 4:
             raise ValueError("not yet")
@@ -364,7 +364,7 @@ def test_integration_with_create_retry_strategy():
 
     call_count = 0
 
-    def fails_three_times(ctx: DurableContext, attempt: int) -> str:
+    async def fails_three_times(ctx: DurableContext, attempt: int) -> str:
         nonlocal call_count
         call_count += 1
         if attempt <= 3:
@@ -398,7 +398,7 @@ def test_integration_retries_exhausted_raises_last_exception():
         wrap_with_run_in_child_context=False,
     )
 
-    def always_fails(ctx: DurableContext, attempt: int) -> None:
+    async def always_fails(ctx: DurableContext, attempt: int) -> None:
         raise RuntimeError(f"error on attempt {attempt}")
 
     with pytest.raises(RuntimeError, match="error on attempt 3"):

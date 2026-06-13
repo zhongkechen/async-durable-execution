@@ -6,7 +6,7 @@ import json
 import random
 from datetime import timedelta
 from itertools import islice
-from unittest.mock import ANY, MagicMock, Mock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
@@ -412,7 +412,7 @@ def test_step_basic(mock_executor_class):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_callable = Mock(return_value="test_result")
+    mock_callable = AsyncMock(return_value="test_result")
     del (
         mock_callable._original_name  # noqa: SLF001
     )  # Ensure _original_name doesn't exist
@@ -448,7 +448,7 @@ def test_step_with_name_and_config(mock_executor_class):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_callable = Mock()
+    mock_callable = AsyncMock()
     del (
         mock_callable._original_name  # noqa: SLF001
     )  # Ensure Mock doesn't have _original_name
@@ -489,7 +489,7 @@ def test_step_with_parent_id(mock_executor_class):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_callable = Mock()
+    mock_callable = AsyncMock()
     del (
         mock_callable._original_name  # noqa: SLF001
     )  # Ensure _original_name doesn't exist
@@ -528,7 +528,7 @@ def test_step_increments_counter(mock_executor_class):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_callable = Mock()
+    mock_callable = AsyncMock()
     del (
         mock_callable._original_name  # noqa: SLF001
     )  # Ensure _original_name doesn't exist
@@ -566,7 +566,7 @@ def test_step_with_original_name(mock_executor_class):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_callable = Mock()
+    mock_callable = AsyncMock()
     mock_callable._original_name = "original_function"  # noqa: SLF001
 
     context = create_test_context(state=mock_state)
@@ -987,7 +987,7 @@ def test_run_in_child_context_basic(mock_handler):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_callable = Mock(return_value="test_result")
+    mock_callable = AsyncMock(return_value="test_result")
     del (
         mock_callable._original_name  # noqa: SLF001
     )  # Ensure _original_name doesn't exist
@@ -1018,7 +1018,7 @@ def test_run_in_child_context_with_name_and_config(mock_handler):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_callable = Mock()
+    mock_callable = AsyncMock()
     mock_callable._original_name = "original_function"  # noqa: SLF001
 
     config = ChildConfig()
@@ -1052,7 +1052,7 @@ def test_run_in_child_context_with_parent_id(mock_executor_class):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_callable = Mock()
+    mock_callable = AsyncMock()
     del (
         mock_callable._original_name  # noqa: SLF001
     )  # Ensure Mock doesn't have _original_name
@@ -1083,15 +1083,15 @@ def test_run_in_child_context_creates_child_context(mock_executor_class):
     seq = operation_id_sequence()
     expected_parent_id = next(seq)
 
-    def capture_child_context(child_context):
+    async def capture_child_context(child_context):
         # Verify child context properties
         assert isinstance(child_context, DurableContext)
         assert child_context.state is mock_state
         assert child_context._parent_id == expected_parent_id  # noqa: SLF001
         return "child_executed"
 
-    mock_callable = Mock(side_effect=capture_child_context)
-    mock_executor_class.side_effect = lambda func, **kwargs: func()
+    mock_callable = AsyncMock(side_effect=capture_child_context)
+    mock_executor_class.side_effect = lambda func, **kwargs: asyncio.run(func())
 
     context = create_test_context(state=mock_state)
 
@@ -1113,7 +1113,7 @@ def test_run_in_child_context_increments_counter(mock_executor_class):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_callable = Mock()
+    mock_callable = AsyncMock()
     del (
         mock_callable._original_name  # noqa: SLF001
     )  # Ensure _original_name doesn't exist
@@ -1154,7 +1154,7 @@ def test_run_in_child_context_resolves_name_from_callable(mock_executor_class):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_callable = Mock()
+    mock_callable = AsyncMock()
     mock_callable._original_name = "original_function_name"  # noqa: SLF001
 
     context = create_test_context(state=mock_state)
@@ -1181,7 +1181,7 @@ def test_wait_for_callback_basic(mock_executor_class):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_submitter = Mock()
+    mock_submitter = AsyncMock()
     del (
         mock_submitter._original_name  # noqa: SLF001
     )  # Ensure _original_name doesn't exist
@@ -1212,7 +1212,7 @@ def test_wait_for_callback_with_name_and_config(mock_executor_class):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_submitter = Mock()
+    mock_submitter = AsyncMock()
     mock_submitter._original_name = "submit_function"  # noqa: SLF001
     config = CallbackConfig()
 
@@ -1241,7 +1241,7 @@ def test_wait_for_callback_resolves_name_from_submitter(mock_executor_class):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_submitter = Mock()
+    mock_submitter = AsyncMock()
     mock_submitter._original_name = "submit_task"  # noqa: SLF001
 
     with patch.object(DurableContext, "run_in_child_context") as mock_run_in_child:
@@ -1261,7 +1261,7 @@ def test_wait_for_callback_passes_child_context(mock_executor_class):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_submitter = Mock()
+    mock_submitter = AsyncMock()
 
     def capture_handler_call(context, submitter, name, config):
         assert isinstance(context, DurableContext)
@@ -1275,7 +1275,7 @@ def test_wait_for_callback_passes_child_context(mock_executor_class):
         def run_child_context(callable_func, name):
             # Execute the child context callable
             child_context = create_test_context(state=mock_state, parent_id="test")
-            return callable_func(child_context)
+            return asyncio.run(callable_func(child_context))
 
         mock_run_in_child.side_effect = run_child_context
         context = create_test_context(state=mock_state)
@@ -1299,7 +1299,7 @@ def test_map_basic(mock_handler):
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
 
-    def test_function(context, item, index, items):
+    async def test_function(context, item, index, items):
         return f"processed_{item}"
 
     inputs = [1, 2, 3]
@@ -1325,7 +1325,7 @@ def test_map_with_name_and_config(mock_handler):
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
 
-    def test_function(context, item, index, items):
+    async def test_function(context, item, index, items):
         return f"processed_{item}"
 
     test_function._original_name = "test_map_function"  # noqa: SLF001
@@ -1353,7 +1353,7 @@ def test_map_calls_handler_correctly(mock_handler):
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
 
-    def test_function(context, item, index, items):
+    async def test_function(context, item, index, items):
         return item.upper()
 
     inputs = ["hello", "world"]
@@ -1375,20 +1375,18 @@ def test_map_with_empty_inputs(mock_handler):
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
 
-    def test_function(context, item, index, items):
+    async def test_function(context, item, index, items):
         return item
 
-    mock_state.wrap_user_function = lambda func, *args, **kwargs: func
+    mock_state.wrap_user_function = lambda func, *args, **kwargs: (
+        lambda *a, **kw: asyncio.run(func(*a, **kw))
+    )
 
     inputs = []
 
-    with patch.object(DurableContext, "run_in_child_context") as mock_run_in_child:
-        mock_run_in_child.return_value = "empty_map_result"
-        context = create_test_context(state=mock_state)
-
-        result = context.map(inputs, test_function)
-
-        assert result == "empty_map_result"
+    context = create_test_context(state=mock_state)
+    result = context.map(inputs, test_function)
+    assert result == "empty_map_result"
 
 
 @patch("async_durable_execution.context.map_handler")
@@ -1399,20 +1397,18 @@ def test_map_with_different_input_types(mock_handler):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_state.wrap_user_function = lambda func, *args, **kwargs: func
+    mock_state.wrap_user_function = lambda func, *args, **kwargs: (
+        lambda *a, **kw: asyncio.run(func(*a, **kw))
+    )
 
-    def test_function(context, item, index, items):
+    async def test_function(context, item, index, items):
         return str(item)
 
     inputs = [1, "hello", {"key": "value"}, [1, 2, 3]]
 
-    with patch.object(DurableContext, "run_in_child_context") as mock_run_in_child:
-        mock_run_in_child.return_value = "mixed_map_result"
-        context = create_test_context(state=mock_state)
-
-        result = context.map(inputs, test_function)
-
-        assert result == "mixed_map_result"
+    context = create_test_context(state=mock_state)
+    result = context.map(inputs, test_function)
+    assert result == "mixed_map_result"
 
 
 # endregion map
@@ -1428,10 +1424,10 @@ def test_parallel_basic(mock_handler):
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
 
-    def task1(context):
+    async def task1(context):
         return "result1"
 
-    def task2(context):
+    async def task2(context):
         return "result2"
 
     callables = [task1, task2]
@@ -1457,10 +1453,10 @@ def test_parallel_with_name_and_config(mock_handler):
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
 
-    def task1(context):
+    async def task1(context):
         return "result1"
 
-    def task2(context):
+    async def task2(context):
         return "result2"
 
     callables = [task1, task2]
@@ -1486,14 +1482,14 @@ def test_parallel_resolves_name_from_callable(mock_handler):
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
 
-    def task1(context):
+    async def task1(context):
         return "result1"
 
-    def task2(context):
+    async def task2(context):
         return "result2"
 
     # Mock callable with _original_name
-    mock_callable = Mock()
+    mock_callable = AsyncMock()
     mock_callable._original_name = "parallel_tasks"  # noqa: SLF001
 
     callables = [task1, task2]
@@ -1521,10 +1517,10 @@ def test_parallel_calls_handler_correctly(mock_handler):
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
 
-    def task1(context):
+    async def task1(context):
         return "result1"
 
-    def task2(context):
+    async def task2(context):
         return "result2"
 
     callables = [task1, task2]
@@ -1545,17 +1541,15 @@ def test_parallel_with_empty_callables(mock_handler):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_state.wrap_user_function = lambda func, *args, **kwargs: func
+    mock_state.wrap_user_function = lambda func, *args, **kwargs: (
+        lambda *a, **kw: asyncio.run(func(*a, **kw))
+    )
 
     callables = []
 
-    with patch.object(DurableContext, "run_in_child_context") as mock_run_in_child:
-        mock_run_in_child.return_value = "empty_parallel_result"
-        context = create_test_context(state=mock_state)
-
-        result = context.parallel(callables)
-
-        assert result == "empty_parallel_result"
+    context = create_test_context(state=mock_state)
+    result = context.parallel(callables)
+    assert result == "empty_parallel_result"
 
 
 @patch("async_durable_execution.context.parallel_handler")
@@ -1566,20 +1560,18 @@ def test_parallel_with_single_callable(mock_handler):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_state.wrap_user_function = lambda func, *args, **kwargs: func
+    mock_state.wrap_user_function = lambda func, *args, **kwargs: (
+        lambda *a, **kw: asyncio.run(func(*a, **kw))
+    )
 
-    def single_task(context):
+    async def single_task(context):
         return "single_result"
 
     callables = [single_task]
 
-    with patch.object(DurableContext, "run_in_child_context") as mock_run_in_child:
-        mock_run_in_child.return_value = "single_parallel_result"
-        context = create_test_context(state=mock_state)
-
-        result = context.parallel(callables)
-
-        assert result == "single_parallel_result"
+    context = create_test_context(state=mock_state)
+    result = context.parallel(callables)
+    assert result == "single_parallel_result"
 
 
 @patch("async_durable_execution.context.parallel_handler")
@@ -1590,23 +1582,21 @@ def test_parallel_with_many_callables(mock_handler):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_state.wrap_user_function = lambda func, *args, **kwargs: func
+    mock_state.wrap_user_function = lambda func, *args, **kwargs: (
+        lambda *a, **kw: asyncio.run(func(*a, **kw))
+    )
 
     def create_task(i):
-        def task(context):
+        async def task(context):
             return f"result_{i}"
 
         return task
 
     callables = [create_task(i) for i in range(10)]
 
-    with patch.object(DurableContext, "run_in_child_context") as mock_run_in_child:
-        mock_run_in_child.return_value = "many_parallel_result"
-        context = create_test_context(state=mock_state)
-
-        result = context.parallel(callables)
-
-        assert result == "many_parallel_result"
+    context = create_test_context(state=mock_state)
+    result = context.parallel(callables)
+    assert result == "many_parallel_result"
 
 
 # endregion parallel
@@ -1622,7 +1612,7 @@ def test_map_calls_handler(mock_handler):
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
 
-    def test_function(context, item, index, items):
+    async def test_function(context, item, index, items):
         return f"processed_{item}"
 
     inputs = ["a", "b", "c"]
@@ -1645,10 +1635,10 @@ def test_parallel_calls_handler(mock_handler):
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
 
-    def task1(context):
+    async def task1(context):
         return "result1"
 
-    def task2(context):
+    async def task2(context):
         return "result2"
 
     callables = [task1, task2]
@@ -1685,7 +1675,7 @@ def test_wait_for_condition_validation_errors():
         context.wait_for_condition(None, config)
 
     # Test None config
-    def dummy_check(state, check_context):
+    async def dummy_check(state, check_context):
         return state
 
     with pytest.raises(
@@ -1698,14 +1688,16 @@ def test_context_map_handler_call():
     """Test that map method calls through to map_handler (line 283)."""
     execution_calls = []
 
-    def test_function(context, item, index, items):
+    async def test_function(context, item, index, items):
         execution_calls.append(f"item_{index}")
         return f"result_{index}"
 
     # Create mock state and context
     state = Mock()
     state.durable_execution_arn = "test_arn"
-    state.wrap_user_function = lambda func, *args, **kwargs: func
+    state.wrap_user_function = lambda func, *args, **kwargs: (
+        lambda *a, **kw: asyncio.run(func(*a, **kw))
+    )
 
     context = create_test_context(state=state)
 
@@ -1713,38 +1705,28 @@ def test_context_map_handler_call():
     with patch("async_durable_execution.context.map_handler") as mock_map_handler:
         mock_map_handler.return_value = Mock()
 
-        with patch.object(context, "run_in_child_context") as mock_run_in_child:
-            # Set up the mock to call the nested function
-            def mock_run_side_effect(func, name=None, config=None):
-                child_context = Mock()
-                child_context.run_in_child_context = Mock()
-                return func(child_context)
-
-            mock_run_in_child.side_effect = mock_run_side_effect
-
-            # Call map method
-            context.map([1, 2], test_function)
-
-            # Verify map_handler was called (line 283)
-            mock_map_handler.assert_called_once()
+        context.map([1, 2], test_function)
+        mock_map_handler.assert_called_once()
 
 
 def test_context_parallel_handler_call():
     """Test that parallel method calls through to parallel_handler (line 306)."""
     execution_calls = []
 
-    def test_callable_1(context):
+    async def test_callable_1(context):
         execution_calls.append("callable_1")
         return "result_1"
 
-    def test_callable_2(context):
+    async def test_callable_2(context):
         execution_calls.append("callable_2")
         return "result_2"
 
     # Create mock state and context
     state = Mock()
     state.durable_execution_arn = "test_arn"
-    state.wrap_user_function = lambda func, *args, **kwargs: func
+    state.wrap_user_function = lambda func, *args, **kwargs: (
+        lambda *a, **kw: asyncio.run(func(*a, **kw))
+    )
 
     context = create_test_context(state=state)
 
@@ -1754,27 +1736,15 @@ def test_context_parallel_handler_call():
     ) as mock_parallel_handler:
         mock_parallel_handler.return_value = Mock()
 
-        with patch.object(context, "run_in_child_context") as mock_run_in_child:
-            # Set up the mock to call the nested function
-            def mock_run_side_effect(func, name=None, config=None):
-                child_context = Mock()
-                child_context.run_in_child_context = Mock()
-                return func(child_context)
-
-            mock_run_in_child.side_effect = mock_run_side_effect
-
-            # Call parallel method
-            context.parallel([test_callable_1, test_callable_2])
-
-            # Verify parallel_handler was called (line 306)
-            mock_parallel_handler.assert_called_once()
+        context.parallel([test_callable_1, test_callable_2])
+        mock_parallel_handler.assert_called_once()
 
 
 def test_context_wait_for_condition_handler_call():
     """Test that wait_for_condition method calls through to wait_for_condition_handler (line 425)."""
     execution_calls = []
 
-    def test_check(state, check_context):
+    async def test_check(state, check_context):
         execution_calls.append("check_called")
         return state
 
@@ -2212,7 +2182,7 @@ def test_durable_parallel_branch_returns_parallel_branch_with_name():
     """Test that the decorator produces a ParallelBranch with the given name."""
 
     @durable_parallel_branch(name="fetch-user-data")
-    def fetch_user(ctx: DurableContext, user_id: str) -> dict:
+    async def fetch_user(ctx: DurableContext, user_id: str) -> dict:
         return {"id": user_id}
 
     result = fetch_user("user-123")
@@ -2225,7 +2195,7 @@ def test_durable_parallel_branch_with_no_name():
     """Test that when name is None, ParallelBranch.name is None."""
 
     @durable_parallel_branch()
-    def fetch_orders(ctx: DurableContext) -> list:
+    async def fetch_orders(ctx: DurableContext) -> list:
         return ["order1"]
 
     result = fetch_orders()
@@ -2238,13 +2208,13 @@ def test_durable_parallel_branch_callable_delegates_to_func():
     """Test that calling the ParallelBranch delegates to the wrapped function."""
 
     @durable_parallel_branch(name="my-branch")
-    def my_branch(ctx: DurableContext, value: int) -> int:
+    async def my_branch(ctx: DurableContext, value: int) -> int:
         return value * 2
 
     branch = my_branch(21)
     mock_ctx = Mock(spec=DurableContext)
 
-    result = branch(mock_ctx)
+    result = asyncio.run(branch(mock_ctx))
 
     assert result == 42
 
@@ -2253,7 +2223,7 @@ def test_durable_parallel_branch_with_multiple_args_and_kwargs():
     """Test that positional and keyword arguments are correctly bound."""
 
     @durable_parallel_branch(name="compute")
-    def compute(ctx: DurableContext, a: int, b: int, op: str = "add") -> str:
+    async def compute(ctx: DurableContext, a: int, b: int, op: str = "add") -> str:
         if op == "add":
             return f"{a + b}"
         return f"{a * b}"
@@ -2261,7 +2231,7 @@ def test_durable_parallel_branch_with_multiple_args_and_kwargs():
     branch = compute(3, 4, op="mul")
     mock_ctx = Mock(spec=DurableContext)
 
-    result = branch(mock_ctx)
+    result = asyncio.run(branch(mock_ctx))
 
     assert result == "12"
 
@@ -2271,14 +2241,14 @@ def test_durable_parallel_branch_passes_context_as_first_arg():
     received_ctx = None
 
     @durable_parallel_branch(name="capture-ctx")
-    def capture(ctx: DurableContext) -> str:
+    async def capture(ctx: DurableContext) -> str:
         nonlocal received_ctx
         received_ctx = ctx
         return "done"
 
     branch = capture()
     mock_ctx = Mock(spec=DurableContext)
-    branch(mock_ctx)
+    asyncio.run(branch(mock_ctx))
 
     assert received_ctx is mock_ctx
 
@@ -2287,7 +2257,7 @@ def test_durable_parallel_branch_multiple_invocations_are_independent():
     """Test that calling the wrapper multiple times produces independent branches."""
 
     @durable_parallel_branch(name="greet")
-    def greet(ctx: DurableContext, name: str) -> str:
+    async def greet(ctx: DurableContext, name: str) -> str:
         return f"hello {name}"
 
     branch_a = greet("Alice")
@@ -2295,18 +2265,19 @@ def test_durable_parallel_branch_multiple_invocations_are_independent():
 
     mock_ctx = Mock(spec=DurableContext)
 
-    assert branch_a(mock_ctx) == "hello Alice"
-    assert branch_b(mock_ctx) == "hello Bob"
+    assert asyncio.run(branch_a(mock_ctx)) == "hello Alice"
+    assert asyncio.run(branch_b(mock_ctx)) == "hello Bob"
 
 
 def test_durable_parallel_branch_is_compatible_with_parallel_functions_arg():
     """Test that the result can be used in a functions list alongside plain callables."""
 
     @durable_parallel_branch(name="named-branch")
-    def named(ctx: DurableContext) -> str:
+    async def named(ctx: DurableContext) -> str:
         return "named"
 
-    plain = lambda ctx: "plain"  # noqa: E731
+    async def plain(ctx) -> str:
+        return "plain"
 
     functions = [named(), plain]
 

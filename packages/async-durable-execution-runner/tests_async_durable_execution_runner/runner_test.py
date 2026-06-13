@@ -732,6 +732,18 @@ def test_durable_function_test_runner_context_manager():
             mock_close.assert_called_once()
 
 
+def test_durable_function_cloud_test_runner_context_manager():
+    """Test DurableFunctionCloudTestRunner context manager."""
+    with patch.object(DurableFunctionCloudTestRunner, "__init__", return_value=None):
+        with patch.object(DurableFunctionCloudTestRunner, "close") as mock_close:
+            runner = DurableFunctionCloudTestRunner("test-function:$LATEST")
+
+            with runner:
+                pass
+
+            mock_close.assert_called_once()
+
+
 @patch("async_durable_execution_runner.runner.DurableFunctionLocalTestRunner")
 def test_create_runner_local_uses_configured_defaults(mock_local_runner_class):
     """Test create_runner builds a local runner with default run values."""
