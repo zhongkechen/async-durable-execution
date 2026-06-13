@@ -33,7 +33,7 @@ from async_durable_execution.types import StepContext
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
     from async_durable_execution.identifier import OperationIdentifier
     from async_durable_execution.state import (
@@ -55,7 +55,7 @@ class StepOperationExecutor(OperationExecutor[T]):
 
     def __init__(
         self,
-        func: Callable[[StepContext], T],
+        func: Callable[[StepContext], Awaitable[T]],
         config: StepConfig,
         state: ExecutionState,
         operation_identifier: OperationIdentifier,

@@ -11,11 +11,11 @@ Build reliable, long-running AWS Lambda workflows with checkpointed steps, waits
 
 This repository is a community-maintained fork of the original Apache-2.0 licensed AWS project and continues to ship under Apache License 2.0 with the upstream notices preserved.
 
-This fork is specifically focused on making async Python work naturally with durable functions. The public API remains synchronous at the durable operation boundary, but the examples, helpers, and package direction here prioritize `async def` handlers, steps, child contexts, callback submitters, and condition checks.
+This fork is specifically focused on making async Python work naturally with durable functions. The public API remains synchronous at the durable operation boundary, but user-provided durable callables must now use `async def` for handlers, steps, child contexts, callback submitters, and condition checks.
 
 ## ✨ Key Features
 
-- **Async-first fork** - This fork prioritizes making `async def` workflows feel natural with durable functions
+- **Async-only user callables** - Durable handlers and user-provided durable callbacks must use `async def`
 - **Automatic checkpointing** - Resume execution after Lambda pauses or restarts
 - **Durable steps** - Run work with retry strategies and deterministic replay
 - **Waits and callbacks** - Pause for time or external signals without blocking Lambda
@@ -35,7 +35,7 @@ This fork is specifically focused on making async Python work naturally with dur
 
 ## 🚀 Quick Start
 
-This fork recommends writing new durable workflows with async callables by default.
+This fork now requires async callables for all user-provided durable code.
 
 Install the execution SDK:
 
@@ -79,7 +79,7 @@ async def handler(event: dict, context: DurableContext) -> dict:
     return {"status": "approved", "order_id": order_id}
 ```
 
-Async callables are supported anywhere the SDK accepts user code, including `map()` item functions, `parallel()` branches, child contexts, callback submitters, and wait-for-condition checks. The public Durable APIs stay synchronous, so async work is awaited transparently for you:
+Async callables are required anywhere the SDK accepts user code, including `map()` item functions, `parallel()` branches, child contexts, callback submitters, and wait-for-condition checks. The public Durable APIs stay synchronous, so async work is awaited transparently for you:
 
 ```python
 import asyncio

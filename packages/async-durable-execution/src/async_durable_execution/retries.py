@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from async_durable_execution.async_tools import invoke_callable
+from async_durable_execution.async_tools import assert_async_callable, invoke_callable
 from async_durable_execution.config import (
     JitterStrategy,
     duration_to_seconds,
@@ -223,8 +223,7 @@ class WithRetryConfig(Generic[T]):
 
 def with_retry(
     context: DurableContext,
-    func: Callable[[DurableContext, int], T]
-    | Callable[[DurableContext, int], Awaitable[T]],
+    func: Callable[[DurableContext, int], Awaitable[T]],
     config: WithRetryConfig[T],
     name: str | None = None,
 ) -> T:
@@ -263,9 +262,10 @@ def with_retry(
         exception propagates unchanged.
         SuspendExecution: Re-raised immediately (SDK control flow).
     """
+    assert_async_callable(func)
     retry_strategy = config.retry_strategy or create_retry_strategy()
 
-    def run_loop(ctx: DurableContext) -> T:
+    async def run_loop(ctx: DurableContext) -> T:
         attempt = 0
         while True:
             attempt += 1
@@ -286,4 +286,4 @@ def with_retry(
             name=name,
             config=config.child_context_config,
         )
-    return run_loop(context)
+    return invoke_callable(run_loop, context)

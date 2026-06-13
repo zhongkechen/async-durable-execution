@@ -14,7 +14,7 @@ from enum import Enum
 from threading import Lock
 from typing import TYPE_CHECKING
 
-from async_durable_execution.async_tools import resolve_awaitable
+from async_durable_execution.async_tools import invoke_callable
 from async_durable_execution.exceptions import (
     BackgroundThreadError,
     CallableRuntimeError,
@@ -937,7 +937,7 @@ class ExecutionState:
                 operation_identifier, is_replay_children, attempt
             )
             try:
-                result = resolve_awaitable(user_function(*args, **kwargs))
+                result = invoke_callable(user_function, *args, **kwargs)
                 self._plugin_executor.on_user_function_end(start_info, None)
                 return result
             except SuspendExecution as e:

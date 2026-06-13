@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, TypeVar
 
 from async_durable_execution.async_tools import invoke_callable
@@ -62,7 +62,7 @@ class ParallelExecutor(ConcurrentExecutor[Callable, R]):
     @classmethod
     def from_callables(
         cls,
-        callables: Sequence[Callable | ParallelBranch],
+        callables: Sequence[Callable[[object], Awaitable[R]] | ParallelBranch],
         config: ParallelConfig,
     ) -> ParallelExecutor:
         """Create ParallelExecutor from a sequence of callables or ParallelBranch instances.
@@ -103,7 +103,7 @@ class ParallelExecutor(ConcurrentExecutor[Callable, R]):
 
 
 def parallel_handler(
-    callables: Sequence[Callable | ParallelBranch],
+    callables: Sequence[Callable[[object], Awaitable[R]] | ParallelBranch],
     config: ParallelConfig | None,
     execution_state: ExecutionState,
     parallel_context: DurableContext,

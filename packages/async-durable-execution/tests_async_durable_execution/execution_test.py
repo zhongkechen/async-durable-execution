@@ -20,6 +20,7 @@ from async_durable_execution.exceptions import (
     GetExecutionStateError,
     InvocationError,
     SuspendExecution,
+    ValidationError,
 )
 from async_durable_execution.execution import (
     DurableExecutionInvocationInput,
@@ -359,7 +360,7 @@ def test_durable_execution_client_selection_env_normal_result():
         mock_client.checkpoint.return_value = mock_output
 
         @durable_execution
-        def test_handler(event: Any, context: DurableContext) -> dict:
+        async def test_handler(event: Any, context: DurableContext) -> dict:
             return {"result": "success"}
 
         # Create regular event with LocalRunner=False
@@ -409,7 +410,7 @@ def test_durable_execution_client_selection_env_large_result():
         mock_client.checkpoint.return_value = mock_output
 
         @durable_execution
-        def test_handler(event: Any, context: DurableContext) -> dict:
+        async def test_handler(event: Any, context: DurableContext) -> dict:
             return {"result": LARGE_RESULT}
 
         # Create regular event with LocalRunner=False
@@ -457,7 +458,7 @@ def test_durable_execution_with_injected_client_success_normal_result():
     mock_client.checkpoint.return_value = mock_output
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
     # Create execution input with injected client
@@ -504,7 +505,7 @@ def test_durable_execution_with_injected_client_success_large_result():
     mock_client.checkpoint.return_value = mock_output
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": LARGE_RESULT}
 
     # Create execution input with injected client
@@ -559,7 +560,7 @@ def test_durable_execution_with_injected_client_failure():
     mock_client.checkpoint.return_value = mock_output
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         msg = "Test error"
         raise ValueError(msg)
 
@@ -606,7 +607,7 @@ def test_durable_execution_with_large_error_payload():
     mock_client.checkpoint.return_value = mock_output
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         raise ValueError(LARGE_RESULT)
 
     operation = Operation(
@@ -652,7 +653,7 @@ def test_durable_execution_fatal_error_handling():
     mock_client = Mock(spec=DurableServiceClient)
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         msg = "Retriable invocation error occurred"
         raise InvocationError(msg)
 
@@ -690,7 +691,7 @@ def test_durable_execution_execution_error_handling():
     mock_client = Mock(spec=DurableServiceClient)
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         msg = "Retriable invocation error occurred"
         raise ExecutionError(msg)
 
@@ -743,7 +744,7 @@ def test_durable_execution_client_selection_default():
         mock_client.checkpoint.return_value = mock_output
 
         @durable_execution
-        def test_handler(event: Any, context: DurableContext) -> dict:
+        async def test_handler(event: Any, context: DurableContext) -> dict:
             return {"result": "success"}
 
         # Create regular event dict instead of DurableExecutionInvocationInputWithClient
@@ -782,7 +783,7 @@ def test_durable_handler_empty_input_payload():
     mock_client = Mock(spec=DurableServiceClient)
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
     # Create execution input with empty input payload
@@ -821,7 +822,7 @@ def test_durable_handler_whitespace_input_payload():
     mock_client = Mock(spec=DurableServiceClient)
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
     # Create execution input with whitespace-only input payload
@@ -860,7 +861,7 @@ def test_durable_handler_invalid_json_input_payload():
     mock_client = Mock(spec=DurableServiceClient)
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
     # Create execution input with invalid JSON
@@ -902,9 +903,12 @@ def test_durable_handler_background_thread_failure():
         raise RuntimeError(msg)
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
+        async def step_result(_step_context) -> str:
+            return "step_result"
+
         # Call a checkpoint operation so background thread error can propagate
-        context.step(lambda ctx: "step_result")
+        context.step(step_result)
         return {"result": "success"}
 
     operation = Operation(
@@ -943,7 +947,7 @@ def test_durable_execution_suspend_execution():
     mock_client = Mock(spec=DurableServiceClient)
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         msg = "Suspending for callback"
         raise SuspendExecution(msg)
 
@@ -992,9 +996,12 @@ def test_durable_execution_checkpoint_error_in_background_thread():
         raise CheckpointError(msg, error_category=CheckpointErrorCategory.EXECUTION)
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
+        async def step_result(_step_context) -> str:
+            return "step_result"
+
         # Call a checkpoint operation so background thread error can propagate
-        context.step(lambda ctx: "step_result")
+        context.step(step_result)
         return {"result": "success"}
 
     operation = Operation(
@@ -1041,7 +1048,7 @@ def test_durable_execution_checkpoint_execution_error_stops_background():
     mock_client = Mock(spec=DurableServiceClient)
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         # Directly raise CheckpointError to simulate checkpoint failure
         msg = "Checkpoint system failed"
         raise CheckpointError(msg, CheckpointErrorCategory.EXECUTION)
@@ -1089,7 +1096,7 @@ def test_durable_execution_checkpoint_invocation_error_retries():
     mock_client = Mock(spec=DurableServiceClient)
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         # Directly raise CheckpointError to simulate checkpoint failure
         msg = "Checkpoint system failed"
         raise CheckpointError(msg, CheckpointErrorCategory.INVOCATION)
@@ -1140,8 +1147,11 @@ def test_durable_execution_background_thread_execution_error_returns_failed():
         raise CheckpointError(msg, error_category=CheckpointErrorCategory.EXECUTION)
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
-        context.step(lambda ctx: "step_result")
+    async def test_handler(event: Any, context: DurableContext) -> dict:
+        async def step_result(_step_context) -> str:
+            return "step_result"
+
+        context.step(step_result)
         return {"result": "success"}
 
     operation = Operation(
@@ -1184,8 +1194,11 @@ def test_durable_execution_background_thread_invocation_error_retries():
         raise CheckpointError(msg, error_category=CheckpointErrorCategory.INVOCATION)
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
-        context.step(lambda ctx: "step_result")
+    async def test_handler(event: Any, context: DurableContext) -> dict:
+        async def step_result(_step_context) -> str:
+            return "step_result"
+
+        context.step(step_result)
         return {"result": "success"}
 
     operation = Operation(
@@ -1229,7 +1242,7 @@ def test_durable_execution_final_success_checkpoint_execution_error_returns_fail
         )
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         # Return large result to trigger final checkpoint (>6MB)
         return {"result": "x" * (7 * 1024 * 1024)}
 
@@ -1274,7 +1287,7 @@ def test_durable_execution_final_success_checkpoint_invocation_error_retries():
         )
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         # Return large result to trigger final checkpoint (>6MB)
         return {"result": "x" * (7 * 1024 * 1024)}
 
@@ -1319,7 +1332,7 @@ def test_durable_execution_final_failure_checkpoint_execution_error_returns_fail
         )
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         # Raise error with large message to trigger final checkpoint (>6MB)
         msg = "x" * (7 * 1024 * 1024)
         raise ValueError(msg)
@@ -1366,7 +1379,7 @@ def test_durable_execution_final_failure_checkpoint_invocation_error_retries():
         )
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         # Raise error with large message to trigger final checkpoint (>6MB)
         msg = "x" * (7 * 1024 * 1024)
         raise ValueError(msg)
@@ -1432,9 +1445,12 @@ def test_durable_handler_background_thread_failure_on_succeed_checkpoint():
         )
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
+        async def step_result(_step_context) -> str:
+            return "step_result"
+
         # Call a step operation which will trigger START and SUCCEED checkpoints
-        context.step(lambda ctx: "step_result")
+        context.step(step_result)
         return {"result": "success"}
 
     operation = Operation(
@@ -1517,14 +1533,20 @@ def test_durable_handler_background_thread_failure_on_start_checkpoint():
         )
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
+        async def first_step_result(_step_context) -> str:
+            return "first_step_result"
+
+        async def second_step_result(_step_context) -> str:
+            return "second_step_result"
+
         # First step with AT_MOST_ONCE_PER_RETRY (synchronous START checkpoint)
         # This should fail on START checkpoint and prevent execution
         step_config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
-        context.step(lambda ctx: "first_step_result", config=step_config)
+        context.step(first_step_result, config=step_config)
 
         # Second step should never be reached if first step's START checkpoint fails
-        context.step(lambda ctx: "second_step_result")
+        context.step(second_step_result)
         return {"result": "success"}
 
     operation = Operation(
@@ -1606,7 +1628,7 @@ def test_durable_handler_background_thread_failure_on_large_result_checkpoint():
         )
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> str:
+    async def test_handler(event: Any, context: DurableContext) -> str:
         # Return a large result that will trigger checkpoint
         return LARGE_RESULT
 
@@ -1675,7 +1697,7 @@ def test_durable_handler_background_thread_failure_on_error_checkpoint():
         )
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> str:
+    async def test_handler(event: Any, context: DurableContext) -> str:
         # Raise an error that will trigger error checkpoint
         msg = "User function error"
         raise ValueError(msg)
@@ -1731,8 +1753,11 @@ def test_durable_execution_logs_checkpoint_error_extras_from_background_thread()
         )
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
-        context.step(lambda ctx: "step_result")
+    async def test_handler(event: Any, context: DurableContext) -> dict:
+        async def step_result(_step_context) -> str:
+            return "step_result"
+
+        context.step(step_result)
         return {"result": "success"}
 
     operation = Operation(
@@ -1791,8 +1816,11 @@ def test_durable_execution_logs_boto_client_error_extras_from_background_thread(
         )
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
-        context.step(lambda ctx: "step_result")
+    async def test_handler(event: Any, context: DurableContext) -> dict:
+        async def step_result(_step_context) -> str:
+            return "step_result"
+
+        context.step(step_result)
         return {"result": "success"}
 
     operation = Operation(
@@ -1844,7 +1872,7 @@ def test_durable_execution_logs_checkpoint_error_extras_from_user_code():
     metadata_obj = {"RequestId": "user-request-id"}
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         raise CheckpointError(  # noqa TRY003
             "User checkpoint error",  # noqa EM101
             error_category=CheckpointErrorCategory.EXECUTION,
@@ -1903,7 +1931,7 @@ def test_durable_execution_with_boto3_client_parameter():
 
     # GIVEN a durable function decorated with the custom client
     @durable_execution(boto3_client=mock_boto3_client)
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
     event = {
@@ -1943,7 +1971,7 @@ def test_durable_execution_with_non_durable_payload_raises_error():
 
     # GIVEN a durable function
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
     # GIVEN a regular Lambda event (not a durable execution payload)
@@ -1974,7 +2002,7 @@ def test_durable_execution_with_non_dict_event_raises_error():
 
     # GIVEN a durable function
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
     # GIVEN a non-dict event
@@ -2703,7 +2731,7 @@ def test_durable_execution_replays_when_paginated_state_has_prior_operations():
     invocation_input = _make_invocation_input(mock_client, next_marker="page2")
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"is_replaying": context.state.is_replaying()}
 
     result = test_handler(invocation_input, _make_lambda_context())
@@ -2728,7 +2756,7 @@ def test_durable_execution_non_retryable_invocation_error_returns_failed():
     )
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         raise non_retryable_error
 
     result = test_handler(_make_invocation_input(mock_client), _make_lambda_context())
@@ -2746,7 +2774,7 @@ def test_durable_execution_retryable_invocation_error_raises():
     )
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         raise retryable_error
 
     with pytest.raises(GetExecutionStateError, match="Service error"):
@@ -2767,8 +2795,11 @@ def test_durable_execution_non_retryable_background_thread_error_returns_failed(
     )
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
-        context.step(lambda ctx: "step_result")
+    async def test_handler(event: Any, context: DurableContext) -> dict:
+        async def step_result(_step_context) -> str:
+            return "step_result"
+
+        context.step(step_result)
         return {"result": "success"}
 
     result = test_handler(_make_invocation_input(mock_client), _make_lambda_context())
@@ -2797,7 +2828,7 @@ def test_durable_execution_non_retryable_initial_pagination_error_returns_failed
     mock_client.get_execution_state.side_effect = non_retryable_error
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
     result = test_handler(
@@ -2819,7 +2850,7 @@ def test_durable_execution_retryable_initial_pagination_error_raises():
     mock_client.get_execution_state.side_effect = retryable_error
 
     @durable_execution
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
     with pytest.raises(GetExecutionStateError, match="Service error"):
@@ -2903,7 +2934,7 @@ def test_durable_execution_with_plugins_success():
     plugin = _RecordingPlugin()
 
     @durable_execution(plugins=[plugin])
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
     result = test_handler(
@@ -2929,7 +2960,7 @@ def test_durable_execution_with_plugins_failure():
     plugin = _RecordingPlugin()
 
     @durable_execution(plugins=[plugin])
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         msg = "user error"
         raise ValueError(msg)
 
@@ -2955,7 +2986,7 @@ def test_durable_execution_with_plugins_pending():
     plugin = _RecordingPlugin()
 
     @durable_execution(plugins=[plugin])
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         raise SuspendExecution("test")
 
     result = test_handler(
@@ -2994,6 +3025,17 @@ def test_durable_execution_supports_async_handler():
     assert json.loads(result["Result"]) == {"result": "async-success"}
 
 
+def test_durable_execution_rejects_sync_handler():
+    with pytest.raises(
+        ValidationError,
+        match="Non-async callables are no longer supported",
+    ):
+
+        @durable_execution
+        def test_handler(event: Any, context: DurableContext) -> dict:
+            return {"result": "sync-success"}
+
+
 def test_durable_execution_supports_async_steps_inside_async_handler():
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
@@ -3028,7 +3070,7 @@ def test_durable_execution_with_plugins_retryable_error():
     plugin = _RecordingPlugin()
 
     @durable_execution(plugins=[plugin])
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         msg = "Retriable error"
         raise InvocationError(msg)
 
@@ -3055,7 +3097,7 @@ def test_durable_execution_with_multiple_plugins():
     plugin2 = _RecordingPlugin()
 
     @durable_execution(plugins=[plugin1, plugin2])
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
     result = test_handler(
@@ -3083,7 +3125,7 @@ def test_durable_execution_with_failing_plugin_does_not_break_execution():
     recording_plugin = _RecordingPlugin()
 
     @durable_execution(plugins=[failing_plugin, recording_plugin])
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
     result = test_handler(
@@ -3108,7 +3150,7 @@ def test_durable_execution_with_no_plugins():
     mock_client.checkpoint.return_value = mock_output
 
     @durable_execution(plugins=None)
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
     result = test_handler(
@@ -3129,7 +3171,7 @@ def test_durable_execution_with_empty_plugins_list():
     mock_client.checkpoint.return_value = mock_output
 
     @durable_execution(plugins=[])
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
     result = test_handler(
@@ -3154,7 +3196,7 @@ def test_durable_execution_decorator_with_plugins_and_boto3_client():
     # When using DurableExecutionInvocationInputWithClient, boto3_client is ignored
     # but we verify the decorator accepts both parameters
     @durable_execution(boto3_client=None, plugins=[plugin])
-    def test_handler(event: Any, context: DurableContext) -> dict:
+    async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
     result = test_handler(

@@ -87,20 +87,18 @@ jobs:
             FunctionNamePrefix="$FUNCTION_NAME_PREFIX" \
             LambdaEndpoint="$LAMBDA_ENDPOINT"
 
-        PYTEST_FUNCTION_NAME_MAP=$(python packages/async-durable-execution-examples/scripts/generate_function_name_map.py --prefix "$FUNCTION_NAME_PREFIX")
-
-        echo "PYTEST_FUNCTION_NAME_MAP=$PYTEST_FUNCTION_NAME_MAP" >> $GITHUB_ENV
+        echo "PYTEST_FUNCTION_NAME_PREFIX=$FUNCTION_NAME_PREFIX" >> $GITHUB_ENV
         echo "STACK_NAME=$STACK_NAME" >> $GITHUB_ENV
 
     - name: Run Integration Tests
       env:
         AWS_REGION: ${{ env.AWS_REGION }}
         LAMBDA_ENDPOINT: "https://lambda.us-west-2.amazonaws.com"
-        PYTEST_FUNCTION_NAME_MAP: ${{ env.PYTEST_FUNCTION_NAME_MAP }}
+        PYTEST_FUNCTION_NAME_PREFIX: ${{ env.PYTEST_FUNCTION_NAME_PREFIX }}
       run: |
         echo "Running integration tests for all deployed examples"
         echo "AWS Region: ${AWS_REGION}"
         echo "Lambda Endpoint: ${LAMBDA_ENDPOINT}"
-        echo "Configured function map: ${PYTEST_FUNCTION_NAME_MAP}"
+        echo "Configured function prefix: ${PYTEST_FUNCTION_NAME_PREFIX}"
 
         hatch run test:examples-integration

@@ -95,7 +95,7 @@ class DurableContext(Protocol):
     @abstractmethod
     def step(
         self,
-        func: Callable[[StepContext], T | Awaitable[T]],
+        func: Callable[[StepContext], Awaitable[T]],
         name: str | None = None,
         config: StepConfig | None = None,
     ) -> T:
@@ -105,7 +105,7 @@ class DurableContext(Protocol):
     @abstractmethod
     def run_in_child_context(
         self,
-        func: Callable[[DurableContext], T | Awaitable[T]],
+        func: Callable[[DurableContext], Awaitable[T]],
         name: str | None = None,
         config: ChildConfig | None = None,
     ) -> T:
@@ -117,8 +117,7 @@ class DurableContext(Protocol):
         self,
         inputs: Sequence[U],
         func: Callable[
-            [DurableContext, U | BatchedInput[Any, U], int, Sequence[U]],
-            T | Awaitable[T],
+            [DurableContext, U | BatchedInput[Any, U], int, Sequence[U]], Awaitable[T]
         ],
         name: str | None = None,
         config: MapConfig | None = None,
@@ -130,7 +129,7 @@ class DurableContext(Protocol):
     def parallel(
         self,
         functions: Sequence[
-            Callable[[DurableContext], T | Awaitable[T]] | ParallelBranch[T]
+            Callable[[DurableContext], Awaitable[T]] | ParallelBranch[T]
         ],
         name: str | None = None,
         config: ParallelConfig | None = None,

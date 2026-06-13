@@ -26,7 +26,7 @@ from async_durable_execution.types import WaitForConditionCheckContext
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
     from async_durable_execution.identifier import OperationIdentifier
     from async_durable_execution.logger import Logger
@@ -54,7 +54,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
 
     def __init__(
         self,
-        check: Callable[[T, WaitForConditionCheckContext], T],
+        check: Callable[[T, WaitForConditionCheckContext], Awaitable[T]],
         config: WaitForConditionConfig[T],
         state: ExecutionState,
         operation_identifier: OperationIdentifier,

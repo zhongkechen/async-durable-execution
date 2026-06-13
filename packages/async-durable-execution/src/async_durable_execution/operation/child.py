@@ -24,7 +24,7 @@ from async_durable_execution.serdes import deserialize, serialize
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
     from async_durable_execution.identifier import OperationIdentifier
     from async_durable_execution.state import (
@@ -51,7 +51,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
 
     def __init__(
         self,
-        func: Callable[[], T],
+        func: Callable[[], Awaitable[T]],
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
         config: ChildConfig,
@@ -266,7 +266,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
 
 
 def child_handler(
-    func: Callable[[], T],
+    func: Callable[[], Awaitable[T]],
     state: ExecutionState,
     operation_identifier: OperationIdentifier,
     config: ChildConfig | None,

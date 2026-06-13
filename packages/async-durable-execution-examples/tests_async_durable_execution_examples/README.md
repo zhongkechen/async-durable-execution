@@ -51,13 +51,20 @@ sam deploy \
 # Set environment variables for cloud testing
 export AWS_REGION=us-west-2
 export LAMBDA_ENDPOINT=https://lambda.us-west-2.amazonaws.com
-export PYTEST_FUNCTION_NAME_MAP='{"async_durable_execution_examples.hello_world.handler":"HelloWorld-Test:$LATEST"}'
+export QUALIFIED_FUNCTION_NAME="HelloWorld-Test:$LATEST"
 
 # Run tests (from repo root)
 pytest --runner-mode=cloud -k test_hello_world packages/async-durable-execution-examples/tests_async_durable_execution_examples/
 
 # Or using hatch (from repo root)
 hatch run test:examples-integration -k test_hello_world
+```
+
+For full-suite cloud runs where examples are deployed with a shared prefix, use:
+
+```bash
+export PYTEST_FUNCTION_NAME_PREFIX="py313-"
+hatch run test:examples-integration
 ```
 
 ## Writing Tests
@@ -94,7 +101,7 @@ def test_my_example(durable_runner):
 ### Environment Variables (Cloud Mode)
 - `AWS_REGION` - AWS region for Lambda invocation (default: us-west-2)
 - `LAMBDA_ENDPOINT` - Optional Lambda endpoint URL for testing
-- `PYTEST_FUNCTION_NAME_MAP` - JSON mapping of handler identifiers to deployed qualified function names
+- `PYTEST_FUNCTION_NAME_PREFIX` - Prefix used to derive deployed qualified function names for all examples
 - `QUALIFIED_FUNCTION_NAME` - Optional fallback for single-function cloud runs
 
 ### CLI Options

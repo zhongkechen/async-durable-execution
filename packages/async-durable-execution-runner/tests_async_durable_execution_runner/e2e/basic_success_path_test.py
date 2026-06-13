@@ -25,34 +25,34 @@ from async_durable_execution_runner.runner import (
 # brazil-test-exec pytest test/runner_int_test.py
 def test_basic_durable_function() -> None:
     @durable_step
-    def one(step_context: StepContext, a: int, b: int) -> str:
+    async def one(step_context: StepContext, a: int, b: int) -> str:
         # print("[DEBUG] one called")
         return f"{a} {b}"
 
     @durable_step
-    def two_1(step_context: StepContext, a: int, b: int) -> str:
+    async def two_1(step_context: StepContext, a: int, b: int) -> str:
         # print("[DEBUG] two_1 called")
         return f"{a} {b}"
 
     @durable_step
-    def two_2(step_context: StepContext, a: int, b: int) -> str:
+    async def two_2(step_context: StepContext, a: int, b: int) -> str:
         # print("[DEBUG] two_2 called")
         return f"{b} {a}"
 
     @durable_with_child_context
-    def two(ctx: DurableContext, a: int, b: int) -> str:
+    async def two(ctx: DurableContext, a: int, b: int) -> str:
         # print("[DEBUG] two called")
         two_1_result: str = ctx.step(two_1(a, b))
         two_2_result: str = ctx.step(two_2(a, b))
         return f"{two_1_result} {two_2_result}"
 
     @durable_step
-    def three(step_context: StepContext, a: int, b: int) -> str:
+    async def three(step_context: StepContext, a: int, b: int) -> str:
         # print("[DEBUG] three called")
         return f"{a} {b}"
 
     @durable_execution
-    def function_under_test(event: Any, context: DurableContext) -> list[str]:
+    async def function_under_test(event: Any, context: DurableContext) -> list[str]:
         results: list[str] = []
 
         result_one: str = context.step(one(1, 2))

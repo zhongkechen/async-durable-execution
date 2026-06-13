@@ -2,6 +2,7 @@
 
 import asyncio
 import importlib
+import inspect
 import json
 from collections.abc import Mapping
 from typing import Any
@@ -35,6 +36,13 @@ from async_durable_execution.serdes import serialize
 from async_durable_execution.state import ExecutionState
 
 from ..serdes_test import CustomStrSerDes
+
+
+def _invoke_maybe_async(func, *args, **kwargs):
+    result = func(*args, **kwargs)
+    if inspect.isawaitable(result):
+        return asyncio.run(result)
+    return result
 
 
 def create_test_context(
@@ -88,10 +96,10 @@ def test_parallel_executor_init():
 def test_parallel_executor_from_callables():
     """Test ParallelExecutor.from_callables class method."""
 
-    def func1(ctx):
+    async def func1(ctx):
         return "result1"
 
-    def func2(ctx):
+    async def func2(ctx):
         return "result2"
 
     callables = [func1, func2]
@@ -114,7 +122,7 @@ def test_parallel_executor_from_callables():
 def test_parallel_executor_from_callables_default_config():
     """Test ParallelExecutor.from_callables with default config."""
 
-    def func1(ctx):
+    async def func1(ctx):
         return "result1"
 
     callables = [func1]
@@ -131,7 +139,7 @@ def test_parallel_executor_from_callables_default_config():
 def test_parallel_executor_execute_item():
     """Test ParallelExecutor.execute_item method."""
 
-    def test_func(ctx):
+    async def test_func(ctx):
         return f"processed-{ctx}"
 
     executable = Executable(index=0, func=test_func)
@@ -175,7 +183,7 @@ def test_parallel_executor_execute_item_with_async_callable():
 def test_parallel_executor_execute_item_with_exception():
     """Test ParallelExecutor.execute_item with callable that raises exception."""
 
-    def failing_func(ctx):
+    async def failing_func(ctx):
         msg = "Test error"
         raise ValueError(msg)
 
@@ -199,10 +207,10 @@ def test_parallel_executor_execute_item_with_exception():
 def test_parallel_handler():
     """Test parallel_handler function."""
 
-    def func1(ctx):
+    async def func1(ctx):
         return "result1"
 
-    def func2(ctx):
+    async def func2(ctx):
         return "result2"
 
     callables = [func1, func2]
@@ -243,7 +251,7 @@ def test_parallel_handler():
 def test_parallel_handler_with_none_config():
     """Test parallel_handler function with None config."""
 
-    def func1(ctx):
+    async def func1(ctx):
         return "result1"
 
     callables = [func1]
@@ -282,7 +290,7 @@ def test_parallel_handler_with_none_config():
 def test_parallel_handler_creates_executor_with_correct_config():
     """Test that parallel_handler creates ParallelExecutor with correct configuration."""
 
-    def func1(ctx):
+    async def func1(ctx):
         return "result1"
 
     callables = [func1]
@@ -323,7 +331,7 @@ def test_parallel_handler_creates_executor_with_correct_config():
 def test_parallel_handler_creates_executor_with_default_config_when_none():
     """Test that parallel_handler creates ParallelExecutor with default config when None is passed."""
 
-    def func1(ctx):
+    async def func1(ctx):
         return "result1"
 
     callables = [func1]
@@ -392,13 +400,13 @@ def test_parallel_executor_from_callables_empty_list():
 def test_parallel_executor_execute_item_return_type():
     """Test that ParallelExecutor.execute_item returns the correct type."""
 
-    def int_func(ctx):
+    async def int_func(ctx):
         return 42
 
-    def str_func(ctx):
+    async def str_func(ctx):
         return "hello"
 
-    def dict_func(ctx):
+    async def dict_func(ctx):
         return {"key": "value"}
 
     executor = ParallelExecutor(
@@ -424,7 +432,7 @@ def test_parallel_executor_execute_item_return_type():
 def test_parallel_handler_with_serdes():
     """Test that parallel_handler with serdes"""
 
-    def func1(ctx):
+    async def func1(ctx):
         return "RESULT1"
 
     callables = [func1]
@@ -443,7 +451,9 @@ def test_parallel_handler_with_serdes():
     executor_context = Mock()
     executor_context._create_step_id_for_logical_step = lambda *args: "1"  # noqa SLF001
     child_context = Mock()
-    child_context.state.wrap_user_function = lambda func, *args, **kwargs: func
+    child_context.state.wrap_user_function = lambda func, *args, **kwargs: (
+        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+    )
     executor_context.create_child_context = lambda *args, **kwargs: child_context
 
     result = parallel_handler(
@@ -460,7 +470,7 @@ def test_parallel_handler_with_serdes():
 def test_parallel_handler_with_summary_generator():
     """Test that parallel_handler calls executor_context methods correctly."""
 
-    def func1(ctx):
+    async def func1(ctx):
         return "large_result" * 1000  # Create a large result
 
     def mock_summary_generator(result):
@@ -499,7 +509,7 @@ def test_parallel_handler_with_summary_generator():
 def test_parallel_executor_from_callables_with_summary_generator():
     """Test ParallelExecutor.from_callables preserves summary_generator."""
 
-    def func1(ctx):
+    async def func1(ctx):
         return "result1"
 
     def mock_summary_generator(result):
@@ -517,10 +527,10 @@ def test_parallel_executor_from_callables_with_summary_generator():
 def test_parallel_handler_default_summary_generator():
     """Test that parallel_handler calls executor_context methods correctly with default config."""
 
-    def func1(ctx):
+    async def func1(ctx):
         return "result1"
 
-    def func2(ctx):
+    async def func2(ctx):
         return "result2"
 
     callables = [func1, func2]
@@ -558,13 +568,13 @@ def test_parallel_handler_default_summary_generator():
 def test_parallel_handler_with_explicit_none_summary_generator():
     """Test that parallel_handler calls executor_context methods correctly with explicit None summary_generator."""
 
-    def func1(ctx):
+    async def func1(ctx):
         return "result1"
 
-    def func2(ctx):
+    async def func2(ctx):
         return "result2"
 
-    def func3(ctx):
+    async def func3(ctx):
         return "result3"
 
     callables = [func1, func2, func3]
@@ -604,10 +614,10 @@ def test_parallel_handler_with_explicit_none_summary_generator():
 def test_parallel_handler_replay_mechanism():
     """Test that parallel_handler uses replay when operation has already succeeded."""
 
-    def func1(ctx):
+    async def func1(ctx):
         return "result1"
 
-    def func2(ctx):
+    async def func2(ctx):
         return "result2"
 
     callables = [func1, func2]
@@ -667,7 +677,7 @@ def test_parallel_handler_replay_mechanism():
 def test_parallel_handler_replay_with_replay_children():
     """Test parallel_handler replay when children need to be re-executed."""
 
-    def func1(ctx):
+    async def func1(ctx):
         return "result1"
 
     callables = [func1]
@@ -856,7 +866,9 @@ def test_parallel_item_serialize(mock_serialize, item_serdes, batch_serdes):
     mock_state.durable_execution_arn = "arn:test"
     mock_state.get_checkpoint_result = Mock(side_effect=get_checkpoint)
     mock_state.create_checkpoint = Mock()
-    mock_state.wrap_user_function = lambda func, *args, **kwargs: func
+    mock_state.wrap_user_function = lambda func, *args, **kwargs: (
+        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+    )
 
     context_map = {}
 
@@ -873,8 +885,15 @@ def test_parallel_item_serialize(mock_serialize, item_serdes, batch_serdes):
 
     with patch.object(DurableContext, "_create_step_id_for_logical_step", create_id):
         context = create_test_context(state=mock_state)
+
+        async def branch_a(ctx):
+            return "a"
+
+        async def branch_b(ctx):
+            return "b"
+
         context.parallel(
-            [lambda ctx: "a", lambda ctx: "b"],
+            [branch_a, branch_b],
             config=ParallelConfig(serdes=batch_serdes, item_serdes=item_serdes),
         )
 
@@ -918,7 +937,9 @@ def test_parallel_item_deserialize(mock_deserialize, item_serdes, batch_serdes):
     mock_state.durable_execution_arn = "arn:test"
     mock_state.get_checkpoint_result = Mock(side_effect=get_checkpoint)
     mock_state.create_checkpoint = Mock()
-    mock_state.wrap_user_function = lambda func, *args, **kwargs: func
+    mock_state.wrap_user_function = lambda func, *args, **kwargs: (
+        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+    )
 
     context_map = {}
 
@@ -935,8 +956,15 @@ def test_parallel_item_deserialize(mock_deserialize, item_serdes, batch_serdes):
 
     with patch.object(DurableContext, "_create_step_id_for_logical_step", create_id):
         context = create_test_context(state=mock_state)
+
+        async def branch_a(ctx):
+            return "a"
+
+        async def branch_b(ctx):
+            return "b"
+
         context.parallel(
-            [lambda ctx: "a", lambda ctx: "b"],
+            [branch_a, branch_b],
             config=ParallelConfig(serdes=batch_serdes, item_serdes=item_serdes),
         )
 
@@ -951,13 +979,13 @@ def test_parallel_item_deserialize(mock_deserialize, item_serdes, batch_serdes):
 def test_parallel_result_serialization_roundtrip():
     """Test that parallel operation BatchResult can be serialized and deserialized."""
 
-    def func1(ctx):
+    async def func1(ctx):
         return [1, 2, 3]
 
-    def func2(ctx):
+    async def func2(ctx):
         return {"status": "complete", "count": 42}
 
-    def func3(ctx):
+    async def func3(ctx):
         return "simple string"
 
     callables = [func1, func2, func3]
@@ -976,7 +1004,9 @@ def test_parallel_result_serialization_roundtrip():
         side_effect=["1", "2", "3"]
     )
     child_context = Mock()
-    child_context.state.wrap_user_function = lambda func, *args, **kwargs: func
+    child_context.state.wrap_user_function = lambda func, *args, **kwargs: (
+        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+    )
     parallel_context.create_child_context = Mock(return_value=child_context)
     operation_identifier = OperationIdentifier(
         "test_op", OperationSubType.PARALLEL, "parent", "test_parallel"
@@ -1036,7 +1066,9 @@ def test_parallel_handler_serializes_batch_result():
             mock_state.durable_execution_arn = "arn:test"
             mock_state.get_checkpoint_result = Mock(side_effect=get_checkpoint)
             mock_state.create_checkpoint = Mock()
-            mock_state.wrap_user_function = lambda func, *args, **kwargs: func
+            mock_state.wrap_user_function = lambda func, *args, **kwargs: (
+                lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+            )
 
             context_map = {}
 
@@ -1055,7 +1087,14 @@ def test_parallel_handler_serializes_batch_result():
                 DurableContext, "_create_step_id_for_logical_step", create_id
             ):
                 context = create_test_context(state=mock_state)
-                result = context.parallel([lambda ctx: "a", lambda ctx: "b"])
+
+                async def branch_a(ctx):
+                    return "a"
+
+                async def branch_b(ctx):
+                    return "b"
+
+                result = context.parallel([branch_a, branch_b])
 
             assert len(mock_serdes_serialize.call_args_list) == 3
             parent_call = mock_serdes_serialize.call_args_list[2]
@@ -1095,7 +1134,9 @@ def test_parallel_default_serdes_serializes_batch_result():
             mock_state.durable_execution_arn = "arn:test"
             mock_state.get_checkpoint_result = Mock(side_effect=get_checkpoint)
             mock_state.create_checkpoint = Mock()
-            mock_state.wrap_user_function = lambda func, *args, **kwargs: func
+            mock_state.wrap_user_function = lambda func, *args, **kwargs: (
+                lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+            )
 
             context_map = {}
 
@@ -1114,7 +1155,14 @@ def test_parallel_default_serdes_serializes_batch_result():
                 DurableContext, "_create_step_id_for_logical_step", create_id
             ):
                 context = create_test_context(state=mock_state)
-                result = context.parallel([lambda ctx: "a", lambda ctx: "b"])
+
+                async def branch_a(ctx):
+                    return "a"
+
+                async def branch_b(ctx):
+                    return "b"
+
+                result = context.parallel([branch_a, branch_b])
 
             assert isinstance(result, BatchResult)
             assert len(mock_serialize.call_args_list) == 3
@@ -1159,7 +1207,9 @@ def test_parallel_custom_serdes_serializes_batch_result():
             mock_state.durable_execution_arn = "arn:test"
             mock_state.get_checkpoint_result = Mock(side_effect=get_checkpoint)
             mock_state.create_checkpoint = Mock()
-            mock_state.wrap_user_function = lambda func, *args, **kwargs: func
+            mock_state.wrap_user_function = lambda func, *args, **kwargs: (
+                lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+            )
 
             context_map = {}
 
@@ -1178,8 +1228,15 @@ def test_parallel_custom_serdes_serializes_batch_result():
                 DurableContext, "_create_step_id_for_logical_step", create_id
             ):
                 context = create_test_context(state=mock_state)
+
+                async def branch_a(ctx):
+                    return "a"
+
+                async def branch_b(ctx):
+                    return "b"
+
                 result = context.parallel(
-                    [lambda ctx: "a", lambda ctx: "b"],
+                    [branch_a, branch_b],
                     config=ParallelConfig(serdes=custom_serdes),
                 )
 
@@ -1208,30 +1265,49 @@ def test_parallel_branch_delegates_to_func():
     """Calling ParallelBranch delegates to the wrapped func."""
     from async_durable_execution.config import ParallelBranch
 
-    branch = ParallelBranch(func=lambda x, y: x + y, name="add")
-    assert branch(3, 4) == 7
+    async def add(x, y):
+        return x + y
+
+    branch = ParallelBranch(func=add, name="add")
+    assert asyncio.run(branch(3, 4)) == 7
 
 
 def test_parallel_branch_passes_kwargs():
     """ParallelBranch passes keyword arguments to func."""
     from async_durable_execution.config import ParallelBranch
 
-    branch = ParallelBranch(func=lambda ctx, flag=False: flag, name="test")
-    assert branch("ctx", flag=True) is True
+    async def test_func(ctx, flag=False):
+        return flag
+
+    branch = ParallelBranch(func=test_func, name="test")
+    assert asyncio.run(branch("ctx", flag=True)) is True
 
 
 def test_parallel_branch_frozen():
     """ParallelBranch is immutable (frozen dataclass)."""
     from async_durable_execution.config import ParallelBranch
 
-    branch = ParallelBranch(func=lambda: None, name="test")
+    async def no_op():
+        return None
+
+    branch = ParallelBranch(func=no_op, name="test")
     with pytest.raises(AttributeError):
         branch.name = "changed"  # type: ignore[misc]
 
 
 def test_parallel_executor_get_iteration_name_default():
     """Plain callables use default 'parallel-branch-{index}' naming."""
-    callables = [lambda ctx: "a", lambda ctx: "b", lambda ctx: "c"]
+
+    async def branch_a(ctx):
+        return "a"
+
+    async def branch_b(ctx):
+        return "b"
+
+    async def branch_c(ctx):
+        return "c"
+
+    callables = [branch_a, branch_b, branch_c]
     config = ParallelConfig()
 
     executor = ParallelExecutor.from_callables(callables, config)
@@ -1245,9 +1321,15 @@ def test_parallel_executor_get_iteration_name_with_named_branches():
     """ParallelBranch with name uses the custom name."""
     from async_durable_execution.config import ParallelBranch
 
+    async def fetch_user(ctx):
+        return "user"
+
+    async def fetch_orders(ctx):
+        return "orders"
+
     branches = [
-        ParallelBranch(func=lambda ctx: "user", name="fetch-user-data"),
-        ParallelBranch(func=lambda ctx: "orders", name="fetch-order-history"),
+        ParallelBranch(func=fetch_user, name="fetch-user-data"),
+        ParallelBranch(func=fetch_orders, name="fetch-order-history"),
     ]
     config = ParallelConfig()
 
@@ -1261,10 +1343,19 @@ def test_parallel_executor_get_iteration_name_mixed():
     """Mix of ParallelBranch (with/without name) and plain callables."""
     from async_durable_execution.config import ParallelBranch
 
+    async def named_branch(ctx):
+        return "a"
+
+    async def plain_branch(ctx):
+        return "b"
+
+    async def unnamed_branch(ctx):
+        return "c"
+
     branches = [
-        ParallelBranch(func=lambda ctx: "a", name="named-branch"),
-        lambda ctx: "b",
-        ParallelBranch(func=lambda ctx: "c"),
+        ParallelBranch(func=named_branch, name="named-branch"),
+        plain_branch,
+        ParallelBranch(func=unnamed_branch),
     ]
     config = ParallelConfig()
 
@@ -1279,9 +1370,10 @@ def test_parallel_executor_get_iteration_name_none_name():
     """ParallelBranch with name=None falls back to default naming."""
     from async_durable_execution.config import ParallelBranch
 
-    branches = [
-        ParallelBranch(func=lambda ctx: "x", name=None),
-    ]
+    async def branch_func(ctx):
+        return "x"
+
+    branches = [ParallelBranch(func=branch_func, name=None)]
     config = ParallelConfig()
 
     executor = ParallelExecutor.from_callables(branches, config)
@@ -1293,7 +1385,10 @@ def test_parallel_branch_execute_item():
     """ParallelBranch works correctly in execute_item."""
     from async_durable_execution.config import ParallelBranch
 
-    branch = ParallelBranch(func=lambda ctx: f"result-{ctx}", name="my-branch")
+    async def branch_func(ctx):
+        return f"result-{ctx}"
+
+    branch = ParallelBranch(func=branch_func, name="my-branch")
     executable = Executable(index=0, func=branch)
 
     executor = ParallelExecutor(

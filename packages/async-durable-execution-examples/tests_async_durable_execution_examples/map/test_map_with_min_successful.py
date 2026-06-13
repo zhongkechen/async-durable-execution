@@ -45,8 +45,10 @@ def test_map_with_min_successful(durable_runner):
     assert map_op is not None
     assert map_op.status is OperationStatus.SUCCEEDED
 
-    # All 10 operations may be started, but only some complete before min_successful
-    assert len(map_op.child_operations) == 10
+    # The map exits early once min_successful is reached, so we only observe the
+    # branches that were started before the parent context returned.
+    assert len(map_op.child_operations) >= result_data["success_count"]
+    assert len(map_op.child_operations) <= 10
 
     # Count operations by status
     succeeded = [
@@ -59,7 +61,7 @@ def test_map_with_min_successful(durable_runner):
         op for op in map_op.child_operations if op.status is OperationStatus.STARTED
     ]
 
-    # Should have 6-7 successes, 0 failures, and remaining in STARTED state
+    # Should have 6-7 successes, 0 failures, and any in-flight branches left STARTED.
     assert len(succeeded) == result_data["success_count"]
     assert len(failed) == 0
-    assert len(started) == 10 - result_data["success_count"]
+    assert len(started) == len(map_op.child_operations) - result_data["success_count"]

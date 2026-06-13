@@ -247,12 +247,12 @@ class ParallelBranch(Generic[T]):
         )
     """
 
-    func: Callable[..., T | Awaitable[T]]
+    func: Callable[..., Awaitable[T]]
     name: str | None = None
 
-    def __call__(self, *args, **kwargs) -> T | Awaitable[T]:
+    async def __call__(self, *args, **kwargs) -> T:
         """Delegate to the wrapped function, making ParallelBranch itself callable."""
-        return self.func(*args, **kwargs)
+        return await self.func(*args, **kwargs)
 
 
 class StepSemantics(Enum):

@@ -1,6 +1,9 @@
 import asyncio
 
+import pytest
+
 from async_durable_execution.async_tools import invoke_callable
+from async_durable_execution.exceptions import ValidationError
 
 
 def test_invoke_callable_runs_async_callable():
@@ -20,3 +23,14 @@ def test_invoke_callable_runs_async_callable_from_running_loop():
         return invoke_callable(async_callable)
 
     assert asyncio.run(main()) == "nested-async-result"
+
+
+def test_invoke_callable_rejects_sync_callable():
+    def sync_callable() -> str:
+        return "sync-result"
+
+    with pytest.raises(
+        ValidationError,
+        match="Non-async callables are no longer supported",
+    ):
+        invoke_callable(sync_callable)
