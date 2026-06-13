@@ -19,12 +19,14 @@ async def handler(_event: Any, context: DurableContext) -> list[int]:
         async def double(_) -> int:
             return item * 2
 
-        return ctx.step(double, name=f"map_item_{index}")
+        return await ctx.step(double, name=f"map_item_{index}")
 
     # Use context.map() to process items concurrently and extract results immediately
-    return context.map(
-        inputs=items,
-        func=process_item,
-        name="map_operation",
-        config=MapConfig(max_concurrency=2),
+    return (
+        await context.map(
+            inputs=items,
+            func=process_item,
+            name="map_operation",
+            config=MapConfig(max_concurrency=2),
+        )
     ).get_results()

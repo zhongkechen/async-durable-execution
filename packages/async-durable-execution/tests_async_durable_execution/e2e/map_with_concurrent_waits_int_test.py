@@ -30,8 +30,8 @@ what the map resubmitter does when all branches resume at once.
 
 from __future__ import annotations
 
-import threading
-from concurrent.futures import ThreadPoolExecutor
+import asyncio
+
 from unittest.mock import Mock
 
 from async_durable_execution.lambda_service import (
@@ -48,7 +48,6 @@ from async_durable_execution.state import (
     ExecutionState,
     QueuedOperation,
 )
-from async_durable_execution.threading import CompletionEvent
 
 
 def _make_state(
@@ -89,56 +88,60 @@ def _make_tracking_client() -> tuple[Mock, list]:
     return mock_client, calls
 
 
+async def _drain_checkpoint_burst(
+    state: ExecutionState,
+    queued_operations: list[QueuedOperation],
+) -> None:
+    for queued_operation in queued_operations:
+        await state._checkpoint_queue.put(queued_operation)
+
+    state.start_checkpointing()
+    await asyncio.gather(
+        *(
+            queued_operation.completion_future
+            for queued_operation in queued_operations
+            if queued_operation.completion_future is not None
+        )
+    )
+
+
 def test_map_with_concurrent_waits_coalesces_empty_checkpoints():
-    """300 concurrent branches all create empty checkpoints simultaneously.
+    """300 concurrent empty checkpoints are drained as one coalesced API call.
 
-    Simulates the Java MapWithConditionAndCallbackExample scenario: 300 map
-    branches all resuming from a wait operation at the same time, each calling
-    the resubmitter which enqueues an empty checkpoint.
-
-    Without the coalescing optimization, the 250-op batch limit splits 300
-    empty checkpoints into 2 batches (250 + 50) → 2 API calls.
-    With the optimization (effective_operation_count stays 1 for empties),
-    all 300 are collected in a single batch → 1 API call.
+    The test pre-queues the full burst before starting the batcher so it verifies
+    the checkpoint coalescing rules directly instead of depending on scheduler
+    timing differences between Python versions.
     """
     mock_client, calls = _make_tracking_client()
     state = _make_state(mock_client, batch_time=5.0, max_ops=250)
 
-    batcher = ThreadPoolExecutor(max_workers=1)
-    batcher.submit(state.checkpoint_batches_forever)
-
-    # 300 branches all call create_checkpoint() concurrently, each blocking
-    # until the batch is processed — mirrors the resubmitter pattern.
-    branch_count = 300
-    start_barrier = threading.Barrier(branch_count)
-    errors: list[Exception] = []
-
-    def branch_work():
+    async def run_test():
+        batcher_task: asyncio.Task[None] | None = None
+        branch_count = 300
+        completion_futures = [
+            asyncio.get_running_loop().create_future() for _ in range(branch_count)
+        ]
+        queued_operations = [
+            QueuedOperation(None, completion_future)
+            for completion_future in completion_futures
+        ]
         try:
-            start_barrier.wait()  # all start simultaneously
-            state.create_checkpoint()  # empty checkpoint, synchronous
-        except Exception as e:  # noqa: BLE001
-            errors.append(e)
+            await _drain_checkpoint_burst(state, queued_operations)
+            batcher_task = state._checkpointing_task
 
-    threads = [threading.Thread(target=branch_work) for _ in range(branch_count)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join(timeout=30)
+            assert len(calls) == 1, (
+                f"Expected 1 coalesced API call for {branch_count} concurrent empty "
+                f"checkpoints, got {len(calls)}. The 250-op limit must not split empties."
+            )
+            assert calls[0] == [], (
+                "Empty checkpoints should produce an empty updates list"
+            )
+        finally:
+            state.stop_checkpointing()
+            if batcher_task is not None:
+                await batcher_task
 
-    try:
-        assert not errors, f"Branch errors: {errors}"
-
-        # All 300 empty checkpoints should be batched into 1 API call.
-        # Without the fix, 300 > 250 limit would produce 2 calls.
-        assert len(calls) == 1, (
-            f"Expected 1 coalesced API call for {branch_count} concurrent empty "
-            f"checkpoints, got {len(calls)}. The 250-op limit must not split empties."
-        )
-        assert calls[0] == [], "Empty checkpoints should produce an empty updates list"
-    finally:
-        state.stop_checkpointing()
-        batcher.shutdown(wait=True)
+    asyncio.run(run_test())
 
 
 def test_map_with_concurrent_waits_api_call_count_scales_with_real_ops_not_empties():
@@ -158,43 +161,42 @@ def test_map_with_concurrent_waits_api_call_count_scales_with_real_ops_not_empti
     # limit = 1 (first empty) + 10 (real ops) = 11, so all fit in one batch
     state = _make_state(mock_client, batch_time=5.0, max_ops=11)
 
-    completion_events: list[CompletionEvent] = []
-
-    try:
-        # 400 empty checkpoints (simulating concurrent branch resumes)
-        for _ in range(400):
-            ev = CompletionEvent()
-            completion_events.append(ev)
-            state._checkpoint_queue.put(QueuedOperation(None, ev))  # noqa: SLF001
-
-        # 10 real operations alongside the empties
-        for i in range(10):
-            op = OperationUpdate(
-                operation_id=f"op_{i}",
-                operation_type=OperationType.STEP,
-                action=OperationAction.START,
+    async def run_test():
+        batcher_task: asyncio.Task[None] | None = None
+        try:
+            completion_futures = [
+                asyncio.get_running_loop().create_future() for _ in range(410)
+            ]
+            queued_operations = [
+                QueuedOperation(None, completion_futures[i]) for i in range(400)
+            ]
+            queued_operations.extend(
+                QueuedOperation(
+                    OperationUpdate(
+                        operation_id=f"op_{i}",
+                        operation_type=OperationType.STEP,
+                        action=OperationAction.START,
+                    ),
+                    completion_futures[400 + i],
+                )
+                for i in range(10)
             )
 
-            ev = CompletionEvent()
-            completion_events.append(ev)
-            state._checkpoint_queue.put(QueuedOperation(op, ev))  # noqa: SLF001
+            await _drain_checkpoint_burst(state, queued_operations)
+            batcher_task = state._checkpointing_task
 
-        batcher = ThreadPoolExecutor(max_workers=1)
-        batcher.submit(state.checkpoint_batches_forever)
+            # 1 empty (effective=1) + 10 real ops (effective=11) exhaust the batch
+            # limit exactly. The 399 remaining empties coalesce in -> still 1 API call.
+            assert len(calls) == 1, (
+                f"Expected 1 API call with 400 empty + 10 real ops (limit=11), "
+                f"got {len(calls)}."
+            )
+            # Only the 10 real ops appear in the updates list; empties are excluded.
+            real_op_ids = {u.operation_id for batch in calls for u in batch}
+            assert real_op_ids == {f"op_{i}" for i in range(10)}
+        finally:
+            state.stop_checkpointing()
+            if batcher_task is not None:
+                await batcher_task
 
-        # Wait for all 410 to be processed
-        for ev in completion_events:
-            ev.wait()
-
-        # 1 empty (effective=1) + 10 real ops (effective=11) exhaust the batch
-        # limit exactly. The 399 remaining empties coalesce in → still 1 API call.
-        assert len(calls) == 1, (
-            f"Expected 1 API call with 400 empty + 10 real ops (limit=11), "
-            f"got {len(calls)}."
-        )
-        # Only the 10 real ops appear in the updates list; empties are excluded.
-        real_op_ids = {u.operation_id for batch in calls for u in batch}
-        assert real_op_ids == {f"op_{i}" for i in range(10)}
-    finally:
-        state.stop_checkpointing()
-        batcher.shutdown(wait=True)
+    asyncio.run(run_test())

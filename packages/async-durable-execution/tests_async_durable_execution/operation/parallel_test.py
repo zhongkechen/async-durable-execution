@@ -41,7 +41,11 @@ from ..serdes_test import CustomStrSerDes
 def _invoke_maybe_async(func, *args, **kwargs):
     result = func(*args, **kwargs)
     if inspect.isawaitable(result):
-        return asyncio.run(result)
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(result)
+        return result
     return result
 
 

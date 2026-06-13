@@ -45,16 +45,16 @@ async def handler(event: Any, context: DurableContext) -> dict[str, Any]:
         Response dictionary with statusCode and body
     """
     # Execute Step #1 - logs a message
-    context.step(step_1())
+    await context.step(step_1())
 
     # Pause for 10 seconds without consuming CPU cycles or incurring usage charges
     # The execution will suspend here and resume after 10 seconds
-    context.wait(timedelta(seconds=10))
+    await context.wait(timedelta(seconds=10))
 
     context.logger.info("Waited for 10 seconds")
 
     # Execute Step #2 - returns a message with status code
-    message = context.step(step_2(status_code=200))
+    message = await context.step(step_2(status_code=200))
 
     # Return response
     return {

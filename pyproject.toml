@@ -109,7 +109,6 @@ workspace.members = [
 
 [tool.hatch.envs.examples.scripts]
 pip = "python -m pip {args}"
-generate-examples-catalog = "python packages/async-durable-execution-examples/scripts/generate_examples_catalog.py {args}"
 generate-sam-template = "python packages/async-durable-execution-examples/scripts/generate_sam_template.py {args}"
 build = "python packages/async-durable-execution-examples/scripts/build_examples.py"
 clean = "rm -rf packages/async-durable-execution-examples/build packages/async-durable-execution-examples/.aws-sam packages/async-durable-execution-examples/*.zip packages/async-durable-execution-examples/template.generated.json"

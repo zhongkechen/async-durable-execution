@@ -34,16 +34,16 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
                 "processed": True,
             }
 
-        return ctx.step(build_result)
+        return await ctx.step(build_result)
 
-    results = context.map(
+    results = await context.map(
         inputs=items,
         func=process_item,
         name="large-scale-map",
         config=config,
     )
 
-    context.wait(timedelta(seconds=1), name="wait1")
+    await context.wait(timedelta(seconds=1), name="wait1")
 
     # Process results immediately after map operation
     # Note: After wait operations, the BatchResult may be summarized
@@ -62,7 +62,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         "allItemsProcessed": all_items_processed,
     }
 
-    context.wait(timedelta(seconds=1), name="wait2")
+    await context.wait(timedelta(seconds=1), name="wait2")
 
     return {
         "success": True,

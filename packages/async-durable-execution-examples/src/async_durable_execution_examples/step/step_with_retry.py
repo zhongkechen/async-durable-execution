@@ -38,7 +38,7 @@ async def handler(_event: Any, context: DurableContext) -> str:
         retryable_error_types=[RuntimeError],
     )
 
-    result: str = context.step(
+    result: str = await context.step(
         unreliable_operation(),
         config=StepConfig(create_retry_strategy(retry_config)),
     )

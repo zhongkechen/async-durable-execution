@@ -14,23 +14,23 @@ async def handler(_event: Any, context: DurableContext) -> str:
         async def run(_) -> str:
             return "Task 1"
 
-        return ctx.step(run, name="task1")
+        return await ctx.step(run, name="task1")
 
     async def task2(ctx: DurableContext) -> str:
         async def run(_) -> str:
             return "Task 2"
 
-        return ctx.step(run, name="task2")
+        return await ctx.step(run, name="task2")
 
     async def task3(ctx: DurableContext) -> str:
         async def run(_) -> str:
             return "Task 3"
 
-        return ctx.step(run, name="task3")
+        return await ctx.step(run, name="task3")
 
     functions = [task1, task2, task3]
 
-    results = context.parallel(
+    results = await context.parallel(
         functions, name="first_successful_parallel", config=config
     )
 

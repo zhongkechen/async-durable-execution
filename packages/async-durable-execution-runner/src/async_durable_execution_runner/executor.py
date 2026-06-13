@@ -5,8 +5,10 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import UTC, datetime
+from threading import Lock
 from typing import TYPE_CHECKING
 
+from async_durable_execution.async_tools import await_maybe
 from async_durable_execution.execution import (
     DurableExecutionInvocationInput,
     DurableExecutionInvocationOutput,
@@ -87,6 +89,10 @@ class Executor(ExecutionObserver):
         self._callback_timeouts: dict[str, Future] = {}
         self._callback_heartbeats: dict[str, Future] = {}
         self._execution_timeout: Future | None = None
+        self._invocation_state_lock = Lock()
+        self._active_invocations: set[str] = set()
+        self._scheduled_callback_resumes: set[str] = set()
+        self._pending_callback_resumes: set[str] = set()
 
     def start_execution(
         self,
@@ -624,7 +630,7 @@ class Executor(ExecutionObserver):
             execution.complete_callback_success(callback_id, result)
             self._store.update(execution)
             self._cleanup_callback_timeouts(callback_id)
-            self._invoke_execution(callback_token.execution_arn)
+            self._schedule_callback_resume(callback_token.execution_arn)
             logger.info("Callback success completed for callback_id: %s", callback_id)
         except Exception as e:
             msg = f"Failed to process callback success: {e}"
@@ -662,7 +668,7 @@ class Executor(ExecutionObserver):
             execution.complete_callback_failure(callback_id, callback_error)
             self._store.update(execution)
             self._cleanup_callback_timeouts(callback_id)
-            self._invoke_execution(callback_token.execution_arn)
+            self._schedule_callback_resume(callback_token.execution_arn)
             logger.info("Callback failure completed for callback_id: %s", callback_id)
         except Exception as e:
             msg = f"Failed to process callback failure: {e}"
@@ -773,6 +779,7 @@ class Executor(ExecutionObserver):
         """Create a parameterless callable that captures execution arn for the scheduler."""
 
         async def invoke() -> None:
+            self._mark_invocation_started(execution_arn)
             execution: Execution = self._store.load(execution_arn)
 
             # Early exit if execution is already completed - like Java's COMPLETED check
@@ -790,10 +797,12 @@ class Executor(ExecutionObserver):
                 self._store.save(execution)
 
                 invocation_start = datetime.now(UTC)
-                invoke_response = self._invoker.invoke(
-                    execution.start_input.function_name,
-                    invocation_input,
-                    execution.start_input.lambda_endpoint,
+                invoke_response = await await_maybe(
+                    self._invoker.invoke(
+                        execution.start_input.function_name,
+                        invocation_input,
+                        execution.start_input.lambda_endpoint,
+                    )
                 )
                 invocation_end = datetime.now(UTC)
 
@@ -842,8 +851,43 @@ class Executor(ExecutionObserver):
                 logger.warning("[%s] Invocation failed: %s", execution_arn, e)
                 error_obj = ErrorObject.from_exception(e)
                 self._retry_invocation(execution, error_obj)
+            finally:
+                self._mark_invocation_finished(execution_arn)
 
         return invoke
+
+    def _schedule_callback_resume(self, execution_arn: str) -> None:
+        """Coalesce callback-triggered resumes to avoid overlapping replays."""
+        with self._invocation_state_lock:
+            if (
+                execution_arn in self._active_invocations
+                or execution_arn in self._scheduled_callback_resumes
+            ):
+                self._pending_callback_resumes.add(execution_arn)
+                return
+
+            self._scheduled_callback_resumes.add(execution_arn)
+
+        self._invoke_execution(execution_arn)
+
+    def _mark_invocation_started(self, execution_arn: str) -> None:
+        with self._invocation_state_lock:
+            self._scheduled_callback_resumes.discard(execution_arn)
+            self._active_invocations.add(execution_arn)
+
+    def _mark_invocation_finished(self, execution_arn: str) -> None:
+        should_resume = False
+        with self._invocation_state_lock:
+            self._active_invocations.discard(execution_arn)
+            if execution_arn in self._pending_callback_resumes:
+                self._pending_callback_resumes.discard(execution_arn)
+                self._scheduled_callback_resumes.add(execution_arn)
+                should_resume = True
+
+        if should_resume:
+            execution = self._store.load(execution_arn)
+            if not execution.is_complete:
+                self._invoke_execution(execution_arn)
 
     def _invoke_execution(self, execution_arn: str, delay: float = 0) -> None:
         """Invoke execution after delay in seconds."""

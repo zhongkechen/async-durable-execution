@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
+from async_durable_execution.async_tools import await_maybe
 from async_durable_execution.config import ChildConfig
 from async_durable_execution.exceptions import (
     InvocationError,
@@ -71,7 +72,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
         self.is_virtual: bool = config.is_virtual
         self.sub_type = config.sub_type or OperationSubType.RUN_IN_CHILD_CONTEXT
 
-    def check_result_status(self) -> CheckResult[T]:
+    async def check_result_status(self) -> CheckResult[T]:
         """Check operation status and create START checkpoint if needed.
 
         Called twice by process() when creating synchronous checkpoints: once before
@@ -129,14 +130,16 @@ class ChildOperationExecutor(OperationExecutor[T]):
             # This is a fire-and-forget operation for performance - we don't need to wait for
             # persistence before executing the child context. The START checkpoint is purely
             # for observability and tracking the operation hierarchy.
-            self.state.create_checkpoint(
-                operation_update=start_operation, is_sync=False
+            await await_maybe(
+                self.state.create_checkpoint(
+                    operation_update=start_operation, is_sync=False
+                )
             )
 
         # Ready to execute (checkpoint exists or was just created)
         return CheckResult.create_is_ready_to_execute(checkpointed_result)
 
-    def execute(self, checkpointed_result: CheckpointedResult) -> T:
+    async def execute(self, checkpointed_result: CheckpointedResult) -> T:
         """Execute child context function with error handling and large payload support.
 
         Args:
@@ -163,7 +166,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 checkpointed_result.is_replay_children(),
                 attempt=None if checkpointed_result.is_existent() else 1,
             )
-            raw_result: T = wrapped_user_func()
+            raw_result: T = await await_maybe(wrapped_user_func())
 
             if self.is_virtual:
                 logger.debug(
@@ -230,7 +233,9 @@ class ChildOperationExecutor(OperationExecutor[T]):
             # Must ensure the child context result is persisted before returning to the parent.
             # This guarantees the result is durable and child operations won't be re-executed on replay
             # (unless replay_children=True for large payloads).
-            self.state.create_checkpoint(operation_update=success_operation)
+            await await_maybe(
+                self.state.create_checkpoint(operation_update=success_operation)
+            )
 
             logger.debug(
                 "✅ Successfully completed child context for id: %s, name: %s",
@@ -253,7 +258,9 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 # Checkpoint child context FAIL with blocking (is_sync=True, default).
                 # Must ensure the failure state is persisted before raising the exception.
                 # This guarantees the error is durable and child operations won't be re-executed on replay.
-                self.state.create_checkpoint(operation_update=fail_operation)
+                await await_maybe(
+                    self.state.create_checkpoint(operation_update=fail_operation)
+                )
 
             # InvocationError and its derivatives can be retried.
             # When we encounter an invocation error (in all of its forms), we
@@ -265,7 +272,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
             raise error_object.to_callable_runtime_error() from e
 
 
-def child_handler(
+async def child_handler(
     func: Callable[[], Awaitable[T]],
     state: ExecutionState,
     operation_identifier: OperationIdentifier,
@@ -295,4 +302,4 @@ def child_handler(
         operation_identifier,
         config or ChildConfig(),
     )
-    return executor.process()
+    return await await_maybe(cast(Any, executor.process()))

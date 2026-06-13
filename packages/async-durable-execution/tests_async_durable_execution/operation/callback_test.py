@@ -329,11 +329,11 @@ def test_wait_for_callback_handler_submitter_called_with_callback_id():
 
     mock_submitter = AsyncMock(return_value=None)
 
-    def capture_step_call(func, name, config=None):
+    async def capture_step_call(func, name, config=None):
         # Execute the step callable to verify submitter is called correctly
         step_context = Mock(spec=StepContext)
         step_context.logger = Mock()
-        asyncio.run(func(step_context))
+        await func(step_context)
 
     mock_context.step.side_effect = capture_step_call
 
@@ -385,10 +385,10 @@ def test_wait_for_callback_handler_with_none_callback_id():
 
     mock_submitter = AsyncMock(return_value=None)
 
-    def execute_step(func, name, config=None):
+    async def execute_step(func, name, config=None):
         step_context = Mock(spec=StepContext)
         step_context.logger = Mock()
-        return asyncio.run(func(step_context))
+        return await func(step_context)
 
     mock_context.step.side_effect = execute_step
 
@@ -412,10 +412,10 @@ def test_wait_for_callback_handler_with_empty_string_callback_id():
 
     mock_submitter = AsyncMock(return_value=None)
 
-    def execute_step(func, name, config=None):
+    async def execute_step(func, name, config=None):
         step_context = Mock(spec=StepContext)
         step_context.logger = Mock()
-        return asyncio.run(func(step_context))
+        return await func(step_context)
 
     mock_context.step.side_effect = execute_step
 
@@ -643,10 +643,10 @@ def test_wait_for_callback_handler_submitter_exception_handling():
         msg = "Submitter failed"
         raise ValueError(msg)
 
-    def step_side_effect(func, name, config=None):
+    async def step_side_effect(func, name, config=None):
         step_context = Mock(spec=StepContext)
         step_context.logger = Mock()
-        asyncio.run(func(step_context))
+        await func(step_context)
 
     mock_context.step.side_effect = step_side_effect
 
@@ -837,10 +837,10 @@ def test_callback_lifecycle_complete_flow():
         assert hasattr(context, "logger")
         return "submitted"
 
-    def execute_step(func, name, config=None):
+    async def execute_step(func, name, config=None):
         step_context = Mock(spec=StepContext)
         step_context.logger = Mock()
-        return asyncio.run(func(step_context))
+        return await func(step_context)
 
     mock_context.step.side_effect = execute_step
 
@@ -970,10 +970,10 @@ def test_callback_with_complex_submitter():
         msg = "Invalid callback ID"
         raise ValueError(msg)
 
-    def execute_step(func, name, config):
+    async def execute_step(func, name, config):
         step_context = Mock(spec=StepContext)
         step_context.logger = Mock()
-        return asyncio.run(func(step_context))
+        return await func(step_context)
 
     mock_context.step.side_effect = execute_step
 

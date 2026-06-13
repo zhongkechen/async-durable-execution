@@ -33,7 +33,7 @@ async def handler(event: dict[str, Any], context: DurableContext) -> dict[str, A
         ),
     )
 
-    result: str = context.wait_for_callback(
+    result: str = await context.wait_for_callback(
         submitter,
         name="retry-submitter-callback",
         config=config,

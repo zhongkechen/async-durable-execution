@@ -13,5 +13,7 @@ async def handler(_event: Any, context: DurableContext) -> str:
     async def at_most_once_step(_) -> str:
         return "AT_MOST_ONCE_PER_RETRY semantics"
 
-    result = context.step(at_most_once_step, name="at_most_once_step", config=config)
+    result = await context.step(
+        at_most_once_step, name="at_most_once_step", config=config
+    )
     return f"Result: {result}"

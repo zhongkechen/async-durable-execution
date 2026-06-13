@@ -16,8 +16,8 @@ async def handler(_event: Any, context: DurableContext) -> str:
         timeout=timedelta(seconds=120), heartbeat_timeout=timedelta(seconds=60)
     )
 
-    callback: Callback[str] = context.create_callback(
+    callback: Callback[str] = await context.create_callback(
         name="example_callback", config=callback_config
     )
 
-    return callback.result()
+    return await callback.result()

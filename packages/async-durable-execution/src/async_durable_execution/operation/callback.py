@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from async_durable_execution.async_tools import await_maybe, run_or_return
 from async_durable_execution.config import StepConfig
 from async_durable_execution.exceptions import CallbackError
 from async_durable_execution.lambda_service import (
@@ -66,7 +67,7 @@ class CallbackOperationExecutor(OperationExecutor[str]):
         self.operation_identifier = operation_identifier
         self.config = config
 
-    def check_result_status(self) -> CheckResult[str]:
+    async def check_result_status(self) -> CheckResult[str]:
         """Check operation status and create START checkpoint if needed.
 
         Called twice by process() when creating synchronous checkpoints: once before
@@ -118,12 +119,14 @@ class CallbackOperationExecutor(OperationExecutor[str]):
         # Checkpoint callback START with blocking (is_sync=True, default).
         # Must wait for the API to generate and return the callback ID before proceeding.
         # The callback ID is needed immediately by the caller to pass to external systems.
-        self.state.create_checkpoint(operation_update=create_callback_operation)
+        await await_maybe(
+            self.state.create_checkpoint(operation_update=create_callback_operation)
+        )
 
         # Signal to process() to check status again for immediate response
         return CheckResult.create_started()
 
-    def execute(self, checkpointed_result: CheckpointedResult) -> str:
+    async def execute(self, checkpointed_result: CheckpointedResult) -> str:
         """Execute callback operation by extracting the callback_id.
 
         Callbacks don't execute logic - they just extract and return the callback_id
@@ -154,18 +157,34 @@ def wait_for_callback_handler(
     name: str | None = None,
     config: WaitForCallbackConfig | None = None,
 ) -> Any:
+    return run_or_return(
+        _wait_for_callback_handler_async(context, submitter, name=name, config=config)
+    )
+
+
+async def _wait_for_callback_handler_async(
+    context: DurableContext,
+    submitter: Callable[[str, WaitForCallbackContext], Awaitable[Any]],
+    name: str | None = None,
+    config: WaitForCallbackConfig | None = None,
+) -> Any:
     """Wait for a callback to be invoked by an external system.
 
     This is a helper function that is used to create a callback and wait for it to be invoked by an external system.
     """
     name_with_space: str = f"{name} " if name else ""
-    callback: Callback = context.create_callback(
-        name=f"{name_with_space}create callback id", config=config
+    callback: Callback = await await_maybe(
+        context.create_callback(
+            name=f"{name_with_space}create callback id", config=config
+        )
     )
 
     async def submitter_step(step_context: StepContext):
-        return await submitter(
-            callback.callback_id, WaitForCallbackContext(logger=step_context.logger)
+        return await await_maybe(
+            submitter(
+                callback.callback_id,
+                WaitForCallbackContext(logger=step_context.logger),
+            )
         )
 
     step_config = (
@@ -176,8 +195,12 @@ def wait_for_callback_handler(
         if config
         else None
     )
-    context.step(
-        func=submitter_step, name=f"{name_with_space}submitter", config=step_config
+    await await_maybe(
+        context.step(
+            func=submitter_step,
+            name=f"{name_with_space}submitter",
+            config=step_config,
+        )
     )
 
-    return callback.result()
+    return await await_maybe(callback.result())

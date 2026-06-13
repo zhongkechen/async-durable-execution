@@ -14,7 +14,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     async def submitter(_callback_id, _context) -> None:
         await asyncio.sleep(1)
 
-    result: str = context.wait_for_callback(submitter)
+    result: str = await context.wait_for_callback(submitter)
 
     return {
         "callbackResult": result,

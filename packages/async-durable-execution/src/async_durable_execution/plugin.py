@@ -3,11 +3,9 @@ import datetime
 import functools
 import logging
 from collections.abc import Callable, MutableMapping
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
-
 from async_durable_execution.exceptions import SuspendExecution
 from async_durable_execution.identifier import OperationIdentifier
 from async_durable_execution.lambda_service import (
@@ -193,27 +191,18 @@ class DurableInstrumentationPlugin:
 class PluginExecutor:
     def __init__(self, plugins: list[DurableInstrumentationPlugin] | None):
         self._plugins = plugins or []
-        self._executor: ThreadPoolExecutor | None = None
         self._invocation_status: InvocationStartInfo | None = None
 
     @contextlib.contextmanager
     def run(self):
-        if self._plugins:
-            self._executor = ThreadPoolExecutor(
-                max_workers=1,
-                thread_name_prefix="plugin-executor",
-            )
         try:
             yield
         finally:
             self._invocation_status = None
-            # Shut down the thread pool, waiting for pending tasks to complete.
-            if self._executor:
-                self._executor.shutdown(wait=True)
 
     @staticmethod
     def _dispatch_plugin(plugin: DurableInstrumentationPlugin, info) -> None:
-        """Invoke the appropriate plugin callback. Runs inside the thread pool."""
+        """Invoke the appropriate plugin callback."""
         try:
             match info:
                 case InvocationStartInfo():
@@ -235,15 +224,10 @@ class PluginExecutor:
             logger.exception("Plugin %s exception ignored", plugin.__class__.__name__)
 
     def execute_plugins(self, info, sync):
-        if not self._executor:
+        if not self._plugins:
             return
         for plugin in self._plugins:
-            if sync:
-                # this is called synchronously, so plugins will be able to manipulate thread local objects
-                self._dispatch_plugin(plugin, info)
-            else:
-                # this is called asynchronously, so plugins cannot manipulate thread local objects
-                self._executor.submit(self._dispatch_plugin, plugin, info)
+            self._dispatch_plugin(plugin, info)
 
     def on_invocation_start(
         self,

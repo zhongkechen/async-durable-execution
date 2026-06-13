@@ -33,13 +33,13 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         async def run(_) -> int:
             return await _process_with_failures(item)
 
-        return ctx.step(
+        return await ctx.step(
             run,
             name=f"item_{index}",
             config=step_config,
         )
 
-    results = context.map(
+    results = await context.map(
         inputs=items,
         func=process_item,
         name="map_with_tolerance",

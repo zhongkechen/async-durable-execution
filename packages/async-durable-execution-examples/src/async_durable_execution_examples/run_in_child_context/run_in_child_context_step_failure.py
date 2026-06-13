@@ -31,14 +31,14 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, bool]:
             """Step that always fails."""
             raise Exception("Step failed in child context")
 
-        ctx.step(
+        await ctx.step(
             failing_step,
             name="failing-step",
             config=step_config,
         )
 
     try:
-        context.run_in_child_context(
+        await context.run_in_child_context(
             child_with_failure,
             name="child-with-failure",
         )
@@ -46,6 +46,6 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, bool]:
         # Catch and ignore child context and step errors
         result = {"success": True, "error": str(error)}
 
-    context.wait(timedelta(seconds=1), name="wait-after-failure")
+    await context.wait(timedelta(seconds=1), name="wait-after-failure")
 
     return result

@@ -17,5 +17,5 @@ async def add_numbers(_step_context: StepContext, a: int, b: int) -> int:
 
 @durable_execution
 async def handler(_event: Any, context: DurableContext) -> int:
-    result: int = context.step(add_numbers(5, 3))
+    result: int = await context.step(add_numbers(5, 3))
     return result

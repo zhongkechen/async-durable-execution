@@ -21,7 +21,7 @@ async def child_workflow(ctx: DurableContext) -> str:
     async def child_step(_) -> str:
         return "child-processed"
 
-    child_result: str = ctx.step(child_step, name="child_step")
+    child_result: str = await ctx.step(child_step, name="child_step")
 
     ctx.logger.info("Child workflow completed", extra={"result": child_result})
 
@@ -48,14 +48,16 @@ async def handler(event: Any, context: DurableContext) -> str:
     async def process_data(_) -> str:
         return "processed"
 
-    result1: str = context.step(process_data, name="process_data")
+    result1: str = await context.step(process_data, name="process_data")
 
-    context.step(my_step(123))
+    await context.step(my_step(123))
 
     context.logger.info("Step 1 completed", extra={"result": result1})
 
     # Child contexts inherit the parent's logger and have their own step ID
-    result2: str = context.run_in_child_context(child_workflow(), name="child_workflow")
+    result2: str = await context.run_in_child_context(
+        child_workflow(), name="child_workflow"
+    )
 
     context.logger.info(
         "Workflow completed", extra={"result1": result1, "result2": result2}

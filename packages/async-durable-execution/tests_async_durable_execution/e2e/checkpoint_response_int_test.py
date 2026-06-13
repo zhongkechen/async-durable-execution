@@ -90,7 +90,7 @@ def test_end_to_end_step_operation_with_double_check():
 
     @durable_execution
     async def my_handler(event, context: DurableContext) -> str:
-        result: str = context.step(my_step())
+        result: str = await context.step(my_step())
         return result
 
     with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
@@ -152,7 +152,7 @@ def test_end_to_end_multiple_operations_execute_sequentially():
 
     @durable_execution
     async def my_handler(event, context: DurableContext) -> list[str]:
-        return [context.step(step1()), context.step(step2())]
+        return [await context.step(step1()), await context.step(step2())]
 
     with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
         mock_client = Mock()
@@ -205,7 +205,7 @@ def test_end_to_end_wait_operation_with_double_check():
 
     @durable_execution
     async def my_handler(event, context: DurableContext) -> str:
-        context.wait(timedelta(seconds=5))
+        await context.wait(timedelta(seconds=5))
         return "completed"
 
     with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
@@ -263,7 +263,7 @@ def test_end_to_end_checkpoint_synchronization_with_operations_list():
 
     @durable_execution
     async def my_handler(event, context: DurableContext) -> str:
-        return context.step(my_step())
+        return await context.step(my_step())
 
     with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
         mock_client = Mock()
@@ -320,13 +320,13 @@ def test_callback_deferred_error_handling_to_result():
     @durable_execution
     async def my_handler(event, context: DurableContext) -> str:
         # Create callback
-        callback_id = context.create_callback("test_callback")
+        callback = await context.create_callback("test_callback")
 
         # This code executes even if callback will eventually fail
         # This is the deferred error handling pattern
-        result = context.step(step_after_callback())
+        result = await context.step(step_after_callback())
 
-        return f"{callback_id}:{result}"
+        return f"{callback.callback_id}:{result}"
 
     with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
         mock_client = Mock()
@@ -420,7 +420,7 @@ def test_end_to_end_invoke_operation_with_double_check():
 
     @durable_execution
     async def my_handler(event, context: DurableContext):
-        context.invoke("my-function", {"data": "test"})
+        await context.invoke("my-function", {"data": "test"})
 
     with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
         mock_client = Mock()
@@ -476,7 +476,7 @@ def test_end_to_end_child_context_with_async_checkpoint():
 
     @durable_execution
     async def my_handler(event, context: DurableContext) -> str:
-        result: str = context.run_in_child_context(child_function)
+        result: str = await context.run_in_child_context(child_function)
         return result
 
     with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
@@ -538,7 +538,7 @@ def test_end_to_end_child_context_replay_children_mode():
 
     @durable_execution
     async def my_handler(event, context: DurableContext) -> str:
-        context.run_in_child_context(
+        await context.run_in_child_context(
             child_function_with_large_result,
             config=ChildConfig(summary_generator=summary_generator),
         )
@@ -638,7 +638,7 @@ def test_end_to_end_child_context_error_handling():
 
     @durable_execution
     async def my_handler(event, context: DurableContext) -> str:
-        result: str = context.run_in_child_context(child_function_that_fails)
+        result: str = await context.run_in_child_context(child_function_that_fails)
         return result
 
     with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
@@ -701,7 +701,9 @@ def test_end_to_end_child_context_invocation_error_reraised():
 
     @durable_execution
     async def my_handler(event, context: DurableContext) -> str:
-        result: str = context.run_in_child_context(child_function_with_invocation_error)
+        result: str = await context.run_in_child_context(
+            child_function_with_invocation_error
+        )
         return result
 
     with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:

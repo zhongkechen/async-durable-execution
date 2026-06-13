@@ -69,17 +69,17 @@ async def handler(event: dict, context: DurableContext) -> dict:
     order_id = event["order_id"]
     context.logger.info("Starting workflow", extra={"order_id": order_id})
 
-    validation = context.step(validate_order(order_id), name="validate_order")
+    validation = await context.step(validate_order(order_id), name="validate_order")
     if not validation["valid"]:
         return {"status": "rejected", "order_id": order_id}
 
     # simulate approval (real world: use wait_for_callback)
-    context.wait(duration=timedelta(seconds=5), name="await_confirmation")
+    await context.wait(duration=timedelta(seconds=5), name="await_confirmation")
 
     return {"status": "approved", "order_id": order_id}
 ```
 
-Async callables are required anywhere the SDK accepts user code, including `map()` item functions, `parallel()` branches, child contexts, callback submitters, and wait-for-condition checks. The public Durable APIs stay synchronous, so async work is awaited transparently for you:
+Async callables are required anywhere the SDK accepts user code, including `map()` item functions, `parallel()` branches, child contexts, callback submitters, and wait-for-condition checks. Durable context operations are awaitable and run on the same event loop as your handler:
 
 ```python
 import asyncio
@@ -101,7 +101,7 @@ async def fetch_order(step_ctx: StepContext, order_id: str) -> dict:
 
 @durable_execution
 async def handler(event: dict, context: DurableContext) -> dict:
-    order = context.step(fetch_order(event["order_id"]), name="fetch_order")
+    order = await context.step(fetch_order(event["order_id"]), name="fetch_order")
     return {"order": order}
 ```
 

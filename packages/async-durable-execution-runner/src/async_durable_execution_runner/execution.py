@@ -363,7 +363,6 @@ class Execution:
             raise IllegalStateException(msg)
 
         with self._state_lock:
-            self._token_sequence += 1
             updated_callback_details = None
             if operation.callback_details:
                 updated_callback_details = replace(
@@ -390,7 +389,6 @@ class Execution:
             raise IllegalStateException(msg)
 
         with self._state_lock:
-            self._token_sequence += 1
             updated_callback_details = None
             if operation.callback_details:
                 updated_callback_details = replace(

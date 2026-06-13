@@ -61,12 +61,12 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         serdes=CustomDataSerDes(),
     )
 
-    callback = context.create_callback(
+    callback = await context.create_callback(
         name="custom-serdes-callback",
         config=callback_config,
     )
 
-    result: CustomData = callback.result()
+    result: CustomData = await callback.result()
 
     return {
         "receivedData": result.to_dict(),

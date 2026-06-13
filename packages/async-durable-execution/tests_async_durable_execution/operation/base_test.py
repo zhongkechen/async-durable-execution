@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+import inspect
+from collections.abc import Coroutine
+
 import pytest
+from typing import Any, cast
 
 from async_durable_execution.exceptions import InvalidStateError
 from async_durable_execution.lambda_service import (
@@ -29,7 +34,7 @@ class ConcreteOperationExecutor(OperationExecutor[str]):
         self.check_result_to_return = None
         self.execute_result_to_return = "executed_result"
 
-    def check_result_status(self) -> CheckResult[str]:
+    async def check_result_status(self) -> CheckResult[str]:
         """Mock implementation that returns configured result."""
         self.check_result_status_called += 1
         if self.check_result_to_return is None:
@@ -37,7 +42,7 @@ class ConcreteOperationExecutor(OperationExecutor[str]):
             raise ValueError(msg)
         return self.check_result_to_return
 
-    def execute(self, checkpointed_result: CheckpointedResult) -> str:
+    async def execute(self, checkpointed_result: CheckpointedResult) -> str:
         """Mock implementation that returns configured result."""
         self.execute_called += 1
         return self.execute_result_to_return
@@ -51,6 +56,12 @@ def create_mock_checkpoint(status: OperationStatus) -> CheckpointedResult:
         status=status,
     )
     return CheckpointedResult.create_from_operation(operation)
+
+
+def run_async(awaitable: Any):
+    if inspect.isawaitable(awaitable):
+        return asyncio.run(cast(Coroutine[Any, Any, Any], awaitable))
+    return awaitable
 
 
 # Tests for CheckResult factory methods
@@ -108,7 +119,7 @@ def test_process_with_terminal_result_on_first_check():
     executor = ConcreteOperationExecutor()
     executor.check_result_to_return = CheckResult.create_completed("terminal_result")
 
-    result = executor.process()
+    result = run_async(executor.process())
 
     assert result == "terminal_result"
     assert executor.check_result_status_called == 1
@@ -122,7 +133,7 @@ def test_process_with_ready_to_execute_on_first_check():
     executor.check_result_to_return = CheckResult.create_is_ready_to_execute(checkpoint)
     executor.execute_result_to_return = "execution_result"
 
-    result = executor.process()
+    result = run_async(executor.process())
 
     assert result == "execution_result"
     assert executor.check_result_status_called == 1
@@ -137,7 +148,7 @@ def test_process_with_checkpoint_created_then_terminal():
     # Second call returns terminal result (immediate response)
     call_count = 0
 
-    def check_result_side_effect():
+    async def check_result_side_effect():
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -146,7 +157,7 @@ def test_process_with_checkpoint_created_then_terminal():
 
     executor.check_result_status = check_result_side_effect
 
-    result = executor.process()
+    result = run_async(executor.process())
 
     assert result == "immediate_response"
     assert call_count == 2
@@ -162,7 +173,7 @@ def test_process_with_checkpoint_created_then_ready_to_execute():
     # Second call returns ready_to_execute (no immediate response, proceed to execute)
     call_count = 0
 
-    def check_result_side_effect():
+    async def check_result_side_effect():
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -172,7 +183,7 @@ def test_process_with_checkpoint_created_then_ready_to_execute():
     executor.check_result_status = check_result_side_effect
     executor.execute_result_to_return = "execution_result"
 
-    result = executor.process()
+    result = run_async(executor.process())
 
     assert result == "execution_result"
     assert call_count == 2
@@ -184,7 +195,7 @@ def test_process_with_none_result_terminal():
     executor = ConcreteOperationExecutor()
     executor.check_result_to_return = CheckResult.create_completed(None)
 
-    result = executor.process()
+    result = run_async(executor.process())
 
     assert result is None
     assert executor.check_result_status_called == 1
@@ -202,7 +213,7 @@ def test_process_raises_invalid_state_when_checkpointed_result_missing():
     )
 
     with pytest.raises(InvalidStateError) as exc_info:
-        executor.process()
+        run_async(executor.process())
 
     assert "checkpointed result is not set" in str(exc_info.value)
 
@@ -219,7 +230,7 @@ def test_process_raises_invalid_state_when_neither_terminal_nor_ready():
     # Mock to return same invalid state on both calls
     call_count = 0
 
-    def check_result_side_effect():
+    async def check_result_side_effect():
         nonlocal call_count
         call_count += 1
         return CheckResult(
@@ -230,7 +241,7 @@ def test_process_raises_invalid_state_when_neither_terminal_nor_ready():
     executor.check_result_status = check_result_side_effect
 
     with pytest.raises(InvalidStateError) as exc_info:
-        executor.process()
+        run_async(executor.process())
 
     assert "neither terminal nor ready to execute" in str(exc_info.value)
     assert call_count == 2  # Should call twice before raising
@@ -249,7 +260,7 @@ def test_process_double_check_pattern():
 
     check_calls = []
 
-    def track_check_calls():
+    async def track_check_calls():
         call_num = len(check_calls) + 1
         check_calls.append(call_num)
 
@@ -262,7 +273,7 @@ def test_process_double_check_pattern():
     executor.check_result_status = track_check_calls
     executor.execute_result_to_return = "final_result"
 
-    result = executor.process()
+    result = run_async(executor.process())
 
     # Verify the double-check pattern
     assert len(check_calls) == 2, "Should check status exactly twice"
@@ -277,14 +288,14 @@ def test_process_single_check_when_terminal_immediately():
 
     check_calls = []
 
-    def track_check_calls():
+    async def track_check_calls():
         call_num = len(check_calls) + 1
         check_calls.append(call_num)
         return CheckResult.create_completed("immediate_terminal")
 
     executor.check_result_status = track_check_calls
 
-    result = executor.process()
+    result = run_async(executor.process())
 
     # Should only check once since terminal result was found
     assert len(check_calls) == 1, "Should check status only once for immediate terminal"
@@ -299,7 +310,7 @@ def test_process_single_check_when_ready_immediately():
 
     check_calls = []
 
-    def track_check_calls():
+    async def track_check_calls():
         call_num = len(check_calls) + 1
         check_calls.append(call_num)
         return CheckResult.create_is_ready_to_execute(checkpoint)
@@ -307,7 +318,7 @@ def test_process_single_check_when_ready_immediately():
     executor.check_result_status = track_check_calls
     executor.execute_result_to_return = "execution_result"
 
-    result = executor.process()
+    result = run_async(executor.process())
 
     # Should only check once since ready_to_execute was found
     assert len(check_calls) == 1, "Should check status only once when ready immediately"

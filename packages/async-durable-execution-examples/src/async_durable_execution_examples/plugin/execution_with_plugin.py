@@ -44,7 +44,7 @@ async def add_numbers(_step_context: StepContext, a: int, b: int) -> int:
 
 @durable_with_child_context
 async def add_numbers_in_child(child_context: DurableContext, a: int, b: int):
-    result: int = child_context.step(
+    result: int = await child_context.step(
         add_numbers(a, b),
         name="add-a-and-b",
     )
@@ -53,11 +53,11 @@ async def add_numbers_in_child(child_context: DurableContext, a: int, b: int):
 
 @durable_execution(plugins=[MyPlugin()])
 async def handler(_event: Any, context: DurableContext) -> int:
-    result: int = context.run_in_child_context(
+    result: int = await context.run_in_child_context(
         add_numbers_in_child(6, 4),
         name="add-6-and-4",
     )
-    return context.step(
+    return await context.step(
         add_numbers(result, 2),
         name="add-result-to-2",
     )

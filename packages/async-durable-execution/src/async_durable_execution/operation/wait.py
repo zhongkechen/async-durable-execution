@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from async_durable_execution.async_tools import await_maybe
 from async_durable_execution.lambda_service import OperationUpdate, WaitOptions
 from async_durable_execution.operation.base import (
     CheckResult,
@@ -47,7 +48,7 @@ class WaitOperationExecutor(OperationExecutor[None]):
         self.state = state
         self.operation_identifier = operation_identifier
 
-    def check_result_status(self) -> CheckResult[None]:
+    async def check_result_status(self) -> CheckResult[None]:
         """Check operation status and create START checkpoint if needed.
 
         Called twice by process() when creating synchronous checkpoints: once before
@@ -81,7 +82,9 @@ class WaitOperationExecutor(OperationExecutor[None]):
             # Checkpoint wait START with blocking (is_sync=True, default).
             # Must ensure the wait operation and scheduled timestamp are persisted before suspending.
             # This guarantees the wait will resume at the correct time on the next invocation.
-            self.state.create_checkpoint(operation_update=operation, is_sync=True)
+            await await_maybe(
+                self.state.create_checkpoint(operation_update=operation, is_sync=True)
+            )
 
             logger.debug(
                 "Wait checkpoint created for id: %s, name: %s, will check for immediate response",
@@ -96,7 +99,7 @@ class WaitOperationExecutor(OperationExecutor[None]):
         # Ready to suspend (checkpoint exists)
         return CheckResult.create_is_ready_to_execute(checkpointed_result)
 
-    def execute(self, _checkpointed_result: CheckpointedResult) -> None:
+    async def execute(self, _checkpointed_result: CheckpointedResult) -> None:
         """Execute wait by suspending.
 
         Wait operations 'execute' by suspending execution until the timer completes.

@@ -10,5 +10,5 @@ async def handler(_event: Any, context: DurableContext) -> str:
     async def named_step(_) -> str:
         return "Step with explicit name"
 
-    result = context.step(named_step, name="custom_step")
+    result = await context.step(named_step, name="custom_step")
     return f"Result: {result}"

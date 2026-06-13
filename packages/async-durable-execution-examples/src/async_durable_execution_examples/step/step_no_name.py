@@ -10,5 +10,5 @@ async def handler(_event: Any, context: DurableContext) -> str:
     async def unnamed_step(_) -> str:
         return "Step without name"
 
-    result = context.step(unnamed_step)
+    result = await context.step(unnamed_step)
     return f"Result: {result}"

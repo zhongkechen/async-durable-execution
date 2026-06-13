@@ -11,7 +11,7 @@ def test_invoke_callable_runs_async_callable():
         await asyncio.sleep(0)
         return "async-result"
 
-    assert invoke_callable(async_callable) == "async-result"
+    assert asyncio.run(invoke_callable(async_callable)) == "async-result"
 
 
 def test_invoke_callable_runs_async_callable_from_running_loop():
@@ -20,7 +20,7 @@ def test_invoke_callable_runs_async_callable_from_running_loop():
         return "nested-async-result"
 
     async def main() -> str:
-        return invoke_callable(async_callable)
+        return await invoke_callable(async_callable)
 
     assert asyncio.run(main()) == "nested-async-result"
 
@@ -33,4 +33,4 @@ def test_invoke_callable_rejects_sync_callable():
         ValidationError,
         match="Non-async callables are no longer supported",
     ):
-        invoke_callable(sync_callable)
+        asyncio.run(invoke_callable(sync_callable))

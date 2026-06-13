@@ -25,7 +25,7 @@ async def handler(_event: Any, context: DurableContext) -> str:
         timeout=timedelta(seconds=120), heartbeat_timeout=timedelta(seconds=60)
     )
 
-    result = context.wait_for_callback(
+    result = await context.wait_for_callback(
         external_system_call, name="external_call", config=config
     )
 

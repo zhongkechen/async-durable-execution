@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import cast
 from unittest.mock import Mock
@@ -19,11 +20,15 @@ from async_durable_execution.lambda_service import (
     OperationSubType,
     OperationType,
 )
-from async_durable_execution.operation.child import child_handler
+from async_durable_execution.operation.child import child_handler as async_child_handler
 from async_durable_execution.state import ExecutionState
 from async_durable_execution.types import SummaryGenerator
 
 from ..serdes_test import CustomDictSerDes
+
+
+def child_handler(*args, **kwargs):
+    return asyncio.run(async_child_handler(*args, **kwargs))
 
 
 @pytest.mark.parametrize(
