@@ -72,7 +72,6 @@ def test_durable_context():
     assert DurableContext is not None
 
 
-# region Callback
 def test_callback_init():
     """Test Callback initialization."""
     mock_state = Mock(spec=ExecutionState)
@@ -262,10 +261,6 @@ def test_callback_result_timed_out():
         callback.result()
 
 
-# endregion Callback
-
-
-# region create_callback
 @patch("async_durable_execution.context.CallbackOperationExecutor")
 def test_create_callback_basic(mock_executor_class):
     """Test create_callback with basic parameters."""
@@ -396,10 +391,6 @@ def test_create_callback_increments_counter(mock_executor_class):
     assert context._step_counter.get_current() == 12  # noqa: SLF001
 
 
-# endregion create_callback
-
-
-# region step
 @patch("async_durable_execution.context.StepOperationExecutor")
 def test_step_basic(mock_executor_class):
     """Test step with basic parameters."""
@@ -589,10 +580,6 @@ def test_step_with_original_name(mock_executor_class):
     mock_executor.process.assert_called_once()
 
 
-# endregion step
-
-
-# region invoke
 @patch("async_durable_execution.context.InvokeOperationExecutor")
 def test_invoke_basic(mock_executor_class):
     """Test invoke with basic parameters."""
@@ -812,10 +799,6 @@ def test_invoke_with_custom_serdes(mock_executor_class):
     mock_executor.process.assert_called_once()
 
 
-# endregion invoke
-
-
-# region wait
 @patch("async_durable_execution.context.WaitOperationExecutor")
 def test_wait_basic(mock_executor_class):
     """Test wait with basic parameters."""
@@ -975,10 +958,6 @@ def test_wait_with_time_less_than_one(mock_executor_class):
         context.wait(timedelta(seconds=0))
 
 
-# endregion wait
-
-
-# region run_in_child_context
 @patch("async_durable_execution.context.child_handler")
 def test_run_in_child_context_basic(mock_handler):
     """Test run_in_child_context with basic parameters."""
@@ -1165,10 +1144,6 @@ def test_run_in_child_context_resolves_name_from_callable(mock_executor_class):
     assert call_args[1]["operation_identifier"].name == "original_function_name"
 
 
-# endregion run_in_child_context
-
-
-# region wait_for_callback
 @patch("async_durable_execution.context.wait_for_callback_handler")
 def test_wait_for_callback_basic(mock_executor_class):
     """Test wait_for_callback with basic parameters."""
@@ -1286,10 +1261,6 @@ def test_wait_for_callback_passes_child_context(mock_executor_class):
         mock_executor_class.assert_called_once()
 
 
-# endregion wait_for_callback
-
-
-# region map
 @patch("async_durable_execution.context.child_handler")
 def test_map_basic(mock_handler):
     """Test map with basic parameters."""
@@ -1411,10 +1382,6 @@ def test_map_with_different_input_types(mock_handler):
     assert result == "mixed_map_result"
 
 
-# endregion map
-
-
-# region parallel
 @patch("async_durable_execution.context.child_handler")
 def test_parallel_basic(mock_handler):
     """Test parallel with basic parameters."""
@@ -1599,10 +1566,6 @@ def test_parallel_with_many_callables(mock_handler):
     assert result == "many_parallel_result"
 
 
-# endregion parallel
-
-
-# region map
 @patch("async_durable_execution.context.child_handler")
 def test_map_calls_handler(mock_handler):
     """Test map calls map_handler through run_in_child_context."""
@@ -1652,7 +1615,6 @@ def test_parallel_calls_handler(mock_handler):
     mock_handler.assert_called_once()
 
 
-# region wait_for_condition
 def test_wait_for_condition_validation_errors():
     """Test wait_for_condition raises ValidationError for invalid inputs."""
     mock_state = Mock(spec=ExecutionState)
@@ -1779,7 +1741,6 @@ def test_context_wait_for_condition_handler_call():
         assert result == "final_state"
 
 
-# region operation_id generation
 def test_operation_id_conditional_on_parent():
     """
     - ensure that for all unique parents we produce unique sequences for the children
@@ -1889,9 +1850,6 @@ def test_invoke_without_tenant_id_defaults_to_none(mock_executor_class):
     assert call_args["config"].tenant_id is None
 
 
-# region ExecutionContext tests
-
-
 def test_execution_context_exists_on_durable_context():
     """Test that DurableContext has execution_context attribute."""
     mock_state = Mock(spec=ExecutionState)
@@ -1970,11 +1928,6 @@ def test_execution_context_type():
     context = create_test_context(state=mock_state)
 
     assert isinstance(context.execution_context, ExecutionContext)
-
-
-# endregion ExecutionContext tests
-
-# region Virtual-context identity tests
 
 
 def test_should_default_step_id_prefix_to_parent_id_when_not_specified():
@@ -2172,12 +2125,6 @@ def test_should_propagate_outer_parent_id_when_virtual_is_nested_in_virtual():
     assert inner_branch._create_step_id_for_logical_step(1) == expected  # noqa: SLF001
 
 
-# endregion Virtual-context identity tests
-
-
-# region durable_parallel_branch
-
-
 def test_durable_parallel_branch_returns_parallel_branch_with_name():
     """Test that the decorator produces a ParallelBranch with the given name."""
 
@@ -2298,6 +2245,3 @@ def test_durable_parallel_branch_supports_async_branches():
     result = asyncio.run(branch(mock_ctx))
 
     assert result == 21
-
-
-# endregion durable_parallel_branch

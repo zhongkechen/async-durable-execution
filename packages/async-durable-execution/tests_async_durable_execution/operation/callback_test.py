@@ -48,7 +48,6 @@ def create_callback_handler(state, operation_identifier, config=None):
     return executor.process()
 
 
-# region create_callback_handler
 def test_create_callback_handler_new_operation_with_config():
     """Test create_callback_handler creates new checkpoint when operation doesn't exist."""
     mock_state = Mock(spec=ExecutionState)
@@ -282,10 +281,6 @@ def test_create_callback_handler_existing_timed_out_missing_callback_details():
         )
 
 
-# endregion create_callback_handler
-
-
-# region wait_for_callback_handler
 def test_wait_for_callback_handler_basic():
     """Test wait_for_callback_handler with basic parameters."""
     mock_context = Mock(spec=DurableContext)
@@ -1103,10 +1098,6 @@ def test_callback_operation_update_creation(mock_operation_update):
     )
 
 
-# endregion wait_for_callback_handler
-
-
-# region immediate response handling tests
 def test_callback_immediate_response_get_checkpoint_result_called_twice():
     """Test that get_checkpoint_result is called twice when checkpoint is created."""
     mock_state = Mock(spec=ExecutionState)
@@ -1591,9 +1582,6 @@ def test_callback_immediate_response_with_config():
     operation_update = call_args["operation_update"]
     assert operation_update.callback_options.timeout_seconds == 300
     assert operation_update.callback_options.heartbeat_timeout_seconds == 60
-
-
-# endregion immediate response handling tests
 
 
 def test_callback_returns_id_when_second_check_returns_started():

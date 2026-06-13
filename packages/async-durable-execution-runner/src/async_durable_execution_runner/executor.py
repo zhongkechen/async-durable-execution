@@ -989,7 +989,6 @@ class Executor(ExecutionObserver):
         except Exception:
             logger.exception("[%s] Error processing retry ready.", execution_arn)
 
-    # region ExecutionObserver
     def on_completed(self, execution_arn: str, result: str | None = None) -> None:
         """Complete execution successfully. Observer method triggered by notifier."""
         self.complete_execution(execution_arn, result)
@@ -1065,9 +1064,6 @@ class Executor(ExecutionObserver):
         # Schedule callback timeouts if configured
         self._schedule_callback_timeouts(execution_arn, callback_options, callback_id)
 
-    # endregion ExecutionObserver
-
-    # region Callback Timeouts
     def _schedule_callback_timeouts(
         self,
         execution_arn: str,
@@ -1220,5 +1216,3 @@ class Executor(ExecutionObserver):
                 execution_arn,
                 callback_id,
             )
-
-    # endregion Callback Timeouts

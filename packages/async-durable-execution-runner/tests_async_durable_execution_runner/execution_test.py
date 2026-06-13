@@ -819,9 +819,6 @@ def test_complete_retry_without_step_details():
     assert result.step_details is None
 
 
-# endregion retry
-
-
 def test_from_dict_with_none_result():
     """Test from_dict with None result."""
     data = {
@@ -845,7 +842,6 @@ def test_from_dict_with_none_result():
         assert execution.result is None
 
 
-# region callback
 def test_find_callback_operation_not_found():
     """Test find_callback_operation raises exception when callback not found."""
     execution = Execution("test-arn", Mock(), [])
@@ -931,9 +927,6 @@ def test_complete_callback_failure_no_callback_details():
     assert result.status == OperationStatus.FAILED
 
 
-# region callback - details
-
-
 def test_complete_callback_success_with_none_callback_details():
     """Test complete_callback_success when operation has None callback_details."""
     callback_op = Operation(
@@ -1005,8 +998,3 @@ def test_complete_callback_success_with_none_result():
     result = execution.complete_callback_success("test-id", None)
     assert result.status == OperationStatus.SUCCEEDED
     assert result.callback_details.result is None
-
-
-# endregion callback -details
-
-# endregion callback

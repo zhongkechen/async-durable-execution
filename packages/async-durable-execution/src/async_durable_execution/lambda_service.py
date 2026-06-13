@@ -45,7 +45,6 @@ def _is_in_var_dir(module_file: str = __file__) -> bool:
     return module_file.startswith("/var/lang/")
 
 
-# region model
 class OperationAction(Enum):
     START = "START"
     SUCCEED = "SUCCEED"
@@ -543,7 +542,6 @@ class OperationUpdate:
             callback_options=callback_options,
         )
 
-    # region context
     @classmethod
     def create_context_start(
         cls, identifier: OperationIdentifier, sub_type: OperationSubType
@@ -596,9 +594,6 @@ class OperationUpdate:
             error=error,
         )
 
-    # endregion context
-
-    # region execution
     @classmethod
     def create_execution_succeed(cls, payload: str) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: EXECUTION, action: SUCCEED."""
@@ -619,9 +614,6 @@ class OperationUpdate:
             error=error,
         )
 
-    # endregion execution
-
-    # region step
     @classmethod
     def create_step_succeed(
         cls, identifier: OperationIdentifier, payload: str
@@ -685,9 +677,6 @@ class OperationUpdate:
             ),
         )
 
-    # endregion step
-
-    # region invoke
     @classmethod
     def create_invoke_start(
         cls,
@@ -707,9 +696,6 @@ class OperationUpdate:
             chained_invoke_options=chained_invoke_options,
         )
 
-    # endregion invoke
-
-    # region wait for condition
     @classmethod
     def create_wait_for_condition_start(
         cls, identifier: OperationIdentifier
@@ -775,9 +761,6 @@ class OperationUpdate:
             error=error,
         )
 
-    # endregion wait for condition
-
-    # region wait
     @classmethod
     def create_wait_start(
         cls, identifier: OperationIdentifier, wait_options: WaitOptions
@@ -792,8 +775,6 @@ class OperationUpdate:
             name=identifier.name,
             wait_options=wait_options,
         )
-
-    # endregion wait
 
 
 class TimestampConverter:
@@ -1107,10 +1088,6 @@ class StateOutput:
         return cls(operations=operations, next_marker=data.get("NextMarker"))
 
 
-# endregion model
-
-
-# region client
 class DurableServiceClient(Protocol):
     """Durable Service clients must implement this interface."""
 
@@ -1214,6 +1191,3 @@ class LambdaClient(DurableServiceClient):
                 "Failed to get execution state.", extra=error.build_logger_extras()
             )
             raise error from None
-
-
-# endregion client

@@ -29,9 +29,6 @@ if TYPE_CHECKING:
 _T = TypeVar("_T")
 
 
-# region Mock DurableContext
-
-
 @dataclass
 class WaitCall:
     """Record of a wait() call."""
@@ -84,12 +81,6 @@ class MockDurableContext:
         raise NotImplementedError("create_callback not used in with_retry tests")
 
 
-# endregion
-
-
-# region Helper fixtures
-
-
 def _make_config(
     max_attempts: int = 3,
     initial_delay: timedelta | None = None,
@@ -108,12 +99,6 @@ def _make_config(
         wrap_with_run_in_child_context=wrap_with_run_in_child_context,
         child_context_config=child_context_config,
     )
-
-
-# endregion
-
-
-# region Tests
 
 
 def test_success_on_first_attempt_returns_result_without_retry():
@@ -406,6 +391,3 @@ def test_integration_retries_exhausted_raises_last_exception():
 
     # Should have waited between attempts 1->2 and 2->3
     assert len(ctx.wait_calls) == 2
-
-
-# endregion

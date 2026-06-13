@@ -15,9 +15,6 @@ from async_durable_execution.retries import (
 )
 
 
-# region Jitter Strategy Tests
-
-
 def test_none_jitter_returns_delay():
     """Test NONE jitter returns the original delay unchanged."""
     strategy = JitterStrategy.NONE
@@ -70,12 +67,6 @@ def test_invalid_jitter_strategy():
         JitterStrategy(invalid_strategy).apply_jitter(10)
 
 
-# endregion
-
-
-# region Retry Decision Tests
-
-
 def test_retry_factory():
     """Test retry factory method."""
     decision = RetryDecision.retry(timedelta(seconds=30))
@@ -90,12 +81,6 @@ def test_no_retry_factory():
     assert decision.delay_seconds == 0
 
 
-# endregion
-
-
-# region Retry Strategy Config Tests
-
-
 def test_default_config():
     """Test default configuration values."""
     config = RetryStrategyConfig()
@@ -106,12 +91,6 @@ def test_default_config():
     assert config.jitter_strategy == JitterStrategy.FULL
     assert config.retryable_errors is None
     assert config.retryable_error_types is None
-
-
-# endregion
-
-
-# region Create Retry Strategy Tests
 
 
 def test_max_attempts_exceeded():
@@ -228,12 +207,6 @@ def test_delay_ceiling_applied():
         assert decision.delay_seconds == 1
 
 
-# endregion
-
-
-# region Retry Presets Tests
-
-
 def test_none_preset():
     """Test none preset allows no retries."""
     strategy = RetryPresets.none()
@@ -311,12 +284,6 @@ def test_critical_preset_no_jitter(mock_random):
     assert decision.delay_seconds == 1
 
 
-# endregion
-
-
-# region Jitter Integration Tests
-
-
 @patch("random.random")
 def test_full_jitter_integration(mock_random):
     """Test full jitter integration in retry strategy."""
@@ -372,12 +339,6 @@ def test_none_jitter_integration():
     error = Exception("test error")
     decision = strategy(error, 1)
     assert decision.delay_seconds == 10
-
-
-# endregion
-
-
-# region Default Behavior Tests
 
 
 def test_no_filters_retries_all_errors():
@@ -488,12 +449,6 @@ def test_empty_retryable_error_types_with_errors():
     assert decision2.should_retry is False
 
 
-# endregion
-
-
-# region Edge Cases Tests
-
-
 def test_none_config():
     """Test behavior when config is None."""
     strategy = create_retry_strategy(None)
@@ -572,6 +527,3 @@ def test_mixed_error_types_and_patterns():
     error = ValueError("some value error")
     decision = strategy(error, 1)
     assert decision.should_retry is True
-
-
-# endregion

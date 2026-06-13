@@ -71,7 +71,6 @@ class Scheduler:
         self._running: bool = False
         self._events: set[asyncio.Event] = set()
 
-    # region context manager
     def __enter__(self):
         self.start()
         return self
@@ -79,9 +78,6 @@ class Scheduler:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
 
-    # endregion context manager
-
-    # region event loop
     def start(self):
         """Start the scheduler. Not thread-safe."""
         if self._running:
@@ -135,8 +131,6 @@ class Scheduler:
         # block indefinitely - call_soon with the read_event will run soon as the loop starts
         self._loop.run_forever()
 
-    # endregion event loop
-    # region Tasks
     def call_later(
         self,
         func: Callable[[], Any],
@@ -191,10 +185,6 @@ class Scheduler:
         )
         return future
 
-    # endregion Tasks
-
-    # region Events
-
     def create_event(self) -> Event:
         """Create an event controlled by the Scheduler to signal between threads and coroutines."""
         # create event inside the Scheduler event-loop
@@ -242,5 +232,3 @@ class Scheduler:
         event = asyncio.Event()
         self._events.add(event)
         return event
-
-    # endregion Events

@@ -16,7 +16,6 @@ from async_durable_execution.threading import (
 )
 
 
-# region OrderedLock
 def test_ordered_lock_init():
     """Test OrderedLock initialization."""
     lock = OrderedLock()
@@ -325,10 +324,6 @@ def test_ordered_lock_release_empty_queue_after_acquire():
         lock.release()
 
 
-# endregion OrderedLock
-
-
-# region OrderedCounter tests
 def test_ordered_counter_init():
     """Test OrderedCounter initialization."""
     counter = OrderedCounter()
@@ -603,10 +598,6 @@ def test_ordered_counter_exception_handling() -> None:
         counter.get_current()
 
 
-# endregion OrderedCounter tests
-
-
-# region CompletionEvent tests
 def test_completion_event_init():
     """Test CompletionEvent initialization."""
     event = CompletionEvent()
@@ -949,6 +940,3 @@ def test_completion_event_background_thread_error_scenario():
     # User thread should receive the error
     assert len(user_thread_result) == 1
     assert "Background processing failed" in user_thread_result[0]
-
-
-# endregion CompletionEvent tests

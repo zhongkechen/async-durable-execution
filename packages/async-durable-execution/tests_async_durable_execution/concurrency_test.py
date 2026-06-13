@@ -3096,9 +3096,6 @@ def test_executor_returns_before_slow_branch_completes():
     assert result.total_count == 2
 
 
-# region TimerScheduler edge cases with exact same reschedule time
-
-
 def test_timer_scheduler_same_timestamp_with_counter_tiebreaker():
     """
     Test that scheduling two tasks with the exact same resume_time works.
@@ -3210,12 +3207,6 @@ def test_timer_scheduler_fifo_ordering_with_same_timestamp():
 
         # Verify FIFO order - they should be resubmitted in order 0, 1, 2
         assert results == [0, 1, 2]
-
-
-# endregion TimerScheduler edge cases with exact same reschedule time
-
-
-# region Completion Reason Inference Tests (from_items)
 
 
 def test_from_items_no_config_with_failures():
@@ -3358,11 +3349,6 @@ def test_from_items_all_succeeded():
     assert result.success_count == 2
 
 
-# endregion Completion Reason Inference Tests
-
-# region Virtual-context wire-format tests
-
-
 def test_flat_mode_stamps_grandparent_as_inner_op_parent_id():
     """In FLAT mode, inner operations in a branch stamp the map/parallel op id as parent_id.
 
@@ -3483,9 +3469,6 @@ def test_nested_mode_stamps_branch_op_as_inner_op_parent_id():
     assert branch_ctx.is_virtual is False
     assert branch_ctx._parent_id == branch_ctx._step_id_prefix  # noqa: SLF001
     assert branch_ctx._parent_id != map_op_id  # noqa: SLF001
-
-
-# endregion Virtual-context wire-format tests
 
 
 def test_flat_mode_produces_deterministic_step_ids_across_runs():

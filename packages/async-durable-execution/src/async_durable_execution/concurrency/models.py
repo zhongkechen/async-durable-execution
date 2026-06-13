@@ -33,7 +33,6 @@ CallableType = TypeVar("CallableType")
 ResultType = TypeVar("ResultType")
 
 
-# region Result models
 class BatchItemStatus(Enum):
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
@@ -295,10 +294,6 @@ class BatchResult(Generic[R], BatchResultProtocol[R]):  # noqa: PYI059
         return len(self.all)
 
 
-# endregion Result models
-
-
-# region concurrency models
 @dataclass(frozen=True)
 class Executable(Generic[CallableType]):
     index: int
@@ -382,7 +377,6 @@ class ExecutableWithState(Generic[CallableType, ResultType]):
     def callable(self) -> CallableType:
         return self.executable.func
 
-    # region State transitions
     def run(self, future: Future) -> None:
         """Transition to RUNNING state with a future."""
         if self._status != BranchStatus.PENDING:
@@ -417,8 +411,6 @@ class ExecutableWithState(Generic[CallableType, ResultType]):
         self._status = BranchStatus.PENDING
         self._future = None
         self._suspend_until = None
-
-    # endregion State transitions
 
 
 class ExecutionCounters:

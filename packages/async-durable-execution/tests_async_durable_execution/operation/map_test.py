@@ -1304,9 +1304,6 @@ def test_map_with_empty_list_should_exit_early():
     assert result.failure_count == 0
 
 
-# region item_namer tests
-
-
 def test_map_executor_get_iteration_name_default():
     """Without item_namer, iterations use default 'map-item-{index}' naming."""
     items = ["a", "b", "c"]
@@ -1418,6 +1415,3 @@ def test_map_config_generic_with_item_namer():
 
     assert config.item_namer is not None
     assert config.item_namer({"name": "test"}, 0) == "item-test"
-
-
-# endregion

@@ -3828,9 +3828,6 @@ def test_initial_execution_state_get_input_payload_none():
     assert result is None
 
 
-# region Plugin Executor Integration Tests
-
-
 class _RecordingPlugin(DurableInstrumentationPlugin):
     """Plugin that records all hook calls for assertion."""
 
@@ -4257,6 +4254,3 @@ def test_plugin_executor_not_called_for_pending_operations():
     # operation_end should NOT fire for PENDING (only for terminal statuses)
     operation_end_calls = [c for c in plugin.calls if c.startswith("operation_end")]
     assert len(operation_end_calls) == 0
-
-
-# endregion Plugin Executor Integration Tests

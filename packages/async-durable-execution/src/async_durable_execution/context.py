@@ -348,7 +348,6 @@ class DurableContext(DurableContextProtocol):
         """
         return self._is_virtual
 
-    # region factories
     @staticmethod
     def from_lambda_context(
         state: ExecutionState,
@@ -404,8 +403,6 @@ class DurableContext(DurableContextProtocol):
             ),
         )
 
-    # endregion factories
-
     @staticmethod
     def _resolve_step_name(name: str | None, func: Callable) -> str | None:
         """Resolve the step name.
@@ -441,8 +438,6 @@ class DurableContext(DurableContextProtocol):
         """
         new_counter: int = self._step_counter.increment()
         return self._create_step_id_for_logical_step(new_counter)
-
-    # region Operations
 
     def create_callback(
         self, name: str | None = None, config: CallbackConfig | None = None
@@ -789,6 +784,3 @@ class DurableContext(DurableContextProtocol):
         result: T = executor.process()
         self.state.track_replay(operation_id=operation_id)
         return result
-
-
-# endregion Operations

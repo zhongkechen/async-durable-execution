@@ -83,7 +83,6 @@ class CustomDictSerDes(SerDes[Any]):
         return value
 
 
-# region Abstract SerDes Tests
 def test_serdes_abstract():
     """Test SerDes abstract base class."""
 
@@ -123,10 +122,6 @@ def test_serdes_abstract_methods_coverage():
     SerDes.deserialize(None, None, None)  # Covers line 104
 
 
-# endregion
-
-
-# region JsonSerDes Tests
 def test_serialize_invalid_json():
     circular_ref = {"a": 1}
     circular_ref["self"] = circular_ref
@@ -174,10 +169,6 @@ def test_default_json_roundtrip():
     assert deserialized == original
 
 
-# endregion
-
-
-# region Custom SerDes Tests
 def test_custom_str_serdes_serialization():
     result = serialize(CustomStrSerDes(), "hello world", "test-op", "test-arn")
     assert result == "HELLO WORLD"
@@ -241,10 +232,6 @@ def test_context_propagation():
     assert deserialized == "data" + "test-arn" + "test-op"
 
 
-# endregion
-
-
-# region EnvelopeSerDes Basic Tests
 def _roundtrip_envelope(value: Any) -> Any:
     """Helper for envelope round-trip testing."""
     serdes: ExtendedTypeSerDes[Any] = ExtendedTypeSerDes()
@@ -292,10 +279,6 @@ def test_envelope_str_roundtrip():
         assert _roundtrip_envelope(val) == val
 
 
-# endregion
-
-
-# region EnvelopeSerDes Extended Types
 def test_envelope_datetime_roundtrip():
     values = [
         datetime(2024, 1, 1, tzinfo=UTC),
@@ -367,10 +350,6 @@ def test_envelope_memoryview_roundtrip():
     assert result == b"memory test"  # Returns bytes, not memoryview
 
 
-# endregion
-
-
-# region EnvelopeSerDes Container Types
 def test_envelope_tuple_roundtrip():
     values = [
         (),
@@ -409,10 +388,6 @@ def test_envelope_dict_roundtrip():
         assert _roundtrip_envelope(val) == val
 
 
-# endregion
-
-
-# region EnvelopeSerDes Complex Structures
 def test_envelope_deeply_nested_structure():
     complex_data = {
         "user": {
@@ -476,10 +451,6 @@ def test_envelope_tuple_with_all_types():
     assert _roundtrip_envelope(all_types_tuple) == all_types_tuple
 
 
-# endregion
-
-
-# region EnvelopeSerDes Error Cases
 def test_envelope_unsupported_type_error():
     serdes = ExtendedTypeSerDes()
     context = SerDesContext("test-op", "test-arn")
@@ -487,10 +458,6 @@ def test_envelope_unsupported_type_error():
         serdes.serialize(object(), context)
 
 
-# endregion
-
-
-# region EnvelopeSerDes Format Validation
 def test_envelope_format_structure():
     serdes = ExtendedTypeSerDes()
     context = SerDesContext("test-op", "test-arn")
@@ -526,10 +493,6 @@ def test_envelope_bytes_base64_encoding():
     assert base64.b64decode(encoded_value) == test_bytes
 
 
-# endregion
-
-
-# region EnvelopeSerDes Integration Tests
 def test_envelope_with_main_api():
     """Test EnvelopeSerDes works with main serialize/deserialize functions."""
     envelope_serdes = ExtendedTypeSerDes()
@@ -735,9 +698,6 @@ def test_extended_serdes_errors():
         serdes.deserialize('{"t": "unknown", "v": "test"}', None)
 
 
-# endregion
-
-
 def test_pass_through_serdes():
     serdes = PassThroughSerDes()
 
@@ -750,7 +710,6 @@ def test_pass_through_serdes():
     assert deserialized == data
 
 
-# region EnvelopeSerDes Performance and Edge Cases
 def test_envelope_large_data_structure():
     """Test with reasonably large data."""
     large_list = list(range(1000))
@@ -911,9 +870,6 @@ def test_all_t_v_nested_dicts():
     serialized = serdes.serialize(val, ctx)
     deserialized = serdes.deserialize(serialized, ctx)
     assert deserialized == val
-
-
-# endregion
 
 
 # to_dict() support tests
