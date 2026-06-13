@@ -54,7 +54,7 @@ def run_awaitable(awaitable: Awaitable[T]) -> T:
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        return asyncio.run(awaitable)
+        return asyncio.run(_await(awaitable))
 
     return _run_awaitable_in_thread(awaitable)
 
@@ -64,7 +64,7 @@ def _run_awaitable_in_thread(awaitable: Awaitable[T]) -> T:
 
     def runner() -> None:
         try:
-            result_queue.put((True, asyncio.run(awaitable)))
+            result_queue.put((True, asyncio.run(_await(awaitable))))
         except BaseException as exc:  # noqa: BLE001
             result_queue.put((False, exc))
 
@@ -76,3 +76,7 @@ def _run_awaitable_in_thread(awaitable: Awaitable[T]) -> T:
     if success:
         return cast("T", payload)
     raise cast("BaseException", payload)
+
+
+async def _await(awaitable: Awaitable[T]) -> T:
+    return await awaitable
