@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import inspect
 from dataclasses import dataclass
@@ -227,7 +228,7 @@ class LambdaInvoker(Invoker):
             ),
         )
 
-    def invoke(
+    async def invoke(
         self,
         function_name: str,
         input: DurableExecutionInvocationInput,
@@ -261,7 +262,8 @@ class LambdaInvoker(Invoker):
 
         try:
             # Invoke AWS Lambda function using standard invoke method
-            response = client.invoke(
+            response = await asyncio.to_thread(
+                client.invoke,
                 FunctionName=function_name,
                 InvocationType="RequestResponse",  # Synchronous invocation
                 Payload=json.dumps(input.to_json_dict()),

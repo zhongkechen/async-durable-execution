@@ -161,7 +161,7 @@ def test_lambda_invoker_create_invocation_input():
     assert isinstance(invocation_input.initial_execution_state, InitialExecutionState)
 
 
-def test_lambda_invoker_invoke_success():
+async def test_lambda_invoker_invoke_success():
     """Test successful lambda invocation."""
     lambda_client = Mock()
 
@@ -198,7 +198,7 @@ def test_lambda_invoker_invoke_success():
         ),
     )
 
-    response = invoker.invoke("test-function", input_data)
+    response = await invoker.invoke("test-function", input_data)
 
     assert isinstance(response.invocation_output, DurableExecutionInvocationOutput)
     assert response.invocation_output.status == InvocationStatus.SUCCEEDED
@@ -213,7 +213,7 @@ def test_lambda_invoker_invoke_success():
     )
 
 
-def test_lambda_invoker_invoke_failure():
+async def test_lambda_invoker_invoke_failure():
     """Test lambda invocation failure."""
     from async_durable_execution_runner.exceptions import (
         DurableFunctionsTestError,
@@ -240,7 +240,7 @@ def test_lambda_invoker_invoke_failure():
         DurableFunctionsTestError,
         match="Lambda invocation failed with status code: 500",
     ):
-        invoker.invoke("test-function", input_data)
+        await invoker.invoke("test-function", input_data)
 
 
 def test_in_process_invoker_invoke_with_execution_operations():
@@ -296,7 +296,7 @@ def test_lambda_invoker_create_invocation_input_with_operations():
     assert invocation_input.initial_execution_state.next_marker == ""
 
 
-def test_lambda_invoker_invoke_empty_function_name():
+async def test_lambda_invoker_invoke_empty_function_name():
     """Test lambda invocation with empty function name."""
     from async_durable_execution_runner.exceptions import (
         InvalidParameterValueException,
@@ -314,10 +314,10 @@ def test_lambda_invoker_invoke_empty_function_name():
     with pytest.raises(
         InvalidParameterValueException, match="Function name is required"
     ):
-        invoker.invoke("", input_data)
+        await invoker.invoke("", input_data)
 
 
-def test_lambda_invoker_invoke_whitespace_function_name():
+async def test_lambda_invoker_invoke_whitespace_function_name():
     """Test lambda invocation with whitespace-only function name."""
     from async_durable_execution_runner.exceptions import (
         InvalidParameterValueException,
@@ -335,10 +335,10 @@ def test_lambda_invoker_invoke_whitespace_function_name():
     with pytest.raises(
         InvalidParameterValueException, match="Function name is required"
     ):
-        invoker.invoke("   ", input_data)
+        await invoker.invoke("   ", input_data)
 
 
-def test_lambda_invoker_invoke_status_202():
+async def test_lambda_invoker_invoke_status_202():
     """Test lambda invocation with status code 202."""
     lambda_client = Mock()
 
@@ -363,12 +363,12 @@ def test_lambda_invoker_invoke_status_202():
         initial_execution_state=InitialExecutionState(operations=[], next_marker=""),
     )
 
-    response = invoker.invoke("test-function", input_data)
+    response = await invoker.invoke("test-function", input_data)
     assert isinstance(response.invocation_output, DurableExecutionInvocationOutput)
     assert response.request_id == "test-request-id-202"
 
 
-def test_lambda_invoker_invoke_function_error():
+async def test_lambda_invoker_invoke_function_error():
     """Test lambda invocation with function error."""
     from async_durable_execution_runner.exceptions import (
         DurableFunctionsTestError,
@@ -396,7 +396,7 @@ def test_lambda_invoker_invoke_function_error():
     with pytest.raises(
         DurableFunctionsTestError, match="Lambda invocation failed with status 200"
     ):
-        invoker.invoke("test-function", input_data)
+        await invoker.invoke("test-function", input_data)
 
 
 def _create_mock_lambda_client_with_exceptions():
@@ -445,7 +445,7 @@ def _create_mock_lambda_client_with_exceptions():
     return lambda_client, MockException
 
 
-def test_lambda_invoker_invoke_resource_not_found():
+async def test_lambda_invoker_invoke_resource_not_found():
     """Test lambda invocation with ResourceNotFoundException."""
     from async_durable_execution_runner.exceptions import (
         ResourceNotFoundException,
@@ -474,16 +474,16 @@ def test_lambda_invoker_invoke_resource_not_found():
     with pytest.raises(
         ResourceNotFoundException, match="Function not found: test-function"
     ):
-        invoker.invoke("test-function", input_data)
+        await invoker.invoke("test-function", input_data)
 
 
-def test_lambda_invoker_invoke_invalid_parameter():
+async def test_lambda_invoker_invoke_invalid_parameter():
     """Test lambda invocation with InvalidParameterValueException."""
     from async_durable_execution_runner.exceptions import (
         InvalidParameterValueException,
     )
 
-    lambda_client, MockException = _create_mock_lambda_client_with_exceptions()
+    lambda_client, _ = _create_mock_lambda_client_with_exceptions()
 
     # Override specific exception for this test
     class MockInvalidParameterValueException(Exception):
@@ -506,10 +506,10 @@ def test_lambda_invoker_invoke_invalid_parameter():
     )
 
     with pytest.raises(InvalidParameterValueException, match="Invalid parameter"):
-        invoker.invoke("test-function", input_data)
+        await invoker.invoke("test-function", input_data)
 
 
-def test_lambda_invoker_invoke_service_exception():
+async def test_lambda_invoker_invoke_service_exception():
     """Test lambda invocation with ServiceException."""
     from async_durable_execution_runner.exceptions import (
         DurableFunctionsTestError,
@@ -534,10 +534,10 @@ def test_lambda_invoker_invoke_service_exception():
     )
 
     with pytest.raises(DurableFunctionsTestError, match="Lambda invocation failed"):
-        invoker.invoke("test-function", input_data)
+        await invoker.invoke("test-function", input_data)
 
 
-def test_lambda_invoker_invoke_ec2_exception():
+async def test_lambda_invoker_invoke_ec2_exception():
     """Test lambda invocation with EC2 exception."""
     from async_durable_execution_runner.exceptions import (
         DurableFunctionsTestError,
@@ -562,10 +562,10 @@ def test_lambda_invoker_invoke_ec2_exception():
     )
 
     with pytest.raises(DurableFunctionsTestError, match="Lambda infrastructure error"):
-        invoker.invoke("test-function", input_data)
+        await invoker.invoke("test-function", input_data)
 
 
-def test_lambda_invoker_invoke_kms_exception():
+async def test_lambda_invoker_invoke_kms_exception():
     """Test lambda invocation with KMS exception."""
     from async_durable_execution_runner.exceptions import (
         DurableFunctionsTestError,
@@ -590,10 +590,10 @@ def test_lambda_invoker_invoke_kms_exception():
     )
 
     with pytest.raises(DurableFunctionsTestError, match="Lambda KMS error"):
-        invoker.invoke("test-function", input_data)
+        await invoker.invoke("test-function", input_data)
 
 
-def test_lambda_invoker_invoke_durable_execution_already_started():
+async def test_lambda_invoker_invoke_durable_execution_already_started():
     """Test lambda invocation with DurableExecutionAlreadyStartedException."""
     from async_durable_execution_runner.exceptions import (
         DurableFunctionsTestError,
@@ -623,10 +623,10 @@ def test_lambda_invoker_invoke_durable_execution_already_started():
     with pytest.raises(
         DurableFunctionsTestError, match="Durable execution already started"
     ):
-        invoker.invoke("test-function", input_data)
+        await invoker.invoke("test-function", input_data)
 
 
-def test_lambda_invoker_invoke_unexpected_exception():
+async def test_lambda_invoker_invoke_unexpected_exception():
     """Test lambda invocation with unexpected exception."""
     from async_durable_execution_runner.exceptions import (
         DurableFunctionsTestError,
@@ -646,4 +646,4 @@ def test_lambda_invoker_invoke_unexpected_exception():
     with pytest.raises(
         DurableFunctionsTestError, match="Unexpected error during Lambda invocation"
     ):
-        invoker.invoke("test-function", input_data)
+        await invoker.invoke("test-function", input_data)
