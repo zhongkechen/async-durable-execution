@@ -4,10 +4,12 @@ from async_durable_execution.execution import InvocationStatus
 from async_durable_execution_examples.none_results import none_results
 
 
-def test_handle_step_operations_with_undefined_result_after_replay(durable_runner):
+async def test_handle_step_operations_with_undefined_result_after_replay(
+    durable_runner,
+):
     """Test handling of step operations with undefined result after replay."""
     with durable_runner(handler=none_results.handler, input=None, timeout=10) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
 

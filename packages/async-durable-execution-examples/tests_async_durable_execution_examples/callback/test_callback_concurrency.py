@@ -6,21 +6,21 @@ from async_durable_execution.execution import InvocationStatus
 from async_durable_execution_examples.callback import callback_concurrency
 
 
-def test_handle_multiple_concurrent_callback_operations(durable_runner):
+async def test_handle_multiple_concurrent_callback_operations(durable_runner):
     """Test handling multiple concurrent callback operations."""
     with durable_runner(
         handler=callback_concurrency.handler, input=None, timeout=60
     ) as runner:
         # Start the execution (this will pause at the callbacks)
-        execution_arn = runner.run_async()
+        execution_arn = await runner.run_async()
 
-        callback_id_1 = runner.wait_for_callback(
+        callback_id_1 = await runner.wait_for_callback(
             execution_arn=execution_arn, name="api-call-1"
         )
-        callback_id_2 = runner.wait_for_callback(
+        callback_id_2 = await runner.wait_for_callback(
             execution_arn=execution_arn, name="api-call-2"
         )
-        callback_id_3 = runner.wait_for_callback(
+        callback_id_3 = await runner.wait_for_callback(
             execution_arn=execution_arn, name="api-call-3"
         )
 
@@ -30,7 +30,7 @@ def test_handle_multiple_concurrent_callback_operations(durable_runner):
                 "data": "second",
             }
         )
-        runner.send_callback_success(
+        await runner.send_callback_success(
             callback_id=callback_id_2, result=callback_result_2.encode()
         )
 
@@ -40,7 +40,7 @@ def test_handle_multiple_concurrent_callback_operations(durable_runner):
                 "data": "first",
             }
         )
-        runner.send_callback_success(
+        await runner.send_callback_success(
             callback_id=callback_id_1, result=callback_result_1.encode()
         )
 
@@ -50,11 +50,11 @@ def test_handle_multiple_concurrent_callback_operations(durable_runner):
                 "data": "third",
             }
         )
-        runner.send_callback_success(
+        await runner.send_callback_success(
             callback_id=callback_id_3, result=callback_result_3.encode()
         )
 
-        result = runner.wait_for_result(execution_arn=execution_arn)
+        result = await runner.wait_for_result(execution_arn=execution_arn)
 
     assert result.status is InvocationStatus.SUCCEEDED
 

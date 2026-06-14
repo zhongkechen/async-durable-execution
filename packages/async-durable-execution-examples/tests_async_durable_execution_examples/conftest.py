@@ -1,6 +1,5 @@
 """Pytest configuration and fixtures for durable execution tests."""
 
-import asyncio
 import inspect
 import logging
 import os
@@ -36,13 +35,13 @@ class RunnerMode(StrEnum):
     CLOUD = "cloud"
 
 
-class SyncRunnerAdapter:
-    """Expose a blocking test-friendly facade over the async runner API."""
+class AsyncRunnerAdapter:
+    """Expose an async test-friendly facade over the runner API."""
 
     def __init__(self, runner: Any) -> None:
         self._runner = runner
 
-    def __enter__(self) -> "SyncRunnerAdapter":
+    def __enter__(self) -> "AsyncRunnerAdapter":
         self._runner.__enter__()
         return self
 
@@ -52,32 +51,34 @@ class SyncRunnerAdapter:
     def __getattr__(self, name: str) -> Any:
         return getattr(self._runner, name)
 
-    def run(self):
-        return asyncio.run(self._runner.run())
+    async def run(self):
+        return await self._runner.run()
 
-    def run_async(self):
-        return asyncio.run(self._runner.run_async())
+    async def run_async(self):
+        return await self._runner.run_async()
 
-    def wait_for_result(self, execution_arn: str, timeout: int = 60):
-        return asyncio.run(self._runner.wait_for_result(execution_arn, timeout))
+    async def wait_for_result(self, execution_arn: str, timeout: int = 60):
+        return await self._runner.wait_for_result(execution_arn, timeout)
 
-    def wait_for_callback(
+    async def wait_for_callback(
         self, execution_arn: str, name: str | None = None, timeout: int = 60
     ):
-        return asyncio.run(
-            self._runner.wait_for_callback(execution_arn, name=name, timeout=timeout)
+        return await self._runner.wait_for_callback(
+            execution_arn, name=name, timeout=timeout
         )
 
-    def send_callback_success(
+    async def send_callback_success(
         self, callback_id: str, result: bytes | None = None
     ) -> None:
-        asyncio.run(self._runner.send_callback_success(callback_id, result))
+        await self._runner.send_callback_success(callback_id, result)
 
-    def send_callback_failure(self, callback_id: str, error: Any | None = None) -> None:
-        asyncio.run(self._runner.send_callback_failure(callback_id, error))
+    async def send_callback_failure(
+        self, callback_id: str, error: Any | None = None
+    ) -> None:
+        await self._runner.send_callback_failure(callback_id, error)
 
-    def send_callback_heartbeat(self, callback_id: str) -> None:
-        asyncio.run(self._runner.send_callback_heartbeat(callback_id))
+    async def send_callback_heartbeat(self, callback_id: str) -> None:
+        await self._runner.send_callback_heartbeat(callback_id)
 
 
 def pytest_addoption(parser):
@@ -142,7 +143,7 @@ def durable_runner(request):
 
             logger.info("Using AWS region: %s", region)
 
-            return SyncRunnerAdapter(
+            return AsyncRunnerAdapter(
                 create_runner(
                     mode=runner_mode,
                     handler=handler,
@@ -153,7 +154,7 @@ def durable_runner(request):
                     timeout=timeout,
                 )
             )
-        return SyncRunnerAdapter(
+        return AsyncRunnerAdapter(
             create_runner(
                 mode=runner_mode,
                 handler=handler,

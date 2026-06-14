@@ -105,7 +105,7 @@ async def _drain_checkpoint_burst(
     )
 
 
-def test_map_with_concurrent_waits_coalesces_empty_checkpoints():
+async def test_map_with_concurrent_waits_coalesces_empty_checkpoints():
     """300 concurrent empty checkpoints are drained as one coalesced API call.
 
     The test pre-queues the full burst before starting the batcher so it verifies
@@ -141,10 +141,10 @@ def test_map_with_concurrent_waits_coalesces_empty_checkpoints():
             if batcher_task is not None:
                 await batcher_task
 
-    asyncio.run(run_test())
+    await run_test()
 
 
-def test_map_with_concurrent_waits_api_call_count_scales_with_real_ops_not_empties():
+async def test_map_with_concurrent_waits_api_call_count_scales_with_real_ops_not_empties():
     """400 empty checkpoints + 10 real ops → 1 API call with limit=11.
 
     Demonstrates that the effective batch count is driven by real operations
@@ -199,4 +199,4 @@ def test_map_with_concurrent_waits_api_call_count_scales_with_real_ops_not_empti
             if batcher_task is not None:
                 await batcher_task
 
-    asyncio.run(run_test())
+    await run_test()

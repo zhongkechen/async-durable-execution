@@ -8,12 +8,12 @@ from async_durable_execution.lambda_service import (
 from async_durable_execution_examples.parallel import parallel_flat
 
 
-def test_parallel_flat(durable_runner):
+async def test_parallel_flat(durable_runner):
     """Test parallel example using context.parallel()."""
     with durable_runner(
         handler=parallel_flat.handler, input="test", timeout=100
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.get_deserialized_result() == [

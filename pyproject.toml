@@ -14,6 +14,7 @@ workspace.members = ["packages/*"]
 dependencies = [
   "coverage[toml]",
   "pytest",
+  "pytest-asyncio",
   "pytest-cov",
 ]
 
@@ -31,6 +32,7 @@ testpaths = [
     "packages/async-durable-execution-examples/tests_async_durable_execution_examples",
 ]
 markers = []
+asyncio_mode = "auto"
 
 [tool.hatch.envs.types]
 workspace.members = ["packages/*"]
@@ -46,6 +48,7 @@ workspace.members = [
 ]
 dependencies = [
   "pytest",
+  "pytest-asyncio",
   "pytest-cov",
   "coverage[toml]",
   "mypy>=1.0.0",
@@ -64,6 +67,7 @@ workspace.members = [
 ]
 dependencies = [
   "pytest",
+  "pytest-asyncio",
   "pytest-cov",
   "coverage[toml]",
   "mypy>=1.0.0",
@@ -82,6 +86,7 @@ workspace.members = [
 ]
 dependencies = [
   "pytest",
+  "pytest-asyncio",
 ]
 
 [tool.hatch.envs.dev-examples.scripts]
@@ -91,6 +96,7 @@ test = "pytest packages/async-durable-execution-examples/tests_async_durable_exe
 dependencies = [
   "async-durable-execution",
   "pytest",
+  "pytest-asyncio",
 ]
 pre-install-commands = [
   "pip install -e packages/async-durable-execution-runner",

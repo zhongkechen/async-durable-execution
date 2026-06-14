@@ -4,12 +4,12 @@ from async_durable_execution.execution import InvocationStatus
 from async_durable_execution_examples.no_replay_execution import no_replay_execution
 
 
-def test_handle_step_operations_when_no_replay_occurs(durable_runner):
+async def test_handle_step_operations_when_no_replay_occurs(durable_runner):
     """Test step operations when no replay occurs."""
     with durable_runner(
         handler=no_replay_execution.handler, input=None, timeout=10
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
 

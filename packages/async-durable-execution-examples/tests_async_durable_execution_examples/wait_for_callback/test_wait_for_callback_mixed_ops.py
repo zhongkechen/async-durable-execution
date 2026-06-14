@@ -8,7 +8,7 @@ from async_durable_execution_examples.wait_for_callback import (
 )
 
 
-def test_handle_wait_for_callback_mixed_with_steps_waits_and_other_operations(
+async def test_handle_wait_for_callback_mixed_with_steps_waits_and_other_operations(
     durable_runner,
 ):
     """Test waitForCallback mixed with steps, waits, and other operations."""
@@ -16,19 +16,19 @@ def test_handle_wait_for_callback_mixed_with_steps_waits_and_other_operations(
         handler=wait_for_callback_mixed_ops.handler, input=None, timeout=30
     ) as runner:
         # Start the execution (this will pause at the callback)
-        execution_arn = runner.run_async()
+        execution_arn = await runner.run_async()
 
         # Wait for callback and get callback_id
-        callback_id = runner.wait_for_callback(execution_arn=execution_arn)
+        callback_id = await runner.wait_for_callback(execution_arn=execution_arn)
 
         # Complete the callback
         callback_result = json.dumps({"processed": True})
-        runner.send_callback_success(
+        await runner.send_callback_success(
             callback_id=callback_id, result=callback_result.encode()
         )
 
         # Wait for the execution to complete
-        result = runner.wait_for_result(execution_arn=execution_arn)
+        result = await runner.wait_for_result(execution_arn=execution_arn)
 
     assert result.status is InvocationStatus.SUCCEEDED
 

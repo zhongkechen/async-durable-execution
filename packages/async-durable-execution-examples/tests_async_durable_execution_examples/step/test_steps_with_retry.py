@@ -5,7 +5,7 @@ from async_durable_execution.lambda_service import OperationType
 from async_durable_execution_examples.step import steps_with_retry
 
 
-def test_steps_with_retry(durable_runner):
+async def test_steps_with_retry(durable_runner):
     """Test steps_with_retry pattern.
 
     With counter-based deterministic behavior:
@@ -18,7 +18,7 @@ def test_steps_with_retry(durable_runner):
     with durable_runner(
         handler=steps_with_retry.handler, input={"name": "test-item"}, timeout=30
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
 

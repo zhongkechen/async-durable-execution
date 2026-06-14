@@ -6,32 +6,32 @@ from async_durable_execution.execution import InvocationStatus
 from async_durable_execution_examples.wait_for_callback import wait_for_callback_child
 
 
-def test_handle_wait_for_callback_within_child_contexts(durable_runner):
+async def test_handle_wait_for_callback_within_child_contexts(durable_runner):
     """Test waitForCallback within child contexts."""
     test_payload = {"test": "child-context-callbacks"}
 
     with durable_runner(
         handler=wait_for_callback_child.handler, input=test_payload, timeout=30
     ) as runner:
-        execution_arn = runner.run_async()
+        execution_arn = await runner.run_async()
         # Wait for parent callback and get callback_id
-        parent_callback_id = runner.wait_for_callback(execution_arn=execution_arn)
+        parent_callback_id = await runner.wait_for_callback(execution_arn=execution_arn)
         # Send parent callback result
         parent_callback_result = json.dumps({"parentData": "parent-completed"})
-        runner.send_callback_success(
+        await runner.send_callback_success(
             callback_id=parent_callback_id, result=parent_callback_result.encode()
         )
         # Wait for child callback and get callback_id
-        child_callback_id = runner.wait_for_callback(
+        child_callback_id = await runner.wait_for_callback(
             execution_arn=execution_arn, name="child-callback-op create callback id"
         )
         # Send child callback result
         child_callback_result = json.dumps({"childData": 42})
-        runner.send_callback_success(
+        await runner.send_callback_success(
             callback_id=child_callback_id, result=child_callback_result.encode()
         )
         # Wait for the execution to complete
-        result = runner.wait_for_result(execution_arn=execution_arn)
+        result = await runner.wait_for_result(execution_arn=execution_arn)
 
     assert result.status is InvocationStatus.SUCCEEDED
     result_data = result.get_deserialized_result()

@@ -9,16 +9,18 @@ from async_durable_execution_examples.wait_for_callback.wait_for_callback_serdes
 )
 
 
-def test_handle_wait_for_callback_with_custom_serdes_configuration(durable_runner):
+async def test_handle_wait_for_callback_with_custom_serdes_configuration(
+    durable_runner,
+):
     """Test waitForCallback with custom serdes configuration."""
     with durable_runner(
         handler=wait_for_callback_serdes.handler, input=None, timeout=30
     ) as runner:
         # Start the execution (this will pause at the callback)
-        execution_arn = runner.run_async()
+        execution_arn = await runner.run_async()
 
         # Wait for callback and get callback_id
-        callback_id = runner.wait_for_callback(execution_arn=execution_arn)
+        callback_id = await runner.wait_for_callback(execution_arn=execution_arn)
 
         # Send data that requires custom serialization
         test_data = {
@@ -34,12 +36,12 @@ def test_handle_wait_for_callback_with_custom_serdes_configuration(durable_runne
         # Serialize the data using custom serdes for sending
         custom_serdes = CustomSerdes()
         serialized_data = custom_serdes.serialize(test_data)
-        runner.send_callback_success(
+        await runner.send_callback_success(
             callback_id=callback_id, result=serialized_data.encode()
         )
 
         # Wait for the execution to complete
-        result = runner.wait_for_result(execution_arn=execution_arn)
+        result = await runner.wait_for_result(execution_arn=execution_arn)
 
     assert result.status is InvocationStatus.SUCCEEDED
 

@@ -5,12 +5,12 @@ from async_durable_execution.lambda_service import OperationStatus
 from async_durable_execution_examples.map import map_with_failure_tolerance
 
 
-def test_map_with_failure_tolerance(durable_runner):
+async def test_map_with_failure_tolerance(durable_runner):
     """Test map with failure tolerance."""
     with durable_runner(
         handler=map_with_failure_tolerance.handler, input="test", timeout=10
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
 

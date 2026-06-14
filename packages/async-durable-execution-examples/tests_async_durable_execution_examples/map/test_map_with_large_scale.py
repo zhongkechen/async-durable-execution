@@ -4,12 +4,12 @@ from async_durable_execution.execution import InvocationStatus
 from async_durable_execution_examples.map import map_with_large_scale
 
 
-def test_handle_50_items_with_100kb_each_using_map(durable_runner):
+async def test_handle_50_items_with_100kb_each_using_map(durable_runner):
     """Test handling 50 items with 100KB each using map."""
     with durable_runner(
         handler=map_with_large_scale.handler, input=None, timeout=60
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     result_data = result.get_deserialized_result()
 

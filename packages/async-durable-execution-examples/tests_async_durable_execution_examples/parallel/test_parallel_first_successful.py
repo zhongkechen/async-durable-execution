@@ -5,12 +5,12 @@ from async_durable_execution.lambda_service import OperationStatus
 from async_durable_execution_examples.parallel import parallel_first_successful
 
 
-def test_parallel_first_successful(durable_runner):
+async def test_parallel_first_successful(durable_runner):
     """Test parallel with first_successful completion strategy."""
     with durable_runner(
         handler=parallel_first_successful.handler, input="test", timeout=10
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
 

@@ -21,31 +21,31 @@ from async_durable_execution.operation.wait import WaitOperationExecutor
 from async_durable_execution.state import CheckpointedResult, ExecutionState
 
 
-def run_async(awaitable):
+async def run_async(awaitable):
     if not inspect.isawaitable(awaitable):
         return awaitable
-    return asyncio.run(awaitable)
+    return await awaitable
 
 
 # Test helper function - maintains old handler signature for backward compatibility
-def wait_handler(seconds: int, state, operation_identifier) -> None:
+async def wait_handler(seconds: int, state, operation_identifier) -> None:
     """Test helper that wraps WaitOperationExecutor with old handler signature."""
     executor = WaitOperationExecutor(
         seconds=seconds,
         state=state,
         operation_identifier=operation_identifier,
     )
-    return run_async(executor.process())
+    return await run_async(executor.process())
 
 
-def test_wait_handler_already_completed():
+async def test_wait_handler_already_completed():
     """Test wait_handler when operation is already completed."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = Mock(spec=CheckpointedResult)
     mock_result.is_succeeded.return_value = True
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    wait_handler(
+    await wait_handler(
         seconds=10,
         state=mock_state,
         operation_identifier=OperationIdentifier("wait1", OperationSubType.WAIT, None),
@@ -55,7 +55,7 @@ def test_wait_handler_already_completed():
     mock_state.create_checkpoint.assert_not_called()
 
 
-def test_wait_handler_not_completed():
+async def test_wait_handler_not_completed():
     """Test wait_handler when operation is not completed."""
     mock_state = Mock(spec=ExecutionState)
 
@@ -72,7 +72,7 @@ def test_wait_handler_not_completed():
     mock_state.get_checkpoint_result.side_effect = [not_found_result, started_result]
 
     with pytest.raises(SuspendExecution, match="Wait for 30 seconds"):
-        wait_handler(
+        await wait_handler(
             seconds=30,
             state=mock_state,
             operation_identifier=OperationIdentifier(
@@ -96,7 +96,7 @@ def test_wait_handler_not_completed():
     )
 
 
-def test_wait_handler_with_none_name():
+async def test_wait_handler_with_none_name():
     """Test wait_handler with None name."""
     mock_state = Mock(spec=ExecutionState)
 
@@ -113,7 +113,7 @@ def test_wait_handler_with_none_name():
     mock_state.get_checkpoint_result.side_effect = [not_found_result, started_result]
 
     with pytest.raises(SuspendExecution, match="Wait for 5 seconds"):
-        wait_handler(
+        await wait_handler(
             state=mock_state,
             operation_identifier=OperationIdentifier(
                 "wait3", OperationSubType.WAIT, None
@@ -137,7 +137,7 @@ def test_wait_handler_with_none_name():
     )
 
 
-def test_wait_handler_with_existent():
+async def test_wait_handler_with_existent():
     """Test wait_handler with existent operation."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = Mock(spec=CheckpointedResult)
@@ -146,7 +146,7 @@ def test_wait_handler_with_existent():
     mock_state.get_checkpoint_result.return_value = mock_result
 
     with pytest.raises(SuspendExecution, match="Wait for 5 seconds"):
-        wait_handler(
+        await wait_handler(
             state=mock_state,
             operation_identifier=OperationIdentifier(
                 "wait4", OperationSubType.WAIT, None
@@ -161,7 +161,7 @@ def test_wait_handler_with_existent():
 # Immediate response handling tests
 
 
-def test_wait_status_evaluation_after_checkpoint():
+async def test_wait_status_evaluation_after_checkpoint():
     """Test that status is evaluated twice: before and after checkpoint creation.
 
     This verifies the immediate response pattern:
@@ -194,7 +194,7 @@ def test_wait_status_evaluation_after_checkpoint():
 
     # Act
     with pytest.raises(SuspendExecution):
-        run_async(executor.process())
+        await run_async(executor.process())
 
     # Assert - verify status checked twice
     assert mock_state.get_checkpoint_result.call_count == 2
@@ -215,7 +215,7 @@ def test_wait_status_evaluation_after_checkpoint():
     )
 
 
-def test_wait_immediate_success_handling():
+async def test_wait_immediate_success_handling():
     """Test that immediate SUCCEEDED response returns without suspend.
 
     When the checkpoint returns SUCCEEDED on the second status check,
@@ -244,7 +244,7 @@ def test_wait_immediate_success_handling():
     )
 
     # Act
-    result = run_async(executor.process())
+    result = await run_async(executor.process())
 
     # Assert - verify immediate return without suspend
     assert result is None  # Wait returns None
@@ -256,7 +256,7 @@ def test_wait_immediate_success_handling():
     assert mock_state.get_checkpoint_result.call_count == 2
 
 
-def test_wait_no_immediate_response_suspends():
+async def test_wait_no_immediate_response_suspends():
     """Test that wait suspends when no immediate response received.
 
     When the checkpoint returns STARTED (not completed) on the second check,
@@ -287,7 +287,7 @@ def test_wait_no_immediate_response_suspends():
 
     # Act & Assert - verify suspend occurs
     with pytest.raises(SuspendExecution) as exc_info:
-        run_async(executor.process())
+        await run_async(executor.process())
 
     # Verify suspend message
     assert "Wait for 60 seconds" in str(exc_info.value)
@@ -299,7 +299,7 @@ def test_wait_no_immediate_response_suspends():
     assert mock_state.get_checkpoint_result.call_count == 2
 
 
-def test_wait_already_completed_no_checkpoint():
+async def test_wait_already_completed_no_checkpoint():
     """Test that already completed wait doesn't create checkpoint.
 
     When replaying and the wait is already completed, it should return
@@ -323,7 +323,7 @@ def test_wait_already_completed_no_checkpoint():
     )
 
     # Act
-    result = run_async(executor.process())
+    result = await run_async(executor.process())
 
     # Assert - verify immediate return without checkpoint
     assert result is None
@@ -335,7 +335,7 @@ def test_wait_already_completed_no_checkpoint():
     mock_state.get_checkpoint_result.assert_called_once_with("wait_replay")
 
 
-def test_wait_with_various_durations():
+async def test_wait_with_various_durations():
     """Test wait operations with different durations handle immediate response correctly."""
     for seconds in [1, 30, 300, 3600]:
         # Arrange
@@ -364,7 +364,7 @@ def test_wait_with_various_durations():
         )
 
         # Act
-        result = run_async(executor.process())
+        result = await run_async(executor.process())
 
         # Assert
         assert result is None
@@ -375,7 +375,7 @@ def test_wait_with_various_durations():
         assert call_args[1]["operation_update"].wait_options.wait_seconds == seconds
 
 
-def test_wait_suspends_when_second_check_returns_started():
+async def test_wait_suspends_when_second_check_returns_started():
     """Test backward compatibility: when the second checkpoint check returns
     STARTED (not terminal), the wait operation suspends normally.
     """
@@ -404,14 +404,14 @@ def test_wait_suspends_when_second_check_returns_started():
     )
 
     with pytest.raises(SuspendExecution):
-        run_async(executor.process())
+        await run_async(executor.process())
 
     # Assert - behaves like "old way"
     assert mock_state.get_checkpoint_result.call_count == 2  # Double-check happened
     mock_state.create_checkpoint.assert_called_once()  # START checkpoint created
 
 
-def test_wait_suspends_when_second_check_returns_started_duplicate():
+async def test_wait_suspends_when_second_check_returns_started_duplicate():
     """Test backward compatibility: when the second checkpoint check returns
     STARTED (not terminal), the wait operation suspends normally.
     """
@@ -438,7 +438,7 @@ def test_wait_suspends_when_second_check_returns_started_duplicate():
     )
 
     with pytest.raises(SuspendExecution):
-        run_async(executor.process())
+        await run_async(executor.process())
 
     # Assert - behaves like "old way"
     assert mock_state.get_checkpoint_result.call_count == 2  # Double-check happened

@@ -4,14 +4,16 @@ from async_durable_execution.execution import InvocationStatus
 from async_durable_execution_examples.handler_error import handler_error
 
 
-def test_handle_handler_errors_gracefully_and_capture_error_details(durable_runner):
+async def test_handle_handler_errors_gracefully_and_capture_error_details(
+    durable_runner,
+):
     """Test that handler errors are handled gracefully and error details are captured."""
     test_payload = {"test": "error-case"}
 
     with durable_runner(
         handler=handler_error.handler, input=test_payload, timeout=10
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     # Verify execution failed
     assert result.status is InvocationStatus.FAILED

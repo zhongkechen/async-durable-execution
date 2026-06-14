@@ -4,7 +4,7 @@ from async_durable_execution.execution import InvocationStatus
 from async_durable_execution_examples.simple_execution import simple_execution
 
 
-def test_execute_simple_handler_without_operations(durable_runner):
+async def test_execute_simple_handler_without_operations(durable_runner):
     """Test simple handler execution without operations."""
     test_payload = {
         "userId": "test-user",
@@ -14,7 +14,7 @@ def test_execute_simple_handler_without_operations(durable_runner):
     with durable_runner(
         handler=simple_execution.handler, input=test_payload, timeout=10
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     result_data = result.get_deserialized_result()
 

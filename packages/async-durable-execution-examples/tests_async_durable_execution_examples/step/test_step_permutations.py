@@ -9,12 +9,12 @@ from async_durable_execution_examples.step import (
 )
 
 
-def test_step_no_name(durable_runner):
+async def test_step_no_name(durable_runner):
     """Test step without explicit name."""
     with durable_runner(
         handler=step_no_name.handler, input="test", timeout=10
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.get_deserialized_result() == "Result: Step without name"
@@ -27,12 +27,12 @@ def test_step_no_name(durable_runner):
     assert step_ops[0].name is None or step_ops[0].name == "<lambda>"
 
 
-def test_step_with_name(durable_runner):
+async def test_step_with_name(durable_runner):
     """Test step with explicit name."""
     with durable_runner(
         handler=step_with_name.handler, input="test", timeout=10
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.get_deserialized_result() == "Result: Step with explicit name"
@@ -44,12 +44,12 @@ def test_step_with_name(durable_runner):
     assert step_ops[0].name == "custom_step"
 
 
-def test_step_with_exponential_backoff(durable_runner):
+async def test_step_with_exponential_backoff(durable_runner):
     """Test step with exponential backoff retry strategy."""
     with durable_runner(
         handler=step_with_exponential_backoff.handler, input="test", timeout=10
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.get_deserialized_result() == "Result: Step with exponential backoff"

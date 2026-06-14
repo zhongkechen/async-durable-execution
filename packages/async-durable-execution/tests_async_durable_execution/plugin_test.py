@@ -1,4 +1,3 @@
-import asyncio
 import datetime
 import logging
 import unittest
@@ -150,29 +149,23 @@ class TestDataClasses(unittest.TestCase):
         self.assertEqual(USER_FUNCTION_END_INFO.error.message, "boom")
 
 
-class TestDurableInstrumentationPlugin(unittest.TestCase):
-    def test_default_methods_are_noop(self):
+class TestDurableInstrumentationPlugin(unittest.IsolatedAsyncioTestCase):
+    async def test_default_methods_are_noop(self):
         """All default hook methods should be callable and return None."""
         plugin = _NoOpPlugin()
-        self.assertIsNone(
-            asyncio.run(plugin.on_invocation_start(INVOCATION_START_INFO))
-        )
-        self.assertIsNone(asyncio.run(plugin.on_invocation_end(INVOCATION_END_INFO)))
-        self.assertIsNone(asyncio.run(plugin.on_operation_start(OPERATION_START_INFO)))
-        self.assertIsNone(asyncio.run(plugin.on_operation_end(OPERATION_END_INFO)))
-        self.assertIsNone(
-            asyncio.run(plugin.on_user_function_start(USER_FUNCTION_START_INFO))
-        )
-        self.assertIsNone(
-            asyncio.run(plugin.on_user_function_end(USER_FUNCTION_END_INFO))
-        )
+        self.assertIsNone(await plugin.on_invocation_start(INVOCATION_START_INFO))
+        self.assertIsNone(await plugin.on_invocation_end(INVOCATION_END_INFO))
+        self.assertIsNone(await plugin.on_operation_start(OPERATION_START_INFO))
+        self.assertIsNone(await plugin.on_operation_end(OPERATION_END_INFO))
+        self.assertIsNone(await plugin.on_user_function_start(USER_FUNCTION_START_INFO))
+        self.assertIsNone(await plugin.on_user_function_end(USER_FUNCTION_END_INFO))
 
-    def test_subclass_override(self):
+    async def test_subclass_override(self):
         """A subclass can override specific hooks."""
         plugin = _TrackingPlugin()
 
-        asyncio.run(plugin.on_invocation_start(INVOCATION_START_INFO))
-        asyncio.run(plugin.on_operation_start(OPERATION_START_INFO))
+        await plugin.on_invocation_start(INVOCATION_START_INFO)
+        await plugin.on_operation_start(OPERATION_START_INFO)
 
         self.assertEqual(
             ["invocation_start:req-1", "operation_start:op-2"], plugin.calls

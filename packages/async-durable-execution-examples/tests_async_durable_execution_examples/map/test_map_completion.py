@@ -4,12 +4,14 @@ from async_durable_execution.execution import InvocationStatus
 from async_durable_execution_examples.map import map_completion
 
 
-def test_reproduce_completion_config_behavior_with_detailed_logging(durable_runner):
+async def test_reproduce_completion_config_behavior_with_detailed_logging(
+    durable_runner,
+):
     """Demonstrates map behavior with minSuccessful and concurrent execution."""
     with durable_runner(
         handler=map_completion.handler, input=None, timeout=60
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
 

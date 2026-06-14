@@ -8,19 +8,19 @@ from async_durable_execution_examples.wait_for_callback import (
 )
 
 
-def test_handle_basic_wait_for_callback_with_anonymous_submitter(durable_runner):
+async def test_handle_basic_wait_for_callback_with_anonymous_submitter(durable_runner):
     """Test basic waitForCallback with anonymous submitter."""
     with durable_runner(
         handler=wait_for_callback_anonymous.handler, input=None, timeout=30
     ) as runner:
-        execution_arn = runner.run_async()
-        callback_id = runner.wait_for_callback(execution_arn=execution_arn)
+        execution_arn = await runner.run_async()
+        callback_id = await runner.wait_for_callback(execution_arn=execution_arn)
         callback_result = json.dumps({"data": "callback_completed"})
-        runner.send_callback_success(
+        await runner.send_callback_success(
             callback_id=callback_id, result=callback_result.encode()
         )
 
-        result = runner.wait_for_result(execution_arn=execution_arn)
+        result = await runner.wait_for_result(execution_arn=execution_arn)
 
     assert result.status is InvocationStatus.SUCCEEDED
 

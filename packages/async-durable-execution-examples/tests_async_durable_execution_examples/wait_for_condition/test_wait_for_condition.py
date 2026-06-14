@@ -1,7 +1,7 @@
 """Tests for wait_for_condition."""
 
 
-def test_wait_for_condition(durable_runner):
+async def test_wait_for_condition(durable_runner):
     """Test wait_for_condition pattern."""
     # TODO: fix bug in local runner so that local tests can pass
     # with durable_runner(

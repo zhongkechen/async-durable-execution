@@ -111,7 +111,7 @@ class MockExecutionObserver(ExecutionObserver):
 
 
 @pytest.fixture
-def test_observer():
+async def test_observer():
     return MockExecutionObserver()
 
 
@@ -163,7 +163,9 @@ def mock_execution():
     return execution
 
 
-def test_init(mock_store, mock_scheduler, mock_invoker, mock_checkpoint_processor):
+async def test_init(
+    mock_store, mock_scheduler, mock_invoker, mock_checkpoint_processor
+):
     # Test that Executor can be constructed with dependencies
     # Dependency injection is implementation detail - test behavior instead
     executor = Executor(
@@ -178,7 +180,7 @@ def test_init(mock_store, mock_scheduler, mock_invoker, mock_checkpoint_processo
 
 
 @patch("async_durable_execution_runner.executor.Execution")
-def test_start_execution(
+async def test_start_execution(
     mock_execution_class, executor, start_input, mock_store, mock_scheduler
 ):
     mock_execution = Mock()
@@ -233,7 +235,7 @@ def test_start_execution(
 
 
 @patch("async_durable_execution_runner.executor.Execution")
-def test_start_execution_with_provided_invocation_id(
+async def test_start_execution_with_provided_invocation_id(
     mock_execution_class, executor, mock_store, mock_scheduler
 ):
     # Create input with invocation_id already provided
@@ -274,7 +276,7 @@ def test_start_execution_with_provided_invocation_id(
     assert result == mock_execution
 
 
-def test_should_complete_workflow_with_error_when_invocation_fails(
+async def test_should_complete_workflow_with_error_when_invocation_fails(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test that failed invocation responses trigger workflow completion with error."""
@@ -314,13 +316,13 @@ def test_should_complete_workflow_with_error_when_invocation_fails(
             # Execute the handler to trigger the invocation logic
             import asyncio
 
-            asyncio.run(handler())
+            await handler()
 
         # Assert - verify workflow was completed with error
         mock_fail.assert_called_once_with("test-arn", failed_response.error)
 
 
-def test_should_complete_workflow_with_result_when_invocation_succeeds(
+async def test_should_complete_workflow_with_result_when_invocation_succeeds(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test that successful invocation responses trigger workflow completion with result."""
@@ -360,13 +362,13 @@ def test_should_complete_workflow_with_result_when_invocation_succeeds(
             # Execute the handler to trigger the invocation logic
             import asyncio
 
-            asyncio.run(handler())
+            await handler()
 
         # Assert - verify workflow was completed with result
         mock_complete.assert_called_once_with("test-arn", "success result")
 
 
-def test_should_handle_pending_status_when_operations_exist(
+async def test_should_handle_pending_status_when_operations_exist(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test that pending invocation responses are handled when operations exist."""
@@ -403,13 +405,13 @@ def test_should_handle_pending_status_when_operations_exist(
         # Execute the handler to trigger the invocation logic
         import asyncio
 
-        asyncio.run(handler())
+        await handler()
 
     # Assert - verify pending operations were checked
     mock_execution.has_pending_operations.assert_called_once_with(mock_execution)
 
 
-def test_should_ignore_response_when_execution_already_complete(
+async def test_should_ignore_response_when_execution_already_complete(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test that responses are ignored when execution is already complete."""
@@ -443,14 +445,14 @@ def test_should_ignore_response_when_execution_already_complete(
         # Execute the handler to trigger the invocation logic
         import asyncio
 
-        asyncio.run(handler())
+        await handler()
 
     # Assert - verify invoker was not called since execution was already complete
     mock_invoker.create_invocation_input.assert_not_called()
     mock_invoker.invoke.assert_not_called()
 
 
-def test_should_retry_when_response_has_no_status(
+async def test_should_retry_when_response_has_no_status(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test that invocation responses without status trigger retry logic."""
@@ -484,7 +486,7 @@ def test_should_retry_when_response_has_no_status(
         handler = mock_scheduler.call_later.call_args_list[-1][0][0]
 
         # Execute the handler to trigger the invocation logic
-        asyncio.run(handler())
+        await handler()
 
         # Assert - verify retry was triggered due to validation error
         assert mock_execution.consecutive_failed_invocation_attempts == 1
@@ -493,7 +495,7 @@ def test_should_retry_when_response_has_no_status(
         assert mock_scheduler.call_later.call_count == 3
 
 
-def test_should_retry_when_failed_response_has_result(
+async def test_should_retry_when_failed_response_has_result(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test that failed responses with result trigger retry logic."""
@@ -529,7 +531,7 @@ def test_should_retry_when_failed_response_has_result(
         handler = mock_scheduler.call_later.call_args_list[-1][0][0]
 
         # Execute the handler to trigger the invocation logic
-        asyncio.run(handler())
+        await handler()
 
         # Assert - verify retry was triggered due to validation error
         assert mock_execution.consecutive_failed_invocation_attempts == 1
@@ -538,7 +540,7 @@ def test_should_retry_when_failed_response_has_result(
         assert mock_scheduler.call_later.call_count == 3
 
 
-def test_should_retry_when_success_response_has_error(
+async def test_should_retry_when_success_response_has_error(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test that successful responses with error trigger retry logic."""
@@ -575,7 +577,7 @@ def test_should_retry_when_success_response_has_error(
         handler = mock_scheduler.call_later.call_args_list[-1][0][0]
 
         # Execute the handler to trigger the invocation logic
-        asyncio.run(handler())
+        await handler()
 
         # Assert - verify retry was triggered due to validation error
         assert mock_execution.consecutive_failed_invocation_attempts == 1
@@ -584,7 +586,7 @@ def test_should_retry_when_success_response_has_error(
         assert mock_scheduler.call_later.call_count == 3
 
 
-def test_should_retry_when_pending_response_has_no_operations(
+async def test_should_retry_when_pending_response_has_no_operations(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test that pending responses without operations trigger retry logic."""
@@ -619,7 +621,7 @@ def test_should_retry_when_pending_response_has_no_operations(
         handler = mock_scheduler.call_later.call_args_list[-1][0][0]
 
         # Execute the handler to trigger the invocation logic
-        asyncio.run(handler())
+        await handler()
 
         # Assert - verify retry was triggered due to validation error
         assert mock_execution.consecutive_failed_invocation_attempts == 1
@@ -628,7 +630,7 @@ def test_should_retry_when_pending_response_has_no_operations(
         assert mock_scheduler.call_later.call_count == 3
 
 
-def test_invoke_handler_success(
+async def test_invoke_handler_success(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test successful invocation through public API."""
@@ -662,7 +664,7 @@ def test_invoke_handler_success(
         handler = mock_scheduler.call_later.call_args_list[-1][0][0]
 
         # Execute the handler to trigger the invocation logic
-        asyncio.run(handler())
+        await handler()
 
     # Verify the invocation process was executed
     mock_invoker.create_invocation_input.assert_called_once_with(
@@ -673,7 +675,7 @@ def test_invoke_handler_success(
     )
 
 
-def test_invoke_handler_execution_already_complete(
+async def test_invoke_handler_execution_already_complete(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test that completed executions are handled properly through public API."""
@@ -698,13 +700,13 @@ def test_invoke_handler_execution_already_complete(
         handler = mock_scheduler.call_later.call_args_list[-1][0][0]
 
         # Execute the handler to trigger the invocation logic
-        asyncio.run(handler())
+        await handler()
 
     # Verify store was accessed to check execution status
     mock_store.load.assert_called_with("test-arn")
 
 
-def test_invoke_handler_execution_completed_during_invocation(
+async def test_invoke_handler_execution_completed_during_invocation(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test execution completing during invocation through public API."""
@@ -744,13 +746,13 @@ def test_invoke_handler_execution_completed_during_invocation(
         handler = mock_scheduler.call_later.call_args_list[-1][0][0]
 
         # Execute the handler to trigger the invocation logic
-        asyncio.run(handler())
+        await handler()
 
     # Verify the execution was checked for completion
     assert mock_store.load.call_count >= 2
 
 
-def test_invoke_handler_resource_not_found(
+async def test_invoke_handler_resource_not_found(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test resource not found handling causes workflow failure through public API."""
@@ -781,7 +783,7 @@ def test_invoke_handler_resource_not_found(
             handler = mock_scheduler.call_later.call_args_list[-1][0][0]
 
             # Execute the handler to trigger the invocation logic
-            asyncio.run(handler())
+            await handler()
 
         # Assert - verify workflow failure was triggered through public API
         mock_fail.assert_called_once()
@@ -793,7 +795,7 @@ def test_invoke_handler_resource_not_found(
         )  # error is second positional arg
 
 
-def test_invoke_handler_general_exception(
+async def test_invoke_handler_general_exception(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test general exception handling triggers retry through public API."""
@@ -822,7 +824,7 @@ def test_invoke_handler_general_exception(
         handler = mock_scheduler.call_later.call_args_list[-1][0][0]
 
         # Execute the handler to trigger the invocation logic
-        asyncio.run(handler())
+        await handler()
 
         # Assert - verify retry was scheduled through observable behavior
         assert mock_execution.consecutive_failed_invocation_attempts == 1
@@ -831,7 +833,7 @@ def test_invoke_handler_general_exception(
         assert mock_scheduler.call_later.call_count == 3
 
 
-def test_invoke_execution_through_start_execution(
+async def test_invoke_execution_through_start_execution(
     executor, mock_scheduler, start_input
 ):
     """Test execution invocation behavior through public start_execution method."""
@@ -855,7 +857,7 @@ def test_invoke_execution_through_start_execution(
     assert args[1]["completion_event"] == mock_event
 
 
-def test_should_complete_workflow_successfully_through_public_api(
+async def test_should_complete_workflow_successfully_through_public_api(
     executor, mock_store, mock_execution
 ):
     """Test workflow completion through public complete_execution method."""
@@ -874,7 +876,7 @@ def test_should_complete_workflow_successfully_through_public_api(
     mock_complete_events.assert_called_once_with(execution_arn="test-arn")
 
 
-def test_should_complete_workflow_with_failure_through_public_api(
+async def test_should_complete_workflow_with_failure_through_public_api(
     executor, mock_store, mock_execution
 ):
     """Test workflow failure completion through public fail_execution method."""
@@ -894,7 +896,7 @@ def test_should_complete_workflow_with_failure_through_public_api(
     mock_complete_events.assert_called_once_with(execution_arn="test-arn")
 
 
-def test_should_handle_workflow_completion_state_through_public_api(
+async def test_should_handle_workflow_completion_state_through_public_api(
     executor, mock_store, mock_execution
 ):
     """Test workflow completion behavior and state management through public API."""
@@ -913,7 +915,7 @@ def test_should_handle_workflow_completion_state_through_public_api(
     mock_complete_events.assert_called_once_with(execution_arn="test-arn")
 
 
-def test_should_fail_execution_when_function_not_found(
+async def test_should_fail_execution_when_function_not_found(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test that workflow fails when function is not found during invocation."""
@@ -947,7 +949,7 @@ def test_should_fail_execution_when_function_not_found(
             # Execute the handler to trigger the invocation logic
             import asyncio
 
-            asyncio.run(handler())
+            await handler()
 
         # Assert - verify failure was triggered with correct error
         mock_fail.assert_called_once()
@@ -956,7 +958,7 @@ def test_should_fail_execution_when_function_not_found(
         assert "Function not found" in call_args[0][1].message  # error message
 
 
-def test_should_fail_execution_when_retries_exhausted(
+async def test_should_fail_execution_when_retries_exhausted(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test that workflow fails when maximum retry attempts are exhausted."""
@@ -991,7 +993,7 @@ def test_should_fail_execution_when_retries_exhausted(
             # Execute the handler to trigger the invocation logic
             import asyncio
 
-            asyncio.run(handler())
+            await handler()
 
         # Assert - verify failure was triggered when retries exhausted
         mock_fail.assert_called_once()
@@ -999,7 +1001,7 @@ def test_should_fail_execution_when_retries_exhausted(
         assert call_args[0][0] == "test-arn"  # execution_arn
 
 
-def test_should_prevent_multiple_workflow_failures_on_complete_execution(
+async def test_should_prevent_multiple_workflow_failures_on_complete_execution(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test that attempting to fail an already completed execution raises an exception."""
@@ -1035,10 +1037,10 @@ def test_should_prevent_multiple_workflow_failures_on_complete_execution(
         with pytest.raises(
             IllegalStateException, match="Cannot make multiple close workflow decisions"
         ):
-            asyncio.run(handler())
+            await handler()
 
 
-def test_should_retry_invocation_when_under_limit_through_public_api(
+async def test_should_retry_invocation_when_under_limit_through_public_api(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test that invocation retries when under limit through public API with final outcome verification."""
@@ -1085,7 +1087,7 @@ def test_should_retry_invocation_when_under_limit_through_public_api(
         initial_handler = mock_scheduler.call_later.call_args_list[-1][0][0]
         import asyncio
 
-        asyncio.run(initial_handler())
+        await initial_handler()
 
         # Verify retry was scheduled due to validation error
         assert mock_scheduler.call_later.call_count == 3  # timeout + initial + retry
@@ -1096,7 +1098,7 @@ def test_should_retry_invocation_when_under_limit_through_public_api(
         retry_delay = retry_call[1]["delay"]
 
         # Execute the retry handler to complete the scenario
-        asyncio.run(retry_handler())
+        await retry_handler()
 
     # Assert - verify final outcome after retry sequence
     assert (
@@ -1107,7 +1109,7 @@ def test_should_retry_invocation_when_under_limit_through_public_api(
     assert mock_invoker.invoke.call_count == 2  # Initial + retry invocation
 
 
-def test_should_fail_workflow_when_retry_limit_exceeded(
+async def test_should_fail_workflow_when_retry_limit_exceeded(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test that workflow fails when retry limit is exceeded through public API."""
@@ -1138,7 +1140,7 @@ def test_should_fail_workflow_when_retry_limit_exceeded(
             handler = mock_scheduler.call_later.call_args_list[-1][0][0]
 
             # Execute the handler to trigger the invocation logic
-            asyncio.run(handler())
+            await handler()
 
         # Assert - verify workflow failed due to retry limit exceeded
         mock_fail.assert_called_once()
@@ -1150,7 +1152,7 @@ def test_should_fail_workflow_when_retry_limit_exceeded(
         )  # error is second positional arg
 
 
-def test_complete_events_through_complete_execution(
+async def test_complete_events_through_complete_execution(
     executor, mock_store, mock_scheduler
 ):
     """Test completion event behavior through public complete_execution method."""
@@ -1185,7 +1187,7 @@ def test_complete_events_through_complete_execution(
     mock_timeout_future.cancel.assert_called_once()
 
 
-def test_complete_events_no_event_through_public_api(executor, mock_store):
+async def test_complete_events_no_event_through_public_api(executor, mock_store):
     """Test that completing non-existent execution handles missing events gracefully."""
     mock_execution = Mock()
     mock_execution.result = "test result"
@@ -1196,7 +1198,7 @@ def test_complete_events_no_event_through_public_api(executor, mock_store):
     executor.complete_execution("nonexistent-arn", "result")
 
 
-def test_wait_until_complete_success(executor, mock_scheduler):
+async def test_wait_until_complete_success(executor, mock_scheduler):
     """Test wait until complete success through public API."""
     mock_event = Mock()
     mock_event.wait.return_value = True
@@ -1220,7 +1222,7 @@ def test_wait_until_complete_success(executor, mock_scheduler):
     mock_event.wait.assert_called_once_with(10)
 
 
-def test_wait_until_complete_timeout(executor, mock_scheduler):
+async def test_wait_until_complete_timeout(executor, mock_scheduler):
     """Test wait until complete timeout through public API."""
     mock_event = Mock()
     mock_event.wait.return_value = False
@@ -1243,12 +1245,12 @@ def test_wait_until_complete_timeout(executor, mock_scheduler):
     assert result is False
 
 
-def test_wait_until_complete_no_event(executor):
+async def test_wait_until_complete_no_event(executor):
     with pytest.raises(ResourceNotFoundException, match="execution does not exist"):
         executor.wait_until_complete("nonexistent-arn")
 
 
-def test_complete_execution(executor, mock_store, mock_execution):
+async def test_complete_execution(executor, mock_store, mock_execution):
     mock_execution.result = "test result"
     mock_store.load.return_value = mock_execution
 
@@ -1261,7 +1263,7 @@ def test_complete_execution(executor, mock_store, mock_execution):
     mock_complete_events.assert_called_once_with(execution_arn="test-arn")
 
 
-def test_fail_execution(executor, mock_store, mock_execution):
+async def test_fail_execution(executor, mock_store, mock_execution):
     error = ErrorObject.from_message("test error")
     mock_execution.result = "error result"
     mock_store.load.return_value = mock_execution
@@ -1275,7 +1277,7 @@ def test_fail_execution(executor, mock_store, mock_execution):
     mock_complete_events.assert_called_once_with(execution_arn="test-arn")
 
 
-def test_should_schedule_wait_timer_correctly(executor, mock_scheduler):
+async def test_should_schedule_wait_timer_correctly(executor, mock_scheduler):
     """Test that wait timer is scheduled correctly through public method."""
     # Arrange
     mock_event = Mock()
@@ -1303,7 +1305,7 @@ def test_should_schedule_wait_timer_correctly(executor, mock_scheduler):
     assert wait_call[1]["completion_event"] == mock_event
 
 
-def test_should_ignore_wait_completion_for_completed_execution(
+async def test_should_ignore_wait_completion_for_completed_execution(
     executor, mock_store, mock_execution
 ):
     """Test that wait completion logic correctly handles completed executions."""
@@ -1324,7 +1326,7 @@ def test_should_ignore_wait_completion_for_completed_execution(
     mock_store.update.assert_not_called()
 
 
-def test_should_handle_wait_completion_exception_gracefully(
+async def test_should_handle_wait_completion_exception_gracefully(
     executor, mock_store, mock_execution
 ):
     """Test that wait completion exceptions are handled through error handling."""
@@ -1341,7 +1343,7 @@ def test_should_handle_wait_completion_exception_gracefully(
         execution.complete_wait(operation_id="op-123")
 
 
-def test_should_complete_retry_when_retry_scheduled(
+async def test_should_complete_retry_when_retry_scheduled(
     executor, mock_store, mock_scheduler, mock_execution
 ):
     """Test retry completion through public scheduler callback API."""
@@ -1366,7 +1368,7 @@ def test_should_complete_retry_when_retry_scheduled(
     mock_store.update.assert_called_with(mock_execution)
 
 
-def test_should_ignore_retry_when_execution_complete(
+async def test_should_ignore_retry_when_execution_complete(
     executor, mock_store, mock_scheduler, mock_execution
 ):
     """Test that completed executions ignore retry events through public API."""
@@ -1391,7 +1393,7 @@ def test_should_ignore_retry_when_execution_complete(
     mock_store.update.assert_not_called()
 
 
-def test_should_handle_retry_exception_gracefully(
+async def test_should_handle_retry_exception_gracefully(
     executor, mock_store, mock_scheduler, mock_execution
 ):
     """Test that retry exceptions are handled gracefully through public API."""
@@ -1415,14 +1417,14 @@ def test_should_handle_retry_exception_gracefully(
     mock_execution.complete_retry.assert_called_once_with(operation_id="op-123")
 
 
-def test_on_completed(executor):
+async def test_on_completed(executor):
     with patch.object(executor, "complete_execution") as mock_complete:
         executor.on_completed("test-arn", "result")
 
     mock_complete.assert_called_once_with("test-arn", "result")
 
 
-def test_on_failed(executor):
+async def test_on_failed(executor):
     error = ErrorObject.from_message("test error")
 
     with patch.object(executor, "fail_execution") as mock_fail:
@@ -1431,7 +1433,7 @@ def test_on_failed(executor):
     mock_fail.assert_called_once_with("test-arn", error)
 
 
-def test_on_wait_timer_scheduled(executor, mock_scheduler):
+async def test_on_wait_timer_scheduled(executor, mock_scheduler):
     """Test wait timer scheduling through public observer method."""
     mock_event = Mock()
     mock_scheduler.create_event.return_value = mock_event
@@ -1463,7 +1465,7 @@ def test_on_wait_timer_scheduled(executor, mock_scheduler):
     assert wait_timer_call[1]["completion_event"] == mock_event
 
 
-def test_should_retry_when_response_has_unexpected_status(
+async def test_should_retry_when_response_has_unexpected_status(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test that responses with unexpected status trigger retry logic."""
@@ -1498,7 +1500,7 @@ def test_should_retry_when_response_has_unexpected_status(
         handler = mock_scheduler.call_later.call_args_list[-1][0][0]
 
         # Execute the handler to trigger the invocation logic
-        asyncio.run(handler())
+        await handler()
 
         # Assert - verify retry was triggered due to validation error
         assert mock_execution.consecutive_failed_invocation_attempts == 1
@@ -1507,7 +1509,7 @@ def test_should_retry_when_response_has_unexpected_status(
         assert mock_scheduler.call_later.call_count == 3
 
 
-def test_invoke_handler_execution_completed_during_invocation_async(
+async def test_invoke_handler_execution_completed_during_invocation_async(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test execution completing during invocation through public API."""
@@ -1544,13 +1546,13 @@ def test_invoke_handler_execution_completed_during_invocation_async(
         handler = mock_scheduler.call_later.call_args_list[-1][0][0]
 
         # Execute the handler to trigger the invocation logic
-        asyncio.run(handler())
+        await handler()
 
     # Verify the execution was loaded multiple times (before and after invocation)
     assert mock_store.load.call_count >= 2
 
 
-def test_invoke_handler_resource_not_found_async(
+async def test_invoke_handler_resource_not_found_async(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test resource not found handling causes workflow failure through public API (async version)."""
@@ -1581,7 +1583,7 @@ def test_invoke_handler_resource_not_found_async(
             handler = mock_scheduler.call_later.call_args_list[-1][0][0]
 
             # Execute the handler to trigger the invocation logic
-            asyncio.run(handler())
+            await handler()
 
         # Assert - verify workflow failure was triggered through public API
         mock_fail.assert_called_once()
@@ -1593,7 +1595,7 @@ def test_invoke_handler_resource_not_found_async(
         )  # error is second positional arg
 
 
-def test_invoke_handler_general_exception_async(
+async def test_invoke_handler_general_exception_async(
     executor, mock_store, mock_scheduler, mock_invoker, start_input
 ):
     """Test general exception handling triggers retry through public API (async version)."""
@@ -1633,7 +1635,7 @@ def test_invoke_handler_general_exception_async(
         handler = mock_scheduler.call_later.call_args_list[-1][0][0]
 
         # Execute the handler to trigger the invocation logic
-        asyncio.run(handler())
+        await handler()
 
         # Assert - verify retry was scheduled through observable behavior
         assert mock_execution.consecutive_failed_invocation_attempts == 1
@@ -1642,7 +1644,7 @@ def test_invoke_handler_general_exception_async(
         assert mock_scheduler.call_later.call_count == 3
 
 
-def test_invoke_execution_with_delay_through_wait_timer(executor, mock_scheduler):
+async def test_invoke_execution_with_delay_through_wait_timer(executor, mock_scheduler):
     """Test execution invocation with delay through wait timer scheduling."""
     mock_event = Mock()
     mock_scheduler.create_event.return_value = mock_event
@@ -1670,7 +1672,9 @@ def test_invoke_execution_with_delay_through_wait_timer(executor, mock_scheduler
     assert wait_timer_call[1]["delay"] == 10.0
 
 
-def test_invoke_execution_no_delay_through_start_execution(executor, mock_scheduler):
+async def test_invoke_execution_no_delay_through_start_execution(
+    executor, mock_scheduler
+):
     """Test execution invocation with no delay through start_execution."""
     mock_event = Mock()
     mock_scheduler.create_event.return_value = mock_event
@@ -1694,7 +1698,7 @@ def test_invoke_execution_no_delay_through_start_execution(executor, mock_schedu
     assert initial_call[1]["delay"] == 0
 
 
-def test_on_step_retry_scheduled(executor, mock_scheduler):
+async def test_on_step_retry_scheduled(executor, mock_scheduler):
     """Test step retry scheduling through public observer method."""
     mock_event = Mock()
     mock_scheduler.create_event.return_value = mock_event
@@ -1724,7 +1728,7 @@ def test_on_step_retry_scheduled(executor, mock_scheduler):
     assert retry_call[1]["completion_event"] == mock_event
 
 
-def test_wait_handler_execution(executor, mock_scheduler):
+async def test_wait_handler_execution(executor, mock_scheduler):
     """Test wait handler execution through public observer method."""
     mock_event = Mock()
     mock_scheduler.create_event.return_value = mock_event
@@ -1756,7 +1760,7 @@ def test_wait_handler_execution(executor, mock_scheduler):
             mock_invoke.assert_called_once_with("test-arn", delay=0)
 
 
-def test_retry_handler_execution(executor, mock_scheduler):
+async def test_retry_handler_execution(executor, mock_scheduler):
     """Test retry handler execution through public observer method."""
     mock_event = Mock()
     mock_scheduler.create_event.return_value = mock_event
@@ -1791,7 +1795,7 @@ def test_retry_handler_execution(executor, mock_scheduler):
 # Tests for new web handler methods
 
 
-def test_get_execution_details(executor, mock_store):
+async def test_get_execution_details(executor, mock_store):
     """Test get_execution_details method."""
 
     # Create real execution instance with mocked start_input
@@ -1836,7 +1840,7 @@ def test_get_execution_details(executor, mock_store):
     mock_store.load.assert_called_once_with("test-arn")
 
 
-def test_get_execution_details_not_found(executor, mock_store):
+async def test_get_execution_details_not_found(executor, mock_store):
     """Test get_execution_details with non-existent execution."""
     mock_store.load.side_effect = KeyError("Execution not found")
 
@@ -1844,7 +1848,7 @@ def test_get_execution_details_not_found(executor, mock_store):
         executor.get_execution_details("test-arn")
 
 
-def test_get_execution_details_failed_execution(executor, mock_store):
+async def test_get_execution_details_failed_execution(executor, mock_store):
     """Test get_execution_details with failed execution."""
 
     # Create real execution instance with mocked start_input
@@ -1888,7 +1892,7 @@ def test_get_execution_details_failed_execution(executor, mock_store):
     assert result.error == error
 
 
-def test_list_executions_empty(executor, mock_store):
+async def test_list_executions_empty(executor, mock_store):
     """Test list_executions with no executions."""
     query_result = ([], None)
     mock_store.query.return_value = query_result
@@ -1900,7 +1904,7 @@ def test_list_executions_empty(executor, mock_store):
     mock_store.query.assert_called_once()
 
 
-def test_list_executions_with_filtering(executor, mock_store):
+async def test_list_executions_with_filtering(executor, mock_store):
     """Test list_executions with function name filtering."""
     # Create real execution instance
     mock_start_input = Mock()
@@ -1937,7 +1941,7 @@ def test_list_executions_with_filtering(executor, mock_store):
     assert result.durable_executions[0].status == "RUNNING"
 
 
-def test_list_executions_with_pagination(executor, mock_store):
+async def test_list_executions_with_pagination(executor, mock_store):
     """Test list_executions with pagination."""
     # Create multiple mock executions for first page
     executions_page1 = []
@@ -2003,7 +2007,7 @@ def test_list_executions_with_pagination(executor, mock_store):
     assert result2.next_marker == "4"
 
 
-def test_list_executions_by_function(executor):
+async def test_list_executions_by_function(executor):
     """Test list_executions_by_function delegates to list_executions."""
     with patch.object(executor, "list_executions") as mock_list:
         mock_response = ListDurableExecutionsResponse(
@@ -2029,7 +2033,7 @@ def test_list_executions_by_function(executor):
         assert result.next_marker is None
 
 
-def test_stop_execution(executor, mock_store):
+async def test_stop_execution(executor, mock_store):
     """Test stop_execution method."""
     # Create real execution instance with mocked start_input
     mock_start_input = Mock()
@@ -2053,7 +2057,7 @@ def test_stop_execution(executor, mock_store):
     assert execution.close_status == ExecutionStatus.STOPPED
 
 
-def test_stop_execution_already_complete(executor, mock_store):
+async def test_stop_execution_already_complete(executor, mock_store):
     """Test stop_execution with already completed execution returns idempotent response."""
     mock_execution = Mock()
     mock_execution.is_complete = True
@@ -2072,7 +2076,7 @@ def test_stop_execution_already_complete(executor, mock_store):
     assert result.stop_timestamp == datetime(2023, 1, 1, 0, 1, 0, tzinfo=UTC)
 
 
-def test_stop_execution_with_custom_error(executor, mock_store):
+async def test_stop_execution_with_custom_error(executor, mock_store):
     """Test stop_execution with custom error."""
     # Create real execution instance with mocked start_input
     mock_start_input = Mock()
@@ -2098,14 +2102,14 @@ def test_stop_execution_with_custom_error(executor, mock_store):
     assert execution.result.error == custom_error
 
 
-def test_get_execution_not_found(executor, mock_store):
+async def test_get_execution_not_found(executor, mock_store):
     mock_store.load.side_effect = KeyError("not found")
 
     with pytest.raises(ResourceNotFoundException):
         executor.get_execution("test-arn")
 
 
-def test_get_execution_state(executor, mock_store):
+async def test_get_execution_state(executor, mock_store):
     """Test get_execution_state method."""
 
     mock_execution = Mock()
@@ -2141,7 +2145,7 @@ def test_get_execution_state(executor, mock_store):
     mock_store.load.assert_called_once_with("test-arn")
 
 
-def test_get_execution_state_invalid_token(executor, mock_store):
+async def test_get_execution_state_invalid_token(executor, mock_store):
     """Test get_execution_state with invalid checkpoint token."""
     mock_execution = Mock()
     mock_execution.used_tokens = {"token1", "token2"}
@@ -2153,7 +2157,7 @@ def test_get_execution_state_invalid_token(executor, mock_store):
         executor.get_execution_state("test-arn", checkpoint_token="invalid-token")  # noqa: S106
 
 
-def test_get_execution_history(executor, mock_store):
+async def test_get_execution_history(executor, mock_store):
     """Test get_execution_history method."""
     mock_execution = Mock()
     mock_execution.operations = []  # Empty operations list
@@ -2172,7 +2176,7 @@ def test_get_execution_history(executor, mock_store):
     mock_store.load.assert_called_once_with("test-arn")
 
 
-def test_get_execution_history_with_events(executor, mock_store):
+async def test_get_execution_history_with_events(executor, mock_store):
     """Test get_execution_history with actual events."""
     from async_durable_execution.lambda_service import StepDetails
 
@@ -2201,7 +2205,7 @@ def test_get_execution_history_with_events(executor, mock_store):
     assert result.events[1].event_type == "StepSucceeded"
 
 
-def test_get_execution_history_reverse_order(executor, mock_store):
+async def test_get_execution_history_reverse_order(executor, mock_store):
     """Test get_execution_history with reverse order."""
     op1 = Operation(
         operation_id="op-1",
@@ -2228,7 +2232,7 @@ def test_get_execution_history_reverse_order(executor, mock_store):
     assert result.events[1].event_type == "StepStarted"
 
 
-def test_get_execution_history_pagination(executor, mock_store):
+async def test_get_execution_history_pagination(executor, mock_store):
     """Test get_execution_history with pagination."""
     # Create multiple operations to generate many events
     operations = []
@@ -2258,7 +2262,7 @@ def test_get_execution_history_pagination(executor, mock_store):
     assert result.next_marker == "3"  # Next event_id
 
 
-def test_get_execution_history_pagination_with_marker(executor, mock_store):
+async def test_get_execution_history_pagination_with_marker(executor, mock_store):
     """Test get_execution_history pagination with marker."""
     operations = []
     for i in range(3):
@@ -2287,7 +2291,7 @@ def test_get_execution_history_pagination_with_marker(executor, mock_store):
     # Should get events with event_id >= 3
 
 
-def test_get_execution_history_invalid_marker(executor, mock_store):
+async def test_get_execution_history_invalid_marker(executor, mock_store):
     """Test get_execution_history with invalid marker."""
     mock_execution = Mock()
     mock_execution.operations = []
@@ -2305,7 +2309,7 @@ def test_get_execution_history_invalid_marker(executor, mock_store):
     assert result.next_marker is None
 
 
-def test_checkpoint_execution(executor, mock_store):
+async def test_checkpoint_execution(executor, mock_store):
     """Test checkpoint_execution method."""
     mock_execution = Mock()
     mock_execution.used_tokens = {"token1", "token2"}
@@ -2320,7 +2324,7 @@ def test_checkpoint_execution(executor, mock_store):
     mock_execution.get_new_checkpoint_token.assert_called_once()
 
 
-def test_checkpoint_execution_invalid_token(executor, mock_store):
+async def test_checkpoint_execution_invalid_token(executor, mock_store):
     """Test checkpoint_execution with invalid checkpoint token."""
     mock_execution = Mock()
     mock_execution.used_tokens = {"token1", "token2"}
@@ -2335,7 +2339,7 @@ def test_checkpoint_execution_invalid_token(executor, mock_store):
 # Callback method tests
 
 
-def test_send_callback_success(executor, mock_store):
+async def test_send_callback_success(executor, mock_store):
     """Test send_callback_success method."""
     from async_durable_execution_runner.token import CallbackToken
 
@@ -2362,19 +2366,19 @@ def test_send_callback_success(executor, mock_store):
     mock_invoke.assert_called_once_with("test-arn")
 
 
-def test_send_callback_success_empty_callback_id(executor):
+async def test_send_callback_success_empty_callback_id(executor):
     """Test send_callback_success with empty callback_id."""
     with pytest.raises(InvalidParameterValueException, match="callback_id is required"):
         executor.send_callback_success("")
 
 
-def test_send_callback_success_none_callback_id(executor):
+async def test_send_callback_success_none_callback_id(executor):
     """Test send_callback_success with None callback_id."""
     with pytest.raises(InvalidParameterValueException, match="callback_id is required"):
         executor.send_callback_success(None)
 
 
-def test_send_callback_success_with_result(executor, mock_store):
+async def test_send_callback_success_with_result(executor, mock_store):
     """Test send_callback_success with result data."""
     from async_durable_execution_runner.token import CallbackToken
 
@@ -2399,7 +2403,7 @@ def test_send_callback_success_with_result(executor, mock_store):
     mock_invoke.assert_called_once_with("test-arn")
 
 
-def test_send_callback_failure(executor, mock_store):
+async def test_send_callback_failure(executor, mock_store):
     """Test send_callback_failure method."""
     from async_durable_execution_runner.token import CallbackToken
 
@@ -2423,19 +2427,19 @@ def test_send_callback_failure(executor, mock_store):
     mock_invoke.assert_called_once_with("test-arn")
 
 
-def test_send_callback_failure_empty_callback_id(executor):
+async def test_send_callback_failure_empty_callback_id(executor):
     """Test send_callback_failure with empty callback_id."""
     with pytest.raises(InvalidParameterValueException, match="callback_id is required"):
         executor.send_callback_failure("")
 
 
-def test_send_callback_failure_none_callback_id(executor):
+async def test_send_callback_failure_none_callback_id(executor):
     """Test send_callback_failure with None callback_id."""
     with pytest.raises(InvalidParameterValueException, match="callback_id is required"):
         executor.send_callback_failure(None)
 
 
-def test_send_callback_failure_with_error(executor, mock_store):
+async def test_send_callback_failure_with_error(executor, mock_store):
     """Test send_callback_failure with error object."""
     # Create valid callback token
     callback_token = CallbackToken(execution_arn="test-arn", operation_id="op-123")
@@ -2457,7 +2461,7 @@ def test_send_callback_failure_with_error(executor, mock_store):
     mock_invoke.assert_called_once_with("test-arn")
 
 
-def test_send_callback_heartbeat(executor, mock_store):
+async def test_send_callback_heartbeat(executor, mock_store):
     """Test send_callback_heartbeat method."""
     # Create valid callback token
     callback_token = CallbackToken(execution_arn="test-arn", operation_id="op-123")
@@ -2480,19 +2484,19 @@ def test_send_callback_heartbeat(executor, mock_store):
     mock_execution.find_callback_operation.assert_called_once_with(callback_id)
 
 
-def test_send_callback_heartbeat_empty_callback_id(executor):
+async def test_send_callback_heartbeat_empty_callback_id(executor):
     """Test send_callback_heartbeat with empty callback_id."""
     with pytest.raises(InvalidParameterValueException, match="callback_id is required"):
         executor.send_callback_heartbeat("")
 
 
-def test_send_callback_heartbeat_none_callback_id(executor):
+async def test_send_callback_heartbeat_none_callback_id(executor):
     """Test send_callback_heartbeat with None callback_id."""
     with pytest.raises(InvalidParameterValueException, match="callback_id is required"):
         executor.send_callback_heartbeat(None)
 
 
-def test_complete_execution_no_result(mock_store, executor):
+async def test_complete_execution_no_result(mock_store, executor):
     """Test complete_execution when execution has no result after completion."""
     mock_execution = Mock()
     mock_execution.result = None  # No result after completion
@@ -2503,7 +2507,7 @@ def test_complete_execution_no_result(mock_store, executor):
             executor.complete_execution("test-arn", "result")
 
 
-def test_fail_execution_no_result(mock_store, executor):
+async def test_fail_execution_no_result(mock_store, executor):
     """Test fail_execution when execution has no result after failure."""
     mock_execution = Mock()
     mock_execution.result = None  # No result after failure
@@ -2515,7 +2519,7 @@ def test_fail_execution_no_result(mock_store, executor):
             executor.fail_execution("test-arn", error)
 
 
-def test_send_callback_heartbeat_inactive_callback(mock_store, executor):
+async def test_send_callback_heartbeat_inactive_callback(mock_store, executor):
     """Test send_callback_heartbeat with inactive callback."""
 
     # Create valid callback token
@@ -2533,7 +2537,7 @@ def test_send_callback_heartbeat_inactive_callback(mock_store, executor):
         executor.send_callback_heartbeat(callback_id)
 
 
-def test_send_callback_success_invalid_token(executor):
+async def test_send_callback_success_invalid_token(executor):
     """Test send_callback_success with invalid token format."""
     with pytest.raises(
         ResourceNotFoundException, match="Failed to process callback success"
@@ -2541,7 +2545,7 @@ def test_send_callback_success_invalid_token(executor):
         executor.send_callback_success("invalid-token")
 
 
-def test_send_callback_failure_invalid_token(executor):
+async def test_send_callback_failure_invalid_token(executor):
     """Test send_callback_failure with invalid token format."""
     with pytest.raises(
         ResourceNotFoundException, match="Failed to process callback failure"
@@ -2549,7 +2553,7 @@ def test_send_callback_failure_invalid_token(executor):
         executor.send_callback_failure("invalid-token")
 
 
-def test_send_callback_heartbeat_invalid_token(executor):
+async def test_send_callback_heartbeat_invalid_token(executor):
     """Test send_callback_heartbeat with invalid token format."""
     with pytest.raises(
         ResourceNotFoundException, match="Failed to process callback heartbeat"
@@ -2557,7 +2561,7 @@ def test_send_callback_heartbeat_invalid_token(executor):
         executor.send_callback_heartbeat("invalid-token")
 
 
-def test_complete_events_no_event(executor):
+async def test_complete_events_no_event(executor):
     """Test _complete_events when no event exists."""
     # Should not raise exception when event doesn't exist
     executor._complete_events("nonexistent-arn")  # Should handle gracefully
@@ -2566,7 +2570,7 @@ def test_complete_events_no_event(executor):
 # Tests for callback timeout functionality
 
 
-def test_callback_timeout_scheduling(executor, mock_store, mock_scheduler):
+async def test_callback_timeout_scheduling(executor, mock_store, mock_scheduler):
     """Test that callback timeouts are scheduled when callback is created."""
     # Create callback options with both timeouts
     callback_options = CallbackOptions(timeout_seconds=60, heartbeat_timeout_seconds=30)
@@ -2581,7 +2585,7 @@ def test_callback_timeout_scheduling(executor, mock_store, mock_scheduler):
     assert mock_scheduler.call_later.call_count == 2  # main timeout + heartbeat timeout
 
 
-def test_callback_timeout_cleanup(executor, mock_store):
+async def test_callback_timeout_cleanup(executor, mock_store):
     """Test that callback timeouts are cleaned up when callback completes."""
     # Create mock timeout events
     timeout_event = Mock()
@@ -2600,7 +2604,7 @@ def test_callback_timeout_cleanup(executor, mock_store):
     assert "callback-id" not in executor._callback_heartbeats
 
 
-def test_callback_heartbeat_timeout_reset(executor, mock_store, mock_scheduler):
+async def test_callback_heartbeat_timeout_reset(executor, mock_store, mock_scheduler):
     """Test that heartbeat timeout is reset when heartbeat is received."""
 
     # Create callback token
@@ -2633,7 +2637,7 @@ def test_callback_heartbeat_timeout_reset(executor, mock_store, mock_scheduler):
     mock_scheduler.call_later.assert_called()
 
 
-def test_callback_timeout_handlers(executor, mock_store):
+async def test_callback_timeout_handlers(executor, mock_store):
     """Test callback timeout and heartbeat timeout handlers."""
     # Create callback token
     callback_token = CallbackToken(execution_arn="test-arn", operation_id="op-123")
@@ -2664,7 +2668,7 @@ def test_callback_timeout_handlers(executor, mock_store):
     assert "Callback heartbeat timed out" in str(heartbeat_error.message)
 
 
-def test_callback_timeout_completed_execution(executor, mock_store):
+async def test_callback_timeout_completed_execution(executor, mock_store):
     """Test that timeout handlers ignore completed executions."""
 
     # Create callback token
@@ -2685,7 +2689,7 @@ def test_callback_timeout_completed_execution(executor, mock_store):
     mock_store.update.assert_not_called()
 
 
-def test_schedule_callback_timeouts_no_callback_details(executor, mock_store):
+async def test_schedule_callback_timeouts_no_callback_details(executor, mock_store):
     """Test _schedule_callback_timeouts when operation has no callback details."""
 
     # Create operation without callback details
@@ -2708,7 +2712,7 @@ def test_schedule_callback_timeouts_no_callback_details(executor, mock_store):
     assert len(executor._callback_heartbeats) == 0
 
 
-def test_schedule_callback_timeouts_no_callback_options(executor, mock_store):
+async def test_schedule_callback_timeouts_no_callback_options(executor, mock_store):
     """Test _schedule_callback_timeouts when no callback options are found."""
 
     # Create operation with callback details but no matching updates
@@ -2733,7 +2737,9 @@ def test_schedule_callback_timeouts_no_callback_options(executor, mock_store):
     assert len(executor._callback_heartbeats) == 0
 
 
-def test_schedule_callback_timeouts_zero_timeouts(executor, mock_store, mock_scheduler):
+async def test_schedule_callback_timeouts_zero_timeouts(
+    executor, mock_store, mock_scheduler
+):
     """Test _schedule_callback_timeouts with zero timeout values."""
     # Create operation with callback details
     operation = Operation(
@@ -2768,7 +2774,7 @@ def test_schedule_callback_timeouts_zero_timeouts(executor, mock_store, mock_sch
     assert len(executor._callback_heartbeats) == 0
 
 
-def test_schedule_callback_timeouts_only_main_timeout(
+async def test_schedule_callback_timeouts_only_main_timeout(
     executor, mock_store, mock_scheduler
 ):
     """Test _schedule_callback_timeouts with only main timeout configured."""
@@ -2786,7 +2792,7 @@ def test_schedule_callback_timeouts_only_main_timeout(
     assert len(executor._callback_heartbeats) == 0
 
 
-def test_schedule_callback_timeouts_only_heartbeat_timeout(
+async def test_schedule_callback_timeouts_only_heartbeat_timeout(
     executor, mock_store, mock_scheduler
 ):
     """Test _schedule_callback_timeouts with only heartbeat timeout configured."""
@@ -2803,7 +2809,7 @@ def test_schedule_callback_timeouts_only_heartbeat_timeout(
     assert len(executor._callback_heartbeats) == 1
 
 
-def test_schedule_callback_timeouts_exception_handling(executor, mock_store):
+async def test_schedule_callback_timeouts_exception_handling(executor, mock_store):
     """Test _schedule_callback_timeouts handles exceptions gracefully."""
     # Make get_execution raise an exception
     mock_store.load.side_effect = Exception("Test error")
@@ -2816,7 +2822,7 @@ def test_schedule_callback_timeouts_exception_handling(executor, mock_store):
     assert len(executor._callback_heartbeats) == 0
 
 
-def test_on_timed_out(executor, mock_store):
+async def test_on_timed_out(executor, mock_store):
     """Test on_timed_out method."""
     # Create real execution instance
     mock_start_input = Mock()
@@ -2844,7 +2850,7 @@ def test_on_timed_out(executor, mock_store):
     assert execution.result.error == error
 
 
-def test_on_stopped(executor):
+async def test_on_stopped(executor):
     """Test on_stopped method."""
     error = ErrorObject.from_message("Execution stopped")
 
@@ -2854,7 +2860,7 @@ def test_on_stopped(executor):
     mock_fail.assert_called_once_with("test-arn", error)
 
 
-def test_notify_timed_out():
+async def test_notify_timed_out():
     """Test notify_timed_out method."""
     notifier = ExecutionNotifier()
     observer = Mock()
@@ -2866,7 +2872,7 @@ def test_notify_timed_out():
     observer.on_timed_out.assert_called_once_with(execution_arn="test-arn", error=error)
 
 
-def test_notify_stopped():
+async def test_notify_stopped():
     """Test notify_stopped method."""
     notifier = ExecutionNotifier()
     observer = Mock()

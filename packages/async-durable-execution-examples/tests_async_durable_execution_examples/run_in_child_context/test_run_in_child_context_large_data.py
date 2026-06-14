@@ -6,14 +6,14 @@ from async_durable_execution_examples.run_in_child_context import (
 )
 
 
-def test_handle_large_data_exceeding_256k_limit_using_run_in_child_context(
+async def test_handle_large_data_exceeding_256k_limit_using_run_in_child_context(
     durable_runner,
 ):
     """Test handling large data exceeding 256k limit using runInChildContext."""
     with durable_runner(
         handler=run_in_child_context_large_data.handler, input=None, timeout=30
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     result_data = result.get_deserialized_result()
 

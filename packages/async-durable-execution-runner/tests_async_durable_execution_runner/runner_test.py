@@ -47,7 +47,7 @@ from async_durable_execution_runner.runner import (
 )
 
 
-def test_operation_creation():
+async def test_operation_creation():
     """Test basic Operation creation."""
     op = Operation(
         operation_id="test-id",
@@ -68,7 +68,7 @@ def test_operation_creation():
     assert op.sub_type == "test-subtype"
 
 
-def test_execution_operation_from_svc_operation():
+async def test_execution_operation_from_svc_operation():
     """Test ExecutionOperation creation from service operation."""
     execution_details = ExecutionDetails(input_payload="test-input")
     svc_op = SvcOperation(
@@ -85,7 +85,7 @@ def test_execution_operation_from_svc_operation():
     assert exec_op.input_payload == "test-input"
 
 
-def test_execution_operation_wrong_type():
+async def test_execution_operation_wrong_type():
     """Test ExecutionOperation raises error for wrong operation type."""
     svc_op = SvcOperation(
         operation_id="test-id",
@@ -100,7 +100,7 @@ def test_execution_operation_wrong_type():
         ExecutionOperation.from_svc_operation(svc_op)
 
 
-def test_context_operation_from_svc_operation():
+async def test_context_operation_from_svc_operation():
     """Test ContextOperation creation from service operation."""
     context_details = ContextDetails(result=json.dumps("test-result"), error=None)
     svc_op = SvcOperation(
@@ -118,7 +118,7 @@ def test_context_operation_from_svc_operation():
     assert ctx_op.child_operations == []
 
 
-def test_context_operation_with_children():
+async def test_context_operation_with_children():
     """Test ContextOperation with child operations."""
     parent_op = SvcOperation(
         operation_id="parent-id",
@@ -143,7 +143,7 @@ def test_context_operation_with_children():
     assert ctx_op.child_operations[0].name == "child-step"
 
 
-def test_context_operation_get_operation_by_name():
+async def test_context_operation_get_operation_by_name():
     """Test ContextOperation get_operation_by_name method."""
     child_op = Operation(
         operation_id="child-id",
@@ -163,7 +163,7 @@ def test_context_operation_get_operation_by_name():
     assert found_op == child_op
 
 
-def test_context_operation_get_operation_by_name_not_found():
+async def test_context_operation_get_operation_by_name_not_found():
     """Test ContextOperation get_operation_by_name raises error when not found."""
     ctx_op = ContextOperation(
         operation_id="ctx-id",
@@ -178,7 +178,7 @@ def test_context_operation_get_operation_by_name_not_found():
         ctx_op.get_operation_by_name("missing")
 
 
-def test_context_operation_get_step():
+async def test_context_operation_get_step():
     """Test ContextOperation get_step method."""
     step_op = StepOperation(
         operation_id="step-id",
@@ -200,7 +200,7 @@ def test_context_operation_get_step():
     assert found_step.name == "test-step"
 
 
-def test_context_operation_get_wait():
+async def test_context_operation_get_wait():
     """Test ContextOperation get_wait method."""
     wait_op = WaitOperation(
         operation_id="wait-id",
@@ -221,7 +221,7 @@ def test_context_operation_get_wait():
     assert found_wait.name == "test-wait"
 
 
-def test_context_operation_get_context():
+async def test_context_operation_get_context():
     """Test ContextOperation get_context method."""
     nested_ctx_op = ContextOperation(
         operation_id="nested-ctx-id",
@@ -243,7 +243,7 @@ def test_context_operation_get_context():
     assert found_ctx.name == "nested-context"
 
 
-def test_context_operation_get_callback():
+async def test_context_operation_get_callback():
     """Test ContextOperation get_callback method."""
     callback_op = CallbackOperation(
         operation_id="callback-id",
@@ -265,7 +265,7 @@ def test_context_operation_get_callback():
     assert found_callback.name == "test-callback"
 
 
-def test_context_operation_get_invoke():
+async def test_context_operation_get_invoke():
     """Test ContextOperation get_invoke method."""
     invoke_op = InvokeOperation(
         operation_id="invoke-id",
@@ -286,7 +286,7 @@ def test_context_operation_get_invoke():
     assert found_invoke.name == "test-invoke"
 
 
-def test_context_operation_get_execution():
+async def test_context_operation_get_execution():
     """Test ContextOperation get_execution method."""
     exec_op = ExecutionOperation(
         operation_id="exec-id",
@@ -307,7 +307,7 @@ def test_context_operation_get_execution():
     assert found_exec.name == "test-execution"
 
 
-def test_step_operation_from_svc_operation():
+async def test_step_operation_from_svc_operation():
     """Test StepOperation creation from service operation."""
     step_details = StepDetails(attempt=2, result=json.dumps("step-result"), error=None)
     svc_op = SvcOperation(
@@ -325,7 +325,7 @@ def test_step_operation_from_svc_operation():
     assert step_op.result == json.dumps("step-result")
 
 
-def test_step_operation_wrong_type():
+async def test_step_operation_wrong_type():
     """Test StepOperation raises error for wrong operation type."""
     svc_op = SvcOperation(
         operation_id="test-id",
@@ -340,7 +340,7 @@ def test_step_operation_wrong_type():
         StepOperation.from_svc_operation(svc_op)
 
 
-def test_wait_operation_from_svc_operation():
+async def test_wait_operation_from_svc_operation():
     """Test WaitOperation creation from service operation."""
     scheduled_time = datetime.datetime.now(tz=datetime.UTC)
     wait_details = WaitDetails(scheduled_end_timestamp=scheduled_time)
@@ -358,7 +358,7 @@ def test_wait_operation_from_svc_operation():
     assert wait_op.scheduled_end_timestamp == scheduled_time
 
 
-def test_wait_operation_wrong_type():
+async def test_wait_operation_wrong_type():
     """Test WaitOperation raises error for wrong operation type."""
     svc_op = SvcOperation(
         operation_id="test-id",
@@ -373,7 +373,7 @@ def test_wait_operation_wrong_type():
         WaitOperation.from_svc_operation(svc_op)
 
 
-def test_callback_operation_from_svc_operation():
+async def test_callback_operation_from_svc_operation():
     """Test CallbackOperation creation from service operation."""
     callback_details = CallbackDetails(
         callback_id="cb-123", result=json.dumps("callback-result")
@@ -393,7 +393,7 @@ def test_callback_operation_from_svc_operation():
     assert callback_op.result == json.dumps("callback-result")
 
 
-def test_callback_operation_wrong_type():
+async def test_callback_operation_wrong_type():
     """Test CallbackOperation raises error for wrong operation type."""
     svc_op = SvcOperation(
         operation_id="test-id",
@@ -408,7 +408,7 @@ def test_callback_operation_wrong_type():
         CallbackOperation.from_svc_operation(svc_op)
 
 
-def test_invoke_operation_from_svc_operation():
+async def test_invoke_operation_from_svc_operation():
     """Test InvokeOperation creation from service operation."""
     invoke_details = ChainedInvokeDetails(
         result=json.dumps("invoke-result"),
@@ -427,7 +427,7 @@ def test_invoke_operation_from_svc_operation():
     assert invoke_op.result == json.dumps("invoke-result")
 
 
-def test_invoke_operation_wrong_type():
+async def test_invoke_operation_wrong_type():
     """Test InvokeOperation raises error for wrong operation type."""
     svc_op = SvcOperation(
         operation_id="test-id",
@@ -442,7 +442,7 @@ def test_invoke_operation_wrong_type():
         InvokeOperation.from_svc_operation(svc_op)
 
 
-def test_operation_factories_mapping():
+async def test_operation_factories_mapping():
     """Test OPERATION_FACTORIES contains all expected mappings."""
     expected_types = {
         OperationType.EXECUTION: ExecutionOperation,
@@ -456,7 +456,7 @@ def test_operation_factories_mapping():
     assert expected_types == OPERATION_FACTORIES
 
 
-def test_create_operation_step():
+async def test_create_operation_step():
     """Test create_operation function with STEP operation."""
     svc_op = SvcOperation(
         operation_id="step-id",
@@ -471,7 +471,7 @@ def test_create_operation_step():
     assert operation.operation_id == "step-id"
 
 
-def test_create_operation_unknown_type():
+async def test_create_operation_unknown_type():
     """Test create_operation raises error for unknown operation type."""
     # Create a mock operation with an invalid type
     svc_op = Mock()
@@ -483,7 +483,7 @@ def test_create_operation_unknown_type():
         create_operation(svc_op)
 
 
-def test_durable_function_test_result_create():
+async def test_durable_function_test_result_create():
     """Test DurableFunctionTestResult.create method."""
     # Create mock execution with operations
     execution = Mock(spec=Execution)
@@ -517,7 +517,7 @@ def test_durable_function_test_result_create():
     assert len(result.operations) == 1  # EXECUTION operation filtered out
 
 
-def test_durable_function_test_result_get_operation_by_name():
+async def test_durable_function_test_result_get_operation_by_name():
     """Test DurableFunctionTestResult get_operation_by_name method."""
     step_op = StepOperation(
         operation_id="step-id",
@@ -536,7 +536,7 @@ def test_durable_function_test_result_get_operation_by_name():
     assert found_op == step_op
 
 
-def test_durable_function_test_result_get_operation_by_name_not_found():
+async def test_durable_function_test_result_get_operation_by_name_not_found():
     """Test DurableFunctionTestResult get_operation_by_name raises error when not found."""
     result = DurableFunctionTestResult(
         status=InvocationStatus.SUCCEEDED,
@@ -549,7 +549,7 @@ def test_durable_function_test_result_get_operation_by_name_not_found():
         result.get_operation_by_name("missing")
 
 
-def test_durable_function_test_result_get_step():
+async def test_durable_function_test_result_get_step():
     """Test DurableFunctionTestResult get_step method."""
     step_op = StepOperation(
         operation_id="step-id",
@@ -569,7 +569,7 @@ def test_durable_function_test_result_get_step():
     assert found_step.name == "test-step"
 
 
-def test_durable_function_test_result_get_wait():
+async def test_durable_function_test_result_get_wait():
     """Test DurableFunctionTestResult get_wait method."""
     wait_op = WaitOperation(
         operation_id="wait-id",
@@ -588,7 +588,7 @@ def test_durable_function_test_result_get_wait():
     assert found_wait.name == "test-wait"
 
 
-def test_durable_function_test_result_get_context():
+async def test_durable_function_test_result_get_context():
     """Test DurableFunctionTestResult get_context method."""
     ctx_op = ContextOperation(
         operation_id="ctx-id",
@@ -608,7 +608,7 @@ def test_durable_function_test_result_get_context():
     assert found_ctx.name == "test-context"
 
 
-def test_durable_function_test_result_get_callback():
+async def test_durable_function_test_result_get_callback():
     """Test DurableFunctionTestResult get_callback method."""
     callback_op = CallbackOperation(
         operation_id="callback-id",
@@ -628,7 +628,7 @@ def test_durable_function_test_result_get_callback():
     assert found_callback.name == "test-callback"
 
 
-def test_durable_function_test_result_get_invoke():
+async def test_durable_function_test_result_get_invoke():
     """Test DurableFunctionTestResult get_invoke method."""
     invoke_op = InvokeOperation(
         operation_id="invoke-id",
@@ -647,7 +647,7 @@ def test_durable_function_test_result_get_invoke():
     assert found_invoke.name == "test-invoke"
 
 
-def test_durable_function_test_result_get_execution():
+async def test_durable_function_test_result_get_execution():
     """Test DurableFunctionTestResult get_execution method."""
     exec_op = ExecutionOperation(
         operation_id="exec-id",
@@ -666,7 +666,7 @@ def test_durable_function_test_result_get_execution():
     assert found_exec.name == "test-execution"
 
 
-def test_durable_function_test_result_get_deserialized_result():
+async def test_durable_function_test_result_get_deserialized_result():
     """Test DurableFunctionTestResult deserializes the execution result."""
     result = DurableFunctionTestResult(
         status=InvocationStatus.SUCCEEDED,
@@ -677,7 +677,7 @@ def test_durable_function_test_result_get_deserialized_result():
     assert result.get_deserialized_result() == {"status": "ok"}
 
 
-def test_context_operation_get_deserialized_result():
+async def test_context_operation_get_deserialized_result():
     """Test ContextOperation deserializes its result payload."""
     op = ContextOperation(
         operation_id="ctx-id",
@@ -696,7 +696,7 @@ def test_context_operation_get_deserialized_result():
 @patch("async_durable_execution_runner.runner.InMemoryServiceClient")
 @patch("async_durable_execution_runner.runner.InProcessInvoker")
 @patch("async_durable_execution_runner.runner.Executor")
-def test_durable_function_test_runner_init(
+async def test_durable_function_test_runner_init(
     mock_executor, mock_invoker, mock_client, mock_processor, mock_store, mock_scheduler
 ):
     """Test DurableFunctionLocalTestRunner initialization."""
@@ -719,7 +719,7 @@ def test_durable_function_test_runner_init(
     )
 
 
-def test_durable_function_test_runner_context_manager():
+async def test_durable_function_test_runner_context_manager():
     """Test DurableFunctionLocalTestRunner context manager."""
     handler = Mock()
 
@@ -733,7 +733,7 @@ def test_durable_function_test_runner_context_manager():
             mock_close.assert_called_once()
 
 
-def test_durable_function_cloud_test_runner_context_manager():
+async def test_durable_function_cloud_test_runner_context_manager():
     """Test DurableFunctionCloudTestRunner context manager."""
     with patch.object(DurableFunctionCloudTestRunner, "__init__", return_value=None):
         with patch.object(DurableFunctionCloudTestRunner, "close") as mock_close:
@@ -746,7 +746,7 @@ def test_durable_function_cloud_test_runner_context_manager():
 
 
 @patch("async_durable_execution_runner.runner.DurableFunctionLocalTestRunner")
-def test_create_runner_local_uses_configured_defaults(mock_local_runner_class):
+async def test_create_runner_local_uses_configured_defaults(mock_local_runner_class):
     """Test create_runner builds a local runner with default run values."""
     handler = Mock()
     mock_local_runner = Mock()
@@ -770,7 +770,7 @@ def test_create_runner_local_uses_configured_defaults(mock_local_runner_class):
 
 
 @patch("async_durable_execution_runner.runner.DurableFunctionCloudTestRunner")
-def test_create_runner_cloud_uses_configured_defaults(mock_cloud_runner_class):
+async def test_create_runner_cloud_uses_configured_defaults(mock_cloud_runner_class):
     """Test create_runner builds a cloud runner with default async values."""
     mock_cloud_runner = Mock()
     mock_cloud_runner_class.return_value = mock_cloud_runner
@@ -796,7 +796,7 @@ def test_create_runner_cloud_uses_configured_defaults(mock_cloud_runner_class):
     )
 
 
-def test_create_runner_requires_handler_for_local_mode():
+async def test_create_runner_requires_handler_for_local_mode():
     """Test local mode validation for create_runner."""
     with pytest.raises(
         InvalidParameterValueException,
@@ -805,7 +805,7 @@ def test_create_runner_requires_handler_for_local_mode():
         create_runner(mode="local")
 
 
-def test_create_runner_requires_function_name_for_cloud_mode():
+async def test_create_runner_requires_function_name_for_cloud_mode():
     """Test cloud mode validation for create_runner."""
     with pytest.raises(
         InvalidParameterValueException,
@@ -814,7 +814,7 @@ def test_create_runner_requires_function_name_for_cloud_mode():
         create_runner(mode="cloud")
 
 
-def test_create_runner_rejects_unknown_mode():
+async def test_create_runner_rejects_unknown_mode():
     """Test mode validation for create_runner."""
     with pytest.raises(
         InvalidParameterValueException,
@@ -824,7 +824,7 @@ def test_create_runner_rejects_unknown_mode():
 
 
 @patch("async_durable_execution_runner.runner.Scheduler")
-def test_durable_function_test_runner_close(mock_scheduler):
+async def test_durable_function_test_runner_close(mock_scheduler):
     """Test DurableFunctionLocalTestRunner close method."""
     handler = Mock()
 
@@ -841,7 +841,7 @@ def test_durable_function_test_runner_close(mock_scheduler):
 
 @patch("async_durable_execution_runner.runner.Executor")
 @patch("async_durable_execution_runner.runner.InMemoryExecutionStore")
-def test_durable_function_test_runner_run(mock_store_class, mock_executor_class):
+async def test_durable_function_test_runner_run(mock_store_class, mock_executor_class):
     """Test DurableFunctionLocalTestRunner run method."""
     handler = Mock()
 
@@ -866,7 +866,7 @@ def test_durable_function_test_runner_run(mock_store_class, mock_executor_class)
     mock_store.load.return_value = mock_execution
 
     runner = DurableFunctionLocalTestRunner(handler, input="test-input")
-    result = asyncio.run(runner.run())
+    result = await runner.run()
 
     # Verify start_execution was called with correct input
     mock_executor.start_execution.assert_called_once()
@@ -890,7 +890,7 @@ def test_durable_function_test_runner_run(mock_store_class, mock_executor_class)
 
 @patch("async_durable_execution_runner.runner.Executor")
 @patch("async_durable_execution_runner.runner.InMemoryExecutionStore")
-def test_durable_function_test_runner_run_with_custom_params(
+async def test_durable_function_test_runner_run_with_custom_params(
     mock_store_class, mock_executor_class
 ):
     """Test DurableFunctionLocalTestRunner run method with custom parameters."""
@@ -924,7 +924,7 @@ def test_durable_function_test_runner_run_with_custom_params(
         execution_name="custom-execution",
         account_id="987654321098",
     )
-    result = asyncio.run(runner.run())
+    result = await runner.run()
 
     # Verify start_execution was called with custom parameters
     start_input = mock_executor.start_execution.call_args[0][0]
@@ -941,7 +941,7 @@ def test_durable_function_test_runner_run_with_custom_params(
 
 
 @patch("async_durable_execution_runner.runner.Executor")
-def test_durable_function_test_runner_run_timeout(mock_executor_class):
+async def test_durable_function_test_runner_run_timeout(mock_executor_class):
     """Test DurableFunctionLocalTestRunner run method with timeout."""
     handler = Mock()
 
@@ -957,10 +957,10 @@ def test_durable_function_test_runner_run_timeout(mock_executor_class):
     runner = DurableFunctionLocalTestRunner(handler, input="test-input")
 
     with pytest.raises(TimeoutError, match="Execution did not complete within timeout"):
-        asyncio.run(runner.run())
+        await runner.run()
 
 
-def test_runner_run_methods_do_not_accept_call_time_overrides():
+async def test_runner_run_methods_do_not_accept_call_time_overrides():
     """Test run APIs only use values configured when the runner is created."""
     local_runner = DurableFunctionLocalTestRunner(Mock())
     cloud_runner = DurableFunctionCloudTestRunner(function_name="test-function")
@@ -978,7 +978,7 @@ def test_runner_run_methods_do_not_accept_call_time_overrides():
         cloud_runner.run_async(timeout=10)
 
 
-def test_context_operation_wrong_type():
+async def test_context_operation_wrong_type():
     """Test ContextOperation raises error for wrong operation type."""
     svc_op = SvcOperation(
         operation_id="test-id",
@@ -993,7 +993,7 @@ def test_context_operation_wrong_type():
         ContextOperation.from_svc_operation(svc_op)
 
 
-def test_context_operation_with_child_operations_none():
+async def test_context_operation_with_child_operations_none():
     """Test ContextOperation with None child operations."""
     svc_op = SvcOperation(
         operation_id="ctx-id",
@@ -1007,7 +1007,7 @@ def test_context_operation_with_child_operations_none():
     assert ctx_op.child_operations == []
 
 
-def test_callback_operation_with_child_operations_none():
+async def test_callback_operation_with_child_operations_none():
     """Test CallbackOperation with None child operations."""
     svc_op = SvcOperation(
         operation_id="callback-id",
@@ -1021,7 +1021,7 @@ def test_callback_operation_with_child_operations_none():
     assert callback_op.child_operations == []
 
 
-def test_step_operation_with_child_operations_none():
+async def test_step_operation_with_child_operations_none():
     """Test StepOperation with None child operations."""
     svc_op = SvcOperation(
         operation_id="step-id",
@@ -1035,7 +1035,7 @@ def test_step_operation_with_child_operations_none():
     assert step_op.child_operations == []
 
 
-def test_durable_function_test_result_create_with_parent_operations():
+async def test_durable_function_test_result_create_with_parent_operations():
     """Test DurableFunctionTestResult.create with operations that have parent_id."""
     execution = Mock(spec=Execution)
 
@@ -1067,7 +1067,7 @@ def test_durable_function_test_result_create_with_parent_operations():
 # Tests for DurableFunctionCloudTestRunner and from_execution_history
 
 
-def test_durable_function_test_result_from_execution_history():
+async def test_durable_function_test_result_from_execution_history():
     """Test DurableFunctionTestResult.from_execution_history factory method."""
     import datetime
 
@@ -1136,7 +1136,7 @@ def test_durable_function_test_result_from_execution_history():
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_init(mock_boto3):
+async def test_cloud_runner_init(mock_boto3):
     """Test DurableFunctionCloudTestRunner initialization."""
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
@@ -1158,7 +1158,7 @@ def test_cloud_runner_init(mock_boto3):
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_run_success(mock_boto3):
+async def test_cloud_runner_run_success(mock_boto3):
     """Test DurableFunctionCloudTestRunner.run with successful execution."""
     from async_durable_execution.execution import InvocationStatus
     from async_durable_execution_runner.runner import (
@@ -1201,7 +1201,7 @@ def test_cloud_runner_run_success(mock_boto3):
         timeout=10,
     )
 
-    result = asyncio.run(runner.run())
+    result = await runner.run()
 
     assert result.status == InvocationStatus.SUCCEEDED
     assert result.result == "test-result"
@@ -1209,7 +1209,7 @@ def test_cloud_runner_run_success(mock_boto3):
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_run_invoke_failure(mock_boto3):
+async def test_cloud_runner_run_invoke_failure(mock_boto3):
     """Test DurableFunctionCloudTestRunner.run with invoke failure."""
     from async_durable_execution_runner.exceptions import (
         DurableFunctionsTestError,
@@ -1230,12 +1230,12 @@ def test_cloud_runner_run_invoke_failure(mock_boto3):
     with pytest.raises(
         DurableFunctionsTestError, match="Failed to invoke Lambda function"
     ):
-        asyncio.run(runner.run())
+        await runner.run()
 
 
 @patch("async_durable_execution_runner.runner.boto3")
 @patch("async_durable_execution_runner.runner.time")
-def test_cloud_runner_wait_for_completion_timeout(mock_time, mock_boto3):
+async def test_cloud_runner_wait_for_completion_timeout(mock_time, mock_boto3):
     """Test DurableFunctionCloudTestRunner._wait_for_completion with timeout."""
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
@@ -1261,7 +1261,7 @@ def test_cloud_runner_wait_for_completion_timeout(mock_time, mock_boto3):
         runner._wait_for_completion("test-arn", timeout=2)
 
 
-def test_durable_function_test_result_from_execution_history_with_exception():
+async def test_durable_function_test_result_from_execution_history_with_exception():
     """Test from_execution_history handles events_to_operations exception."""
     import datetime
 
@@ -1304,7 +1304,7 @@ def test_durable_function_test_result_from_execution_history_with_exception():
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_wait_for_completion_failed_status(mock_boto3):
+async def test_cloud_runner_wait_for_completion_failed_status(mock_boto3):
     """Test DurableFunctionCloudTestRunner._wait_for_completion with FAILED status."""
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
@@ -1330,7 +1330,7 @@ def test_cloud_runner_wait_for_completion_failed_status(mock_boto3):
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_run_bad_status_code(mock_boto3):
+async def test_cloud_runner_run_bad_status_code(mock_boto3):
     """Test DurableFunctionCloudTestRunner.run with bad HTTP status code."""
     from async_durable_execution_runner.exceptions import (
         DurableFunctionsTestError,
@@ -1355,11 +1355,11 @@ def test_cloud_runner_run_bad_status_code(mock_boto3):
     with pytest.raises(
         DurableFunctionsTestError, match="Lambda invocation failed with status 500"
     ):
-        asyncio.run(runner.run())
+        await runner.run()
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_run_function_error(mock_boto3):
+async def test_cloud_runner_run_function_error(mock_boto3):
     """Test DurableFunctionCloudTestRunner.run with function error."""
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
@@ -1398,12 +1398,12 @@ def test_cloud_runner_run_function_error(mock_boto3):
         function_name="test-function",
         input="test-input",
     )
-    result = asyncio.run(runner.run())
+    result = await runner.run()
     assert result.status is InvocationStatus.FAILED
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_run_missing_execution_arn(mock_boto3):
+async def test_cloud_runner_run_missing_execution_arn(mock_boto3):
     """Test DurableFunctionCloudTestRunner.run with missing execution ARN."""
     from async_durable_execution_runner.exceptions import (
         DurableFunctionsTestError,
@@ -1428,11 +1428,11 @@ def test_cloud_runner_run_missing_execution_arn(mock_boto3):
     with pytest.raises(
         DurableFunctionsTestError, match="No DurableExecutionArn in response"
     ):
-        asyncio.run(runner.run())
+        await runner.run()
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_wait_for_completion_get_execution_failure(mock_boto3):
+async def test_cloud_runner_wait_for_completion_get_execution_failure(mock_boto3):
     """Test DurableFunctionCloudTestRunner._wait_for_completion with API failure."""
     from async_durable_execution_runner.exceptions import (
         DurableFunctionsTestError,
@@ -1453,7 +1453,7 @@ def test_cloud_runner_wait_for_completion_get_execution_failure(mock_boto3):
         runner._wait_for_completion("test-arn", timeout=10)
 
 
-def test_durable_function_test_result_from_execution_history_filters_execution_type():
+async def test_durable_function_test_result_from_execution_history_filters_execution_type():
     """Test from_execution_history filters out EXECUTION type operations."""
     import datetime
 
@@ -1493,7 +1493,7 @@ def test_durable_function_test_result_from_execution_history_filters_execution_t
     assert len(result.operations) == 0
 
 
-def test_durable_function_test_result_from_execution_history_unknown_status():
+async def test_durable_function_test_result_from_execution_history_unknown_status():
     """Test from_execution_history with unknown status defaults to FAILED."""
     import datetime
 
@@ -1523,7 +1523,7 @@ def test_durable_function_test_result_from_execution_history_unknown_status():
     assert result.status == InvocationStatus.FAILED
 
 
-def test_durable_function_test_result_from_execution_history_with_parent_operations():
+async def test_durable_function_test_result_from_execution_history_with_parent_operations():
     """Test from_execution_history filters operations with parent_id."""
     import datetime
 
@@ -1574,7 +1574,7 @@ def test_durable_function_test_result_from_execution_history_with_parent_operati
     assert result.operations[0].name == "parent-step"
 
 
-def test_durable_function_test_result_from_execution_history_failed():
+async def test_durable_function_test_result_from_execution_history_failed():
     """Test from_execution_history with failed execution."""
     import datetime
 
@@ -1611,7 +1611,7 @@ def test_durable_function_test_result_from_execution_history_failed():
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_wait_for_completion_timed_out_status(mock_boto3):
+async def test_cloud_runner_wait_for_completion_timed_out_status(mock_boto3):
     """Test DurableFunctionCloudTestRunner._wait_for_completion with TIMED_OUT status."""
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
@@ -1636,7 +1636,7 @@ def test_cloud_runner_wait_for_completion_timed_out_status(mock_boto3):
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_wait_for_completion_aborted_status(mock_boto3):
+async def test_cloud_runner_wait_for_completion_aborted_status(mock_boto3):
     """Test DurableFunctionCloudTestRunner._wait_for_completion with ABORTED status."""
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
@@ -1661,7 +1661,7 @@ def test_cloud_runner_wait_for_completion_aborted_status(mock_boto3):
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_run_async_success(mock_boto3):
+async def test_cloud_runner_run_async_success(mock_boto3):
     """Test DurableFunctionCloudTestRunner.run_async with successful invocation."""
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
@@ -1680,7 +1680,7 @@ def test_cloud_runner_run_async_success(mock_boto3):
         function_name="test-function",
         input="test-input",
     )
-    execution_arn = asyncio.run(runner.run_async())
+    execution_arn = await runner.run_async()
 
     assert (
         execution_arn
@@ -1694,7 +1694,7 @@ def test_cloud_runner_run_async_success(mock_boto3):
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_run_async_with_400(mock_boto3):
+async def test_cloud_runner_run_async_with_400(mock_boto3):
     """Test DurableFunctionCloudTestRunner.run_async with successful invocation."""
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
@@ -1716,11 +1716,11 @@ def test_cloud_runner_run_async_with_400(mock_boto3):
     with pytest.raises(
         DurableFunctionsTestError, match="Lambda invocation failed with status 400"
     ):
-        asyncio.run(runner.run_async())
+        await runner.run_async()
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_run_async_failure(mock_boto3):
+async def test_cloud_runner_run_async_failure(mock_boto3):
     """Test DurableFunctionCloudTestRunner.run_async with invocation failure."""
     from async_durable_execution_runner.exceptions import (
         DurableFunctionsTestError,
@@ -1741,11 +1741,11 @@ def test_cloud_runner_run_async_failure(mock_boto3):
     with pytest.raises(
         DurableFunctionsTestError, match="Failed to invoke Lambda function"
     ):
-        asyncio.run(runner.run_async())
+        await runner.run_async()
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_send_callback_success(mock_boto3):
+async def test_cloud_runner_send_callback_success(mock_boto3):
     """Test DurableFunctionCloudTestRunner.send_callback_success."""
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
@@ -1755,7 +1755,7 @@ def test_cloud_runner_send_callback_success(mock_boto3):
     mock_boto3.client.return_value = mock_client
 
     runner = DurableFunctionCloudTestRunner(function_name="test-function")
-    asyncio.run(runner.send_callback_success("callback-123"))
+    await runner.send_callback_success("callback-123")
 
     mock_client.send_durable_execution_callback_success.assert_called_once_with(
         CallbackId="callback-123", Result=None
@@ -1763,7 +1763,7 @@ def test_cloud_runner_send_callback_success(mock_boto3):
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_send_callback_failure(mock_boto3):
+async def test_cloud_runner_send_callback_failure(mock_boto3):
     """Test DurableFunctionCloudTestRunner.send_callback_failure."""
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
@@ -1773,7 +1773,7 @@ def test_cloud_runner_send_callback_failure(mock_boto3):
     mock_boto3.client.return_value = mock_client
 
     runner = DurableFunctionCloudTestRunner(function_name="test-function")
-    asyncio.run(runner.send_callback_failure("callback-123"))
+    await runner.send_callback_failure("callback-123")
 
     mock_client.send_durable_execution_callback_failure.assert_called_once_with(
         CallbackId="callback-123", Error=None
@@ -1781,7 +1781,7 @@ def test_cloud_runner_send_callback_failure(mock_boto3):
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_send_callback_heartbeat(mock_boto3):
+async def test_cloud_runner_send_callback_heartbeat(mock_boto3):
     """Test DurableFunctionCloudTestRunner.send_callback_heartbeat."""
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
@@ -1791,7 +1791,7 @@ def test_cloud_runner_send_callback_heartbeat(mock_boto3):
     mock_boto3.client.return_value = mock_client
 
     runner = DurableFunctionCloudTestRunner(function_name="test-function")
-    asyncio.run(runner.send_callback_heartbeat("callback-123"))
+    await runner.send_callback_heartbeat("callback-123")
 
     mock_client.send_durable_execution_callback_heartbeat.assert_called_once_with(
         CallbackId="callback-123"
@@ -1799,7 +1799,7 @@ def test_cloud_runner_send_callback_heartbeat(mock_boto3):
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_send_callback_error(mock_boto3):
+async def test_cloud_runner_send_callback_error(mock_boto3):
     """Test DurableFunctionCloudTestRunner callback methods with API errors."""
     from async_durable_execution_runner.exceptions import (
         DurableFunctionsTestError,
@@ -1819,11 +1819,11 @@ def test_cloud_runner_send_callback_error(mock_boto3):
     with pytest.raises(
         DurableFunctionsTestError, match="Failed to send callback success"
     ):
-        asyncio.run(runner.send_callback_success("callback-123"))
+        await runner.send_callback_success("callback-123")
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_wait_for_callback_success(mock_boto3):
+async def test_cloud_runner_wait_for_callback_success(mock_boto3):
     """Test DurableFunctionCloudTestRunner.wait_for_callback success."""
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
@@ -1847,15 +1847,15 @@ def test_cloud_runner_wait_for_callback_success(mock_boto3):
     runner = DurableFunctionCloudTestRunner(
         function_name="test-function", poll_interval=0.01
     )
-    callback_id = asyncio.run(
-        runner.wait_for_callback("test-arn", name="test-callback", timeout=10)
+    callback_id = await runner.wait_for_callback(
+        "test-arn", name="test-callback", timeout=10
     )
 
     assert callback_id == "callback-123"
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_wait_for_callback_none(mock_boto3):
+async def test_cloud_runner_wait_for_callback_none(mock_boto3):
     """Test DurableFunctionCloudTestRunner.wait_for_callback none."""
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
@@ -1881,13 +1881,11 @@ def test_cloud_runner_wait_for_callback_none(mock_boto3):
     )
 
     with pytest.raises(TimeoutError, match="Callback did not available within"):
-        asyncio.run(
-            runner.wait_for_callback("test-arn", name="test-callback1", timeout=2)
-        )
+        await runner.wait_for_callback("test-arn", name="test-callback1", timeout=2)
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_wait_for_callback_success_without_name(mock_boto3):
+async def test_cloud_runner_wait_for_callback_success_without_name(mock_boto3):
     """Test DurableFunctionCloudTestRunner.wait_for_callback success."""
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
@@ -1911,13 +1909,13 @@ def test_cloud_runner_wait_for_callback_success_without_name(mock_boto3):
     runner = DurableFunctionCloudTestRunner(
         function_name="test-function", poll_interval=0.01
     )
-    callback_id = asyncio.run(runner.wait_for_callback("test-arn"))
+    callback_id = await runner.wait_for_callback("test-arn")
 
     assert callback_id == "callback-123"
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_wait_for_callback_all_done_without_name(mock_boto3):
+async def test_cloud_runner_wait_for_callback_all_done_without_name(mock_boto3):
     """Test DurableFunctionCloudTestRunner.wait_for_callback all_done_without_name."""
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
@@ -1948,11 +1946,13 @@ def test_cloud_runner_wait_for_callback_all_done_without_name(mock_boto3):
         function_name="test-function", poll_interval=0.01
     )
     with pytest.raises(TimeoutError, match="Callback did not available within"):
-        asyncio.run(runner.wait_for_callback("test-arn", timeout=2))
+        await runner.wait_for_callback("test-arn", timeout=2)
 
 
 @patch("async_durable_execution_runner.runner.Executor")
-def test_local_runner_wait_for_callback_all_done_without_name(mock_executor_class):
+async def test_local_runner_wait_for_callback_all_done_without_name(
+    mock_executor_class,
+):
     """Test DurableFunctionCloudTestRunner.wait_for_callback all_done_without_name."""
     handler = Mock()
     mock_executor = Mock()
@@ -1981,11 +1981,11 @@ def test_local_runner_wait_for_callback_all_done_without_name(mock_executor_clas
 
     runner = DurableFunctionLocalTestRunner(handler)
     with pytest.raises(TimeoutError, match="Callback did not available within"):
-        asyncio.run(runner.wait_for_callback("test-arn", timeout=2))
+        await runner.wait_for_callback("test-arn", timeout=2)
 
 
 @patch("async_durable_execution_runner.runner.Executor")
-def test_local_runner_wait_for_callback_with_exception(mock_executor_class):
+async def test_local_runner_wait_for_callback_with_exception(mock_executor_class):
     """Test DurableFunctionLocalTestRunner.wait_for_callback with exception."""
     handler = Mock()
     mock_executor = Mock()
@@ -1996,11 +1996,11 @@ def test_local_runner_wait_for_callback_with_exception(mock_executor_class):
     with pytest.raises(
         DurableFunctionsTestError, match="Failed to fetch execution history"
     ):
-        asyncio.run(runner.wait_for_callback("test-arn", timeout=10))
+        await runner.wait_for_callback("test-arn", timeout=10)
 
 
 @patch("async_durable_execution_runner.runner.Executor")
-def test_local_runner_wait_for_callback_with_resource_not_found_exception(
+async def test_local_runner_wait_for_callback_with_resource_not_found_exception(
     mock_executor_class,
 ):
     """Test DurableFunctionLocalTestRunner.wait_for_callback with resource_not_found exception."""
@@ -2011,12 +2011,12 @@ def test_local_runner_wait_for_callback_with_resource_not_found_exception(
 
     runner = DurableFunctionLocalTestRunner(handler)
     with pytest.raises(TimeoutError, match="Callback did not available within"):
-        asyncio.run(runner.wait_for_callback("test-arn", timeout=2))
+        await runner.wait_for_callback("test-arn", timeout=2)
 
 
 @patch("async_durable_execution_runner.runner.boto3")
 @patch("async_durable_execution_runner.runner.time")
-def test_cloud_runner_wait_for_callback_timeout(mock_time, mock_boto3):
+async def test_cloud_runner_wait_for_callback_timeout(mock_time, mock_boto3):
     """Test DurableFunctionCloudTestRunner.wait_for_callback timeout."""
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
@@ -2033,11 +2033,11 @@ def test_cloud_runner_wait_for_callback_timeout(mock_time, mock_boto3):
     )
 
     with pytest.raises(TimeoutError, match="Callback did not available within"):
-        asyncio.run(runner.wait_for_callback("test-arn", timeout=2))
+        await runner.wait_for_callback("test-arn", timeout=2)
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_wait_for_callback_already_completed(mock_boto3):
+async def test_cloud_runner_wait_for_callback_already_completed(mock_boto3):
     """Test DurableFunctionCloudTestRunner.wait_for_callback already completed."""
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
@@ -2071,11 +2071,11 @@ def test_cloud_runner_wait_for_callback_already_completed(mock_boto3):
     with pytest.raises(
         DurableFunctionsTestError, match="Callback test-callback has already completed"
     ):
-        asyncio.run(runner.wait_for_callback("test-arn", "test-callback", timeout=2))
+        await runner.wait_for_callback("test-arn", "test-callback", timeout=2)
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_wait_for_callback_client_error_retryable(mock_boto3):
+async def test_cloud_runner_wait_for_callback_client_error_retryable(mock_boto3):
     """Test wait_for_callback with retryable ClientError."""
     from botocore.exceptions import ClientError  # type: ignore
 
@@ -2108,15 +2108,15 @@ def test_cloud_runner_wait_for_callback_client_error_retryable(mock_boto3):
     runner = DurableFunctionCloudTestRunner(
         function_name="test-function", poll_interval=0.01
     )
-    callback_id = asyncio.run(
-        runner.wait_for_callback("test-arn", name="test-callback", timeout=10)
+    callback_id = await runner.wait_for_callback(
+        "test-arn", name="test-callback", timeout=10
     )
 
     assert callback_id == "callback-123"
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_wait_for_callback_client_error_non_retryable(
+async def test_cloud_runner_wait_for_callback_client_error_non_retryable(
     mock_boto3,
 ):
     """Test wait_for_callback with non-retryable ClientError."""
@@ -2142,11 +2142,11 @@ def test_cloud_runner_wait_for_callback_client_error_non_retryable(
     with pytest.raises(
         DurableFunctionsTestError, match="Failed to fetch execution history"
     ):
-        asyncio.run(runner.wait_for_callback("test-arn", timeout=10))
+        await runner.wait_for_callback("test-arn", timeout=10)
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_wait_for_callback_generic_exception(mock_boto3):
+async def test_cloud_runner_wait_for_callback_generic_exception(mock_boto3):
     """Test wait_for_callback with generic Exception."""
     from async_durable_execution_runner.exceptions import (
         DurableFunctionsTestError,
@@ -2165,11 +2165,11 @@ def test_cloud_runner_wait_for_callback_generic_exception(mock_boto3):
     with pytest.raises(
         DurableFunctionsTestError, match="Failed to fetch execution history"
     ):
-        asyncio.run(runner.wait_for_callback("test-arn", timeout=10))
+        await runner.wait_for_callback("test-arn", timeout=10)
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_wait_for_result_fetch_history_exception(mock_boto3):
+async def test_cloud_runner_wait_for_result_fetch_history_exception(mock_boto3):
     """Test wait_for_result with exception in _fetch_execution_history."""
     from async_durable_execution_runner.exceptions import (
         DurableFunctionsTestError,
@@ -2196,11 +2196,11 @@ def test_cloud_runner_wait_for_result_fetch_history_exception(mock_boto3):
         DurableFunctionsTestError,
         match="Failed to fetch execution history: History fetch failed",
     ):
-        asyncio.run(runner.wait_for_result("test-arn", timeout=60))
+        await runner.wait_for_result("test-arn", timeout=60)
 
 
 @patch("async_durable_execution_runner.runner.boto3")
-def test_cloud_runner_wait_for_result_success(mock_boto3):
+async def test_cloud_runner_wait_for_result_success(mock_boto3):
     """Test wait_for_result successful execution."""
     from async_durable_execution.execution import InvocationStatus
     from async_durable_execution_runner.runner import (
@@ -2228,7 +2228,7 @@ def test_cloud_runner_wait_for_result_success(mock_boto3):
         mock_result.status = InvocationStatus.SUCCEEDED
         mock_from_history.return_value = mock_result
 
-        result = asyncio.run(runner.wait_for_result("test-arn", timeout=60))
+        result = await runner.wait_for_result("test-arn", timeout=60)
 
         assert result.status == InvocationStatus.SUCCEEDED
         mock_from_history.assert_called_once_with(

@@ -6,7 +6,9 @@ from async_durable_execution_examples.wait_for_callback import (
 )
 
 
-def test_fail_after_exhausting_retries_when_submitter_always_fails(durable_runner):
+async def test_fail_after_exhausting_retries_when_submitter_always_fails(
+    durable_runner,
+):
     """Test that execution fails after exhausting retries when submitter always fails."""
     test_payload = {"shouldFail": True}
 
@@ -15,8 +17,8 @@ def test_fail_after_exhausting_retries_when_submitter_always_fails(durable_runne
         input=test_payload,
         timeout=30,
     ) as runner:
-        execution_arn = runner.run_async()
-        result = runner.wait_for_result(execution_arn=execution_arn)
+        execution_arn = await runner.run_async()
+        result = await runner.wait_for_result(execution_arn=execution_arn)
 
     # Execution should fail after retries are exhausted
     assert result.status is InvocationStatus.FAILED
