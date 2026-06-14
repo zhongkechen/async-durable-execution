@@ -1,12 +1,13 @@
 import contextlib
 import datetime
 import functools
+import inspect
 import logging
 from collections.abc import Callable, MutableMapping
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
-from async_durable_execution.async_tools import await_maybe, run_or_return
+from async_durable_execution.async_tools import run_or_return
 from async_durable_execution.exceptions import SuspendExecution
 from async_durable_execution.identifier import OperationIdentifier
 from async_durable_execution.lambda_service import (
@@ -420,7 +421,9 @@ class PluginExecutor:
             async def wrapper_async(event: Any, context: LambdaContext):
                 with self.run():
                     try:
-                        output = await await_maybe(func(event, context))
+                        output = func(event, context)
+                        if inspect.isawaitable(output):
+                            output = await output
 
                         await self.on_invocation_end(
                             output=DurableExecutionInvocationOutput.from_dict(output),

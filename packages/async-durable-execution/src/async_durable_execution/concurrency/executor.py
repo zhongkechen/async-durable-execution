@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 from async_durable_execution.concurrency.models import (
     BatchItem,
@@ -188,7 +189,9 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
         async def resubmitter(
             executable_with_state: ExecutableWithState[CallableType, ResultType],
         ) -> None:
-            await execution_state.create_checkpoint(is_sync=False)
+            checkpoint_result = execution_state._create_checkpoint_async(is_sync=False)
+            if inspect.isawaitable(checkpoint_result):
+                await checkpoint_result
             await submit_task(executable_with_state)
 
         async with TimerScheduler(resubmitter) as scheduler:
@@ -335,7 +338,7 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
         async def run_in_child_handler() -> ResultType:
             return await self.execute_item(child_context, executable)
 
-        result: ResultType = await child_handler(
+        result_or_awaitable = child_handler(
             run_in_child_handler,
             child_context.state,
             operation_identifier=operation_identifier,
@@ -346,6 +349,11 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
                 is_virtual=is_virtual,
             ),
         )
+        result: ResultType
+        if inspect.isawaitable(result_or_awaitable):
+            result = await cast("Awaitable[ResultType]", result_or_awaitable)
+        else:
+            result = cast("ResultType", result_or_awaitable)
         child_context.state.track_replay(operation_id=operation_id)
         return result
 

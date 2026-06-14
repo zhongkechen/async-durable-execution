@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
@@ -8,7 +9,6 @@ from typing import TYPE_CHECKING, Any, Concatenate, Generic, ParamSpec, TypeVar,
 
 from async_durable_execution.async_tools import (
     assert_async_callable,
-    await_maybe,
     run_or_return,
 )
 from async_durable_execution.config import (
@@ -482,7 +482,7 @@ class DurableContext(DurableContextProtocol):
             ),
             config=config,
         )
-        callback_id: str = await await_maybe(cast(Any, executor.process()))
+        callback_id: str = await executor.process()
         result: Callback = Callback(
             callback_id=callback_id,
             operation_id=operation_id,
@@ -525,7 +525,7 @@ class DurableContext(DurableContextProtocol):
             ),
             config=config,
         )
-        result: R = await await_maybe(cast(Any, executor.process()))
+        result: R = await executor.process()
         self.state.track_replay(operation_id=operation_id)
         return result
 
@@ -567,18 +567,16 @@ class DurableContext(DurableContextProtocol):
             # was called. We are calling it `map_context` to make it explicit
             # that any operations happening from hereon are done on the context
             # that owns the branches
-            return await await_maybe(
-                map_handler(
-                    items=inputs,
-                    func=func,
-                    config=config,
-                    execution_state=self.state,
-                    map_context=map_context,
-                    operation_identifier=operation_identifier,
-                )
+            return await map_handler(
+                items=inputs,
+                func=func,
+                config=config,
+                execution_state=self.state,
+                map_context=map_context,
+                operation_identifier=operation_identifier,
             )
 
-        result: BatchResult[T] = await child_handler(
+        result_or_awaitable = child_handler(
             func=map_in_child_context,
             state=self.state,
             operation_identifier=operation_identifier,
@@ -591,6 +589,11 @@ class DurableContext(DurableContextProtocol):
                 item_serdes=None,
             ),
         )
+        result: BatchResult[T]
+        if inspect.isawaitable(result_or_awaitable):
+            result = await cast("Awaitable[BatchResult[T]]", result_or_awaitable)
+        else:
+            result = cast("BatchResult[T]", result_or_awaitable)
         self.state.track_replay(operation_id=operation_id)
         return result
 
@@ -632,17 +635,15 @@ class DurableContext(DurableContextProtocol):
             # was called. We are calling it `parallel_context` to make it explicit
             # that any operations happening from hereon are done on the context
             # that owns the branches
-            return await await_maybe(
-                parallel_handler(
-                    callables=functions,
-                    config=config,
-                    execution_state=self.state,
-                    parallel_context=parallel_context,
-                    operation_identifier=operation_identifier,
-                )
+            return await parallel_handler(
+                callables=functions,
+                config=config,
+                execution_state=self.state,
+                parallel_context=parallel_context,
+                operation_identifier=operation_identifier,
             )
 
-        result: BatchResult[T] = await child_handler(
+        result_or_awaitable = child_handler(
             func=parallel_in_child_context,
             state=self.state,
             operation_identifier=operation_identifier,
@@ -655,6 +656,11 @@ class DurableContext(DurableContextProtocol):
                 item_serdes=None,
             ),
         )
+        result: BatchResult[T]
+        if inspect.isawaitable(result_or_awaitable):
+            result = await cast("Awaitable[BatchResult[T]]", result_or_awaitable)
+        else:
+            result = cast("BatchResult[T]", result_or_awaitable)
         self.state.track_replay(operation_id=operation_id)
         return result
 
@@ -695,7 +701,7 @@ class DurableContext(DurableContextProtocol):
                 )
             )
 
-        result: T = await child_handler(
+        result_or_awaitable = child_handler(
             func=callable_with_child_context,
             state=self.state,
             operation_identifier=OperationIdentifier(
@@ -706,6 +712,11 @@ class DurableContext(DurableContextProtocol):
             ),
             config=config,
         )
+        result: T
+        if inspect.isawaitable(result_or_awaitable):
+            result = await cast("Awaitable[T]", result_or_awaitable)
+        else:
+            result = cast("T", result_or_awaitable)
         self.state.track_replay(operation_id=operation_id)
         return result
 
@@ -733,7 +744,7 @@ class DurableContext(DurableContextProtocol):
             ),
             context_logger=self.logger,
         )
-        result: T = await await_maybe(cast(Any, executor.process()))
+        result: T = await executor.process()
         self.state.track_replay(operation_id=operation_id)
         return result
 
@@ -759,7 +770,7 @@ class DurableContext(DurableContextProtocol):
                 name=name,
             ),
         )
-        await await_maybe(cast(Any, executor.process()))
+        await executor.process()
         self.state.track_replay(operation_id=operation_id)
 
     async def wait_for_callback(
@@ -773,11 +784,8 @@ class DurableContext(DurableContextProtocol):
         logger.debug("wait_for_callback name: %s", step_name)
 
         async def wait_in_child_context(context: DurableContext):
-            return await await_maybe(
-                cast(
-                    Any,
-                    wait_for_callback_handler(context, submitter, step_name, config),
-                )
+            return await wait_for_callback_handler(
+                context, submitter, step_name, config
             )
 
         return await self.run_in_child_context(
@@ -824,6 +832,6 @@ class DurableContext(DurableContextProtocol):
                 context_logger=self.logger,
             )
         )
-        result: T = await await_maybe(cast(Any, executor.process()))
+        result: T = await executor.process()
         self.state.track_replay(operation_id=operation_id)
         return result

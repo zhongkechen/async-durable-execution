@@ -6,7 +6,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from async_durable_execution.async_tools import run_or_return
 from async_durable_execution.exceptions import InvalidStateError
 
 
@@ -149,10 +148,7 @@ class OperationExecutor(ABC, Generic[T]):
         """
         ...  # pragma: no cover
 
-    def process(self) -> T | object:
-        return run_or_return(self._process_async())
-
-    async def _process_async(self) -> T:
+    async def process(self) -> T:
         """Process operation with checkpoint response handling.
 
         Orchestrates the double-check pattern:

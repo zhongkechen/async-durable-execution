@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from async_durable_execution.async_tools import await_maybe
 from async_durable_execution.lambda_service import OperationUpdate, WaitOptions
 from async_durable_execution.operation.base import (
     CheckResult,
@@ -82,8 +81,8 @@ class WaitOperationExecutor(OperationExecutor[None]):
             # Checkpoint wait START with blocking (is_sync=True, default).
             # Must ensure the wait operation and scheduled timestamp are persisted before suspending.
             # This guarantees the wait will resume at the correct time on the next invocation.
-            await await_maybe(
-                self.state.create_checkpoint(operation_update=operation, is_sync=True)
+            await self.state._create_checkpoint_async(
+                operation_update=operation, is_sync=True
             )
 
             logger.debug(

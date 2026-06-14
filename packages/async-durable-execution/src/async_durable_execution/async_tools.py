@@ -54,9 +54,3 @@ def run_or_return(awaitable: Awaitable[T]) -> T | Awaitable[T]:
     except RuntimeError:
         return asyncio.run(cast(Coroutine[Any, Any, T], awaitable))
     return awaitable
-
-
-async def await_maybe(value: T | Awaitable[T]) -> T:
-    if inspect.isawaitable(value):
-        return await cast("Awaitable[T]", value)
-    return value

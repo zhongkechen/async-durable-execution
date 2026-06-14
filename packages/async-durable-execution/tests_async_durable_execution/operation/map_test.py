@@ -6,7 +6,7 @@ import inspect
 import json
 from collections.abc import Mapping
 from typing import Any
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -911,7 +911,7 @@ async def test_map_item_serialize(mock_serialize, item_serdes, batch_serdes):
     mock_state = Mock()
     mock_state.durable_execution_arn = "arn:test"
     mock_state.get_checkpoint_result = Mock(side_effect=get_checkpoint)
-    mock_state.create_checkpoint = Mock()
+    mock_state._create_checkpoint_async = AsyncMock()
     mock_state.wrap_user_function = lambda func, *args, **kwargs: (
         lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
     )
@@ -979,7 +979,7 @@ async def test_map_item_deserialize(mock_deserialize, item_serdes, batch_serdes)
     mock_state = Mock()
     mock_state.durable_execution_arn = "arn:test"
     mock_state.get_checkpoint_result = Mock(side_effect=get_checkpoint)
-    mock_state.create_checkpoint = Mock()
+    mock_state._create_checkpoint_async = AsyncMock()
     mock_state.wrap_user_function = lambda func, *args, **kwargs: (
         lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
     )
@@ -1093,7 +1093,7 @@ async def test_map_handler_serializes_batch_result():
             mock_state = Mock()
             mock_state.durable_execution_arn = "arn:test"
             mock_state.get_checkpoint_result = Mock(side_effect=get_checkpoint)
-            mock_state.create_checkpoint = Mock()
+            mock_state._create_checkpoint_async = AsyncMock()
             mock_state.wrap_user_function = lambda func, *args, **kwargs: (
                 lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
             )
@@ -1158,7 +1158,7 @@ async def test_map_default_serdes_serializes_batch_result():
             mock_state = Mock()
             mock_state.durable_execution_arn = "arn:test"
             mock_state.get_checkpoint_result = Mock(side_effect=get_checkpoint)
-            mock_state.create_checkpoint = Mock()
+            mock_state._create_checkpoint_async = AsyncMock()
             mock_state.wrap_user_function = lambda func, *args, **kwargs: (
                 lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
             )
@@ -1228,7 +1228,7 @@ async def test_map_custom_serdes_serializes_batch_result():
             mock_state = Mock()
             mock_state.durable_execution_arn = "arn:test"
             mock_state.get_checkpoint_result = Mock(side_effect=get_checkpoint)
-            mock_state.create_checkpoint = Mock()
+            mock_state._create_checkpoint_async = AsyncMock()
             mock_state.wrap_user_function = lambda func, *args, **kwargs: (
                 lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
             )
@@ -1286,7 +1286,7 @@ async def test_map_with_empty_list_should_exit_early():
     parent_checkpoint.is_existent.return_value = False
 
     mock_state.get_checkpoint_result = Mock(return_value=parent_checkpoint)
-    mock_state.create_checkpoint = Mock()
+    mock_state._create_checkpoint_async = AsyncMock()
     mock_state.wrap_user_function = lambda func, *args, **kwargs: (
         lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
     )

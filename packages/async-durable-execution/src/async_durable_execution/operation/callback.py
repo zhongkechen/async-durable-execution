@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import inspect
 from typing import TYPE_CHECKING, Any
 
-from async_durable_execution.async_tools import await_maybe, run_or_return
+from async_durable_execution.async_tools import run_or_return
 from async_durable_execution.config import StepConfig
 from async_durable_execution.exceptions import CallbackError
 from async_durable_execution.lambda_service import (
@@ -119,8 +120,8 @@ class CallbackOperationExecutor(OperationExecutor[str]):
         # Checkpoint callback START with blocking (is_sync=True, default).
         # Must wait for the API to generate and return the callback ID before proceeding.
         # The callback ID is needed immediately by the caller to pass to external systems.
-        await await_maybe(
-            self.state.create_checkpoint(operation_update=create_callback_operation)
+        await self.state._create_checkpoint_async(
+            operation_update=create_callback_operation
         )
 
         # Signal to process() to check status again for immediate response
@@ -173,19 +174,18 @@ async def _wait_for_callback_handler_async(
     This is a helper function that is used to create a callback and wait for it to be invoked by an external system.
     """
     name_with_space: str = f"{name} " if name else ""
-    callback: Callback = await await_maybe(
-        context.create_callback(
-            name=f"{name_with_space}create callback id", config=config
-        )
+    callback: Callback = await context.create_callback(
+        name=f"{name_with_space}create callback id", config=config
     )
 
     async def submitter_step(step_context: StepContext):
-        return await await_maybe(
-            submitter(
-                callback.callback_id,
-                WaitForCallbackContext(logger=step_context.logger),
-            )
+        submitter_result = submitter(
+            callback.callback_id,
+            WaitForCallbackContext(logger=step_context.logger),
         )
+        if inspect.isawaitable(submitter_result):
+            return await submitter_result
+        return submitter_result
 
     step_config = (
         StepConfig(
@@ -195,12 +195,15 @@ async def _wait_for_callback_handler_async(
         if config
         else None
     )
-    await await_maybe(
-        context.step(
-            func=submitter_step,
-            name=f"{name_with_space}submitter",
-            config=step_config,
-        )
+    step_result = context.step(
+        func=submitter_step,
+        name=f"{name_with_space}submitter",
+        config=step_config,
     )
+    if inspect.isawaitable(step_result):
+        await step_result
 
-    return await await_maybe(callback.result())
+    callback_result = callback.result()
+    if inspect.isawaitable(callback_result):
+        return await callback_result
+    return callback_result
