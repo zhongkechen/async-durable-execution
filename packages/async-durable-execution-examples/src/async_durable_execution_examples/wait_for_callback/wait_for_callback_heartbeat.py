@@ -1,6 +1,6 @@
 """Demonstrates sending heartbeats during long-running callback processing."""
 
-import time
+import asyncio
 from datetime import timedelta
 from typing import Any
 
@@ -14,7 +14,7 @@ from async_durable_execution.execution import durable_execution
 
 async def submitter(_callback_id: str, _context: WaitForCallbackContext) -> None:
     """Simulate long-running submitter function."""
-    time.sleep(5)
+    await asyncio.sleep(5)
 
 
 @durable_execution
