@@ -84,21 +84,21 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         async def run(_) -> int:
             return 100
 
-        return ctx.step(run, name="branch1")
+        return await ctx.step(run, name="branch1")
 
     async def branch2(ctx: DurableContext) -> int:
         async def run(_) -> int:
             return 200
 
-        return ctx.step(run, name="branch2")
+        return await ctx.step(run, name="branch2")
 
     async def branch3(ctx: DurableContext) -> int:
         async def run(_) -> int:
             return 300
 
-        return ctx.step(run, name="branch3")
+        return await ctx.step(run, name="branch3")
 
-    results = context.parallel(
+    results = await context.parallel(
         functions=[branch1, branch2, branch3],
         name="parallel_with_batch_serdes",
         config=config,

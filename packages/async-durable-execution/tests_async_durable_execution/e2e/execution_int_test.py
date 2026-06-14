@@ -93,18 +93,18 @@ def test_step_different_ways_to_pass_args():
     @durable_execution
     async def my_handler(event, context: DurableContext) -> list[str]:
         results: list[str] = []
-        result: str = context.step(step_with_args(a=123, b="str"))
+        result: str = await context.step(step_with_args(a=123, b="str"))
         assert result == "from step 123 str"
         results.append(result)
 
-        result = context.step(step_no_args())
+        result = await context.step(step_no_args())
         assert result == "from step no args"
         results.append(result)
 
         # note this won't work:
         # result: str = context.step(step_no_args)
 
-        result = context.step(step_plain)
+        result = await context.step(step_plain)
         assert result == "from step plain"
         results.append(result)
 
@@ -191,7 +191,7 @@ def test_step_with_logger():
     @durable_execution
     async def my_handler(event, context: DurableContext):
         context.set_logger(my_logger)
-        result: str = context.step(mystep(a=123, b="str"))
+        result: str = await context.step(mystep(a=123, b="str"))
         assert result == "result"
 
     with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
@@ -286,11 +286,11 @@ def test_wait_inside_run_in_childcontext():
     @durable_with_child_context
     async def func(child_context: DurableContext, a: int, b: int):
         mock_inside_child(a, b)
-        child_context.wait(timedelta(seconds=1))
+        await child_context.wait(timedelta(seconds=1))
 
     @durable_execution
     async def my_handler(event, context):
-        context.run_in_child_context(func(10, 20))
+        await context.run_in_child_context(func(10, 20))
 
     # Mock the lambda client
     with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
@@ -380,7 +380,7 @@ def test_step_checkpoint_failure_propagates_error():
     @durable_execution
     async def my_handler(event, context: DurableContext):
         # This step will trigger a checkpoint that fails
-        result: str = context.step(failing_step())
+        result: str = await context.step(failing_step())
         return result
 
     with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
@@ -427,10 +427,11 @@ def test_step_checkpoint_failure_propagates_error():
         lambda_context.invoked_function_arn = "test-arn"
         lambda_context.tenant_id = None
 
-        # Execute the handler - should propagate the checkpoint error
-        # The background thread error should propagate and raise
-        with pytest.raises(RuntimeError, match="Checkpoint service unavailable"):
-            my_handler(event, lambda_context)
+        # Execute the handler - local runner surfaces execution failure in the
+        # invocation payload rather than re-raising to the caller.
+        result = my_handler(event, lambda_context)
+        assert result["Status"] == InvocationStatus.FAILED.value
+        assert result["Error"]["ErrorMessage"] == "Checkpoint service unavailable"
 
 
 def test_wait_not_caught_by_exception():
@@ -439,7 +440,7 @@ def test_wait_not_caught_by_exception():
     @durable_execution
     async def my_handler(event: Any, context: DurableContext):
         try:
-            context.wait(timedelta(seconds=1))
+            await context.wait(timedelta(seconds=1))
         except Exception as err:
             msg = "This should not be caught"
             raise CustomError(msg) from err
@@ -509,7 +510,9 @@ def test_durable_wait_for_callback_decorator():
 
     @durable_execution
     async def my_handler(event, context):
-        context.wait_for_callback(submit_to_external_system("my_task", priority=5))
+        await context.wait_for_callback(
+            submit_to_external_system("my_task", priority=5)
+        )
 
     with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
         mock_client = Mock()

@@ -25,7 +25,7 @@ async def handler(event: dict[str, Any], context: DurableContext) -> dict[str, A
         timeout=timedelta(seconds=120), heartbeat_timeout=timedelta(seconds=15)
     )
 
-    result: str = context.wait_for_callback(submitter, config=config)
+    result: str = await context.wait_for_callback(submitter, config=config)
 
     return {
         "callbackResult": result,

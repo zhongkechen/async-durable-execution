@@ -78,7 +78,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         serdes=CustomSerdes(),
     )
 
-    result: CustomData = context.wait_for_callback(
+    result: CustomData = await context.wait_for_callback(
         noop_submitter,
         name="custom-serdes-callback",
         config=config,

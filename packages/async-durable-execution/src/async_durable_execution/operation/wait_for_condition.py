@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, TypeVar
 
+from async_durable_execution.async_tools import await_maybe
 from async_durable_execution.exceptions import (
     ExecutionError,
 )
@@ -75,7 +76,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         self.operation_identifier = operation_identifier
         self.context_logger = context_logger
 
-    def check_result_status(self) -> CheckResult[T]:
+    async def check_result_status(self) -> CheckResult[T]:
         """Check operation status and create START checkpoint if needed.
 
         Called twice by process() when creating synchronous checkpoints: once before
@@ -129,8 +130,10 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             # Checkpoint wait_for_condition START with non-blocking (is_sync=False).
             # This is purely for observability - we don't need to wait for persistence before
             # executing the check function. The START checkpoint just records that polling began.
-            self.state.create_checkpoint(
-                operation_update=start_operation, is_sync=False
+            await await_maybe(
+                self.state.create_checkpoint(
+                    operation_update=start_operation, is_sync=False
+                )
             )
             # For async checkpoint, no immediate response possible
             # Proceed directly to execute with current checkpoint data
@@ -138,7 +141,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         # Ready to execute check function
         return CheckResult.create_is_ready_to_execute(checkpointed_result)
 
-    def execute(self, checkpointed_result: CheckpointedResult) -> T:
+    async def execute(self, checkpointed_result: CheckpointedResult) -> T:
         """Execute check function and handle decision.
 
         Args:
@@ -195,7 +198,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 False,
                 attempt,
             )
-            new_state = wrapped_user_func(current_state, check_context)
+            new_state = await wrapped_user_func(current_state, check_context)
 
             # Check if condition is met with the wait strategy
             decision: WaitForConditionDecision = self.config.wait_strategy(
@@ -225,7 +228,9 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 # Checkpoint SUCCEED operation with blocking (is_sync=True, default).
                 # Must ensure the final state is persisted before returning to the caller.
                 # This guarantees the condition result is durable and won't be re-evaluated on replay.
-                self.state.create_checkpoint(operation_update=success_operation)
+                await await_maybe(
+                    self.state.create_checkpoint(operation_update=success_operation)
+                )
 
                 logger.debug(
                     "✅ wait_for_condition completed for id: %s, name: %s",
@@ -258,7 +263,9 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             # Checkpoint RETRY operation with blocking (is_sync=True, default).
             # Must ensure the current state and next attempt timestamp are persisted before suspending.
             # This guarantees the polling state is durable and will resume correctly on the next invocation.
-            self.state.create_checkpoint(operation_update=retry_operation)
+            await await_maybe(
+                self.state.create_checkpoint(operation_update=retry_operation)
+            )
 
             suspend_with_optional_resume_delay(
                 msg=f"wait_for_condition {self.operation_identifier.name or self.operation_identifier.operation_id} will retry in {decision.delay_seconds} seconds",
@@ -281,7 +288,9 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             # Checkpoint FAIL operation with blocking (is_sync=True, default).
             # Must ensure the failure state is persisted before raising the exception.
             # This guarantees the error is durable and the condition won't be re-evaluated on replay.
-            self.state.create_checkpoint(operation_update=fail_operation)
+            await await_maybe(
+                self.state.create_checkpoint(operation_update=fail_operation)
+            )
             raise
 
         msg: str = (

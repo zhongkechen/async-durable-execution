@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
+from async_durable_execution.async_tools import run_or_return
 from async_durable_execution.exceptions import InvalidStateError
 
 
@@ -105,7 +106,7 @@ class OperationExecutor(ABC, Generic[T]):
     """
 
     @abstractmethod
-    def check_result_status(self) -> CheckResult[T]:
+    async def check_result_status(self) -> CheckResult[T]:
         """Check operation status and create START checkpoint if needed.
 
         Called twice by process() when creating synchronous checkpoints: once before
@@ -131,7 +132,7 @@ class OperationExecutor(ABC, Generic[T]):
         ...  # pragma: no cover
 
     @abstractmethod
-    def execute(self, checkpointed_result: CheckpointedResult) -> T:
+    async def execute(self, checkpointed_result: CheckpointedResult) -> T:
         """Execute operation logic with checkpoint data.
 
         This method is called when the operation is ready to execute its core logic.
@@ -148,7 +149,10 @@ class OperationExecutor(ABC, Generic[T]):
         """
         ...  # pragma: no cover
 
-    def process(self) -> T:
+    def process(self) -> T | object:
+        return run_or_return(self._process_async())
+
+    async def _process_async(self) -> T:
         """Process operation with checkpoint response handling.
 
         Orchestrates the double-check pattern:
@@ -166,11 +170,11 @@ class OperationExecutor(ABC, Generic[T]):
             May raise operation-specific errors from check_result_status() or execute()
         """
         # Check 1: Entry (handles replay and existing checkpoints)
-        result = self.check_result_status()
+        result = await self.check_result_status()
 
         # If checkpoint was created, verify checkpoint response for immediate status change
         if not result.is_ready_to_execute and not result.has_checkpointed_result:
-            result = self.check_result_status()
+            result = await self.check_result_status()
 
         # Return terminal result if available (can be None for operations that return None)
         if result.has_checkpointed_result:
@@ -181,7 +185,7 @@ class OperationExecutor(ABC, Generic[T]):
             if result.checkpointed_result is None:
                 msg = "CheckResult is marked ready to execute but checkpointed result is not set."
                 raise InvalidStateError(msg)
-            return self.execute(result.checkpointed_result)
+            return await self.execute(result.checkpointed_result)
 
         # Invalid state - neither terminal nor ready to execute
         msg = "Invalid CheckResult state: neither terminal nor ready to execute"

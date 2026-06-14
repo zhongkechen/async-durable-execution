@@ -28,33 +28,33 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         async def run(_) -> str:
             return "success 1"
 
-        return ctx.step(run, name="task1", config=step_config)
+        return await ctx.step(run, name="task1", config=step_config)
 
     async def task2(ctx: DurableContext) -> str:
         async def run(_) -> str:
             return await _failing_task(2)
 
-        return ctx.step(run, name="task2", config=step_config)
+        return await ctx.step(run, name="task2", config=step_config)
 
     async def task3(ctx: DurableContext) -> str:
         async def run(_) -> str:
             return "success 3"
 
-        return ctx.step(run, name="task3", config=step_config)
+        return await ctx.step(run, name="task3", config=step_config)
 
     async def task4(ctx: DurableContext) -> str:
         async def run(_) -> str:
             return await _failing_task(4)
 
-        return ctx.step(run, name="task4", config=step_config)
+        return await ctx.step(run, name="task4", config=step_config)
 
     async def task5(ctx: DurableContext) -> str:
         async def run(_) -> str:
             return "success 5"
 
-        return ctx.step(run, name="task5", config=step_config)
+        return await ctx.step(run, name="task5", config=step_config)
 
-    results = context.parallel(
+    results = await context.parallel(
         functions=[task1, task2, task3, task4, task5],
         name="parallel_with_tolerance",
         config=config,

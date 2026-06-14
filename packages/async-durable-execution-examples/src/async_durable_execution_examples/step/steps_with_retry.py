@@ -62,7 +62,7 @@ async def handler(event: Any, context: DurableContext) -> dict[str, Any]:
                 return await simulated_get_item(step_context, item_name)
 
             # Try to get the item with retry
-            get_response = context.step(
+            get_response = await context.step(
                 get_item,
                 name=f"get_item_poll_{poll_count}",
                 config=step_config,
@@ -74,7 +74,7 @@ async def handler(event: Any, context: DurableContext) -> dict[str, Any]:
                 break
 
             # Wait 1 second until next poll
-            context.wait(timedelta(seconds=1))
+            await context.wait(timedelta(seconds=1))
 
     except RuntimeError as e:
         # Retries exhausted

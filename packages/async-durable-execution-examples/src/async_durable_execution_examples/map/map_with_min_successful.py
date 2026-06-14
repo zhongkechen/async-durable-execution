@@ -25,9 +25,9 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         async def run(_) -> int:
             return await _process_item(item)
 
-        return ctx.step(run, name=f"item_{index}")
+        return await ctx.step(run, name=f"item_{index}")
 
-    results = context.map(
+    results = await context.map(
         inputs=items,
         func=process_item,
         name="map_min_successful",

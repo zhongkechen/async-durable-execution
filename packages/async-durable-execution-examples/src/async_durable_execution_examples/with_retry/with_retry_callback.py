@@ -41,7 +41,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
             heartbeat_timeout=timedelta(seconds=60),
         )
 
-        return ctx.wait_for_callback(
+        return await ctx.wait_for_callback(
             submitter, name=f"external-call-attempt-{attempt}", config=config
         )
 
@@ -55,7 +55,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         ),
     )
 
-    result = with_retry(
+    result = await with_retry(
         context,
         func=retryable_callback_flow,
         config=retry_config,

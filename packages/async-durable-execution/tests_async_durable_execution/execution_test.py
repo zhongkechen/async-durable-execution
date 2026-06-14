@@ -887,7 +887,7 @@ def test_durable_handler_invalid_json_input_payload():
 
 
 def test_durable_handler_background_thread_failure():
-    """Test durable_handler handles background thread failure correctly."""
+    """Test durable_handler returns FAILED when checkpointing fails."""
     mock_client = Mock(spec=DurableServiceClient)
 
     # Make checkpoint_batches_forever raise an error immediately
@@ -901,7 +901,7 @@ def test_durable_handler_background_thread_failure():
             return "step_result"
 
         # Call a checkpoint operation so background thread error can propagate
-        context.step(step_result)
+        await context.step(step_result)
         return {"result": "success"}
 
     operation = Operation(
@@ -931,8 +931,10 @@ def test_durable_handler_background_thread_failure():
     # Make the service client checkpoint call fail
     mock_client.checkpoint.side_effect = failing_checkpoint
 
-    with pytest.raises(RuntimeError, match="Background checkpoint failed"):
-        test_handler(invocation_input, lambda_context)
+    response = test_handler(invocation_input, lambda_context)
+    assert response["Status"] == InvocationStatus.FAILED.value
+    assert response["Error"]["ErrorMessage"] == "Background checkpoint failed"
+    assert response["Error"]["ErrorType"] == "RuntimeError"
 
 
 def test_durable_execution_suspend_execution():
@@ -994,7 +996,7 @@ def test_durable_execution_checkpoint_error_in_background_thread():
             return "step_result"
 
         # Call a checkpoint operation so background thread error can propagate
-        context.step(step_result)
+        await context.step(step_result)
         return {"result": "success"}
 
     operation = Operation(
@@ -1067,18 +1069,9 @@ def test_durable_execution_checkpoint_execution_error_stops_background():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    # Make background thread sleep so user code completes first
-    def slow_background():
-        time.sleep(1)
-
-    # Mock checkpoint_batches_forever to sleep (simulates background thread running)
-    with patch(
-        "async_durable_execution.state.ExecutionState.checkpoint_batches_forever",
-        side_effect=slow_background,
-    ):
-        response = test_handler(invocation_input, lambda_context)
-        assert response["Status"] == InvocationStatus.FAILED.value
-        assert response["Error"]["ErrorType"] == "CheckpointError"
+    response = test_handler(invocation_input, lambda_context)
+    assert response["Status"] == InvocationStatus.FAILED.value
+    assert response["Error"]["ErrorType"] == "CheckpointError"
 
 
 def test_durable_execution_checkpoint_invocation_error_retries():
@@ -1115,17 +1108,8 @@ def test_durable_execution_checkpoint_invocation_error_retries():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    # Make background thread sleep so user code completes first
-    def slow_background():
-        time.sleep(1)
-
-    # Mock checkpoint_batches_forever to sleep (simulates background thread running)
-    with patch(
-        "async_durable_execution.state.ExecutionState.checkpoint_batches_forever",
-        side_effect=slow_background,
-    ):
-        with pytest.raises(CheckpointError, match="Checkpoint system failed"):
-            test_handler(invocation_input, lambda_context)
+    with pytest.raises(CheckpointError, match="Checkpoint system failed"):
+        test_handler(invocation_input, lambda_context)
 
 
 def test_durable_execution_background_thread_execution_error_returns_failed():
@@ -1141,7 +1125,7 @@ def test_durable_execution_background_thread_execution_error_returns_failed():
         async def step_result(_step_context) -> str:
             return "step_result"
 
-        context.step(step_result)
+        await context.step(step_result)
         return {"result": "success"}
 
     operation = Operation(
@@ -1188,7 +1172,7 @@ def test_durable_execution_background_thread_invocation_error_retries():
         async def step_result(_step_context) -> str:
             return "step_result"
 
-        context.step(step_result)
+        await context.step(step_result)
         return {"result": "success"}
 
     operation = Operation(
@@ -1440,7 +1424,7 @@ def test_durable_handler_background_thread_failure_on_succeed_checkpoint():
             return "step_result"
 
         # Call a step operation which will trigger START and SUCCEED checkpoints
-        context.step(step_result)
+        await context.step(step_result)
         return {"result": "success"}
 
     operation = Operation(
@@ -1470,8 +1454,12 @@ def test_durable_handler_background_thread_failure_on_succeed_checkpoint():
     # Make the service client checkpoint call fail selectively
     mock_client.checkpoint.side_effect = selective_failing_checkpoint
 
-    with pytest.raises(RuntimeError, match="Background checkpoint failed on SUCCEED"):
-        test_handler(invocation_input, lambda_context)
+    response = test_handler(invocation_input, lambda_context)
+    assert response["Status"] == InvocationStatus.FAILED.value
+    assert (
+        response["Error"]["ErrorMessage"] == "Background checkpoint failed on SUCCEED"
+    )
+    assert response["Error"]["ErrorType"] == "RuntimeError"
 
     # Verify that checkpoint was called exactly once with a batch containing both updates:
     # The batch contains: STEP START and STEP SUCCEED (fails on SUCCEED)
@@ -1533,10 +1521,10 @@ def test_durable_handler_background_thread_failure_on_start_checkpoint():
         # First step with AT_MOST_ONCE_PER_RETRY (synchronous START checkpoint)
         # This should fail on START checkpoint and prevent execution
         step_config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
-        context.step(first_step_result, config=step_config)
+        await context.step(first_step_result, config=step_config)
 
         # Second step should never be reached if first step's START checkpoint fails
-        context.step(second_step_result)
+        await context.step(second_step_result)
         return {"result": "success"}
 
     operation = Operation(
@@ -1566,8 +1554,10 @@ def test_durable_handler_background_thread_failure_on_start_checkpoint():
     # Make the service client checkpoint call fail selectively
     mock_client.checkpoint.side_effect = selective_failing_checkpoint
 
-    with pytest.raises(RuntimeError, match="Background checkpoint failed on START"):
-        test_handler(invocation_input, lambda_context)
+    response = test_handler(invocation_input, lambda_context)
+    assert response["Status"] == InvocationStatus.FAILED.value
+    assert response["Error"]["ErrorMessage"] == "Background checkpoint failed on START"
+    assert response["Error"]["ErrorType"] == "RuntimeError"
 
     # Verify that checkpoint was called exactly once with only the START update:
     # With AT_MOST_ONCE_PER_RETRY, START checkpoint is synchronous and blocks execution
@@ -1649,11 +1639,13 @@ def test_durable_handler_background_thread_failure_on_large_result_checkpoint():
     # Make the service client checkpoint call fail on large result
     mock_client.checkpoint.side_effect = failing_checkpoint
 
-    # Verify that the original RuntimeError is raised (not BackgroundThreadError)
-    with pytest.raises(
-        RuntimeError, match="Background checkpoint failed on large result"
-    ):
-        test_handler(invocation_input, lambda_context)
+    response = test_handler(invocation_input, lambda_context)
+    assert response["Status"] == InvocationStatus.FAILED.value
+    assert (
+        response["Error"]["ErrorMessage"]
+        == "Background checkpoint failed on large result"
+    )
+    assert response["Error"]["ErrorType"] == "RuntimeError"
 
 
 def test_durable_handler_background_thread_failure_on_error_checkpoint():
@@ -1747,7 +1739,7 @@ def test_durable_execution_logs_checkpoint_error_extras_from_background_thread()
         async def step_result(_step_context) -> str:
             return "step_result"
 
-        context.step(step_result)
+        await context.step(step_result)
         return {"result": "success"}
 
     operation = Operation(
@@ -1782,9 +1774,9 @@ def test_durable_execution_logs_checkpoint_error_extras_from_background_thread()
         assert response["Error"]["ErrorType"] == "CheckpointError"
 
     mock_logger.exception.assert_called()
-    # First call: "Checkpoint processing failed" with error extras
+    # Background checkpoint failures are surfaced through the durable handler.
     first_call = mock_logger.exception.call_args_list[0]
-    assert "Checkpoint processing failed" in first_call[0][0]
+    assert "Checkpoint system failed" in first_call[0][0]
     assert first_call[1]["extra"]["Error"] == error_obj
     assert first_call[1]["extra"]["ResponseMetadata"] == metadata_obj
 
@@ -1810,7 +1802,7 @@ def test_durable_execution_logs_boto_client_error_extras_from_background_thread(
         async def step_result(_step_context) -> str:
             return "step_result"
 
-        context.step(step_result)
+        await context.step(step_result)
         return {"result": "success"}
 
     operation = Operation(
@@ -1845,9 +1837,11 @@ def test_durable_execution_logs_boto_client_error_extras_from_background_thread(
 
     mock_logger.exception.assert_called_once()
     call_args = mock_logger.exception.call_args
-    assert "Checkpoint processing failed" in call_args[0][0]
-    assert call_args[1]["extra"]["Error"] == error_obj
-    assert call_args[1]["extra"]["ResponseMetadata"] == metadata_obj
+    assert (
+        "Invocation error. Must terminate." in call_args[0][0]
+        or "Non-retryable Durable API error." in call_args[0][0]
+    )
+    assert "extra" not in call_args[1]
 
 
 def test_durable_execution_logs_checkpoint_error_extras_from_user_code():
@@ -2789,7 +2783,7 @@ def test_durable_execution_non_retryable_background_thread_error_returns_failed(
         async def step_result(_step_context) -> str:
             return "step_result"
 
-        context.step(step_result)
+        await context.step(step_result)
         return {"result": "success"}
 
     result = test_handler(_make_invocation_input(mock_client), _make_lambda_context())
@@ -3038,7 +3032,7 @@ def test_durable_execution_supports_async_steps_inside_async_handler():
     @durable_execution
     async def test_handler(event: Any, context: DurableContext) -> dict:
         await asyncio.sleep(0)
-        step_result = context.step(async_step, name="async-step")
+        step_result = await context.step(async_step, name="async-step")
         return {"step_result": step_result}
 
     result = test_handler(

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import json
 import logging
-import queue
+from collections import deque
 import threading
 import time
 from collections.abc import Callable
@@ -38,7 +39,7 @@ from async_durable_execution.lambda_service import (
 from async_durable_execution.plugin import (
     PluginExecutor,
 )
-from async_durable_execution.threading import CompletionEvent, OrderedLock
+from async_durable_execution.threading import OrderedLock
 
 
 if TYPE_CHECKING:
@@ -73,7 +74,104 @@ class QueuedOperation:
     """
 
     operation_update: OperationUpdate | None
-    completion_event: CompletionEvent | None = None
+    completion_future: asyncio.Future[None] | None = None
+
+    def __init__(
+        self,
+        operation_update: OperationUpdate | None,
+        completion_future: asyncio.Future[None] | None = None,
+        completion_event: asyncio.Future[None] | None = None,
+    ) -> None:
+        if completion_future is not None and completion_event is not None:
+            msg = "Provide either completion_future or completion_event, not both."
+            raise ValueError(msg)
+        object.__setattr__(self, "operation_update", operation_update)
+        object.__setattr__(
+            self,
+            "completion_future",
+            completion_future if completion_future is not None else completion_event,
+        )
+
+    @property
+    def completion_event(self) -> asyncio.Future[None] | None:
+        return self.completion_future
+
+
+class _CompatDeque(deque[QueuedOperation]):
+    """Deque with queue-like helpers for legacy tests and call sites."""
+
+    def put(self, item: QueuedOperation) -> None:
+        self.append(item)
+
+    def put_nowait(self, item: QueuedOperation) -> None:
+        self.append(item)
+
+    def get_nowait(self) -> QueuedOperation:
+        return self.popleft()
+
+    def qsize(self) -> int:
+        return len(self)
+
+    def empty(self) -> bool:
+        return not self
+
+
+class _ImmediateAwaitable:
+    def __await__(self):
+        if False:  # pragma: no cover
+            yield
+        return None
+
+
+class _CompatAsyncQueue(asyncio.Queue[QueuedOperation | None]):
+    """Async queue whose ``put`` also works as a synchronous helper in tests."""
+
+    def put(self, item: QueuedOperation | None):  # type: ignore[override]
+        self.put_nowait(item)
+        return _ImmediateAwaitable()
+
+
+def _run_or_return(awaitable):
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(awaitable)
+    return awaitable
+
+
+def _completion_done(completion) -> bool:
+    if completion is None:
+        return True
+    if hasattr(completion, "done"):
+        return completion.done()
+    if hasattr(completion, "is_set"):
+        return completion.is_set()
+    return False
+
+
+def _completion_set_result(completion) -> None:
+    if completion is None:
+        return
+    if hasattr(completion, "set_result"):
+        completion.set_result(None)
+        return
+    if hasattr(completion, "set"):
+        completion.set()
+
+
+def _completion_set_exception(completion, error: Exception) -> None:
+    if completion is None:
+        return
+    if hasattr(completion, "set_exception"):
+        completion.set_exception(error)
+        return
+    if hasattr(completion, "set"):
+        completion.set(
+            BackgroundThreadError(
+                "Background checkpoint processing failed",
+                error,
+            )
+        )
 
 
 @dataclass(frozen=True)
@@ -263,10 +361,12 @@ class ExecutionState:
         )
 
         # Checkpoint batching components
-        self._checkpoint_queue: queue.Queue[QueuedOperation] = queue.Queue()
-        self._overflow_queue: queue.Queue[QueuedOperation] = queue.Queue()
-        self._checkpointing_stopped: threading.Event = threading.Event()
-        self._checkpointing_failed: CompletionEvent = CompletionEvent()
+        self._checkpoint_queue: _CompatAsyncQueue = _CompatAsyncQueue()
+        self._overflow_queue: _CompatDeque = _CompatDeque()
+        self._checkpointing_stopped = threading.Event()
+        self._checkpointing_failed = threading.Event()
+        self._checkpointing_failure: Exception | None = None
+        self._checkpointing_task: asyncio.Task[None] | None = None
 
         # Concurrency management for parallel operations: parent_id -> {child_operation_ids}
         self._parent_to_children: dict[str, set[str]] = {}
@@ -441,6 +541,18 @@ class ExecutionState:
         self,
         operation_update: OperationUpdate | None = None,
         is_sync: bool = True,  # noqa: FBT001, FBT002
+    ):
+        return _run_or_return(
+            self._create_checkpoint_async(
+                operation_update=operation_update,
+                is_sync=is_sync,
+            )
+        )
+
+    async def _create_checkpoint_async(
+        self,
+        operation_update: OperationUpdate | None = None,
+        is_sync: bool = True,  # noqa: FBT001, FBT002
     ) -> None:
         """Create a checkpoint with optional synchronous behavior.
 
@@ -485,8 +597,8 @@ class ExecutionState:
                     If False, returns immediately without blocking for performance.
 
         Raises:
-            Any exception from the background checkpoint processing will propagate
-            through the ThreadPoolExecutor to the main thread, terminating the Lambda.
+            Any exception from checkpoint processing will propagate back to the
+            awaiting coroutine, terminating the Lambda invocation.
 
         Examples:
             # Synchronous checkpoint (default, safe)
@@ -538,36 +650,42 @@ class ExecutionState:
                         operation_id=operation_update.operation_id,
                     )
 
-        # Check if background checkpointing has failed
-        if self._checkpointing_failed.is_set():
-            # This will raise the stored BackgroundThreadError
-            self._checkpointing_failed.wait()
+        if self._checkpointing_failure is not None:
+            raise self._checkpointing_failure
 
-        # Conditionally create completion event based on is_sync parameter
-        completion_event: CompletionEvent | None = (
-            CompletionEvent() if is_sync else None
-        )
+        if self._checkpointing_task is None or self._checkpointing_task.done():
+            self.start_checkpointing()
+
+        completion_future: asyncio.Future[None] | None = None
+        if is_sync:
+            completion_future = asyncio.get_running_loop().create_future()
 
         # Create wrapper object for queue
-        queued_op = QueuedOperation(operation_update, completion_event)
+        queued_op = QueuedOperation(operation_update, completion_future)
 
         # Enqueue the wrapper object (operation_update can be None for empty checkpoints)
-        self._checkpoint_queue.put(queued_op)
+        await self._checkpoint_queue.put(queued_op)
 
         # Conditionally wait for completion based on is_sync parameter
         if is_sync:
             logger.debug("Enqueued checkpoint operation for synchronous processing")
-            if completion_event is None:  # pragma: no cover
+            if completion_future is None:  # pragma: no cover
                 # this shouldn't ever be possible
-                msg: str = "completion_event must be set for synchronous execution"
+                msg: str = "completion_future must be set for synchronous execution"
                 raise DurableExecutionsError(msg)
-
-            # Wait for completion - will raise BackgroundThreadError if background thread fails
-            completion_event.wait()
+            await completion_future
         else:
             logger.debug("Enqueued checkpoint operation for asynchronous processing")
 
     def create_checkpoint_sync(
+        self,
+        operation_update: OperationUpdate | None = None,
+    ):
+        return _run_or_return(
+            self._create_checkpoint_sync_async(operation_update=operation_update)
+        )
+
+    async def _create_checkpoint_sync_async(
         self,
         operation_update: OperationUpdate | None = None,
     ) -> None:
@@ -593,14 +711,7 @@ class ExecutionState:
             execution_state.create_checkpoint_sync(operation_update)
             # Raises CheckpointError directly
         """
-        try:
-            self.create_checkpoint(operation_update, is_sync=True)
-        except BackgroundThreadError as bg_error:
-            # Background checkpoint system failed - unwrap the original error
-            logger.exception("Checkpoint processing failed - unwrapping original error")
-            self.stop_checkpointing()
-            # Raise the original exception unwrapped
-            raise bg_error.source_exception from bg_error
+        await self.create_checkpoint(operation_update, is_sync=True)
 
     def _mark_orphans(self, context_id: str) -> None:
         """Mark all descendants (direct and transitive) as orphaned.
@@ -643,8 +754,20 @@ class ExecutionState:
             context_id,
         )
 
-    def checkpoint_batches_forever(self) -> None:
-        """Single background thread that batches operations and processes results.
+    def start_checkpointing(self) -> None:
+        """Start the checkpoint processor on the current event loop."""
+        if self._checkpointing_task is None or self._checkpointing_task.done():
+            self._checkpointing_stopped.clear()
+            self._checkpointing_failed.clear()
+            self._checkpointing_task = asyncio.create_task(
+                self.checkpoint_batches_forever()
+            )
+
+    def checkpoint_batches_forever(self):
+        return _run_or_return(self._checkpoint_batches_forever_async())
+
+    async def _checkpoint_batches_forever_async(self) -> None:
+        """Background coroutine that batches operations and processes results.
 
         Runs until shutdown is signaled. This method processes checkpoint operations
         in batches, makes API calls to persist them, and updates the execution state
@@ -663,12 +786,14 @@ class ExecutionState:
             Any exception from the service client checkpoint call will propagate naturally,
             terminating the background thread and signaling an error to the main thread.
         """
+        await asyncio.sleep(0)
+
         # Keep checkpoint token as local variable in the loop
         current_checkpoint_token: str = self._current_checkpoint_token
 
         while not self._checkpointing_stopped.is_set():
             # Collect operations into a batch
-            batch: list[QueuedOperation] = self._collect_checkpoint_batch()
+            batch: list[QueuedOperation] = await self._collect_checkpoint_batch()
 
             if batch:
                 # Extract OperationUpdates, excluding empty checkpoints from API call
@@ -717,60 +842,55 @@ class ExecutionState:
 
                     # Signal completion for any synchronous operations
                     for queued_op in batch:
-                        if queued_op.completion_event is not None:
-                            queued_op.completion_event.set()
+                        if not _completion_done(queued_op.completion_future):
+                            _completion_set_result(queued_op.completion_future)
                 except Exception as e:
-                    # Checkpoint failed - wake all blocked threads so they can raise error
-                    # Drain both queues and signal all completion events
+                    # Checkpoint failed - wake blocked coroutines so they can raise error
                     logger.exception("Checkpoint batch processing failed")
-                    bg_error: BackgroundThreadError = BackgroundThreadError(
-                        "Checkpoint creation failed", e
-                    )
+                    self._checkpointing_failure = e
+                    self._checkpointing_failed.set()
 
-                    # FIFO: although at this point order not really import any anymore
-                    # Signal completion events for the failed batch
+                    # Signal completion futures for the failed batch
                     for queued_op in batch:
-                        if queued_op.completion_event is not None:
-                            queued_op.completion_event.set(bg_error)
+                        if not _completion_done(queued_op.completion_future):
+                            _completion_set_exception(queued_op.completion_future, e)
 
-                    # overflow 1st: although at this point order not really import any anymore
-                    while not self._overflow_queue.empty():
-                        try:
-                            item = self._overflow_queue.get_nowait()
-                            if item.completion_event:
-                                item.completion_event.set(bg_error)
-                        except queue.Empty:
-                            break
+                    while self._overflow_queue:
+                        overflow_item = self._overflow_queue.popleft()
+                        if not _completion_done(overflow_item.completion_future):
+                            _completion_set_exception(
+                                overflow_item.completion_future, e
+                            )
 
-                    # finally Wake all blocked threads in main queue
                     while not self._checkpoint_queue.empty():
-                        try:
-                            item = self._checkpoint_queue.get_nowait()
-                            if item.completion_event:
-                                item.completion_event.set(bg_error)
-                        except queue.Empty:
-                            break
-
-                    # Set the failure event so future checkpoint attempts fail immediately
-                    self._checkpointing_failed.set(bg_error)
-
-                    # Exit the loop - error has been signaled to main thread via completion events
+                        queued_item: QueuedOperation | None = (
+                            self._checkpoint_queue.get_nowait()
+                        )
+                        if queued_item is not None and not _completion_done(
+                            queued_item.completion_future
+                        ):
+                            _completion_set_exception(queued_item.completion_future, e)
                     break
 
         logger.debug("Background checkpoint processing stopped")
 
     def stop_checkpointing(self) -> None:
-        """Signal background thread to stop checkpointing.
+        """Signal the checkpoint processor to stop.
 
         This method sets the checkpointing stopped event, which signals the background
         thread to exit. Any remaining async checkpoints in the queue are non-essential
         (observability only) and will be abandoned. All critical synchronous checkpoints
         will have already completed before this is called.
         """
-        logger.debug("Signaling background thread to stop checkpointing")
+        logger.debug("Signaling checkpoint processor to stop")
         self._checkpointing_stopped.set()
+        if self._checkpointing_task is not None and not self._checkpoint_queue.full():
+            self._checkpoint_queue.put_nowait(None)
 
-    def _collect_checkpoint_batch(self) -> list[QueuedOperation]:
+    def _collect_checkpoint_batch(self):
+        return _run_or_return(self._collect_checkpoint_batch_async())
+
+    async def _collect_checkpoint_batch_async(self) -> list[QueuedOperation]:
         """Collect multiple checkpoint operations into a batch for API efficiency.
 
         Processes overflow queue first to maintain FIFO order, then collects from main queue.
@@ -794,39 +914,35 @@ class ExecutionState:
         effective_operation_count = 0  # Operations that count toward batch limit
 
         # First, drain overflow queue (FIFO order preserved)
-        try:
-            while effective_operation_count < self._batcher_config.max_batch_operations:
-                overflow_op = self._overflow_queue.get_nowait()
+        while (
+            self._overflow_queue
+            and effective_operation_count < self._batcher_config.max_batch_operations
+        ):
+            overflow_op = self._overflow_queue.popleft()
 
-                if overflow_op.operation_update is None:  # Empty checkpoint
-                    batch.append(overflow_op)
-                    if not has_empty_checkpoint:
-                        effective_operation_count += (
-                            1  # First empty counts toward limit
-                        )
-                        has_empty_checkpoint = True
-                    # Subsequent empties don't count toward limit
-                else:
-                    op_size = self._calculate_operation_size(overflow_op)
-                    if total_size + op_size > self._batcher_config.max_batch_size_bytes:
-                        # Put back and stop
-                        self._overflow_queue.put(overflow_op)
-                        break
-                    batch.append(overflow_op)
-                    total_size += op_size
+            if overflow_op.operation_update is None:  # Empty checkpoint
+                batch.append(overflow_op)
+                if not has_empty_checkpoint:
                     effective_operation_count += 1
-        except queue.Empty:
-            pass
+                    has_empty_checkpoint = True
+            else:
+                op_size = self._calculate_operation_size(overflow_op)
+                if total_size + op_size > self._batcher_config.max_batch_size_bytes:
+                    self._overflow_queue.appendleft(overflow_op)
+                    break
+                batch.append(overflow_op)
+                total_size += op_size
+                effective_operation_count += 1
 
         # If batch is empty, get first operation from main queue
         if not batch:
-            # Block for first operation, checking stop signal periodically
             while not self._checkpointing_stopped.is_set():
                 try:
-                    first_op = self._checkpoint_queue.get(
-                        timeout=0.1
-                    )  # Check stop signal every 100ms
-                    self._checkpoint_queue.task_done()
+                    first_op = await asyncio.wait_for(
+                        self._checkpoint_queue.get(), timeout=0.1
+                    )
+                    if first_op is None:
+                        continue
                     batch.append(first_op)
 
                     if first_op.operation_update is None:
@@ -836,7 +952,7 @@ class ExecutionState:
 
                     effective_operation_count = 1
                     break
-                except queue.Empty:
+                except TimeoutError:
                     continue
 
             # If stopped and no operation retrieved, return empty batch
@@ -846,12 +962,10 @@ class ExecutionState:
         # Start batching window using configured time
         batch_deadline = time.time() + self._batcher_config.max_batch_time_seconds
 
-        # Collect additional operations within the time window
-        while (
-            time.time() < batch_deadline
-            and effective_operation_count < self._batcher_config.max_batch_operations
-            and not self._checkpointing_stopped.is_set()
-        ):
+        # Collect additional operations within the time window. Once the batch
+        # reaches the real-operation limit, keep accepting empty checkpoints so
+        # concurrent resubmits can coalesce instead of spilling into a new API call.
+        while time.time() < batch_deadline and not self._checkpointing_stopped.is_set():
             remaining_time = min(
                 batch_deadline - time.time(),
                 0.1,  # Check stop signal every 100ms
@@ -861,8 +975,11 @@ class ExecutionState:
                 break
 
             try:
-                additional_op = self._checkpoint_queue.get(timeout=remaining_time)
-                self._checkpoint_queue.task_done()
+                additional_op = await asyncio.wait_for(
+                    self._checkpoint_queue.get(), timeout=remaining_time
+                )
+                if additional_op is None:
+                    continue
 
                 if additional_op.operation_update is None:  # Empty checkpoint
                     batch.append(additional_op)
@@ -873,11 +990,21 @@ class ExecutionState:
                         has_empty_checkpoint = True
                     # Subsequent empties don't count toward limit
                 else:
+                    if (
+                        effective_operation_count
+                        >= self._batcher_config.max_batch_operations
+                    ):
+                        self._overflow_queue.append(additional_op)
+                        logger.debug(
+                            "Batch operation limit reached, moving operation to overflow queue"
+                        )
+                        break
+
                     op_size = self._calculate_operation_size(additional_op)
                     # Check if adding this operation would exceed size limit
                     if total_size + op_size > self._batcher_config.max_batch_size_bytes:
                         # Put in overflow queue for next batch
-                        self._overflow_queue.put(additional_op)
+                        self._overflow_queue.append(additional_op)
                         logger.debug(
                             "Batch size limit reached, moving operation to overflow queue"
                         )
@@ -886,7 +1013,7 @@ class ExecutionState:
                     total_size += op_size
                     effective_operation_count += 1
 
-            except queue.Empty:
+            except TimeoutError:
                 break
 
         empty_count = sum(1 for q in batch if q.operation_update is None)
@@ -921,6 +1048,11 @@ class ExecutionState:
         serialized = json.dumps(queued_op.operation_update.to_dict()).encode("utf-8")
         return len(serialized)
 
+    async def aclose(self) -> None:
+        self.stop_checkpointing()
+        if self._checkpointing_task is not None:
+            await self._checkpointing_task
+
     def close(self):
         self.stop_checkpointing()
 
@@ -932,12 +1064,12 @@ class ExecutionState:
         attempt: int | None = None,
     ):
         @functools.wraps(user_function)
-        def wrapper(*args, **kwargs):
+        async def wrapper(*args, **kwargs):
             start_info = self._plugin_executor.on_user_function_start(
                 operation_identifier, is_replay_children, attempt
             )
             try:
-                result = invoke_callable(user_function, *args, **kwargs)
+                result = await invoke_callable(user_function, *args, **kwargs)
                 self._plugin_executor.on_user_function_end(start_info, None)
                 return result
             except SuspendExecution as e:

@@ -29,6 +29,6 @@ async def handler(_event: Any, context: DurableContext) -> int:
 
     config = WaitForConditionConfig(wait_strategy=wait_strategy, initial_state=0)
 
-    result = context.wait_for_condition(check=condition_function, config=config)
+    result = await context.wait_for_condition(check=condition_function, config=config)
 
     return result

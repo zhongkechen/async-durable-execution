@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
-import threading
 import time
 from collections import Counter
 from dataclasses import dataclass
@@ -19,8 +19,6 @@ from async_durable_execution.types import BatchResult as BatchResultProtocol
 
 
 if TYPE_CHECKING:
-    from concurrent.futures import Future
-
     from async_durable_execution.config import CompletionConfig
 
 
@@ -315,14 +313,14 @@ class ExecutableWithState(Generic[CallableType, ResultType]):
     def __init__(self, executable: Executable[CallableType]):
         self.executable = executable
         self._status = BranchStatus.PENDING
-        self._future: Future | None = None
+        self._future: asyncio.Task[ResultType] | None = None
         self._suspend_until: float | None = None
         self._result: ResultType = None  # type: ignore[assignment]
         self._is_result_set: bool = False
         self._error: Exception | None = None
 
     @property
-    def future(self) -> Future:
+    def future(self) -> asyncio.Task[ResultType]:
         """Get the future, raising error if not available."""
         if self._future is None:
             msg = f"ExecutableWithState was never started. {self.executable.index}"
@@ -377,7 +375,7 @@ class ExecutableWithState(Generic[CallableType, ResultType]):
     def callable(self) -> CallableType:
         return self.executable.func
 
-    def run(self, future: Future) -> None:
+    def run(self, future: asyncio.Task[ResultType]) -> None:
         """Transition to RUNNING state with a future."""
         if self._status != BranchStatus.PENDING:
             msg = f"Cannot start running from {self._status}"
@@ -414,7 +412,7 @@ class ExecutableWithState(Generic[CallableType, ResultType]):
 
 
 class ExecutionCounters:
-    """Thread-safe counters for tracking execution state."""
+    """Counters for tracking execution state on a single event loop."""
 
     def __init__(
         self,
@@ -429,60 +427,53 @@ class ExecutionCounters:
         self.tolerated_failure_percentage: float | None = tolerated_failure_percentage
         self.success_count: int = 0
         self.failure_count: int = 0
-        self._lock = threading.Lock()
 
     def complete_task(self) -> None:
         """Task completed successfully."""
-        with self._lock:
-            self.success_count += 1
+        self.success_count += 1
 
     def fail_task(self) -> None:
         """Task failed."""
-        with self._lock:
-            self.failure_count += 1
+        self.failure_count += 1
 
     def should_continue(self) -> bool:
         """
         Check if we should continue starting new tasks (based on failure tolerance).
         Matches TypeScript shouldContinue() logic.
         """
-        with self._lock:
-            # If no completion config, only continue if no failures
-            if (
-                self.tolerated_failure_count is None
-                and self.tolerated_failure_percentage is None
-            ):
-                return self.failure_count == 0
+        # If no completion config, only continue if no failures
+        if (
+            self.tolerated_failure_count is None
+            and self.tolerated_failure_percentage is None
+        ):
+            return self.failure_count == 0
 
-            # Check failure count tolerance
-            if (
-                self.tolerated_failure_count is not None
-                and self.failure_count > self.tolerated_failure_count
-            ):
+        # Check failure count tolerance
+        if (
+            self.tolerated_failure_count is not None
+            and self.failure_count > self.tolerated_failure_count
+        ):
+            return False
+
+        # Check failure percentage tolerance
+        if self.tolerated_failure_percentage is not None and self.total_tasks > 0:
+            failure_percentage = (self.failure_count / self.total_tasks) * 100
+            if failure_percentage > self.tolerated_failure_percentage:
                 return False
 
-            # Check failure percentage tolerance
-            if self.tolerated_failure_percentage is not None and self.total_tasks > 0:
-                failure_percentage = (self.failure_count / self.total_tasks) * 100
-                if failure_percentage > self.tolerated_failure_percentage:
-                    return False
-
-            return True
+        return True
 
     def is_complete(self) -> bool:
         """
         Check if execution should complete (based on completion criteria).
         Matches TypeScript isComplete() logic.
         """
-        with self._lock:
-            completed_count = self.success_count + self.failure_count
+        completed_count = self.success_count + self.failure_count
 
-            # All tasks completed
-            if completed_count == self.total_tasks:
-                return True
+        if completed_count == self.total_tasks:
+            return True
 
-            # when we breach min successful, we've completed
-            return self.success_count >= self.min_successful
+        return self.success_count >= self.min_successful
 
     def should_complete(self) -> bool:
         """
@@ -493,22 +484,19 @@ class ExecutionCounters:
 
     def is_all_completed(self) -> bool:
         """True if all tasks completed successfully."""
-        with self._lock:
-            return self.success_count == self.total_tasks
+        return self.success_count == self.total_tasks
 
     def is_min_successful_reached(self) -> bool:
         """True if minimum successful tasks reached."""
-        with self._lock:
-            return self.success_count >= self.min_successful
+        return self.success_count >= self.min_successful
 
     def is_failure_tolerance_exceeded(self) -> bool:
         """True if failure tolerance was exceeded."""
-        with self._lock:
-            return self._is_failure_condition_reached(
-                tolerated_count=self.tolerated_failure_count,
-                tolerated_percentage=self.tolerated_failure_percentage,
-                failure_count=self.failure_count,
-            )
+        return self._is_failure_condition_reached(
+            tolerated_count=self.tolerated_failure_count,
+            tolerated_percentage=self.tolerated_failure_percentage,
+            failure_count=self.failure_count,
+        )
 
     def _is_failure_condition_reached(
         self,

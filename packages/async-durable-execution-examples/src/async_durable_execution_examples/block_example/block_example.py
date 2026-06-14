@@ -14,7 +14,7 @@ from async_durable_execution.execution import durable_execution
 async def nested_block(ctx: DurableContext) -> str:
     """Nested block with its own child context."""
     # Wait in the nested block
-    ctx.wait(timedelta(seconds=1))
+    await ctx.wait(timedelta(seconds=1))
     return "nested block result"
 
 
@@ -26,13 +26,13 @@ async def parent_block(ctx: DurableContext) -> dict[str, str]:
         return "nested step result"
 
     # Nested step
-    nested_result: str = ctx.step(
+    nested_result: str = await ctx.step(
         build_nested_result,
         name="nested_step",
     )
 
     # Nested block with its own child context
-    nested_block_result: str = ctx.run_in_child_context(nested_block())
+    nested_block_result: str = await ctx.run_in_child_context(nested_block())
 
     return {
         "nestedStep": nested_result,
@@ -44,7 +44,7 @@ async def parent_block(ctx: DurableContext) -> dict[str, str]:
 async def handler(_event: Any, context: DurableContext) -> dict[str, str]:
     """Handler demonstrating nested child contexts."""
     # Run parent block which contains nested operations
-    result: dict[str, str] = context.run_in_child_context(
+    result: dict[str, str] = await context.run_in_child_context(
         parent_block(), name="parent_block"
     )
 

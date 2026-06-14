@@ -7,7 +7,11 @@ import logging
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, TypeVar
 
-from async_durable_execution.async_tools import invoke_callable
+from async_durable_execution.async_tools import (
+    await_maybe,
+    invoke_callable,
+    run_or_return,
+)
 from async_durable_execution.concurrency.executor import ConcurrentExecutor
 from async_durable_execution.concurrency.models import Executable
 from async_durable_execution.config import (
@@ -97,14 +101,37 @@ class ParallelExecutor(ConcurrentExecutor[Callable, R]):
             return func.name
         return super().get_iteration_name(index)
 
-    def execute_item(self, child_context, executable: Executable[Callable]) -> R:  # noqa: PLR6301
+    def execute_item(self, child_context, executable: Executable[Callable]):  # noqa: PLR6301
+        return run_or_return(self._execute_item_async(child_context, executable))
+
+    async def _execute_item_async(
+        self, child_context, executable: Executable[Callable]
+    ) -> R:
         logger.debug("🔀 Processing parallel branch: %s", executable.index)
-        result: R = invoke_callable(executable.func, child_context)
+        result: R = await invoke_callable(executable.func, child_context)
         logger.debug("✅ Processed parallel branch: %s", executable.index)
         return result
 
 
 def parallel_handler(
+    callables: Sequence[Callable[[DurableContext], Awaitable[R]] | ParallelBranch[R]],
+    config: ParallelConfig | None,
+    execution_state: ExecutionState,
+    parallel_context: DurableContext,
+    operation_identifier: OperationIdentifier,
+):
+    return run_or_return(
+        _parallel_handler_async(
+            callables,
+            config,
+            execution_state,
+            parallel_context,
+            operation_identifier,
+        )
+    )
+
+
+async def _parallel_handler_async(
     callables: Sequence[Callable[[DurableContext], Awaitable[R]] | ParallelBranch[R]],
     config: ParallelConfig | None,
     execution_state: ExecutionState,
@@ -127,8 +154,10 @@ def parallel_handler(
         operation_identifier.operation_id
     )
     if checkpoint.is_succeeded():
-        return executor.replay(execution_state, parallel_context)
-    return executor.execute(execution_state, executor_context=parallel_context)
+        return await await_maybe(executor.replay(execution_state, parallel_context))
+    return await await_maybe(
+        executor.execute(execution_state, executor_context=parallel_context)
+    )
 
 
 class ParallelSummaryGenerator:

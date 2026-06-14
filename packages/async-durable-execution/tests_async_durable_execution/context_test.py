@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import inspect
 import json
 import random
 from datetime import timedelta
@@ -47,6 +48,29 @@ from async_durable_execution.waits import (
 
 from .serdes_test import CustomDictSerDes
 from .test_helpers import operation_id_sequence
+
+
+def run_async(awaitable):
+    if inspect.isawaitable(awaitable):
+        return asyncio.run(awaitable)
+    return awaitable
+
+
+def make_async_executor(result):
+    mock_executor = MagicMock()
+    mock_executor.process = AsyncMock(return_value=result)
+    return mock_executor
+
+
+def create_async_child_state() -> Mock:
+    state = Mock(spec=ExecutionState)
+    state.durable_execution_arn = (
+        "arn:aws:durable:us-east-1:123456789012:execution/test"
+    )
+    state.get_checkpoint_result.return_value = CheckpointedResult.create_not_found()
+    state.create_checkpoint = AsyncMock()
+    state.wrap_user_function = lambda func, *args, **kwargs: func
+    return state
 
 
 def create_test_context(
@@ -99,7 +123,7 @@ def test_callback_result_succeeded():
     mock_state.get_checkpoint_result.return_value = mock_result
 
     callback = Callback("callback1", "op1", mock_state)
-    result = callback.result()
+    result = run_async(callback.result())
 
     assert result == '"success_result"'
     mock_state.get_checkpoint_result.assert_called_once_with("op1")
@@ -121,7 +145,7 @@ def test_callback_result_succeeded_with_plain_str():
     mock_state.get_checkpoint_result.return_value = mock_result
 
     callback = Callback("callback1", "op1", mock_state)
-    result = callback.result()
+    result = run_async(callback.result())
 
     assert result == "success_result"
     mock_state.get_checkpoint_result.assert_called_once_with("op1")
@@ -140,7 +164,7 @@ def test_callback_result_succeeded_none():
     mock_state.get_checkpoint_result.return_value = mock_result
 
     callback = Callback("callback2", "op2", mock_state)
-    result = callback.result()
+    result = run_async(callback.result())
 
     assert result is None
 
@@ -160,7 +184,7 @@ def test_callback_result_started_no_timeout():
     callback = Callback("callback3", "op3", mock_state)
 
     with pytest.raises(SuspendExecution, match="Callback result not received yet"):
-        callback.result()
+        run_async(callback.result())
 
 
 def test_callback_result_started_with_timeout():
@@ -178,7 +202,7 @@ def test_callback_result_started_with_timeout():
     callback = Callback("callback4", "op4", mock_state)
 
     with pytest.raises(SuspendExecution, match="Callback result not received yet"):
-        callback.result()
+        run_async(callback.result())
 
 
 def test_callback_result_failed():
@@ -199,7 +223,7 @@ def test_callback_result_failed():
     callback = Callback("callback5", "op5", mock_state)
 
     with pytest.raises(CallbackError):
-        callback.result()
+        run_async(callback.result())
 
 
 def test_callback_result_not_started():
@@ -211,7 +235,7 @@ def test_callback_result_not_started():
     callback = Callback("callback6", "op6", mock_state)
 
     with pytest.raises(CallbackError, match="Callback operation must exist"):
-        callback.result()
+        run_async(callback.result())
 
 
 def test_callback_custom_serdes_result_succeeded():
@@ -230,7 +254,7 @@ def test_callback_custom_serdes_result_succeeded():
     mock_state.get_checkpoint_result.return_value = mock_result
 
     callback = Callback("callback1", "op1", mock_state, CustomDictSerDes())
-    result = callback.result()
+    result = run_async(callback.result())
 
     expected_complex_result = {"key": "value", "number": 42, "list": [1, 2, 3]}
 
@@ -258,14 +282,13 @@ def test_callback_result_timed_out():
     callback = Callback("callback_timeout", "op_timeout", mock_state)
 
     with pytest.raises(CallbackError):
-        callback.result()
+        run_async(callback.result())
 
 
 @patch("async_durable_execution.context.CallbackOperationExecutor")
 def test_create_callback_basic(mock_executor_class):
     """Test create_callback with basic parameters."""
-    mock_executor = MagicMock()
-    mock_executor.process.return_value = "callback123"
+    mock_executor = make_async_executor("callback123")
     mock_executor_class.return_value = mock_executor
 
     mock_state = Mock(spec=ExecutionState)
@@ -277,7 +300,7 @@ def test_create_callback_basic(mock_executor_class):
     operation_ids = operation_id_sequence()
     expected_operation_id = next(operation_ids)
 
-    callback = context.create_callback()
+    callback = run_async(context.create_callback())
 
     assert isinstance(callback, Callback)
     assert callback.callback_id == "callback123"
@@ -297,8 +320,7 @@ def test_create_callback_basic(mock_executor_class):
 @patch("async_durable_execution.context.CallbackOperationExecutor")
 def test_create_callback_with_name_and_config(mock_executor_class):
     """Test create_callback with name and config."""
-    mock_executor = MagicMock()
-    mock_executor.process.return_value = "callback456"
+    mock_executor = make_async_executor("callback456")
     mock_executor_class.return_value = mock_executor
 
     mock_state = Mock(spec=ExecutionState)
@@ -313,7 +335,7 @@ def test_create_callback_with_name_and_config(mock_executor_class):
     expected_operation_id = next(operation_ids)  # Get the 6th ID
     [context._create_step_id() for _ in range(5)]  # Set counter to 5 # noqa: SLF001
 
-    callback = context.create_callback(config=config)
+    callback = run_async(context.create_callback(config=config))
 
     assert callback.callback_id == "callback456"
     assert callback.operation_id == expected_operation_id
@@ -332,9 +354,7 @@ def test_create_callback_with_name_and_config(mock_executor_class):
 def test_create_callback_with_parent_id(mock_executor_class):
     """Test create_callback with parent_id."""
 
-    mock_executor = MagicMock()
-
-    mock_executor.process.return_value = "callback789"
+    mock_executor = make_async_executor("callback789")
 
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
@@ -348,7 +368,7 @@ def test_create_callback_with_parent_id(mock_executor_class):
     expected_operation_id = next(operation_ids)  # Get the 3rd ID
     [context._create_step_id() for _ in range(2)]  # Set counter to 2 # noqa: SLF001
 
-    callback = context.create_callback()
+    callback = run_async(context.create_callback())
 
     assert callback.operation_id == expected_operation_id
 
@@ -364,9 +384,7 @@ def test_create_callback_with_parent_id(mock_executor_class):
 @patch("async_durable_execution.context.CallbackOperationExecutor")
 def test_create_callback_increments_counter(mock_executor_class):
     """Test create_callback increments step counter."""
-    mock_executor = MagicMock()
-
-    mock_executor.process.return_value = "callback_test"
+    mock_executor = make_async_executor("callback_test")
 
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
@@ -377,8 +395,8 @@ def test_create_callback_increments_counter(mock_executor_class):
     context = create_test_context(state=mock_state)
     [context._create_step_id() for _ in range(10)]  # Set counter to 10 # noqa: SLF001
 
-    callback1 = context.create_callback()
-    callback2 = context.create_callback()
+    callback1 = run_async(context.create_callback())
+    callback2 = run_async(context.create_callback())
 
     # Use operation_id_sequence to get expected IDs
     seq = operation_id_sequence()
@@ -394,9 +412,7 @@ def test_create_callback_increments_counter(mock_executor_class):
 @patch("async_durable_execution.context.StepOperationExecutor")
 def test_step_basic(mock_executor_class):
     """Test step with basic parameters."""
-    mock_executor = MagicMock()
-
-    mock_executor.process.return_value = "step_result"
+    mock_executor = make_async_executor("step_result")
 
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
@@ -412,7 +428,7 @@ def test_step_basic(mock_executor_class):
     operation_ids = operation_id_sequence()
     expected_operation_id = next(operation_ids)
 
-    result = context.step(mock_callable)
+    result = run_async(context.step(mock_callable))
 
     assert result == "step_result"
     mock_executor_class.assert_called_once_with(
@@ -430,9 +446,7 @@ def test_step_basic(mock_executor_class):
 @patch("async_durable_execution.context.StepOperationExecutor")
 def test_step_with_name_and_config(mock_executor_class):
     """Test step with name and config."""
-    mock_executor = MagicMock()
-
-    mock_executor.process.return_value = "configured_result"
+    mock_executor = make_async_executor("configured_result")
 
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
@@ -448,7 +462,7 @@ def test_step_with_name_and_config(mock_executor_class):
     context = create_test_context(state=mock_state)
     [context._create_step_id() for _ in range(5)]  # Set counter to 5 # noqa: SLF001
 
-    result = context.step(mock_callable, config=config)
+    result = run_async(context.step(mock_callable, config=config))
 
     # Get expected ID
     seq = operation_id_sequence()
@@ -471,9 +485,7 @@ def test_step_with_name_and_config(mock_executor_class):
 @patch("async_durable_execution.context.StepOperationExecutor")
 def test_step_with_parent_id(mock_executor_class):
     """Test step with parent_id."""
-    mock_executor = MagicMock()
-
-    mock_executor.process.return_value = "parent_result"
+    mock_executor = make_async_executor("parent_result")
 
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
@@ -488,7 +500,7 @@ def test_step_with_parent_id(mock_executor_class):
     context = create_test_context(state=mock_state, parent_id="parent123")
     [context._create_step_id() for _ in range(2)]  # Set counter to 2 # noqa: SLF001
 
-    context.step(mock_callable)
+    run_async(context.step(mock_callable))
 
     # Get expected ID with parent
     seq = operation_id_sequence("parent123")
@@ -510,9 +522,7 @@ def test_step_with_parent_id(mock_executor_class):
 @patch("async_durable_execution.context.StepOperationExecutor")
 def test_step_increments_counter(mock_executor_class):
     """Test step increments step counter."""
-    mock_executor = MagicMock()
-
-    mock_executor.process.return_value = "result"
+    mock_executor = make_async_executor("result")
 
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
@@ -527,8 +537,8 @@ def test_step_increments_counter(mock_executor_class):
     context = create_test_context(state=mock_state)
     [context._create_step_id() for _ in range(10)]  # Set counter to 10 # noqa: SLF001
 
-    context.step(mock_callable)
-    context.step(mock_callable)
+    run_async(context.step(mock_callable))
+    run_async(context.step(mock_callable))
 
     # Get expected IDs
     seq = operation_id_sequence()
@@ -548,9 +558,7 @@ def test_step_increments_counter(mock_executor_class):
 @patch("async_durable_execution.context.StepOperationExecutor")
 def test_step_with_original_name(mock_executor_class):
     """Test step with callable that has _original_name attribute."""
-    mock_executor = MagicMock()
-
-    mock_executor.process.return_value = "named_result"
+    mock_executor = make_async_executor("named_result")
 
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
@@ -562,7 +570,7 @@ def test_step_with_original_name(mock_executor_class):
 
     context = create_test_context(state=mock_state)
 
-    context.step(mock_callable, name="override_name")
+    run_async(context.step(mock_callable, name="override_name"))
 
     # Get expected ID
     seq = operation_id_sequence()
@@ -583,9 +591,7 @@ def test_step_with_original_name(mock_executor_class):
 @patch("async_durable_execution.context.InvokeOperationExecutor")
 def test_invoke_basic(mock_executor_class):
     """Test invoke with basic parameters."""
-    mock_executor = MagicMock()
-
-    mock_executor.process.return_value = "invoke_result"
+    mock_executor = make_async_executor("invoke_result")
 
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
@@ -597,7 +603,7 @@ def test_invoke_basic(mock_executor_class):
     operation_ids = operation_id_sequence()
     expected_operation_id = next(operation_ids)
 
-    result = context.invoke("test_function", "test_payload")
+    result = run_async(context.invoke("test_function", "test_payload"))
 
     assert result == "invoke_result"
 
@@ -616,10 +622,7 @@ def test_invoke_basic(mock_executor_class):
 @patch("async_durable_execution.context.InvokeOperationExecutor")
 def test_invoke_with_name_and_config(mock_executor_class):
     """Test invoke with name and config."""
-    mock_executor = MagicMock()
-
-    mock_executor.process.return_value = "configured_result"
-
+    mock_executor = make_async_executor("configured_result")
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
@@ -630,8 +633,10 @@ def test_invoke_with_name_and_config(mock_executor_class):
     context = create_test_context(state=mock_state)
     [context._create_step_id() for _ in range(5)]  # Set counter to 5 # noqa: SLF001
 
-    result = context.invoke(
-        "test_function", {"key": "value"}, name="named_invoke", config=config
+    result = run_async(
+        context.invoke(
+            "test_function", {"key": "value"}, name="named_invoke", config=config
+        )
     )
 
     # Get expected ID
@@ -655,10 +660,7 @@ def test_invoke_with_name_and_config(mock_executor_class):
 @patch("async_durable_execution.context.InvokeOperationExecutor")
 def test_invoke_with_parent_id(mock_executor_class):
     """Test invoke with parent_id."""
-    mock_executor = MagicMock()
-
-    mock_executor.process.return_value = "parent_result"
-
+    mock_executor = make_async_executor("parent_result")
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
@@ -668,7 +670,7 @@ def test_invoke_with_parent_id(mock_executor_class):
     context = create_test_context(state=mock_state, parent_id="parent123")
     [context._create_step_id() for _ in range(2)]  # Set counter to 2 # noqa: SLF001
 
-    context.invoke("test_function", None)
+    run_async(context.invoke("test_function", None))
 
     seq = operation_id_sequence("parent123")
     [next(seq) for _ in range(2)]
@@ -689,10 +691,7 @@ def test_invoke_with_parent_id(mock_executor_class):
 @patch("async_durable_execution.context.InvokeOperationExecutor")
 def test_invoke_increments_counter(mock_executor_class):
     """Test invoke increments step counter."""
-    mock_executor = MagicMock()
-
-    mock_executor.process.return_value = "result"
-
+    mock_executor = make_async_executor("result")
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
@@ -702,8 +701,8 @@ def test_invoke_increments_counter(mock_executor_class):
     context = create_test_context(state=mock_state)
     [context._create_step_id() for _ in range(10)]  # Set counter to 10 # noqa: SLF001
 
-    context.invoke("function1", "payload1")
-    context.invoke("function2", "payload2")
+    run_async(context.invoke("function1", "payload1"))
+    run_async(context.invoke("function2", "payload2"))
 
     seq = operation_id_sequence()
     [next(seq) for _ in range(10)]
@@ -722,10 +721,7 @@ def test_invoke_increments_counter(mock_executor_class):
 @patch("async_durable_execution.context.InvokeOperationExecutor")
 def test_invoke_with_none_payload(mock_executor_class):
     """Test invoke with None payload."""
-    mock_executor = MagicMock()
-
-    mock_executor.process.return_value = None
-
+    mock_executor = make_async_executor(None)
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
@@ -734,7 +730,7 @@ def test_invoke_with_none_payload(mock_executor_class):
 
     context = create_test_context(state=mock_state)
 
-    result = context.invoke("test_function", None)
+    result = run_async(context.invoke("test_function", None))
 
     seq = operation_id_sequence()
     expected_id = next(seq)
@@ -756,10 +752,7 @@ def test_invoke_with_none_payload(mock_executor_class):
 @patch("async_durable_execution.context.InvokeOperationExecutor")
 def test_invoke_with_custom_serdes(mock_executor_class):
     """Test invoke with custom serialization config."""
-    mock_executor = MagicMock()
-
-    mock_executor.process.return_value = {"transformed": "data"}
-
+    mock_executor = make_async_executor({"transformed": "data"})
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
@@ -776,11 +769,13 @@ def test_invoke_with_custom_serdes(mock_executor_class):
 
     context = create_test_context(state=mock_state)
 
-    result = context.invoke(
-        "test_function",
-        {"original": "data"},
-        name="custom_serdes_invoke",
-        config=config,
+    result = run_async(
+        context.invoke(
+            "test_function",
+            {"original": "data"},
+            name="custom_serdes_invoke",
+            config=config,
+        )
     )
 
     seq = operation_id_sequence()
@@ -802,8 +797,7 @@ def test_invoke_with_custom_serdes(mock_executor_class):
 @patch("async_durable_execution.context.WaitOperationExecutor")
 def test_wait_basic(mock_executor_class):
     """Test wait with basic parameters."""
-    mock_executor = MagicMock()
-    mock_executor.process.return_value = None
+    mock_executor = make_async_executor(None)
     mock_executor_class.return_value = mock_executor
 
     mock_state = Mock(spec=ExecutionState)
@@ -815,7 +809,7 @@ def test_wait_basic(mock_executor_class):
     operation_ids = operation_id_sequence()
     expected_operation_id = next(operation_ids)
 
-    context.wait(timedelta(seconds=30))
+    run_async(context.wait(timedelta(seconds=30)))
 
     mock_executor_class.assert_called_once_with(
         state=mock_state,
@@ -830,8 +824,7 @@ def test_wait_basic(mock_executor_class):
 @patch("async_durable_execution.context.WaitOperationExecutor")
 def test_wait_with_name(mock_executor_class):
     """Test wait with name parameter."""
-    mock_executor = MagicMock()
-    mock_executor.process.return_value = None
+    mock_executor = make_async_executor(None)
     mock_executor_class.return_value = mock_executor
 
     mock_state = Mock(spec=ExecutionState)
@@ -842,7 +835,7 @@ def test_wait_with_name(mock_executor_class):
     context = create_test_context(state=mock_state)
     [context._create_step_id() for _ in range(5)]  # Set counter to 5 # noqa: SLF001
 
-    context.wait(timedelta(minutes=1), name="test_wait")
+    run_async(context.wait(timedelta(minutes=1), name="test_wait"))
 
     seq = operation_id_sequence()
     [next(seq) for _ in range(5)]
@@ -861,8 +854,7 @@ def test_wait_with_name(mock_executor_class):
 @patch("async_durable_execution.context.WaitOperationExecutor")
 def test_wait_with_parent_id(mock_executor_class):
     """Test wait with parent_id."""
-    mock_executor = MagicMock()
-    mock_executor.process.return_value = None
+    mock_executor = make_async_executor(None)
     mock_executor_class.return_value = mock_executor
 
     mock_state = Mock(spec=ExecutionState)
@@ -873,7 +865,7 @@ def test_wait_with_parent_id(mock_executor_class):
     context = create_test_context(state=mock_state, parent_id="parent123")
     [context._create_step_id() for _ in range(2)]  # Set counter to 2 # noqa: SLF001
 
-    context.wait(timedelta(seconds=45))
+    run_async(context.wait(timedelta(seconds=45)))
 
     seq = operation_id_sequence("parent123")
     [next(seq) for _ in range(2)]
@@ -892,8 +884,7 @@ def test_wait_with_parent_id(mock_executor_class):
 @patch("async_durable_execution.context.WaitOperationExecutor")
 def test_wait_increments_counter(mock_executor_class):
     """Test wait increments step counter."""
-    mock_executor = MagicMock()
-    mock_executor.process.return_value = None
+    mock_executor = make_async_executor(None)
     mock_executor_class.return_value = mock_executor
 
     mock_state = Mock(spec=ExecutionState)
@@ -904,8 +895,8 @@ def test_wait_increments_counter(mock_executor_class):
     context = create_test_context(state=mock_state)
     [context._create_step_id() for _ in range(10)]  # Set counter to 10 # noqa: SLF001
 
-    context.wait(timedelta(seconds=15))
-    context.wait(timedelta(seconds=25))
+    run_async(context.wait(timedelta(seconds=15)))
+    run_async(context.wait(timedelta(seconds=25)))
 
     seq = operation_id_sequence()
     [next(seq) for _ in range(10)]
@@ -924,8 +915,7 @@ def test_wait_increments_counter(mock_executor_class):
 @patch("async_durable_execution.context.WaitOperationExecutor")
 def test_wait_returns_none(mock_executor_class):
     """Test wait returns None."""
-    mock_executor = MagicMock()
-    mock_executor.process.return_value = None
+    mock_executor = make_async_executor(None)
     mock_executor_class.return_value = mock_executor
 
     mock_state = Mock(spec=ExecutionState)
@@ -935,7 +925,7 @@ def test_wait_returns_none(mock_executor_class):
 
     context = create_test_context(state=mock_state)
 
-    result = context.wait(timedelta(seconds=10))
+    result = run_async(context.wait(timedelta(seconds=10)))
 
     assert result is None
 
@@ -943,8 +933,7 @@ def test_wait_returns_none(mock_executor_class):
 @patch("async_durable_execution.context.WaitOperationExecutor")
 def test_wait_with_time_less_than_one(mock_executor_class):
     """Test wait with time less than one."""
-    mock_executor = MagicMock()
-    mock_executor.process.return_value = None
+    mock_executor = make_async_executor(None)
     mock_executor_class.return_value = mock_executor
 
     mock_state = Mock(spec=ExecutionState)
@@ -955,7 +944,7 @@ def test_wait_with_time_less_than_one(mock_executor_class):
     context = create_test_context(state=mock_state)
 
     with pytest.raises(ValidationError):
-        context.wait(timedelta(seconds=0))
+        run_async(context.wait(timedelta(seconds=0)))
 
 
 @patch("async_durable_execution.context.child_handler")
@@ -975,7 +964,7 @@ def test_run_in_child_context_basic(mock_handler):
     operation_ids = operation_id_sequence()
     expected_operation_id = next(operation_ids)
 
-    result = context.run_in_child_context(mock_callable)
+    result = run_async(context.run_in_child_context(mock_callable))
 
     assert result == "child_result"
     assert mock_handler.call_count == 1
@@ -1005,7 +994,7 @@ def test_run_in_child_context_with_name_and_config(mock_handler):
     context = create_test_context(state=mock_state)
     [context._create_step_id() for _ in range(3)]  # Set counter to 3 # noqa: SLF001
 
-    result = context.run_in_child_context(mock_callable, config=config)
+    result = run_async(context.run_in_child_context(mock_callable, config=config))
 
     seq = operation_id_sequence()
     [next(seq) for _ in range(3)]
@@ -1039,7 +1028,7 @@ def test_run_in_child_context_with_parent_id(mock_executor_class):
     context = create_test_context(state=mock_state, parent_id="parent456")
     [context._create_step_id() for _ in range(1)]  # Set counter to 1 # noqa: SLF001
 
-    context.run_in_child_context(mock_callable)
+    run_async(context.run_in_child_context(mock_callable))
 
     seq = operation_id_sequence("parent456")
     [next(seq) for _ in range(1)]
@@ -1054,10 +1043,7 @@ def test_run_in_child_context_with_parent_id(mock_executor_class):
 @patch("async_durable_execution.context.child_handler")
 def test_run_in_child_context_creates_child_context(mock_executor_class):
     """Test run_in_child_context creates proper child context."""
-    mock_state = Mock(spec=ExecutionState)
-    mock_state.durable_execution_arn = (
-        "arn:aws:durable:us-east-1:123456789012:execution/test"
-    )
+    mock_state = create_async_child_state()
 
     seq = operation_id_sequence()
     expected_parent_id = next(seq)
@@ -1070,11 +1056,15 @@ def test_run_in_child_context_creates_child_context(mock_executor_class):
         return "child_executed"
 
     mock_callable = AsyncMock(side_effect=capture_child_context)
-    mock_executor_class.side_effect = lambda func, **kwargs: asyncio.run(func())
+
+    async def execute_child_handler(func, **kwargs):
+        return await func()
+
+    mock_executor_class.side_effect = execute_child_handler
 
     context = create_test_context(state=mock_state)
 
-    result = context.run_in_child_context(mock_callable)
+    result = run_async(context.run_in_child_context(mock_callable))
 
     assert result == "child_executed"
     mock_callable.assert_called_once()
@@ -1100,8 +1090,8 @@ def test_run_in_child_context_increments_counter(mock_executor_class):
     context = create_test_context(state=mock_state)
     [context._create_step_id() for _ in range(5)]  # Set counter to 5 # noqa: SLF001
 
-    context.run_in_child_context(mock_callable)
-    context.run_in_child_context(mock_callable)
+    run_async(context.run_in_child_context(mock_callable))
+    run_async(context.run_in_child_context(mock_callable))
 
     seq = operation_id_sequence()
     [next(seq) for _ in range(5)]
@@ -1138,7 +1128,7 @@ def test_run_in_child_context_resolves_name_from_callable(mock_executor_class):
 
     context = create_test_context(state=mock_state)
 
-    context.run_in_child_context(mock_callable)
+    run_async(context.run_in_child_context(mock_callable))
 
     call_args = mock_executor_class.call_args
     assert call_args[1]["operation_identifier"].name == "original_function_name"
@@ -1147,10 +1137,7 @@ def test_run_in_child_context_resolves_name_from_callable(mock_executor_class):
 @patch("async_durable_execution.context.wait_for_callback_handler")
 def test_wait_for_callback_basic(mock_executor_class):
     """Test wait_for_callback with basic parameters."""
-    mock_executor = MagicMock()
-
-    mock_executor.process.return_value = "callback_result"
-
+    mock_executor = make_async_executor("callback_result")
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
@@ -1165,7 +1152,7 @@ def test_wait_for_callback_basic(mock_executor_class):
         mock_run_in_child.return_value = "callback_result"
         context = create_test_context(state=mock_state)
 
-        result = context.wait_for_callback(mock_submitter)
+        result = run_async(context.wait_for_callback(mock_submitter))
 
         assert result == "callback_result"
         mock_run_in_child.assert_called_once()
@@ -1178,10 +1165,7 @@ def test_wait_for_callback_basic(mock_executor_class):
 @patch("async_durable_execution.context.wait_for_callback_handler")
 def test_wait_for_callback_with_name_and_config(mock_executor_class):
     """Test wait_for_callback with name and config."""
-    mock_executor = MagicMock()
-
-    mock_executor.process.return_value = "configured_callback_result"
-
+    mock_executor = make_async_executor("configured_callback_result")
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
@@ -1195,7 +1179,7 @@ def test_wait_for_callback_with_name_and_config(mock_executor_class):
         mock_run_in_child.return_value = "configured_callback_result"
         context = create_test_context(state=mock_state)
 
-        result = context.wait_for_callback(mock_submitter, config=config)
+        result = run_async(context.wait_for_callback(mock_submitter, config=config))
 
         assert result == "configured_callback_result"
         call_args = mock_run_in_child.call_args
@@ -1207,10 +1191,7 @@ def test_wait_for_callback_with_name_and_config(mock_executor_class):
 @patch("async_durable_execution.context.wait_for_callback_handler")
 def test_wait_for_callback_resolves_name_from_submitter(mock_executor_class):
     """Test wait_for_callback resolves name from submitter._original_name."""
-    mock_executor = MagicMock()
-
-    mock_executor.process.return_value = "named_callback_result"
-
+    mock_executor = make_async_executor("named_callback_result")
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
@@ -1223,7 +1204,7 @@ def test_wait_for_callback_resolves_name_from_submitter(mock_executor_class):
         mock_run_in_child.return_value = "named_callback_result"
         context = create_test_context(state=mock_state)
 
-        context.wait_for_callback(mock_submitter)
+        run_async(context.wait_for_callback(mock_submitter))
 
         call_args = mock_run_in_child.call_args
         assert call_args[0][1] == "submit_task"
@@ -1247,15 +1228,15 @@ def test_wait_for_callback_passes_child_context(mock_executor_class):
 
     with patch.object(DurableContext, "run_in_child_context") as mock_run_in_child:
 
-        def run_child_context(callable_func, name):
+        async def run_child_context(callable_func, name):
             # Execute the child context callable
             child_context = create_test_context(state=mock_state, parent_id="test")
-            return asyncio.run(callable_func(child_context))
+            return await callable_func(child_context)
 
         mock_run_in_child.side_effect = run_child_context
         context = create_test_context(state=mock_state)
 
-        result = context.wait_for_callback(mock_submitter)
+        result = run_async(context.wait_for_callback(mock_submitter))
 
         assert result == "handler_result"
         mock_executor_class.assert_called_once()
@@ -1277,7 +1258,7 @@ def test_map_basic(mock_handler):
 
     context = create_test_context(state=mock_state)
 
-    result = context.map(inputs, test_function)
+    result = run_async(context.map(inputs, test_function))
 
     assert result == "map_result"
     mock_handler.assert_called_once()
@@ -1306,7 +1287,9 @@ def test_map_with_name_and_config(mock_handler):
 
     context = create_test_context(state=mock_state)
 
-    result = context.map(inputs, test_function, name="custom_map", config=config)
+    result = run_async(
+        context.map(inputs, test_function, name="custom_map", config=config)
+    )
 
     assert result == "configured_map_result"
     call_args = mock_handler.call_args
@@ -1331,46 +1314,33 @@ def test_map_calls_handler_correctly(mock_handler):
 
     context = create_test_context(state=mock_state)
 
-    result = context.map(inputs, test_function)
+    result = run_async(context.map(inputs, test_function))
 
     assert result == "handler_result"
     mock_handler.assert_called_once()
 
 
-@patch("async_durable_execution.context.map_handler")
+@patch("async_durable_execution.context.map_handler", new_callable=AsyncMock)
 def test_map_with_empty_inputs(mock_handler):
     """Test map with empty inputs."""
     mock_handler.return_value = "empty_map_result"
-    mock_state = Mock(spec=ExecutionState)
-    mock_state.durable_execution_arn = (
-        "arn:aws:durable:us-east-1:123456789012:execution/test"
-    )
+    mock_state = create_async_child_state()
 
     async def test_function(context, item, index, items):
         return item
 
-    mock_state.wrap_user_function = lambda func, *args, **kwargs: (
-        lambda *a, **kw: asyncio.run(func(*a, **kw))
-    )
-
     inputs = []
 
     context = create_test_context(state=mock_state)
-    result = context.map(inputs, test_function)
+    result = run_async(context.map(inputs, test_function))
     assert result == "empty_map_result"
 
 
-@patch("async_durable_execution.context.map_handler")
+@patch("async_durable_execution.context.map_handler", new_callable=AsyncMock)
 def test_map_with_different_input_types(mock_handler):
     """Test map with different input types."""
     mock_handler.return_value = "mixed_map_result"
-    mock_state = Mock(spec=ExecutionState)
-    mock_state.durable_execution_arn = (
-        "arn:aws:durable:us-east-1:123456789012:execution/test"
-    )
-    mock_state.wrap_user_function = lambda func, *args, **kwargs: (
-        lambda *a, **kw: asyncio.run(func(*a, **kw))
-    )
+    mock_state = create_async_child_state()
 
     async def test_function(context, item, index, items):
         return str(item)
@@ -1378,7 +1348,7 @@ def test_map_with_different_input_types(mock_handler):
     inputs = [1, "hello", {"key": "value"}, [1, 2, 3]]
 
     context = create_test_context(state=mock_state)
-    result = context.map(inputs, test_function)
+    result = run_async(context.map(inputs, test_function))
     assert result == "mixed_map_result"
 
 
@@ -1401,7 +1371,7 @@ def test_parallel_basic(mock_handler):
 
     context = create_test_context(state=mock_state)
 
-    result = context.parallel(callables)
+    result = run_async(context.parallel(callables))
 
     assert result == "parallel_result"
     mock_handler.assert_called_once()
@@ -1431,7 +1401,9 @@ def test_parallel_with_name_and_config(mock_handler):
 
     context = create_test_context(state=mock_state)
 
-    result = context.parallel(callables, name="custom_parallel", config=config)
+    result = run_async(
+        context.parallel(callables, name="custom_parallel", config=config)
+    )
 
     assert result == "configured_parallel_result"
     call_args = mock_handler.call_args
@@ -1467,7 +1439,7 @@ def test_parallel_resolves_name_from_callable(mock_handler):
     resolved_name = context._resolve_step_name(None, mock_callable)  # noqa: SLF001
     assert resolved_name == "parallel_tasks"
 
-    context.parallel(callables)
+    run_async(context.parallel(callables))
 
     call_args = mock_handler.call_args
     assert (
@@ -1494,42 +1466,30 @@ def test_parallel_calls_handler_correctly(mock_handler):
 
     context = create_test_context(state=mock_state)
 
-    result = context.parallel(callables)
+    result = run_async(context.parallel(callables))
 
     assert result == "handler_result"
     mock_handler.assert_called_once()
 
 
-@patch("async_durable_execution.context.parallel_handler")
+@patch("async_durable_execution.context.parallel_handler", new_callable=AsyncMock)
 def test_parallel_with_empty_callables(mock_handler):
     """Test parallel with empty callables."""
     mock_handler.return_value = "empty_parallel_result"
-    mock_state = Mock(spec=ExecutionState)
-    mock_state.durable_execution_arn = (
-        "arn:aws:durable:us-east-1:123456789012:execution/test"
-    )
-    mock_state.wrap_user_function = lambda func, *args, **kwargs: (
-        lambda *a, **kw: asyncio.run(func(*a, **kw))
-    )
+    mock_state = create_async_child_state()
 
     callables = []
 
     context = create_test_context(state=mock_state)
-    result = context.parallel(callables)
+    result = run_async(context.parallel(callables))
     assert result == "empty_parallel_result"
 
 
-@patch("async_durable_execution.context.parallel_handler")
+@patch("async_durable_execution.context.parallel_handler", new_callable=AsyncMock)
 def test_parallel_with_single_callable(mock_handler):
     """Test parallel with single callable."""
     mock_handler.return_value = "single_parallel_result"
-    mock_state = Mock(spec=ExecutionState)
-    mock_state.durable_execution_arn = (
-        "arn:aws:durable:us-east-1:123456789012:execution/test"
-    )
-    mock_state.wrap_user_function = lambda func, *args, **kwargs: (
-        lambda *a, **kw: asyncio.run(func(*a, **kw))
-    )
+    mock_state = create_async_child_state()
 
     async def single_task(context):
         return "single_result"
@@ -1537,21 +1497,15 @@ def test_parallel_with_single_callable(mock_handler):
     callables = [single_task]
 
     context = create_test_context(state=mock_state)
-    result = context.parallel(callables)
+    result = run_async(context.parallel(callables))
     assert result == "single_parallel_result"
 
 
-@patch("async_durable_execution.context.parallel_handler")
+@patch("async_durable_execution.context.parallel_handler", new_callable=AsyncMock)
 def test_parallel_with_many_callables(mock_handler):
     """Test parallel with many callables."""
     mock_handler.return_value = "many_parallel_result"
-    mock_state = Mock(spec=ExecutionState)
-    mock_state.durable_execution_arn = (
-        "arn:aws:durable:us-east-1:123456789012:execution/test"
-    )
-    mock_state.wrap_user_function = lambda func, *args, **kwargs: (
-        lambda *a, **kw: asyncio.run(func(*a, **kw))
-    )
+    mock_state = create_async_child_state()
 
     def create_task(i):
         async def task(context):
@@ -1562,7 +1516,7 @@ def test_parallel_with_many_callables(mock_handler):
     callables = [create_task(i) for i in range(10)]
 
     context = create_test_context(state=mock_state)
-    result = context.parallel(callables)
+    result = run_async(context.parallel(callables))
     assert result == "many_parallel_result"
 
 
@@ -1583,7 +1537,7 @@ def test_map_calls_handler(mock_handler):
 
     context = create_test_context(state=mock_state)
 
-    result = context.map(inputs, test_function, config=config)
+    result = run_async(context.map(inputs, test_function, config=config))
 
     assert result == "map_result"
     mock_handler.assert_called_once()
@@ -1609,7 +1563,7 @@ def test_parallel_calls_handler(mock_handler):
 
     context = create_test_context(state=mock_state)
 
-    result = context.parallel(callables, config=config)
+    result = run_async(context.parallel(callables, config=config))
 
     assert result == "parallel_result"
     mock_handler.assert_called_once()
@@ -1634,7 +1588,7 @@ def test_wait_for_condition_validation_errors():
     with pytest.raises(
         ValidationError, match="`check` is required for wait_for_condition"
     ):
-        context.wait_for_condition(None, config)
+        run_async(context.wait_for_condition(None, config))
 
     # Test None config
     async def dummy_check(state, check_context):
@@ -1643,7 +1597,7 @@ def test_wait_for_condition_validation_errors():
     with pytest.raises(
         ValidationError, match="`config` is required for wait_for_condition"
     ):
-        context.wait_for_condition(dummy_check, None)
+        run_async(context.wait_for_condition(dummy_check, None))
 
 
 def test_context_map_handler_call():
@@ -1655,19 +1609,17 @@ def test_context_map_handler_call():
         return f"result_{index}"
 
     # Create mock state and context
-    state = Mock()
-    state.durable_execution_arn = "test_arn"
-    state.wrap_user_function = lambda func, *args, **kwargs: (
-        lambda *a, **kw: asyncio.run(func(*a, **kw))
-    )
+    state = create_async_child_state()
 
     context = create_test_context(state=state)
 
     # Mock the handlers to track calls
-    with patch("async_durable_execution.context.map_handler") as mock_map_handler:
-        mock_map_handler.return_value = Mock()
+    with patch(
+        "async_durable_execution.context.map_handler", new_callable=AsyncMock
+    ) as mock_map_handler:
+        mock_map_handler.return_value = "map_result"
 
-        context.map([1, 2], test_function)
+        run_async(context.map([1, 2], test_function))
         mock_map_handler.assert_called_once()
 
 
@@ -1684,21 +1636,17 @@ def test_context_parallel_handler_call():
         return "result_2"
 
     # Create mock state and context
-    state = Mock()
-    state.durable_execution_arn = "test_arn"
-    state.wrap_user_function = lambda func, *args, **kwargs: (
-        lambda *a, **kw: asyncio.run(func(*a, **kw))
-    )
+    state = create_async_child_state()
 
     context = create_test_context(state=state)
 
     # Mock the handlers to track calls
     with patch(
-        "async_durable_execution.context.parallel_handler"
+        "async_durable_execution.context.parallel_handler", new_callable=AsyncMock
     ) as mock_parallel_handler:
-        mock_parallel_handler.return_value = Mock()
+        mock_parallel_handler.return_value = "parallel_result"
 
-        context.parallel([test_callable_1, test_callable_2])
+        run_async(context.parallel([test_callable_1, test_callable_2]))
         mock_parallel_handler.assert_called_once()
 
 
@@ -1728,12 +1676,11 @@ def test_context_wait_for_condition_handler_call():
     with patch(
         "async_durable_execution.context.WaitForConditionOperationExecutor"
     ) as mock_executor_class:
-        mock_executor = MagicMock()
-        mock_executor.process.return_value = "final_state"
+        mock_executor = make_async_executor("final_state")
         mock_executor_class.return_value = mock_executor
 
         # Call wait_for_condition method
-        result = context.wait_for_condition(test_check, config)
+        result = run_async(context.wait_for_condition(test_check, config))
 
         # Verify executor was called
         mock_executor_class.assert_called_once()
@@ -1806,10 +1753,7 @@ def test_operation_id_generation_unique():
 @patch("async_durable_execution.context.InvokeOperationExecutor")
 def test_invoke_with_explicit_tenant_id(mock_executor_class):
     """Test invoke with explicit tenant_id in config."""
-    mock_executor = MagicMock()
-
-    mock_executor.process.return_value = "result"
-
+    mock_executor = make_async_executor("result")
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
@@ -1819,7 +1763,7 @@ def test_invoke_with_explicit_tenant_id(mock_executor_class):
     config = InvokeConfig(tenant_id="explicit-tenant")
     context = create_test_context(state=mock_state)
 
-    result = context.invoke("test_function", "payload", config=config)
+    result = run_async(context.invoke("test_function", "payload", config=config))
 
     assert result == "result"
     call_args = mock_executor_class.call_args[1]
@@ -1829,10 +1773,7 @@ def test_invoke_with_explicit_tenant_id(mock_executor_class):
 @patch("async_durable_execution.context.InvokeOperationExecutor")
 def test_invoke_without_tenant_id_defaults_to_none(mock_executor_class):
     """Test invoke without tenant_id defaults to None."""
-    mock_executor = MagicMock()
-
-    mock_executor.process.return_value = "result"
-
+    mock_executor = make_async_executor("result")
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
@@ -1841,7 +1782,7 @@ def test_invoke_without_tenant_id_defaults_to_none(mock_executor_class):
 
     context = create_test_context(state=mock_state)
 
-    result = context.invoke("test_function", "payload")
+    result = run_async(context.invoke("test_function", "payload"))
 
     assert result == "result"
     # Config is created as InvokeConfig() when not provided

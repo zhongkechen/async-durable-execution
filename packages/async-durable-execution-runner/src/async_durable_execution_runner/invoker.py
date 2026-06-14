@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 from dataclasses import dataclass
 from threading import Lock
 from typing import TYPE_CHECKING, Any, Protocol
@@ -9,6 +10,7 @@ from uuid import uuid4
 import boto3  # type: ignore
 from botocore.config import Config  # type: ignore
 
+from async_durable_execution.async_tools import await_maybe, run_or_return
 from async_durable_execution.execution import (
     DurableExecutionInvocationInput,
     DurableExecutionInvocationInputWithClient,
@@ -24,7 +26,7 @@ from async_durable_execution_runner.model import LambdaContext
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
     from async_durable_execution_runner.client import InMemoryServiceClient
     from async_durable_execution_runner.execution import Execution
@@ -97,7 +99,7 @@ class Invoker(Protocol):
         function_name: str,
         input: DurableExecutionInvocationInput,
         endpoint_url: str | None = None,
-    ) -> InvokeResponse: ...  # pragma: no cover
+    ) -> InvokeResponse | Awaitable[InvokeResponse]: ...  # pragma: no cover
 
     def update_endpoint(
         self, endpoint_url: str, region_name: str
@@ -128,17 +130,26 @@ class InProcessInvoker(Invoker):
         function_name: str,  # noqa: ARG002
         input: DurableExecutionInvocationInput,
         endpoint_url: str | None = None,  # noqa: ARG002
-    ) -> InvokeResponse:
+    ) -> InvokeResponse | Awaitable[InvokeResponse]:
         # TODO: reasses if function_name will be used in future
-        input_with_client = DurableExecutionInvocationInputWithClient.from_durable_execution_invocation_input(
-            input, self.service_client
-        )
-        context = create_test_lambda_context()
-        response_dict = self.handler(input_with_client, context)
-        output = DurableExecutionInvocationOutput.from_dict(response_dict)
-        return InvokeResponse(
-            invocation_output=output, request_id=context.aws_request_id
-        )
+        async def invoke_async() -> InvokeResponse:
+            input_with_client = DurableExecutionInvocationInputWithClient.from_durable_execution_invocation_input(
+                input, self.service_client
+            )
+            context = create_test_lambda_context()
+            async_handler = getattr(self.handler, "_async_handler", None)
+            handler_result = (
+                async_handler(input_with_client, context)
+                if inspect.iscoroutinefunction(async_handler)
+                else self.handler(input_with_client, context)
+            )
+            response_dict = await await_maybe(handler_result)
+            output = DurableExecutionInvocationOutput.from_dict(response_dict)
+            return InvokeResponse(
+                invocation_output=output, request_id=context.aws_request_id
+            )
+
+        return run_or_return(invoke_async())
 
     def update_endpoint(self, endpoint_url: str, region_name: str) -> None:
         """No-op for in-process invoker."""

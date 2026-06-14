@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-import contextlib
+import asyncio
 import functools
 import json
 import logging
 import warnings
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from async_durable_execution.async_tools import assert_async_callable, invoke_callable
+from async_durable_execution.async_tools import (
+    assert_async_callable,
+    await_maybe,
+    invoke_callable,
+)
 from async_durable_execution.context import DurableContext
 from async_durable_execution.exceptions import (
-    BackgroundThreadError,
     BotoClientError,
     CheckpointError,
     ExecutionError,
@@ -188,8 +190,32 @@ def durable_execution(
 
     plugin_executor = PluginExecutor(plugins)
 
-    @plugin_executor.handle_durable_output
+    async def _wrapper_with_plugins(
+        event: Any, context: LambdaContext
+    ) -> MutableMapping[str, Any]:
+        with plugin_executor.run():
+            try:
+                output = await _wrapper_async(event, context)
+                plugin_executor.on_invocation_end(
+                    output=DurableExecutionInvocationOutput.from_dict(output),
+                )
+                return output
+            except Exception as e:
+                plugin_executor.on_invocation_end(
+                    output=DurableExecutionInvocationOutput.create_retry(
+                        ErrorObject.from_exception(e)
+                    ),
+                )
+                raise
+
     def wrapper(event: Any, context: LambdaContext) -> MutableMapping[str, Any]:
+        return asyncio.run(_wrapper_with_plugins(event, context))
+
+    wrapper._async_handler = _wrapper_with_plugins  # type: ignore[attr-defined]  # noqa: SLF001
+
+    async def _wrapper_async(
+        event: Any, context: LambdaContext
+    ) -> MutableMapping[str, Any]:
         invocation_input: DurableExecutionInvocationInput
         service_client: DurableServiceClient
 
@@ -269,13 +295,7 @@ def durable_execution(
             state=execution_state, lambda_context=context
         )
 
-        # Use ThreadPoolExecutor for concurrent execution of user code and background checkpoint processing
-        with (
-            ThreadPoolExecutor(
-                max_workers=2, thread_name_prefix="dex-handler"
-            ) as executor,
-            contextlib.closing(execution_state) as execution_state,
-        ):
+        try:
             execution_operation = execution_state.get_execution_operation()
             if execution_operation is None:
                 msg = "Execution state is missing the root execution operation."
@@ -287,15 +307,10 @@ def durable_execution(
                 execution_start_time=execution_operation.start_timestamp,
                 is_first_invocation=not execution_state.is_replaying(),
             )
-            # Thread 1: Run background checkpoint processing
-            executor.submit(execution_state.checkpoint_batches_forever)
+            execution_state.start_checkpointing()
 
-            # Thread 2: Execute user function
             logger.debug(
                 "%s entering user-space...", invocation_input.durable_execution_arn
-            )
-            user_future = executor.submit(
-                invoke_callable, func, input_event, durable_context
             )
 
             logger.debug(
@@ -304,8 +319,7 @@ def durable_execution(
             )
 
             try:
-                # Background checkpointing errors will propagate through CompletionEvent.wait() as BackgroundThreadError
-                result = user_future.result()
+                result = await invoke_callable(func, input_event, durable_context)
 
                 # done with userland
                 logger.debug(
@@ -332,8 +346,10 @@ def durable_execution(
                     # Large results exceed Lambda response limits and must be stored durably
                     # before the execution completes.
                     try:
-                        execution_state.create_checkpoint(
-                            success_operation, is_sync=True
+                        await await_maybe(
+                            execution_state.create_checkpoint(
+                                success_operation, is_sync=True
+                            )
                         )
                     except CheckpointError as e:
                         return handle_checkpoint_error(e).to_dict()
@@ -345,32 +361,7 @@ def durable_execution(
                     result=serialized_result
                 ).to_dict()
 
-            except BackgroundThreadError as bg_error:
-                # Background checkpoint system failed - propagated through CompletionEvent
-                # Do not attempt to checkpoint anything, just terminate immediately
-                if isinstance(bg_error.source_exception, BotoClientError):
-                    logger.exception(
-                        "Checkpoint processing failed",
-                        extra=bg_error.source_exception.build_logger_extras(),
-                    )
-                    # Non-retryable Durable API errors (e.g., customer configuration issues,
-                    # 4xx client errors) will never succeed on retry — fail the execution immediately.
-                    if not bg_error.source_exception.is_retryable():
-                        logger.exception(
-                            "Non-retryable Durable API error from background thread. Must fail execution "
-                            "without retry.",
-                            extra=bg_error.source_exception.build_logger_extras(),
-                        )
-                        return DurableExecutionInvocationOutput(
-                            status=InvocationStatus.FAILED,
-                            error=ErrorObject.from_exception(bg_error.source_exception),
-                        ).to_dict()
-                else:
-                    logger.exception("Checkpoint processing failed")
-                raise bg_error.source_exception from bg_error
-
             except SuspendExecution:
-                # User code suspended - stop background checkpointing thread
                 logger.debug("Suspending execution...")
                 return DurableExecutionInvocationOutput(
                     status=InvocationStatus.PENDING
@@ -432,7 +423,9 @@ def durable_execution(
                     # Large results exceed Lambda response limits and must be stored durably
                     # before the execution completes.
                     try:
-                        execution_state.create_checkpoint_sync(failed_operation)
+                        await await_maybe(
+                            execution_state.create_checkpoint_sync(failed_operation)
+                        )
                     except CheckpointError as e:
                         return handle_checkpoint_error(e).to_dict()
                     return DurableExecutionInvocationOutput(
@@ -440,6 +433,8 @@ def durable_execution(
                     ).to_dict()
 
                 return result
+        finally:
+            await execution_state.aclose()
 
     return wrapper
 

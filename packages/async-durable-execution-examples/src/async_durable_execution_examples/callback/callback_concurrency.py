@@ -16,29 +16,29 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
 
     async def callback_branch_1(ctx: DurableContext) -> str:
         """First callback branch."""
-        callback = ctx.create_callback(
+        callback = await ctx.create_callback(
             name="api-call-1",
             config=callback_config,
         )
-        return callback.result()
+        return await callback.result()
 
     async def callback_branch_2(ctx: DurableContext) -> str:
         """Second callback branch."""
-        callback = ctx.create_callback(
+        callback = await ctx.create_callback(
             name="api-call-2",
             config=callback_config,
         )
-        return callback.result()
+        return await callback.result()
 
     async def callback_branch_3(ctx: DurableContext) -> str:
         """Third callback branch."""
-        callback = ctx.create_callback(
+        callback = await ctx.create_callback(
             name="api-call-3",
             config=callback_config,
         )
-        return callback.result()
+        return await callback.result()
 
-    parallel_results = context.parallel(
+    parallel_results = await context.parallel(
         functions=[callback_branch_1, callback_branch_2, callback_branch_3],
         name="parallel_callbacks",
     )

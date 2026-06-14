@@ -7,7 +7,11 @@ import logging
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from async_durable_execution.async_tools import invoke_callable
+from async_durable_execution.async_tools import (
+    await_maybe,
+    invoke_callable,
+    run_or_return,
+)
 from async_durable_execution.concurrency.executor import ConcurrentExecutor
 from async_durable_execution.concurrency.models import (
     BatchResult,
@@ -99,10 +103,15 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
             return self._item_namer(self.items[index], index)
         return super().get_iteration_name(index)
 
-    def execute_item(self, child_context, executable: Executable[Callable]) -> R:
+    def execute_item(self, child_context, executable: Executable[Callable]):
+        return run_or_return(self._execute_item_async(child_context, executable))
+
+    async def _execute_item_async(
+        self, child_context, executable: Executable[Callable]
+    ) -> R:
         logger.debug("🗺️ Processing map item: %s", executable.index)
         item = self.items[executable.index]
-        result: R = invoke_callable(
+        result: R = await invoke_callable(
             executable.func, child_context, item, executable.index, self.items
         )
         logger.debug("✅ Processed map item: %s", executable.index)
@@ -110,6 +119,26 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
 
 
 def map_handler(
+    items: Sequence[T],
+    func: Callable[[DurableContext, T, int, Sequence[T]], Awaitable[R]],
+    config: MapConfig | None,
+    execution_state: ExecutionState,
+    map_context: DurableContext,
+    operation_identifier: OperationIdentifier,
+):
+    return run_or_return(
+        _map_handler_async(
+            items,
+            func,
+            config,
+            execution_state,
+            map_context,
+            operation_identifier,
+        )
+    )
+
+
+async def _map_handler_async(
     items: Sequence[T],
     func: Callable[[DurableContext, T, int, Sequence[T]], Awaitable[R]],
     config: MapConfig | None,
@@ -135,9 +164,11 @@ def map_handler(
     )
     if checkpoint.is_succeeded():
         # if we've reached this point, then not only is the step succeeded, but it is also `replay_children`.
-        return executor.replay(execution_state, map_context)
+        return await await_maybe(executor.replay(execution_state, map_context))
     # we are making it explicit that we are now executing within the map_context
-    return executor.execute(execution_state, executor_context=map_context)
+    return await await_maybe(
+        executor.execute(execution_state, executor_context=map_context)
+    )
 
 
 class MapSummaryGenerator:

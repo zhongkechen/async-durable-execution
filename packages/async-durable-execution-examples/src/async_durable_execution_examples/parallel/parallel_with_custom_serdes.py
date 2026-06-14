@@ -41,21 +41,21 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         async def run(_) -> dict[str, Any]:
             return {"task": "task1", "value": 100}
 
-        return ctx.step(run, name="task1")
+        return await ctx.step(run, name="task1")
 
     async def task2(ctx: DurableContext) -> dict[str, Any]:
         async def run(_) -> dict[str, Any]:
             return {"task": "task2", "value": 200}
 
-        return ctx.step(run, name="task2")
+        return await ctx.step(run, name="task2")
 
     async def task3(ctx: DurableContext) -> dict[str, Any]:
         async def run(_) -> dict[str, Any]:
             return {"task": "task3", "value": 300}
 
-        return ctx.step(run, name="task3")
+        return await ctx.step(run, name="task3")
 
-    results = context.parallel(
+    results = await context.parallel(
         functions=[task1, task2, task3],
         name="parallel_with_custom_serdes",
         config=config,

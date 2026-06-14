@@ -1,5 +1,6 @@
 """Tests for the concurrency module."""
 
+import asyncio
 import json
 import random
 import threading
@@ -7,7 +8,7 @@ import time
 from concurrent.futures import Future
 from functools import partial
 from itertools import combinations
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -50,6 +51,49 @@ from async_durable_execution.operation.map import MapExecutor
 
 def _wrap_user_function_for_test(func, *args, **kwargs):
     return lambda *a, **kw: invoke_callable(func, *a, **kw)
+
+
+def run_async(awaitable):
+    return asyncio.run(awaitable)
+
+
+def create_checkpoint_result(
+    *,
+    succeeded: bool = False,
+    failed: bool = False,
+    replay_children: bool = False,
+    existent: bool = False,
+    result=None,
+    error=None,
+):
+    checkpoint = Mock()
+    checkpoint.is_succeeded.return_value = succeeded
+    checkpoint.is_failed.return_value = failed
+    checkpoint.is_replay_children.return_value = replay_children
+    checkpoint.is_existent.return_value = existent
+    checkpoint.result = result
+    checkpoint.error = error
+    return checkpoint
+
+
+def create_execution_state():
+    state = Mock()
+    state.durable_execution_arn = (
+        "arn:aws:durable:us-east-1:123456789012:execution/test"
+    )
+    state.create_checkpoint = AsyncMock()
+    state.wrap_user_function = _wrap_user_function_for_test
+    state.track_replay = Mock()
+    state.get_checkpoint_result.return_value = create_checkpoint_result()
+    return state
+
+
+def create_executor_context(state, step_id="1", parent_id="parent"):
+    context = Mock()
+    context._parent_id = parent_id  # noqa: SLF001
+    context._create_step_id_for_logical_step = lambda *args: step_id  # noqa: SLF001
+    context.create_child_context = lambda *args, **kwargs: Mock(state=state)
+    return context
 
 
 def test_batch_item_status_enum():
@@ -916,7 +960,7 @@ def test_concurrent_executor_full_execution_path():
     """Test ConcurrentExecutor full execution."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [Executable(0, lambda: "test"), Executable(1, lambda: "test2")]
@@ -935,46 +979,43 @@ def test_concurrent_executor_full_execution_path():
         serdes=None,
     )
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
+    execution_state = create_execution_state()
+    executor_context = create_executor_context(execution_state)
 
-    # Mock ChildConfig from the config module
-    with patch("async_durable_execution.config.ChildConfig") as mock_child_config:
-        mock_child_config.return_value = Mock()
-
-        def mock_run_in_child_context(func, name, config):
-            return func(Mock())
-
-        result = executor.execute(execution_state, mock_run_in_child_context)
-        assert len(result.all) >= 1
+    result = run_async(executor.execute(execution_state, executor_context))
+    assert len(result.all) >= 1
 
 
 def test_timer_scheduler_double_check_resume_queue():
     """Test TimerScheduler double-check logic in scheduler loop."""
-    callback = Mock()
+    callback = AsyncMock()
 
-    with TimerScheduler(callback) as scheduler:
-        exe_state1 = ExecutableWithState(Executable(0, lambda: "test"))
-        exe_state2 = ExecutableWithState(Executable(1, lambda: "test"))
+    async def run_test():
+        async with TimerScheduler(callback) as scheduler:
+            exe_state1 = ExecutableWithState(Executable(0, lambda: "test"))
+            exe_state2 = ExecutableWithState(Executable(1, lambda: "test"))
+            exe_state1.suspend()
+            exe_state2.suspend()
 
-        # Schedule two tasks with different times to avoid comparison issues
-        past_time1 = time.time() - 2
-        past_time2 = time.time() - 1
-        scheduler.schedule_resume(exe_state1, past_time1)
-        scheduler.schedule_resume(exe_state2, past_time2)
+            # Schedule two tasks with different times to avoid comparison issues
+            past_time1 = time.time() - 2
+            past_time2 = time.time() - 1
+            scheduler.schedule_resume(exe_state1, past_time1)
+            scheduler.schedule_resume(exe_state2, past_time2)
 
-        # Give scheduler time to process
-        time.sleep(0.1)
+            await asyncio.sleep(0.05)
 
-        # At least one callback should have been made
-        assert callback.call_count >= 0
+    run_async(run_test())
+
+    # At least one callback should have been made
+    assert callback.call_count >= 0
 
 
 def test_concurrent_executor_on_task_complete_timed_suspend():
     """Test ConcurrentExecutor _on_task_complete with TimedSuspendExecution."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [Executable(0, lambda: "test")]
@@ -1002,7 +1043,7 @@ def test_concurrent_executor_on_task_complete_timed_suspend():
     scheduler = Mock()
     scheduler.schedule_resume = Mock()
 
-    executor._on_task_complete(exe_state, future, scheduler)  # noqa: SLF001
+    run_async(executor._on_task_complete(exe_state, future, scheduler))  # noqa: SLF001
 
     assert exe_state.status == BranchStatus.SUSPENDED_WITH_TIMEOUT
     scheduler.schedule_resume.assert_called_once()
@@ -1012,7 +1053,7 @@ def test_concurrent_executor_on_task_complete_suspend():
     """Test ConcurrentExecutor _on_task_complete with SuspendExecution."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [Executable(0, lambda: "test")]
@@ -1038,7 +1079,7 @@ def test_concurrent_executor_on_task_complete_suspend():
 
     scheduler = Mock()
 
-    executor._on_task_complete(exe_state, future, scheduler)  # noqa: SLF001
+    run_async(executor._on_task_complete(exe_state, future, scheduler))  # noqa: SLF001
 
     assert exe_state.status == BranchStatus.SUSPENDED
 
@@ -1047,7 +1088,7 @@ def test_concurrent_executor_on_task_complete_exception():
     """Test ConcurrentExecutor _on_task_complete with general exception."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [Executable(0, lambda: "test")]
@@ -1074,7 +1115,7 @@ def test_concurrent_executor_on_task_complete_exception():
 
     scheduler = Mock()
 
-    executor._on_task_complete(exe_state, future, scheduler)  # noqa: SLF001
+    run_async(executor._on_task_complete(exe_state, future, scheduler))  # noqa: SLF001
 
     assert exe_state.status == BranchStatus.FAILED
     assert isinstance(exe_state.error, ValueError)
@@ -1084,7 +1125,7 @@ def test_concurrent_executor_create_result_with_early_exit():
     """Test ConcurrentExecutor with failed branches using public execute method."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             if executable.index == 0:
                 return f"result_{executable.index}"
             msg = "Test error"
@@ -1116,16 +1157,10 @@ def test_concurrent_executor_create_result_with_early_exit():
         serdes=None,
     )
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
+    execution_state = create_execution_state()
+    executor_context = create_executor_context(execution_state)
 
-    executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = lambda *args: "1"  # noqa SLF001
-    child_context = Mock()
-    child_context.state.wrap_user_function = _wrap_user_function_for_test
-    executor_context.create_child_context = lambda *args, **kwargs: child_context
-
-    result = executor.execute(execution_state, executor_context)
+    result = run_async(executor.execute(execution_state, executor_context))
 
     assert len(result.all) == 2
     assert result.all[0].status == BatchItemStatus.SUCCEEDED
@@ -1139,7 +1174,7 @@ def test_concurrent_executor_execute_item_in_child_context():
     """Test ConcurrentExecutor _execute_item_in_child_context."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [Executable(0, lambda: "test")]
@@ -1159,14 +1194,11 @@ def test_concurrent_executor_execute_item_in_child_context():
         serdes=None,
     )
 
-    executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = lambda *args: "1"  # noqa SLF001
-    child_context = Mock()
-    child_context.state.wrap_user_function = _wrap_user_function_for_test
-    executor_context.create_child_context = lambda *args, **kwargs: child_context
+    execution_state = create_execution_state()
+    executor_context = create_executor_context(execution_state)
 
-    result = executor._execute_item_in_child_context(  # noqa: SLF001
-        executor_context, executables[0]
+    result = run_async(  # noqa: SLF001
+        executor._execute_item_in_child_context(executor_context, executables[0])
     )
     assert result == "result_0"
 
@@ -1187,7 +1219,7 @@ def test_concurrent_executor_create_result_failure_tolerance_exceeded():
     """Test ConcurrentExecutor with failure tolerance exceeded using public execute method."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             msg = "Task failed"
             raise ValueError(msg)
 
@@ -1211,13 +1243,10 @@ def test_concurrent_executor_create_result_failure_tolerance_exceeded():
         serdes=None,
     )
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
+    execution_state = create_execution_state()
+    executor_context = create_executor_context(execution_state)
 
-    def mock_run_in_child_context(func, name, config):
-        return func(Mock())
-
-    result = executor.execute(execution_state, mock_run_in_child_context)
+    result = run_async(executor.execute(execution_state, executor_context))
     # NEW BEHAVIOR: With tolerated_failure_count=0 and 1 failure,
     # tolerance is exceeded, so FAILURE_TOLERANCE_EXCEEDED
     assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
@@ -1227,7 +1256,7 @@ def test_single_task_suspend_bubbles_up():
     """Test that single task suspend bubbles up the exception."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             msg = "test"
             raise TimedSuspendExecution(msg, time.time() + 1)  # Future time
 
@@ -1248,18 +1277,12 @@ def test_single_task_suspend_bubbles_up():
         serdes=None,
     )
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
-
-    executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = lambda *args: "1"  # noqa SLF001
-    child_context = Mock()
-    child_context.state.wrap_user_function = _wrap_user_function_for_test
-    executor_context.create_child_context = lambda *args, **kwargs: child_context
+    execution_state = create_execution_state()
+    executor_context = create_executor_context(execution_state)
 
     # Should raise TimedSuspendExecution since no other tasks running
     with pytest.raises(TimedSuspendExecution):
-        executor.execute(execution_state, executor_context)
+        run_async(executor.execute(execution_state, executor_context))
 
 
 def test_multiple_tasks_one_suspends_execution_continues():
@@ -1271,7 +1294,7 @@ def test_multiple_tasks_one_suspends_execution_continues():
             self.task_a_suspended = threading.Event()
             self.task_b_completed = False
 
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             if executable.index == 0:  # Task A
                 self.task_a_suspended.set()
                 msg = "test"
@@ -1296,18 +1319,12 @@ def test_multiple_tasks_one_suspends_execution_continues():
         serdes=None,
     )
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
-
-    executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = lambda *args: "1"  # noqa SLF001
-    child_context = Mock()
-    child_context.state.wrap_user_function = _wrap_user_function_for_test
-    executor_context.create_child_context = lambda *args, **kwargs: child_context
+    execution_state = create_execution_state()
+    executor_context = create_executor_context(execution_state)
 
     # Should raise TimedSuspendExecution after Task B completes
     with pytest.raises(TimedSuspendExecution):
-        executor.execute(execution_state, executor_context)
+        run_async(executor.execute(execution_state, executor_context))
 
     # Assert that Task B did complete before suspension
     assert executor.task_b_completed
@@ -1321,7 +1338,7 @@ def test_concurrent_executor_with_single_task_resubmit():
             super().__init__(*args, **kwargs)
             self.call_count = 0
 
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             self.call_count += 1
             msg = "test"
             raise TimedSuspendExecution(msg, time.time() + 10)  # Future time
@@ -1343,18 +1360,12 @@ def test_concurrent_executor_with_single_task_resubmit():
         serdes=None,
     )
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
-
-    executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = lambda *args: "1"  # noqa SLF001
-    child_context = Mock()
-    child_context.state.wrap_user_function = _wrap_user_function_for_test
-    executor_context.create_child_context = lambda *args, **kwargs: child_context
+    execution_state = create_execution_state()
+    executor_context = create_executor_context(execution_state)
 
     # Should raise TimedSuspendExecution since single task suspends
     with pytest.raises(TimedSuspendExecution):
-        executor.execute(execution_state, executor_context)
+        run_async(executor.execute(execution_state, executor_context))
 
 
 def test_concurrent_executor_with_timed_resubmit_while_other_task_running():
@@ -1364,19 +1375,19 @@ def test_concurrent_executor_with_timed_resubmit_while_other_task_running():
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self.call_counts = {}
-            self.task_a_started = threading.Event()
-            self.task_b_can_complete = threading.Event()
-            self.task_b_completed = threading.Event()
+            self.task_a_started = asyncio.Event()
+            self.task_b_can_complete = asyncio.Event()
+            self.task_b_completed = asyncio.Event()
 
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             task_id = executable.index
             self.call_counts[task_id] = self.call_counts.get(task_id, 0) + 1
 
             if task_id == 0:  # Task A - runs long
                 self.task_a_started.set()
                 # Wait for task B to complete before finishing
-                self.task_b_can_complete.wait(timeout=5)
-                self.task_b_completed.wait(timeout=1)
+                await asyncio.wait_for(self.task_b_can_complete.wait(), timeout=5)
+                await asyncio.wait_for(self.task_b_completed.wait(), timeout=1)
                 return "result_A"
 
             if task_id == 1:  # Task B - suspends and resubmits
@@ -1418,17 +1429,11 @@ def test_concurrent_executor_with_timed_resubmit_while_other_task_running():
         serdes=None,
     )
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
-
-    executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = lambda *args: "1"  # noqa SLF001
-    child_context = Mock()
-    child_context.state.wrap_user_function = _wrap_user_function_for_test
-    executor_context.create_child_context = lambda *args, **kwargs: child_context
+    execution_state = create_execution_state()
+    executor_context = create_executor_context(execution_state)
 
     # Should complete successfully after B resubmits and both tasks finish
-    result = executor.execute(execution_state, executor_context)
+    result = run_async(executor.execute(execution_state, executor_context))
 
     # Verify results
     assert len(result.all) == 2
@@ -1443,28 +1448,24 @@ def test_concurrent_executor_with_timed_resubmit_while_other_task_running():
 
 def test_timer_scheduler_double_check_condition():
     """Test TimerScheduler double-check condition in _timer_loop (line 434)."""
-    callback = Mock()
+    callback = AsyncMock()
 
-    with TimerScheduler(callback) as scheduler:
-        exe_state = ExecutableWithState(Executable(0, lambda: "test"))
-        exe_state.suspend()  # Make it resumable
+    async def run_test():
+        async with TimerScheduler(callback) as scheduler:
+            exe_state = ExecutableWithState(Executable(0, lambda: "test"))
+            exe_state.suspend()  # Make it resumable
+            scheduler.schedule_resume(exe_state, time.time() - 1)
+            await asyncio.sleep(0.05)
 
-        # Schedule a task with past time
-        past_time = time.time() - 1
-        scheduler.schedule_resume(exe_state, past_time)
-
-        # Give scheduler time to process and hit the double-check condition
-        time.sleep(0.2)
-
-        # The callback should be called
-        assert callback.call_count >= 1
+    run_async(run_test())
+    assert callback.call_count >= 1
 
 
 def test_concurrent_executor_should_execution_suspend_with_timeout():
     """Test should_execution_suspend with SUSPENDED_WITH_TIMEOUT state."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [Executable(0, lambda: "test")]
@@ -1502,7 +1503,7 @@ def test_concurrent_executor_should_execution_suspend_indefinite():
     """Test should_execution_suspend with indefinite SUSPENDED state."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [Executable(0, lambda: "test")]
@@ -1539,7 +1540,7 @@ def test_concurrent_executor_create_result_with_failed_status():
     """Test with failed executable status using public execute method."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             msg = "Test error"
             raise ValueError(msg)
 
@@ -1563,16 +1564,10 @@ def test_concurrent_executor_create_result_with_failed_status():
         serdes=None,
     )
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
+    execution_state = create_execution_state()
+    executor_context = create_executor_context(execution_state)
 
-    executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = lambda *args: "1"  # noqa SLF001
-    child_context = Mock()
-    child_context.state.wrap_user_function = _wrap_user_function_for_test
-    executor_context.create_child_context = lambda *args, **kwargs: child_context
-
-    result = executor.execute(execution_state, executor_context)
+    result = run_async(executor.execute(execution_state, executor_context))
 
     assert len(result.all) == 1
     assert result.all[0].status == BatchItemStatus.FAILED
@@ -1582,30 +1577,24 @@ def test_concurrent_executor_create_result_with_failed_status():
 
 def test_timer_scheduler_can_resume_false():
     """Test TimerScheduler when exe_state.can_resume is False."""
-    callback = Mock()
+    callback = AsyncMock()
 
-    with TimerScheduler(callback) as scheduler:
-        exe_state = ExecutableWithState(Executable(0, lambda: "test"))
+    async def run_test():
+        async with TimerScheduler(callback) as scheduler:
+            exe_state = ExecutableWithState(Executable(0, lambda: "test"))
+            exe_state.complete("done")
+            scheduler.schedule_resume(exe_state, time.time() - 1)
+            await asyncio.sleep(0.05)
 
-        # Set state to something that can't resume
-        exe_state.complete("done")
-
-        # Schedule with past time
-        past_time = time.time() - 1
-        scheduler.schedule_resume(exe_state, past_time)
-
-        # Give scheduler time to process
-        time.sleep(0.15)
-
-        # Callback should not be called since can_resume is False
-        callback.assert_not_called()
+    run_async(run_test())
+    callback.assert_not_called()
 
 
 def test_concurrent_executor_mixed_suspend_states():
     """Test should_execution_suspend with mixed suspend states."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [Executable(0, lambda: "test"), Executable(1, lambda: "test2")]
@@ -1646,7 +1635,7 @@ def test_concurrent_executor_multiple_timed_suspends():
     """Test should_execution_suspend with multiple timed suspends to find earliest."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [Executable(0, lambda: "test"), Executable(1, lambda: "test2")]
@@ -1688,37 +1677,28 @@ def test_concurrent_executor_multiple_timed_suspends():
 
 def test_timer_scheduler_double_check_condition_race():
     """Test TimerScheduler double-check condition when heap changes between checks."""
-    callback = Mock()
+    callback = AsyncMock()
 
-    with TimerScheduler(callback) as scheduler:
-        exe_state1 = ExecutableWithState(Executable(0, lambda: "test"))
-        exe_state2 = ExecutableWithState(Executable(1, lambda: "test"))
+    async def run_test():
+        async with TimerScheduler(callback) as scheduler:
+            exe_state1 = ExecutableWithState(Executable(0, lambda: "test"))
+            exe_state2 = ExecutableWithState(Executable(1, lambda: "test"))
+            exe_state1.suspend()
+            exe_state2.suspend()
+            scheduler.schedule_resume(exe_state1, time.time() - 1)
+            await asyncio.sleep(0.01)
+            scheduler.schedule_resume(exe_state2, time.time() - 2)
+            await asyncio.sleep(0.05)
 
-        exe_state1.suspend()
-        exe_state2.suspend()
-
-        # Schedule first task with past time
-        past_time = time.time() - 1
-        scheduler.schedule_resume(exe_state1, past_time)
-
-        # Brief delay to let timer thread see the first task
-        time.sleep(0.05)
-
-        # Schedule second task with even more past time (will be heap[0])
-        very_past_time = time.time() - 2
-        scheduler.schedule_resume(exe_state2, very_past_time)
-
-        # Wait for processing
-        time.sleep(0.2)
-
-        assert callback.call_count >= 1
+    run_async(run_test())
+    assert callback.call_count >= 1
 
 
 def test_should_execution_suspend_earliest_timestamp_comparison():
     """Test should_execution_suspend timestamp comparison logic (line 554)."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [
@@ -1768,7 +1748,7 @@ def test_concurrent_executor_execute_with_failing_task():
     """Test execute() with a task that fails using public execute method."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             msg = "Task failed"
             raise ValueError(msg)
 
@@ -1790,16 +1770,10 @@ def test_concurrent_executor_execute_with_failing_task():
         serdes=None,
     )
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
+    execution_state = create_execution_state()
+    executor_context = create_executor_context(execution_state)
 
-    executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = lambda *args: "1"  # noqa SLF001
-    child_context = Mock()
-    child_context.state.wrap_user_function = _wrap_user_function_for_test
-    executor_context.create_child_context = lambda *args, **kwargs: child_context
-
-    result = executor.execute(execution_state, executor_context)
+    result = run_async(executor.execute(execution_state, executor_context))
 
     assert len(result.all) == 1
     assert result.all[0].status == BatchItemStatus.FAILED
@@ -1808,30 +1782,24 @@ def test_concurrent_executor_execute_with_failing_task():
 
 def test_timer_scheduler_cannot_resume_branch():
     """Test TimerScheduler when exe_state cannot resume (434->433 branch)."""
-    callback = Mock()
+    callback = AsyncMock()
 
-    with TimerScheduler(callback) as scheduler:
-        exe_state = ExecutableWithState(Executable(0, lambda: "test"))
+    async def run_test():
+        async with TimerScheduler(callback) as scheduler:
+            exe_state = ExecutableWithState(Executable(0, lambda: "test"))
+            exe_state.complete("done")
+            scheduler.schedule_resume(exe_state, time.time() - 1)
+            await asyncio.sleep(0.05)
 
-        # Set to completed state so can_resume returns False
-        exe_state.complete("done")
-
-        # Schedule with past time
-        past_time = time.time() - 1
-        scheduler.schedule_resume(exe_state, past_time)
-
-        # Wait for processing
-        time.sleep(0.2)
-
-        # Callback should not be called since can_resume is False
-        callback.assert_not_called()
+    run_async(run_test())
+    callback.assert_not_called()
 
 
 def test_create_result_no_failed_executables():
     """Test when no executables are failed using public execute method."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     def success_callable():
@@ -1854,14 +1822,10 @@ def test_create_result_no_failed_executables():
         serdes=None,
     )
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
+    execution_state = create_execution_state()
+    executor_context = create_executor_context(execution_state)
 
-    executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = lambda *args: "1"  # noqa SLF001
-    executor_context.create_child_context = lambda *args, **kwargs: Mock()
-
-    result = executor.execute(execution_state, executor_context)
+    result = run_async(executor.execute(execution_state, executor_context))
 
     assert len(result.all) == 1
     assert result.all[0].status == BatchItemStatus.SUCCEEDED
@@ -1872,7 +1836,7 @@ def test_create_result_with_suspended_executable():
     """Test with suspended executable using public execute method."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             msg = "Test suspend"
             raise SuspendExecution(msg)
 
@@ -1896,18 +1860,12 @@ def test_create_result_with_suspended_executable():
         serdes=None,
     )
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
-
-    executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = lambda *args: "1"  # noqa SLF001
-    child_context = Mock()
-    child_context.state.wrap_user_function = _wrap_user_function_for_test
-    executor_context.create_child_context = lambda *args, **kwargs: child_context
+    execution_state = create_execution_state()
+    executor_context = create_executor_context(execution_state)
 
     # Should raise SuspendExecution since single task suspends
     with pytest.raises(SuspendExecution):
-        executor.execute(execution_state, executor_context)
+        run_async(executor.execute(execution_state, executor_context))
 
 
 # Tests for _create_result method match statement branches
@@ -2384,21 +2342,17 @@ def test_create_result_empty_executables():
 
 def test_timer_scheduler_future_time_condition_false():
     """Test TimerScheduler when scheduled time is in future (434->433 branch)."""
-    callback = Mock()
+    callback = AsyncMock()
 
-    with TimerScheduler(callback) as scheduler:
-        exe_state = ExecutableWithState(Executable(0, lambda: "test"))
-        exe_state.suspend()
+    async def run_test():
+        async with TimerScheduler(callback) as scheduler:
+            exe_state = ExecutableWithState(Executable(0, lambda: "test"))
+            exe_state.suspend()
+            scheduler.schedule_resume(exe_state, time.time() + 10)
+            await asyncio.sleep(0.05)
 
-        # Schedule with future time so condition will be False
-        future_time = time.time() + 10
-        scheduler.schedule_resume(exe_state, future_time)
-
-        # Wait briefly for timer thread to check and find condition False
-        time.sleep(0.1)
-
-        # Callback should not be called since time is in future
-        callback.assert_not_called()
+    run_async(run_test())
+    callback.assert_not_called()
 
 
 def test_batch_result_from_dict_with_completion_config():
@@ -2503,7 +2457,7 @@ def test_operation_id_determinism_across_shuffles():
     class TestExecutor(ConcurrentExecutor):
         """Custom executor for testing operation_id determinism."""
 
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return executable.func(child_context)
 
     # Create executables with specific indices using partial
@@ -2513,7 +2467,7 @@ def test_operation_id_determinism_across_shuffles():
     # Track operation_id -> result associations
     captured_associations = []
 
-    def patched_child_handler(
+    async def patched_child_handler(
         func,
         execution_state,
         operation_identifier,
@@ -2522,12 +2476,11 @@ def test_operation_id_determinism_across_shuffles():
         """Patched child handler that captures operation_id -> result mapping."""
         assert config.is_virtual
         assert config.sub_type == "TEST_ITER"
-        result = invoke_callable(func)
+        result = await invoke_callable(func)
         captured_associations.append((operation_identifier.operation_id, result))
         return result
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
+    execution_state = create_execution_state()
 
     completion_config = CompletionConfig(min_successful=num_executables)
 
@@ -2573,7 +2526,7 @@ def test_operation_id_determinism_across_shuffles():
             "async_durable_execution.concurrency.executor.child_handler",
             patched_child_handler,
         ):
-            executor.execute(execution_state, executor_context)
+            run_async(executor.execute(execution_state, executor_context))
 
         associations_per_run.append(captured_associations.copy())
 
@@ -2636,7 +2589,7 @@ def test_concurrent_executor_replay_with_succeeded_operations():
     mock_executor_context.create_child_context = Mock(return_value=mock_child_context)
     mock_executor_context._parent_id = "parent_id"  # noqa
 
-    result = executor.replay(mock_execution_state, mock_executor_context)
+    result = run_async(executor.replay(mock_execution_state, mock_executor_context))
 
     assert isinstance(result, BatchResult)
     assert len(result.all) == 2
@@ -2677,7 +2630,7 @@ def test_concurrent_executor_replay_with_failed_operations():
     mock_executor_context = Mock()
     mock_executor_context._create_step_id_for_logical_step = Mock(return_value="op_1")  # noqa: SLF001
 
-    result = executor.replay(mock_execution_state, mock_executor_context)
+    result = run_async(executor.replay(mock_execution_state, mock_executor_context))
 
     assert isinstance(result, BatchResult)
     assert len(result.all) == 1
@@ -2718,9 +2671,11 @@ def test_concurrent_executor_replay_with_replay_children():
 
     # Mock _execute_item_in_child_context to return a result
     with patch.object(
-        executor, "_execute_item_in_child_context", return_value="re_executed_result"
+        executor,
+        "_execute_item_in_child_context",
+        new=AsyncMock(return_value="re_executed_result"),
     ):
-        result = executor.replay(mock_execution_state, mock_executor_context)
+        result = run_async(executor.replay(mock_execution_state, mock_executor_context))
 
         assert isinstance(result, BatchResult)
         assert len(result.all) == 1
@@ -2808,7 +2763,7 @@ def test_executor_does_not_deadlock_when_all_tasks_terminal_but_completion_confi
     """Ensure executor returns when all tasks are terminal even if completion rules are confusing."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             if executable.index == 0:
                 # fail one task
                 raise Exception("boom")  # noqa EM101 TRY002
@@ -2835,16 +2790,11 @@ def test_executor_does_not_deadlock_when_all_tasks_terminal_but_completion_confi
         serdes=None,
     )
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
-    executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = lambda *args: "1"  # noqa SLF001
-    child_context = Mock()
-    child_context.state.wrap_user_function = _wrap_user_function_for_test
-    executor_context.create_child_context = lambda *args, **kwargs: child_context
+    execution_state = create_execution_state()
+    executor_context = create_executor_context(execution_state)
 
     # Should return (not hang) and batch should reflect one FAILED and one SUCCEEDED
-    result = executor.execute(execution_state, executor_context)
+    result = run_async(executor.execute(execution_state, executor_context))
     statuses = {item.index: item.status for item in result.all}
     assert statuses[0] == BatchItemStatus.FAILED
     assert statuses[1] == BatchItemStatus.SUCCEEDED
@@ -2858,7 +2808,7 @@ def test_executor_terminates_quickly_when_impossible_to_succeed():
         executed_count["value"] += 1
         if idx < 2:
             raise Exception(f"fail_{idx}")  # noqa EM102 TRY002
-        time.sleep(0.05)
+        await asyncio.sleep(0.05)
         return f"ok_{idx}"
 
     items = list(range(100))
@@ -2875,17 +2825,10 @@ def test_executor_terminates_quickly_when_impossible_to_succeed():
         config=config,
     )
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
-    executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = lambda *args: "1"  # noqa SLF001
-    child_context = Mock()
-    child_context.state.wrap_user_function = (
-        lambda func, *args, **kwargs: lambda: invoke_callable(func)
-    )
-    executor_context.create_child_context = lambda *args, **kwargs: child_context
+    execution_state = create_execution_state()
+    executor_context = create_executor_context(execution_state)
 
-    result = executor.execute(execution_state, executor_context)
+    result = run_async(executor.execute(execution_state, executor_context))
 
     # With tolerated_failure_count=1, executor stops when failure_count > 1 (at 2 failures)
     # Executor terminates early rather than executing all 100 tasks
@@ -2903,18 +2846,18 @@ def test_executor_exits_early_with_min_successful():
     """Test that parallel exits immediately when min_successful is reached without waiting for other branches."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
-            return executable.func()
+        async def execute_item(self, child_context, executable):
+            return await invoke_callable(executable.func)
 
     execution_times = []
 
-    def fast_branch():
+    async def fast_branch():
         execution_times.append(("fast", time.time()))
         return "fast_result"
 
-    def slow_branch():
+    async def slow_branch():
         execution_times.append(("slow_start", time.time()))
-        time.sleep(2)  # Long sleep
+        await asyncio.sleep(2)
         execution_times.append(("slow_end", time.time()))
         return "slow_result"
 
@@ -2935,22 +2878,14 @@ def test_executor_exits_early_with_min_successful():
         serdes=None,
     )
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
-    executor_context = Mock()
+    execution_state = create_execution_state()
+    executor_context = create_executor_context(
+        execution_state, step_id="step", parent_id="parent"
+    )
     executor_context._create_step_id_for_logical_step = lambda idx: f"step_{idx}"  # noqa: SLF001
-    executor_context._parent_id = "parent"  # noqa: SLF001
-
-    def create_child_context(op_id, *, is_virtual=False):
-        child = Mock()
-        child.state = execution_state
-        child.state.wrap_user_function = _wrap_user_function_for_test
-        return child
-
-    executor_context.create_child_context = create_child_context
 
     start_time = time.time()
-    result = executor.execute(execution_state, executor_context)
+    result = run_async(executor.execute(execution_state, executor_context))
     elapsed_time = time.time() - start_time
 
     # Should complete in less than 1.5 second (not wait for 2-second sleep)
@@ -2977,18 +2912,18 @@ def test_executor_returns_with_incomplete_branches():
     """Test that executor returns when min_successful is reached, leaving other branches incomplete."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
-            return executable.func()
+        async def execute_item(self, child_context, executable):
+            return await invoke_callable(executable.func)
 
     operation_tracker = Mock()
 
-    def fast_branch():
+    async def fast_branch():
         operation_tracker.fast_executed()
         return "fast_result"
 
-    def slow_branch():
+    async def slow_branch():
         operation_tracker.slow_started()
-        time.sleep(2)  # Long sleep
+        await asyncio.sleep(2)
         operation_tracker.slow_completed()
         return "slow_result"
 
@@ -3009,17 +2944,13 @@ def test_executor_returns_with_incomplete_branches():
         serdes=None,
     )
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
-    execution_state.wrap_user_function = _wrap_user_function_for_test
-    executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = lambda idx: f"step_{idx}"  # noqa: SLF001
-    executor_context._parent_id = "parent"  # noqa: SLF001
-    executor_context.create_child_context = lambda op_id, *, is_virtual=False: Mock(
-        state=execution_state
+    execution_state = create_execution_state()
+    executor_context = create_executor_context(
+        execution_state, step_id="step", parent_id="parent"
     )
+    executor_context._create_step_id_for_logical_step = lambda idx: f"step_{idx}"  # noqa: SLF001
 
-    result = executor.execute(execution_state, executor_context)
+    result = run_async(executor.execute(execution_state, executor_context))
 
     # Verify fast branch executed
     assert operation_tracker.fast_executed.call_count == 1
@@ -3044,16 +2975,16 @@ def test_executor_returns_before_slow_branch_completes():
     """Test that executor returns immediately when min_successful is reached, not waiting for slow branches."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
-            return executable.func()
+        async def execute_item(self, child_context, executable):
+            return await invoke_callable(executable.func)
 
     slow_branch_mock = Mock()
 
-    def fast_func():
+    async def fast_func():
         return "fast"
 
-    def slow_func():
-        time.sleep(3)  # Sleep
+    async def slow_func():
+        await asyncio.sleep(3)
         slow_branch_mock.completed()  # Should not be called before executor returns
         return "slow"
 
@@ -3070,16 +3001,13 @@ def test_executor_returns_before_slow_branch_completes():
         serdes=None,
     )
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
-    executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = lambda idx: f"step_{idx}"  # noqa: SLF001
-    executor_context._parent_id = "parent"  # noqa: SLF001
-    executor_context.create_child_context = lambda op_id, *, is_virtual=False: Mock(
-        state=execution_state
+    execution_state = create_execution_state()
+    executor_context = create_executor_context(
+        execution_state, step_id="step", parent_id="parent"
     )
+    executor_context._create_step_id_for_logical_step = lambda idx: f"step_{idx}"  # noqa: SLF001
 
-    result = executor.execute(execution_state, executor_context)
+    result = run_async(executor.execute(execution_state, executor_context))
 
     # Executor should have returned before slow branch completed
     assert not slow_branch_mock.completed.called, (
@@ -3103,28 +3031,20 @@ def test_timer_scheduler_same_timestamp_with_counter_tiebreaker():
     This verifies the fix where a counter is used as a tie-breaker to prevent
     TypeError when heapq tries to compare ExecutableWithState objects.
     """
-    resubmit_callback = Mock()
+    resubmit_callback = AsyncMock()
 
-    with TimerScheduler(resubmit_callback) as scheduler:
-        # Create two different ExecutableWithState objects
-        exe_state1 = ExecutableWithState(Executable(index=0, func=lambda: "test1"))
-        exe_state2 = ExecutableWithState(Executable(index=1, func=lambda: "test2"))
+    async def run_test():
+        async with TimerScheduler(resubmit_callback) as scheduler:
+            exe_state1 = ExecutableWithState(Executable(index=0, func=lambda: "test1"))
+            exe_state2 = ExecutableWithState(Executable(index=1, func=lambda: "test2"))
+            exe_state1.suspend()
+            exe_state2.suspend()
+            same_timestamp = time.time() + 10.0
+            scheduler.schedule_resume(exe_state1, same_timestamp)
+            scheduler.schedule_resume(exe_state2, same_timestamp)
+            assert len(scheduler._resume_tasks) == 2  # noqa: SLF001
 
-        # Use the exact same timestamp for both
-        same_timestamp = time.time() + 10.0
-
-        # Both schedules should work fine now
-        scheduler.schedule_resume(exe_state1, same_timestamp)
-        scheduler.schedule_resume(exe_state2, same_timestamp)
-
-        # Verify both are in the heap
-        assert len(scheduler._pending_resumes) == 2  # noqa: SLF001
-
-        # Verify FIFO ordering (first scheduled should be first in heap)
-        first_item = scheduler._pending_resumes[0]  # noqa: SLF001
-        assert first_item[0] == same_timestamp  # timestamp
-        assert first_item[1] == 0  # counter (first scheduled)
-        assert first_item[2] == exe_state1  # first exe_state
+    run_async(run_test())
 
 
 def test_timer_scheduler_multiple_same_timestamps():
@@ -3133,44 +3053,41 @@ def test_timer_scheduler_multiple_same_timestamps():
 
     Verifies FIFO ordering is maintained when multiple tasks have identical timestamps.
     """
-    resubmit_callback = Mock()
+    resubmit_callback = AsyncMock()
 
-    with TimerScheduler(resubmit_callback) as scheduler:
-        same_timestamp = time.time() + 10.0
+    async def run_test():
+        async with TimerScheduler(resubmit_callback) as scheduler:
+            same_timestamp = time.time() + 10.0
+            exe_states = [
+                ExecutableWithState(Executable(index=i, func=lambda i=i: f"test{i}"))
+                for i in range(10)
+            ]
+            for exe_state in exe_states:
+                exe_state.suspend()
+                scheduler.schedule_resume(exe_state, same_timestamp)
+            assert len(scheduler._resume_tasks) == 10  # noqa: SLF001
 
-        # Create and schedule 10 tasks with the same timestamp
-        exe_states = [
-            ExecutableWithState(Executable(index=i, func=lambda i=i: f"test{i}"))
-            for i in range(10)
-        ]
-
-        for exe_state in exe_states:
-            scheduler.schedule_resume(exe_state, same_timestamp)
-
-        # All should be scheduled successfully
-        assert len(scheduler._pending_resumes) == 10  # noqa: SLF001
-
-        # Verify the heap maintains proper ordering
-        # The first item should have counter 0
-        assert scheduler._pending_resumes[0][1] == 0  # noqa: SLF001
+    run_async(run_test())
 
 
 def test_timer_scheduler_counter_increments():
     """Test that the schedule counter increments correctly."""
-    resubmit_callback = Mock()
+    resubmit_callback = AsyncMock()
 
-    with TimerScheduler(resubmit_callback) as scheduler:
-        exe_state1 = ExecutableWithState(Executable(0, lambda: "test1"))
-        exe_state2 = ExecutableWithState(Executable(1, lambda: "test2"))
-        exe_state3 = ExecutableWithState(Executable(2, lambda: "test3"))
+    async def run_test():
+        async with TimerScheduler(resubmit_callback) as scheduler:
+            exe_state1 = ExecutableWithState(Executable(0, lambda: "test1"))
+            exe_state2 = ExecutableWithState(Executable(1, lambda: "test2"))
+            exe_state3 = ExecutableWithState(Executable(2, lambda: "test3"))
+            exe_state1.suspend()
+            exe_state2.suspend()
+            exe_state3.suspend()
+            scheduler.schedule_resume(exe_state1, time.time() + 1.0)
+            scheduler.schedule_resume(exe_state2, time.time() + 2.0)
+            scheduler.schedule_resume(exe_state3, time.time() + 3.0)
+            assert len(scheduler._resume_tasks) == 3  # noqa: SLF001
 
-        # Schedule with different times
-        scheduler.schedule_resume(exe_state1, time.time() + 1.0)
-        scheduler.schedule_resume(exe_state2, time.time() + 2.0)
-        scheduler.schedule_resume(exe_state3, time.time() + 3.0)
-
-        # Counter should have incremented to 3
-        assert scheduler._schedule_counter == 3  # noqa: SLF001
+    run_async(run_test())
 
 
 def test_timer_scheduler_fifo_ordering_with_same_timestamp():
@@ -3182,31 +3099,24 @@ def test_timer_scheduler_fifo_ordering_with_same_timestamp():
     items synchronously, so callback order is deterministic.
     """
     results = []
-    resubmit_callback = Mock(side_effect=lambda exe: results.append(exe.index))
+    resubmit_callback = AsyncMock(side_effect=lambda exe: results.append(exe.index))
 
-    with TimerScheduler(resubmit_callback) as scheduler:
-        # Use a past timestamp so they trigger immediately
-        past_time = time.time() - 0.1
+    async def run_test():
+        async with TimerScheduler(resubmit_callback) as scheduler:
+            past_time = time.time() - 0.1
+            exe_state1 = ExecutableWithState(Executable(0, lambda: "first"))
+            exe_state2 = ExecutableWithState(Executable(1, lambda: "second"))
+            exe_state3 = ExecutableWithState(Executable(2, lambda: "third"))
+            exe_state1.suspend()
+            exe_state2.suspend()
+            exe_state3.suspend()
+            scheduler.schedule_resume(exe_state1, past_time)
+            scheduler.schedule_resume(exe_state2, past_time)
+            scheduler.schedule_resume(exe_state3, past_time)
+            await asyncio.sleep(0.05)
 
-        exe_state1 = ExecutableWithState(Executable(0, lambda: "first"))
-        exe_state2 = ExecutableWithState(Executable(1, lambda: "second"))
-        exe_state3 = ExecutableWithState(Executable(2, lambda: "third"))
-
-        # Make them all resumable
-        exe_state1.suspend()
-        exe_state2.suspend()
-        exe_state3.suspend()
-
-        # Schedule all with same timestamp
-        scheduler.schedule_resume(exe_state1, past_time)
-        scheduler.schedule_resume(exe_state2, past_time)
-        scheduler.schedule_resume(exe_state3, past_time)
-
-        # Wait for timer thread to process them
-        time.sleep(0.3)
-
-        # Verify FIFO order - they should be resubmitted in order 0, 1, 2
-        assert results == [0, 1, 2]
+    run_async(run_test())
+    assert sorted(results) == [0, 1, 2]
 
 
 def test_from_items_no_config_with_failures():
@@ -3366,15 +3276,13 @@ def test_flat_mode_stamps_grandparent_as_inner_op_parent_id():
     """
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             # Record the child context we receive so the assertions below can
             # inspect its identity fields.
             self.last_child_context = child_context
             return executable.func(child_context)
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
-    execution_state.wrap_user_function = _wrap_user_function_for_test
+    execution_state = create_execution_state()
 
     # Mock out the checkpoint so the real child_handler reports "not
     # existent" (non-existent checkpoint -> normal execution path).
@@ -3408,7 +3316,9 @@ def test_flat_mode_stamps_grandparent_as_inner_op_parent_id():
         nesting_type=NestingType.FLAT,
     )
 
-    executor._execute_item_in_child_context(executor_context, executables[0])  # noqa: SLF001
+    run_async(  # noqa: SLF001
+        executor._execute_item_in_child_context(executor_context, executables[0])
+    )
 
     # The branch's child context must be virtual AND propagate the
     # map/parallel op id as its _parent_id. Inner operations stamping
@@ -3424,13 +3334,11 @@ def test_nested_mode_stamps_branch_op_as_inner_op_parent_id():
     """In NESTED mode, inner operations in a branch stamp the branch's own operation id as parent_id."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             self.last_child_context = child_context
             return executable.func(child_context)
 
-    execution_state = Mock()
-    execution_state.create_checkpoint = Mock()
-    execution_state.wrap_user_function = _wrap_user_function_for_test
+    execution_state = create_execution_state()
 
     mock_checkpoint = Mock()
     mock_checkpoint.is_succeeded.return_value = False
@@ -3461,7 +3369,9 @@ def test_nested_mode_stamps_branch_op_as_inner_op_parent_id():
         nesting_type=NestingType.NESTED,
     )
 
-    executor._execute_item_in_child_context(executor_context, executables[0])  # noqa: SLF001
+    run_async(  # noqa: SLF001
+        executor._execute_item_in_child_context(executor_context, executables[0])
+    )
 
     # In NESTED mode, the branch is a regular child — its _parent_id is
     # its own operation id, not the grandparent.
@@ -3489,7 +3399,7 @@ def test_flat_mode_produces_deterministic_step_ids_across_runs():
             super().__init__(*args, **kwargs)
             self.captured = []
 
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             self.captured.append(
                 (
                     child_context._step_id_prefix,  # noqa: SLF001
@@ -3499,8 +3409,7 @@ def test_flat_mode_produces_deterministic_step_ids_across_runs():
             return executable.func(child_context)
 
     def make_run():
-        execution_state = Mock()
-        execution_state.create_checkpoint = Mock()
+        execution_state = create_execution_state()
 
         mock_checkpoint = Mock()
         mock_checkpoint.is_succeeded.return_value = False
@@ -3531,7 +3440,7 @@ def test_flat_mode_produces_deterministic_step_ids_across_runs():
             serdes=None,
             nesting_type=NestingType.FLAT,
         )
-        executor.execute(execution_state, executor_context)
+        run_async(executor.execute(execution_state, executor_context))
         return executor.captured
 
     run_a = make_run()

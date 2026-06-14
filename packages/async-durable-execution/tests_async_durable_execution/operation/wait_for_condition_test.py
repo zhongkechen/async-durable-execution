@@ -1,6 +1,8 @@
 """Unit tests for wait_for_condition operation."""
 
+import asyncio
 import datetime
+import inspect
 import json
 from datetime import timedelta
 from unittest.mock import Mock
@@ -34,19 +36,41 @@ from async_durable_execution.waits import (
 from ..serdes_test import CustomDictSerDes
 
 
+def _invoke_maybe_async(result):
+    if inspect.isawaitable(result):
+        return asyncio.run(result)
+    return result
+
+
+def _asyncify(func):
+    if inspect.iscoroutinefunction(func):
+        return func
+
+    async def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
 # Test helper - maintains old handler signature for backward compatibility in tests
 def wait_for_condition_handler(
     check, config, state, operation_identifier, context_logger
 ):
     """Test helper that wraps WaitForConditionOperationExecutor with old handler signature."""
+    if hasattr(state, "wrap_user_function") and hasattr(
+        state.wrap_user_function, "return_value"
+    ):
+        state.wrap_user_function.return_value = _asyncify(
+            state.wrap_user_function.return_value
+        )
     executor = WaitForConditionOperationExecutor(
-        check=check,
+        check=_asyncify(check),
         config=config,
         state=state,
         operation_identifier=operation_identifier,
         context_logger=context_logger,
     )
-    return executor.process()
+    return _invoke_maybe_async(executor.process())
 
 
 def test_wait_for_condition_first_execution_condition_met():
@@ -1358,7 +1382,7 @@ def test_wait_for_condition_executes_check_when_checkpoint_not_terminal():
     mock_check_function = Mock(return_value="final_state")
     mock_logger = Mock(spec=Logger)
     mock_logger.with_log_info.return_value = mock_logger
-    mock_state.wrap_user_function.return_value = mock_check_function
+    mock_state.wrap_user_function.return_value = _asyncify(mock_check_function)
 
     def mock_wait_strategy(state, attempt):
         return WaitForConditionDecision(
@@ -1402,7 +1426,7 @@ def test_wait_for_condition_executes_check_when_checkpoint_not_terminal_duplicat
     )
 
     mock_check_function = Mock(return_value="final_state")
-    mock_state.wrap_user_function.return_value = mock_check_function
+    mock_state.wrap_user_function.return_value = _asyncify(mock_check_function)
     mock_logger = Mock(spec=Logger)
     mock_logger.with_log_info.return_value = mock_logger
 

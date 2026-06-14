@@ -23,10 +23,10 @@ async def handler(_event: Any, context: DurableContext) -> str:
     async def fetch_user(_) -> None:
         return None
 
-    context.step(fetch_user, name="fetch-user")
+    await context.step(fetch_user, name="fetch-user")
 
-    context.run_in_child_context(parent_context(), name="parent")
+    await context.run_in_child_context(parent_context(), name="parent")
 
-    context.wait(timedelta(seconds=1), name="wait")
+    await context.wait(timedelta(seconds=1), name="wait")
 
     return "result"

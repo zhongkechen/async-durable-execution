@@ -27,7 +27,7 @@ async def large_data_processor(child_context: DurableContext) -> dict[str, Any]:
         async def build_chunk(_, size_in_kb: int = 50) -> str:
             return await generate_large_string(size_in_kb)
 
-        step_result: str = child_context.step(
+        step_result: str = await child_context.step(
             build_chunk,  # 50KB
             name=f"generate-data-{i}",
         )
@@ -50,12 +50,12 @@ async def large_data_processor(child_context: DurableContext) -> dict[str, Any]:
 async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating runInChildContext with large data."""
     # Use runInChildContext to handle large data that would exceed 256k step limit
-    large_data_result: dict[str, Any] = context.run_in_child_context(
+    large_data_result: dict[str, Any] = await context.run_in_child_context(
         large_data_processor(), name="large-data-processor"
     )
 
     # Add a wait after runInChildContext to test persistence across invocations
-    context.wait(timedelta(seconds=1), name="post-processing-wait")
+    await context.wait(timedelta(seconds=1), name="post-processing-wait")
 
     # Verify the data is still intact after the wait
     data_integrity_check = (

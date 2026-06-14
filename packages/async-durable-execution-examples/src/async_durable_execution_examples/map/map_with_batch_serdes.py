@@ -87,9 +87,9 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         async def double(_) -> int:
             return item * 2
 
-        return ctx.step(double, name=f"double_{index}")
+        return await ctx.step(double, name=f"double_{index}")
 
-    results = context.map(
+    results = await context.map(
         inputs=items,
         func=process_item,
         name="map_with_batch_serdes",

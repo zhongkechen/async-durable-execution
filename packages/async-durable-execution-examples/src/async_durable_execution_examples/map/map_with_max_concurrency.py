@@ -19,12 +19,14 @@ async def handler(_event: Any, context: DurableContext) -> list[int]:
         async def triple(_) -> int:
             return item * 3
 
-        return ctx.step(triple, name=f"process_{index}")
+        return await ctx.step(triple, name=f"process_{index}")
 
     # Extract results immediately to avoid BatchResult serialization
-    return context.map(
-        inputs=items,
-        func=process_item,
-        name="map_with_concurrency",
-        config=MapConfig(max_concurrency=3),
+    return (
+        await context.map(
+            inputs=items,
+            func=process_item,
+            name="map_with_concurrency",
+            config=MapConfig(max_concurrency=3),
+        )
     ).get_results()

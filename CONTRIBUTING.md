@@ -151,9 +151,6 @@ hatch run -- examples:pip install -e packages/async-durable-execution-examples
 # Build the shared example bundle
 hatch run examples:build
 
-# Generate the examples catalog
-hatch run examples:generate-examples-catalog
-
 # Generate a SAM template for all examples
 hatch run examples:generate-sam-template
 

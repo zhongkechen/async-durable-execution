@@ -75,8 +75,8 @@ class Callback(Protocol, Generic[C_co]):
     callback_id: str
 
     @abstractmethod
-    def result(self) -> C_co | None:
-        """Return the result of the future. Will block until result is available."""
+    async def result(self) -> C_co | None:
+        """Return the result of the future."""
         ...  # pragma: no cover
 
 
@@ -93,7 +93,7 @@ class DurableContext(Protocol):
     """Protocol defining the interface for durable execution contexts."""
 
     @abstractmethod
-    def step(
+    async def step(
         self,
         func: Callable[[StepContext], Awaitable[T]],
         name: str | None = None,
@@ -103,7 +103,7 @@ class DurableContext(Protocol):
         ...  # pragma: no cover
 
     @abstractmethod
-    def run_in_child_context(
+    async def run_in_child_context(
         self,
         func: Callable[[DurableContext], Awaitable[T]],
         name: str | None = None,
@@ -113,7 +113,7 @@ class DurableContext(Protocol):
         ...  # pragma: no cover
 
     @abstractmethod
-    def map(
+    async def map(
         self,
         inputs: Sequence[U],
         func: Callable[
@@ -126,7 +126,7 @@ class DurableContext(Protocol):
         ...  # pragma: no cover
 
     @abstractmethod
-    def parallel(
+    async def parallel(
         self,
         functions: Sequence[
             Callable[[DurableContext], Awaitable[T]] | ParallelBranch[T]
@@ -138,12 +138,12 @@ class DurableContext(Protocol):
         ...  # pragma: no cover
 
     @abstractmethod
-    def wait(self, duration: timedelta, name: str | None = None) -> None:
+    async def wait(self, duration: timedelta, name: str | None = None) -> None:
         """Wait for a specified amount of time."""
         ...  # pragma: no cover
 
     @abstractmethod
-    def create_callback(
+    async def create_callback(
         self, name: str | None = None, config: CallbackConfig | None = None
     ) -> Callback:
         """Create a callback."""

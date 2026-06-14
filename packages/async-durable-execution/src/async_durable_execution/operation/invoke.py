@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, TypeVar
 
+from async_durable_execution.async_tools import await_maybe
 from async_durable_execution.exceptions import ExecutionError
 from async_durable_execution.lambda_service import (
     ChainedInvokeOptions,
@@ -72,7 +73,7 @@ class InvokeOperationExecutor(OperationExecutor[R]):
         self.payload = payload
         self.config = config
 
-    def check_result_status(self) -> CheckResult[R]:
+    async def check_result_status(self) -> CheckResult[R]:
         """Check operation status and create START checkpoint if needed.
 
         Called twice by process() when creating synchronous checkpoints: once before
@@ -136,7 +137,11 @@ class InvokeOperationExecutor(OperationExecutor[R]):
             )
             # Checkpoint invoke START with blocking (is_sync=True).
             # Must ensure the chained invocation is recorded before suspending execution.
-            self.state.create_checkpoint(operation_update=start_operation, is_sync=True)
+            await await_maybe(
+                self.state.create_checkpoint(
+                    operation_update=start_operation, is_sync=True
+                )
+            )
 
             logger.debug(
                 "🚀 Invoke %s started, will check for immediate response",
@@ -150,7 +155,7 @@ class InvokeOperationExecutor(OperationExecutor[R]):
         # Ready to suspend (checkpoint exists but not in a terminal or started state)
         return CheckResult.create_is_ready_to_execute(checkpointed_result)
 
-    def execute(self, _checkpointed_result: CheckpointedResult) -> R:
+    async def execute(self, _checkpointed_result: CheckpointedResult) -> R:
         """Execute invoke operation by suspending to wait for async completion.
 
         The invoke operation doesn't execute synchronously - it suspends and

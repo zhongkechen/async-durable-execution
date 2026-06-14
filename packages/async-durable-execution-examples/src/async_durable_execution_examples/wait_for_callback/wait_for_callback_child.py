@@ -17,9 +17,9 @@ async def noop_submitter(_callback_id: str, _context: DurableContext) -> None:
 @durable_with_child_context
 async def child_context_with_callback(child_context: DurableContext) -> dict[str, Any]:
     """Child context containing wait and callback operations."""
-    child_context.wait(timedelta(seconds=1), name="child-wait")
+    await child_context.wait(timedelta(seconds=1), name="child-wait")
 
-    child_callback_result: str = child_context.wait_for_callback(
+    child_callback_result: str = await child_context.wait_for_callback(
         noop_submitter, name="child-callback-op"
     )
 
@@ -32,11 +32,11 @@ async def child_context_with_callback(child_context: DurableContext) -> dict[str
 @durable_execution
 async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating waitForCallback within child contexts."""
-    parent_result: str = context.wait_for_callback(
+    parent_result: str = await context.wait_for_callback(
         noop_submitter, name="parent-callback-op"
     )
 
-    child_context_result: dict[str, Any] = context.run_in_child_context(
+    child_context_result: dict[str, Any] = await context.run_in_child_context(
         child_context_with_callback(), name="child-context-with-callback"
     )
 

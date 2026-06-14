@@ -15,21 +15,21 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     async def fetch_data(_) -> dict[str, Any]:
         return {"userId": 123, "name": "John Doe"}
 
-    step_result: dict[str, Any] = context.step(
+    step_result: dict[str, Any] = await context.step(
         fetch_data,
         name="fetch-data",
     )
 
     callback_config = CallbackConfig(timeout=timedelta(minutes=1))
-    callback = context.create_callback(
+    callback = await context.create_callback(
         name="process-user",
         config=callback_config,
     )
 
     # Mix callback with step and wait operations
-    context.wait(timedelta(seconds=1), name="initial-wait")
+    await context.wait(timedelta(seconds=1), name="initial-wait")
 
-    callback_result = callback.result()
+    callback_result = await callback.result()
 
     return {
         "stepResult": step_result,

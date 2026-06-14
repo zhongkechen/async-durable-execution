@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 import functools
 import inspect
-import queue
-import threading
-from collections.abc import Awaitable, Callable
-from typing import TypeVar, cast
+import asyncio
+from collections.abc import Awaitable, Callable, Coroutine
+from typing import Any, TypeVar, cast
 
 from async_durable_execution.exceptions import ValidationError
 
@@ -45,38 +43,20 @@ def assert_async_callable(
     raise ValidationError(msg)
 
 
-def invoke_callable(func: Callable[..., Awaitable[T]], *args, **kwargs) -> T:
+async def invoke_callable(func: Callable[..., Awaitable[T]], *args, **kwargs) -> T:
     assert_async_callable(func)
-    return run_awaitable(cast("Awaitable[T]", func(*args, **kwargs)))
+    return await cast("Awaitable[T]", func(*args, **kwargs))
 
 
-def run_awaitable(awaitable: Awaitable[T]) -> T:
+def run_or_return(awaitable: Awaitable[T]) -> T | Awaitable[T]:
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        return asyncio.run(_await(awaitable))
-
-    return _run_awaitable_in_thread(awaitable)
-
-
-def _run_awaitable_in_thread(awaitable: Awaitable[T]) -> T:
-    result_queue: queue.Queue[tuple[bool, T | BaseException]] = queue.Queue(maxsize=1)
-
-    def runner() -> None:
-        try:
-            result_queue.put((True, asyncio.run(_await(awaitable))))
-        except BaseException as exc:  # noqa: BLE001
-            result_queue.put((False, exc))
-
-    thread = threading.Thread(target=runner, name="dex-async-user-code", daemon=True)
-    thread.start()
-    success, payload = result_queue.get()
-    thread.join()
-
-    if success:
-        return cast("T", payload)
-    raise cast("BaseException", payload)
+        return asyncio.run(cast(Coroutine[Any, Any, T], awaitable))
+    return awaitable
 
 
-async def _await(awaitable: Awaitable[T]) -> T:
-    return await awaitable
+async def await_maybe(value: T | Awaitable[T]) -> T:
+    if inspect.isawaitable(value):
+        return await cast("Awaitable[T]", value)
+    return value

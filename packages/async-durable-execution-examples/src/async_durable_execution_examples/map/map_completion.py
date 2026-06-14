@@ -66,7 +66,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
                 "result": f"Item {item['id']} processed successfully",
             }
 
-        return ctx.step(
+        return await ctx.step(
             step_function,
             name=f"process-item-{index}",
             config=step_config,
@@ -77,7 +77,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         completion_config=completion_config,
     )
 
-    results = context.map(
+    results = await context.map(
         inputs=items,
         func=process_item,
         name="completion-config-items",

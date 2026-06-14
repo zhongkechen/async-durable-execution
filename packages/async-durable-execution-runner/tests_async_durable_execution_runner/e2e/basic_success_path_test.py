@@ -42,8 +42,8 @@ def test_basic_durable_function() -> None:
     @durable_with_child_context
     async def two(ctx: DurableContext, a: int, b: int) -> str:
         # print("[DEBUG] two called")
-        two_1_result: str = ctx.step(two_1(a, b))
-        two_2_result: str = ctx.step(two_2(a, b))
+        two_1_result: str = await ctx.step(two_1(a, b))
+        two_2_result: str = await ctx.step(two_2(a, b))
         return f"{two_1_result} {two_2_result}"
 
     @durable_step
@@ -55,15 +55,15 @@ def test_basic_durable_function() -> None:
     async def function_under_test(event: Any, context: DurableContext) -> list[str]:
         results: list[str] = []
 
-        result_one: str = context.step(one(1, 2))
+        result_one: str = await context.step(one(1, 2))
         results.append(result_one)
 
-        context.wait(timedelta(seconds=1))
+        await context.wait(timedelta(seconds=1))
 
-        result_two: str = context.run_in_child_context(two(3, 4))
+        result_two: str = await context.run_in_child_context(two(3, 4))
         results.append(result_two)
 
-        result_three: str = context.step(three(5, 6))
+        result_three: str = await context.step(three(5, 6))
         results.append(result_three)
 
         return results

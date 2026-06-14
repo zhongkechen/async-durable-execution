@@ -19,10 +19,10 @@ async def child_operation(ctx: DurableContext, value: int) -> int:
     async def multiply(_) -> int:
         return await multiply_by_two(value)
 
-    return ctx.step(multiply, name="multiply")
+    return await ctx.step(multiply, name="multiply")
 
 
 @durable_execution
 async def handler(_event: Any, context: DurableContext) -> str:
-    result = context.run_in_child_context(child_operation(5))
+    result = await context.run_in_child_context(child_operation(5))
     return f"Child context result: {result}"

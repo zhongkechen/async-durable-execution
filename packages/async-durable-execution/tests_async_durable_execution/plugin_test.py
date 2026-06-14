@@ -190,18 +190,18 @@ class TestPluginExecutorInit(unittest.TestCase):
 
 class TestPluginExecutor(unittest.TestCase):
     def test_no_thread_pool_when_plugins_is_none(self):
-        """Tests that PluginExecutor does not create a thread pool when plugins is empty."""
+        """PluginExecutor should stay single-threaded when no plugins are configured."""
         executor = PluginExecutor(plugins=None)
-        self.assertIsNone(executor._executor)
+        self.assertFalse(hasattr(executor, "_executor"))
 
     def test_no_thread_pool_when_plugins_is_empty_list(self):
         executor = PluginExecutor(plugins=[])
-        self.assertIsNone(executor._executor)
+        self.assertFalse(hasattr(executor, "_executor"))
 
-    def test_thread_pool_created_when_plugins_provided(self):
+    def test_no_thread_pool_created_when_plugins_provided(self):
         executor = PluginExecutor(plugins=[_NoOpPlugin()])
         with executor.run():
-            self.assertIsNotNone(executor._executor)
+            self.assertFalse(hasattr(executor, "_executor"))
 
     def test_start_is_noop_when_empty(self):
         executor = PluginExecutor(plugins=[])

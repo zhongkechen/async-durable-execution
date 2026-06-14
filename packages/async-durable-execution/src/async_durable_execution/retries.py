@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import math
+import inspect
 import re
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
-from async_durable_execution.async_tools import assert_async_callable, invoke_callable
+from async_durable_execution.async_tools import (
+    assert_async_callable,
+    await_maybe,
+    invoke_callable,
+    run_or_return,
+)
 from async_durable_execution.config import (
     JitterStrategy,
     duration_to_seconds,
@@ -226,7 +232,7 @@ def with_retry(
     func: Callable[[DurableContext, int], Awaitable[T]],
     config: WithRetryConfig[T],
     name: str | None = None,
-) -> T:
+) -> T | Awaitable[T]:
     """Retry a block of durable logic with configurable backoff.
 
     Semantically a run_in_child_context with a retry policy wrapped around
@@ -262,15 +268,15 @@ def with_retry(
         exception propagates unchanged.
         SuspendExecution: Re-raised immediately (SDK control flow).
     """
-    assert_async_callable(func)
-    retry_strategy = config.retry_strategy or create_retry_strategy()
 
     async def run_loop(ctx: DurableContext) -> T:
+        assert_async_callable(func)
+        retry_strategy = config.retry_strategy or create_retry_strategy()
         attempt = 0
         while True:
             attempt += 1
             try:
-                return invoke_callable(func, ctx, attempt)
+                return await invoke_callable(func, ctx, attempt)
             except SuspendExecution:
                 raise  # SDK control flow - never intercept
             except Exception as err:
@@ -278,12 +284,18 @@ def with_retry(
                 if not decision.should_retry:
                     raise
                 wait_name = f"{name}-backoff-{attempt}" if name else None
-                ctx.wait(duration=decision.delay, name=wait_name)
+                await await_maybe(
+                    cast(Any, ctx.wait(duration=decision.delay, name=wait_name))
+                )
 
     if config.wrap_with_run_in_child_context:
-        return context.run_in_child_context(
+        child_result = context.run_in_child_context(
             run_loop,
             name=name,
             config=config.child_context_config,
         )
-    return invoke_callable(run_loop, context)
+        if inspect.isawaitable(child_result):
+            return run_or_return(child_result)
+        return child_result
+
+    return run_or_return(invoke_callable(run_loop, context))

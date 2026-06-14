@@ -36,7 +36,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     )
 
     try:
-        result: str = context.wait_for_callback(
+        result: str = await context.wait_for_callback(
             submitter,
             name="failing-submitter-callback",
             config=config,

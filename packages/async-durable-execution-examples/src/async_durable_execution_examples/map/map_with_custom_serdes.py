@@ -55,9 +55,9 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
                 "doubled_id": item["id"] * 2,
             }
 
-        return ctx.step(build_result, name=f"process_{index}")
+        return await ctx.step(build_result, name=f"process_{index}")
 
-    results = context.map(
+    results = await context.map(
         inputs=items,
         func=process_item,
         name="map_with_custom_serdes",

@@ -1,5 +1,7 @@
 """Unit tests for wait handler."""
 
+import asyncio
+import inspect
 from unittest.mock import Mock
 
 import pytest
@@ -19,6 +21,12 @@ from async_durable_execution.operation.wait import WaitOperationExecutor
 from async_durable_execution.state import CheckpointedResult, ExecutionState
 
 
+def run_async(awaitable):
+    if not inspect.isawaitable(awaitable):
+        return awaitable
+    return asyncio.run(awaitable)
+
+
 # Test helper function - maintains old handler signature for backward compatibility
 def wait_handler(seconds: int, state, operation_identifier) -> None:
     """Test helper that wraps WaitOperationExecutor with old handler signature."""
@@ -27,7 +35,7 @@ def wait_handler(seconds: int, state, operation_identifier) -> None:
         state=state,
         operation_identifier=operation_identifier,
     )
-    return executor.process()
+    return run_async(executor.process())
 
 
 def test_wait_handler_already_completed():
@@ -186,7 +194,7 @@ def test_wait_status_evaluation_after_checkpoint():
 
     # Act
     with pytest.raises(SuspendExecution):
-        executor.process()
+        run_async(executor.process())
 
     # Assert - verify status checked twice
     assert mock_state.get_checkpoint_result.call_count == 2
@@ -236,7 +244,7 @@ def test_wait_immediate_success_handling():
     )
 
     # Act
-    result = executor.process()
+    result = run_async(executor.process())
 
     # Assert - verify immediate return without suspend
     assert result is None  # Wait returns None
@@ -279,7 +287,7 @@ def test_wait_no_immediate_response_suspends():
 
     # Act & Assert - verify suspend occurs
     with pytest.raises(SuspendExecution) as exc_info:
-        executor.process()
+        run_async(executor.process())
 
     # Verify suspend message
     assert "Wait for 60 seconds" in str(exc_info.value)
@@ -315,7 +323,7 @@ def test_wait_already_completed_no_checkpoint():
     )
 
     # Act
-    result = executor.process()
+    result = run_async(executor.process())
 
     # Assert - verify immediate return without checkpoint
     assert result is None
@@ -356,7 +364,7 @@ def test_wait_with_various_durations():
         )
 
         # Act
-        result = executor.process()
+        result = run_async(executor.process())
 
         # Assert
         assert result is None
@@ -396,7 +404,7 @@ def test_wait_suspends_when_second_check_returns_started():
     )
 
     with pytest.raises(SuspendExecution):
-        executor.process()
+        run_async(executor.process())
 
     # Assert - behaves like "old way"
     assert mock_state.get_checkpoint_result.call_count == 2  # Double-check happened
@@ -430,7 +438,7 @@ def test_wait_suspends_when_second_check_returns_started_duplicate():
     )
 
     with pytest.raises(SuspendExecution):
-        executor.process()
+        run_async(executor.process())
 
     # Assert - behaves like "old way"
     assert mock_state.get_checkpoint_result.call_count == 2  # Double-check happened

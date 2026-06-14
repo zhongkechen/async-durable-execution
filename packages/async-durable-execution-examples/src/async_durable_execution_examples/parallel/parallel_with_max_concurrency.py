@@ -15,35 +15,37 @@ async def handler(_event: Any, context: DurableContext) -> list[str]:
         async def run(_) -> str:
             return "task 1"
 
-        return ctx.step(run, name="task1")
+        return await ctx.step(run, name="task1")
 
     async def task2(ctx: DurableContext) -> str:
         async def run(_) -> str:
             return "task 2"
 
-        return ctx.step(run, name="task2")
+        return await ctx.step(run, name="task2")
 
     async def task3(ctx: DurableContext) -> str:
         async def run(_) -> str:
             return "task 3"
 
-        return ctx.step(run, name="task3")
+        return await ctx.step(run, name="task3")
 
     async def task4(ctx: DurableContext) -> str:
         async def run(_) -> str:
             return "task 4"
 
-        return ctx.step(run, name="task4")
+        return await ctx.step(run, name="task4")
 
     async def task5(ctx: DurableContext) -> str:
         async def run(_) -> str:
             return "task 5"
 
-        return ctx.step(run, name="task5")
+        return await ctx.step(run, name="task5")
 
     # Extract results immediately to avoid BatchResult serialization
-    return context.parallel(
-        functions=[task1, task2, task3, task4, task5],
-        name="parallel_with_concurrency",
-        config=ParallelConfig(max_concurrency=2),
+    return (
+        await context.parallel(
+            functions=[task1, task2, task3, task4, task5],
+            name="parallel_with_concurrency",
+            config=ParallelConfig(max_concurrency=2),
+        )
     ).get_results()
