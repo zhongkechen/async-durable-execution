@@ -102,4 +102,4 @@ jobs:
         echo "Lambda Endpoint: ${LAMBDA_ENDPOINT}"
         echo "Configured function prefix: ${PYTEST_FUNCTION_NAME_PREFIX}"
 
-        hatch run test:examples-integration
+        hatch run test:examples-integration -- -n 4 --dist worksteal
