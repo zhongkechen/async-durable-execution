@@ -1,5 +1,6 @@
 """Unit tests for runner module."""
 
+import asyncio
 import datetime
 import json
 from unittest.mock import Mock, patch
@@ -865,7 +866,7 @@ def test_durable_function_test_runner_run(mock_store_class, mock_executor_class)
     mock_store.load.return_value = mock_execution
 
     runner = DurableFunctionLocalTestRunner(handler, input="test-input")
-    result = runner.run()
+    result = asyncio.run(runner.run())
 
     # Verify start_execution was called with correct input
     mock_executor.start_execution.assert_called_once()
@@ -923,7 +924,7 @@ def test_durable_function_test_runner_run_with_custom_params(
         execution_name="custom-execution",
         account_id="987654321098",
     )
-    result = runner.run()
+    result = asyncio.run(runner.run())
 
     # Verify start_execution was called with custom parameters
     start_input = mock_executor.start_execution.call_args[0][0]
@@ -956,7 +957,7 @@ def test_durable_function_test_runner_run_timeout(mock_executor_class):
     runner = DurableFunctionLocalTestRunner(handler, input="test-input")
 
     with pytest.raises(TimeoutError, match="Execution did not complete within timeout"):
-        runner.run()
+        asyncio.run(runner.run())
 
 
 def test_runner_run_methods_do_not_accept_call_time_overrides():
@@ -1200,7 +1201,7 @@ def test_cloud_runner_run_success(mock_boto3):
         timeout=10,
     )
 
-    result = runner.run()
+    result = asyncio.run(runner.run())
 
     assert result.status == InvocationStatus.SUCCEEDED
     assert result.result == "test-result"
@@ -1229,7 +1230,7 @@ def test_cloud_runner_run_invoke_failure(mock_boto3):
     with pytest.raises(
         DurableFunctionsTestError, match="Failed to invoke Lambda function"
     ):
-        runner.run()
+        asyncio.run(runner.run())
 
 
 @patch("async_durable_execution_runner.runner.boto3")
@@ -1354,7 +1355,7 @@ def test_cloud_runner_run_bad_status_code(mock_boto3):
     with pytest.raises(
         DurableFunctionsTestError, match="Lambda invocation failed with status 500"
     ):
-        runner.run()
+        asyncio.run(runner.run())
 
 
 @patch("async_durable_execution_runner.runner.boto3")
@@ -1397,7 +1398,7 @@ def test_cloud_runner_run_function_error(mock_boto3):
         function_name="test-function",
         input="test-input",
     )
-    result = runner.run()
+    result = asyncio.run(runner.run())
     assert result.status is InvocationStatus.FAILED
 
 
@@ -1427,7 +1428,7 @@ def test_cloud_runner_run_missing_execution_arn(mock_boto3):
     with pytest.raises(
         DurableFunctionsTestError, match="No DurableExecutionArn in response"
     ):
-        runner.run()
+        asyncio.run(runner.run())
 
 
 @patch("async_durable_execution_runner.runner.boto3")
@@ -1679,7 +1680,7 @@ def test_cloud_runner_run_async_success(mock_boto3):
         function_name="test-function",
         input="test-input",
     )
-    execution_arn = runner.run_async()
+    execution_arn = asyncio.run(runner.run_async())
 
     assert (
         execution_arn
@@ -1715,7 +1716,7 @@ def test_cloud_runner_run_async_with_400(mock_boto3):
     with pytest.raises(
         DurableFunctionsTestError, match="Lambda invocation failed with status 400"
     ):
-        runner.run_async()
+        asyncio.run(runner.run_async())
 
 
 @patch("async_durable_execution_runner.runner.boto3")
@@ -1740,7 +1741,7 @@ def test_cloud_runner_run_async_failure(mock_boto3):
     with pytest.raises(
         DurableFunctionsTestError, match="Failed to invoke Lambda function"
     ):
-        runner.run_async()
+        asyncio.run(runner.run_async())
 
 
 @patch("async_durable_execution_runner.runner.boto3")
@@ -1754,7 +1755,7 @@ def test_cloud_runner_send_callback_success(mock_boto3):
     mock_boto3.client.return_value = mock_client
 
     runner = DurableFunctionCloudTestRunner(function_name="test-function")
-    runner.send_callback_success("callback-123")
+    asyncio.run(runner.send_callback_success("callback-123"))
 
     mock_client.send_durable_execution_callback_success.assert_called_once_with(
         CallbackId="callback-123", Result=None
@@ -1772,7 +1773,7 @@ def test_cloud_runner_send_callback_failure(mock_boto3):
     mock_boto3.client.return_value = mock_client
 
     runner = DurableFunctionCloudTestRunner(function_name="test-function")
-    runner.send_callback_failure("callback-123")
+    asyncio.run(runner.send_callback_failure("callback-123"))
 
     mock_client.send_durable_execution_callback_failure.assert_called_once_with(
         CallbackId="callback-123", Error=None
@@ -1790,7 +1791,7 @@ def test_cloud_runner_send_callback_heartbeat(mock_boto3):
     mock_boto3.client.return_value = mock_client
 
     runner = DurableFunctionCloudTestRunner(function_name="test-function")
-    runner.send_callback_heartbeat("callback-123")
+    asyncio.run(runner.send_callback_heartbeat("callback-123"))
 
     mock_client.send_durable_execution_callback_heartbeat.assert_called_once_with(
         CallbackId="callback-123"
@@ -1818,7 +1819,7 @@ def test_cloud_runner_send_callback_error(mock_boto3):
     with pytest.raises(
         DurableFunctionsTestError, match="Failed to send callback success"
     ):
-        runner.send_callback_success("callback-123")
+        asyncio.run(runner.send_callback_success("callback-123"))
 
 
 @patch("async_durable_execution_runner.runner.boto3")
@@ -1846,7 +1847,9 @@ def test_cloud_runner_wait_for_callback_success(mock_boto3):
     runner = DurableFunctionCloudTestRunner(
         function_name="test-function", poll_interval=0.01
     )
-    callback_id = runner.wait_for_callback("test-arn", name="test-callback", timeout=10)
+    callback_id = asyncio.run(
+        runner.wait_for_callback("test-arn", name="test-callback", timeout=10)
+    )
 
     assert callback_id == "callback-123"
 
@@ -1878,7 +1881,9 @@ def test_cloud_runner_wait_for_callback_none(mock_boto3):
     )
 
     with pytest.raises(TimeoutError, match="Callback did not available within"):
-        runner.wait_for_callback("test-arn", name="test-callback1", timeout=2)
+        asyncio.run(
+            runner.wait_for_callback("test-arn", name="test-callback1", timeout=2)
+        )
 
 
 @patch("async_durable_execution_runner.runner.boto3")
@@ -1906,7 +1911,7 @@ def test_cloud_runner_wait_for_callback_success_without_name(mock_boto3):
     runner = DurableFunctionCloudTestRunner(
         function_name="test-function", poll_interval=0.01
     )
-    callback_id = runner.wait_for_callback("test-arn")
+    callback_id = asyncio.run(runner.wait_for_callback("test-arn"))
 
     assert callback_id == "callback-123"
 
@@ -1943,7 +1948,7 @@ def test_cloud_runner_wait_for_callback_all_done_without_name(mock_boto3):
         function_name="test-function", poll_interval=0.01
     )
     with pytest.raises(TimeoutError, match="Callback did not available within"):
-        runner.wait_for_callback("test-arn", timeout=2)
+        asyncio.run(runner.wait_for_callback("test-arn", timeout=2))
 
 
 @patch("async_durable_execution_runner.runner.Executor")
@@ -1976,7 +1981,7 @@ def test_local_runner_wait_for_callback_all_done_without_name(mock_executor_clas
 
     runner = DurableFunctionLocalTestRunner(handler)
     with pytest.raises(TimeoutError, match="Callback did not available within"):
-        runner.wait_for_callback("test-arn", timeout=2)
+        asyncio.run(runner.wait_for_callback("test-arn", timeout=2))
 
 
 @patch("async_durable_execution_runner.runner.Executor")
@@ -1991,7 +1996,7 @@ def test_local_runner_wait_for_callback_with_exception(mock_executor_class):
     with pytest.raises(
         DurableFunctionsTestError, match="Failed to fetch execution history"
     ):
-        runner.wait_for_callback("test-arn", timeout=10)
+        asyncio.run(runner.wait_for_callback("test-arn", timeout=10))
 
 
 @patch("async_durable_execution_runner.runner.Executor")
@@ -2006,7 +2011,7 @@ def test_local_runner_wait_for_callback_with_resource_not_found_exception(
 
     runner = DurableFunctionLocalTestRunner(handler)
     with pytest.raises(TimeoutError, match="Callback did not available within"):
-        runner.wait_for_callback("test-arn", timeout=2)
+        asyncio.run(runner.wait_for_callback("test-arn", timeout=2))
 
 
 @patch("async_durable_execution_runner.runner.boto3")
@@ -2028,7 +2033,7 @@ def test_cloud_runner_wait_for_callback_timeout(mock_time, mock_boto3):
     )
 
     with pytest.raises(TimeoutError, match="Callback did not available within"):
-        runner.wait_for_callback("test-arn", timeout=2)
+        asyncio.run(runner.wait_for_callback("test-arn", timeout=2))
 
 
 @patch("async_durable_execution_runner.runner.boto3")
@@ -2066,7 +2071,7 @@ def test_cloud_runner_wait_for_callback_already_completed(mock_boto3):
     with pytest.raises(
         DurableFunctionsTestError, match="Callback test-callback has already completed"
     ):
-        runner.wait_for_callback("test-arn", "test-callback", timeout=2)
+        asyncio.run(runner.wait_for_callback("test-arn", "test-callback", timeout=2))
 
 
 @patch("async_durable_execution_runner.runner.boto3")
@@ -2103,7 +2108,9 @@ def test_cloud_runner_wait_for_callback_client_error_retryable(mock_boto3):
     runner = DurableFunctionCloudTestRunner(
         function_name="test-function", poll_interval=0.01
     )
-    callback_id = runner.wait_for_callback("test-arn", name="test-callback", timeout=10)
+    callback_id = asyncio.run(
+        runner.wait_for_callback("test-arn", name="test-callback", timeout=10)
+    )
 
     assert callback_id == "callback-123"
 
@@ -2135,7 +2142,7 @@ def test_cloud_runner_wait_for_callback_client_error_non_retryable(
     with pytest.raises(
         DurableFunctionsTestError, match="Failed to fetch execution history"
     ):
-        runner.wait_for_callback("test-arn", timeout=10)
+        asyncio.run(runner.wait_for_callback("test-arn", timeout=10))
 
 
 @patch("async_durable_execution_runner.runner.boto3")
@@ -2158,7 +2165,7 @@ def test_cloud_runner_wait_for_callback_generic_exception(mock_boto3):
     with pytest.raises(
         DurableFunctionsTestError, match="Failed to fetch execution history"
     ):
-        runner.wait_for_callback("test-arn", timeout=10)
+        asyncio.run(runner.wait_for_callback("test-arn", timeout=10))
 
 
 @patch("async_durable_execution_runner.runner.boto3")
@@ -2189,7 +2196,7 @@ def test_cloud_runner_wait_for_result_fetch_history_exception(mock_boto3):
         DurableFunctionsTestError,
         match="Failed to fetch execution history: History fetch failed",
     ):
-        runner.wait_for_result("test-arn", timeout=60)
+        asyncio.run(runner.wait_for_result("test-arn", timeout=60))
 
 
 @patch("async_durable_execution_runner.runner.boto3")
@@ -2221,7 +2228,7 @@ def test_cloud_runner_wait_for_result_success(mock_boto3):
         mock_result.status = InvocationStatus.SUCCEEDED
         mock_from_history.return_value = mock_result
 
-        result = runner.wait_for_result("test-arn", timeout=60)
+        result = asyncio.run(runner.wait_for_result("test-arn", timeout=60))
 
         assert result.status == InvocationStatus.SUCCEEDED
         mock_from_history.assert_called_once_with(

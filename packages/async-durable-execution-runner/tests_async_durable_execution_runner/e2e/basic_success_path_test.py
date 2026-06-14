@@ -1,5 +1,6 @@
 """Functional tests, covering end-to-end DurableTestRunner."""
 
+import asyncio
 import json
 from datetime import timedelta
 from typing import Any
@@ -71,7 +72,7 @@ def test_basic_durable_function() -> None:
     with DurableFunctionLocalTestRunner(
         handler=function_under_test, input="input str", timeout=10
     ) as runner:
-        result: DurableFunctionTestResult = runner.run()
+        result: DurableFunctionTestResult = asyncio.run(runner.run())
 
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.result == json.dumps(["1 2", "3 4 4 3", "5 6"])

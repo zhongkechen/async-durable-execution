@@ -101,6 +101,8 @@ async def function_under_test(event: Any, context: DurableContext) -> list[str]:
 ### Your test code
 
 ```python
+import asyncio
+
 from async_durable_execution.execution import InvocationStatus
 from async_durable_execution_runner import (
     ContextOperation,
@@ -117,7 +119,7 @@ def test_my_durable_functions():
         input="input str",
         timeout=10,
     ) as runner:
-        result: DurableFunctionTestResult = runner.run()
+        result: DurableFunctionTestResult = asyncio.run(runner.run())
 
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.result == '["1 2", "3 4 4 3", "5 6"]'
@@ -144,7 +146,7 @@ def test_my_durable_functions():
 5. **ExecutionNotifier** broadcasts events to **Executor** (observer)
 6. **Executor** updates **Execution** state based on events
 7. **Execution** completion triggers final event notifications
-8. **DurableTestRunner** run() blocks until it receives completion event, and then returns `DurableFunctionTestResult`.
+8. **DurableTestRunner** exposes async runner methods, so `await runner.run()` resolves once the execution completes and returns `DurableFunctionTestResult`.
 
 ## Major Components
 
