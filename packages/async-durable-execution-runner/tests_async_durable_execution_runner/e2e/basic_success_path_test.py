@@ -24,7 +24,7 @@ from async_durable_execution_runner.runner import (
 
 
 # brazil-test-exec pytest test/runner_int_test.py
-def test_basic_durable_function() -> None:
+async def test_basic_durable_function() -> None:
     @durable_step
     async def one(step_context: StepContext, a: int, b: int) -> str:
         # print("[DEBUG] one called")
@@ -72,7 +72,7 @@ def test_basic_durable_function() -> None:
     with DurableFunctionLocalTestRunner(
         handler=function_under_test, input="input str", timeout=10
     ) as runner:
-        result: DurableFunctionTestResult = asyncio.run(runner.run())
+        result: DurableFunctionTestResult = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.result == json.dumps(["1 2", "3 4 4 3", "5 6"])

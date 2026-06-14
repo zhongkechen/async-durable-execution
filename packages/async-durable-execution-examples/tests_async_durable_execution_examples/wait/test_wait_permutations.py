@@ -4,12 +4,12 @@ from async_durable_execution.execution import InvocationStatus
 from async_durable_execution_examples.wait import wait_with_name
 
 
-def test_wait_with_name(durable_runner):
+async def test_wait_with_name(durable_runner):
     """Test wait with explicit name."""
     with durable_runner(
         handler=wait_with_name.handler, input="test", timeout=10
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.get_deserialized_result() == "Wait with name completed"

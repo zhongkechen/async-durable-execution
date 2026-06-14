@@ -5,12 +5,12 @@ from async_durable_execution.lambda_service import OperationType
 from async_durable_execution_examples.logger_example import logger_example
 
 
-def test_logger_example(durable_runner):
+async def test_logger_example(durable_runner):
     """Test logger example."""
     with durable_runner(
         handler=logger_example.handler, input={"id": "test-123"}, timeout=10
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.get_deserialized_result() == "processed-child-processed"

@@ -61,21 +61,21 @@ def reset_lambda_client_cache():
 # =============================================================================
 
 
-def test_execution_details_from_dict():
+async def test_execution_details_from_dict():
     """Test ExecutionDetails.from_dict method."""
     data = {"InputPayload": "test_payload"}
     details = ExecutionDetails.from_dict(data)
     assert details.input_payload == "test_payload"
 
 
-def test_execution_details_empty():
+async def test_execution_details_empty():
     """Test ExecutionDetails.from_dict with empty data."""
     data = {}
     details = ExecutionDetails.from_dict(data)
     assert details.input_payload is None
 
 
-def test_context_details_from_dict():
+async def test_context_details_from_dict():
     """Test ContextDetails.from_dict method."""
     data = {"Result": "test_result"}
     details = ContextDetails.from_dict(data)
@@ -83,7 +83,7 @@ def test_context_details_from_dict():
     assert details.error is None
 
 
-def test_context_details_with_error():
+async def test_context_details_with_error():
     """Test ContextDetails.from_dict with error."""
     error_data = {"ErrorMessage": "Context error", "ErrorType": "ContextError"}
     data = {"Result": "test_result", "Error": error_data}
@@ -93,7 +93,7 @@ def test_context_details_with_error():
     assert details.error.type == "ContextError"
 
 
-def test_context_details_error_only():
+async def test_context_details_error_only():
     """Test ContextDetails.from_dict with only error."""
     error_data = {"ErrorMessage": "Context failed"}
     data = {"Error": error_data}
@@ -102,7 +102,7 @@ def test_context_details_error_only():
     assert details.error.message == "Context failed"
 
 
-def test_context_details_empty():
+async def test_context_details_empty():
     """Test ContextDetails.from_dict with empty data."""
     data = {}
     details = ContextDetails.from_dict(data)
@@ -111,7 +111,7 @@ def test_context_details_empty():
     assert details.error is None
 
 
-def test_context_details_with_replay_children():
+async def test_context_details_with_replay_children():
     """Test ContextDetails.from_dict with replay_children field."""
     data = {"ReplayChildren": True, "Result": "test_result"}
     details = ContextDetails.from_dict(data)
@@ -120,7 +120,7 @@ def test_context_details_with_replay_children():
     assert details.error is None
 
 
-def test_error_object_from_dict():
+async def test_error_object_from_dict():
     """Test ErrorObject.from_dict method."""
     data = {
         "ErrorMessage": "Test error",
@@ -135,7 +135,7 @@ def test_error_object_from_dict():
     assert error.stack_trace == ["line1", "line2"]
 
 
-def test_error_object_from_exception():
+async def test_error_object_from_exception():
     """Test ErrorObject.from_exception method."""
     exception = ValueError("Test value error")
     error = ErrorObject.from_exception(exception)
@@ -145,7 +145,7 @@ def test_error_object_from_exception():
     assert error.stack_trace is None
 
 
-def test_error_object_from_exception_runtime_error():
+async def test_error_object_from_exception_runtime_error():
     """Test ErrorObject.from_exception with RuntimeError."""
     runtime_error = RuntimeError("Runtime issue")
     error = ErrorObject.from_exception(runtime_error)
@@ -155,7 +155,7 @@ def test_error_object_from_exception_runtime_error():
     assert error.stack_trace is None
 
 
-def test_error_object_from_exception_custom_error():
+async def test_error_object_from_exception_custom_error():
     """Test ErrorObject.from_exception with custom exception."""
 
     class CustomError(Exception):
@@ -169,7 +169,7 @@ def test_error_object_from_exception_custom_error():
     assert error.stack_trace is None
 
 
-def test_error_object_from_exception_empty_message():
+async def test_error_object_from_exception_empty_message():
     """Test ErrorObject.from_exception with exception that has no message."""
     empty_error = ValueError()
     error = ErrorObject.from_exception(empty_error)
@@ -179,7 +179,7 @@ def test_error_object_from_exception_empty_message():
     assert error.stack_trace is None
 
 
-def test_error_object_from_message_regular():
+async def test_error_object_from_message_regular():
     """Test ErrorObject.from_message with regular message."""
     error = ErrorObject.from_message("Test error message")
     assert error.message == "Test error message"
@@ -188,7 +188,7 @@ def test_error_object_from_message_regular():
     assert error.stack_trace is None
 
 
-def test_error_object_from_message_empty():
+async def test_error_object_from_message_empty():
     """Test ErrorObject.from_message with empty message."""
     error = ErrorObject.from_message("")
     assert not error.message
@@ -197,7 +197,7 @@ def test_error_object_from_message_empty():
     assert error.stack_trace is None
 
 
-def test_error_object_to_dict():
+async def test_error_object_to_dict():
     """Test ErrorObject.to_dict method."""
     error = ErrorObject(
         message="Test error",
@@ -215,21 +215,21 @@ def test_error_object_to_dict():
     assert result == expected
 
 
-def test_error_object_to_dict_partial():
+async def test_error_object_to_dict_partial():
     """Test ErrorObject.to_dict with None values."""
     error = ErrorObject(message="Test error", type=None, data=None, stack_trace=None)
     result = error.to_dict()
     assert result == {"ErrorMessage": "Test error"}
 
 
-def test_error_object_to_dict_all_none():
+async def test_error_object_to_dict_all_none():
     """Test ErrorObject.to_dict with all None values."""
     error = ErrorObject(message=None, type=None, data=None, stack_trace=None)
     result = error.to_dict()
     assert result == {}
 
 
-def test_error_object_to_callable_runtime_error():
+async def test_error_object_to_callable_runtime_error():
     """Test ErrorObject.to_callable_runtime_error method."""
     error = ErrorObject(
         message="Test error",
@@ -245,7 +245,7 @@ def test_error_object_to_callable_runtime_error():
     assert runtime_error.stack_trace == ["line1"]
 
 
-def test_step_details_from_dict():
+async def test_step_details_from_dict():
     """Test StepDetails.from_dict method."""
     error_data = {"ErrorMessage": "Step error"}
     data = {
@@ -265,7 +265,7 @@ def test_step_details_from_dict():
     assert details.error.message == "Step error"
 
 
-def test_step_details_all_fields():
+async def test_step_details_all_fields():
     """Test StepDetails.from_dict with all fields."""
     error_data = {"ErrorMessage": "Step failed", "ErrorType": "StepError"}
     data = {
@@ -286,7 +286,7 @@ def test_step_details_all_fields():
     assert details.error.type == "StepError"
 
 
-def test_step_details_minimal():
+async def test_step_details_minimal():
     """Test StepDetails.from_dict with minimal data."""
     data = {}
     details = StepDetails.from_dict(data)
@@ -296,7 +296,7 @@ def test_step_details_minimal():
     assert details.error is None
 
 
-def test_wait_details_from_dict():
+async def test_wait_details_from_dict():
     """Test WaitDetails.from_dict method."""
     timestamp = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
     data = {"ScheduledEndTimestamp": timestamp}
@@ -304,14 +304,14 @@ def test_wait_details_from_dict():
     assert details.scheduled_end_timestamp == timestamp
 
 
-def test_wait_details_from_dict_empty():
+async def test_wait_details_from_dict_empty():
     """Test WaitDetails.from_dict with empty data."""
     data = {}
     details = WaitDetails.from_dict(data)
     assert details.scheduled_end_timestamp is None
 
 
-def test_callback_details_from_dict():
+async def test_callback_details_from_dict():
     """Test CallbackDetails.from_dict method."""
     error_data = {"ErrorMessage": "Callback error"}
     data = {
@@ -325,7 +325,7 @@ def test_callback_details_from_dict():
     assert details.error.message == "Callback error"
 
 
-def test_callback_details_all_fields():
+async def test_callback_details_all_fields():
     """Test CallbackDetails.from_dict with all fields."""
     error_data = {"ErrorMessage": "Callback failed", "ErrorType": "CallbackError"}
     data = {
@@ -340,7 +340,7 @@ def test_callback_details_all_fields():
     assert details.error.type == "CallbackError"
 
 
-def test_callback_details_minimal():
+async def test_callback_details_minimal():
     """Test CallbackDetails.from_dict with minimal required data."""
     data = {"CallbackId": "cb789"}
     details = CallbackDetails.from_dict(data)
@@ -349,7 +349,7 @@ def test_callback_details_minimal():
     assert details.error is None
 
 
-def test_invoke_details_from_dict():
+async def test_invoke_details_from_dict():
     """Test ChainedInvokeDetails.from_dict method."""
     error_data = {"ErrorMessage": "Invoke error"}
     data = {
@@ -361,7 +361,7 @@ def test_invoke_details_from_dict():
     assert details.error.message == "Invoke error"
 
 
-def test_invoke_details_all_fields():
+async def test_invoke_details_all_fields():
     """Test ChainedInvokeDetails.from_dict with all fields."""
     error_data = {"ErrorMessage": "Invoke failed", "ErrorType": "InvokeError"}
     data = {
@@ -374,7 +374,7 @@ def test_invoke_details_all_fields():
     assert details.error.type == "InvokeError"
 
 
-def test_invoke_details_minimal():
+async def test_invoke_details_minimal():
     """Test ChainedInvokeDetails.from_dict with minimal required data."""
     data = {"DurableExecutionArn": "arn:minimal"}
     details = ChainedInvokeDetails.from_dict(data)
@@ -388,20 +388,20 @@ def test_invoke_details_minimal():
 # =============================================================================
 
 
-def test_step_options_from_dict():
+async def test_step_options_from_dict():
     """Test StepOptions.from_dict method."""
     data = {"NextAttemptDelaySeconds": 30}
     options = StepOptions.from_dict(data)
     assert options.next_attempt_delay_seconds == 30
 
 
-def test_step_options_from_dict_empty():
+async def test_step_options_from_dict_empty():
     """Test StepOptions.from_dict with empty dict."""
     options = StepOptions.from_dict({})
     assert options.next_attempt_delay_seconds == 0
 
 
-def test_callback_options_from_dict():
+async def test_callback_options_from_dict():
     """Test CallbackOptions.from_dict method."""
     data = {"TimeoutSeconds": 300, "HeartbeatTimeoutSeconds": 60}
     options = CallbackOptions.from_dict(data)
@@ -409,7 +409,7 @@ def test_callback_options_from_dict():
     assert options.heartbeat_timeout_seconds == 60
 
 
-def test_callback_options_from_dict_partial():
+async def test_callback_options_from_dict_partial():
     """Test CallbackOptions.from_dict with partial data."""
     data = {"TimeoutSeconds": 300}
     options = CallbackOptions.from_dict(data)
@@ -417,7 +417,7 @@ def test_callback_options_from_dict_partial():
     assert options.heartbeat_timeout_seconds == 0
 
 
-def test_invoke_options_from_dict():
+async def test_invoke_options_from_dict():
     """Test ChainedInvokeOptions.from_dict method."""
     data = {"FunctionName": "test-function", "TenantId": "test-tenant"}
     options = ChainedInvokeOptions.from_dict(data)
@@ -425,7 +425,7 @@ def test_invoke_options_from_dict():
     assert options.tenant_id == "test-tenant"
 
 
-def test_invoke_options_from_dict_required_only():
+async def test_invoke_options_from_dict_required_only():
     """Test ChainedInvokeOptions.from_dict with only required field."""
     data = {"FunctionName": "test-function"}
     options = ChainedInvokeOptions.from_dict(data)
@@ -433,7 +433,7 @@ def test_invoke_options_from_dict_required_only():
     assert options.tenant_id is None
 
 
-def test_invoke_options_from_dict_with_none_tenant():
+async def test_invoke_options_from_dict_with_none_tenant():
     """Test ChainedInvokeOptions.from_dict with explicit None tenant_id."""
     data = {"FunctionName": "test-function", "TenantId": None}
     options = ChainedInvokeOptions.from_dict(data)
@@ -441,20 +441,20 @@ def test_invoke_options_from_dict_with_none_tenant():
     assert options.tenant_id is None
 
 
-def test_context_options_from_dict():
+async def test_context_options_from_dict():
     """Test ContextOptions.from_dict method."""
     data = {"ReplayChildren": True}
     options = ContextOptions.from_dict(data)
     assert options.replay_children is True
 
 
-def test_context_options_from_dict_empty():
+async def test_context_options_from_dict_empty():
     """Test ContextOptions.from_dict with empty dict."""
     options = ContextOptions.from_dict({})
     assert options.replay_children is False
 
 
-def test_step_options_roundtrip():
+async def test_step_options_roundtrip():
     """Test StepOptions to_dict -> from_dict roundtrip."""
     original = StepOptions(next_attempt_delay_seconds=45)
     data = original.to_dict()
@@ -462,7 +462,7 @@ def test_step_options_roundtrip():
     assert restored == original
 
 
-def test_callback_options_roundtrip():
+async def test_callback_options_roundtrip():
     """Test CallbackOptions to_dict -> from_dict roundtrip."""
     original = CallbackOptions(timeout_seconds=300, heartbeat_timeout_seconds=60)
     data = original.to_dict()
@@ -470,7 +470,7 @@ def test_callback_options_roundtrip():
     assert restored == original
 
 
-def test_invoke_options_roundtrip():
+async def test_invoke_options_roundtrip():
     """Test ChainedInvokeOptions to_dict -> from_dict roundtrip."""
     original = ChainedInvokeOptions(function_name="test-func")
     data = original.to_dict()
@@ -478,7 +478,7 @@ def test_invoke_options_roundtrip():
     assert restored == original
 
 
-def test_context_options_roundtrip():
+async def test_context_options_roundtrip():
     """Test ContextOptions to_dict -> from_dict roundtrip."""
     original = ContextOptions(replay_children=True)
     data = original.to_dict()
@@ -486,35 +486,35 @@ def test_context_options_roundtrip():
     assert restored == original
 
 
-def test_wait_options_from_dict():
+async def test_wait_options_from_dict():
     """Test WaitOptions.from_dict method."""
     data = {"WaitSeconds": 30}
     options = WaitOptions.from_dict(data)
     assert options.wait_seconds == 30
 
 
-def test_step_options_to_dict():
+async def test_step_options_to_dict():
     """Test StepOptions.to_dict method."""
     options = StepOptions(next_attempt_delay_seconds=30)
     result = options.to_dict()
     assert result == {"NextAttemptDelaySeconds": 30}
 
 
-def test_wait_options_to_dict():
+async def test_wait_options_to_dict():
     """Test WaitOptions.to_dict method."""
     options = WaitOptions(wait_seconds=60)
     result = options.to_dict()
     assert result == {"WaitSeconds": 60}
 
 
-def test_callback_options_to_dict():
+async def test_callback_options_to_dict():
     """Test CallbackOptions.to_dict method."""
     options = CallbackOptions(timeout_seconds=300, heartbeat_timeout_seconds=60)
     result = options.to_dict()
     assert result == {"TimeoutSeconds": 300, "HeartbeatTimeoutSeconds": 60}
 
 
-def test_callback_options_all_fields():
+async def test_callback_options_all_fields():
     """Test CallbackOptions with all fields."""
     options = CallbackOptions(timeout_seconds=300, heartbeat_timeout_seconds=60)
     result = options.to_dict()
@@ -522,7 +522,7 @@ def test_callback_options_all_fields():
     assert result["HeartbeatTimeoutSeconds"] == 60
 
 
-def test_invoke_options_to_dict():
+async def test_invoke_options_to_dict():
     """Test ChainedInvokeOptions.to_dict method."""
     options = ChainedInvokeOptions(
         function_name="test_function",
@@ -534,35 +534,35 @@ def test_invoke_options_to_dict():
     assert result == expected
 
 
-def test_invoke_options_to_dict_minimal():
+async def test_invoke_options_to_dict_minimal():
     """Test ChainedInvokeOptions.to_dict with minimal fields."""
     options = ChainedInvokeOptions(function_name="test_function")
     result = options.to_dict()
     assert result == {"FunctionName": "test_function"}
 
 
-def test_context_options_to_dict():
+async def test_context_options_to_dict():
     """Test ContextOptions.to_dict method."""
     options = ContextOptions(replay_children=True)
     result = options.to_dict()
     assert result == {"ReplayChildren": True}
 
 
-def test_context_options_to_dict_default():
+async def test_context_options_to_dict_default():
     """Test ContextOptions.to_dict with default value."""
     options = ContextOptions()
     result = options.to_dict()
     assert result == {"ReplayChildren": False}
 
 
-def test_context_options_to_dict_false():
+async def test_context_options_to_dict_false():
     """Test ContextOptions.to_dict with replay_children=False."""
     options = ContextOptions(replay_children=False)
     result = options.to_dict()
     assert result == {"ReplayChildren": False}
 
 
-def test_invoke_options_from_dict_missing_function_name():
+async def test_invoke_options_from_dict_missing_function_name():
     """Test ChainedInvokeOptions.from_dict with missing required FunctionName."""
     data = {"TimeoutSeconds": 60}
 
@@ -570,7 +570,7 @@ def test_invoke_options_from_dict_missing_function_name():
         ChainedInvokeOptions.from_dict(data)
 
 
-def test_invoke_options_to_dict_complete():
+async def test_invoke_options_to_dict_complete():
     """Test ChainedInvokeOptions.to_dict with all fields."""
     options = ChainedInvokeOptions(function_name="test_func")
 
@@ -584,7 +584,7 @@ def test_invoke_options_to_dict_complete():
 # =============================================================================
 
 
-def test_operation_update_create_invoke_start():
+async def test_operation_update_create_invoke_start():
     """Test OperationUpdate.create_invoke_start method to cover line 545."""
     identifier = OperationIdentifier(
         "test-id", OperationSubType.CHAINED_INVOKE, "parent-id"
@@ -594,7 +594,7 @@ def test_operation_update_create_invoke_start():
     assert update.operation_id == "test-id"
 
 
-def test_operation_update_to_dict():
+async def test_operation_update_to_dict():
     """Test OperationUpdate.to_dict method."""
     error = ErrorObject(
         message="Test error", type="TestError", data=None, stack_trace=None
@@ -626,7 +626,7 @@ def test_operation_update_to_dict():
     assert result == expected
 
 
-def test_operation_update_to_dict_complete():
+async def test_operation_update_to_dict_complete():
     """Test OperationUpdate.to_dict with all optional fields."""
     error = ErrorObject(
         message="Test error", type="TestError", data=None, stack_trace=None
@@ -669,7 +669,7 @@ def test_operation_update_to_dict_complete():
     assert result == expected
 
 
-def test_operation_update_minimal():
+async def test_operation_update_minimal():
     """Test OperationUpdate.to_dict with minimal required fields."""
     update = OperationUpdate(
         operation_id="minimal_op",
@@ -685,7 +685,7 @@ def test_operation_update_minimal():
     assert result == expected
 
 
-def test_operation_update_create_callback():
+async def test_operation_update_create_callback():
     """Test OperationUpdate.create_callback factory method."""
     callback_options = CallbackOptions(timeout_seconds=300)
     update = OperationUpdate.create_callback(
@@ -700,7 +700,7 @@ def test_operation_update_create_callback():
     assert update.sub_type is OperationSubType.CALLBACK
 
 
-def test_operation_update_create_wait_start():
+async def test_operation_update_create_wait_start():
     """Test OperationUpdate.create_wait_start factory method."""
     wait_options = WaitOptions(wait_seconds=30)
     update = OperationUpdate.create_wait_start(
@@ -717,7 +717,7 @@ def test_operation_update_create_wait_start():
 
 
 @patch("async_durable_execution.lambda_service.datetime")
-def test_operation_update_create_execution_succeed(mock_datetime):
+async def test_operation_update_create_execution_succeed(mock_datetime):
     """Test OperationUpdate.create_execution_succeed factory method."""
 
     mock_datetime.datetime.now.return_value = datetime.datetime.fromtimestamp(
@@ -730,7 +730,7 @@ def test_operation_update_create_execution_succeed(mock_datetime):
     assert update.payload == "success_payload"
 
 
-def test_operation_update_create_step_succeed():
+async def test_operation_update_create_step_succeed():
     """Test OperationUpdate.create_step_succeed factory method."""
     update = OperationUpdate.create_step_succeed(
         OperationIdentifier("step1", OperationSubType.STEP, None, "test_step"),
@@ -744,7 +744,7 @@ def test_operation_update_create_step_succeed():
     assert update.sub_type is OperationSubType.STEP
 
 
-def test_operation_update_factory_methods():
+async def test_operation_update_factory_methods():
     """Test all OperationUpdate factory methods."""
     error = ErrorObject(
         message="Test error", type="TestError", data=None, stack_trace=None
@@ -816,7 +816,7 @@ def test_operation_update_factory_methods():
     assert update.sub_type is OperationSubType.STEP
 
 
-def test_operation_update_with_parent_id():
+async def test_operation_update_with_parent_id():
     """Test OperationUpdate with parent_id field."""
     update = OperationUpdate(
         operation_id="child_op",
@@ -830,7 +830,7 @@ def test_operation_update_with_parent_id():
     assert result["ParentId"] == "parent_op"
 
 
-def test_operation_update_wait_and_invoke_types():
+async def test_operation_update_wait_and_invoke_types():
     """Test OperationUpdate with WAIT and INVOKE operation types."""
     # Test WAIT operation
     wait_options = WaitOptions(wait_seconds=30)
@@ -859,7 +859,7 @@ def test_operation_update_wait_and_invoke_types():
     assert result["ChainedInvokeOptions"]["FunctionName"] == "test_func"
 
 
-def test_operation_update_create_wait():
+async def test_operation_update_create_wait():
     """Test OperationUpdate factory method for WAIT operations."""
     wait_options = WaitOptions(wait_seconds=30)
     update = OperationUpdate(
@@ -873,7 +873,7 @@ def test_operation_update_create_wait():
     assert update.wait_options == wait_options
 
 
-def test_operation_update_create_invoke():
+async def test_operation_update_create_invoke():
     """Test OperationUpdate factory method for INVOKE operations."""
     chained_invoke_options = ChainedInvokeOptions(function_name="test-function")
     update = OperationUpdate(
@@ -887,7 +887,7 @@ def test_operation_update_create_invoke():
     assert update.chained_invoke_options == chained_invoke_options
 
 
-def test_operation_update_with_sub_type():
+async def test_operation_update_with_sub_type():
     """Test OperationUpdate with sub_type field."""
     update = OperationUpdate(
         operation_id="op1",
@@ -899,7 +899,7 @@ def test_operation_update_with_sub_type():
     assert result["SubType"] == "Step"
 
 
-def test_operation_update_with_context_options():
+async def test_operation_update_with_context_options():
     """Test OperationUpdate with context_options field."""
     context_options = ContextOptions(replay_children=True)
     update = OperationUpdate(
@@ -912,7 +912,7 @@ def test_operation_update_with_context_options():
     assert result["ContextOptions"] == {"ReplayChildren": True}
 
 
-def test_operation_update_complete_with_new_fields():
+async def test_operation_update_complete_with_new_fields():
     """Test OperationUpdate.to_dict with all fields including new ones."""
     error = ErrorObject(
         message="Test error", type="TestError", data=None, stack_trace=None
@@ -965,7 +965,7 @@ def test_operation_update_complete_with_new_fields():
 # =============================================================================
 
 
-def test_operation_update_create_wait_for_condition_start():
+async def test_operation_update_create_wait_for_condition_start():
     """Test OperationUpdate.create_wait_for_condition_start factory method."""
     identifier = OperationIdentifier(
         "wait_cond_1",
@@ -983,7 +983,7 @@ def test_operation_update_create_wait_for_condition_start():
     assert update.name == "test_wait_condition"
 
 
-def test_operation_update_create_wait_for_condition_succeed():
+async def test_operation_update_create_wait_for_condition_succeed():
     """Test OperationUpdate.create_wait_for_condition_succeed factory method."""
     identifier = OperationIdentifier(
         "wait_cond_1",
@@ -1004,7 +1004,7 @@ def test_operation_update_create_wait_for_condition_succeed():
     assert update.payload == "success_payload"
 
 
-def test_operation_update_create_wait_for_condition_retry():
+async def test_operation_update_create_wait_for_condition_retry():
     """Test OperationUpdate.create_wait_for_condition_retry factory method."""
     identifier = OperationIdentifier(
         "wait_cond_1",
@@ -1026,7 +1026,7 @@ def test_operation_update_create_wait_for_condition_retry():
     assert update.step_options.next_attempt_delay_seconds == 45
 
 
-def test_operation_update_create_wait_for_condition_fail():
+async def test_operation_update_create_wait_for_condition_fail():
     """Test OperationUpdate.create_wait_for_condition_fail factory method."""
     identifier = OperationIdentifier(
         "wait_cond_1",
@@ -1051,7 +1051,7 @@ def test_operation_update_create_wait_for_condition_fail():
 # Tests for ContextOptions class
 
 
-def test_operation_update_to_dict_with_sub_type():
+async def test_operation_update_to_dict_with_sub_type():
     """Test OperationUpdate.to_dict includes sub_type field when present."""
     update = OperationUpdate(
         operation_id="op1",
@@ -1063,7 +1063,7 @@ def test_operation_update_to_dict_with_sub_type():
     assert result["SubType"] == "WaitForCondition"
 
 
-def test_operation_update_to_dict_without_sub_type():
+async def test_operation_update_to_dict_without_sub_type():
     """Test OperationUpdate.to_dict excludes sub_type field when None."""
     update = OperationUpdate(
         operation_id="op1",
@@ -1074,7 +1074,7 @@ def test_operation_update_to_dict_without_sub_type():
     assert "SubType" not in result
 
 
-def test_operation_update_with_all_none_values():
+async def test_operation_update_with_all_none_values():
     """Test OperationUpdate.to_dict with None values for optional fields."""
     update = OperationUpdate(
         operation_id="test",
@@ -1092,7 +1092,7 @@ def test_operation_update_with_all_none_values():
     assert "Payload" not in result
 
 
-def test_operation_update_from_dict_with_minimal_data():
+async def test_operation_update_from_dict_with_minimal_data():
     """Test OperationUpdate.from_dict with minimal required data."""
     data = {
         "Id": "test-id",
@@ -1108,7 +1108,7 @@ def test_operation_update_from_dict_with_minimal_data():
     assert update.name is None
 
 
-def test_operation_update_from_dict_with_error_only():
+async def test_operation_update_from_dict_with_error_only():
     """Test OperationUpdate.from_dict with Error field only."""
     data = {
         "Id": "test-id",
@@ -1122,7 +1122,7 @@ def test_operation_update_from_dict_with_error_only():
     assert update.error.message == "Test error"
 
 
-def test_operation_update_from_dict_with_all_options():
+async def test_operation_update_from_dict_with_all_options():
     """Test OperationUpdate.from_dict with all option types."""
     data = {
         "Id": "test-id",
@@ -1151,7 +1151,7 @@ def test_operation_update_from_dict_with_all_options():
 # =============================================================================
 
 
-def test_operation_from_dict_with_all_options():
+async def test_operation_from_dict_with_all_options():
     """Test Operation.from_dict with all option types to cover lines 339-361."""
     data = {
         "Id": "test-id",
@@ -1169,7 +1169,7 @@ def test_operation_from_dict_with_all_options():
     assert operation.operation_id == "test-id"
 
 
-def test_operation_from_dict_no_options():
+async def test_operation_from_dict_no_options():
     """Test Operation.from_dict without options to cover None assignments."""
     data = {
         "Id": "test-id",
@@ -1181,7 +1181,7 @@ def test_operation_from_dict_no_options():
     assert operation.operation_id == "test-id"
 
 
-def test_operation_from_dict_individual_options():
+async def test_operation_from_dict_individual_options():
     """Test Operation.from_dict with each option type individually."""
     # Test with just ContextOptions
     data1 = {
@@ -1239,7 +1239,7 @@ def test_operation_from_dict_individual_options():
     assert op5.operation_id == "test5"
 
 
-def test_operation_from_dict_with_all_option_types():
+async def test_operation_from_dict_with_all_option_types():
     """Test Operation.from_dict with all option types present."""
     data = {
         "Id": "test-id",
@@ -1258,7 +1258,7 @@ def test_operation_from_dict_with_all_option_types():
     assert operation.status == OperationStatus.SUCCEEDED
 
 
-def test_operation_to_dict_with_all_details():
+async def test_operation_to_dict_with_all_details():
     """Test Operation.to_dict with all detail types."""
     execution_details = ExecutionDetails(input_payload="exec_payload")
     context_details = ContextDetails(
@@ -1304,7 +1304,7 @@ def test_operation_to_dict_with_all_details():
     assert result["ChainedInvokeDetails"]["Result"] == "invoke_result"
 
 
-def test_operation_to_dict_with_step_details_partial():
+async def test_operation_to_dict_with_step_details_partial():
     """Test Operation.to_dict with step_details having some None fields."""
     step_details = StepDetails(
         attempt=1, next_attempt_timestamp=None, result=None, error=None
@@ -1325,7 +1325,7 @@ def test_operation_to_dict_with_step_details_partial():
     assert "Error" not in step_dict
 
 
-def test_operation_to_dict_with_callback_details_partial():
+async def test_operation_to_dict_with_callback_details_partial():
     """Test Operation.to_dict with callback_details having some None fields."""
     callback_details = CallbackDetails(callback_id="cb123", result=None, error=None)
 
@@ -1343,7 +1343,7 @@ def test_operation_to_dict_with_callback_details_partial():
     assert "Error" not in callback_dict
 
 
-def test_operation_to_dict_with_invoke_details_partial():
+async def test_operation_to_dict_with_invoke_details_partial():
     """Test Operation.to_dict with invoke_details having some None fields."""
     chained_invoke_details = ChainedInvokeDetails(result=None, error=None)
 
@@ -1360,7 +1360,7 @@ def test_operation_to_dict_with_invoke_details_partial():
     assert "Error" not in invoke_dict
 
 
-def test_operation_to_dict_with_context_details_complete():
+async def test_operation_to_dict_with_context_details_complete():
     """Test Operation.to_dict with context_details having all fields."""
     error = ErrorObject(
         message="Context error", type="ContextError", data=None, stack_trace=None
@@ -1382,7 +1382,7 @@ def test_operation_to_dict_with_context_details_complete():
     # Note: The current implementation only includes Result, not error or replay_children
 
 
-def test_operation_to_dict_with_execution_details_none():
+async def test_operation_to_dict_with_execution_details_none():
     """Test Operation.to_dict with execution_details having None input_payload."""
     execution_details = ExecutionDetails(input_payload=None)
 
@@ -1398,7 +1398,7 @@ def test_operation_to_dict_with_execution_details_none():
     assert exec_dict["InputPayload"] is None
 
 
-def test_operation_to_dict_with_step_details_error():
+async def test_operation_to_dict_with_step_details_error():
     """Test Operation.to_dict with step_details having error."""
     error = ErrorObject(
         message="Step failed", type="StepError", data=None, stack_trace=None
@@ -1420,7 +1420,7 @@ def test_operation_to_dict_with_step_details_error():
     assert step_dict["Error"]["ErrorType"] == "StepError"
 
 
-def test_operation_to_dict_with_callback_details_error():
+async def test_operation_to_dict_with_callback_details_error():
     """Test Operation.to_dict with callback_details having error."""
     error = ErrorObject(
         message="Callback failed", type="CallbackError", data=None, stack_trace=None
@@ -1440,7 +1440,7 @@ def test_operation_to_dict_with_callback_details_error():
     assert callback_dict["Error"]["ErrorType"] == "CallbackError"
 
 
-def test_operation_to_dict_with_invoke_details_error():
+async def test_operation_to_dict_with_invoke_details_error():
     """Test Operation.to_dict with chained_invoke_details having error."""
     error = ErrorObject(
         message="Invoke failed", type="InvokeError", data=None, stack_trace=None
@@ -1460,7 +1460,7 @@ def test_operation_to_dict_with_invoke_details_error():
     assert invoke_dict["Error"]["ErrorType"] == "InvokeError"
 
 
-def test_operation_from_dict():
+async def test_operation_from_dict():
     """Test Operation.from_dict method."""
     data = {
         "Id": "op1",
@@ -1480,7 +1480,7 @@ def test_operation_from_dict():
     assert operation.step_details.result == "step_result"
 
 
-def test_operation_from_dict_with_subtype():
+async def test_operation_from_dict_with_subtype():
     """Test Operation.from_dict method with SubType field."""
     data = {
         "Id": "op1",
@@ -1496,7 +1496,7 @@ def test_operation_from_dict_with_subtype():
     assert operation.sub_type is OperationSubType.STEP
 
 
-def test_operation_from_dict_complete():
+async def test_operation_from_dict_complete():
     """Test Operation.from_dict with all fields."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.UTC)
     end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.UTC)
@@ -1537,7 +1537,7 @@ def test_operation_from_dict_complete():
     assert operation.chained_invoke_details.result == "invoke_result"
 
 
-def test_operation_to_dict_with_subtype():
+async def test_operation_to_dict_with_subtype():
     """Test Operation.to_dict method includes SubType field."""
     operation = Operation(
         operation_id="op1",
@@ -1549,7 +1549,7 @@ def test_operation_to_dict_with_subtype():
     assert result["SubType"] == "Step"
 
 
-def test_operation_to_dict_all_optional_fields():
+async def test_operation_to_dict_all_optional_fields():
     """Test Operation.to_dict with all optional fields."""
 
     operation = Operation(
@@ -1579,7 +1579,7 @@ def test_operation_to_dict_all_optional_fields():
 # =============================================================================
 
 
-def test_checkpoint_output_from_dict():
+async def test_checkpoint_output_from_dict():
     """Test CheckpointOutput.from_dict method."""
     data = {
         "CheckpointToken": "token123",
@@ -1594,7 +1594,7 @@ def test_checkpoint_output_from_dict():
     assert output.new_execution_state.next_marker == "marker123"
 
 
-def test_checkpoint_output_from_dict_empty():
+async def test_checkpoint_output_from_dict_empty():
     """Test CheckpointOutput.from_dict with empty data."""
     data = {}
     output = CheckpointOutput.from_dict(data)
@@ -1603,7 +1603,7 @@ def test_checkpoint_output_from_dict_empty():
     assert output.new_execution_state.next_marker is None
 
 
-def test_checkpoint_updated_execution_state_from_dict():
+async def test_checkpoint_updated_execution_state_from_dict():
     """Test CheckpointUpdatedExecutionState.from_dict method."""
     data = {
         "Operations": [
@@ -1619,7 +1619,7 @@ def test_checkpoint_updated_execution_state_from_dict():
     assert state.operations[1].operation_id == "op2"
 
 
-def test_checkpoint_updated_execution_state_from_dict_empty():
+async def test_checkpoint_updated_execution_state_from_dict_empty():
     """Test CheckpointUpdatedExecutionState.from_dict with empty data."""
     data = {}
     state = CheckpointUpdatedExecutionState.from_dict(data)
@@ -1627,7 +1627,7 @@ def test_checkpoint_updated_execution_state_from_dict_empty():
     assert state.next_marker is None
 
 
-def test_state_output_from_dict():
+async def test_state_output_from_dict():
     """Test StateOutput.from_dict method."""
     data = {
         "Operations": [
@@ -1641,7 +1641,7 @@ def test_state_output_from_dict():
     assert output.operations[0].operation_type is OperationType.EXECUTION
 
 
-def test_state_output_from_dict_empty():
+async def test_state_output_from_dict_empty():
     """Test StateOutput.from_dict with empty data."""
     data = {}
     output = StateOutput.from_dict(data)
@@ -1649,7 +1649,7 @@ def test_state_output_from_dict_empty():
     assert output.next_marker is None
 
 
-def test_state_output_from_dict_empty_operations():
+async def test_state_output_from_dict_empty_operations():
     """Test StateOutput.from_dict with no operations."""
     data = {"NextMarker": "marker123"}  # No Operations key
 
@@ -1658,7 +1658,7 @@ def test_state_output_from_dict_empty_operations():
     assert output.next_marker == "marker123"
 
 
-def test_checkpoint_output_from_dict_with_empty_operations():
+async def test_checkpoint_output_from_dict_with_empty_operations():
     """Test CheckpointOutput.from_dict with empty operations list."""
     data = {
         "CheckpointToken": "token123",
@@ -1671,7 +1671,7 @@ def test_checkpoint_output_from_dict_with_empty_operations():
     assert output.new_execution_state.next_marker == "marker123"
 
 
-def test_state_output_from_dict_with_next_marker_only():
+async def test_state_output_from_dict_with_next_marker_only():
     """Test StateOutput.from_dict with NextMarker but no operations."""
     data = {"NextMarker": "marker456"}
 
@@ -1680,7 +1680,7 @@ def test_state_output_from_dict_with_next_marker_only():
     assert output.next_marker == "marker456"
 
 
-def test_checkpoint_updated_execution_state_from_dict_with_operations():
+async def test_checkpoint_updated_execution_state_from_dict_with_operations():
     """Test CheckpointUpdatedExecutionState.from_dict with operations."""
     data = {
         "Operations": [
@@ -1698,7 +1698,7 @@ def test_checkpoint_updated_execution_state_from_dict_with_operations():
 
 
 @patch("async_durable_execution.lambda_service.boto3")
-def test_lambda_client_checkpoint(mock_boto3):
+async def test_lambda_client_checkpoint(mock_boto3):
     """Test LambdaClient.checkpoint method."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
@@ -1713,7 +1713,7 @@ def test_lambda_client_checkpoint(mock_boto3):
         action=OperationAction.START,
     )
 
-    result = asyncio.run(lambda_client.checkpoint("arn123", "token123", [update], None))
+    result = await lambda_client.checkpoint("arn123", "token123", [update], None)
 
     mock_client.checkpoint_durable_execution.assert_called_once_with(
         DurableExecutionArn="arn123",
@@ -1724,7 +1724,7 @@ def test_lambda_client_checkpoint(mock_boto3):
     assert result.checkpoint_token == "new_token"  # noqa: S105
 
 
-def test_lambda_client_checkpoint_with_client_token():
+async def test_lambda_client_checkpoint_with_client_token():
     """Test LambdaClient.checkpoint method with client_token."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
@@ -1739,8 +1739,8 @@ def test_lambda_client_checkpoint_with_client_token():
         action=OperationAction.START,
     )
 
-    result = asyncio.run(
-        lambda_client.checkpoint("arn123", "token123", [update], "client-token-123")
+    result = await lambda_client.checkpoint(
+        "arn123", "token123", [update], "client-token-123"
     )
 
     mock_client.checkpoint_durable_execution.assert_called_once_with(
@@ -1753,7 +1753,7 @@ def test_lambda_client_checkpoint_with_client_token():
     assert result.checkpoint_token == "new_token"  # noqa: S105
 
 
-def test_lambda_client_checkpoint_with_explicit_none_client_token():
+async def test_lambda_client_checkpoint_with_explicit_none_client_token():
     """Test LambdaClient.checkpoint method with explicit None client_token - should not pass ClientToken."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
@@ -1768,7 +1768,7 @@ def test_lambda_client_checkpoint_with_explicit_none_client_token():
         action=OperationAction.START,
     )
 
-    result = asyncio.run(lambda_client.checkpoint("arn123", "token123", [update], None))
+    result = await lambda_client.checkpoint("arn123", "token123", [update], None)
 
     mock_client.checkpoint_durable_execution.assert_called_once_with(
         DurableExecutionArn="arn123",
@@ -1779,7 +1779,7 @@ def test_lambda_client_checkpoint_with_explicit_none_client_token():
     assert result.checkpoint_token == "new_token"  # noqa: S105
 
 
-def test_lambda_client_checkpoint_with_empty_string_client_token():
+async def test_lambda_client_checkpoint_with_empty_string_client_token():
     """Test LambdaClient.checkpoint method with empty string client_token - should pass empty string."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
@@ -1794,7 +1794,7 @@ def test_lambda_client_checkpoint_with_empty_string_client_token():
         action=OperationAction.START,
     )
 
-    result = asyncio.run(lambda_client.checkpoint("arn123", "token123", [update], ""))
+    result = await lambda_client.checkpoint("arn123", "token123", [update], "")
 
     mock_client.checkpoint_durable_execution.assert_called_once_with(
         DurableExecutionArn="arn123",
@@ -1806,7 +1806,7 @@ def test_lambda_client_checkpoint_with_empty_string_client_token():
     assert result.checkpoint_token == "new_token"  # noqa: S105
 
 
-def test_lambda_client_checkpoint_with_string_value_client_token():
+async def test_lambda_client_checkpoint_with_string_value_client_token():
     """Test LambdaClient.checkpoint method with string value client_token - should pass the value."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
@@ -1821,8 +1821,8 @@ def test_lambda_client_checkpoint_with_string_value_client_token():
         action=OperationAction.START,
     )
 
-    result = asyncio.run(
-        lambda_client.checkpoint("arn123", "token123", [update], "my-client-token")
+    result = await lambda_client.checkpoint(
+        "arn123", "token123", [update], "my-client-token"
     )
 
     mock_client.checkpoint_durable_execution.assert_called_once_with(
@@ -1835,7 +1835,7 @@ def test_lambda_client_checkpoint_with_string_value_client_token():
     assert result.checkpoint_token == "new_token"  # noqa: S105
 
 
-def test_lambda_client_checkpoint_with_exception():
+async def test_lambda_client_checkpoint_with_exception():
     """Test LambdaClient.checkpoint method with exception."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.side_effect = Exception("API Error")
@@ -1848,11 +1848,11 @@ def test_lambda_client_checkpoint_with_exception():
     )
 
     with pytest.raises(CheckpointError):
-        asyncio.run(lambda_client.checkpoint("arn123", "token123", [update], None))
+        await lambda_client.checkpoint("arn123", "token123", [update], None)
 
 
 @patch("async_durable_execution.lambda_service.logger")
-def test_lambda_client_checkpoint_logs_response_metadata(mock_logger):
+async def test_lambda_client_checkpoint_logs_response_metadata(mock_logger):
     """Test LambdaClient.checkpoint logs ResponseMetadata from boto3 exception."""
     mock_client = Mock()
     boto_error = Exception("API Error")
@@ -1873,7 +1873,7 @@ def test_lambda_client_checkpoint_logs_response_metadata(mock_logger):
     )
 
     with pytest.raises(CheckpointError):
-        asyncio.run(lambda_client.checkpoint("arn123", "token123", [update], None))
+        await lambda_client.checkpoint("arn123", "token123", [update], None)
 
     mock_logger.exception.assert_called_once_with(
         "Failed to checkpoint.",
@@ -1888,7 +1888,7 @@ def test_lambda_client_checkpoint_logs_response_metadata(mock_logger):
 
 
 @patch("async_durable_execution.lambda_service.logger")
-def test_lambda_client_get_execution_state_logs_response_metadata(mock_logger):
+async def test_lambda_client_get_execution_state_logs_response_metadata(mock_logger):
     """Test LambdaClient.get_execution_state logs ResponseMetadata from boto3 exception."""
     mock_client = Mock()
     boto_error = Exception("API Error")
@@ -1904,7 +1904,7 @@ def test_lambda_client_get_execution_state_logs_response_metadata(mock_logger):
     lambda_client = LambdaClient(mock_client)
 
     with pytest.raises(GetExecutionStateError) as exc_info:
-        asyncio.run(lambda_client.get_execution_state("arn123", "token123", "", 1000))
+        await lambda_client.get_execution_state("arn123", "token123", "", 1000)
 
     assert exc_info.value.error is None
     assert exc_info.value.response_metadata == {
@@ -1925,7 +1925,7 @@ def test_lambda_client_get_execution_state_logs_response_metadata(mock_logger):
     )
 
 
-def test_durable_service_client_protocol_checkpoint():
+async def test_durable_service_client_protocol_checkpoint():
     """Test DurableServiceClient protocol checkpoint method signature."""
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
@@ -1940,9 +1940,7 @@ def test_durable_service_client_protocol_checkpoint():
         )
     ]
 
-    result = asyncio.run(
-        mock_client.checkpoint("arn123", "token", updates, "client_token")
-    )
+    result = await mock_client.checkpoint("arn123", "token", updates, "client_token")
 
     mock_client.checkpoint.assert_called_once_with(
         "arn123", "token", updates, "client_token"
@@ -1955,7 +1953,7 @@ def test_durable_service_client_protocol_checkpoint():
 # =============================================================================
 
 
-def test_lambda_client_constructor():
+async def test_lambda_client_constructor():
     """Test LambdaClient constructor to cover lines 931-945."""
     mock_client = Mock()
     client = LambdaClient(mock_client)
@@ -1964,7 +1962,7 @@ def test_lambda_client_constructor():
 
 @patch.dict("os.environ", {}, clear=True)
 @patch("boto3.client")
-def test_lambda_client_initialize_client_default(
+async def test_lambda_client_initialize_client_default(
     mock_boto_client, reset_lambda_client_cache
 ):
     """Test LambdaClient.initialize_client with default endpoint."""
@@ -1987,7 +1985,7 @@ def test_lambda_client_initialize_client_default(
 
 @patch.dict("os.environ", {"AWS_ENDPOINT_URL_LAMBDA": "http://localhost:3000"})
 @patch("boto3.client")
-def test_lambda_client_initialize_client_with_endpoint(
+async def test_lambda_client_initialize_client_with_endpoint(
     mock_boto_client, reset_lambda_client_cache
 ):
     """Test LambdaClient.initialize_client with custom endpoint (boto3 handles it automatically)."""
@@ -2009,7 +2007,7 @@ def test_lambda_client_initialize_client_with_endpoint(
     assert isinstance(client, LambdaClient)
 
 
-def test_lambda_client_get_execution_state():
+async def test_lambda_client_get_execution_state():
     """Test LambdaClient.get_execution_state method."""
     mock_client = Mock()
     mock_client.get_durable_execution_state.return_value = {
@@ -2017,8 +2015,8 @@ def test_lambda_client_get_execution_state():
     }
 
     lambda_client = LambdaClient(mock_client)
-    result = asyncio.run(
-        lambda_client.get_execution_state("arn123", "token123", "marker", 500)
+    result = await lambda_client.get_execution_state(
+        "arn123", "token123", "marker", 500
     )
 
     mock_client.get_durable_execution_state.assert_called_once_with(
@@ -2030,15 +2028,13 @@ def test_lambda_client_get_execution_state():
     assert len(result.operations) == 1
 
 
-def test_durable_service_client_protocol_get_execution_state():
+async def test_durable_service_client_protocol_get_execution_state():
     """Test DurableServiceClient protocol get_execution_state method signature."""
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = StateOutput(operations=[], next_marker="marker")
     mock_client.get_execution_state.return_value = mock_output
 
-    result = asyncio.run(
-        mock_client.get_execution_state("arn123", "token", "marker", 1000)
-    )
+    result = await mock_client.get_execution_state("arn123", "token", "marker", 1000)
 
     mock_client.get_execution_state.assert_called_once_with(
         "arn123", "token", "marker", 1000
@@ -2048,13 +2044,13 @@ def test_durable_service_client_protocol_get_execution_state():
 
 @patch.dict("os.environ", {}, clear=True)
 @patch("async_durable_execution.lambda_service.LambdaClient.initialize_client")
-def test_lambda_client_initialize_client_defaults(mock_init):
+async def test_lambda_client_initialize_client_defaults(mock_init):
     """Test LambdaClient.initialize_client with default environment values."""
     LambdaClient.initialize_client()
     mock_init.assert_called_once_with()
 
 
-def test_checkpoint_error_handling():
+async def test_checkpoint_error_handling():
     """Test CheckpointError exception handling in LambdaClient.checkpoint."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.side_effect = Exception("API Error")
@@ -2067,12 +2063,12 @@ def test_checkpoint_error_handling():
     )
 
     with pytest.raises(CheckpointError):
-        asyncio.run(lambda_client.checkpoint("arn:test", "token", [update], None))
+        await lambda_client.checkpoint("arn:test", "token", [update], None)
 
 
 @patch.dict("os.environ", {}, clear=True)
 @patch("boto3.client")
-def test_lambda_client_initialize_client_no_endpoint(
+async def test_lambda_client_initialize_client_no_endpoint(
     mock_boto_client, reset_lambda_client_cache
 ):
     """Test LambdaClient.initialize_client without AWS_ENDPOINT_URL_LAMBDA."""
@@ -2095,7 +2091,7 @@ def test_lambda_client_initialize_client_no_endpoint(
     return_value=True,
 )
 @patch("boto3.client")
-def test_lambda_client_user_agent_runtime_bundled(
+async def test_lambda_client_user_agent_runtime_bundled(
     mock_boto_client, _mock_is_in_var_dir, reset_lambda_client_cache
 ):
     """user_agent_extra includes -bundled when SDK is in /var/lang/."""
@@ -2115,7 +2111,7 @@ def test_lambda_client_user_agent_runtime_bundled(
     return_value=False,
 )
 @patch("boto3.client")
-def test_lambda_client_user_agent_not_runtime_bundled(
+async def test_lambda_client_user_agent_not_runtime_bundled(
     mock_boto_client, _mock_is_in_var_dir, reset_lambda_client_cache
 ):
     """user_agent_extra omits -bundled when SDK is not in /var/lang."""
@@ -2153,11 +2149,11 @@ def test_lambda_client_user_agent_not_runtime_bundled(
         ("", False),
     ],
 )
-def test_is_in_var_dir(path, expected):
+async def test_is_in_var_dir(path, expected):
     assert _is_in_var_dir(path) is expected
 
 
-def test_lambda_client_checkpoint_with_non_none_client_token():
+async def test_lambda_client_checkpoint_with_non_none_client_token():
     """Test LambdaClient.checkpoint with non-None client_token."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
@@ -2172,8 +2168,8 @@ def test_lambda_client_checkpoint_with_non_none_client_token():
         action=OperationAction.START,
     )
 
-    result = asyncio.run(
-        lambda_client.checkpoint("arn:test", "token", [update], "client_token_123")
+    result = await lambda_client.checkpoint(
+        "arn:test", "token", [update], "client_token_123"
     )
 
     # Verify ClientToken was passed
@@ -2189,7 +2185,9 @@ def test_lambda_client_checkpoint_with_non_none_client_token():
 
 
 @patch("boto3.client")
-def test_lambda_client_cache_reuses_client(mock_boto_client, reset_lambda_client_cache):
+async def test_lambda_client_cache_reuses_client(
+    mock_boto_client, reset_lambda_client_cache
+):
     """Test that initialize_client reuses the same boto3 client on subsequent calls."""
     mock_client = Mock()
     mock_boto_client.return_value = mock_client
@@ -2208,7 +2206,7 @@ def test_lambda_client_cache_reuses_client(mock_boto_client, reset_lambda_client
 
 
 @patch("boto3.client")
-def test_lambda_client_cache_creates_client_only_once(
+async def test_lambda_client_cache_creates_client_only_once(
     mock_boto_client, reset_lambda_client_cache
 ):
     """Test that boto3.client is called only once even with multiple initialize_client calls."""
@@ -2224,7 +2222,7 @@ def test_lambda_client_cache_creates_client_only_once(
 
 
 @patch("boto3.client")
-def test_lambda_client_cache_is_class_level(
+async def test_lambda_client_cache_is_class_level(
     mock_boto_client, reset_lambda_client_cache
 ):
     """Test that the boto3 client cache is stored at class level."""
@@ -2242,7 +2240,7 @@ def test_lambda_client_cache_is_class_level(
 # =============================================================================
 
 
-def test_operation_to_json_dict_minimal():
+async def test_operation_to_json_dict_minimal():
     """Test Operation.to_json_dict with minimal required fields."""
     operation = Operation(
         operation_id="op1",
@@ -2259,7 +2257,7 @@ def test_operation_to_json_dict_minimal():
     assert result == expected
 
 
-def test_operation_to_json_dict_with_timestamps():
+async def test_operation_to_json_dict_with_timestamps():
     """Test Operation.to_json_dict converts datetime objects to millisecond timestamps."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.UTC)
     end_time = datetime.datetime(2023, 1, 1, 11, 30, 0, tzinfo=datetime.UTC)
@@ -2285,7 +2283,7 @@ def test_operation_to_json_dict_with_timestamps():
     assert result["Status"] == "SUCCEEDED"
 
 
-def test_operation_to_json_dict_with_step_details_timestamp():
+async def test_operation_to_json_dict_with_step_details_timestamp():
     """Test Operation.to_json_dict converts StepDetails.NextAttemptTimestamp to milliseconds."""
     next_attempt_time = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
     step_details = StepDetails(
@@ -2307,7 +2305,7 @@ def test_operation_to_json_dict_with_step_details_timestamp():
     assert result["StepDetails"]["Result"] == "step_result"
 
 
-def test_operation_to_json_dict_with_wait_details_timestamp():
+async def test_operation_to_json_dict_with_wait_details_timestamp():
     """Test Operation.to_json_dict converts WaitDetails.ScheduledEndTimestamp to milliseconds."""
     scheduled_end_time = datetime.datetime(2023, 1, 1, 15, 0, 0, tzinfo=datetime.UTC)
     wait_details = WaitDetails(scheduled_end_timestamp=scheduled_end_time)
@@ -2325,7 +2323,7 @@ def test_operation_to_json_dict_with_wait_details_timestamp():
     assert result["WaitDetails"]["ScheduledEndTimestamp"] == expected_ms
 
 
-def test_operation_to_json_dict_with_all_timestamps():
+async def test_operation_to_json_dict_with_all_timestamps():
     """Test Operation.to_json_dict with all timestamp fields present."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.UTC)
     end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.UTC)
@@ -2360,7 +2358,7 @@ def test_operation_to_json_dict_with_all_timestamps():
     )
 
 
-def test_operation_to_json_dict_with_none_timestamps():
+async def test_operation_to_json_dict_with_none_timestamps():
     """Test Operation.to_json_dict handles None timestamp values correctly."""
     step_details = StepDetails(
         attempt=1, next_attempt_timestamp=None, result="step_result"
@@ -2386,7 +2384,7 @@ def test_operation_to_json_dict_with_none_timestamps():
     assert result["WaitDetails"] == {}  # Empty dict when no scheduled end timestamp
 
 
-def test_operation_from_json_dict_minimal():
+async def test_operation_from_json_dict_minimal():
     """Test Operation.from_json_dict with minimal required fields."""
     data = {
         "Id": "op1",
@@ -2402,7 +2400,7 @@ def test_operation_from_json_dict_minimal():
     assert operation.end_timestamp is None
 
 
-def test_operation_from_json_dict_with_timestamps():
+async def test_operation_from_json_dict_with_timestamps():
     """Test Operation.from_json_dict converts millisecond timestamps to datetime objects."""
     start_ms = 1672574400000  # 2023-01-01 12:00:00 UTC
     end_ms = 1672579800000  # 2023-01-01 13:30:00 UTC
@@ -2425,7 +2423,7 @@ def test_operation_from_json_dict_with_timestamps():
     assert operation.operation_id == "op1"
 
 
-def test_operation_from_json_dict_with_step_details_timestamp():
+async def test_operation_from_json_dict_with_step_details_timestamp():
     """Test Operation.from_json_dict converts StepDetails.NextAttemptTimestamp from milliseconds."""
     next_attempt_ms = 1672581600000  # 2023-01-01 14:00:00 UTC
 
@@ -2448,7 +2446,7 @@ def test_operation_from_json_dict_with_step_details_timestamp():
     assert operation.step_details.result == "step_result"
 
 
-def test_operation_from_json_dict_with_wait_details_timestamp():
+async def test_operation_from_json_dict_with_wait_details_timestamp():
     """Test Operation.from_json_dict converts WaitDetails.ScheduledEndTimestamp from milliseconds."""
     scheduled_end_ms = 1672592400000  # 2023-01-01 17:00:00 UTC
 
@@ -2465,7 +2463,7 @@ def test_operation_from_json_dict_with_wait_details_timestamp():
     assert operation.wait_details.scheduled_end_timestamp == expected_time
 
 
-def test_operation_from_json_dict_with_all_timestamps():
+async def test_operation_from_json_dict_with_all_timestamps():
     """Test Operation.from_json_dict with all timestamp fields present."""
     start_ms = 1672574400000  # 2023-01-01 120:00:00 UTC
     end_ms = 1672578000000  # 2023-01-01 13:00:00 UTC
@@ -2503,7 +2501,7 @@ def test_operation_from_json_dict_with_all_timestamps():
     )
 
 
-def test_operation_from_json_dict_with_none_timestamps():
+async def test_operation_from_json_dict_with_none_timestamps():
     """Test Operation.from_json_dict handles None timestamp values correctly."""
     data = {
         "Id": "op1",
@@ -2527,7 +2525,7 @@ def test_operation_from_json_dict_with_none_timestamps():
     assert operation.wait_details.scheduled_end_timestamp is None
 
 
-def test_operation_json_roundtrip():
+async def test_operation_json_roundtrip():
     """Test Operation to_json_dict -> from_json_dict roundtrip preserves all data."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.UTC)
     end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.UTC)
@@ -2602,7 +2600,7 @@ def test_operation_json_roundtrip():
     )
 
 
-def test_operation_json_dict_preserves_non_timestamp_fields():
+async def test_operation_json_dict_preserves_non_timestamp_fields():
     """Test that to_json_dict preserves all non-timestamp fields unchanged."""
     context_details = ContextDetails(replay_children=True, result="context_result")
 
@@ -2632,7 +2630,7 @@ def test_operation_json_dict_preserves_non_timestamp_fields():
     assert result["ChainedInvokeDetails"]["Result"] == "invoke_result"
 
 
-def test_timestamp_converter_to_unix_millis_valid_datetime():
+async def test_timestamp_converter_to_unix_millis_valid_datetime():
     """Test converting valid datetime to Unix timestamp in milliseconds."""
     # Test epoch
     epoch = datetime.datetime(1970, 1, 1, tzinfo=UTC)
@@ -2650,12 +2648,12 @@ def test_timestamp_converter_to_unix_millis_valid_datetime():
     assert result > 0
 
 
-def test_timestamp_converter_to_unix_millis_none():
+async def test_timestamp_converter_to_unix_millis_none():
     """Test converting None to Unix timestamp returns None."""
     assert TimestampConverter.to_unix_millis(None) is None
 
 
-def test_timestamp_converter_to_unix_millis_edge_cases():
+async def test_timestamp_converter_to_unix_millis_edge_cases():
     """Test edge cases for datetime to Unix timestamp conversion."""
     # Test year 2038 (Unix timestamp overflow boundary for 32-bit systems)
     dt_2038 = datetime.datetime(2038, 1, 19, 3, 14, 7, tzinfo=UTC)
@@ -2677,7 +2675,7 @@ def test_timestamp_converter_to_unix_millis_edge_cases():
     assert result == expected
 
 
-def test_timestamp_converter_from_unix_millis_valid_timestamp():
+async def test_timestamp_converter_from_unix_millis_valid_timestamp():
     """Test converting valid Unix timestamp in milliseconds to datetime."""
     # Test epoch
     assert TimestampConverter.from_unix_millis(0) == datetime.datetime(
@@ -2697,18 +2695,18 @@ def test_timestamp_converter_from_unix_millis_valid_timestamp():
     assert result == datetime.datetime(2021, 1, 1, tzinfo=UTC)
 
 
-def test_timestamp_converter_from_unix_millis_none():
+async def test_timestamp_converter_from_unix_millis_none():
     """Test converting None timestamp returns None."""
     assert TimestampConverter.from_unix_millis(None) is None
 
 
-def test_timestamp_converter_from_unix_millis_zero():
+async def test_timestamp_converter_from_unix_millis_zero():
     """Test converting zero timestamp returns epoch."""
     result = TimestampConverter.from_unix_millis(0)
     assert result == datetime.datetime(1970, 1, 1, tzinfo=UTC)
 
 
-def test_timestamp_converter_from_unix_millis_negative():
+async def test_timestamp_converter_from_unix_millis_negative():
     """Test converting negative timestamp (before epoch)."""
     # Test negative timestamp (before 1970)
     ms = -86400000  # 1969-12-31 00:00:00 UTC
@@ -2718,7 +2716,7 @@ def test_timestamp_converter_from_unix_millis_negative():
     assert result.year == 1969
 
 
-def test_timestamp_converter_from_unix_millis_large_timestamp():
+async def test_timestamp_converter_from_unix_millis_large_timestamp():
     """Test converting large timestamp values."""
     # Test year 2038 boundary
     ms = 2147483647000  # 2038-01-19 03:14:07 UTC
@@ -2733,7 +2731,7 @@ def test_timestamp_converter_from_unix_millis_large_timestamp():
     assert result == expected
 
 
-def test_timestamp_converter_roundtrip_conversion():
+async def test_timestamp_converter_roundtrip_conversion():
     """Test roundtrip conversion: datetime -> millis -> datetime."""
     original_datetimes = [
         datetime.datetime(1970, 1, 1, tzinfo=UTC),  # Epoch
@@ -2756,7 +2754,7 @@ def test_timestamp_converter_roundtrip_conversion():
         assert abs((converted_back - original).total_seconds()) < 0.001
 
 
-def test_timestamp_converter_roundtrip_with_none():
+async def test_timestamp_converter_roundtrip_with_none():
     """Test roundtrip conversion with None values."""
     # None -> None -> None
     millis = TimestampConverter.to_unix_millis(None)
@@ -2766,7 +2764,7 @@ def test_timestamp_converter_roundtrip_with_none():
     assert converted_back is None
 
 
-def test_timestamp_converter_precision_handling():
+async def test_timestamp_converter_precision_handling():
     """Test precision handling in timestamp conversions."""
     # Test that microseconds are properly handled in millisecond conversion
     dt_with_microseconds = datetime.datetime(2024, 1, 1, 0, 0, 0, 123456, tzinfo=UTC)
@@ -2782,7 +2780,7 @@ def test_timestamp_converter_precision_handling():
     assert time_diff < 0.001
 
 
-def test_timestamp_converter_timezone_handling():
+async def test_timestamp_converter_timezone_handling():
     """Test that converted datetimes always have UTC timezone."""
     test_timestamps = [0, 1704110445123, -86400000, 2147483647000]
 
@@ -2791,7 +2789,7 @@ def test_timestamp_converter_timezone_handling():
         assert result.tzinfo == UTC
 
 
-def test_timestamp_converter_type_validation():
+async def test_timestamp_converter_type_validation():
     """Test that methods return correct types."""
     # Test to_unix_millis return type
     dt = datetime.datetime(2024, 1, 1, tzinfo=UTC)
@@ -2810,7 +2808,7 @@ def test_timestamp_converter_type_validation():
     assert result_none is None
 
 
-def test_timestamp_converter_static_methods():
+async def test_timestamp_converter_static_methods():
     """Test that TimestampConverter methods are static and can be called without instance."""
     # Should be able to call without creating instance
     dt = datetime.datetime(2024, 1, 1, tzinfo=UTC)
@@ -2824,7 +2822,7 @@ def test_timestamp_converter_static_methods():
     assert converted_back.tzinfo == UTC
 
 
-def test_timestamp_converter_millisecond_boundaries():
+async def test_timestamp_converter_millisecond_boundaries():
     """Test conversion at millisecond boundaries."""
     # Test exact millisecond values
     test_cases = [

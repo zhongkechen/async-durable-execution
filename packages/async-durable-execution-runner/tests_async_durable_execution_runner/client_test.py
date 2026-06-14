@@ -14,7 +14,7 @@ from async_durable_execution.lambda_service import (
 from async_durable_execution_runner.client import InMemoryServiceClient
 
 
-def test_checkpoint():
+async def test_checkpoint():
     """Test checkpoint method delegates to processor."""
     processor = Mock()
     expected_output = CheckpointOutput(
@@ -33,13 +33,11 @@ def test_checkpoint():
         )
     ]
 
-    result = asyncio.run(
-        client.checkpoint(
-            "arn:aws:lambda:us-east-1:123456789012:function:test",
-            "token",
-            updates,
-            "client-token",
-        )
+    result = await client.checkpoint(
+        "arn:aws:lambda:us-east-1:123456789012:function:test",
+        "token",
+        updates,
+        "client-token",
     )
 
     assert result == expected_output
@@ -48,7 +46,7 @@ def test_checkpoint():
     )
 
 
-def test_get_execution_state():
+async def test_get_execution_state():
     """Test get_execution_state method delegates to processor."""
     processor = Mock()
     expected_output = StateOutput(operations=[], next_marker="marker")
@@ -56,20 +54,18 @@ def test_get_execution_state():
 
     client = InMemoryServiceClient(processor)
 
-    result = asyncio.run(
-        client.get_execution_state(
-            "arn:aws:lambda:us-east-1:123456789012:function:test",
-            "token",
-            "marker",
-            500,
-        )
+    result = await client.get_execution_state(
+        "arn:aws:lambda:us-east-1:123456789012:function:test",
+        "token",
+        "marker",
+        500,
     )
 
     assert result == expected_output
     processor.get_execution_state.assert_called_once_with("token", "marker", 500)
 
 
-def test_get_execution_state_default_max_items():
+async def test_get_execution_state_default_max_items():
     """Test get_execution_state with default max_items."""
     processor = Mock()
     expected_output = StateOutput(operations=[], next_marker="marker")
@@ -77,19 +73,17 @@ def test_get_execution_state_default_max_items():
 
     client = InMemoryServiceClient(processor)
 
-    result = asyncio.run(
-        client.get_execution_state(
-            "arn:aws:lambda:us-east-1:123456789012:function:test",
-            "token",
-            "marker",
-        )
+    result = await client.get_execution_state(
+        "arn:aws:lambda:us-east-1:123456789012:function:test",
+        "token",
+        "marker",
     )
 
     assert result == expected_output
     processor.get_execution_state.assert_called_once_with("token", "marker", 1000)
 
 
-def test_stop():
+async def test_stop():
     """Test stop method returns current datetime."""
     processor = Mock()
     client = InMemoryServiceClient(processor)
@@ -104,7 +98,7 @@ def test_stop():
     assert before <= result <= after
 
 
-def test_stop_with_none_payload():
+async def test_stop_with_none_payload():
     """Test stop method with None payload."""
     processor = Mock()
     client = InMemoryServiceClient(processor)

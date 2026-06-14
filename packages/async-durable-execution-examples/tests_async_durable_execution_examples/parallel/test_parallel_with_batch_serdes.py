@@ -5,12 +5,12 @@ from async_durable_execution.lambda_service import OperationStatus
 from async_durable_execution_examples.parallel import parallel_with_batch_serdes
 
 
-def test_parallel_with_batch_serdes(durable_runner):
+async def test_parallel_with_batch_serdes(durable_runner):
     """Test parallel with custom batch-level serialization."""
     with durable_runner(
         handler=parallel_with_batch_serdes.handler, input="test", timeout=10
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
 

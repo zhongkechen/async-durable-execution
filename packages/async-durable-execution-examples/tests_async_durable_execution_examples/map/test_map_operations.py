@@ -7,12 +7,12 @@ from async_durable_execution.lambda_service import (
 from async_durable_execution_examples.map import map_operations
 
 
-def test_map_operations(durable_runner):
+async def test_map_operations(durable_runner):
     """Test map_operations example using context.map()."""
     with durable_runner(
         handler=map_operations.handler, input="test", timeout=10
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.get_deserialized_result() == [2, 4, 6, 8, 10]

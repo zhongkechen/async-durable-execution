@@ -5,7 +5,7 @@ from async_durable_execution_examples.wait_for_callback import (
 )
 
 
-def test_handle_wait_for_callback_with_failing_submitter_function_errors(
+async def test_handle_wait_for_callback_with_failing_submitter_function_errors(
     durable_runner,
 ):
     """Test waitForCallback with failing submitter function errors."""
@@ -14,8 +14,8 @@ def test_handle_wait_for_callback_with_failing_submitter_function_errors(
         input=None,
         timeout=30,
     ) as runner:
-        execution_arn = runner.run_async()
-        result = runner.wait_for_result(execution_arn=execution_arn)
+        execution_arn = await runner.run_async()
+        result = await runner.wait_for_result(execution_arn=execution_arn)
 
     result_data = result.get_deserialized_result()
 

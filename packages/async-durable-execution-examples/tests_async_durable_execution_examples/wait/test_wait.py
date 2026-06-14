@@ -4,10 +4,10 @@ from async_durable_execution.execution import InvocationStatus
 from async_durable_execution_examples.wait import wait
 
 
-def test_wait(durable_runner):
+async def test_wait(durable_runner):
     """Test wait example."""
     with durable_runner(handler=wait.handler, input="test", timeout=10) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.get_deserialized_result() == "Wait completed"

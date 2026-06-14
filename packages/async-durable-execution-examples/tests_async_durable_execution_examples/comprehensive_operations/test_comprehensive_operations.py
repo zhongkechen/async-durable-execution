@@ -6,12 +6,12 @@ from async_durable_execution_examples.comprehensive_operations import (
 )
 
 
-def test_execute_all_operations_successfully(durable_runner):
+async def test_execute_all_operations_successfully(durable_runner):
     """Test that all operations execute successfully."""
     with durable_runner(
         handler=comprehensive_operations.handler, input={"message": "test"}, timeout=30
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
 

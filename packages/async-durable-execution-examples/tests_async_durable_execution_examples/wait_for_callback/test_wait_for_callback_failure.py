@@ -3,16 +3,16 @@ from async_durable_execution.lambda_service import ErrorObject
 from async_durable_execution_examples.wait_for_callback import wait_for_callback
 
 
-def test_wait_for_callback_failure(durable_runner):
+async def test_wait_for_callback_failure(durable_runner):
     with durable_runner(
         handler=wait_for_callback.handler, input="test", timeout=30
     ) as runner:
-        execution_arn = runner.run_async()
-        callback_id = runner.wait_for_callback(execution_arn=execution_arn)
-        runner.send_callback_failure(
+        execution_arn = await runner.run_async()
+        callback_id = await runner.wait_for_callback(execution_arn=execution_arn)
+        await runner.send_callback_failure(
             callback_id=callback_id, error=ErrorObject.from_message("my callback error")
         )
-        result = runner.wait_for_result(execution_arn=execution_arn)
+        result = await runner.wait_for_result(execution_arn=execution_arn)
 
     assert result.status is InvocationStatus.FAILED
     assert isinstance(result.error, ErrorObject)

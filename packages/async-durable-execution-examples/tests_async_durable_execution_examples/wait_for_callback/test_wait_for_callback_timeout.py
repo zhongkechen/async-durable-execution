@@ -4,16 +4,16 @@ from async_durable_execution.execution import InvocationStatus
 from async_durable_execution_examples.wait_for_callback import wait_for_callback_timeout
 
 
-def test_handle_wait_for_callback_timeout_scenarios(durable_runner):
+async def test_handle_wait_for_callback_timeout_scenarios(durable_runner):
     """Test waitForCallback timeout scenarios."""
     test_payload = {"test": "timeout-scenario"}
 
     with durable_runner(
         handler=wait_for_callback_timeout.handler, input=test_payload, timeout=2
     ) as runner:
-        execution_arn = runner.run_async()
+        execution_arn = await runner.run_async()
         # Don't send callback - let it timeout
-        result = runner.wait_for_result(execution_arn=execution_arn)
+        result = await runner.wait_for_result(execution_arn=execution_arn)
 
     # Handler catches the timeout error, so execution succeeds with error in result
     assert result.status is InvocationStatus.SUCCEEDED

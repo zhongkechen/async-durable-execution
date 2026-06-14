@@ -10,7 +10,7 @@ from async_durable_execution.lambda_service import ErrorObject
 from async_durable_execution_examples.with_retry import with_retry_callback
 
 
-def test_with_retry_callback_fails_twice_then_succeeds(durable_runner):
+async def test_with_retry_callback_fails_twice_then_succeeds(durable_runner):
     """Test that with_retry retries the callback flow after failures.
 
     The external system sends callback failure 2 times, then succeeds
@@ -20,39 +20,39 @@ def test_with_retry_callback_fails_twice_then_succeeds(durable_runner):
     with durable_runner(
         handler=with_retry_callback.handler, input=None, timeout=60
     ) as runner:
-        execution_arn = runner.run_async()
+        execution_arn = await runner.run_async()
 
         # Attempt 1: external system fails
-        callback_id_1 = runner.wait_for_callback(
+        callback_id_1 = await runner.wait_for_callback(
             execution_arn=execution_arn,
             name="external-call-attempt-1 create callback id",
         )
-        runner.send_callback_failure(
+        await runner.send_callback_failure(
             callback_id=callback_id_1,
             error=ErrorObject.from_message("External system unavailable"),
         )
 
         # Attempt 2: external system fails again
-        callback_id_2 = runner.wait_for_callback(
+        callback_id_2 = await runner.wait_for_callback(
             execution_arn=execution_arn,
             name="external-call-attempt-2 create callback id",
         )
-        runner.send_callback_failure(
+        await runner.send_callback_failure(
             callback_id=callback_id_2,
             error=ErrorObject.from_message("External system timeout"),
         )
 
         # Attempt 3: external system succeeds
-        callback_id_3 = runner.wait_for_callback(
+        callback_id_3 = await runner.wait_for_callback(
             execution_arn=execution_arn,
             name="external-call-attempt-3 create callback id",
         )
-        runner.send_callback_success(
+        await runner.send_callback_success(
             callback_id=callback_id_3,
             result=b"approval granted",
         )
 
-        result = runner.wait_for_result(execution_arn=execution_arn)
+        result = await runner.wait_for_result(execution_arn=execution_arn)
 
     assert result.status is InvocationStatus.SUCCEEDED
 

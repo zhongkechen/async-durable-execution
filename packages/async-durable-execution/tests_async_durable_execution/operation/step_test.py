@@ -36,9 +36,9 @@ from async_durable_execution.state import CheckpointedResult, ExecutionState
 from ..serdes_test import CustomDictSerDes
 
 
-def _invoke_maybe_async(result):
+async def _invoke_maybe_async(result):
     if inspect.isawaitable(result):
-        return asyncio.run(result)
+        return await result
     return result
 
 
@@ -53,7 +53,7 @@ def _asyncify(func):
 
 
 # Test helper - maintains old handler signature for backward compatibility in tests
-def step_handler(func, state, operation_identifier, config, context_logger):
+async def step_handler(func, state, operation_identifier, config, context_logger):
     """Test helper that wraps StepOperationExecutor with old handler signature."""
     if not config:
         config = StepConfig()
@@ -70,10 +70,10 @@ def step_handler(func, state, operation_identifier, config, context_logger):
         operation_identifier=operation_identifier,
         context_logger=context_logger,
     )
-    return _invoke_maybe_async(executor.process())
+    return await _invoke_maybe_async(executor.process())
 
 
-def test_step_handler_already_succeeded():
+async def test_step_handler_already_succeeded():
     """Test step_handler when operation already succeeded."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -89,7 +89,7 @@ def test_step_handler_already_succeeded():
     mock_callable = Mock(return_value="should_not_call")
     mock_logger = Mock(spec=Logger)
 
-    result = step_handler(
+    result = await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier("step1", OperationSubType.STEP, None, "test_step"),
@@ -102,7 +102,7 @@ def test_step_handler_already_succeeded():
     mock_state.create_checkpoint.assert_not_called()
 
 
-def test_step_handler_already_succeeded_none_result():
+async def test_step_handler_already_succeeded_none_result():
     """Test step_handler when operation succeeded with None result."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -118,7 +118,7 @@ def test_step_handler_already_succeeded_none_result():
     mock_callable = Mock()
     mock_logger = Mock(spec=Logger)
 
-    result = step_handler(
+    result = await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier("step2", OperationSubType.STEP, None, "test_step"),
@@ -130,7 +130,7 @@ def test_step_handler_already_succeeded_none_result():
     mock_callable.assert_not_called()
 
 
-def test_step_handler_already_failed():
+async def test_step_handler_already_failed():
     """Test step_handler when operation already failed."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -150,7 +150,7 @@ def test_step_handler_already_failed():
     mock_logger = Mock(spec=Logger)
 
     with pytest.raises(CallableRuntimeError):
-        step_handler(
+        await step_handler(
             mock_callable,
             mock_state,
             OperationIdentifier("step3", OperationSubType.STEP, None, "test_step"),
@@ -161,7 +161,7 @@ def test_step_handler_already_failed():
     mock_callable.assert_not_called()
 
 
-def test_step_handler_started_at_most_once():
+async def test_step_handler_started_at_most_once():
     """Test step_handler when operation started with AT_MOST_ONCE semantics."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -179,7 +179,7 @@ def test_step_handler_started_at_most_once():
     mock_logger = Mock(spec=Logger)
 
     with pytest.raises(SuspendExecution):
-        step_handler(
+        await step_handler(
             mock_callable,
             mock_state,
             OperationIdentifier("step4", OperationSubType.STEP, None, "test_step"),
@@ -188,7 +188,7 @@ def test_step_handler_started_at_most_once():
         )
 
 
-def test_step_handler_started_at_least_once():
+async def test_step_handler_started_at_least_once():
     """Test step_handler when operation started with AT_LEAST_ONCE semantics."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -209,7 +209,7 @@ def test_step_handler_started_at_least_once():
     mock_state.wrap_user_function.return_value = mock_callable
     mock_logger = Mock(spec=Logger)
 
-    step_handler(
+    await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier("step5", OperationSubType.STEP, None, "test_step"),
@@ -218,7 +218,7 @@ def test_step_handler_started_at_least_once():
     )
 
 
-def test_step_handler_success_at_least_once():
+async def test_step_handler_success_at_least_once():
     """Test step_handler successful execution with AT_LEAST_ONCE semantics."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = CheckpointedResult.create_not_found()
@@ -231,7 +231,7 @@ def test_step_handler_success_at_least_once():
     mock_logger = Mock(spec=Logger)
     mock_logger.with_log_info.return_value = mock_logger
 
-    result = step_handler(
+    result = await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier("step6", OperationSubType.STEP, None, "test_step"),
@@ -261,7 +261,7 @@ def test_step_handler_success_at_least_once():
     assert success_operation.action is OperationAction.SUCCEED
 
 
-def test_step_handler_success_at_most_once():
+async def test_step_handler_success_at_most_once():
     """Test step_handler successful execution with AT_MOST_ONCE semantics."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -283,7 +283,7 @@ def test_step_handler_success_at_most_once():
     mock_logger = Mock(spec=Logger)
     mock_logger.with_log_info.return_value = mock_logger
 
-    result = step_handler(
+    result = await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier("step7", OperationSubType.STEP, None, "test_step"),
@@ -313,7 +313,7 @@ def test_step_handler_success_at_most_once():
     assert success_operation.action is OperationAction.SUCCEED
 
 
-def test_step_handler_non_retriable_execution_error():
+async def test_step_handler_non_retriable_execution_error():
     """Test step_handler with ExecutionError exception."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = CheckpointedResult.create_not_found()
@@ -326,7 +326,7 @@ def test_step_handler_non_retriable_execution_error():
     mock_logger.with_log_info.return_value = mock_logger
 
     with pytest.raises(ExecutionError, match="Do Not Retry"):
-        step_handler(
+        await step_handler(
             mock_callable,
             mock_state,
             OperationIdentifier("step8", OperationSubType.STEP, None, "test_step"),
@@ -335,7 +335,7 @@ def test_step_handler_non_retriable_execution_error():
         )
 
 
-def test_step_handler_retry_success():
+async def test_step_handler_retry_success():
     """Test step_handler with retry that succeeds."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = CheckpointedResult.create_not_found()
@@ -352,7 +352,7 @@ def test_step_handler_retry_success():
     mock_logger.with_log_info.return_value = mock_logger
 
     with pytest.raises(SuspendExecution, match="Retry scheduled"):
-        step_handler(
+        await step_handler(
             mock_callable,
             mock_state,
             OperationIdentifier("step9", OperationSubType.STEP, None, "test_step"),
@@ -379,7 +379,7 @@ def test_step_handler_retry_success():
     assert retry_operation.action is OperationAction.RETRY
 
 
-def test_step_handler_retry_exhausted():
+async def test_step_handler_retry_exhausted():
     """Test step_handler with retry exhausted."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = CheckpointedResult.create_not_found()
@@ -396,7 +396,7 @@ def test_step_handler_retry_exhausted():
     mock_logger.with_log_info.return_value = mock_logger
 
     with pytest.raises(CallableRuntimeError):
-        step_handler(
+        await step_handler(
             mock_callable,
             mock_state,
             OperationIdentifier("step10", OperationSubType.STEP, None, "test_step"),
@@ -423,7 +423,7 @@ def test_step_handler_retry_exhausted():
     assert fail_operation.action is OperationAction.FAIL
 
 
-def test_step_handler_retry_interrupted_error():
+async def test_step_handler_retry_interrupted_error():
     """Test step_handler with StepInterruptedError in retry."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = CheckpointedResult.create_not_found()
@@ -441,7 +441,7 @@ def test_step_handler_retry_interrupted_error():
     mock_logger.with_log_info.return_value = mock_logger
 
     with pytest.raises(StepInterruptedError, match="Step interrupted"):
-        step_handler(
+        await step_handler(
             mock_callable,
             mock_state,
             OperationIdentifier("step11", OperationSubType.STEP, None, "test_step"),
@@ -450,7 +450,7 @@ def test_step_handler_retry_interrupted_error():
         )
 
 
-def test_step_handler_retry_with_existing_attempts():
+async def test_step_handler_retry_with_existing_attempts():
     """Test step_handler retry logic with existing attempt count."""
     mock_state = Mock(spec=ExecutionState)
 
@@ -479,7 +479,7 @@ def test_step_handler_retry_with_existing_attempts():
     mock_logger.with_log_info.return_value = mock_logger
 
     with pytest.raises(SuspendExecution, match="Retry scheduled"):
-        step_handler(
+        await step_handler(
             mock_callable,
             mock_state,
             OperationIdentifier("step12", OperationSubType.STEP, None, "test_step"),
@@ -491,7 +491,7 @@ def test_step_handler_retry_with_existing_attempts():
     mock_retry_strategy.assert_not_called()
 
 
-def test_step_handler_pending_without_existing_attempts():
+async def test_step_handler_pending_without_existing_attempts():
     """Test step_handler retry logic with existing attempt count."""
     mock_state = Mock(spec=ExecutionState)
 
@@ -515,7 +515,7 @@ def test_step_handler_pending_without_existing_attempts():
     mock_logger.with_log_info.return_value = mock_logger
 
     with pytest.raises(SuspendExecution, match="No timestamp provided"):
-        step_handler(
+        await step_handler(
             mock_callable,
             mock_state,
             OperationIdentifier("step12", OperationSubType.STEP, None, "test_step"),
@@ -528,7 +528,7 @@ def test_step_handler_pending_without_existing_attempts():
 
 
 @patch("async_durable_execution.operation.step.StepOperationExecutor.retry_handler")
-def test_step_handler_retry_handler_no_exception(mock_retry_handler):
+async def test_step_handler_retry_handler_no_exception(mock_retry_handler):
     """Test step_handler when retry_handler doesn't raise an exception."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -556,7 +556,7 @@ def test_step_handler_retry_handler_no_exception(mock_retry_handler):
         ExecutionError,
         match="retry handler should have raised an exception, but did not.",
     ):
-        step_handler(
+        await step_handler(
             mock_callable,
             mock_state,
             OperationIdentifier("step13", OperationSubType.STEP, None, "test_step"),
@@ -567,7 +567,7 @@ def test_step_handler_retry_handler_no_exception(mock_retry_handler):
     mock_retry_handler.assert_called_once()
 
 
-def test_step_handler_custom_serdes_success():
+async def test_step_handler_custom_serdes_success():
     mock_state = Mock(spec=ExecutionState)
     mock_result = CheckpointedResult.create_not_found()
     mock_state.get_checkpoint_result.return_value = mock_result
@@ -582,7 +582,7 @@ def test_step_handler_custom_serdes_success():
     mock_logger = Mock(spec=Logger)
     mock_logger.with_log_info.return_value = mock_logger
 
-    step_handler(
+    await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier("step6", OperationSubType.STEP, None, "test_step"),
@@ -599,7 +599,7 @@ def test_step_handler_custom_serdes_success():
     assert success_operation.payload == expected_checkpoointed_result
 
 
-def test_step_handler_custom_serdes_already_succeeded():
+async def test_step_handler_custom_serdes_already_succeeded():
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
     operation = Operation(
@@ -616,7 +616,7 @@ def test_step_handler_custom_serdes_already_succeeded():
     mock_callable = Mock(return_value="should_not_call")
     mock_logger = Mock(spec=Logger)
 
-    result = step_handler(
+    result = await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier("step1", OperationSubType.STEP, None, "test_step"),
@@ -630,7 +630,7 @@ def test_step_handler_custom_serdes_already_succeeded():
 # Tests for immediate response handling
 
 
-def test_step_immediate_response_get_checkpoint_called_twice():
+async def test_step_immediate_response_get_checkpoint_called_twice():
     """Test that get_checkpoint_result is called twice when checkpoint is created."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -653,7 +653,7 @@ def test_step_immediate_response_get_checkpoint_called_twice():
     mock_logger = Mock(spec=Logger)
     mock_logger.with_log_info.return_value = mock_logger
 
-    result = step_handler(
+    result = await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier(
@@ -668,7 +668,7 @@ def test_step_immediate_response_get_checkpoint_called_twice():
     assert result == "success_result"
 
 
-def test_step_immediate_response_create_checkpoint_sync_at_most_once():
+async def test_step_immediate_response_create_checkpoint_sync_at_most_once():
     """Test that create_checkpoint is called with is_sync=True for AT_MOST_ONCE semantics."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -690,7 +690,7 @@ def test_step_immediate_response_create_checkpoint_sync_at_most_once():
     mock_logger = Mock(spec=Logger)
     mock_logger.with_log_info.return_value = mock_logger
 
-    step_handler(
+    await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier(
@@ -705,7 +705,7 @@ def test_step_immediate_response_create_checkpoint_sync_at_most_once():
     assert start_call[1]["is_sync"] is True
 
 
-def test_step_immediate_response_create_checkpoint_async_at_least_once():
+async def test_step_immediate_response_create_checkpoint_async_at_least_once():
     """Test that create_checkpoint is called with is_sync=False for AT_LEAST_ONCE semantics."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -720,7 +720,7 @@ def test_step_immediate_response_create_checkpoint_async_at_least_once():
     mock_logger = Mock(spec=Logger)
     mock_logger.with_log_info.return_value = mock_logger
 
-    step_handler(
+    await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier(
@@ -735,7 +735,7 @@ def test_step_immediate_response_create_checkpoint_async_at_least_once():
     assert start_call[1]["is_sync"] is False
 
 
-def test_step_immediate_response_immediate_success():
+async def test_step_immediate_response_immediate_success():
     """Test immediate success: checkpoint returns SUCCEEDED on second check, operation returns without suspend.
 
     Note: The current implementation calls get_checkpoint_result twice within check_result_status()
@@ -762,7 +762,7 @@ def test_step_immediate_response_immediate_success():
     mock_logger = Mock(spec=Logger)
     mock_logger.with_log_info.return_value = mock_logger
 
-    result = step_handler(
+    result = await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier(
@@ -779,7 +779,7 @@ def test_step_immediate_response_immediate_success():
     assert mock_state.create_checkpoint.call_count == 2
 
 
-def test_step_immediate_response_immediate_failure():
+async def test_step_immediate_response_immediate_failure():
     """Test immediate failure: checkpoint returns FAILED on second check, operation raises error without suspend."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -814,7 +814,7 @@ def test_step_immediate_response_immediate_failure():
 
     # Verify operation raises error after executing step function
     with pytest.raises(CallableRuntimeError, match="Step execution error"):
-        step_handler(
+        await step_handler(
             mock_callable,
             mock_state,
             OperationIdentifier(
@@ -829,7 +829,7 @@ def test_step_immediate_response_immediate_failure():
     assert mock_state.create_checkpoint.call_count == 2
 
 
-def test_step_immediate_response_no_immediate_response():
+async def test_step_immediate_response_no_immediate_response():
     """Test no immediate response: checkpoint returns STARTED on second check, operation executes step function."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -852,7 +852,7 @@ def test_step_immediate_response_no_immediate_response():
     mock_logger = Mock(spec=Logger)
     mock_logger.with_log_info.return_value = mock_logger
 
-    result = step_handler(
+    result = await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier(
@@ -869,7 +869,7 @@ def test_step_immediate_response_no_immediate_response():
     assert mock_state.create_checkpoint.call_count == 2
 
 
-def test_step_immediate_response_already_completed():
+async def test_step_immediate_response_already_completed():
     """Test already completed: checkpoint is already SUCCEEDED on first check, no checkpoint created."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -888,7 +888,7 @@ def test_step_immediate_response_already_completed():
     mock_callable = Mock(return_value="should_not_call")
     mock_logger = Mock(spec=Logger)
 
-    result = step_handler(
+    result = await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier(
@@ -906,7 +906,7 @@ def test_step_immediate_response_already_completed():
     assert mock_state.get_checkpoint_result.call_count == 1
 
 
-def test_step_executes_function_when_second_check_returns_started():
+async def test_step_executes_function_when_second_check_returns_started():
     """Test backward compatibility: when the second checkpoint check returns
     STARTED (not terminal), the step function executes normally.
     """
@@ -939,7 +939,7 @@ def test_step_executes_function_when_second_check_returns_started():
         ),
         context_logger=mock_logger,
     )
-    result = executor.process()
+    result = await executor.process()
 
     # Assert - behaves like "old way"
     mock_step_function.assert_called_once()  # Function executed (not skipped)
@@ -950,7 +950,7 @@ def test_step_executes_function_when_second_check_returns_started():
     assert mock_state.create_checkpoint.call_count == 2  # START + SUCCEED checkpoints
 
 
-def test_step_creates_start_checkpoint_when_status_is_ready():
+async def test_step_creates_start_checkpoint_when_status_is_ready():
     """Test that create_checkpoint is called with START action when the step is in READY status."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -980,7 +980,7 @@ def test_step_creates_start_checkpoint_when_status_is_ready():
     mock_logger = Mock(spec=Logger)
     mock_logger.with_log_info.return_value = mock_logger
 
-    result = step_handler(
+    result = await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier("step_ready_1", OperationSubType.STEP, None, "test_step"),

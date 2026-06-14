@@ -5,12 +5,12 @@ from async_durable_execution.lambda_service import OperationType
 from async_durable_execution_examples.step import step_semantics_at_most_once
 
 
-def test_step_semantics_at_most_once(durable_runner):
+async def test_step_semantics_at_most_once(durable_runner):
     """Test step with at-most-once semantics."""
     with durable_runner(
         handler=step_semantics_at_most_once.handler, input="test", timeout=10
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
     assert (

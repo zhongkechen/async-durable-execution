@@ -53,8 +53,8 @@ def _wrap_user_function_for_test(func, *args, **kwargs):
     return lambda *a, **kw: invoke_callable(func, *a, **kw)
 
 
-def run_async(awaitable):
-    return asyncio.run(awaitable)
+async def run_async(awaitable):
+    return await awaitable
 
 
 def create_checkpoint_result(
@@ -96,14 +96,14 @@ def create_executor_context(state, step_id="1", parent_id="parent"):
     return context
 
 
-def test_batch_item_status_enum():
+async def test_batch_item_status_enum():
     """Test BatchItemStatus enum values."""
     assert BatchItemStatus.SUCCEEDED.value == "SUCCEEDED"
     assert BatchItemStatus.FAILED.value == "FAILED"
     assert BatchItemStatus.STARTED.value == "STARTED"
 
 
-def test_completion_reason_enum():
+async def test_completion_reason_enum():
     """Test CompletionReason enum values."""
     assert CompletionReason.ALL_COMPLETED.value == "ALL_COMPLETED"
     assert CompletionReason.MIN_SUCCESSFUL_REACHED.value == "MIN_SUCCESSFUL_REACHED"
@@ -113,7 +113,7 @@ def test_completion_reason_enum():
     )
 
 
-def test_branch_status_enum():
+async def test_branch_status_enum():
     """Test BranchStatus enum values."""
     assert BranchStatus.PENDING.value == "pending"
     assert BranchStatus.RUNNING.value == "running"
@@ -123,7 +123,7 @@ def test_branch_status_enum():
     assert BranchStatus.FAILED.value == "failed"
 
 
-def test_batch_item_creation():
+async def test_batch_item_creation():
     """Test BatchItem creation and properties."""
     item = BatchItem(index=0, status=BatchItemStatus.SUCCEEDED, result="test_result")
     assert item.index == 0
@@ -132,7 +132,7 @@ def test_batch_item_creation():
     assert item.error is None
 
 
-def test_batch_item_to_dict():
+async def test_batch_item_to_dict():
     """Test BatchItem to_dict method."""
     error = ErrorObject(
         message="test message", type="TestError", data=None, stack_trace=None
@@ -149,7 +149,7 @@ def test_batch_item_to_dict():
     assert result == expected
 
 
-def test_batch_item_from_dict():
+async def test_batch_item_from_dict():
     """Test BatchItem from_dict method."""
     data = {
         "index": 2,
@@ -165,7 +165,7 @@ def test_batch_item_from_dict():
     assert item.error is None
 
 
-def test_batch_result_creation():
+async def test_batch_result_creation():
     """Test BatchResult creation."""
     items = [
         BatchItem(0, BatchItemStatus.SUCCEEDED, "result1"),
@@ -179,7 +179,7 @@ def test_batch_result_creation():
     assert result.completion_reason == CompletionReason.ALL_COMPLETED
 
 
-def test_batch_result_succeeded():
+async def test_batch_result_succeeded():
     """Test BatchResult succeeded method."""
     items = [
         BatchItem(0, BatchItemStatus.SUCCEEDED, "result1"),
@@ -196,7 +196,7 @@ def test_batch_result_succeeded():
     assert succeeded[1].result == "result2"
 
 
-def test_batch_result_failed():
+async def test_batch_result_failed():
     """Test BatchResult failed method."""
     error = ErrorObject("test message", "TestError", None, None)
     items = [
@@ -210,7 +210,7 @@ def test_batch_result_failed():
     assert failed[0].error == error
 
 
-def test_batch_result_started():
+async def test_batch_result_started():
     """Test BatchResult started method."""
     items = [
         BatchItem(0, BatchItemStatus.STARTED),
@@ -223,7 +223,7 @@ def test_batch_result_started():
     assert started[0].status == BatchItemStatus.STARTED
 
 
-def test_batch_result_status():
+async def test_batch_result_status():
     """Test BatchResult status property."""
     # No failures
     items = [BatchItem(0, BatchItemStatus.SUCCEEDED, "result1")]
@@ -241,7 +241,7 @@ def test_batch_result_status():
     assert result.status == BatchItemStatus.FAILED
 
 
-def test_batch_result_has_failure():
+async def test_batch_result_has_failure():
     """Test BatchResult has_failure property."""
     # No failures
     items = [BatchItem(0, BatchItemStatus.SUCCEEDED, "result1")]
@@ -258,7 +258,7 @@ def test_batch_result_has_failure():
     assert result.has_failure
 
 
-def test_batch_result_throw_if_error():
+async def test_batch_result_throw_if_error():
     """Test BatchResult throw_if_error method."""
     # No errors
     items = [BatchItem(0, BatchItemStatus.SUCCEEDED, "result1")]
@@ -274,7 +274,7 @@ def test_batch_result_throw_if_error():
         result.throw_if_error()
 
 
-def test_batch_result_get_results():
+async def test_batch_result_get_results():
     """Test BatchResult get_results method."""
     items = [
         BatchItem(0, BatchItemStatus.SUCCEEDED, "result1"),
@@ -289,7 +289,7 @@ def test_batch_result_get_results():
     assert results == ["result1", "result2"]
 
 
-def test_batch_result_get_errors():
+async def test_batch_result_get_errors():
     """Test BatchResult get_errors method."""
     error1 = ErrorObject("msg1", "Error1", None, None)
     error2 = ErrorObject("msg2", "Error2", None, None)
@@ -306,7 +306,7 @@ def test_batch_result_get_errors():
     assert error2 in errors
 
 
-def test_batch_result_counts():
+async def test_batch_result_counts():
     """Test BatchResult count properties."""
     items = [
         BatchItem(0, BatchItemStatus.SUCCEEDED, "result1"),
@@ -324,7 +324,7 @@ def test_batch_result_counts():
     assert result.total_count == 4
 
 
-def test_batch_result_to_dict():
+async def test_batch_result_to_dict():
     """Test BatchResult to_dict method."""
     items = [BatchItem(0, BatchItemStatus.SUCCEEDED, "result1")]
     result = BatchResult(items, CompletionReason.ALL_COMPLETED)
@@ -339,7 +339,7 @@ def test_batch_result_to_dict():
     assert result_dict == expected
 
 
-def test_batch_result_from_dict():
+async def test_batch_result_from_dict():
     """Test BatchResult from_dict method."""
     data = {
         "all": [
@@ -355,7 +355,7 @@ def test_batch_result_from_dict():
     assert result.completion_reason == CompletionReason.ALL_COMPLETED
 
 
-def test_batch_result_from_dict_default_completion_reason():
+async def test_batch_result_from_dict_default_completion_reason():
     """Test BatchResult from_dict with default completion reason."""
     data = {
         "all": [
@@ -372,7 +372,7 @@ def test_batch_result_from_dict_default_completion_reason():
         assert "Missing completionReason" in mock_logger.warning.call_args[0][0]
 
 
-def test_batch_result_from_dict_infer_all_completed_all_succeeded():
+async def test_batch_result_from_dict_infer_all_completed_all_succeeded():
     """Test BatchResult from_dict infers ALL_COMPLETED when all items succeeded."""
     data = {
         "all": [
@@ -388,7 +388,7 @@ def test_batch_result_from_dict_infer_all_completed_all_succeeded():
         mock_logger.warning.assert_called_once()
 
 
-def test_batch_result_from_dict_infer_failure_tolerance_exceeded_all_failed():
+async def test_batch_result_from_dict_infer_failure_tolerance_exceeded_all_failed():
     """Test BatchResult from_dict infers completion reason when all items failed."""
     error_data = {
         "message": "Test error",
@@ -411,7 +411,7 @@ def test_batch_result_from_dict_infer_failure_tolerance_exceeded_all_failed():
         mock_logger.warning.assert_called_once()
 
 
-def test_batch_result_from_dict_infer_all_completed_mixed_success_failure():
+async def test_batch_result_from_dict_infer_all_completed_mixed_success_failure():
     """Test BatchResult from_dict infers completion reason with mix of success/failure."""
     error_data = {
         "message": "Test error",
@@ -435,7 +435,7 @@ def test_batch_result_from_dict_infer_all_completed_mixed_success_failure():
         mock_logger.warning.assert_called_once()
 
 
-def test_batch_result_from_dict_infer_min_successful_reached_has_started():
+async def test_batch_result_from_dict_infer_min_successful_reached_has_started():
     """Test BatchResult from_dict infers MIN_SUCCESSFUL_REACHED when items are still started."""
     data = {
         "all": [
@@ -452,7 +452,7 @@ def test_batch_result_from_dict_infer_min_successful_reached_has_started():
         mock_logger.warning.assert_called_once()
 
 
-def test_batch_result_from_dict_infer_empty_items():
+async def test_batch_result_from_dict_infer_empty_items():
     """Test BatchResult from_dict infers ALL_COMPLETED for empty items."""
     data = {
         "all": [],
@@ -465,7 +465,7 @@ def test_batch_result_from_dict_infer_empty_items():
         mock_logger.warning.assert_called_once()
 
 
-def test_batch_result_from_dict_with_explicit_completion_reason():
+async def test_batch_result_from_dict_with_explicit_completion_reason():
     """Test BatchResult from_dict uses explicit completionReason when provided."""
     data = {
         "all": [
@@ -481,7 +481,7 @@ def test_batch_result_from_dict_with_explicit_completion_reason():
         mock_logger.warning.assert_not_called()
 
 
-def test_batch_result_infer_completion_reason_edge_cases():
+async def test_batch_result_infer_completion_reason_edge_cases():
     """Test _infer_completion_reason method with various edge cases."""
     # Test with only started items and min_successful=0
     started_items = [
@@ -540,7 +540,7 @@ def test_batch_result_infer_completion_reason_edge_cases():
     assert batch.completion_reason == CompletionReason.ALL_COMPLETED
 
 
-def test_batch_result_get_results_empty():
+async def test_batch_result_get_results_empty():
     """Test BatchResult get_results with no successful items."""
     items = [
         BatchItem(
@@ -554,7 +554,7 @@ def test_batch_result_get_results_empty():
     assert results == []
 
 
-def test_batch_result_get_errors_empty():
+async def test_batch_result_get_errors_empty():
     """Test BatchResult get_errors with no failed items."""
     items = [
         BatchItem(0, BatchItemStatus.SUCCEEDED, "result1"),
@@ -566,10 +566,10 @@ def test_batch_result_get_errors_empty():
     assert errors == []
 
 
-def test_executable_creation():
+async def test_executable_creation():
     """Test Executable creation."""
 
-    def test_func():
+    async def test_func():
         return "test"
 
     executable = Executable(index=5, func=test_func)
@@ -577,7 +577,7 @@ def test_executable_creation():
     assert executable.func == test_func
 
 
-def test_executable_with_state_creation():
+async def test_executable_with_state_creation():
     """Test ExecutableWithState creation."""
     executable = Executable(index=1, func=lambda: "test")
     exe_state = ExecutableWithState(executable)
@@ -588,10 +588,10 @@ def test_executable_with_state_creation():
     assert exe_state.callable == executable.func
 
 
-def test_executable_with_state_properties():
+async def test_executable_with_state_properties():
     """Test ExecutableWithState property access."""
 
-    def test_callable():
+    async def test_callable():
         return "test"
 
     executable = Executable(index=42, func=test_callable)
@@ -602,7 +602,7 @@ def test_executable_with_state_properties():
     assert exe_state.suspend_until is None
 
 
-def test_executable_with_state_future_not_available():
+async def test_executable_with_state_future_not_available():
     """Test ExecutableWithState future property when not started."""
     executable = Executable(index=1, func=lambda: "test")
     exe_state = ExecutableWithState(executable)
@@ -611,7 +611,7 @@ def test_executable_with_state_future_not_available():
         _ = exe_state.future
 
 
-def test_executable_with_state_result_not_available():
+async def test_executable_with_state_result_not_available():
     """Test ExecutableWithState result property when not completed."""
     executable = Executable(index=1, func=lambda: "test")
     exe_state = ExecutableWithState(executable)
@@ -620,7 +620,7 @@ def test_executable_with_state_result_not_available():
         _ = exe_state.result
 
 
-def test_executable_with_state_error_not_available():
+async def test_executable_with_state_error_not_available():
     """Test ExecutableWithState error property when not failed."""
     executable = Executable(index=1, func=lambda: "test")
     exe_state = ExecutableWithState(executable)
@@ -629,7 +629,7 @@ def test_executable_with_state_error_not_available():
         _ = exe_state.error
 
 
-def test_executable_with_state_is_running():
+async def test_executable_with_state_is_running():
     """Test ExecutableWithState is_running property."""
     executable = Executable(index=1, func=lambda: "test")
     exe_state = ExecutableWithState(executable)
@@ -641,7 +641,7 @@ def test_executable_with_state_is_running():
     assert exe_state.is_running
 
 
-def test_executable_with_state_can_resume():
+async def test_executable_with_state_can_resume():
     """Test ExecutableWithState can_resume property."""
     executable = Executable(index=1, func=lambda: "test")
     exe_state = ExecutableWithState(executable)
@@ -664,7 +664,7 @@ def test_executable_with_state_can_resume():
     assert exe_state.can_resume
 
 
-def test_executable_with_state_run():
+async def test_executable_with_state_run():
     """Test ExecutableWithState run method."""
     executable = Executable(index=1, func=lambda: "test")
     exe_state = ExecutableWithState(executable)
@@ -675,7 +675,7 @@ def test_executable_with_state_run():
     assert exe_state.future == future
 
 
-def test_executable_with_state_run_invalid_state():
+async def test_executable_with_state_run_invalid_state():
     """Test ExecutableWithState run method from invalid state."""
     executable = Executable(index=1, func=lambda: "test")
     exe_state = ExecutableWithState(executable)
@@ -688,7 +688,7 @@ def test_executable_with_state_run_invalid_state():
         exe_state.run(future2)
 
 
-def test_executable_with_state_suspend():
+async def test_executable_with_state_suspend():
     """Test ExecutableWithState suspend method."""
     executable = Executable(index=1, func=lambda: "test")
     exe_state = ExecutableWithState(executable)
@@ -698,7 +698,7 @@ def test_executable_with_state_suspend():
     assert exe_state.suspend_until is None
 
 
-def test_executable_with_state_suspend_with_timeout():
+async def test_executable_with_state_suspend_with_timeout():
     """Test ExecutableWithState suspend_with_timeout method."""
     executable = Executable(index=1, func=lambda: "test")
     exe_state = ExecutableWithState(executable)
@@ -709,7 +709,7 @@ def test_executable_with_state_suspend_with_timeout():
     assert exe_state.suspend_until == timestamp
 
 
-def test_executable_with_state_complete():
+async def test_executable_with_state_complete():
     """Test ExecutableWithState complete method."""
     executable = Executable(index=1, func=lambda: "test")
     exe_state = ExecutableWithState(executable)
@@ -719,7 +719,7 @@ def test_executable_with_state_complete():
     assert exe_state.result == "test_result"
 
 
-def test_executable_with_state_fail():
+async def test_executable_with_state_fail():
     """Test ExecutableWithState fail method."""
     executable = Executable(index=1, func=lambda: "test")
     exe_state = ExecutableWithState(executable)
@@ -730,7 +730,7 @@ def test_executable_with_state_fail():
     assert exe_state.error == error
 
 
-def test_execution_counters_creation():
+async def test_execution_counters_creation():
     """Test ExecutionCounters creation."""
     counters = ExecutionCounters(
         total_tasks=10,
@@ -747,7 +747,7 @@ def test_execution_counters_creation():
     assert counters.failure_count == 0
 
 
-def test_execution_counters_complete_task():
+async def test_execution_counters_complete_task():
     """Test ExecutionCounters complete_task method."""
     counters = ExecutionCounters(5, 3, None, None)
 
@@ -755,7 +755,7 @@ def test_execution_counters_complete_task():
     assert counters.success_count == 1
 
 
-def test_execution_counters_fail_task():
+async def test_execution_counters_fail_task():
     """Test ExecutionCounters fail_task method."""
     counters = ExecutionCounters(5, 3, None, None)
 
@@ -763,7 +763,7 @@ def test_execution_counters_fail_task():
     assert counters.failure_count == 1
 
 
-def test_execution_counters_should_complete_min_successful():
+async def test_execution_counters_should_complete_min_successful():
     """Test ExecutionCounters should_complete with min successful reached."""
     counters = ExecutionCounters(5, 3, None, None)
 
@@ -776,7 +776,7 @@ def test_execution_counters_should_complete_min_successful():
     assert counters.should_complete()
 
 
-def test_execution_counters_should_complete_failure_count():
+async def test_execution_counters_should_complete_failure_count():
     """Test ExecutionCounters should_complete with failure count exceeded."""
     counters = ExecutionCounters(5, 3, 1, None)
 
@@ -789,7 +789,7 @@ def test_execution_counters_should_complete_failure_count():
     assert counters.should_complete()
 
 
-def test_execution_counters_should_complete_failure_percentage():
+async def test_execution_counters_should_complete_failure_percentage():
     """Test ExecutionCounters should_complete with failure percentage exceeded."""
     counters = ExecutionCounters(10, 8, None, 15.0)
 
@@ -802,7 +802,7 @@ def test_execution_counters_should_complete_failure_percentage():
     assert counters.should_complete()  # 20% > 15%
 
 
-def test_execution_counters_is_all_completed():
+async def test_execution_counters_is_all_completed():
     """Test ExecutionCounters is_all_completed method."""
     counters = ExecutionCounters(3, 2, None, None)
 
@@ -816,7 +816,7 @@ def test_execution_counters_is_all_completed():
     assert counters.is_all_completed()
 
 
-def test_execution_counters_is_min_successful_reached():
+async def test_execution_counters_is_min_successful_reached():
     """Test ExecutionCounters is_min_successful_reached method."""
     counters = ExecutionCounters(5, 3, None, None)
 
@@ -830,7 +830,7 @@ def test_execution_counters_is_min_successful_reached():
     assert counters.is_min_successful_reached()
 
 
-def test_execution_counters_is_failure_tolerance_exceeded():
+async def test_execution_counters_is_failure_tolerance_exceeded():
     """Test ExecutionCounters is_failure_tolerance_exceeded method."""
     counters = ExecutionCounters(10, 8, 2, None)
 
@@ -844,7 +844,7 @@ def test_execution_counters_is_failure_tolerance_exceeded():
     assert counters.is_failure_tolerance_exceeded()
 
 
-def test_execution_counters_zero_total_tasks():
+async def test_execution_counters_zero_total_tasks():
     """Test ExecutionCounters with zero total tasks."""
     counters = ExecutionCounters(0, 0, None, 50.0)
 
@@ -852,7 +852,7 @@ def test_execution_counters_zero_total_tasks():
     assert not counters.is_failure_tolerance_exceeded()
 
 
-def test_execution_counters_failure_percentage_edge_case():
+async def test_execution_counters_failure_percentage_edge_case():
     """Test ExecutionCounters failure percentage at exact threshold."""
     counters = ExecutionCounters(10, 5, None, 20.0)
 
@@ -865,7 +865,7 @@ def test_execution_counters_failure_percentage_edge_case():
     assert counters.is_failure_tolerance_exceeded()
 
 
-def test_execution_counters_thread_safety():
+async def test_execution_counters_thread_safety():
     """Test ExecutionCounters thread safety."""
     counters = ExecutionCounters(100, 50, None, None)
 
@@ -882,7 +882,7 @@ def test_execution_counters_thread_safety():
     assert counters.success_count == 50
 
 
-def test_batch_result_failed_with_none_error():
+async def test_batch_result_failed_with_none_error():
     """Test BatchResult failed method filters out None errors."""
     items = [
         BatchItem(0, BatchItemStatus.FAILED, error=None),  # Should be filtered out
@@ -897,11 +897,11 @@ def test_batch_result_failed_with_none_error():
     assert failed[0].error is not None
 
 
-def test_concurrent_executor_nesting_type_parameter():
+async def test_concurrent_executor_nesting_type_parameter():
     """Test ConcurrentExecutor nesting_type parameter."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [Executable(0, lambda: "test")]
@@ -934,11 +934,11 @@ def test_concurrent_executor_nesting_type_parameter():
     assert executor_flat.nesting_type is NestingType.FLAT
 
 
-def test_concurrent_executor_default_nesting_type():
+async def test_concurrent_executor_default_nesting_type():
     """Test ConcurrentExecutor uses NESTED as default nesting_type."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [Executable(0, lambda: "test")]
@@ -956,7 +956,7 @@ def test_concurrent_executor_default_nesting_type():
     assert executor.nesting_type is NestingType.NESTED
 
 
-def test_concurrent_executor_full_execution_path():
+async def test_concurrent_executor_full_execution_path():
     """Test ConcurrentExecutor full execution."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -982,11 +982,11 @@ def test_concurrent_executor_full_execution_path():
     execution_state = create_execution_state()
     executor_context = create_executor_context(execution_state)
 
-    result = run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute(execution_state, executor_context))
     assert len(result.all) >= 1
 
 
-def test_timer_scheduler_double_check_resume_queue():
+async def test_timer_scheduler_double_check_resume_queue():
     """Test TimerScheduler double-check logic in scheduler loop."""
     callback = AsyncMock()
 
@@ -1005,13 +1005,13 @@ def test_timer_scheduler_double_check_resume_queue():
 
             await asyncio.sleep(0.05)
 
-    run_async(run_test())
+    await run_async(run_test())
 
     # At least one callback should have been made
     assert callback.call_count >= 0
 
 
-def test_concurrent_executor_on_task_complete_timed_suspend():
+async def test_concurrent_executor_on_task_complete_timed_suspend():
     """Test ConcurrentExecutor _on_task_complete with TimedSuspendExecution."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1043,13 +1043,13 @@ def test_concurrent_executor_on_task_complete_timed_suspend():
     scheduler = Mock()
     scheduler.schedule_resume = Mock()
 
-    run_async(executor._on_task_complete(exe_state, future, scheduler))  # noqa: SLF001
+    await run_async(executor._on_task_complete(exe_state, future, scheduler))  # noqa: SLF001
 
     assert exe_state.status == BranchStatus.SUSPENDED_WITH_TIMEOUT
     scheduler.schedule_resume.assert_called_once()
 
 
-def test_concurrent_executor_on_task_complete_suspend():
+async def test_concurrent_executor_on_task_complete_suspend():
     """Test ConcurrentExecutor _on_task_complete with SuspendExecution."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1079,12 +1079,12 @@ def test_concurrent_executor_on_task_complete_suspend():
 
     scheduler = Mock()
 
-    run_async(executor._on_task_complete(exe_state, future, scheduler))  # noqa: SLF001
+    await run_async(executor._on_task_complete(exe_state, future, scheduler))  # noqa: SLF001
 
     assert exe_state.status == BranchStatus.SUSPENDED
 
 
-def test_concurrent_executor_on_task_complete_exception():
+async def test_concurrent_executor_on_task_complete_exception():
     """Test ConcurrentExecutor _on_task_complete with general exception."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1115,13 +1115,13 @@ def test_concurrent_executor_on_task_complete_exception():
 
     scheduler = Mock()
 
-    run_async(executor._on_task_complete(exe_state, future, scheduler))  # noqa: SLF001
+    await run_async(executor._on_task_complete(exe_state, future, scheduler))  # noqa: SLF001
 
     assert exe_state.status == BranchStatus.FAILED
     assert isinstance(exe_state.error, ValueError)
 
 
-def test_concurrent_executor_create_result_with_early_exit():
+async def test_concurrent_executor_create_result_with_early_exit():
     """Test ConcurrentExecutor with failed branches using public execute method."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1160,7 +1160,7 @@ def test_concurrent_executor_create_result_with_early_exit():
     execution_state = create_execution_state()
     executor_context = create_executor_context(execution_state)
 
-    result = run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute(execution_state, executor_context))
 
     assert len(result.all) == 2
     assert result.all[0].status == BatchItemStatus.SUCCEEDED
@@ -1170,7 +1170,7 @@ def test_concurrent_executor_create_result_with_early_exit():
     assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
 
 
-def test_concurrent_executor_execute_item_in_child_context():
+async def test_concurrent_executor_execute_item_in_child_context():
     """Test ConcurrentExecutor _execute_item_in_child_context."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1197,13 +1197,13 @@ def test_concurrent_executor_execute_item_in_child_context():
     execution_state = create_execution_state()
     executor_context = create_executor_context(execution_state)
 
-    result = run_async(  # noqa: SLF001
+    result = await run_async(  # noqa: SLF001
         executor._execute_item_in_child_context(executor_context, executables[0])
     )
     assert result == "result_0"
 
 
-def test_execution_counters_impossible_to_succeed():
+async def test_execution_counters_impossible_to_succeed():
     """Test ExecutionCounters should_complete when impossible to succeed."""
     counters = ExecutionCounters(5, 4, None, None)
 
@@ -1215,7 +1215,7 @@ def test_execution_counters_impossible_to_succeed():
     assert counters.should_complete()
 
 
-def test_concurrent_executor_create_result_failure_tolerance_exceeded():
+async def test_concurrent_executor_create_result_failure_tolerance_exceeded():
     """Test ConcurrentExecutor with failure tolerance exceeded using public execute method."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1246,13 +1246,13 @@ def test_concurrent_executor_create_result_failure_tolerance_exceeded():
     execution_state = create_execution_state()
     executor_context = create_executor_context(execution_state)
 
-    result = run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute(execution_state, executor_context))
     # NEW BEHAVIOR: With tolerated_failure_count=0 and 1 failure,
     # tolerance is exceeded, so FAILURE_TOLERANCE_EXCEEDED
     assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
 
 
-def test_single_task_suspend_bubbles_up():
+async def test_single_task_suspend_bubbles_up():
     """Test that single task suspend bubbles up the exception."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1282,10 +1282,10 @@ def test_single_task_suspend_bubbles_up():
 
     # Should raise TimedSuspendExecution since no other tasks running
     with pytest.raises(TimedSuspendExecution):
-        run_async(executor.execute(execution_state, executor_context))
+        await run_async(executor.execute(execution_state, executor_context))
 
 
-def test_multiple_tasks_one_suspends_execution_continues():
+async def test_multiple_tasks_one_suspends_execution_continues():
     """Test that when one task suspends but others are running, execution continues."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1324,13 +1324,13 @@ def test_multiple_tasks_one_suspends_execution_continues():
 
     # Should raise TimedSuspendExecution after Task B completes
     with pytest.raises(TimedSuspendExecution):
-        run_async(executor.execute(execution_state, executor_context))
+        await run_async(executor.execute(execution_state, executor_context))
 
     # Assert that Task B did complete before suspension
     assert executor.task_b_completed
 
 
-def test_concurrent_executor_with_single_task_resubmit():
+async def test_concurrent_executor_with_single_task_resubmit():
     """Test single task suspend bubbles up immediately."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1365,10 +1365,10 @@ def test_concurrent_executor_with_single_task_resubmit():
 
     # Should raise TimedSuspendExecution since single task suspends
     with pytest.raises(TimedSuspendExecution):
-        run_async(executor.execute(execution_state, executor_context))
+        await run_async(executor.execute(execution_state, executor_context))
 
 
-def test_concurrent_executor_with_timed_resubmit_while_other_task_running():
+async def test_concurrent_executor_with_timed_resubmit_while_other_task_running():
     """Test timed resubmission while other tasks are still running."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1433,7 +1433,7 @@ def test_concurrent_executor_with_timed_resubmit_while_other_task_running():
     executor_context = create_executor_context(execution_state)
 
     # Should complete successfully after B resubmits and both tasks finish
-    result = run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute(execution_state, executor_context))
 
     # Verify results
     assert len(result.all) == 2
@@ -1446,7 +1446,7 @@ def test_concurrent_executor_with_timed_resubmit_while_other_task_running():
     assert executor.call_counts[0] == 1
 
 
-def test_timer_scheduler_double_check_condition():
+async def test_timer_scheduler_double_check_condition():
     """Test TimerScheduler double-check condition in _timer_loop (line 434)."""
     callback = AsyncMock()
 
@@ -1457,11 +1457,11 @@ def test_timer_scheduler_double_check_condition():
             scheduler.schedule_resume(exe_state, time.time() - 1)
             await asyncio.sleep(0.05)
 
-    run_async(run_test())
+    await run_async(run_test())
     assert callback.call_count >= 1
 
 
-def test_concurrent_executor_should_execution_suspend_with_timeout():
+async def test_concurrent_executor_should_execution_suspend_with_timeout():
     """Test should_execution_suspend with SUSPENDED_WITH_TIMEOUT state."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1499,7 +1499,7 @@ def test_concurrent_executor_should_execution_suspend_with_timeout():
     assert result.exception.scheduled_timestamp == future_time
 
 
-def test_concurrent_executor_should_execution_suspend_indefinite():
+async def test_concurrent_executor_should_execution_suspend_indefinite():
     """Test should_execution_suspend with indefinite SUSPENDED state."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1536,7 +1536,7 @@ def test_concurrent_executor_should_execution_suspend_indefinite():
     assert "pending external callback" in str(result.exception)
 
 
-def test_concurrent_executor_create_result_with_failed_status():
+async def test_concurrent_executor_create_result_with_failed_status():
     """Test with failed executable status using public execute method."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1567,7 +1567,7 @@ def test_concurrent_executor_create_result_with_failed_status():
     execution_state = create_execution_state()
     executor_context = create_executor_context(execution_state)
 
-    result = run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute(execution_state, executor_context))
 
     assert len(result.all) == 1
     assert result.all[0].status == BatchItemStatus.FAILED
@@ -1575,7 +1575,7 @@ def test_concurrent_executor_create_result_with_failed_status():
     assert result.all[0].error.message == "Test error"
 
 
-def test_timer_scheduler_can_resume_false():
+async def test_timer_scheduler_can_resume_false():
     """Test TimerScheduler when exe_state.can_resume is False."""
     callback = AsyncMock()
 
@@ -1586,11 +1586,11 @@ def test_timer_scheduler_can_resume_false():
             scheduler.schedule_resume(exe_state, time.time() - 1)
             await asyncio.sleep(0.05)
 
-    run_async(run_test())
+    await run_async(run_test())
     callback.assert_not_called()
 
 
-def test_concurrent_executor_mixed_suspend_states():
+async def test_concurrent_executor_mixed_suspend_states():
     """Test should_execution_suspend with mixed suspend states."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1631,7 +1631,7 @@ def test_concurrent_executor_mixed_suspend_states():
     assert isinstance(result.exception, TimedSuspendExecution)
 
 
-def test_concurrent_executor_multiple_timed_suspends():
+async def test_concurrent_executor_multiple_timed_suspends():
     """Test should_execution_suspend with multiple timed suspends to find earliest."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1675,7 +1675,7 @@ def test_concurrent_executor_multiple_timed_suspends():
     assert result.exception.scheduled_timestamp == earlier_time
 
 
-def test_timer_scheduler_double_check_condition_race():
+async def test_timer_scheduler_double_check_condition_race():
     """Test TimerScheduler double-check condition when heap changes between checks."""
     callback = AsyncMock()
 
@@ -1690,11 +1690,11 @@ def test_timer_scheduler_double_check_condition_race():
             scheduler.schedule_resume(exe_state2, time.time() - 2)
             await asyncio.sleep(0.05)
 
-    run_async(run_test())
+    await run_async(run_test())
     assert callback.call_count >= 1
 
 
-def test_should_execution_suspend_earliest_timestamp_comparison():
+async def test_should_execution_suspend_earliest_timestamp_comparison():
     """Test should_execution_suspend timestamp comparison logic (line 554)."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1744,7 +1744,7 @@ def test_should_execution_suspend_earliest_timestamp_comparison():
     assert result.exception.scheduled_timestamp == time2
 
 
-def test_concurrent_executor_execute_with_failing_task():
+async def test_concurrent_executor_execute_with_failing_task():
     """Test execute() with a task that fails using public execute method."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1773,14 +1773,14 @@ def test_concurrent_executor_execute_with_failing_task():
     execution_state = create_execution_state()
     executor_context = create_executor_context(execution_state)
 
-    result = run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute(execution_state, executor_context))
 
     assert len(result.all) == 1
     assert result.all[0].status == BatchItemStatus.FAILED
     assert result.all[0].error.message == "Task failed"
 
 
-def test_timer_scheduler_cannot_resume_branch():
+async def test_timer_scheduler_cannot_resume_branch():
     """Test TimerScheduler when exe_state cannot resume (434->433 branch)."""
     callback = AsyncMock()
 
@@ -1791,11 +1791,11 @@ def test_timer_scheduler_cannot_resume_branch():
             scheduler.schedule_resume(exe_state, time.time() - 1)
             await asyncio.sleep(0.05)
 
-    run_async(run_test())
+    await run_async(run_test())
     callback.assert_not_called()
 
 
-def test_create_result_no_failed_executables():
+async def test_create_result_no_failed_executables():
     """Test when no executables are failed using public execute method."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1825,14 +1825,14 @@ def test_create_result_no_failed_executables():
     execution_state = create_execution_state()
     executor_context = create_executor_context(execution_state)
 
-    result = run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute(execution_state, executor_context))
 
     assert len(result.all) == 1
     assert result.all[0].status == BatchItemStatus.SUCCEEDED
     assert result.completion_reason == CompletionReason.ALL_COMPLETED
 
 
-def test_create_result_with_suspended_executable():
+async def test_create_result_with_suspended_executable():
     """Test with suspended executable using public execute method."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -1865,15 +1865,15 @@ def test_create_result_with_suspended_executable():
 
     # Should raise SuspendExecution since single task suspends
     with pytest.raises(SuspendExecution):
-        run_async(executor.execute(execution_state, executor_context))
+        await run_async(executor.execute(execution_state, executor_context))
 
 
 # Tests for _create_result method match statement branches
-def test_create_result_completed_branch():
+async def test_create_result_completed_branch():
     """Test _create_result with COMPLETED status branch."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [Executable(0, lambda: "test")]
@@ -1903,11 +1903,11 @@ def test_create_result_completed_branch():
     assert result.all[0].index == 0
 
 
-def test_create_result_failed_branch():
+async def test_create_result_failed_branch():
     """Test _create_result with FAILED status branch."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [Executable(0, lambda: "test")]
@@ -1940,11 +1940,11 @@ def test_create_result_failed_branch():
     assert result.all[0].index == 0
 
 
-def test_create_result_pending_branch():
+async def test_create_result_pending_branch():
     """Test _create_result with PENDING status branch."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [Executable(0, lambda: "test")]
@@ -1977,11 +1977,11 @@ def test_create_result_pending_branch():
     assert result.completion_reason == CompletionReason.ALL_COMPLETED
 
 
-def test_create_result_running_branch():
+async def test_create_result_running_branch():
     """Test _create_result with RUNNING status branch."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [Executable(0, lambda: "test")]
@@ -2014,11 +2014,11 @@ def test_create_result_running_branch():
     assert result.completion_reason == CompletionReason.ALL_COMPLETED
 
 
-def test_create_result_suspended_branch():
+async def test_create_result_suspended_branch():
     """Test _create_result with SUSPENDED status branch."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [Executable(0, lambda: "test")]
@@ -2050,11 +2050,11 @@ def test_create_result_suspended_branch():
     assert result.completion_reason == CompletionReason.ALL_COMPLETED
 
 
-def test_create_result_suspended_with_timeout_branch():
+async def test_create_result_suspended_with_timeout_branch():
     """Test _create_result with SUSPENDED_WITH_TIMEOUT status branch."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [Executable(0, lambda: "test")]
@@ -2087,11 +2087,11 @@ def test_create_result_suspended_with_timeout_branch():
     assert result.completion_reason == CompletionReason.ALL_COMPLETED
 
 
-def test_create_result_mixed_statuses():
+async def test_create_result_mixed_statuses():
     """Test _create_result with mixed executable statuses covering all branches."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [
@@ -2176,11 +2176,11 @@ def test_create_result_mixed_statuses():
     assert result.completion_reason == CompletionReason.MIN_SUCCESSFUL_REACHED
 
 
-def test_create_result_multiple_completed():
+async def test_create_result_multiple_completed():
     """Test _create_result with multiple COMPLETED executables."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [
@@ -2218,11 +2218,11 @@ def test_create_result_multiple_completed():
     assert result.completion_reason == CompletionReason.ALL_COMPLETED
 
 
-def test_create_result_multiple_failed():
+async def test_create_result_multiple_failed():
     """Test _create_result with multiple FAILED executables."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [
@@ -2260,11 +2260,11 @@ def test_create_result_multiple_failed():
     assert result.completion_reason == CompletionReason.ALL_COMPLETED
 
 
-def test_create_result_multiple_started_states():
+async def test_create_result_multiple_started_states():
     """Test _create_result with multiple executables in STARTED states."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = [
@@ -2312,11 +2312,11 @@ def test_create_result_multiple_started_states():
     assert result.completion_reason == CompletionReason.ALL_COMPLETED
 
 
-def test_create_result_empty_executables():
+async def test_create_result_empty_executables():
     """Test _create_result with no executables."""
 
     class TestExecutor(ConcurrentExecutor):
-        def execute_item(self, child_context, executable):
+        async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
     executables = []
@@ -2340,7 +2340,7 @@ def test_create_result_empty_executables():
     assert result.completion_reason == CompletionReason.ALL_COMPLETED
 
 
-def test_timer_scheduler_future_time_condition_false():
+async def test_timer_scheduler_future_time_condition_false():
     """Test TimerScheduler when scheduled time is in future (434->433 branch)."""
     callback = AsyncMock()
 
@@ -2351,11 +2351,11 @@ def test_timer_scheduler_future_time_condition_false():
             scheduler.schedule_resume(exe_state, time.time() + 10)
             await asyncio.sleep(0.05)
 
-    run_async(run_test())
+    await run_async(run_test())
     callback.assert_not_called()
 
 
-def test_batch_result_from_dict_with_completion_config():
+async def test_batch_result_from_dict_with_completion_config():
     """Test BatchResult from_dict with completion config parameter."""
     data = {
         "all": [
@@ -2374,7 +2374,7 @@ def test_batch_result_from_dict_with_completion_config():
         mock_logger.warning.assert_called_once()
 
 
-def test_batch_result_from_dict_all_completed():
+async def test_batch_result_from_dict_all_completed():
     """Test BatchResult from_dict infers completion reason when all items are completed."""
     data = {
         "all": [
@@ -2401,7 +2401,7 @@ def test_batch_result_from_dict_all_completed():
         mock_logger.warning.assert_called_once()
 
 
-def test_batch_result_from_dict_backward_compatibility():
+async def test_batch_result_from_dict_backward_compatibility():
     """Test BatchResult from_dict maintains backward compatibility when no completion_config provided."""
     data = {
         "all": [
@@ -2419,7 +2419,7 @@ def test_batch_result_from_dict_backward_compatibility():
     assert result2.completion_reason == CompletionReason.MIN_SUCCESSFUL_REACHED
 
 
-def test_batch_result_infer_completion_reason_basic_cases():
+async def test_batch_result_infer_completion_reason_basic_cases():
     """Test _infer_completion_reason method with basic scenarios."""
     # Test with started items - should be MIN_SUCCESSFUL_REACHED
     items = {
@@ -2447,7 +2447,7 @@ def test_batch_result_infer_completion_reason_basic_cases():
     assert batch.completion_reason == CompletionReason.ALL_COMPLETED
 
 
-def test_operation_id_determinism_across_shuffles():
+async def test_operation_id_determinism_across_shuffles():
     """Test that operation_id depends on Executable.index, not execution order."""
 
     def index_based_function(index, ctx):
@@ -2526,7 +2526,7 @@ def test_operation_id_determinism_across_shuffles():
             "async_durable_execution.concurrency.executor.child_handler",
             patched_child_handler,
         ):
-            run_async(executor.execute(execution_state, executor_context))
+            await run_async(executor.execute(execution_state, executor_context))
 
         associations_per_run.append(captured_associations.copy())
 
@@ -2541,7 +2541,7 @@ def test_operation_id_determinism_across_shuffles():
     )
 
 
-def test_concurrent_executor_replay_with_succeeded_operations():
+async def test_concurrent_executor_replay_with_succeeded_operations():
     """Test ConcurrentExecutor replay method with succeeded operations."""
 
     def func1(ctx, item, idx, items):
@@ -2589,7 +2589,9 @@ def test_concurrent_executor_replay_with_succeeded_operations():
     mock_executor_context.create_child_context = Mock(return_value=mock_child_context)
     mock_executor_context._parent_id = "parent_id"  # noqa
 
-    result = run_async(executor.replay(mock_execution_state, mock_executor_context))
+    result = await run_async(
+        executor.replay(mock_execution_state, mock_executor_context)
+    )
 
     assert isinstance(result, BatchResult)
     assert len(result.all) == 2
@@ -2599,7 +2601,7 @@ def test_concurrent_executor_replay_with_succeeded_operations():
     assert result.all[1].result == "cached_result_op_1"
 
 
-def test_concurrent_executor_replay_with_failed_operations():
+async def test_concurrent_executor_replay_with_failed_operations():
     """Test ConcurrentExecutor replay method with failed operations."""
 
     def func1(ctx, item, idx, items):
@@ -2630,7 +2632,9 @@ def test_concurrent_executor_replay_with_failed_operations():
     mock_executor_context = Mock()
     mock_executor_context._create_step_id_for_logical_step = Mock(return_value="op_1")  # noqa: SLF001
 
-    result = run_async(executor.replay(mock_execution_state, mock_executor_context))
+    result = await run_async(
+        executor.replay(mock_execution_state, mock_executor_context)
+    )
 
     assert isinstance(result, BatchResult)
     assert len(result.all) == 1
@@ -2638,7 +2642,7 @@ def test_concurrent_executor_replay_with_failed_operations():
     assert result.all[0].error is not None
 
 
-def test_concurrent_executor_replay_with_replay_children():
+async def test_concurrent_executor_replay_with_replay_children():
     """Test ConcurrentExecutor replay method when children need re-execution."""
 
     def func1(ctx, item, idx, items):
@@ -2675,7 +2679,9 @@ def test_concurrent_executor_replay_with_replay_children():
         "_execute_item_in_child_context",
         new=AsyncMock(return_value="re_executed_result"),
     ):
-        result = run_async(executor.replay(mock_execution_state, mock_executor_context))
+        result = await run_async(
+            executor.replay(mock_execution_state, mock_executor_context)
+        )
 
         assert isinstance(result, BatchResult)
         assert len(result.all) == 1
@@ -2683,7 +2689,7 @@ def test_concurrent_executor_replay_with_replay_children():
         assert result.all[0].result == "re_executed_result"
 
 
-def test_batch_item_from_dict_with_error():
+async def test_batch_item_from_dict_with_error():
     """Test BatchItem.from_dict() with error."""
     data = {
         "index": 3,
@@ -2704,7 +2710,7 @@ def test_batch_item_from_dict_with_error():
     assert item.error.message == "bad value"
 
 
-def test_batch_result_with_mixed_statuses():
+async def test_batch_result_with_mixed_statuses():
     """Test BatchResult serialization with mixed item statuses."""
     result = BatchResult(
         all=[
@@ -2729,7 +2735,7 @@ def test_batch_result_with_mixed_statuses():
     assert deserialized.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
 
 
-def test_batch_result_empty_list():
+async def test_batch_result_empty_list():
     """Test BatchResult serialization with empty items list."""
     result = BatchResult(all=[], completion_reason=CompletionReason.ALL_COMPLETED)
 
@@ -2740,7 +2746,7 @@ def test_batch_result_empty_list():
     assert deserialized.completion_reason == CompletionReason.ALL_COMPLETED
 
 
-def test_batch_result_complex_nested_data():
+async def test_batch_result_complex_nested_data():
     """Test BatchResult with complex nested data structures."""
     complex_result = {
         "users": [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}],
@@ -2759,7 +2765,7 @@ def test_batch_result_complex_nested_data():
     assert deserialized.all[0].result["users"][0]["name"] == "Alice"
 
 
-def test_executor_does_not_deadlock_when_all_tasks_terminal_but_completion_config_allows_failures():
+async def test_executor_does_not_deadlock_when_all_tasks_terminal_but_completion_config_allows_failures():
     """Ensure executor returns when all tasks are terminal even if completion rules are confusing."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -2794,13 +2800,13 @@ def test_executor_does_not_deadlock_when_all_tasks_terminal_but_completion_confi
     executor_context = create_executor_context(execution_state)
 
     # Should return (not hang) and batch should reflect one FAILED and one SUCCEEDED
-    result = run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute(execution_state, executor_context))
     statuses = {item.index: item.status for item in result.all}
     assert statuses[0] == BatchItemStatus.FAILED
     assert statuses[1] == BatchItemStatus.SUCCEEDED
 
 
-def test_executor_terminates_quickly_when_impossible_to_succeed():
+async def test_executor_terminates_quickly_when_impossible_to_succeed():
     """Test that executor terminates when min_successful becomes impossible."""
     executed_count = {"value": 0}
 
@@ -2828,7 +2834,7 @@ def test_executor_terminates_quickly_when_impossible_to_succeed():
     execution_state = create_execution_state()
     executor_context = create_executor_context(execution_state)
 
-    result = run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute(execution_state, executor_context))
 
     # With tolerated_failure_count=1, executor stops when failure_count > 1 (at 2 failures)
     # Executor terminates early rather than executing all 100 tasks
@@ -2842,7 +2848,7 @@ def test_executor_terminates_quickly_when_impossible_to_succeed():
     )
 
 
-def test_executor_exits_early_with_min_successful():
+async def test_executor_exits_early_with_min_successful():
     """Test that parallel exits immediately when min_successful is reached without waiting for other branches."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -2885,7 +2891,7 @@ def test_executor_exits_early_with_min_successful():
     executor_context._create_step_id_for_logical_step = lambda idx: f"step_{idx}"  # noqa: SLF001
 
     start_time = time.time()
-    result = run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute(execution_state, executor_context))
     elapsed_time = time.time() - start_time
 
     # Should complete in less than 1.5 second (not wait for 2-second sleep)
@@ -2908,7 +2914,7 @@ def test_executor_exits_early_with_min_successful():
     assert result.total_count == 2
 
 
-def test_executor_returns_with_incomplete_branches():
+async def test_executor_returns_with_incomplete_branches():
     """Test that executor returns when min_successful is reached, leaving other branches incomplete."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -2950,7 +2956,7 @@ def test_executor_returns_with_incomplete_branches():
     )
     executor_context._create_step_id_for_logical_step = lambda idx: f"step_{idx}"  # noqa: SLF001
 
-    result = run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute(execution_state, executor_context))
 
     # Verify fast branch executed
     assert operation_tracker.fast_executed.call_count == 1
@@ -2971,7 +2977,7 @@ def test_executor_returns_with_incomplete_branches():
     assert result.total_count == 2
 
 
-def test_executor_returns_before_slow_branch_completes():
+async def test_executor_returns_before_slow_branch_completes():
     """Test that executor returns immediately when min_successful is reached, not waiting for slow branches."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -3007,7 +3013,7 @@ def test_executor_returns_before_slow_branch_completes():
     )
     executor_context._create_step_id_for_logical_step = lambda idx: f"step_{idx}"  # noqa: SLF001
 
-    result = run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute(execution_state, executor_context))
 
     # Executor should have returned before slow branch completed
     assert not slow_branch_mock.completed.called, (
@@ -3024,7 +3030,7 @@ def test_executor_returns_before_slow_branch_completes():
     assert result.total_count == 2
 
 
-def test_timer_scheduler_same_timestamp_with_counter_tiebreaker():
+async def test_timer_scheduler_same_timestamp_with_counter_tiebreaker():
     """
     Test that scheduling two tasks with the exact same resume_time works.
 
@@ -3044,10 +3050,10 @@ def test_timer_scheduler_same_timestamp_with_counter_tiebreaker():
             scheduler.schedule_resume(exe_state2, same_timestamp)
             assert len(scheduler._resume_tasks) == 2  # noqa: SLF001
 
-    run_async(run_test())
+    await run_async(run_test())
 
 
-def test_timer_scheduler_multiple_same_timestamps():
+async def test_timer_scheduler_multiple_same_timestamps():
     """
     Test that scheduling many tasks with the same timestamp works correctly.
 
@@ -3067,10 +3073,10 @@ def test_timer_scheduler_multiple_same_timestamps():
                 scheduler.schedule_resume(exe_state, same_timestamp)
             assert len(scheduler._resume_tasks) == 10  # noqa: SLF001
 
-    run_async(run_test())
+    await run_async(run_test())
 
 
-def test_timer_scheduler_counter_increments():
+async def test_timer_scheduler_counter_increments():
     """Test that the schedule counter increments correctly."""
     resubmit_callback = AsyncMock()
 
@@ -3087,10 +3093,10 @@ def test_timer_scheduler_counter_increments():
             scheduler.schedule_resume(exe_state3, time.time() + 3.0)
             assert len(scheduler._resume_tasks) == 3  # noqa: SLF001
 
-    run_async(run_test())
+    await run_async(run_test())
 
 
-def test_timer_scheduler_fifo_ordering_with_same_timestamp():
+async def test_timer_scheduler_fifo_ordering_with_same_timestamp():
     """
     Test that FIFO ordering is maintained when timestamps are equal.
 
@@ -3115,11 +3121,11 @@ def test_timer_scheduler_fifo_ordering_with_same_timestamp():
             scheduler.schedule_resume(exe_state3, past_time)
             await asyncio.sleep(0.05)
 
-    run_async(run_test())
+    await run_async(run_test())
     assert sorted(results) == [0, 1, 2]
 
 
-def test_from_items_no_config_with_failures():
+async def test_from_items_no_config_with_failures():
     """Validates: Requirements 2.4 - Fail-fast with no config."""
     items = [
         BatchItem(0, BatchItemStatus.SUCCEEDED, result="ok"),
@@ -3131,7 +3137,7 @@ def test_from_items_no_config_with_failures():
     assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
 
 
-def test_from_items_empty_config_with_failures():
+async def test_from_items_empty_config_with_failures():
     """Validates: Requirements 2.5 - Fail-fast with empty config."""
     items = [
         BatchItem(0, BatchItemStatus.SUCCEEDED, result="ok"),
@@ -3144,7 +3150,7 @@ def test_from_items_empty_config_with_failures():
     assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
 
 
-def test_from_items_tolerance_checked_before_all_completed():
+async def test_from_items_tolerance_checked_before_all_completed():
     """Validates: Requirements 2.1, 2.2 - Tolerance priority."""
     items = [
         BatchItem(0, BatchItemStatus.SUCCEEDED, result="ok"),
@@ -3161,7 +3167,7 @@ def test_from_items_tolerance_checked_before_all_completed():
     assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
 
 
-def test_from_items_all_completed_within_tolerance():
+async def test_from_items_all_completed_within_tolerance():
     """Validates: Requirements 1.1 - All completed."""
     items = [
         BatchItem(0, BatchItemStatus.SUCCEEDED, result="ok"),
@@ -3174,7 +3180,7 @@ def test_from_items_all_completed_within_tolerance():
     assert result.completion_reason == CompletionReason.ALL_COMPLETED
 
 
-def test_from_items_min_successful_reached():
+async def test_from_items_min_successful_reached():
     """Validates: Requirements 1.3 - Min successful."""
     items = [
         BatchItem(0, BatchItemStatus.SUCCEEDED, result="ok"),
@@ -3186,7 +3192,7 @@ def test_from_items_min_successful_reached():
     assert result.completion_reason == CompletionReason.MIN_SUCCESSFUL_REACHED
 
 
-def test_from_items_tolerance_count_exceeded():
+async def test_from_items_tolerance_count_exceeded():
     """Validates: Requirements 1.2 - Tolerance count."""
     items = [
         BatchItem(
@@ -3202,7 +3208,7 @@ def test_from_items_tolerance_count_exceeded():
     assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
 
 
-def test_from_items_tolerance_percentage_exceeded():
+async def test_from_items_tolerance_percentage_exceeded():
     """Validates: Requirements 1.2 - Tolerance percentage."""
     items = [
         BatchItem(0, BatchItemStatus.SUCCEEDED, result="ok"),
@@ -3222,7 +3228,7 @@ def test_from_items_tolerance_percentage_exceeded():
     assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
 
 
-def test_from_items_tolerance_priority_over_min_successful():
+async def test_from_items_tolerance_priority_over_min_successful():
     """Validates: Requirements 2.3 - Tolerance takes precedence."""
     items = [
         BatchItem(0, BatchItemStatus.SUCCEEDED, result="ok"),
@@ -3240,7 +3246,7 @@ def test_from_items_tolerance_priority_over_min_successful():
     assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
 
 
-def test_from_items_empty_array():
+async def test_from_items_empty_array():
     """Validates: Edge case - empty items."""
     items = []
     result = BatchResult.from_items(items, completion_config=None)
@@ -3248,7 +3254,7 @@ def test_from_items_empty_array():
     assert result.total_count == 0
 
 
-def test_from_items_all_succeeded():
+async def test_from_items_all_succeeded():
     """Validates: All items succeeded."""
     items = [
         BatchItem(0, BatchItemStatus.SUCCEEDED, result="ok1"),
@@ -3259,7 +3265,7 @@ def test_from_items_all_succeeded():
     assert result.success_count == 2
 
 
-def test_flat_mode_stamps_grandparent_as_inner_op_parent_id():
+async def test_flat_mode_stamps_grandparent_as_inner_op_parent_id():
     """In FLAT mode, inner operations in a branch stamp the map/parallel op id as parent_id.
 
     This is the core FLAT-mode invariant. Inner operations must not
@@ -3316,7 +3322,7 @@ def test_flat_mode_stamps_grandparent_as_inner_op_parent_id():
         nesting_type=NestingType.FLAT,
     )
 
-    run_async(  # noqa: SLF001
+    await run_async(  # noqa: SLF001
         executor._execute_item_in_child_context(executor_context, executables[0])
     )
 
@@ -3330,7 +3336,7 @@ def test_flat_mode_stamps_grandparent_as_inner_op_parent_id():
     assert branch_ctx._step_id_prefix != map_op_id  # noqa: SLF001
 
 
-def test_nested_mode_stamps_branch_op_as_inner_op_parent_id():
+async def test_nested_mode_stamps_branch_op_as_inner_op_parent_id():
     """In NESTED mode, inner operations in a branch stamp the branch's own operation id as parent_id."""
 
     class TestExecutor(ConcurrentExecutor):
@@ -3369,7 +3375,7 @@ def test_nested_mode_stamps_branch_op_as_inner_op_parent_id():
         nesting_type=NestingType.NESTED,
     )
 
-    run_async(  # noqa: SLF001
+    await run_async(  # noqa: SLF001
         executor._execute_item_in_child_context(executor_context, executables[0])
     )
 
@@ -3381,7 +3387,7 @@ def test_nested_mode_stamps_branch_op_as_inner_op_parent_id():
     assert branch_ctx._parent_id != map_op_id  # noqa: SLF001
 
 
-def test_flat_mode_produces_deterministic_step_ids_across_runs():
+async def test_flat_mode_produces_deterministic_step_ids_across_runs():
     """Step ids and inner parent_ids must be deterministic under FLAT mode.
 
     Replay depends on regenerating the same operation ids for the same
@@ -3408,7 +3414,7 @@ def test_flat_mode_produces_deterministic_step_ids_across_runs():
             )
             return executable.func(child_context)
 
-    def make_run():
+    async def make_run():
         execution_state = create_execution_state()
 
         mock_checkpoint = Mock()
@@ -3440,11 +3446,11 @@ def test_flat_mode_produces_deterministic_step_ids_across_runs():
             serdes=None,
             nesting_type=NestingType.FLAT,
         )
-        run_async(executor.execute(execution_state, executor_context))
+        await run_async(executor.execute(execution_state, executor_context))
         return executor.captured
 
-    run_a = make_run()
-    run_b = make_run()
+    run_a = await make_run()
+    run_b = await make_run()
 
     # Ordering of captured items is non-deterministic because branches run
     # on a ThreadPoolExecutor. What matters is that the SET of (prefix,

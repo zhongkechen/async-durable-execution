@@ -8,12 +8,12 @@ from async_durable_execution.lambda_service import (
 from async_durable_execution_examples.parallel import parallel_with_named_branches
 
 
-def test_parallel_with_named_branches(durable_runner):
+async def test_parallel_with_named_branches(durable_runner):
     """Test parallel example with all branch patterns."""
     with durable_runner(
         handler=parallel_with_named_branches.handler, input="test", timeout=10
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.get_deserialized_result() == [

@@ -5,12 +5,12 @@ from async_durable_execution.lambda_service import OperationStatus
 from async_durable_execution_examples.map import map_with_min_successful
 
 
-def test_map_with_min_successful(durable_runner):
+async def test_map_with_min_successful(durable_runner):
     """Test map with min_successful threshold."""
     with durable_runner(
         handler=map_with_min_successful.handler, input="test", timeout=10
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
 

@@ -14,7 +14,7 @@ from async_durable_execution.config import (
 from async_durable_execution.types import Callback, DurableContext
 
 
-def test_callback_protocol():
+async def test_callback_protocol():
     """Test Callback protocol implementation."""
     # Create a mock that implements the Callback protocol
     mock_callback = Mock(spec=Callback)
@@ -23,22 +23,22 @@ def test_callback_protocol():
 
     # Test protocol methods
     assert mock_callback.callback_id == "test-callback-123"
-    result = asyncio.run(mock_callback.result())
+    result = await mock_callback.result()
     assert result == "test_result"
 
 
-def test_durable_context_protocol():
+async def test_durable_context_protocol():
     """Test DurableContext protocol implementation."""
     # Create a mock that implements the DurableContext protocol
     mock_context = Mock(spec=DurableContext)
 
     # Test step method
-    def test_callable():
+    async def test_callable():
         return "step_result"
 
     mock_context.step = AsyncMock(return_value="step_result")
-    result = asyncio.run(
-        mock_context.step(test_callable, name="test_step", config=StepConfig())
+    result = await mock_context.step(
+        test_callable, name="test_step", config=StepConfig()
     )
     assert result == "step_result"
     mock_context.step.assert_called_once_with(
@@ -50,10 +50,8 @@ def test_durable_context_protocol():
         return "child_result"
 
     mock_context.run_in_child_context = AsyncMock(return_value="child_result")
-    result = asyncio.run(
-        mock_context.run_in_child_context(
-            child_callable, name="test_child", config=ChildConfig()
-        )
+    result = await mock_context.run_in_child_context(
+        child_callable, name="test_child", config=ChildConfig()
     )
     assert result == "child_result"
     mock_context.run_in_child_context.assert_called_once_with(
@@ -66,8 +64,8 @@ def test_durable_context_protocol():
 
     inputs = ["a", "b", "c"]
     mock_context.map = AsyncMock(return_value=["mapped_a", "mapped_b", "mapped_c"])
-    result = asyncio.run(
-        mock_context.map(inputs, map_function, name="test_map", config=MapConfig())
+    result = await mock_context.map(
+        inputs, map_function, name="test_map", config=MapConfig()
     )
     assert result == ["mapped_a", "mapped_b", "mapped_c"]
     mock_context.map.assert_called_once_with(
@@ -83,8 +81,8 @@ def test_durable_context_protocol():
 
     callables = [callable1, callable2]
     mock_context.parallel = AsyncMock(return_value=["result1", "result2"])
-    result = asyncio.run(
-        mock_context.parallel(callables, name="test_parallel", config=ParallelConfig())
+    result = await mock_context.parallel(
+        callables, name="test_parallel", config=ParallelConfig()
     )
     assert result == ["result1", "result2"]
     mock_context.parallel.assert_called_once_with(
@@ -93,14 +91,14 @@ def test_durable_context_protocol():
 
     # Test wait method
     mock_context.wait = AsyncMock()
-    asyncio.run(mock_context.wait(10, name="test_wait"))
+    await mock_context.wait(10, name="test_wait")
     mock_context.wait.assert_called_once_with(10, name="test_wait")
 
     # Test create_callback method
     mock_callback = Mock(spec=Callback)
     mock_context.create_callback = AsyncMock(return_value=mock_callback)
-    result = asyncio.run(
-        mock_context.create_callback(name="test_callback", config=CallbackConfig())
+    result = await mock_context.create_callback(
+        name="test_callback", config=CallbackConfig()
     )
     assert result == mock_callback
     mock_context.create_callback.assert_called_once_with(
@@ -108,56 +106,54 @@ def test_durable_context_protocol():
     )
 
 
-def test_callback_protocol_with_none_values():
+async def test_callback_protocol_with_none_values():
     """Test Callback protocol with None values."""
     mock_callback = Mock(spec=Callback)
     mock_callback.callback_id = "test-callback-456"
     mock_callback.result = AsyncMock(return_value=None)
 
     # Test with None result
-    result = asyncio.run(mock_callback.result())
+    result = await mock_callback.result()
     assert result is None
 
 
-def test_durable_context_protocol_with_none_values():
+async def test_durable_context_protocol_with_none_values():
     """Test DurableContext protocol with None values."""
     mock_context = Mock(spec=DurableContext)
 
-    def test_callable():
+    async def test_callable():
         return "result"
 
     # Test methods with None names and configs
     mock_context.step = AsyncMock(return_value="result")
-    asyncio.run(mock_context.step(test_callable, name=None, config=None))
+    await mock_context.step(test_callable, name=None, config=None)
     mock_context.step.assert_called_once_with(test_callable, name=None, config=None)
 
     mock_context.run_in_child_context = AsyncMock(return_value="child_result")
-    asyncio.run(
-        mock_context.run_in_child_context(test_callable, name=None, config=None)
-    )
+    await mock_context.run_in_child_context(test_callable, name=None, config=None)
     mock_context.run_in_child_context.assert_called_once_with(
         test_callable, name=None, config=None
     )
 
     mock_context.map = AsyncMock(return_value=[])
-    asyncio.run(mock_context.map([], test_callable, name=None, config=None))
+    await mock_context.map([], test_callable, name=None, config=None)
     mock_context.map.assert_called_once_with([], test_callable, name=None, config=None)
 
     mock_context.parallel = AsyncMock(return_value=[])
-    asyncio.run(mock_context.parallel([], name=None, config=None))
+    await mock_context.parallel([], name=None, config=None)
     mock_context.parallel.assert_called_once_with([], name=None, config=None)
 
     mock_context.wait = AsyncMock()
-    asyncio.run(mock_context.wait(5, name=None))
+    await mock_context.wait(5, name=None)
     mock_context.wait.assert_called_once_with(5, name=None)
 
     mock_callback = Mock(spec=Callback)
     mock_context.create_callback = AsyncMock(return_value=mock_callback)
-    asyncio.run(mock_context.create_callback(name=None, config=None))
+    await mock_context.create_callback(name=None, config=None)
     mock_context.create_callback.assert_called_once_with(name=None, config=None)
 
 
-def test_map_with_batched_input():
+async def test_map_with_batched_input():
     """Test map method with BatchedInput type."""
     mock_context = Mock(spec=DurableContext)
 
@@ -170,18 +166,18 @@ def test_map_with_batched_input():
     # Test with regular inputs
     inputs = ["x", "y"]
     mock_context.map = AsyncMock(return_value=["single_x", "single_y"])
-    result = asyncio.run(mock_context.map(inputs, map_function))
+    result = await mock_context.map(inputs, map_function)
     assert result == ["single_x", "single_y"]
 
     # Test with BatchedInput (correct constructor)
     batched_input = BatchedInput(batch_input="batch_data", items=["a", "b", "c"])
     inputs_with_batch = [batched_input]
     mock_context.map = AsyncMock(return_value=["batched_3"])
-    result = asyncio.run(mock_context.map(inputs_with_batch, map_function))
+    result = await mock_context.map(inputs_with_batch, map_function)
     assert result == ["batched_3"]
 
 
-def test_protocol_abstract_methods():
+async def test_protocol_abstract_methods():
     """Test that protocol methods are abstract and contain ellipsis."""
     # Test that the protocols have the expected abstract methods
     assert hasattr(Callback, "result")
@@ -194,7 +190,7 @@ def test_protocol_abstract_methods():
     assert hasattr(DurableContext, "create_callback")
 
 
-def test_concrete_callback_implementation():
+async def test_concrete_callback_implementation():
     """Test a concrete implementation of Callback protocol."""
 
     class ConcreteCallback:
@@ -208,4 +204,4 @@ def test_concrete_callback_implementation():
     # Test the concrete implementation
     callback = ConcreteCallback("test-123")
     assert callback.callback_id == "test-123"
-    assert asyncio.run(callback.result()) is None
+    assert await callback.result() is None

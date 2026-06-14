@@ -14,12 +14,12 @@ def _get_all_operations(operations):
     return all_ops
 
 
-def test_block_example(durable_runner):
+async def test_block_example(durable_runner):
     """Test block example with nested child contexts."""
     with durable_runner(
         handler=block_example.handler, input="test", timeout=10
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
 

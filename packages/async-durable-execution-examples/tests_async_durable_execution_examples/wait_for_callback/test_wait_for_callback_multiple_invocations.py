@@ -8,7 +8,7 @@ from async_durable_execution_examples.wait_for_callback import (
 )
 
 
-def test_handle_multiple_invocations_tracking_with_wait_for_callback_operations(
+async def test_handle_multiple_invocations_tracking_with_wait_for_callback_operations(
     durable_runner,
 ):
     """Test multiple invocations tracking with waitForCallback operations."""
@@ -20,30 +20,30 @@ def test_handle_multiple_invocations_tracking_with_wait_for_callback_operations(
         timeout=60,
     ) as runner:
         # Start the execution (this will pause at callbacks)
-        execution_arn = runner.run_async()
+        execution_arn = await runner.run_async()
 
         # Wait for first callback and get callback_id
-        first_callback_id = runner.wait_for_callback(execution_arn=execution_arn)
+        first_callback_id = await runner.wait_for_callback(execution_arn=execution_arn)
 
         # Complete first callback
         first_callback_result = json.dumps({"step": 1})
-        runner.send_callback_success(
+        await runner.send_callback_success(
             callback_id=first_callback_id, result=first_callback_result.encode()
         )
 
         # Wait for second callback and get callback_id
-        second_callback_id = runner.wait_for_callback(
+        second_callback_id = await runner.wait_for_callback(
             execution_arn=execution_arn, name="second-callback create callback id"
         )
 
         # Complete second callback
         second_callback_result = json.dumps({"step": 2})
-        runner.send_callback_success(
+        await runner.send_callback_success(
             callback_id=second_callback_id, result=second_callback_result.encode()
         )
 
         # Wait for the execution to complete
-        result = runner.wait_for_result(execution_arn=execution_arn)
+        result = await runner.wait_for_result(execution_arn=execution_arn)
 
     assert result.status is InvocationStatus.SUCCEEDED
 
