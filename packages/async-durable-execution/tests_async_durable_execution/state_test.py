@@ -28,7 +28,7 @@ from async_durable_execution.lambda_service import (
     CheckpointUpdatedExecutionState,
     ContextDetails,
     ErrorObject,
-    LambdaClient,
+    ThreadedSyncLambdaClient,
     Operation,
     OperationAction,
     OperationStatus,
@@ -414,7 +414,7 @@ async def test_checkpointed_result_immutable():
 
 async def test_execution_state_creation():
     """Test ExecutionState creation."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     state = ExecutionState(
         durable_execution_arn="test_arn",
         initial_checkpoint_token="test_token",  # noqa: S106
@@ -428,7 +428,7 @@ async def test_execution_state_creation():
 
 async def test_get_checkpoint_result_success_with_result():
     """Test get_checkpoint_result with successful operation and result."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     step_details = StepDetails(result="test_result")
     operation = Operation(
         operation_id="op1",
@@ -452,7 +452,7 @@ async def test_get_checkpoint_result_success_with_result():
 
 async def test_get_checkpoint_result_success_without_step_details():
     """Test get_checkpoint_result with successful operation but no step details."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     operation = Operation(
         operation_id="op1",
         operation_type=OperationType.STEP,
@@ -474,7 +474,7 @@ async def test_get_checkpoint_result_success_without_step_details():
 
 async def test_get_checkpoint_result_operation_not_succeeded():
     """Test get_checkpoint_result with failed operation."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     operation = Operation(
         operation_id="op1",
         operation_type=OperationType.STEP,
@@ -496,7 +496,7 @@ async def test_get_checkpoint_result_operation_not_succeeded():
 
 async def test_get_checkpoint_result_operation_not_found():
     """Test get_checkpoint_result with nonexistent operation."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     state = ExecutionState(
         durable_execution_arn="test_arn",
         initial_checkpoint_token="token123",  # noqa: S106
@@ -515,7 +515,7 @@ async def test_get_checkpoint_result_operation_not_found():
 
 async def test_create_checkpoint():
     """Test create_checkpoint method enqueues operations asynchronously."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -547,7 +547,7 @@ async def test_create_checkpoint():
 
 async def test_create_checkpoint_with_none():
     """Test create_checkpoint method with None operation_update (empty checkpoint)."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -573,7 +573,7 @@ async def test_create_checkpoint_with_none():
 
 async def test_create_checkpoint_with_no_args():
     """Test create_checkpoint method with no arguments (default None)."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -599,7 +599,7 @@ async def test_create_checkpoint_with_no_args():
 
 async def test_get_checkpoint_result_started():
     """Test get_checkpoint_result with started operation."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     operation = Operation(
         operation_id="op1",
         operation_type=OperationType.STEP,
@@ -660,7 +660,7 @@ async def test_checkpointed_result_is_timed_out_false_for_other_statuses():
 
 
 async def test_fetch_paginated_operations_with_marker():
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     def mock_get_execution_state(durable_execution_arn, checkpoint_token, next_marker):
         resp = {
@@ -773,7 +773,7 @@ async def test_fetch_paginated_operations_with_marker():
 
 async def test_fetch_paginated_operations_stores_partial_results_on_error():
     """Test that operations from successful pages are stored even when a later page fails."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     non_retryable_error = GetExecutionStateError(
         message="KMS access denied",
@@ -827,7 +827,7 @@ async def test_fetch_paginated_operations_stores_partial_results_on_error():
 
 async def test_fetch_paginated_operations_logs_error(caplog):
     """Test that GetExecutionStateError is logged with structured extras."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     error = GetExecutionStateError(
         message="Service error",
@@ -939,7 +939,7 @@ async def test_checkpoint_batch_respects_default_max_items_limit():
 
     This ensures consistency across all Durable Execution SDK implementations.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     # Use default config (max_batch_operations=250)
     config = CheckpointBatcherConfig(
@@ -1008,7 +1008,7 @@ async def test_calculate_operation_size_with_none():
 # Test 8.2: Batching logic and size limits
 async def test_collect_checkpoint_batch_respects_size_limit():
     """Test that batch collection respects max_batch_size_bytes limit."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     # Create config with small size limit
     config = CheckpointBatcherConfig(
@@ -1048,7 +1048,7 @@ async def test_collect_checkpoint_batch_respects_size_limit():
 
 async def test_collect_checkpoint_batch_uses_overflow_queue():
     """Test that overflow queue is processed first to maintain FIFO order."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -1100,7 +1100,7 @@ async def test_collect_checkpoint_batch_uses_overflow_queue():
 
 async def test_collect_checkpoint_batch_handles_empty_checkpoint():
     """Test batch collection with empty checkpoints (None operation_update)."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -1136,7 +1136,7 @@ async def test_collect_checkpoint_batch_handles_empty_checkpoint():
 
 async def test_collect_checkpoint_batch_returns_empty_when_stopped():
     """Test that batch collection returns empty list when checkpointing is stopped."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -1158,7 +1158,7 @@ async def test_collect_checkpoint_batch_returns_empty_when_stopped():
 # Test 8.3: Parallel operation concurrency management
 async def test_parent_child_relationship_building():
     """Test that parent-child relationships are built correctly."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -1200,7 +1200,7 @@ async def test_parent_child_relationship_building():
 
 async def test_descendant_cancellation_when_parent_completes():
     """Test that descendants are marked as orphaned when parent CONTEXT completes."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -1240,7 +1240,7 @@ async def test_descendant_cancellation_when_parent_completes():
 
 async def test_rejection_of_operations_from_completed_parents():
     """Test that operations are rejected if their parent has completed."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -1290,7 +1290,7 @@ async def test_rejection_of_operations_from_completed_parents():
 
 async def test_nested_parallel_operations_deep_hierarchy():
     """Test that nested parallel operations handle deep hierarchies correctly."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -1340,7 +1340,7 @@ async def test_nested_parallel_operations_deep_hierarchy():
 # Test 8.4: Thread safety and synchronous operations
 async def test_synchronous_checkpoint_blocks_until_complete():
     """Test that create_checkpoint_sync returns only after checkpoint processing."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     mock_lambda_client.checkpoint.return_value = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
         new_execution_state=CheckpointUpdatedExecutionState(
@@ -1371,7 +1371,7 @@ async def test_synchronous_checkpoint_blocks_until_complete():
 
 async def test_concurrent_access_to_operations_dictionary():
     """Test thread-safe concurrent access to operations dictionary."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -1441,7 +1441,7 @@ async def test_concurrent_access_to_operations_dictionary():
 
 async def test_stop_checkpointing_signals_background_thread():
     """Test that stop_checkpointing signals the background thread to stop."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -1535,7 +1535,7 @@ async def test_checkpointed_result_get_next_attempt_timestamp_none():
 
 async def test_create_checkpoint_sync_with_parent_id():
     """Test create_checkpoint_sync builds parent-child relationships."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     mock_lambda_client.checkpoint.return_value = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
         new_execution_state=CheckpointUpdatedExecutionState(
@@ -1577,7 +1577,7 @@ async def test_create_checkpoint_sync_with_parent_id():
 
 async def test_create_checkpoint_sync_rejects_orphaned_operation():
     """Test create_checkpoint_sync rejects operations whose parent is done."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     mock_lambda_client.checkpoint.return_value = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
         new_execution_state=CheckpointUpdatedExecutionState(
@@ -1636,7 +1636,7 @@ async def test_create_checkpoint_sync_rejects_orphaned_operation():
 
 async def test_mark_orphans_handles_cycles():
     """Test _mark_orphans handles potential cycles in parent-child relationships."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -1666,7 +1666,7 @@ async def test_checkpoint_batches_forever_exception_handling():
     This test verifies the bug fix where completion events should NOT be signaled
     when checkpoint fails, preventing callers from continuing with corrupted state.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     mock_lambda_client.checkpoint.side_effect = RuntimeError("API error")
 
     state = ExecutionState(
@@ -1715,7 +1715,7 @@ async def test_collect_checkpoint_batch_shutdown_path():
     _collect_checkpoint_batch() returns empty immediately. Any remaining operations
     in the queue are non-essential async checkpoints that will be abandoned.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -1745,7 +1745,7 @@ async def test_collect_checkpoint_batch_shutdown_path():
 
 async def test_collect_checkpoint_batch_shutdown_empty_queue():
     """Test _collect_checkpoint_batch during shutdown with empty queue."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -1767,7 +1767,7 @@ async def test_collect_checkpoint_batch_shutdown_empty_queue():
 
 async def test_collect_checkpoint_batch_overflow_put_back():
     """Test that operations exceeding size limit are put back in overflow queue."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     # Create config with very small size limit
     config = CheckpointBatcherConfig(
@@ -1819,7 +1819,7 @@ async def test_collect_checkpoint_batch_overflow_put_back():
 # Additional edge case tests for remaining coverage
 async def test_create_checkpoint_sync_with_none_operation_update():
     """Test create_checkpoint_sync with None operation_update (empty checkpoint)."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     mock_lambda_client.checkpoint.return_value = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
         new_execution_state=CheckpointUpdatedExecutionState(),
@@ -1842,7 +1842,7 @@ async def test_create_checkpoint_sync_with_none_operation_update():
 
 async def test_checkpoint_batches_forever_exception_with_no_sync_operations():
     """Test checkpoint_batches_forever exception handling when no sync operations exist."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     mock_lambda_client.checkpoint.side_effect = RuntimeError("API error")
 
     state = ExecutionState(
@@ -1868,7 +1868,7 @@ async def test_checkpoint_batches_forever_exception_with_no_sync_operations():
 
 async def test_collect_checkpoint_batch_size_limit_during_time_window():
     """Test that size limit is enforced during time window collection."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     # Create config with small size limit
     config = CheckpointBatcherConfig(
@@ -1921,7 +1921,7 @@ async def test_collect_checkpoint_batch_size_limit_during_time_window():
 
 async def test_collect_checkpoint_batch_respects_max_operations_limit():
     """Test that batch collection respects max_batch_operations limit."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     # Create config with max 1 operation per batch
     config = CheckpointBatcherConfig(
@@ -1965,7 +1965,7 @@ async def test_collect_checkpoint_batch_respects_max_operations_limit():
 
 async def test_collect_checkpoint_batch_time_window_expires():
     """Test that batch collection stops when time window expires (remaining_time <= 0)."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     # Create config with very short time window
     config = CheckpointBatcherConfig(
@@ -2020,7 +2020,7 @@ async def test_collect_checkpoint_batch_time_window_expires():
 
 async def test_collect_checkpoint_batch_empty_overflow_queue_path():
     """Test batch collection when overflow queue is empty from the start."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -2051,7 +2051,7 @@ async def test_collect_checkpoint_batch_empty_overflow_queue_path():
 
 async def test_collect_checkpoint_batch_overflow_queue_hits_operation_limit():
     """Test that overflow queue draining stops when max_batch_operations is reached."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     # Create config with max 2 operations per batch
     config = CheckpointBatcherConfig(
@@ -2092,7 +2092,7 @@ async def test_collect_checkpoint_batch_overflow_queue_hits_operation_limit():
 
 async def test_collect_checkpoint_batch_overflow_queue_size_limit():
     """Test that overflow queue draining respects size limit and puts back oversized operations."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     # Create config with small size limit
     config = CheckpointBatcherConfig(
@@ -2146,7 +2146,7 @@ async def test_checkpoint_error_signals_completion_events_with_error():
     completion events are signaled with BackgroundThreadError to wake up
     blocked callers and allow them to exit cleanly.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     # Simulate checkpoint API failure
     mock_lambda_client.checkpoint.side_effect = RuntimeError("Checkpoint API error")
 
@@ -2187,7 +2187,7 @@ async def test_synchronous_caller_receives_error_on_background_thread_failure():
     callers waiting on completion events are woken up with BackgroundThreadError,
     allowing them to exit cleanly rather than hanging indefinitely.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     # Simulate checkpoint API failure
     mock_lambda_client.checkpoint.side_effect = RuntimeError("Background thread error")
 
@@ -2220,7 +2220,7 @@ async def test_exception_propagates_through_threadpoolexecutor():
     it signals the error through completion events and failure state, then
     exits gracefully rather than raising an exception in the background thread.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     # Simulate checkpoint API failure
     mock_lambda_client.checkpoint.side_effect = RuntimeError("Checkpoint API failure")
 
@@ -2254,7 +2254,7 @@ async def test_multiple_sync_operations_all_remain_blocked_on_error():
     checkpoint processor fails, ALL of them are completed with error rather than
     hanging indefinitely.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     # Simulate checkpoint API failure
     mock_lambda_client.checkpoint.side_effect = RuntimeError("Batch processing error")
 
@@ -2299,7 +2299,7 @@ async def test_async_operations_not_affected_by_error_handling():
     This verifies that the error handling logic correctly handles batches containing
     only async operations (no completion events to signal).
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     # Simulate checkpoint API failure
     mock_lambda_client.checkpoint.side_effect = RuntimeError("API error")
 
@@ -2337,7 +2337,7 @@ async def test_mixed_sync_async_operations_only_sync_blocked_on_error():
     the error handling correctly processes both types without attempting to
     signal non-existent completion events for async operations.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     # Simulate checkpoint API failure
     mock_lambda_client.checkpoint.side_effect = RuntimeError("Mixed batch error")
 
@@ -2393,7 +2393,7 @@ async def test_create_checkpoint_accepts_is_sync_parameter():
     Verifies that the consolidated create_checkpoint method accepts the is_sync
     parameter for controlling synchronous vs asynchronous behavior.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -2429,7 +2429,7 @@ async def test_create_checkpoint_default_is_sync_true():
     Verifies that when is_sync parameter is not provided, the method defaults
     to synchronous behavior (is_sync=True), creating a completion event.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -2469,7 +2469,7 @@ async def test_create_checkpoint_explicit_is_sync_true():
     Verifies that explicitly setting is_sync=True results in synchronous behavior
     with a completion event created.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -2510,7 +2510,7 @@ async def test_create_checkpoint_is_sync_false_no_completion_event():
     Verifies that setting is_sync=False results in asynchronous behavior
     without a completion event.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -2544,7 +2544,7 @@ async def test_create_checkpoint_is_sync_false_returns_immediately():
     Verifies that asynchronous checkpoints return immediately without blocking,
     even when the background thread is not processing checkpoints.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -2585,7 +2585,7 @@ async def test_create_checkpoint_with_none_defaults_to_sync():
     Verifies that empty checkpoints (operation_update=None) also default
     to synchronous behavior when is_sync is not specified.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -2618,7 +2618,7 @@ async def test_create_checkpoint_no_args_defaults_to_sync():
     Verifies that calling create_checkpoint with no arguments results in
     an empty synchronous checkpoint.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -2647,7 +2647,7 @@ async def test_create_checkpoint_no_args_defaults_to_sync():
 
 async def test_collect_checkpoint_batch_overflow_queue_size_limit_final():
     """Test that overflow queue draining respects size limit and puts back oversized operations."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     # Create config with small size limit
     config = CheckpointBatcherConfig(
@@ -2703,7 +2703,7 @@ async def test_create_checkpoint_blocks_until_completion_default():
     Verifies that calling create_checkpoint without specifying is_sync results in
     synchronous blocking behavior until the background thread processes the checkpoint.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     def delayed_checkpoint(**_kwargs):
         time.sleep(0.15)
@@ -2748,7 +2748,7 @@ async def test_create_checkpoint_blocks_until_completion_explicit_true():
     Verifies that explicitly setting is_sync=True results in synchronous blocking
     behavior until the background thread processes the checkpoint.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     def delayed_checkpoint(**_kwargs):
         time.sleep(0.15)
@@ -2793,7 +2793,7 @@ async def test_create_checkpoint_completion_event_created_and_signaled():
     Verifies that when is_sync=True, a completion future is created, enqueued,
     and properly resolved after successful checkpoint processing.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
         durable_execution_arn="test_arn",
@@ -2835,7 +2835,7 @@ async def test_create_checkpoint_completion_event_not_signaled_on_failure():
     Verifies that checkpoint failures propagate back through the completion future
     and do not leave the caller blocked.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     # Simulate checkpoint failure
     mock_lambda_client.checkpoint.side_effect = RuntimeError("Checkpoint failed")
 
@@ -2868,7 +2868,7 @@ async def test_create_checkpoint_caller_remains_blocked_on_background_failure():
     Verifies that synchronous callers do not hang after a checkpoint failure on
     the single-threaded event loop.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     # Simulate background thread failure
     mock_lambda_client.checkpoint.side_effect = RuntimeError("Background failure")
 
@@ -2904,7 +2904,7 @@ async def test_create_checkpoint_multiple_sync_calls_all_block():
     Verifies that when multiple threads call create_checkpoint synchronously,
     they all block until their respective completion events are signaled.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     mock_lambda_client.checkpoint.return_value = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
         new_execution_state=CheckpointUpdatedExecutionState(
@@ -2964,7 +2964,7 @@ async def test_create_checkpoint_sync_with_empty_checkpoint():
 
     Verifies that empty checkpoints also block correctly when is_sync=True.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     mock_lambda_client.checkpoint.return_value = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
         new_execution_state=CheckpointUpdatedExecutionState(
@@ -3006,7 +3006,7 @@ async def test_create_checkpoint_sync_with_empty_checkpoint():
 
 async def test_create_checkpoint_sync_success():
     """Test create_checkpoint_sync works normally when no error occurs."""
-    mock_client = Mock(spec=LambdaClient)
+    mock_client = Mock(spec=ThreadedSyncLambdaClient)
     mock_client.checkpoint.return_value = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
         new_execution_state=CheckpointUpdatedExecutionState(),
@@ -3035,7 +3035,7 @@ async def test_create_checkpoint_sync_success():
 
 async def test_create_checkpoint_sync_unwraps_background_thread_error():
     """Test create_checkpoint_sync unwraps BackgroundThreadError to original exception."""
-    mock_client = Mock(spec=LambdaClient)
+    mock_client = Mock(spec=ThreadedSyncLambdaClient)
 
     # Make checkpoint fail with a specific error
     original_error = RuntimeError("Original checkpoint error")
@@ -3064,7 +3064,7 @@ async def test_create_checkpoint_sync_unwraps_background_thread_error():
 
 async def test_create_checkpoint_sync_always_synchronous():
     """Test create_checkpoint_sync is always synchronous and blocks until completion."""
-    mock_client = Mock(spec=LambdaClient)
+    mock_client = Mock(spec=ThreadedSyncLambdaClient)
 
     def delayed_checkpoint(**_kwargs):
         time.sleep(0.15)
@@ -3168,7 +3168,7 @@ async def test_collect_checkpoint_batch_coalesces_many_empty_checkpoints():
     With the coalescing optimization, 999 empty checkpoints should all be collected
     in one batch (effective_operation_count=1), not split across 4 batches of 250.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     config = CheckpointBatcherConfig(
         max_batch_size_bytes=10 * 1024 * 1024,
@@ -3202,7 +3202,7 @@ async def test_collect_checkpoint_batch_empty_checkpoints_with_real_ops_respects
     """Test that real operations still respect the max_batch_operations limit
     even when many empty checkpoints are present in the same batch.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     config = CheckpointBatcherConfig(
         max_batch_size_bytes=10 * 1024 * 1024,
@@ -3242,7 +3242,7 @@ async def test_collect_checkpoint_batch_empty_checkpoints_with_real_ops_respects
 
 async def test_collect_checkpoint_batch_overflow_coalesces_empty_checkpoints():
     """Test that empty checkpoints in the overflow queue are also coalesced."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     config = CheckpointBatcherConfig(
         max_batch_size_bytes=10 * 1024 * 1024,
@@ -3277,7 +3277,7 @@ async def test_checkpoint_batches_forever_single_api_call_for_many_empty_checkpo
     This is the core optimization: 999 empty checkpoints should produce exactly 1 API
     call instead of ceil(999/250) = 4 API calls.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     mock_lambda_client.checkpoint.return_value = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
         new_execution_state=CheckpointUpdatedExecutionState(),
@@ -3324,7 +3324,7 @@ async def test_collect_checkpoint_batch_first_empty_counts_toward_limit():
     With limit=2: an empty op (effective=1) + a real op (effective=2) exactly fills the
     batch. The loop exits after the limit is hit; items after the limit stay in the queue.
     """
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     config = CheckpointBatcherConfig(
         max_batch_size_bytes=10 * 1024 * 1024,
@@ -3381,7 +3381,7 @@ async def test_collect_checkpoint_batch_first_empty_counts_toward_limit():
 
 async def test_execution_state_get_execution_operation_no_operations():
     """Test get_execution_operation logs debug and returns None when no operations exist."""
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     config = CheckpointBatcherConfig(
         max_batch_size_bytes=10 * 1024 * 1024,
         max_batch_time_seconds=10.0,
@@ -3413,7 +3413,7 @@ async def test_initial_execution_state_get_execution_operation_wrong_type():
         status=OperationStatus.STARTED,
     )
 
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     config = CheckpointBatcherConfig(
         max_batch_size_bytes=10 * 1024 * 1024,
         max_batch_time_seconds=10.0,
@@ -3450,7 +3450,7 @@ async def test_initial_execution_state_get_input_payload_none():
         status=OperationStatus.STARTED,
     )
 
-    mock_lambda_client = Mock(spec=LambdaClient)
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     config = CheckpointBatcherConfig(
         max_batch_size_bytes=10 * 1024 * 1024,
         max_batch_time_seconds=10.0,
@@ -3502,7 +3502,7 @@ class _RecordingPlugin(DurableInstrumentationPlugin):
 
 async def test_execution_state_accepts_plugin_executor_parameter():
     """Test that ExecutionState can be created with a plugin_executor parameter."""
-    mock_client = Mock(spec=LambdaClient)
+    mock_client = Mock(spec=ThreadedSyncLambdaClient)
     plugin = _RecordingPlugin()
     plugin_executor = PluginExecutor(plugins=[plugin])
 
@@ -3519,7 +3519,7 @@ async def test_execution_state_accepts_plugin_executor_parameter():
 
 async def test_plugin_executor_on_operation_action_called_on_checkpoint():
     """Test that plugin_executor.on_operation_action is called for each update after checkpoint."""
-    mock_client = create_autospec(LambdaClient)
+    mock_client = create_autospec(ThreadedSyncLambdaClient)
 
     # Return a succeeded step operation from checkpoint
     step_op = Operation(
@@ -3565,7 +3565,7 @@ async def test_plugin_executor_on_operation_action_called_on_checkpoint():
 
 async def test_plugin_executor_on_operation_update_called_for_terminal_operations():
     """Test that plugin_executor.on_operation_update is called for terminal operations."""
-    mock_client = create_autospec(LambdaClient)
+    mock_client = create_autospec(ThreadedSyncLambdaClient)
 
     # Return a succeeded step operation from checkpoint
     step_op = Operation(
@@ -3611,7 +3611,7 @@ async def test_plugin_executor_on_operation_update_called_for_terminal_operation
 
 async def test_plugin_executor_not_called_for_non_terminal_operations():
     """Test that plugin_executor.on_operation_update does not fire for non-terminal operations."""
-    mock_client = create_autospec(spec=LambdaClient)
+    mock_client = create_autospec(spec=ThreadedSyncLambdaClient)
 
     # Return a STARTED step operation from checkpoint
     step_op = Operation(
@@ -3660,7 +3660,7 @@ async def test_plugin_executor_not_called_for_non_terminal_operations():
 
 async def test_plugin_executor_called_for_multiple_updates_in_batch():
     """Test that plugin_executor is called for each update in a batch."""
-    mock_client = create_autospec(spec=LambdaClient)
+    mock_client = create_autospec(spec=ThreadedSyncLambdaClient)
 
     # Return multiple operations from checkpoint
     step_op1 = Operation(
@@ -3729,7 +3729,7 @@ async def test_plugin_executor_called_for_multiple_updates_in_batch():
 
 async def test_plugin_executor_not_called_on_checkpoint_failure():
     """Test that plugin_executor is NOT called when checkpoint API fails."""
-    mock_client = create_autospec(spec=LambdaClient)
+    mock_client = create_autospec(spec=ThreadedSyncLambdaClient)
     mock_client.checkpoint.side_effect = RuntimeError("API error")
 
     plugin = _RecordingPlugin()
@@ -3764,7 +3764,7 @@ async def test_plugin_executor_not_called_on_checkpoint_failure():
 
 async def test_plugin_executor_exception_does_not_break_checkpointing():
     """Test that a plugin exception does not break the checkpoint processing loop."""
-    mock_client = create_autospec(spec=LambdaClient)
+    mock_client = create_autospec(spec=ThreadedSyncLambdaClient)
 
     step_op = Operation(
         operation_id="step-1",
@@ -3815,7 +3815,7 @@ async def test_plugin_executor_exception_does_not_break_checkpointing():
 
 async def test_plugin_executor_not_called_for_pending_operations():
     """Test that plugin_executor.on_operation_update fires on_user_function_end for PENDING operations."""
-    mock_client = create_autospec(spec=LambdaClient)
+    mock_client = create_autospec(spec=ThreadedSyncLambdaClient)
 
     # Return a PENDING step operation from checkpoint (simulates a retry scenario)
     step_op = Operation(

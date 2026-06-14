@@ -37,7 +37,7 @@ from unittest.mock import Mock
 from async_durable_execution.lambda_service import (
     CheckpointOutput,
     CheckpointUpdatedExecutionState,
-    LambdaClient,
+    ThreadedSyncLambdaClient,
     OperationAction,
     OperationType,
     OperationUpdate,
@@ -71,9 +71,9 @@ def _make_state(
 
 
 def _make_tracking_client() -> tuple[Mock, list]:
-    """Return a (mock LambdaClient, checkpoint_calls list) pair."""
+    """Return a (mock ThreadedSyncLambdaClient, checkpoint_calls list) pair."""
     calls: list[list] = []
-    mock_client = Mock(spec=LambdaClient)
+    mock_client = Mock(spec=ThreadedSyncLambdaClient)
 
     def _checkpoint(
         durable_execution_arn, checkpoint_token, updates, client_token=None

@@ -1109,8 +1109,8 @@ class DurableServiceClient(Protocol):
     ) -> StateOutput: ...  # pragma: no cover
 
 
-class LambdaClient(DurableServiceClient):
-    """Persist durable operations to the Lambda Durable Function APIs."""
+class ThreadedSyncLambdaClient(DurableServiceClient):
+    """Adapt the sync boto3 Lambda client to the async service interface."""
 
     _cached_boto_client: Boto3LambdaClient | None = None
 
@@ -1118,7 +1118,7 @@ class LambdaClient(DurableServiceClient):
         self.client = client
 
     @classmethod
-    def initialize_client(cls) -> LambdaClient:
+    def initialize_client(cls) -> ThreadedSyncLambdaClient:
         """Initialize or return cached Lambda client.
 
         Implements lazy initialization with class-level caching to optimize
@@ -1127,7 +1127,7 @@ class LambdaClient(DurableServiceClient):
         pool setup.
 
         Returns:
-            LambdaClient: A new LambdaClient instance wrapping the cached boto3 client.
+            ThreadedSyncLambdaClient: A new client wrapping the cached boto3 client.
         """
         if cls._cached_boto_client is None:
             cls._cached_boto_client = boto3.client(

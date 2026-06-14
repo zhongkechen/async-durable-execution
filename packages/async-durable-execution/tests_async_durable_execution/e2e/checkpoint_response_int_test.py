@@ -93,7 +93,9 @@ def test_end_to_end_step_operation_with_double_check():
         result: str = await context.step(my_step())
         return result
 
-    with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
         mock_client = Mock()
         mock_client_class.initialize_client.return_value = mock_client
 
@@ -154,7 +156,9 @@ def test_end_to_end_multiple_operations_execute_sequentially():
     async def my_handler(event, context: DurableContext) -> list[str]:
         return [await context.step(step1()), await context.step(step2())]
 
-    with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
         mock_client = Mock()
         mock_client_class.initialize_client.return_value = mock_client
 
@@ -208,7 +212,9 @@ def test_end_to_end_wait_operation_with_double_check():
         await context.wait(timedelta(seconds=5))
         return "completed"
 
-    with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
         mock_client = Mock()
         mock_client_class.initialize_client.return_value = mock_client
 
@@ -265,7 +271,9 @@ def test_end_to_end_checkpoint_synchronization_with_operations_list():
     async def my_handler(event, context: DurableContext) -> str:
         return await context.step(my_step())
 
-    with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
         mock_client = Mock()
         mock_client_class.initialize_client.return_value = mock_client
 
@@ -328,7 +336,9 @@ def test_callback_deferred_error_handling_to_result():
 
         return f"{callback.callback_id}:{result}"
 
-    with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
         mock_client = Mock()
         mock_client_class.initialize_client.return_value = mock_client
 
@@ -422,7 +432,9 @@ def test_end_to_end_invoke_operation_with_double_check():
     async def my_handler(event, context: DurableContext):
         await context.invoke("my-function", {"data": "test"})
 
-    with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
         mock_client = Mock()
         mock_client_class.initialize_client.return_value = mock_client
 
@@ -479,7 +491,9 @@ def test_end_to_end_child_context_with_async_checkpoint():
         result: str = await context.run_in_child_context(child_function)
         return result
 
-    with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
         mock_client = Mock()
         mock_client_class.initialize_client.return_value = mock_client
 
@@ -544,7 +558,9 @@ def test_end_to_end_child_context_replay_children_mode():
         )
         return f"executed_{execution_count['count']}_times"
 
-    with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
         mock_client = Mock()
         mock_client_class.initialize_client.return_value = mock_client
 
@@ -641,7 +657,9 @@ def test_end_to_end_child_context_error_handling():
         result: str = await context.run_in_child_context(child_function_that_fails)
         return result
 
-    with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
         mock_client = Mock()
         mock_client_class.initialize_client.return_value = mock_client
 
@@ -706,7 +724,9 @@ def test_end_to_end_child_context_invocation_error_reraised():
         )
         return result
 
-    with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
         mock_client = Mock()
         mock_client_class.initialize_client.return_value = mock_client
 
