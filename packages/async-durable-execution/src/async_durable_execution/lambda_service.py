@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import copy
 import datetime
 import logging
@@ -1091,7 +1092,7 @@ class StateOutput:
 class DurableServiceClient(Protocol):
     """Durable Service clients must implement this interface."""
 
-    def checkpoint(
+    async def checkpoint(
         self,
         durable_execution_arn: str,
         checkpoint_token: str,
@@ -1099,7 +1100,7 @@ class DurableServiceClient(Protocol):
         client_token: str | None,
     ) -> CheckpointOutput: ...  # pragma: no cover
 
-    def get_execution_state(
+    async def get_execution_state(
         self,
         durable_execution_arn: str,
         checkpoint_token: str,
@@ -1139,7 +1140,7 @@ class LambdaClient(DurableServiceClient):
             )
         return cls(client=cls._cached_boto_client)
 
-    def checkpoint(
+    async def checkpoint(
         self,
         durable_execution_arn: str,
         checkpoint_token: str,
@@ -1151,13 +1152,12 @@ class LambdaClient(DurableServiceClient):
             if client_token is not None:
                 optional_params["ClientToken"] = client_token
 
-            result: CheckpointDurableExecutionResponseTypeDef = (
-                self.client.checkpoint_durable_execution(
-                    DurableExecutionArn=durable_execution_arn,
-                    CheckpointToken=checkpoint_token,
-                    Updates=cast("Any", [o.to_dict() for o in updates]),
-                    **optional_params,  # type: ignore[arg-type]
-                )
+            result: CheckpointDurableExecutionResponseTypeDef = await asyncio.to_thread(
+                self.client.checkpoint_durable_execution,
+                DurableExecutionArn=durable_execution_arn,
+                CheckpointToken=checkpoint_token,
+                Updates=cast("Any", [o.to_dict() for o in updates]),
+                **optional_params,  # type: ignore[arg-type]
             )
 
             return CheckpointOutput.from_dict(cast("MutableMapping[str, Any]", result))
@@ -1168,7 +1168,7 @@ class LambdaClient(DurableServiceClient):
             )
             raise checkpoint_error from None
 
-    def get_execution_state(
+    async def get_execution_state(
         self,
         durable_execution_arn: str,
         checkpoint_token: str,
@@ -1176,13 +1176,12 @@ class LambdaClient(DurableServiceClient):
         max_items: int = 1000,
     ) -> StateOutput:
         try:
-            result: GetDurableExecutionStateResponseTypeDef = (
-                self.client.get_durable_execution_state(
-                    DurableExecutionArn=durable_execution_arn,
-                    CheckpointToken=checkpoint_token,
-                    Marker=next_marker,
-                    MaxItems=max_items,
-                )
+            result: GetDurableExecutionStateResponseTypeDef = await asyncio.to_thread(
+                self.client.get_durable_execution_state,
+                DurableExecutionArn=durable_execution_arn,
+                CheckpointToken=checkpoint_token,
+                Marker=next_marker,
+                MaxItems=max_items,
             )
             return StateOutput.from_dict(cast("MutableMapping[str, Any]", result))
         except Exception as e:

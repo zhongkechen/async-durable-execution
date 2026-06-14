@@ -1,5 +1,6 @@
 """Tests for the service module."""
 
+import asyncio
 import datetime
 from datetime import UTC
 from unittest.mock import Mock, patch
@@ -1712,7 +1713,7 @@ def test_lambda_client_checkpoint(mock_boto3):
         action=OperationAction.START,
     )
 
-    result = lambda_client.checkpoint("arn123", "token123", [update], None)
+    result = asyncio.run(lambda_client.checkpoint("arn123", "token123", [update], None))
 
     mock_client.checkpoint_durable_execution.assert_called_once_with(
         DurableExecutionArn="arn123",
@@ -1738,8 +1739,8 @@ def test_lambda_client_checkpoint_with_client_token():
         action=OperationAction.START,
     )
 
-    result = lambda_client.checkpoint(
-        "arn123", "token123", [update], "client-token-123"
+    result = asyncio.run(
+        lambda_client.checkpoint("arn123", "token123", [update], "client-token-123")
     )
 
     mock_client.checkpoint_durable_execution.assert_called_once_with(
@@ -1767,7 +1768,7 @@ def test_lambda_client_checkpoint_with_explicit_none_client_token():
         action=OperationAction.START,
     )
 
-    result = lambda_client.checkpoint("arn123", "token123", [update], None)
+    result = asyncio.run(lambda_client.checkpoint("arn123", "token123", [update], None))
 
     mock_client.checkpoint_durable_execution.assert_called_once_with(
         DurableExecutionArn="arn123",
@@ -1793,7 +1794,7 @@ def test_lambda_client_checkpoint_with_empty_string_client_token():
         action=OperationAction.START,
     )
 
-    result = lambda_client.checkpoint("arn123", "token123", [update], "")
+    result = asyncio.run(lambda_client.checkpoint("arn123", "token123", [update], ""))
 
     mock_client.checkpoint_durable_execution.assert_called_once_with(
         DurableExecutionArn="arn123",
@@ -1820,7 +1821,9 @@ def test_lambda_client_checkpoint_with_string_value_client_token():
         action=OperationAction.START,
     )
 
-    result = lambda_client.checkpoint("arn123", "token123", [update], "my-client-token")
+    result = asyncio.run(
+        lambda_client.checkpoint("arn123", "token123", [update], "my-client-token")
+    )
 
     mock_client.checkpoint_durable_execution.assert_called_once_with(
         DurableExecutionArn="arn123",
@@ -1845,7 +1848,7 @@ def test_lambda_client_checkpoint_with_exception():
     )
 
     with pytest.raises(CheckpointError):
-        lambda_client.checkpoint("arn123", "token123", [update], None)
+        asyncio.run(lambda_client.checkpoint("arn123", "token123", [update], None))
 
 
 @patch("async_durable_execution.lambda_service.logger")
@@ -1870,7 +1873,7 @@ def test_lambda_client_checkpoint_logs_response_metadata(mock_logger):
     )
 
     with pytest.raises(CheckpointError):
-        lambda_client.checkpoint("arn123", "token123", [update], None)
+        asyncio.run(lambda_client.checkpoint("arn123", "token123", [update], None))
 
     mock_logger.exception.assert_called_once_with(
         "Failed to checkpoint.",
@@ -1901,7 +1904,7 @@ def test_lambda_client_get_execution_state_logs_response_metadata(mock_logger):
     lambda_client = LambdaClient(mock_client)
 
     with pytest.raises(GetExecutionStateError) as exc_info:
-        lambda_client.get_execution_state("arn123", "token123", "", 1000)
+        asyncio.run(lambda_client.get_execution_state("arn123", "token123", "", 1000))
 
     assert exc_info.value.error is None
     assert exc_info.value.response_metadata == {
@@ -1937,7 +1940,9 @@ def test_durable_service_client_protocol_checkpoint():
         )
     ]
 
-    result = mock_client.checkpoint("arn123", "token", updates, "client_token")
+    result = asyncio.run(
+        mock_client.checkpoint("arn123", "token", updates, "client_token")
+    )
 
     mock_client.checkpoint.assert_called_once_with(
         "arn123", "token", updates, "client_token"
@@ -2012,7 +2017,9 @@ def test_lambda_client_get_execution_state():
     }
 
     lambda_client = LambdaClient(mock_client)
-    result = lambda_client.get_execution_state("arn123", "token123", "marker", 500)
+    result = asyncio.run(
+        lambda_client.get_execution_state("arn123", "token123", "marker", 500)
+    )
 
     mock_client.get_durable_execution_state.assert_called_once_with(
         DurableExecutionArn="arn123",
@@ -2029,7 +2036,9 @@ def test_durable_service_client_protocol_get_execution_state():
     mock_output = StateOutput(operations=[], next_marker="marker")
     mock_client.get_execution_state.return_value = mock_output
 
-    result = mock_client.get_execution_state("arn123", "token", "marker", 1000)
+    result = asyncio.run(
+        mock_client.get_execution_state("arn123", "token", "marker", 1000)
+    )
 
     mock_client.get_execution_state.assert_called_once_with(
         "arn123", "token", "marker", 1000
@@ -2058,7 +2067,7 @@ def test_checkpoint_error_handling():
     )
 
     with pytest.raises(CheckpointError):
-        lambda_client.checkpoint("arn:test", "token", [update], None)
+        asyncio.run(lambda_client.checkpoint("arn:test", "token", [update], None))
 
 
 @patch.dict("os.environ", {}, clear=True)
@@ -2163,7 +2172,9 @@ def test_lambda_client_checkpoint_with_non_none_client_token():
         action=OperationAction.START,
     )
 
-    result = lambda_client.checkpoint("arn:test", "token", [update], "client_token_123")
+    result = asyncio.run(
+        lambda_client.checkpoint("arn:test", "token", [update], "client_token_123")
+    )
 
     # Verify ClientToken was passed
     mock_client.checkpoint_durable_execution.assert_called_once()

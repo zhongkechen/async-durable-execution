@@ -19,7 +19,7 @@ class InMemoryServiceClient(DurableServiceClient):
     def __init__(self, checkpoint_processor: CheckpointProcessor):
         self._checkpoint_processor: CheckpointProcessor = checkpoint_processor
 
-    def checkpoint(
+    async def checkpoint(
         self,
         durable_execution_arn: str,  # noqa: ARG002
         checkpoint_token: str,
@@ -31,7 +31,7 @@ class InMemoryServiceClient(DurableServiceClient):
             checkpoint_token, updates, client_token
         )
 
-    def get_execution_state(
+    async def get_execution_state(
         self,
         durable_execution_arn: str,  # noqa: ARG002
         checkpoint_token: str,

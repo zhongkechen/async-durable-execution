@@ -15,7 +15,7 @@ from enum import Enum
 from threading import Lock
 from typing import TYPE_CHECKING
 
-from async_durable_execution.async_tools import invoke_callable
+from async_durable_execution.async_tools import await_maybe, invoke_callable
 from async_durable_execution.exceptions import (
     BackgroundThreadError,
     CallableRuntimeError,
@@ -385,6 +385,20 @@ class ExecutionState:
         initial_operations: list[Operation],
         checkpoint_token: str,
         next_marker: str | None,
+    ):
+        return _run_or_return(
+            self._fetch_paginated_operations_async(
+                initial_operations=initial_operations,
+                checkpoint_token=checkpoint_token,
+                next_marker=next_marker,
+            )
+        )
+
+    async def _fetch_paginated_operations_async(
+        self,
+        initial_operations: list[Operation],
+        checkpoint_token: str,
+        next_marker: str | None,
     ) -> list[Operation]:
         """Add initial operations and fetch all paginated operations from the Durable Functions API. This method is thread_safe.
 
@@ -408,10 +422,12 @@ class ExecutionState:
         )
         try:
             while next_marker:
-                output: StateOutput = self._service_client.get_execution_state(
-                    durable_execution_arn=self.durable_execution_arn,
-                    checkpoint_token=checkpoint_token,
-                    next_marker=next_marker,
+                output: StateOutput = await await_maybe(
+                    self._service_client.get_execution_state(
+                        durable_execution_arn=self.durable_execution_arn,
+                        checkpoint_token=checkpoint_token,
+                        next_marker=next_marker,
+                    )
                 )
                 all_operations.extend(output.operations)
                 next_marker = output.next_marker
@@ -815,11 +831,13 @@ class ExecutionState:
 
                 try:
                     # Make API call with batched operations
-                    output: CheckpointOutput = self._service_client.checkpoint(
-                        durable_execution_arn=self.durable_execution_arn,
-                        checkpoint_token=current_checkpoint_token,
-                        updates=updates,
-                        client_token=None,
+                    output: CheckpointOutput = await await_maybe(
+                        self._service_client.checkpoint(
+                            durable_execution_arn=self.durable_execution_arn,
+                            checkpoint_token=current_checkpoint_token,
+                            updates=updates,
+                            client_token=None,
+                        )
                     )
 
                     logger.debug("Checkpoint batch processed successfully")
@@ -828,7 +846,7 @@ class ExecutionState:
                     current_checkpoint_token = output.checkpoint_token
 
                     # Fetch new operations from the API before unblocking sync waiters
-                    updated_operations = self.fetch_paginated_operations(
+                    updated_operations = await self.fetch_paginated_operations(
                         output.new_execution_state.operations,
                         output.checkpoint_token,
                         output.new_execution_state.next_marker,

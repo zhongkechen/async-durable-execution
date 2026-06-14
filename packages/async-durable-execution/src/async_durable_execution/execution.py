@@ -254,10 +254,12 @@ def durable_execution(
         )
 
         try:
-            execution_state.fetch_paginated_operations(
-                invocation_input.initial_execution_state.operations,
-                invocation_input.checkpoint_token,
-                invocation_input.initial_execution_state.next_marker,
+            await await_maybe(
+                execution_state.fetch_paginated_operations(
+                    invocation_input.initial_execution_state.operations,
+                    invocation_input.checkpoint_token,
+                    invocation_input.initial_execution_state.next_marker,
+                )
             )
         except BotoClientError as e:
             # Non-retryable Durable API errors (e.g., customer configuration issues,
