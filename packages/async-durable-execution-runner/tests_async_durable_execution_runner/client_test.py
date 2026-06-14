@@ -1,5 +1,6 @@
 """Unit tests for InMemoryServiceClient."""
 
+import asyncio
 import datetime
 from unittest.mock import Mock
 
@@ -32,11 +33,13 @@ def test_checkpoint():
         )
     ]
 
-    result = client.checkpoint(
-        "arn:aws:lambda:us-east-1:123456789012:function:test",
-        "token",
-        updates,
-        "client-token",
+    result = asyncio.run(
+        client.checkpoint(
+            "arn:aws:lambda:us-east-1:123456789012:function:test",
+            "token",
+            updates,
+            "client-token",
+        )
     )
 
     assert result == expected_output
@@ -53,8 +56,13 @@ def test_get_execution_state():
 
     client = InMemoryServiceClient(processor)
 
-    result = client.get_execution_state(
-        "arn:aws:lambda:us-east-1:123456789012:function:test", "token", "marker", 500
+    result = asyncio.run(
+        client.get_execution_state(
+            "arn:aws:lambda:us-east-1:123456789012:function:test",
+            "token",
+            "marker",
+            500,
+        )
     )
 
     assert result == expected_output
@@ -69,8 +77,12 @@ def test_get_execution_state_default_max_items():
 
     client = InMemoryServiceClient(processor)
 
-    result = client.get_execution_state(
-        "arn:aws:lambda:us-east-1:123456789012:function:test", "token", "marker"
+    result = asyncio.run(
+        client.get_execution_state(
+            "arn:aws:lambda:us-east-1:123456789012:function:test",
+            "token",
+            "marker",
+        )
     )
 
     assert result == expected_output
