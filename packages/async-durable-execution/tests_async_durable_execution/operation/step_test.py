@@ -261,6 +261,33 @@ async def test_step_handler_success_at_least_once():
     assert success_operation.action is OperationAction.SUCCEED
 
 
+async def test_step_handler_passes_attempt_to_step_context():
+    """Test step execution exposes the current attempt on StepContext."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_result = CheckpointedResult.create_not_found()
+    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.durable_execution_arn = "test_arn"
+    mock_state.wrap_user_function.side_effect = lambda func, *args, **kwargs: _asyncify(
+        func
+    )
+
+    mock_logger = Mock(spec=Logger)
+    mock_logger.with_log_info.return_value = mock_logger
+
+    async def step_callable(step_context):
+        return step_context.attempt
+
+    result = await step_handler(
+        step_callable,
+        mock_state,
+        OperationIdentifier("step_attempt", OperationSubType.STEP, None, "test_step"),
+        StepConfig(step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY),
+        mock_logger,
+    )
+
+    assert result == 1
+
+
 async def test_step_handler_success_at_most_once():
     """Test step_handler successful execution with AT_MOST_ONCE semantics."""
     mock_state = Mock(spec=ExecutionState)

@@ -1,7 +1,6 @@
 """Example demonstrating multiple steps with retry logic."""
 
 from datetime import timedelta
-from itertools import count
 from typing import Any
 
 from async_durable_execution.config import StepConfig
@@ -13,27 +12,21 @@ from async_durable_execution.retries import (
 )
 
 
-# Counter for deterministic behavior across retries
-_attempts = count(1)  # starts from 1
-
-
 async def simulated_get_item(
-    _step_context: StepContext, name: str
+    step_context: StepContext, name: str, poll_count: int
 ) -> dict[str, Any] | None:
-    """Simulate getting an item with deterministic counter-based behavior."""
-    # Use counter for deterministic behavior
-    attempt = next(_attempts)
+    """Simulate getting an item with deterministic per-poll retry behavior."""
+    attempt = step_context.attempt or 1
 
-    # Fail on first attempt
-    if attempt == 1:
+    # Poll 1 fails once, then returns None on retry so the workflow polls again.
+    if poll_count == 1 and attempt == 1:
         msg = "Random failure"
         raise RuntimeError(msg)
 
-    # Return None on second attempt (poll 1)
-    if attempt == 2:
+    if poll_count == 1:
         return None
 
-    # Return item on third attempt (poll 2, after retry)
+    # Poll 2 succeeds immediately.
     return {"id": name, "data": "item data"}
 
 
@@ -59,7 +52,7 @@ async def handler(event: Any, context: DurableContext) -> dict[str, Any]:
             poll_count += 1
 
             async def get_item(step_context: StepContext, item_name: str = name):
-                return await simulated_get_item(step_context, item_name)
+                return await simulated_get_item(step_context, item_name, poll_count)
 
             # Try to get the item with retry
             get_response = await context.step(

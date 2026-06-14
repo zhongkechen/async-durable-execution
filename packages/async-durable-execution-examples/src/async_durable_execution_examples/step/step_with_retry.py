@@ -1,4 +1,3 @@
-from itertools import count
 from typing import Any
 
 from async_durable_execution.config import StepConfig
@@ -14,17 +13,13 @@ from async_durable_execution.retries import (
 )
 
 
-# Counter for deterministic behavior across retries
-_attempts = count(1)  # starts from 1
-
-
 @durable_step
 async def unreliable_operation(
-    _step_context: StepContext,
+    step_context: StepContext,
 ) -> str:
-    # Use counter for deterministic behavior
-    # Will fail on first attempt, succeed on second
-    attempt = next(_attempts)
+    # Retry behavior is derived from the current step attempt so it remains
+    # deterministic for each durable execution and safe across warm Lambdas.
+    attempt = step_context.attempt or 1
     if attempt < 2:
         msg = f"Attempt {attempt} failed"
         raise RuntimeError(msg)
