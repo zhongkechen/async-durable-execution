@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -632,31 +633,37 @@ class DurableFunctionLocalTestRunner:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
     def close(self):
         self._scheduler.stop()
 
-    def run(
+    async def run(
         self,
     ) -> DurableFunctionTestResult:
-        execution_arn = self.run_async()
-        return self.wait_for_result(
+        execution_arn = await self.run_async()
+        return await self.wait_for_result(
             execution_arn=execution_arn, timeout=self._default_timeout
         )
 
-    def send_callback_success(
+    async def send_callback_success(
         self, callback_id: str, result: bytes | None = None
     ) -> None:
         self._executor.send_callback_success(callback_id=callback_id, result=result)
 
-    def send_callback_failure(
+    async def send_callback_failure(
         self, callback_id: str, error: ErrorObject | None = None
     ) -> None:
         self._executor.send_callback_failure(callback_id=callback_id, error=error)
 
-    def send_callback_heartbeat(self, callback_id: str) -> None:
+    async def send_callback_heartbeat(self, callback_id: str) -> None:
         self._executor.send_callback_heartbeat(callback_id=callback_id)
 
-    def run_async(
+    async def run_async(
         self,
     ) -> str:
         start_input = StartDurableExecutionInput(
@@ -672,8 +679,8 @@ class DurableFunctionLocalTestRunner:
             input=self._default_input,
         )
 
-        output: StartDurableExecutionOutput = self._executor.start_execution(
-            start_input
+        output: StartDurableExecutionOutput = await asyncio.to_thread(
+            self._executor.start_execution, start_input
         )
 
         if output.execution_arn is None:
@@ -681,28 +688,31 @@ class DurableFunctionLocalTestRunner:
             raise DurableFunctionsTestError(msg_arn)
         return output.execution_arn
 
-    def wait_for_result(
+    async def wait_for_result(
         self, execution_arn: str, timeout: int = 60
     ) -> DurableFunctionTestResult:
-        # Block until completion
-        completed = self._executor.wait_until_complete(execution_arn, timeout)
+        completed = await asyncio.to_thread(
+            self._executor.wait_until_complete, execution_arn, timeout
+        )
 
         if not completed:
             msg_timeout: str = "Execution did not complete within timeout"
 
             raise TimeoutError(msg_timeout)
 
-        execution: Execution = self._store.load(execution_arn)
+        execution: Execution = await asyncio.to_thread(self._store.load, execution_arn)
         return DurableFunctionTestResult.create(execution=execution)
 
-    def wait_for_callback(
+    async def wait_for_callback(
         self, execution_arn: str, name: str | None = None, timeout: int = 60
     ) -> str:
         start_time = time.time()
 
         while time.time() - start_time < timeout:
             try:
-                history_response = self._executor.get_execution_history(execution_arn)
+                history_response = await asyncio.to_thread(
+                    self._executor.get_execution_history, execution_arn
+                )
                 callback_id = _get_callback_id_from_events(
                     events=history_response.events, name=name
                 )
@@ -714,8 +724,7 @@ class DurableFunctionLocalTestRunner:
                 msg = f"Failed to fetch execution history: {e}"
                 raise DurableFunctionsTestError(msg) from e
 
-            # Wait before next poll
-            time.sleep(self.poll_interval)
+            await asyncio.sleep(self.poll_interval)
 
         # Timeout reached
         elapsed = time.time() - start_time
@@ -743,8 +752,8 @@ def create_runner(
         region: AWS region for cloud mode.
         lambda_endpoint: Optional Lambda endpoint for cloud mode.
         poll_interval: Poll interval used by the underlying runner.
-        input: Default input for ``run()`` and ``run_async()``.
-        timeout: Default timeout for ``run()`` and ``run_async()``.
+        input: Default input for ``await run()`` and ``await run_async()``.
+        timeout: Default timeout for ``await run()`` and ``await run_async()``.
 
     Returns:
         A configured runner that can be used as a context manager.
@@ -935,8 +944,8 @@ class DurableFunctionCloudTestRunner:
         >>> runner = DurableFunctionCloudTestRunner(
         ...     function_name="HelloWorld-Python-PR-123", region="us-west-2"
         ... )
-        >>> with runner:
-        ...     result = runner.run()
+        >>> async with runner:
+        ...     result = await runner.run()
         >>> assert result.current_status == InvocationStatus.SUCCEEDED
     """
 
@@ -974,13 +983,19 @@ class DurableFunctionCloudTestRunner:
         """Close underlying resources when leaving a context manager block."""
         self.close()
 
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
     def close(self) -> None:
         """Close the underlying boto3 client when supported."""
         close = getattr(self.lambda_client, "close", None)
         if callable(close):
             close()
 
-    def run(
+    async def run(
         self,
     ) -> DurableFunctionTestResult:
         """Execute function on AWS Lambda and wait for completion."""
@@ -995,7 +1010,8 @@ class DurableFunctionCloudTestRunner:
 
         # Invoke Lambda function
         try:
-            response = self.lambda_client.invoke(
+            response = await asyncio.to_thread(
+                self.lambda_client.invoke,
                 FunctionName=self.function_name,
                 InvocationType="RequestResponse",
                 Payload=payload,
@@ -1031,11 +1047,11 @@ class DurableFunctionCloudTestRunner:
             )
             raise DurableFunctionsTestError(msg)
 
-        return self.wait_for_result(
+        return await self.wait_for_result(
             execution_arn=execution_arn, timeout=self._default_timeout
         )
 
-    def run_async(
+    async def run_async(
         self,
     ) -> str:
         """Execute function on AWS Lambda asynchronously"""
@@ -1046,7 +1062,8 @@ class DurableFunctionCloudTestRunner:
         )
         payload = json.dumps(self._default_input)
         try:
-            response = self.lambda_client.invoke(
+            response = await asyncio.to_thread(
+                self.lambda_client.invoke,
                 FunctionName=self.function_name,
                 InvocationType="Event",
                 Payload=payload,
@@ -1064,11 +1081,12 @@ class DurableFunctionCloudTestRunner:
 
         return response.get("DurableExecutionArn")
 
-    def send_callback_success(
+    async def send_callback_success(
         self, callback_id: str, result: bytes | None = None
     ) -> None:
         try:
-            self.lambda_client.send_durable_execution_callback_success(
+            await asyncio.to_thread(
+                self.lambda_client.send_durable_execution_callback_success,
                 CallbackId=callback_id,
                 Result=cast(Any, result),
             )
@@ -1076,11 +1094,12 @@ class DurableFunctionCloudTestRunner:
             msg = f"Failed to send callback success for {self.function_name}, callback_id {callback_id}: {e}"
             raise DurableFunctionsTestError(msg) from e
 
-    def send_callback_failure(
+    async def send_callback_failure(
         self, callback_id: str, error: ErrorObject | None = None
     ) -> None:
         try:
-            self.lambda_client.send_durable_execution_callback_failure(
+            await asyncio.to_thread(
+                self.lambda_client.send_durable_execution_callback_failure,
                 CallbackId=callback_id,
                 Error=cast(Any, error.to_dict() if error else None),
             )
@@ -1088,10 +1107,11 @@ class DurableFunctionCloudTestRunner:
             msg = f"Failed to send callback failure for {self.function_name}, callback_id {callback_id}: {e}"
             raise DurableFunctionsTestError(msg) from e
 
-    def send_callback_heartbeat(self, callback_id: str) -> None:
+    async def send_callback_heartbeat(self, callback_id: str) -> None:
         try:
-            self.lambda_client.send_durable_execution_callback_heartbeat(
-                CallbackId=callback_id
+            await asyncio.to_thread(
+                self.lambda_client.send_durable_execution_callback_heartbeat,
+                CallbackId=callback_id,
             )
         except Exception as e:
             msg = f"Failed to send callback heartbeat for {self.function_name}, callback_id {callback_id}: {e}"
@@ -1153,14 +1173,17 @@ class DurableFunctionCloudTestRunner:
         )
         raise TimeoutError(msg)
 
-    def wait_for_result(
+    async def wait_for_result(
         self, execution_arn: str, timeout: int = 60
     ) -> DurableFunctionTestResult:
-        # Poll for completion
-        execution_response = self._wait_for_completion(execution_arn, timeout)
+        execution_response = await asyncio.to_thread(
+            self._wait_for_completion, execution_arn, timeout
+        )
 
         try:
-            history_response = self._fetch_execution_history(execution_arn)
+            history_response = await asyncio.to_thread(
+                self._fetch_execution_history, execution_arn
+            )
         except Exception as e:
             msg = f"Failed to fetch execution history: {e}"
             raise DurableFunctionsTestError(msg) from e
@@ -1170,7 +1193,7 @@ class DurableFunctionCloudTestRunner:
             execution_response, history_response
         )
 
-    def wait_for_callback(
+    async def wait_for_callback(
         self, execution_arn: str, name: str | None = None, timeout: int = 60
     ) -> str:
         """
@@ -1196,7 +1219,9 @@ class DurableFunctionCloudTestRunner:
 
         while time.time() - start_time < timeout:
             try:
-                history_response = self._fetch_execution_history(execution_arn)
+                history_response = await asyncio.to_thread(
+                    self._fetch_execution_history, execution_arn
+                )
                 callback_id = _get_callback_id_from_events(
                     events=history_response.events, name=name
                 )
@@ -1216,8 +1241,7 @@ class DurableFunctionCloudTestRunner:
                 msg = f"Failed to fetch execution history: {e}"
                 raise DurableFunctionsTestError(msg) from e
 
-            # Wait before next poll
-            time.sleep(self.poll_interval)
+            await asyncio.sleep(self.poll_interval)
 
         # Timeout reached
         elapsed = time.time() - start_time
