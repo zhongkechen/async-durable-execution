@@ -26,9 +26,9 @@ from async_durable_execution.lambda_service import (
     DurableServiceClient,
     ErrorObject,
     InvocationStatus,
-    LambdaClient,
     Operation,
     OperationUpdate,
+    ThreadedSyncLambdaClient,
 )
 from async_durable_execution.plugin import (
     DurableInstrumentationPlugin,
@@ -239,9 +239,9 @@ def durable_execution(
 
             # Use custom client if provided, otherwise initialize from environment
             service_client = (
-                LambdaClient(client=boto3_client)
+                ThreadedSyncLambdaClient(client=boto3_client)
                 if boto3_client is not None
-                else LambdaClient.initialize_client()
+                else ThreadedSyncLambdaClient.initialize_client()
             )
 
         execution_state: ExecutionState = ExecutionState(

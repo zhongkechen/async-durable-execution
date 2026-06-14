@@ -110,7 +110,9 @@ def test_step_different_ways_to_pass_args():
 
         return results
 
-    with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
         mock_client = Mock()
         mock_client_class.initialize_client.return_value = mock_client
 
@@ -194,7 +196,9 @@ def test_step_with_logger():
         result: str = await context.step(mystep(a=123, b="str"))
         assert result == "result"
 
-    with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
         mock_client = Mock()
         mock_client_class.initialize_client.return_value = mock_client
 
@@ -293,7 +297,9 @@ def test_wait_inside_run_in_childcontext():
         await context.run_in_child_context(func(10, 20))
 
     # Mock the lambda client
-    with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
         mock_client = Mock()
         mock_client_class.initialize_client.return_value = mock_client
 
@@ -383,7 +389,9 @@ def test_step_checkpoint_failure_propagates_error():
         result: str = await context.step(failing_step())
         return result
 
-    with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
         mock_client = Mock()
         mock_client_class.initialize_client.return_value = mock_client
 
@@ -445,7 +453,9 @@ def test_wait_not_caught_by_exception():
             msg = "This should not be caught"
             raise CustomError(msg) from err
 
-    with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
         mock_client = Mock()
         mock_client_class.initialize_client.return_value = mock_client
 
@@ -514,7 +524,9 @@ def test_durable_wait_for_callback_decorator():
             submit_to_external_system("my_task", priority=5)
         )
 
-    with patch("async_durable_execution.execution.LambdaClient") as mock_client_class:
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
         mock_client = Mock()
         mock_client_class.initialize_client.return_value = mock_client
 

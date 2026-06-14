@@ -26,7 +26,7 @@ from async_durable_execution.lambda_service import (
     DurableServiceClient,
     ErrorObject,
     ExecutionDetails,
-    LambdaClient,
+    ThreadedSyncLambdaClient,
     Operation,
     OperationAction,
     OperationStatus,
@@ -51,9 +51,9 @@ from async_durable_execution.lambda_service import (
 @pytest.fixture
 def reset_lambda_client_cache():
     """Reset the class-level boto3 client cache before and after each test."""
-    LambdaClient._cached_boto_client = None  # noqa: SLF001
+    ThreadedSyncLambdaClient._cached_boto_client = None  # noqa: SLF001
     yield
-    LambdaClient._cached_boto_client = None  # noqa: SLF001
+    ThreadedSyncLambdaClient._cached_boto_client = None  # noqa: SLF001
 
 
 # =============================================================================
@@ -1699,14 +1699,14 @@ async def test_checkpoint_updated_execution_state_from_dict_with_operations():
 
 @patch("async_durable_execution.lambda_service.boto3")
 async def test_lambda_client_checkpoint(mock_boto3):
-    """Test LambdaClient.checkpoint method."""
+    """Test ThreadedSyncLambdaClient.checkpoint method."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
         "CheckpointToken": "new_token",
         "NewExecutionState": {"Operations": []},
     }
 
-    lambda_client = LambdaClient(mock_client)
+    lambda_client = ThreadedSyncLambdaClient(mock_client)
     update = OperationUpdate(
         operation_id="op1",
         operation_type=OperationType.STEP,
@@ -1725,14 +1725,14 @@ async def test_lambda_client_checkpoint(mock_boto3):
 
 
 async def test_lambda_client_checkpoint_with_client_token():
-    """Test LambdaClient.checkpoint method with client_token."""
+    """Test ThreadedSyncLambdaClient.checkpoint method with client_token."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
         "CheckpointToken": "new_token",
         "NewExecutionState": {"Operations": []},
     }
 
-    lambda_client = LambdaClient(mock_client)
+    lambda_client = ThreadedSyncLambdaClient(mock_client)
     update = OperationUpdate(
         operation_id="op1",
         operation_type=OperationType.STEP,
@@ -1754,14 +1754,14 @@ async def test_lambda_client_checkpoint_with_client_token():
 
 
 async def test_lambda_client_checkpoint_with_explicit_none_client_token():
-    """Test LambdaClient.checkpoint method with explicit None client_token - should not pass ClientToken."""
+    """Test ThreadedSyncLambdaClient.checkpoint method with explicit None client_token - should not pass ClientToken."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
         "CheckpointToken": "new_token",
         "NewExecutionState": {"Operations": []},
     }
 
-    lambda_client = LambdaClient(mock_client)
+    lambda_client = ThreadedSyncLambdaClient(mock_client)
     update = OperationUpdate(
         operation_id="op1",
         operation_type=OperationType.STEP,
@@ -1780,14 +1780,14 @@ async def test_lambda_client_checkpoint_with_explicit_none_client_token():
 
 
 async def test_lambda_client_checkpoint_with_empty_string_client_token():
-    """Test LambdaClient.checkpoint method with empty string client_token - should pass empty string."""
+    """Test ThreadedSyncLambdaClient.checkpoint method with empty string client_token - should pass empty string."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
         "CheckpointToken": "new_token",
         "NewExecutionState": {"Operations": []},
     }
 
-    lambda_client = LambdaClient(mock_client)
+    lambda_client = ThreadedSyncLambdaClient(mock_client)
     update = OperationUpdate(
         operation_id="op1",
         operation_type=OperationType.STEP,
@@ -1807,14 +1807,14 @@ async def test_lambda_client_checkpoint_with_empty_string_client_token():
 
 
 async def test_lambda_client_checkpoint_with_string_value_client_token():
-    """Test LambdaClient.checkpoint method with string value client_token - should pass the value."""
+    """Test ThreadedSyncLambdaClient.checkpoint method with string value client_token - should pass the value."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
         "CheckpointToken": "new_token",
         "NewExecutionState": {"Operations": []},
     }
 
-    lambda_client = LambdaClient(mock_client)
+    lambda_client = ThreadedSyncLambdaClient(mock_client)
     update = OperationUpdate(
         operation_id="op1",
         operation_type=OperationType.STEP,
@@ -1836,11 +1836,11 @@ async def test_lambda_client_checkpoint_with_string_value_client_token():
 
 
 async def test_lambda_client_checkpoint_with_exception():
-    """Test LambdaClient.checkpoint method with exception."""
+    """Test ThreadedSyncLambdaClient.checkpoint method with exception."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.side_effect = Exception("API Error")
 
-    lambda_client = LambdaClient(mock_client)
+    lambda_client = ThreadedSyncLambdaClient(mock_client)
     update = OperationUpdate(
         operation_id="op1",
         operation_type=OperationType.STEP,
@@ -1853,7 +1853,7 @@ async def test_lambda_client_checkpoint_with_exception():
 
 @patch("async_durable_execution.lambda_service.logger")
 async def test_lambda_client_checkpoint_logs_response_metadata(mock_logger):
-    """Test LambdaClient.checkpoint logs ResponseMetadata from boto3 exception."""
+    """Test ThreadedSyncLambdaClient.checkpoint logs ResponseMetadata from boto3 exception."""
     mock_client = Mock()
     boto_error = Exception("API Error")
     boto_error.response = {
@@ -1865,7 +1865,7 @@ async def test_lambda_client_checkpoint_logs_response_metadata(mock_logger):
     }
     mock_client.checkpoint_durable_execution.side_effect = boto_error
 
-    lambda_client = LambdaClient(mock_client)
+    lambda_client = ThreadedSyncLambdaClient(mock_client)
     update = OperationUpdate(
         operation_id="op1",
         operation_type=OperationType.STEP,
@@ -1889,7 +1889,7 @@ async def test_lambda_client_checkpoint_logs_response_metadata(mock_logger):
 
 @patch("async_durable_execution.lambda_service.logger")
 async def test_lambda_client_get_execution_state_logs_response_metadata(mock_logger):
-    """Test LambdaClient.get_execution_state logs ResponseMetadata from boto3 exception."""
+    """Test ThreadedSyncLambdaClient.get_execution_state logs ResponseMetadata from boto3 exception."""
     mock_client = Mock()
     boto_error = Exception("API Error")
     boto_error.response = {
@@ -1901,7 +1901,7 @@ async def test_lambda_client_get_execution_state_logs_response_metadata(mock_log
     }
     mock_client.get_durable_execution_state.side_effect = boto_error
 
-    lambda_client = LambdaClient(mock_client)
+    lambda_client = ThreadedSyncLambdaClient(mock_client)
 
     with pytest.raises(GetExecutionStateError) as exc_info:
         await lambda_client.get_execution_state("arn123", "token123", "", 1000)
@@ -1949,15 +1949,15 @@ async def test_durable_service_client_protocol_checkpoint():
 
 
 # =============================================================================
-# Tests for Client Classes (DurableServiceClient, LambdaClient)
+# Tests for Client Classes (DurableServiceClient, ThreadedSyncLambdaClient)
 # =============================================================================
 
 
 async def test_lambda_client_constructor():
-    """Test LambdaClient constructor to cover lines 931-945."""
+    """Test ThreadedSyncLambdaClient constructor to cover lines 931-945."""
     mock_client = Mock()
-    client = LambdaClient(mock_client)
-    assert isinstance(client, LambdaClient)
+    client = ThreadedSyncLambdaClient(mock_client)
+    assert isinstance(client, ThreadedSyncLambdaClient)
 
 
 @patch.dict("os.environ", {}, clear=True)
@@ -1965,11 +1965,11 @@ async def test_lambda_client_constructor():
 async def test_lambda_client_initialize_client_default(
     mock_boto_client, reset_lambda_client_cache
 ):
-    """Test LambdaClient.initialize_client with default endpoint."""
+    """Test ThreadedSyncLambdaClient.initialize_client with default endpoint."""
     mock_client = Mock()
     mock_boto_client.return_value = mock_client
 
-    client = LambdaClient.initialize_client()
+    client = ThreadedSyncLambdaClient.initialize_client()
 
     # Check that boto3.client was called with the right service name and config
     mock_boto_client.assert_called_once()
@@ -1980,7 +1980,7 @@ async def test_lambda_client_initialize_client_default(
     assert config.connect_timeout == 5
     assert config.read_timeout == 50
     assert config.user_agent_extra == f"async-durable-execution/{__version__}"
-    assert isinstance(client, LambdaClient)
+    assert isinstance(client, ThreadedSyncLambdaClient)
 
 
 @patch.dict("os.environ", {"AWS_ENDPOINT_URL_LAMBDA": "http://localhost:3000"})
@@ -1988,11 +1988,11 @@ async def test_lambda_client_initialize_client_default(
 async def test_lambda_client_initialize_client_with_endpoint(
     mock_boto_client, reset_lambda_client_cache
 ):
-    """Test LambdaClient.initialize_client with custom endpoint (boto3 handles it automatically)."""
+    """Test ThreadedSyncLambdaClient.initialize_client with custom endpoint (boto3 handles it automatically)."""
     mock_client = Mock()
     mock_boto_client.return_value = mock_client
 
-    client = LambdaClient.initialize_client()
+    client = ThreadedSyncLambdaClient.initialize_client()
 
     # Check that boto3.client was called with the right parameters and config
     # Note: boto3 automatically picks up AWS_ENDPOINT_URL_LAMBDA from environment
@@ -2004,17 +2004,17 @@ async def test_lambda_client_initialize_client_with_endpoint(
     assert config.connect_timeout == 5
     assert config.read_timeout == 50
     assert config.user_agent_extra == f"async-durable-execution/{__version__}"
-    assert isinstance(client, LambdaClient)
+    assert isinstance(client, ThreadedSyncLambdaClient)
 
 
 async def test_lambda_client_get_execution_state():
-    """Test LambdaClient.get_execution_state method."""
+    """Test ThreadedSyncLambdaClient.get_execution_state method."""
     mock_client = Mock()
     mock_client.get_durable_execution_state.return_value = {
         "Operations": [{"Id": "op1", "Type": "STEP", "Status": "SUCCEEDED"}]
     }
 
-    lambda_client = LambdaClient(mock_client)
+    lambda_client = ThreadedSyncLambdaClient(mock_client)
     result = await lambda_client.get_execution_state(
         "arn123", "token123", "marker", 500
     )
@@ -2043,19 +2043,21 @@ async def test_durable_service_client_protocol_get_execution_state():
 
 
 @patch.dict("os.environ", {}, clear=True)
-@patch("async_durable_execution.lambda_service.LambdaClient.initialize_client")
+@patch(
+    "async_durable_execution.lambda_service.ThreadedSyncLambdaClient.initialize_client"
+)
 async def test_lambda_client_initialize_client_defaults(mock_init):
-    """Test LambdaClient.initialize_client with default environment values."""
-    LambdaClient.initialize_client()
+    """Test ThreadedSyncLambdaClient.initialize_client with default environment values."""
+    ThreadedSyncLambdaClient.initialize_client()
     mock_init.assert_called_once_with()
 
 
 async def test_checkpoint_error_handling():
-    """Test CheckpointError exception handling in LambdaClient.checkpoint."""
+    """Test CheckpointError exception handling in ThreadedSyncLambdaClient.checkpoint."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.side_effect = Exception("API Error")
 
-    lambda_client = LambdaClient(mock_client)
+    lambda_client = ThreadedSyncLambdaClient(mock_client)
     update = OperationUpdate(
         operation_id="test",
         operation_type=OperationType.STEP,
@@ -2071,11 +2073,11 @@ async def test_checkpoint_error_handling():
 async def test_lambda_client_initialize_client_no_endpoint(
     mock_boto_client, reset_lambda_client_cache
 ):
-    """Test LambdaClient.initialize_client without AWS_ENDPOINT_URL_LAMBDA."""
+    """Test ThreadedSyncLambdaClient.initialize_client without AWS_ENDPOINT_URL_LAMBDA."""
     mock_client = Mock()
     mock_boto_client.return_value = mock_client
 
-    client = LambdaClient.initialize_client()
+    client = ThreadedSyncLambdaClient.initialize_client()
 
     # Verify the call was made with the expected arguments including config
     call_args = mock_boto_client.call_args
@@ -2083,7 +2085,7 @@ async def test_lambda_client_initialize_client_no_endpoint(
     assert "config" in call_args[1]
     config = call_args[1]["config"]
     assert config.user_agent_extra == f"async-durable-execution/{__version__}"
-    assert isinstance(client, LambdaClient)
+    assert isinstance(client, ThreadedSyncLambdaClient)
 
 
 @patch(
@@ -2098,12 +2100,12 @@ async def test_lambda_client_user_agent_runtime_bundled(
     mock_client = Mock()
     mock_boto_client.return_value = mock_client
 
-    client = LambdaClient.initialize_client()
+    client = ThreadedSyncLambdaClient.initialize_client()
 
     call_args = mock_boto_client.call_args
     config = call_args[1]["config"]
     assert config.user_agent_extra == f"async-durable-execution/{__version__}-bundled"
-    assert isinstance(client, LambdaClient)
+    assert isinstance(client, ThreadedSyncLambdaClient)
 
 
 @patch(
@@ -2118,12 +2120,12 @@ async def test_lambda_client_user_agent_not_runtime_bundled(
     mock_client = Mock()
     mock_boto_client.return_value = mock_client
 
-    client = LambdaClient.initialize_client()
+    client = ThreadedSyncLambdaClient.initialize_client()
 
     call_args = mock_boto_client.call_args
     config = call_args[1]["config"]
     assert config.user_agent_extra == f"async-durable-execution/{__version__}"
-    assert isinstance(client, LambdaClient)
+    assert isinstance(client, ThreadedSyncLambdaClient)
 
 
 @pytest.mark.parametrize(
@@ -2154,14 +2156,14 @@ async def test_is_in_var_dir(path, expected):
 
 
 async def test_lambda_client_checkpoint_with_non_none_client_token():
-    """Test LambdaClient.checkpoint with non-None client_token."""
+    """Test ThreadedSyncLambdaClient.checkpoint with non-None client_token."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
         "CheckpointToken": "new_token",
         "NewExecutionState": {"Operations": []},
     }
 
-    lambda_client = LambdaClient(mock_client)
+    lambda_client = ThreadedSyncLambdaClient(mock_client)
     update = OperationUpdate(
         operation_id="test",
         operation_type=OperationType.STEP,
@@ -2180,7 +2182,7 @@ async def test_lambda_client_checkpoint_with_non_none_client_token():
 
 
 # =============================================================================
-# Tests for LambdaClient caching behavior
+# Tests for ThreadedSyncLambdaClient caching behavior
 # =============================================================================
 
 
@@ -2193,15 +2195,15 @@ async def test_lambda_client_cache_reuses_client(
     mock_boto_client.return_value = mock_client
 
     # First call should create the boto3 client
-    client1 = LambdaClient.initialize_client()
+    client1 = ThreadedSyncLambdaClient.initialize_client()
 
     # Second call should reuse the same boto3 client
-    client2 = LambdaClient.initialize_client()
+    client2 = ThreadedSyncLambdaClient.initialize_client()
 
     # boto3.client should only be called once
     mock_boto_client.assert_called_once()
 
-    # Both LambdaClient instances should wrap the same boto3 client
+    # Both ThreadedSyncLambdaClient instances should wrap the same boto3 client
     assert client1.client is client2.client
 
 
@@ -2215,7 +2217,7 @@ async def test_lambda_client_cache_creates_client_only_once(
 
     # Call initialize_client multiple times
     for _ in range(5):
-        LambdaClient.initialize_client()
+        ThreadedSyncLambdaClient.initialize_client()
 
     # boto3.client should only be called once
     assert mock_boto_client.call_count == 1
@@ -2230,10 +2232,10 @@ async def test_lambda_client_cache_is_class_level(
     mock_boto_client.return_value = mock_client
 
     # Create client
-    LambdaClient.initialize_client()
+    ThreadedSyncLambdaClient.initialize_client()
 
     # Verify the boto3 client is cached at class level
-    assert LambdaClient._cached_boto_client is mock_client  # noqa: SLF001
+    assert ThreadedSyncLambdaClient._cached_boto_client is mock_client  # noqa: SLF001
 
 
 # Tests for Operation JSON Serialization Methods
