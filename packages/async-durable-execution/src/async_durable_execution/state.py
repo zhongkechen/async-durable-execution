@@ -835,10 +835,10 @@ class ExecutionState:
                     )
 
                     for update in updates:
-                        self._plugin_executor.on_operation_action(update)
+                        await self._plugin_executor.on_operation_action(update)
 
                     for operation in updated_operations:
-                        self._plugin_executor.on_operation_update(operation)
+                        await self._plugin_executor.on_operation_update(operation)
 
                     # Signal completion for any synchronous operations
                     for queued_op in batch:
@@ -1065,15 +1065,15 @@ class ExecutionState:
     ):
         @functools.wraps(user_function)
         async def wrapper(*args, **kwargs):
-            start_info = self._plugin_executor.on_user_function_start(
+            start_info = await self._plugin_executor.on_user_function_start(
                 operation_identifier, is_replay_children, attempt
             )
             try:
                 result = await invoke_callable(user_function, *args, **kwargs)
-                self._plugin_executor.on_user_function_end(start_info, None)
+                await self._plugin_executor.on_user_function_end(start_info, None)
                 return result
             except SuspendExecution as e:
-                self._plugin_executor.on_user_function_end(
+                await self._plugin_executor.on_user_function_end(
                     start_info,
                     ErrorObject(
                         type=type(e).__name__, message=None, data=None, stack_trace=None
@@ -1081,7 +1081,7 @@ class ExecutionState:
                 )
                 raise
             except Exception as e:
-                self._plugin_executor.on_user_function_end(
+                await self._plugin_executor.on_user_function_end(
                     start_info, ErrorObject.from_exception(e)
                 )
                 raise

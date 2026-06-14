@@ -196,12 +196,12 @@ def durable_execution(
         with plugin_executor.run():
             try:
                 output = await _wrapper_async(event, context)
-                plugin_executor.on_invocation_end(
+                await plugin_executor.on_invocation_end(
                     output=DurableExecutionInvocationOutput.from_dict(output),
                 )
                 return output
             except Exception as e:
-                plugin_executor.on_invocation_end(
+                await plugin_executor.on_invocation_end(
                     output=DurableExecutionInvocationOutput.create_retry(
                         ErrorObject.from_exception(e)
                     ),
@@ -301,7 +301,7 @@ def durable_execution(
                 msg = "Execution state is missing the root execution operation."
                 raise RuntimeError(msg)
             # execute the plugins
-            plugin_executor.on_invocation_start(
+            await plugin_executor.on_invocation_start(
                 execution_arn=invocation_input.durable_execution_arn,
                 lambda_context=context,
                 execution_start_time=execution_operation.start_timestamp,
