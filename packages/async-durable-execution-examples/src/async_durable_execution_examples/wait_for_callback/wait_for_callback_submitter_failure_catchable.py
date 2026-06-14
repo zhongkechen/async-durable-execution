@@ -1,6 +1,6 @@
 """Demonstrates waitForCallback with submitter function that fails."""
 
-import time
+import asyncio
 from datetime import timedelta
 from typing import Any
 
@@ -19,7 +19,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
 
     async def submitter(_callback_id, _context) -> None:
         """Submitter function that fails after a delay."""
-        time.sleep(0.5)
+        await asyncio.sleep(0.5)
         # Submitter fails
         raise Exception("Submitter failed")
 

@@ -167,15 +167,21 @@ def durable_parallel_branch(
 
     Example:
         @durable_parallel_branch(name="fetch-user-data")
-        def fetch_user(ctx: DurableContext, user_id: str) -> dict:
-            return ctx.step(lambda _: {"id": user_id, "name": "Jane"}, name="load_user")
+        async def fetch_user(ctx: DurableContext, user_id: str) -> dict:
+            async def load_user(step_ctx: StepContext) -> dict:
+                return {"id": user_id, "name": "Jane"}
+
+            return await ctx.step(load_user, name="load_user")
 
         @durable_parallel_branch(name="fetch-orders")
-        def fetch_orders(ctx: DurableContext, user_id: str) -> list:
-            return ctx.step(lambda _: ["order1", "order2"], name="load_orders")
+        async def fetch_orders(ctx: DurableContext, user_id: str) -> list:
+            async def load_orders(step_ctx: StepContext) -> list:
+                return ["order1", "order2"]
+
+            return await ctx.step(load_orders, name="load_orders")
 
         # Usage in a durable handler:
-        results = context.parallel(
+        results = await context.parallel(
             functions=[fetch_user(user_id), fetch_orders(user_id)],
             name="load-data",
         )
@@ -214,7 +220,7 @@ def durable_wait_for_callback(
 
     Example:
         @durable_wait_for_callback
-        def submit_to_external_system(
+        async def submit_to_external_system(
             callback_id: str,
             context: WaitForCallbackContext,
             task_name: str,
@@ -228,7 +234,7 @@ def durable_wait_for_callback(
             )
 
         # Usage in durable handler:
-        result = context.wait_for_callback(
+        result = await context.wait_for_callback(
             submit_to_external_system("my_task", priority=5)
         )
     """

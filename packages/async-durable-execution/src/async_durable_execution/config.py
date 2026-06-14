@@ -237,10 +237,16 @@ class ParallelBranch(Generic[T]):
             This affects observability but not replay determinism.
 
     Example:
-        context.parallel(
+        async def fetch_user(ctx: DurableContext) -> dict:
+            ...
+
+        async def fetch_orders(ctx: DurableContext) -> dict:
+            ...
+
+        await context.parallel(
             functions=[
-                ParallelBranch(func=lambda ctx: fetch_user(ctx), name="fetch-user-data"),
-                ParallelBranch(func=lambda ctx: fetch_orders(ctx), name="fetch-order-history"),
+                ParallelBranch(func=fetch_user, name="fetch-user-data"),
+                ParallelBranch(func=fetch_orders, name="fetch-order-history"),
             ],
             name="load-data",
             config=ParallelConfig(max_concurrency=2),
