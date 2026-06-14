@@ -2,7 +2,7 @@
 
 import asyncio
 from datetime import UTC, datetime
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -127,7 +127,9 @@ def mock_scheduler():
 
 @pytest.fixture
 def mock_invoker():
-    return Mock()
+    invoker = Mock()
+    invoker.invoke = AsyncMock()
+    return invoker
 
 
 @pytest.fixture

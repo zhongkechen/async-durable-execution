@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 from threading import Lock
 from typing import TYPE_CHECKING
 
-from async_durable_execution.async_tools import await_maybe
 from async_durable_execution.execution import (
     DurableExecutionInvocationInput,
     DurableExecutionInvocationOutput,
@@ -797,12 +796,10 @@ class Executor(ExecutionObserver):
                 self._store.save(execution)
 
                 invocation_start = datetime.now(UTC)
-                invoke_response = await await_maybe(
-                    self._invoker.invoke(
-                        execution.start_input.function_name,
-                        invocation_input,
-                        execution.start_input.lambda_endpoint,
-                    )
+                invoke_response = await self._invoker.invoke(
+                    execution.start_input.function_name,
+                    invocation_input,
+                    execution.start_input.lambda_endpoint,
                 )
                 invocation_end = datetime.now(UTC)
 

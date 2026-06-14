@@ -52,7 +52,7 @@ async def test_wait_handler_already_completed():
     )
 
     mock_state.get_checkpoint_result.assert_called_once_with("wait1")
-    mock_state.create_checkpoint.assert_not_called()
+    mock_state._create_checkpoint_async.assert_not_called()
 
 
 async def test_wait_handler_not_completed():
@@ -91,7 +91,7 @@ async def test_wait_handler_not_completed():
         sub_type=OperationSubType.WAIT,
         wait_options=WaitOptions(wait_seconds=30),
     )
-    mock_state.create_checkpoint.assert_called_once_with(
+    mock_state._create_checkpoint_async.assert_called_once_with(
         operation_update=expected_operation, is_sync=True
     )
 
@@ -132,7 +132,7 @@ async def test_wait_handler_with_none_name():
         sub_type=OperationSubType.WAIT,
         wait_options=WaitOptions(wait_seconds=5),
     )
-    mock_state.create_checkpoint.assert_called_once_with(
+    mock_state._create_checkpoint_async.assert_called_once_with(
         operation_update=expected_operation, is_sync=True
     )
 
@@ -155,7 +155,7 @@ async def test_wait_handler_with_existent():
         )
 
     mock_state.get_checkpoint_result.assert_called_once_with("wait4")
-    mock_state.create_checkpoint.assert_not_called()
+    mock_state._create_checkpoint_async.assert_not_called()
 
 
 # Immediate response handling tests
@@ -210,7 +210,7 @@ async def test_wait_status_evaluation_after_checkpoint():
         sub_type=OperationSubType.WAIT,
         wait_options=WaitOptions(wait_seconds=30),
     )
-    mock_state.create_checkpoint.assert_called_once_with(
+    mock_state._create_checkpoint_async.assert_called_once_with(
         operation_update=expected_operation, is_sync=True
     )
 
@@ -250,7 +250,7 @@ async def test_wait_immediate_success_handling():
     assert result is None  # Wait returns None
 
     # Verify checkpoint was created
-    assert mock_state.create_checkpoint.call_count == 1
+    assert mock_state._create_checkpoint_async.call_count == 1
 
     # Verify status checked twice
     assert mock_state.get_checkpoint_result.call_count == 2
@@ -293,7 +293,7 @@ async def test_wait_no_immediate_response_suspends():
     assert "Wait for 60 seconds" in str(exc_info.value)
 
     # Verify checkpoint was created
-    assert mock_state.create_checkpoint.call_count == 1
+    assert mock_state._create_checkpoint_async.call_count == 1
 
     # Verify status checked twice
     assert mock_state.get_checkpoint_result.call_count == 2
@@ -329,7 +329,7 @@ async def test_wait_already_completed_no_checkpoint():
     assert result is None
 
     # Verify no checkpoint created
-    mock_state.create_checkpoint.assert_not_called()
+    mock_state._create_checkpoint_async.assert_not_called()
 
     # Verify status checked only once
     mock_state.get_checkpoint_result.assert_called_once_with("wait_replay")
@@ -371,7 +371,7 @@ async def test_wait_with_various_durations():
         assert mock_state.get_checkpoint_result.call_count == 2
 
         # Verify correct wait duration in checkpoint
-        call_args = mock_state.create_checkpoint.call_args
+        call_args = mock_state._create_checkpoint_async.call_args
         assert call_args[1]["operation_update"].wait_options.wait_seconds == seconds
 
 
@@ -408,7 +408,7 @@ async def test_wait_suspends_when_second_check_returns_started():
 
     # Assert - behaves like "old way"
     assert mock_state.get_checkpoint_result.call_count == 2  # Double-check happened
-    mock_state.create_checkpoint.assert_called_once()  # START checkpoint created
+    mock_state._create_checkpoint_async.assert_called_once()  # START checkpoint created
 
 
 async def test_wait_suspends_when_second_check_returns_started_duplicate():
@@ -442,4 +442,4 @@ async def test_wait_suspends_when_second_check_returns_started_duplicate():
 
     # Assert - behaves like "old way"
     assert mock_state.get_checkpoint_result.call_count == 2  # Double-check happened
-    mock_state.create_checkpoint.assert_called_once()  # START checkpoint created
+    mock_state._create_checkpoint_async.assert_called_once()  # START checkpoint created

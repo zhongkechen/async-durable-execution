@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, TypeVar
 
-from async_durable_execution.async_tools import await_maybe
 from async_durable_execution.config import (
     StepConfig,
     StepSemantics,
@@ -167,10 +166,8 @@ class StepOperationExecutor(OperationExecutor[T]):
             is_sync: bool = (
                 self.config.step_semantics is StepSemantics.AT_MOST_ONCE_PER_RETRY
             )
-            await await_maybe(
-                self.state.create_checkpoint(
-                    operation_update=start_operation, is_sync=is_sync
-                )
+            await self.state._create_checkpoint_async(
+                operation_update=start_operation, is_sync=is_sync
             )
 
             # After creating sync checkpoint, check the status
@@ -246,8 +243,8 @@ class StepOperationExecutor(OperationExecutor[T]):
             # Checkpoint SUCCEED operation with blocking (is_sync=True, default).
             # Must ensure the success state is persisted before returning the result to the caller.
             # This guarantees the step result is durable and won't be lost if Lambda terminates.
-            await await_maybe(
-                self.state.create_checkpoint(operation_update=success_operation)
+            await self.state._create_checkpoint_async(
+                operation_update=success_operation
             )
 
             logger.debug(
@@ -346,9 +343,7 @@ class StepOperationExecutor(OperationExecutor[T]):
             # Checkpoint RETRY operation with blocking (is_sync=True, default).
             # Must ensure retry state is persisted before suspending execution.
             # This guarantees the retry attempt count and next attempt timestamp are durable.
-            await await_maybe(
-                self.state.create_checkpoint(operation_update=retry_operation)
-            )
+            await self.state._create_checkpoint_async(operation_update=retry_operation)
 
             suspend_with_optional_resume_delay(
                 msg=(
@@ -366,7 +361,7 @@ class StepOperationExecutor(OperationExecutor[T]):
         # Checkpoint FAIL operation with blocking (is_sync=True, default).
         # Must ensure the failure state is persisted before raising the exception.
         # This guarantees the error is durable and the step won't be retried on replay.
-        await await_maybe(self.state.create_checkpoint(operation_update=fail_operation))
+        await self.state._create_checkpoint_async(operation_update=fail_operation)
 
         if isinstance(error, StepInterruptedError):
             raise error

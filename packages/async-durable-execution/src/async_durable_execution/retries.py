@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 from async_durable_execution.async_tools import (
     assert_async_callable,
-    await_maybe,
     invoke_callable,
     run_or_return,
 )
@@ -284,9 +283,9 @@ def with_retry(
                 if not decision.should_retry:
                     raise
                 wait_name = f"{name}-backoff-{attempt}" if name else None
-                await await_maybe(
-                    cast(Any, ctx.wait(duration=decision.delay, name=wait_name))
-                )
+                wait_result = ctx.wait(duration=decision.delay, name=wait_name)
+                if inspect.isawaitable(wait_result):
+                    await wait_result
 
     if config.wrap_with_run_in_child_context:
         child_result = context.run_in_child_context(

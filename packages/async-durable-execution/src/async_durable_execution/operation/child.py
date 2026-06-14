@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import TYPE_CHECKING, TypeVar, cast
 
-from async_durable_execution.async_tools import await_maybe
+from async_durable_execution.async_tools import run_or_return
 from async_durable_execution.config import ChildConfig
 from async_durable_execution.exceptions import (
     InvocationError,
@@ -130,11 +131,11 @@ class ChildOperationExecutor(OperationExecutor[T]):
             # This is a fire-and-forget operation for performance - we don't need to wait for
             # persistence before executing the child context. The START checkpoint is purely
             # for observability and tracking the operation hierarchy.
-            await await_maybe(
-                self.state.create_checkpoint(
-                    operation_update=start_operation, is_sync=False
-                )
+            checkpoint_result = self.state._create_checkpoint_async(
+                operation_update=start_operation, is_sync=False
             )
+            if inspect.isawaitable(checkpoint_result):
+                await checkpoint_result
 
         # Ready to execute (checkpoint exists or was just created)
         return CheckResult.create_is_ready_to_execute(checkpointed_result)
@@ -166,7 +167,11 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 checkpointed_result.is_replay_children(),
                 attempt=None if checkpointed_result.is_existent() else 1,
             )
-            raw_result: T = await await_maybe(wrapped_user_func())
+            raw_result_or_awaitable = wrapped_user_func()
+            if inspect.isawaitable(raw_result_or_awaitable):
+                raw_result: T = await cast("Awaitable[T]", raw_result_or_awaitable)
+            else:
+                raw_result = cast("T", raw_result_or_awaitable)
 
             if self.is_virtual:
                 logger.debug(
@@ -233,9 +238,11 @@ class ChildOperationExecutor(OperationExecutor[T]):
             # Must ensure the child context result is persisted before returning to the parent.
             # This guarantees the result is durable and child operations won't be re-executed on replay
             # (unless replay_children=True for large payloads).
-            await await_maybe(
-                self.state.create_checkpoint(operation_update=success_operation)
+            checkpoint_result = self.state._create_checkpoint_async(
+                operation_update=success_operation
             )
+            if inspect.isawaitable(checkpoint_result):
+                await checkpoint_result
 
             logger.debug(
                 "✅ Successfully completed child context for id: %s, name: %s",
@@ -258,9 +265,11 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 # Checkpoint child context FAIL with blocking (is_sync=True, default).
                 # Must ensure the failure state is persisted before raising the exception.
                 # This guarantees the error is durable and child operations won't be re-executed on replay.
-                await await_maybe(
-                    self.state.create_checkpoint(operation_update=fail_operation)
+                checkpoint_result = self.state._create_checkpoint_async(
+                    operation_update=fail_operation
                 )
+                if inspect.isawaitable(checkpoint_result):
+                    await checkpoint_result
 
             # InvocationError and its derivatives can be retried.
             # When we encounter an invocation error (in all of its forms), we
@@ -272,12 +281,12 @@ class ChildOperationExecutor(OperationExecutor[T]):
             raise error_object.to_callable_runtime_error() from e
 
 
-async def child_handler(
+def child_handler(
     func: Callable[[], Awaitable[T]],
     state: ExecutionState,
     operation_identifier: OperationIdentifier,
     config: ChildConfig | None,
-) -> T:
+) -> T | Awaitable[T]:
     """Run a function in a child context.
 
     Create a ChildOperationExecutor and delegates to its process() method.
@@ -302,4 +311,4 @@ async def child_handler(
         operation_identifier,
         config or ChildConfig(),
     )
-    return await await_maybe(cast(Any, executor.process()))
+    return run_or_return(executor.process())

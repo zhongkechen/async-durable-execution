@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 
 from async_durable_execution.async_tools import (
     assert_async_callable,
-    await_maybe,
     invoke_callable,
 )
 from async_durable_execution.context import DurableContext
@@ -254,12 +253,10 @@ def durable_execution(
         )
 
         try:
-            await await_maybe(
-                execution_state.fetch_paginated_operations(
-                    invocation_input.initial_execution_state.operations,
-                    invocation_input.checkpoint_token,
-                    invocation_input.initial_execution_state.next_marker,
-                )
+            await execution_state._fetch_paginated_operations_async(
+                invocation_input.initial_execution_state.operations,
+                invocation_input.checkpoint_token,
+                invocation_input.initial_execution_state.next_marker,
             )
         except BotoClientError as e:
             # Non-retryable Durable API errors (e.g., customer configuration issues,
@@ -348,10 +345,8 @@ def durable_execution(
                     # Large results exceed Lambda response limits and must be stored durably
                     # before the execution completes.
                     try:
-                        await await_maybe(
-                            execution_state.create_checkpoint(
-                                success_operation, is_sync=True
-                            )
+                        await execution_state._create_checkpoint_async(
+                            success_operation, is_sync=True
                         )
                     except CheckpointError as e:
                         return handle_checkpoint_error(e).to_dict()
@@ -425,8 +420,8 @@ def durable_execution(
                     # Large results exceed Lambda response limits and must be stored durably
                     # before the execution completes.
                     try:
-                        await await_maybe(
-                            execution_state.create_checkpoint_sync(failed_operation)
+                        await execution_state._create_checkpoint_sync_async(
+                            failed_operation
                         )
                     except CheckpointError as e:
                         return handle_checkpoint_error(e).to_dict()

@@ -81,7 +81,7 @@ def test_in_process_invoker_create_invocation_input():
     assert invocation_input.service_client is service_client
 
 
-def test_in_process_invoker_invoke():
+async def test_in_process_invoker_invoke():
     """Test invoking function with in-process invoker."""
     # Mock handler that returns a valid response
     handler = Mock()
@@ -96,7 +96,7 @@ def test_in_process_invoker_invoke():
         initial_execution_state=InitialExecutionState(operations=[], next_marker=""),
     )
 
-    response = invoker.invoke("test-function", input_data)
+    response = await invoker.invoke("test-function", input_data)
 
     assert isinstance(response.invocation_output, DurableExecutionInvocationOutput)
     assert response.invocation_output.status == InvocationStatus.SUCCEEDED
@@ -243,7 +243,7 @@ async def test_lambda_invoker_invoke_failure():
         await invoker.invoke("test-function", input_data)
 
 
-def test_in_process_invoker_invoke_with_execution_operations():
+async def test_in_process_invoker_invoke_with_execution_operations():
     """Test in-process invoker with execution that has operations."""
     handler = Mock()
     handler.return_value = {"Status": "SUCCEEDED", "Result": None}
@@ -264,7 +264,7 @@ def test_in_process_invoker_invoke_with_execution_operations():
     execution.start()  # This adds operations
 
     invocation_input = invoker.create_invocation_input(execution)
-    response = invoker.invoke("test-function", invocation_input)
+    response = await invoker.invoke("test-function", invocation_input)
 
     assert isinstance(response.invocation_output, DurableExecutionInvocationOutput)
     assert isinstance(response.request_id, str)

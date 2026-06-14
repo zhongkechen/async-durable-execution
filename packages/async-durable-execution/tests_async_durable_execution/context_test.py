@@ -1221,7 +1221,7 @@ async def test_wait_for_callback_passes_child_context(mock_executor_class):
     )
     mock_submitter = AsyncMock()
 
-    def capture_handler_call(context, submitter, name, config):
+    async def capture_handler_call(context, submitter, name, config):
         assert isinstance(context, DurableContext)
         assert submitter is mock_submitter
         return "handler_result"

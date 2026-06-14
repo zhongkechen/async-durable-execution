@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import inspect
 import json
 import logging
 from collections import deque
@@ -15,7 +16,7 @@ from enum import Enum
 from threading import Lock
 from typing import TYPE_CHECKING
 
-from async_durable_execution.async_tools import await_maybe, invoke_callable
+from async_durable_execution.async_tools import invoke_callable
 from async_durable_execution.exceptions import (
     BackgroundThreadError,
     CallableRuntimeError,
@@ -422,12 +423,15 @@ class ExecutionState:
         )
         try:
             while next_marker:
-                output: StateOutput = await await_maybe(
-                    self._service_client.get_execution_state(
-                        durable_execution_arn=self.durable_execution_arn,
-                        checkpoint_token=checkpoint_token,
-                        next_marker=next_marker,
-                    )
+                state_output = self._service_client.get_execution_state(
+                    durable_execution_arn=self.durable_execution_arn,
+                    checkpoint_token=checkpoint_token,
+                    next_marker=next_marker,
+                )
+                output: StateOutput = (
+                    await state_output
+                    if inspect.isawaitable(state_output)
+                    else state_output
                 )
                 all_operations.extend(output.operations)
                 next_marker = output.next_marker
@@ -727,7 +731,7 @@ class ExecutionState:
             execution_state.create_checkpoint_sync(operation_update)
             # Raises CheckpointError directly
         """
-        await self.create_checkpoint(operation_update, is_sync=True)
+        await self._create_checkpoint_async(operation_update, is_sync=True)
 
     def _mark_orphans(self, context_id: str) -> None:
         """Mark all descendants (direct and transitive) as orphaned.
@@ -831,13 +835,16 @@ class ExecutionState:
 
                 try:
                     # Make API call with batched operations
-                    output: CheckpointOutput = await await_maybe(
-                        self._service_client.checkpoint(
-                            durable_execution_arn=self.durable_execution_arn,
-                            checkpoint_token=current_checkpoint_token,
-                            updates=updates,
-                            client_token=None,
-                        )
+                    checkpoint_output = self._service_client.checkpoint(
+                        durable_execution_arn=self.durable_execution_arn,
+                        checkpoint_token=current_checkpoint_token,
+                        updates=updates,
+                        client_token=None,
+                    )
+                    output: CheckpointOutput = (
+                        await checkpoint_output
+                        if inspect.isawaitable(checkpoint_output)
+                        else checkpoint_output
                     )
 
                     logger.debug("Checkpoint batch processed successfully")
@@ -846,7 +853,7 @@ class ExecutionState:
                     current_checkpoint_token = output.checkpoint_token
 
                     # Fetch new operations from the API before unblocking sync waiters
-                    updated_operations = await self.fetch_paginated_operations(
+                    updated_operations = await self._fetch_paginated_operations_async(
                         output.new_execution_state.operations,
                         output.checkpoint_token,
                         output.new_execution_state.next_marker,

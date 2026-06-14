@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, TypeVar
 
-from async_durable_execution.async_tools import await_maybe
 from async_durable_execution.exceptions import ExecutionError
 from async_durable_execution.lambda_service import (
     ChainedInvokeOptions,
@@ -137,10 +136,8 @@ class InvokeOperationExecutor(OperationExecutor[R]):
             )
             # Checkpoint invoke START with blocking (is_sync=True).
             # Must ensure the chained invocation is recorded before suspending execution.
-            await await_maybe(
-                self.state.create_checkpoint(
-                    operation_update=start_operation, is_sync=True
-                )
+            await self.state._create_checkpoint_async(
+                operation_update=start_operation, is_sync=True
             )
 
             logger.debug(
