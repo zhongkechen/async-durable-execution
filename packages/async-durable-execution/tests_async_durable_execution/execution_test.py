@@ -2856,16 +2856,16 @@ class _RecordingPlugin(DurableInstrumentationPlugin):
     def on_execution_end(self, info):
         self.calls.append(f"execution_end:{info.status.value}")
 
-    def on_invocation_start(self, info):
+    async def on_invocation_start(self, info):
         self.calls.append("invocation_start")
 
-    def on_invocation_end(self, info):
+    async def on_invocation_end(self, info):
         self.calls.append(f"invocation_end:{info.status.value}")
 
-    def on_operation_start(self, info):
+    async def on_operation_start(self, info):
         self.calls.append(f"operation_start:{info.operation_id}")
 
-    def on_operation_end(self, info):
+    async def on_operation_end(self, info):
         self.calls.append(f"operation_end:{info.operation_id}")
 
     def on_operation_attempt_start(self, info):
@@ -2884,16 +2884,16 @@ class _FailingPlugin(DurableInstrumentationPlugin):
     def on_execution_end(self, info):
         raise RuntimeError("plugin boom")
 
-    def on_invocation_start(self, info):
+    async def on_invocation_start(self, info):
         raise RuntimeError("plugin boom")
 
-    def on_invocation_end(self, info):
+    async def on_invocation_end(self, info):
         raise RuntimeError("plugin boom")
 
-    def on_operation_start(self, info):
+    async def on_operation_start(self, info):
         raise RuntimeError("plugin boom")
 
-    def on_operation_end(self, info):
+    async def on_operation_end(self, info):
         raise RuntimeError("plugin boom")
 
     def on_operation_attempt_start(self, info):

@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import logging
 import unittest
@@ -153,19 +154,25 @@ class TestDurableInstrumentationPlugin(unittest.TestCase):
     def test_default_methods_are_noop(self):
         """All default hook methods should be callable and return None."""
         plugin = _NoOpPlugin()
-        self.assertIsNone(plugin.on_invocation_start(INVOCATION_START_INFO))
-        self.assertIsNone(plugin.on_invocation_end(INVOCATION_END_INFO))
-        self.assertIsNone(plugin.on_operation_start(OPERATION_START_INFO))
-        self.assertIsNone(plugin.on_operation_end(OPERATION_END_INFO))
-        self.assertIsNone(plugin.on_user_function_start(USER_FUNCTION_START_INFO))
-        self.assertIsNone(plugin.on_user_function_end(USER_FUNCTION_END_INFO))
+        self.assertIsNone(
+            asyncio.run(plugin.on_invocation_start(INVOCATION_START_INFO))
+        )
+        self.assertIsNone(asyncio.run(plugin.on_invocation_end(INVOCATION_END_INFO)))
+        self.assertIsNone(asyncio.run(plugin.on_operation_start(OPERATION_START_INFO)))
+        self.assertIsNone(asyncio.run(plugin.on_operation_end(OPERATION_END_INFO)))
+        self.assertIsNone(
+            asyncio.run(plugin.on_user_function_start(USER_FUNCTION_START_INFO))
+        )
+        self.assertIsNone(
+            asyncio.run(plugin.on_user_function_end(USER_FUNCTION_END_INFO))
+        )
 
     def test_subclass_override(self):
         """A subclass can override specific hooks."""
         plugin = _TrackingPlugin()
 
-        plugin.on_invocation_start(INVOCATION_START_INFO)
-        plugin.on_operation_start(OPERATION_START_INFO)
+        asyncio.run(plugin.on_invocation_start(INVOCATION_START_INFO))
+        asyncio.run(plugin.on_operation_start(OPERATION_START_INFO))
 
         self.assertEqual(
             ["invocation_start:req-1", "operation_start:op-2"], plugin.calls
@@ -280,39 +287,39 @@ class TestPluginExecutorExecutePlugins(unittest.TestCase):
 
     def test_dispatch_invocation_start_info(self):
         with self.executor.run():
-            self.executor.execute_plugins(INVOCATION_START_INFO, sync=True)
+            self.executor.execute_plugins(INVOCATION_START_INFO)
         self.assertIn("invocation_start:req-1", self.plugin.calls)
 
     def test_dispatch_invocation_end_info(self):
         with self.executor.run():
-            self.executor.execute_plugins(INVOCATION_END_INFO, sync=True)
+            self.executor.execute_plugins(INVOCATION_END_INFO)
         self.assertIn("invocation_end:req-1", self.plugin.calls)
 
     def test_dispatch_operation_end_info(self):
         with self.executor.run():
-            self.executor.execute_plugins(OPERATION_END_INFO, sync=False)
+            self.executor.execute_plugins(OPERATION_END_INFO)
         self.assertIn("operation_end:op-1", self.plugin.calls)
 
     def test_dispatch_operation_start_info(self):
         with self.executor.run():
-            self.executor.execute_plugins(OPERATION_START_INFO, sync=False)
+            self.executor.execute_plugins(OPERATION_START_INFO)
         self.assertIn("operation_start:op-2", self.plugin.calls)
 
     def test_dispatch_user_function_start_info(self):
         with self.executor.run():
-            self.executor.execute_plugins(USER_FUNCTION_START_INFO, sync=True)
+            self.executor.execute_plugins(USER_FUNCTION_START_INFO)
         self.assertIn("user_function_start:op-1", self.plugin.calls)
 
     def test_dispatch_user_function_end_info(self):
         with self.executor.run():
-            self.executor.execute_plugins(USER_FUNCTION_END_INFO, sync=True)
+            self.executor.execute_plugins(USER_FUNCTION_END_INFO)
         self.assertIn("user_function_end:op-1", self.plugin.calls)
 
     def test_dispatch_unknown_type_logs_exception(self):
         """Unknown info types should be caught and logged."""
         with self.assertLogs("async_durable_execution.plugin", level=logging.ERROR):
             with self.executor.run():
-                self.executor.execute_plugins("not a valid info type", sync=True)
+                self.executor.execute_plugins("not a valid info type")
 
     def test_plugin_exception_is_swallowed(self):
         """If a plugin raises, the exception is logged and execution continues."""
@@ -322,7 +329,7 @@ class TestPluginExecutorExecutePlugins(unittest.TestCase):
 
         with self.assertLogs("async_durable_execution.plugin", level=logging.ERROR):
             with executor.run():
-                executor.execute_plugins(OPERATION_START_INFO, sync=True)
+                executor.execute_plugins(OPERATION_START_INFO)
 
         # The second plugin should still have been called
         self.assertIn("operation_start:op-2", tracking_plugin.calls)
@@ -333,7 +340,7 @@ class TestPluginExecutorExecutePlugins(unittest.TestCase):
         executor = PluginExecutor(plugins=[p1, p2])
 
         with executor.run():
-            executor.execute_plugins(OPERATION_START_INFO, sync=True)
+            executor.execute_plugins(OPERATION_START_INFO)
 
         self.assertIn("operation_start:op-2", p1.calls)
         self.assertIn("operation_start:op-2", p2.calls)
@@ -708,22 +715,22 @@ class _TrackingPlugin(DurableInstrumentationPlugin):
     def __init__(self) -> None:
         self.calls: list[str] = []
 
-    def on_invocation_start(self, info: InvocationStartInfo) -> None:
+    async def on_invocation_start(self, info: InvocationStartInfo) -> None:
         self.calls.append(f"invocation_start:{info.request_id}")
 
-    def on_invocation_end(self, info: InvocationEndInfo) -> None:
+    async def on_invocation_end(self, info: InvocationEndInfo) -> None:
         self.calls.append(f"invocation_end:{info.request_id}")
 
-    def on_operation_start(self, info: OperationStartInfo) -> None:
+    async def on_operation_start(self, info: OperationStartInfo) -> None:
         self.calls.append(f"operation_start:{info.operation_id}")
 
-    def on_operation_end(self, info: OperationEndInfo) -> None:
+    async def on_operation_end(self, info: OperationEndInfo) -> None:
         self.calls.append(f"operation_end:{info.operation_id}")
 
-    def on_user_function_start(self, info: UserFunctionStartInfo) -> None:
+    async def on_user_function_start(self, info: UserFunctionStartInfo) -> None:
         self.calls.append(f"user_function_start:{info.operation_id}")
 
-    def on_user_function_end(self, info: UserFunctionEndInfo) -> None:
+    async def on_user_function_end(self, info: UserFunctionEndInfo) -> None:
         self.calls.append(f"user_function_end:{info.operation_id}")
 
 
@@ -736,16 +743,16 @@ class _FailingPlugin(DurableInstrumentationPlugin):
     def on_execution_end(self, info):
         raise RuntimeError("boom")
 
-    def on_invocation_start(self, info):
+    async def on_invocation_start(self, info):
         raise RuntimeError("boom")
 
-    def on_invocation_end(self, info):
+    async def on_invocation_end(self, info):
         raise RuntimeError("boom")
 
-    def on_operation_start(self, info):
+    async def on_operation_start(self, info):
         raise RuntimeError("boom")
 
-    def on_operation_end(self, info):
+    async def on_operation_end(self, info):
         raise RuntimeError("boom")
 
     def on_operation_attempt_start(self, info):

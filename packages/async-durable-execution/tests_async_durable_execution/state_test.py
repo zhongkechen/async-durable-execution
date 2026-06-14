@@ -3481,22 +3481,22 @@ class _RecordingPlugin(DurableInstrumentationPlugin):
     def on_execution_end(self, info):
         self.calls.append("execution_end")
 
-    def on_invocation_start(self, info):
+    async def on_invocation_start(self, info):
         self.calls.append("invocation_start")
 
-    def on_invocation_end(self, info):
+    async def on_invocation_end(self, info):
         self.calls.append("invocation_end")
 
-    def on_operation_start(self, info):
+    async def on_operation_start(self, info):
         self.calls.append(f"operation_start:{info.operation_id}")
 
-    def on_operation_end(self, info):
+    async def on_operation_end(self, info):
         self.calls.append(f"operation_end:{info.operation_id}")
 
-    def on_user_function_start(self, info):
+    async def on_user_function_start(self, info):
         self.calls.append(f"user_function_start:{info.operation_id}")
 
-    def on_user_function_end(self, info):
+    async def on_user_function_end(self, info):
         self.calls.append(f"user_function_end:{info.operation_id}")
 
 
@@ -3781,10 +3781,10 @@ def test_plugin_executor_exception_does_not_break_checkpointing():
     )
 
     class _ExplodingPlugin(DurableInstrumentationPlugin):
-        def on_operation_start(self, info):
+        async def on_operation_start(self, info):
             raise RuntimeError("plugin exploded")
 
-        def on_operation_end(self, info):
+        async def on_operation_end(self, info):
             raise RuntimeError("plugin exploded")
 
     exploding_plugin = _ExplodingPlugin()

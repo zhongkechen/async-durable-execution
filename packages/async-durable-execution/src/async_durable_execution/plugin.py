@@ -6,6 +6,7 @@ from collections.abc import Callable, MutableMapping
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
+from async_durable_execution.async_tools import await_maybe, run_or_return
 from async_durable_execution.exceptions import SuspendExecution
 from async_durable_execution.identifier import OperationIdentifier
 from async_durable_execution.lambda_service import (
@@ -139,21 +140,21 @@ class InvocationEndInfo(InvocationInfo):
 class DurableInstrumentationPlugin:
     """Base class for plugins. Override only the methods you need."""
 
-    def on_invocation_start(self, info: InvocationStartInfo) -> None:
+    async def on_invocation_start(self, info: InvocationStartInfo) -> None:
         """Called when an invocation starts. This is called within the thread that runs user function handler.
 
         Args:
             info: Information about the invocation.
         """
 
-    def on_invocation_end(self, info: InvocationEndInfo) -> None:
+    async def on_invocation_end(self, info: InvocationEndInfo) -> None:
         """Called when an invocation ends. This is called within the thread that runs user function handler.
 
         Args:
             info: Information about the invocation.
         """
 
-    def on_operation_start(self, info: OperationStartInfo) -> None:
+    async def on_operation_start(self, info: OperationStartInfo) -> None:
         """
         Called when an operation checkpoints STARTED status. This is called NOT within the thread that runs operation.
 
@@ -162,7 +163,7 @@ class DurableInstrumentationPlugin:
 
         """
 
-    def on_operation_end(self, info: OperationEndInfo) -> None:
+    async def on_operation_end(self, info: OperationEndInfo) -> None:
         """
         Called when an operation checkpoints a terminal status. This is called NOT within the thread that runs operation.
 
@@ -170,14 +171,14 @@ class DurableInstrumentationPlugin:
             info: Information about the operation.
         """
 
-    def on_user_function_start(self, info: UserFunctionStartInfo) -> None:
+    async def on_user_function_start(self, info: UserFunctionStartInfo) -> None:
         """Called when an operation starts to execute user provided function. This is called within the thread that runs user provided function.
 
         Args:
             info: Information about the operation attempt.
         """
 
-    def on_user_function_end(self, info: UserFunctionEndInfo) -> None:
+    async def on_user_function_end(self, info: UserFunctionEndInfo) -> None:
         """Called when an operation finishes executing user provided function. This is called within the thread that runs user provided function.
 
         Args:
@@ -201,35 +202,54 @@ class PluginExecutor:
             self._invocation_status = None
 
     @staticmethod
-    def _dispatch_plugin(plugin: DurableInstrumentationPlugin, info) -> None:
+    async def _dispatch_plugin(plugin: DurableInstrumentationPlugin, info) -> None:
         """Invoke the appropriate plugin callback."""
         try:
             match info:
                 case InvocationStartInfo():
-                    plugin.on_invocation_start(info)
+                    await plugin.on_invocation_start(info)
                 case InvocationEndInfo():
-                    plugin.on_invocation_end(info)
+                    await plugin.on_invocation_end(info)
                 case OperationStartInfo():
-                    plugin.on_operation_start(info)
+                    await plugin.on_operation_start(info)
                 case OperationEndInfo():
-                    plugin.on_operation_end(info)
+                    await plugin.on_operation_end(info)
                 case UserFunctionStartInfo():
-                    plugin.on_user_function_start(info)
+                    await plugin.on_user_function_start(info)
                 case UserFunctionEndInfo():
-                    plugin.on_user_function_end(info)
+                    await plugin.on_user_function_end(info)
                 case _:
                     raise RuntimeError(f"Unknown info type: {type(info)}")
         except Exception:
             # log and ignore the exception
             logger.exception("Plugin %s exception ignored", plugin.__class__.__name__)
 
-    def execute_plugins(self, info, sync):
+    def execute_plugins(self, info):
+        return run_or_return(self._execute_plugins_async(info))
+
+    async def _execute_plugins_async(self, info) -> None:
         if not self._plugins:
             return
         for plugin in self._plugins:
-            self._dispatch_plugin(plugin, info)
+            await self._dispatch_plugin(plugin, info)
 
     def on_invocation_start(
+        self,
+        execution_arn: str,
+        is_first_invocation: bool,
+        execution_start_time: datetime.datetime | None,
+        lambda_context: LambdaContext | None,
+    ):
+        return run_or_return(
+            self._on_invocation_start_async(
+                execution_arn=execution_arn,
+                is_first_invocation=is_first_invocation,
+                execution_start_time=execution_start_time,
+                lambda_context=lambda_context,
+            )
+        )
+
+    async def _on_invocation_start_async(
         self,
         execution_arn: str,
         is_first_invocation: bool,
@@ -248,9 +268,15 @@ class PluginExecutor:
             is_first_invocation=is_first_invocation,
             start_time=invocation_start_time,
         )
-        self.execute_plugins(self._invocation_status, sync=True)
+        await self._execute_plugins_async(self._invocation_status)
 
     def on_invocation_end(
+        self,
+        output: "DurableExecutionInvocationOutput",
+    ):
+        return run_or_return(self._on_invocation_end_async(output=output))
+
+    async def _on_invocation_end_async(
         self,
         output: "DurableExecutionInvocationOutput",
     ) -> None:
@@ -263,9 +289,23 @@ class PluginExecutor:
                 self._invocation_status, output
             )
         )
-        self.execute_plugins(invocation_end_info, sync=True)
+        await self._execute_plugins_async(invocation_end_info)
 
     def on_user_function_start(
+        self,
+        operation_identifier: OperationIdentifier,
+        is_replay_children: bool = False,
+        attempt: int | None = None,
+    ):
+        return run_or_return(
+            self._on_user_function_start_async(
+                operation_identifier=operation_identifier,
+                is_replay_children=is_replay_children,
+                attempt=attempt,
+            )
+        )
+
+    async def _on_user_function_start_async(
         self,
         operation_identifier: OperationIdentifier,
         is_replay_children: bool = False,
@@ -282,16 +322,26 @@ class PluginExecutor:
             is_replay_children=is_replay_children,
             attempt=attempt,
         )
-        self.execute_plugins(start_info, sync=True)
+        await self._execute_plugins_async(start_info)
         return start_info
 
-    def on_user_function_end(self, start_info: UserFunctionStartInfo, error) -> None:
+    def on_user_function_end(self, start_info: UserFunctionStartInfo, error):
+        return run_or_return(
+            self._on_user_function_end_async(start_info=start_info, error=error)
+        )
+
+    async def _on_user_function_end_async(
+        self, start_info: UserFunctionStartInfo, error
+    ) -> None:
         """Execute any registered plugins for the operation when its user function finishes execution."""
-        self.execute_plugins(
-            UserFunctionEndInfo.from_start_info(start_info, error), sync=True
+        await self._execute_plugins_async(
+            UserFunctionEndInfo.from_start_info(start_info, error)
         )
 
     def on_operation_action(self, update: OperationUpdate):
+        return run_or_return(self._on_operation_action_async(update))
+
+    async def _on_operation_action_async(self, update: OperationUpdate) -> None:
         """Execute any registered plugins for a given operation when an update is checkpointed
 
         Args:
@@ -301,7 +351,7 @@ class PluginExecutor:
         if update.action is OperationAction.START:
             # we handle only START action here because on_operation_update may not be able to see a STARTED update
             # when START is checkpointed in batch with terminal status updates.
-            self.execute_plugins(
+            await self._execute_plugins_async(
                 OperationStartInfo(
                     operation_id=update.operation_id,
                     operation_type=update.operation_type,
@@ -310,10 +360,12 @@ class PluginExecutor:
                     parent_id=update.parent_id,
                     start_time=datetime.datetime.now(datetime.UTC),
                 ),
-                sync=True,
             )
 
     def on_operation_update(self, operation: Operation | None):
+        return run_or_return(self._on_operation_update_async(operation))
+
+    async def _on_operation_update_async(self, operation: Operation | None) -> None:
         """Execute any registered plugins for a given operation when it receives an update
 
         Updates such as STARTED might be omitted because START and completion action (e.g. SUCCEED/FAIL) may be
@@ -325,7 +377,7 @@ class PluginExecutor:
             operation: the operation is just checkpointed
         """
         if operation and self._is_terminal_status(operation.status):
-            self.execute_plugins(
+            await self._execute_plugins_async(
                 OperationEndInfo(
                     operation_id=operation.operation_id,
                     operation_type=operation.operation_type,
@@ -337,7 +389,6 @@ class PluginExecutor:
                     status=operation.status,
                     error=self._extract_error(operation),
                 ),
-                sync=True,
             )
 
     @staticmethod
@@ -366,22 +417,26 @@ class PluginExecutor:
     def handle_durable_output(self):
         def decorator(func: Callable[[Any, LambdaContext], MutableMapping[str, Any]]):
             @functools.wraps(func)
-            def wrapper(event: Any, context: LambdaContext):
+            async def wrapper_async(event: Any, context: LambdaContext):
                 with self.run():
                     try:
-                        output = func(event, context)
+                        output = await await_maybe(func(event, context))
 
-                        self.on_invocation_end(
+                        await self.on_invocation_end(
                             output=DurableExecutionInvocationOutput.from_dict(output),
                         )
                         return output
                     except Exception as e:
-                        self.on_invocation_end(
+                        await self.on_invocation_end(
                             output=DurableExecutionInvocationOutput.create_retry(
                                 ErrorObject.from_exception(e)
                             ),
                         )
                         raise
+
+            @functools.wraps(func)
+            def wrapper(event: Any, context: LambdaContext):
+                return run_or_return(wrapper_async(event, context))
 
             return wrapper
 
