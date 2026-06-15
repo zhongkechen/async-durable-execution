@@ -7,7 +7,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     ErrorObject,
     Operation,
     OperationStatus,

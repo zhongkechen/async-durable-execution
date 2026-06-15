@@ -12,7 +12,7 @@ from async_durable_execution.concurrency.models import (
 from async_durable_execution.config import ParallelConfig
 from async_durable_execution.context import DurableContext
 from async_durable_execution.execution import durable_execution
-from async_durable_execution.lambda_service import ErrorObject
+from async_durable_execution.models import ErrorObject
 from async_durable_execution.serdes import JsonSerDes, SerDes, SerDesContext
 
 

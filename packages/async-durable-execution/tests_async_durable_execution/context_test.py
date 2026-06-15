@@ -32,7 +32,7 @@ from async_durable_execution.exceptions import (
     ValidationError,
 )
 from async_durable_execution.identifier import OperationIdentifier
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     CallbackDetails,
     ErrorObject,
     Operation,

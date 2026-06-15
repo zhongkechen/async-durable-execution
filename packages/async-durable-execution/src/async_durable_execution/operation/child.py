@@ -10,7 +10,7 @@ from async_durable_execution.exceptions import (
     InvocationError,
     SuspendExecution,
 )
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     ContextOptions,
     ErrorObject,
     OperationSubType,

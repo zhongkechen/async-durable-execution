@@ -26,7 +26,7 @@ from async_durable_execution.config import (
 )
 from async_durable_execution.context import DurableContext, ExecutionContext
 from async_durable_execution.identifier import OperationIdentifier
-from async_durable_execution.lambda_service import OperationSubType
+from async_durable_execution.models import OperationSubType
 from async_durable_execution.operation import child  # PLC0415
 from async_durable_execution.operation.map import MapExecutor, map_handler
 from async_durable_execution.serdes import serialize

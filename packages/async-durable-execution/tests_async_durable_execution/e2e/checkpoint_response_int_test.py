@@ -19,7 +19,7 @@ from async_durable_execution.execution import (
     InvocationStatus,
     durable_execution,
 )
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     CallbackDetails,
     CheckpointOutput,
     CheckpointUpdatedExecutionState,

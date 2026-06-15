@@ -24,6 +24,9 @@ classifiers = [
 ]
 dependencies = ["boto3>=1.42.1"]
 
+[project.optional-dependencies]
+typing = ["boto3-stubs[lambda]>=1.42.1"]
+
 [project.urls]
 Documentation = "https://github.com/zhongkechen/async-durable-execution#readme"
 Issues = "https://github.com/zhongkechen/async-durable-execution/issues"

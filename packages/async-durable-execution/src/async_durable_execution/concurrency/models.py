@@ -14,7 +14,7 @@ from async_durable_execution.exceptions import (
     InvalidStateError,
     SuspendExecution,
 )
-from async_durable_execution.lambda_service import ErrorObject
+from async_durable_execution.models import ErrorObject
 from async_durable_execution.types import BatchResult as BatchResultProtocol
 
 

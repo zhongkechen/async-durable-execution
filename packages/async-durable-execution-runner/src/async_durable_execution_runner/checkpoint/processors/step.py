@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     Operation,
     OperationAction,
     OperationStatus,

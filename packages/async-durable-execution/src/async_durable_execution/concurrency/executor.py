@@ -26,7 +26,7 @@ from async_durable_execution.exceptions import (
     TimedSuspendExecution,
 )
 from async_durable_execution.identifier import OperationIdentifier
-from async_durable_execution.lambda_service import ErrorObject
+from async_durable_execution.models import ErrorObject
 from async_durable_execution.operation.child import child_handler
 
 
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
     from async_durable_execution.config import CompletionConfig
     from async_durable_execution.context import DurableContext
-    from async_durable_execution.lambda_service import OperationSubType
+    from async_durable_execution.models import OperationSubType
     from async_durable_execution.serdes import SerDes
     from async_durable_execution.state import ExecutionState
     from async_durable_execution.types import SummaryGenerator

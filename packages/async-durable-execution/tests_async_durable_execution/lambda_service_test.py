@@ -14,7 +14,7 @@ from async_durable_execution.exceptions import (
     GetExecutionStateError,
 )
 from async_durable_execution.identifier import OperationIdentifier
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     CallbackDetails,
     CallbackOptions,
     ChainedInvokeDetails,
@@ -23,10 +23,8 @@ from async_durable_execution.lambda_service import (
     CheckpointUpdatedExecutionState,
     ContextDetails,
     ContextOptions,
-    DurableServiceClient,
     ErrorObject,
     ExecutionDetails,
-    ThreadedSyncLambdaClient,
     Operation,
     OperationAction,
     OperationStatus,
@@ -39,6 +37,10 @@ from async_durable_execution.lambda_service import (
     TimestampConverter,
     WaitDetails,
     WaitOptions,
+)
+from async_durable_execution.lambda_service import (
+    DurableServiceClient,
+    ThreadedSyncLambdaClient,
     _is_in_var_dir,
 )
 
@@ -716,7 +718,7 @@ async def test_operation_update_create_wait_start():
     assert update.sub_type is OperationSubType.WAIT
 
 
-@patch("async_durable_execution.lambda_service.datetime")
+@patch("async_durable_execution.models.datetime")
 async def test_operation_update_create_execution_succeed(mock_datetime):
     """Test OperationUpdate.create_execution_succeed factory method."""
 

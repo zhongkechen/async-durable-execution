@@ -17,7 +17,7 @@ from async_durable_execution.config import (
     ParallelBranch,
     ParallelConfig,
 )
-from async_durable_execution.lambda_service import OperationSubType
+from async_durable_execution.models import OperationSubType
 
 
 if TYPE_CHECKING:

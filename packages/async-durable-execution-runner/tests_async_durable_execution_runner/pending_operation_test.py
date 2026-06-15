@@ -3,7 +3,7 @@
 # from datetime import UTC, datetime
 # from unittest.mock import Mock
 #
-# from async_durable_execution.lambda_service import (
+# from async_durable_execution.models import (
 #     OperationStatus,
 #     OperationType,
 # )

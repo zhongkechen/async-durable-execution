@@ -4,7 +4,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     Operation,
     OperationStatus,
     OperationType,

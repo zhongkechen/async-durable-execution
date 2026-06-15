@@ -493,7 +493,7 @@ def test_sqlite_execution_store_custom_db_path():
 
 def test_sqlite_execution_store_failed_execution_status(store):
     """Test that failed executions are properly stored and queried."""
-    from async_durable_execution.lambda_service import ErrorObject
+    from async_durable_execution.models import ErrorObject
 
     input_data = StartDurableExecutionInput(
         account_id="123456789012",

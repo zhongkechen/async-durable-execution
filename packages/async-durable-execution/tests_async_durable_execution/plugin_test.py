@@ -3,7 +3,7 @@ import logging
 import unittest
 from unittest.mock import MagicMock
 
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     DurableExecutionInvocationOutput,
     ErrorObject,
     InvocationStatus,

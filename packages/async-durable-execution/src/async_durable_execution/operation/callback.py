@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from async_durable_execution.config import StepConfig
 from async_durable_execution.exceptions import CallbackError
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     CallbackOptions,
     OperationUpdate,
 )

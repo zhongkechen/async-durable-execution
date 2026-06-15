@@ -12,7 +12,7 @@ from async_durable_execution_runner.token import CallbackToken
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from async_durable_execution.lambda_service import (
+    from async_durable_execution.models import (
         CallbackOptions,
         ErrorObject,
     )
