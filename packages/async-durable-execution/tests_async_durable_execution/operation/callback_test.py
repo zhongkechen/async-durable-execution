@@ -281,13 +281,12 @@ async def test_create_callback_handler_existing_timed_out_missing_callback_detai
 
 async def test_wait_for_callback_handler_basic():
     """Test wait_for_callback_handler with basic parameters."""
-    mock_context = Mock(spec=DurableContext)
+    mock_context = AsyncMock(spec=DurableContext)
     mock_callback = Mock()
     mock_callback.callback_id = "callback789"
-    mock_callback.result.return_value = "callback_result"
+    mock_callback.result = AsyncMock(return_value="callback_result")
     mock_context.create_callback.return_value = mock_callback
-    mock_context.step = Mock()
-    mock_submitter = Mock()
+    mock_submitter = AsyncMock(return_value=None)
 
     result = await wait_for_callback_handler(mock_context, mock_submitter)
 
@@ -298,12 +297,12 @@ async def test_wait_for_callback_handler_basic():
 
 async def test_wait_for_callback_handler_with_name_and_config():
     """Test wait_for_callback_handler with name and config."""
-    mock_context = Mock(spec=DurableContext)
+    mock_context = AsyncMock(spec=DurableContext)
     mock_callback = Mock()
     mock_callback.callback_id = "callback999"
-    mock_callback.result.return_value = "named_callback_result"
+    mock_callback.result = AsyncMock(return_value="named_callback_result")
     mock_context.create_callback.return_value = mock_callback
-    mock_submitter = Mock()
+    mock_submitter = AsyncMock(return_value=None)
     config = WaitForCallbackConfig()
 
     result = await wait_for_callback_handler(
@@ -319,10 +318,10 @@ async def test_wait_for_callback_handler_with_name_and_config():
 
 async def test_wait_for_callback_handler_submitter_called_with_callback_id():
     """Test wait_for_callback_handler calls submitter with callback_id."""
-    mock_context = Mock(spec=DurableContext)
+    mock_context = AsyncMock(spec=DurableContext)
     mock_callback = Mock()
     mock_callback.callback_id = "callback_test_id"
-    mock_callback.result.return_value = "test_result"
+    mock_callback.result = AsyncMock(return_value="test_result")
     mock_context.create_callback.return_value = mock_callback
 
     mock_submitter = AsyncMock(return_value=None)
@@ -375,10 +374,10 @@ async def test_create_callback_handler_with_negative_timeouts():
 
 async def test_wait_for_callback_handler_with_none_callback_id():
     """Test wait_for_callback_handler when callback has None callback_id."""
-    mock_context = Mock(spec=DurableContext)
+    mock_context = AsyncMock(spec=DurableContext)
     mock_callback = Mock()
     mock_callback.callback_id = None
-    mock_callback.result.return_value = "result_with_none_id"
+    mock_callback.result = AsyncMock(return_value="result_with_none_id")
     mock_context.create_callback.return_value = mock_callback
 
     mock_submitter = AsyncMock(return_value=None)
@@ -402,10 +401,10 @@ async def test_wait_for_callback_handler_with_none_callback_id():
 
 async def test_wait_for_callback_handler_with_empty_string_callback_id():
     """Test wait_for_callback_handler when callback has empty string callback_id."""
-    mock_context = Mock(spec=DurableContext)
+    mock_context = AsyncMock(spec=DurableContext)
     mock_callback = Mock()
     mock_callback.callback_id = ""
-    mock_callback.result.return_value = "result_with_empty_id"
+    mock_callback.result = AsyncMock(return_value="result_with_empty_id")
     mock_context.create_callback.return_value = mock_callback
 
     mock_submitter = AsyncMock(return_value=None)
@@ -429,7 +428,7 @@ async def test_wait_for_callback_handler_with_empty_string_callback_id():
 
 async def test_wait_for_callback_handler_with_large_data():
     """Test wait_for_callback_handler with large result data."""
-    mock_context = Mock(spec=DurableContext)
+    mock_context = AsyncMock(spec=DurableContext)
     mock_callback = Mock()
     mock_callback.callback_id = "large_data_cb"
 
@@ -437,9 +436,9 @@ async def test_wait_for_callback_handler_with_large_data():
         "data": ["item_" + str(i) for i in range(1000)],
         "metadata": {"size": 1000, "type": "large_dataset"},
     }
-    mock_callback.result.return_value = large_result
+    mock_callback.result = AsyncMock(return_value=large_result)
     mock_context.create_callback.return_value = mock_callback
-    mock_submitter = Mock()
+    mock_submitter = AsyncMock(return_value=None)
 
     result = await wait_for_callback_handler(
         mock_context, mock_submitter, "large_data_test"
@@ -454,12 +453,12 @@ async def test_wait_for_callback_handler_with_unicode_names():
     unicode_names = ["测试回调", "コールバック", "🔄 callback test 🚀"]
 
     for name in unicode_names:
-        mock_context = Mock(spec=DurableContext)
+        mock_context = AsyncMock(spec=DurableContext)
         mock_callback = Mock()
         mock_callback.callback_id = f"unicode_cb_{hash(name) % 1000}"
-        mock_callback.result.return_value = f"result_for_{name}"
+        mock_callback.result = AsyncMock(return_value=f"result_for_{name}")
         mock_context.create_callback.return_value = mock_callback
-        mock_submitter = Mock()
+        mock_submitter = AsyncMock(return_value=None)
 
         result = await wait_for_callback_handler(mock_context, mock_submitter, name)
 
@@ -633,10 +632,10 @@ async def test_create_callback_handler_empty_operation_id():
 
 async def test_wait_for_callback_handler_submitter_exception_handling():
     """Test wait_for_callback_handler when submitter raises exception."""
-    mock_context = Mock(spec=DurableContext)
+    mock_context = AsyncMock(spec=DurableContext)
     mock_callback = Mock()
     mock_callback.callback_id = "callback_exception"
-    mock_callback.result.return_value = "exception_result"
+    mock_callback.result = AsyncMock(return_value="exception_result")
     mock_context.create_callback.return_value = mock_callback
 
     async def failing_submitter(callback_id, context):
@@ -656,12 +655,12 @@ async def test_wait_for_callback_handler_submitter_exception_handling():
 
 async def test_wait_for_callback_handler_callback_result_exception():
     """Test wait_for_callback_handler when callback.result() raises exception."""
-    mock_context = Mock(spec=DurableContext)
+    mock_context = AsyncMock(spec=DurableContext)
     mock_callback = Mock()
     mock_callback.callback_id = "callback_result_exception"
-    mock_callback.result.side_effect = RuntimeError("Callback result failed")
+    mock_callback.result = AsyncMock(side_effect=RuntimeError("Callback result failed"))
     mock_context.create_callback.return_value = mock_callback
-    mock_submitter = Mock()
+    mock_submitter = AsyncMock(return_value=None)
 
     with pytest.raises(RuntimeError, match="Callback result failed"):
         await wait_for_callback_handler(mock_context, mock_submitter, "test")
@@ -669,12 +668,12 @@ async def test_wait_for_callback_handler_callback_result_exception():
 
 async def test_wait_for_callback_handler_empty_name_handling():
     """Test wait_for_callback_handler with empty string name."""
-    mock_context = Mock(spec=DurableContext)
+    mock_context = AsyncMock(spec=DurableContext)
     mock_callback = Mock()
     mock_callback.callback_id = "callback_empty_name"
-    mock_callback.result.return_value = "empty_name_result"
+    mock_callback.result = AsyncMock(return_value="empty_name_result")
     mock_context.create_callback.return_value = mock_callback
-    mock_submitter = Mock()
+    mock_submitter = AsyncMock(return_value=None)
 
     result = await wait_for_callback_handler(mock_context, mock_submitter, "", None)
 
@@ -684,7 +683,7 @@ async def test_wait_for_callback_handler_empty_name_handling():
 
 async def test_wait_for_callback_handler_complex_callback_result():
     """Test wait_for_callback_handler with complex callback result."""
-    mock_context = Mock(spec=DurableContext)
+    mock_context = AsyncMock(spec=DurableContext)
     mock_callback = Mock()
     mock_callback.callback_id = "callback_complex"
     complex_result = {
@@ -692,9 +691,9 @@ async def test_wait_for_callback_handler_complex_callback_result():
         "data": [1, 2, 3],
         "metadata": {"timestamp": 123456},
     }
-    mock_callback.result.return_value = complex_result
+    mock_callback.result = AsyncMock(return_value=complex_result)
     mock_context.create_callback.return_value = mock_callback
-    mock_submitter = Mock()
+    mock_submitter = AsyncMock(return_value=None)
 
     result = await wait_for_callback_handler(
         mock_context, mock_submitter, "complex_test"
@@ -706,12 +705,12 @@ async def test_wait_for_callback_handler_complex_callback_result():
 
 async def test_wait_for_callback_handler_step_name_formatting():
     """Test wait_for_callback_handler step name formatting with various inputs."""
-    mock_context = Mock(spec=DurableContext)
+    mock_context = AsyncMock(spec=DurableContext)
     mock_callback = Mock()
     mock_callback.callback_id = "callback_name_format"
-    mock_callback.result.return_value = "formatted_result"
+    mock_callback.result = AsyncMock(return_value="formatted_result")
     mock_context.create_callback.return_value = mock_callback
-    mock_submitter = Mock()
+    mock_submitter = AsyncMock(return_value=None)
 
     await wait_for_callback_handler(mock_context, mock_submitter, "test with spaces")
 
@@ -723,12 +722,12 @@ async def test_wait_for_callback_handler_step_name_formatting():
 
 async def test_wait_for_callback_handler_config_propagation():
     """Test wait_for_callback_handler properly passes config to create_callback."""
-    mock_context = Mock(spec=DurableContext)
+    mock_context = AsyncMock(spec=DurableContext)
     mock_callback = Mock()
     mock_callback.callback_id = "callback_config_prop"
-    mock_callback.result.return_value = "config_result"
+    mock_callback.result = AsyncMock(return_value="config_result")
     mock_context.create_callback.return_value = mock_callback
-    mock_submitter = Mock()
+    mock_submitter = AsyncMock(return_value=None)
 
     config = WaitForCallbackConfig(
         timeout=timedelta(minutes=2), heartbeat_timeout=timedelta(seconds=30)
@@ -747,12 +746,12 @@ async def test_wait_for_callback_handler_config_propagation():
 async def test_wait_for_callback_handler_step_config_propagation():
     """Test wait_for_callback_handler properly passes retry_strategy and serdes to step config."""
 
-    mock_context = Mock(spec=DurableContext)
+    mock_context = AsyncMock(spec=DurableContext)
     mock_callback = Mock()
     mock_callback.callback_id = "step_config_test"
-    mock_callback.result.return_value = "step_config_result"
+    mock_callback.result = AsyncMock(return_value="step_config_result")
     mock_context.create_callback.return_value = mock_callback
-    mock_submitter = Mock()
+    mock_submitter = AsyncMock(return_value=None)
 
     def test_retry_strategy(exception, attempt):
         return RetryDecision.retry_after_delay(1)
@@ -784,12 +783,12 @@ async def test_wait_for_callback_handler_with_various_result_types():
     result_types = [None, True, False, 0, math.pi, "", "string", [], {"key": "value"}]
 
     for i, expected_result in enumerate(result_types):
-        mock_context = Mock(spec=DurableContext)
+        mock_context = AsyncMock(spec=DurableContext)
         mock_callback = Mock()
         mock_callback.callback_id = f"type_test_cb_{i}"
-        mock_callback.result.return_value = expected_result
+        mock_callback.result = AsyncMock(return_value=expected_result)
         mock_context.create_callback.return_value = mock_callback
-        mock_submitter = Mock()
+        mock_submitter = AsyncMock(return_value=None)
 
         result = await wait_for_callback_handler(
             mock_context, mock_submitter, f"type_test_{i}"
@@ -815,10 +814,12 @@ async def test_callback_lifecycle_complete_flow():
         CheckpointedResult.create_from_operation(operation),
     ]
 
-    mock_context = Mock(spec=DurableContext)
+    mock_context = AsyncMock(spec=DurableContext)
     mock_callback = Mock()
     mock_callback.callback_id = "lifecycle_cb123"
-    mock_callback.result.return_value = {"status": "completed", "data": "test_data"}
+    mock_callback.result = AsyncMock(
+        return_value={"status": "completed", "data": "test_data"}
+    )
     mock_context.create_callback.return_value = mock_callback
 
     config = WaitForCallbackConfig(
@@ -945,19 +946,21 @@ async def test_callback_error_propagation():
     )
     assert callback_id == "failed_cb"
 
-    mock_context = Mock(spec=DurableContext)
+    mock_context = AsyncMock(spec=DurableContext)
     mock_context.create_callback.side_effect = ValueError("Context creation failed")
 
     with pytest.raises(ValueError, match="Context creation failed"):
-        await wait_for_callback_handler(mock_context, Mock(), "error_test")
+        await wait_for_callback_handler(
+            mock_context, AsyncMock(return_value=None), "error_test"
+        )
 
 
 async def test_callback_with_complex_submitter():
     """Test callback with complex submitter logic."""
-    mock_context = Mock(spec=DurableContext)
+    mock_context = AsyncMock(spec=DurableContext)
     mock_callback = Mock()
     mock_callback.callback_id = "complex_cb789"
-    mock_callback.result.return_value = "complex_result"
+    mock_callback.result = AsyncMock(return_value="complex_result")
     mock_context.create_callback.return_value = mock_callback
 
     submission_log = []
@@ -1048,12 +1051,12 @@ async def test_callback_name_variations():
     ]
 
     for name in name_test_cases:
-        mock_context = Mock(spec=DurableContext)
+        mock_context = AsyncMock(spec=DurableContext)
         mock_callback = Mock()
         mock_callback.callback_id = f"name_test_{hash(str(name)) % 1000}"
-        mock_callback.result.return_value = f"result_for_{name}"
+        mock_callback.result = AsyncMock(return_value=f"result_for_{name}")
         mock_context.create_callback.return_value = mock_callback
-        mock_submitter = Mock()
+        mock_submitter = AsyncMock(return_value=None)
 
         result = await wait_for_callback_handler(mock_context, mock_submitter, name)
 

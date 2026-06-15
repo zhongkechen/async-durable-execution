@@ -52,7 +52,7 @@ def create_mock_checkpoint_with_operations():
         )
     ]
 
-    def mock_checkpoint(
+    async def mock_checkpoint(
         durable_execution_arn,
         checkpoint_token,
         updates,
@@ -355,7 +355,7 @@ async def test_callback_deferred_error_handling_to_result():
             )
         ]
 
-        def mock_checkpoint(
+        async def mock_checkpoint(
             durable_execution_arn,
             checkpoint_token,
             updates,
@@ -577,7 +577,7 @@ async def test_end_to_end_child_context_replay_children_mode():
             )
         ]
 
-        def mock_checkpoint(
+        async def mock_checkpoint(
             durable_execution_arn,
             checkpoint_token,
             updates,

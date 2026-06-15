@@ -2,7 +2,6 @@
 
 import asyncio
 import importlib
-import inspect
 import json
 from collections.abc import Mapping
 from typing import Any
@@ -39,14 +38,7 @@ from ..serdes_test import CustomStrSerDes
 
 
 async def _invoke_maybe_async(func, *args, **kwargs):
-    result = await func(*args, **kwargs)
-    if inspect.isawaitable(result):
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return await result
-        return result
-    return result
+    return await func(*args, **kwargs)
 
 
 def create_test_context(
@@ -318,7 +310,7 @@ async def test_parallel_handler_creates_executor_with_correct_config():
     with patch.object(ParallelExecutor, "from_callables") as mock_from_callables:
         mock_executor = Mock()
         mock_batch_result = Mock(spec=BatchResult)
-        mock_executor.execute.return_value = mock_batch_result
+        mock_executor.execute = AsyncMock(return_value=mock_batch_result)
         mock_from_callables.return_value = mock_executor
 
         result = await parallel_handler(
@@ -358,7 +350,7 @@ async def test_parallel_handler_creates_executor_with_default_config_when_none()
     with patch.object(ParallelExecutor, "from_callables") as mock_from_callables:
         mock_executor = Mock()
         mock_batch_result = Mock(spec=BatchResult)
-        mock_executor.execute.return_value = mock_batch_result
+        mock_executor.execute = AsyncMock(return_value=mock_batch_result)
         mock_from_callables.return_value = mock_executor
 
         result = await parallel_handler(

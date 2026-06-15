@@ -1,7 +1,6 @@
 """Implementation for the Durable create_callback and wait_for_callback operations."""
 
 from __future__ import annotations
-import inspect
 from typing import TYPE_CHECKING, Any
 
 from async_durable_execution.config import StepConfig
@@ -178,13 +177,10 @@ async def _wait_for_callback_handler_async(
     )
 
     async def submitter_step(step_context: StepContext):
-        submitter_result = submitter(
+        return await submitter(
             callback.callback_id,
             WaitForCallbackContext(logger=step_context.logger),
         )
-        if inspect.isawaitable(submitter_result):
-            return await submitter_result
-        return submitter_result
 
     step_config = (
         StepConfig(
@@ -194,15 +190,10 @@ async def _wait_for_callback_handler_async(
         if config
         else None
     )
-    step_result = context.step(
+    await context.step(
         func=submitter_step,
         name=f"{name_with_space}submitter",
         config=step_config,
     )
-    if inspect.isawaitable(step_result):
-        await step_result
 
-    callback_result = callback.result()
-    if inspect.isawaitable(callback_result):
-        return await callback_result
-    return callback_result
+    return await callback.result()

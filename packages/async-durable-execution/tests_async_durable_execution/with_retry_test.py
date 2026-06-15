@@ -53,7 +53,7 @@ class MockDurableContext:
     wait_calls: list[WaitCall] = field(default_factory=list)
     child_context_calls: list[RunInChildContextCall] = field(default_factory=list)
 
-    def wait(self, duration: timedelta, name: str | None = None) -> None:
+    async def wait(self, duration: timedelta, name: str | None = None) -> None:
         self.wait_calls.append(WaitCall(duration=duration, name=name))
 
     async def run_in_child_context(

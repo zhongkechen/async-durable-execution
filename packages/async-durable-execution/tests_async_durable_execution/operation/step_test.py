@@ -37,9 +37,7 @@ from ..serdes_test import CustomDictSerDes
 
 
 async def _invoke_maybe_async(result):
-    if inspect.isawaitable(result):
-        return await result
-    return result
+    return await result
 
 
 def _asyncify(func):

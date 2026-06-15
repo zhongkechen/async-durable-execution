@@ -81,6 +81,7 @@ def create_execution_state():
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
     state.create_checkpoint = AsyncMock()
+    state._create_checkpoint_async = AsyncMock()
     state.wrap_user_function = _wrap_user_function_for_test
     state.track_replay = Mock()
     state.get_checkpoint_result.return_value = create_checkpoint_result()

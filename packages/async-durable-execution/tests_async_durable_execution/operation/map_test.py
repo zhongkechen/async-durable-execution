@@ -2,7 +2,6 @@
 
 import asyncio
 import importlib
-import inspect
 import json
 from collections.abc import Mapping
 from typing import Any
@@ -36,14 +35,7 @@ from ..serdes_test import CustomStrSerDes
 
 
 async def _invoke_maybe_async(func, *args, **kwargs):
-    result = await func(*args, **kwargs)
-    if inspect.isawaitable(result):
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return await result
-        return result
-    return result
+    return await func(*args, **kwargs)
 
 
 def _mock_call_kwargs_by_operation_id(
@@ -400,7 +392,7 @@ async def test_map_handler_with_none_config_creates_default():
             all=[BatchItem(index=0, status=BatchItemStatus.SUCCEEDED, result="test")],
             completion_reason=CompletionReason.ALL_COMPLETED,
         )
-        mock_executor.execute.return_value = mock_batch_result
+        mock_executor.execute = AsyncMock(return_value=mock_batch_result)
         mock_from_items.return_value = mock_executor
 
         executor_context = Mock()

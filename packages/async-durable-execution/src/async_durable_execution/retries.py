@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 import math
-import inspect
 import re
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from async_durable_execution.async_tools import (
     assert_async_callable,
@@ -281,18 +280,13 @@ async def with_retry(
                 if not decision.should_retry:
                     raise
                 wait_name = f"{name}-backoff-{attempt}" if name else None
-                wait_result = ctx.wait(duration=decision.delay, name=wait_name)
-                if inspect.isawaitable(wait_result):
-                    await wait_result
+                await ctx.wait(duration=decision.delay, name=wait_name)
 
     if config.wrap_with_run_in_child_context:
-        child_result = context.run_in_child_context(
+        return await context.run_in_child_context(
             run_loop,
             name=name,
             config=config.child_context_config,
         )
-        if inspect.isawaitable(child_result):
-            return await child_result
-        return child_result
 
     return await invoke_callable(run_loop, context)

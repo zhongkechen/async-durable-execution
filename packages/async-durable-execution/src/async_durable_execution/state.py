@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import functools
-import inspect
 import json
 import logging
 from collections import deque
@@ -364,15 +363,10 @@ class ExecutionState:
         )
         try:
             while next_marker:
-                state_output = self._service_client.get_execution_state(
+                output = await self._service_client.get_execution_state(
                     durable_execution_arn=self.durable_execution_arn,
                     checkpoint_token=checkpoint_token,
                     next_marker=next_marker,
-                )
-                output: StateOutput = (
-                    await state_output
-                    if inspect.isawaitable(state_output)
-                    else state_output
                 )
                 all_operations.extend(output.operations)
                 next_marker = output.next_marker
@@ -719,16 +713,11 @@ class ExecutionState:
 
                 try:
                     # Make API call with batched operations
-                    checkpoint_output = self._service_client.checkpoint(
+                    output = await self._service_client.checkpoint(
                         durable_execution_arn=self.durable_execution_arn,
                         checkpoint_token=current_checkpoint_token,
                         updates=updates,
                         client_token=None,
-                    )
-                    output: CheckpointOutput = (
-                        await checkpoint_output
-                        if inspect.isawaitable(checkpoint_output)
-                        else checkpoint_output
                     )
 
                     logger.debug("Checkpoint batch processed successfully")

@@ -2,7 +2,6 @@
 
 import asyncio
 import hashlib
-import inspect
 import json
 import random
 from datetime import timedelta
@@ -51,9 +50,7 @@ from .test_helpers import operation_id_sequence
 
 
 async def run_async(awaitable):
-    if inspect.isawaitable(awaitable):
-        return await awaitable
-    return awaitable
+    return await awaitable
 
 
 def make_async_executor(result):

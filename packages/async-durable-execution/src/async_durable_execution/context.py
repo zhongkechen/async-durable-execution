@@ -1,10 +1,9 @@
 from __future__ import annotations
 import hashlib
-import inspect
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, Concatenate, Generic, ParamSpec, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Concatenate, Generic, ParamSpec, TypeVar
 
 from async_durable_execution.async_tools import (
     assert_async_callable,
@@ -585,7 +584,7 @@ class DurableContext(DurableContextProtocol):
                 operation_identifier=operation_identifier,
             )
 
-        result_or_awaitable = child_handler(
+        result = await child_handler(
             func=map_in_child_context,
             state=self.state,
             operation_identifier=operation_identifier,
@@ -598,11 +597,6 @@ class DurableContext(DurableContextProtocol):
                 item_serdes=None,
             ),
         )
-        result: BatchResult[T]
-        if inspect.isawaitable(result_or_awaitable):
-            result = await cast("Awaitable[BatchResult[T]]", result_or_awaitable)
-        else:
-            result = cast("BatchResult[T]", result_or_awaitable)
         self.state.track_replay(operation_id=operation_id)
         return result
 
@@ -652,7 +646,7 @@ class DurableContext(DurableContextProtocol):
                 operation_identifier=operation_identifier,
             )
 
-        result_or_awaitable = child_handler(
+        result = await child_handler(
             func=parallel_in_child_context,
             state=self.state,
             operation_identifier=operation_identifier,
@@ -665,11 +659,6 @@ class DurableContext(DurableContextProtocol):
                 item_serdes=None,
             ),
         )
-        result: BatchResult[T]
-        if inspect.isawaitable(result_or_awaitable):
-            result = await cast("Awaitable[BatchResult[T]]", result_or_awaitable)
-        else:
-            result = cast("BatchResult[T]", result_or_awaitable)
         self.state.track_replay(operation_id=operation_id)
         return result
 
@@ -710,7 +699,7 @@ class DurableContext(DurableContextProtocol):
                 )
             )
 
-        result_or_awaitable = child_handler(
+        result = await child_handler(
             func=callable_with_child_context,
             state=self.state,
             operation_identifier=OperationIdentifier(
@@ -721,11 +710,6 @@ class DurableContext(DurableContextProtocol):
             ),
             config=config,
         )
-        result: T
-        if inspect.isawaitable(result_or_awaitable):
-            result = await cast("Awaitable[T]", result_or_awaitable)
-        else:
-            result = cast("T", result_or_awaitable)
         self.state.track_replay(operation_id=operation_id)
         return result
 
