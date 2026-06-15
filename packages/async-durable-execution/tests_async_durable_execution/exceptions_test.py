@@ -17,7 +17,6 @@ from async_durable_execution.exceptions import (
     ExecutionError,
     GetExecutionStateError,
     InvocationError,
-    OrderedLockError,
     OrphanedChildException,
     StepInterruptedError,
     SuspendExecution,
@@ -249,22 +248,6 @@ def test_suspend_execution():
     error = SuspendExecution("suspend execution")
     assert str(error) == "suspend execution"
     assert isinstance(error, BaseException)
-
-
-def test_ordered_lock_error_without_source():
-    """Test OrderedLockError without source exception."""
-    error = OrderedLockError("lock error")
-    assert str(error) == "lock error"
-    assert error.source_exception is None
-    assert isinstance(error, DurableExecutionsError)
-
-
-def test_ordered_lock_error_with_source():
-    """Test OrderedLockError with source exception."""
-    source = ValueError("source error")
-    error = OrderedLockError("lock error", source)
-    assert str(error) == "lock error ValueError: source error"
-    assert error.source_exception is source
 
 
 def test_callable_runtime_error_serializable_details_from_exception():

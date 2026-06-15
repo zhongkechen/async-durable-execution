@@ -3,7 +3,6 @@
 import asyncio
 import json
 import random
-import threading
 import time
 from concurrent.futures import Future
 from functools import partial
@@ -865,19 +864,11 @@ async def test_execution_counters_failure_percentage_edge_case():
     assert counters.is_failure_tolerance_exceeded()
 
 
-async def test_execution_counters_thread_safety():
-    """Test ExecutionCounters thread safety."""
+async def test_execution_counters_increment_counts():
+    """Test ExecutionCounters increments counts correctly on one event loop."""
     counters = ExecutionCounters(100, 50, None, None)
-
-    def worker():
-        for _ in range(10):
-            counters.complete_task()
-
-    threads = [threading.Thread(target=worker) for _ in range(5)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
+    for _ in range(50):
+        counters.complete_task()
 
     assert counters.success_count == 50
 
@@ -1291,7 +1282,7 @@ async def test_multiple_tasks_one_suspends_execution_continues():
     class TestExecutor(ConcurrentExecutor):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
-            self.task_a_suspended = threading.Event()
+            self.task_a_suspended = asyncio.Event()
             self.task_b_completed = False
 
         async def execute_item(self, child_context, executable):
@@ -1301,8 +1292,8 @@ async def test_multiple_tasks_one_suspends_execution_continues():
                 raise TimedSuspendExecution(msg, time.time() + 1)  # Future time
             # Task B
             # Wait for Task A to suspend first
-            self.task_a_suspended.wait(timeout=2.0)
-            time.sleep(0.1)  # Ensure A has suspended
+            await asyncio.wait_for(self.task_a_suspended.wait(), timeout=2.0)
+            await asyncio.sleep(0.1)  # Ensure A has suspended
             self.task_b_completed = True
             return f"result_{executable.index}"
 
