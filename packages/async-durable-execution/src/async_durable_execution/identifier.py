@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     OperationSubType,
     OperationType,
 )

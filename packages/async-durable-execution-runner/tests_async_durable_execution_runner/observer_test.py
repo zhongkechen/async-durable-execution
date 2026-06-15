@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.lambda_service import CallbackOptions, ErrorObject
+from async_durable_execution.models import CallbackOptions, ErrorObject
 from async_durable_execution_runner.observer import (
     ExecutionNotifier,
     ExecutionObserver,

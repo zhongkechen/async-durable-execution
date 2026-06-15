@@ -14,7 +14,7 @@ from dateutil.tz import UTC
 from async_durable_execution.execution import DurableExecutionInvocationOutput
 
 # Import existing types from the main SDK - REUSE EVERYTHING POSSIBLE
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     CallbackDetails,
     CallbackOptions,
     ChainedInvokeDetails,

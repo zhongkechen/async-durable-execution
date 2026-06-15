@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     OperationAction,
     OperationUpdate,
 )

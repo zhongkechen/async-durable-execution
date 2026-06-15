@@ -1,7 +1,7 @@
 """Tests for parallel first successful example."""
 
 from async_durable_execution.execution import InvocationStatus
-from async_durable_execution.lambda_service import OperationStatus
+from async_durable_execution.models import OperationStatus
 from async_durable_execution_examples.parallel import parallel_first_successful
 
 

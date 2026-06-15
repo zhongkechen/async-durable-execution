@@ -10,7 +10,7 @@ from async_durable_execution.execution import (
     DurableExecutionInvocationOutput,
     InvocationStatus,
 )
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     CallbackDetails,
     CallbackOptions,
     ErrorObject,
@@ -2180,7 +2180,7 @@ async def test_get_execution_history(executor, mock_store):
 
 async def test_get_execution_history_with_events(executor, mock_store):
     """Test get_execution_history with actual events."""
-    from async_durable_execution.lambda_service import StepDetails
+    from async_durable_execution.models import StepDetails
 
     # Create operations that will generate events
     op1 = Operation(

@@ -34,14 +34,14 @@ import asyncio
 
 from unittest.mock import Mock
 
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     CheckpointOutput,
     CheckpointUpdatedExecutionState,
-    ThreadedSyncLambdaClient,
     OperationAction,
     OperationType,
     OperationUpdate,
 )
+from async_durable_execution.lambda_service import ThreadedSyncLambdaClient
 from async_durable_execution.plugin import PluginExecutor
 from async_durable_execution.state import (
     CheckpointBatcherConfig,

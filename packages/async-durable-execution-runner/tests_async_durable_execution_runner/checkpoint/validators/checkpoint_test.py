@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     ErrorObject,
     Operation,
     OperationAction,
@@ -419,7 +419,7 @@ def test_validate_inconsistent_operation_subtype():
     execution = _create_test_execution()
 
     # Add existing operation with subtype
-    from async_durable_execution.lambda_service import OperationSubType
+    from async_durable_execution.models import OperationSubType
 
     context_op = Operation(
         operation_id="op-1",

@@ -18,14 +18,13 @@ from async_durable_execution.exceptions import (
     OrphanedChildException,
 )
 from async_durable_execution.identifier import OperationIdentifier
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     CallbackDetails,
     ChainedInvokeDetails,
     CheckpointOutput,
     CheckpointUpdatedExecutionState,
     ContextDetails,
     ErrorObject,
-    ThreadedSyncLambdaClient,
     Operation,
     OperationAction,
     OperationStatus,
@@ -35,6 +34,7 @@ from async_durable_execution.lambda_service import (
     StateOutput,
     StepDetails,
 )
+from async_durable_execution.lambda_service import ThreadedSyncLambdaClient
 from async_durable_execution.plugin import (
     DurableInstrumentationPlugin,
     PluginExecutor,

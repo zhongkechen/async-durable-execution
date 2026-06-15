@@ -2,12 +2,12 @@
 
 import datetime
 
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     CheckpointOutput,
-    DurableServiceClient,
     OperationUpdate,
     StateOutput,
 )
+from async_durable_execution.lambda_service import DurableServiceClient
 from async_durable_execution_runner.checkpoint.processor import (
     CheckpointProcessor,
 )

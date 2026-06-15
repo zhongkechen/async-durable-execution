@@ -19,7 +19,7 @@ from async_durable_execution.exceptions import (
     ExecutionError,
     SerDesError,
 )
-from async_durable_execution.lambda_service import ErrorObject
+from async_durable_execution.models import ErrorObject
 from async_durable_execution.serdes import (
     BytesCodec,
     ContainerCodec,

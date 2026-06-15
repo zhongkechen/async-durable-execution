@@ -10,7 +10,7 @@ import pytest
 from typing import Any, cast
 
 from async_durable_execution.exceptions import InvalidStateError
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     Operation,
     OperationStatus,
     OperationType,

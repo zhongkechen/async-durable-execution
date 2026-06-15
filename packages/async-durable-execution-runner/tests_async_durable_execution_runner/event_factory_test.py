@@ -8,7 +8,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     ErrorObject,
     OperationAction,
     OperationStatus,
@@ -56,7 +56,7 @@ def create_mock_operation(
 def test_create_execution_started():
     from unittest.mock import Mock
 
-    from async_durable_execution.lambda_service import ExecutionDetails
+    from async_durable_execution.models import ExecutionDetails
 
     operation = Mock()
     operation.operation_id = "op-1"
@@ -893,7 +893,7 @@ def test_execution_to_dict_with_function_arn():
 
 
 def test_event_input_from_details():
-    from async_durable_execution.lambda_service import ExecutionDetails
+    from async_durable_execution.models import ExecutionDetails
 
     details = ExecutionDetails(input_payload='{"test": "data"}')
     event_input = EventInput.from_details(details, include=True)
@@ -906,7 +906,7 @@ def test_event_input_from_details():
 
 
 def test_event_result_from_details():
-    from async_durable_execution.lambda_service import StepDetails
+    from async_durable_execution.models import StepDetails
 
     details = StepDetails(result='{"result": "success"}')
     event_result = EventResult.from_details(details, include=True)
@@ -915,7 +915,7 @@ def test_event_result_from_details():
 
 
 def test_event_error_from_details():
-    from async_durable_execution.lambda_service import StepDetails
+    from async_durable_execution.models import StepDetails
 
     error_obj = ErrorObject.from_message("Test error")
     details = StepDetails(error=error_obj)

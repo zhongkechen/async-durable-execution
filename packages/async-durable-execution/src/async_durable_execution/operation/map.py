@@ -16,7 +16,7 @@ from async_durable_execution.concurrency.models import (
     Executable,
 )
 from async_durable_execution.config import MapConfig, NestingType
-from async_durable_execution.lambda_service import OperationSubType
+from async_durable_execution.models import OperationSubType
 
 
 if TYPE_CHECKING:

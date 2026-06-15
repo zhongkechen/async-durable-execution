@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from async_durable_execution.lambda_service import OperationUpdate, WaitOptions
+from async_durable_execution.models import OperationUpdate, WaitOptions
 from async_durable_execution.operation.base import (
     CheckResult,
     OperationExecutor,

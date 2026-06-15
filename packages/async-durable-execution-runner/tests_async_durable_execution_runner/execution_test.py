@@ -8,7 +8,7 @@ import pytest
 from async_durable_execution.execution import (
     InvocationStatus,
 )
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     CallbackDetails,
     ErrorObject,
     Operation,

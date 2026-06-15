@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     OperationStatus,
     OperationType,
 )
@@ -2938,7 +2938,7 @@ def test_list_durable_executions_by_function_request_with_durable_execution_name
 # Test for missing branch coverage in CheckpointDurableExecutionResponse
 def test_checkpoint_updated_execution_state_with_next_marker():
     """Test CheckpointUpdatedExecutionState to_dict with next_marker."""
-    from async_durable_execution.lambda_service import (
+    from async_durable_execution.models import (
         Operation,
         OperationStatus,
         OperationType,
@@ -3072,7 +3072,7 @@ def test_events_to_operations_step_with_retry():
     """Test events_to_operations with step retry details."""
     import datetime
 
-    from async_durable_execution.lambda_service import (
+    from async_durable_execution.models import (
         OperationStatus,
         OperationType,
     )
@@ -3108,7 +3108,7 @@ def test_events_to_operations_step_failed_with_next_attempt():
     """Test events_to_operations with failed step and next attempt timestamp."""
     import datetime
 
-    from async_durable_execution.lambda_service import (
+    from async_durable_execution.models import (
         ErrorObject,
         OperationStatus,
     )
@@ -3151,7 +3151,7 @@ def test_events_to_operations_context_succeeded():
     """Test events_to_operations with successful context."""
     import datetime
 
-    from async_durable_execution.lambda_service import (
+    from async_durable_execution.models import (
         OperationStatus,
         OperationType,
     )
@@ -3185,7 +3185,7 @@ def test_events_to_operations_chained_invoke_succeeded():
     """Test events_to_operations with successful chained invoke."""
     import datetime
 
-    from async_durable_execution.lambda_service import (
+    from async_durable_execution.models import (
         OperationStatus,
         OperationType,
     )
@@ -3231,7 +3231,7 @@ def test_events_to_operations_callback_failed():
     """Test events_to_operations with failed callback."""
     import datetime
 
-    from async_durable_execution.lambda_service import (
+    from async_durable_execution.models import (
         ErrorObject,
         OperationStatus,
     )
@@ -3275,7 +3275,7 @@ def test_events_to_operations_callback_timed_out():
     """Test events_to_operations with timed out callback."""
     import datetime
 
-    from async_durable_execution.lambda_service import (
+    from async_durable_execution.models import (
         ErrorObject,
         OperationStatus,
     )
@@ -3318,7 +3318,7 @@ def test_events_to_operations_wait_started():
     """Test events_to_operations with wait operation."""
     import datetime
 
-    from async_durable_execution.lambda_service import (
+    from async_durable_execution.models import (
         OperationStatus,
         OperationType,
     )
@@ -3351,7 +3351,7 @@ def test_events_to_operations_context_failed():
     """Test events_to_operations with failed context."""
     import datetime
 
-    from async_durable_execution.lambda_service import (
+    from async_durable_execution.models import (
         ErrorObject,
         OperationStatus,
     )
@@ -3387,7 +3387,7 @@ def test_events_to_operations_chained_invoke_failed():
     """Test events_to_operations with failed chained invoke."""
     import datetime
 
-    from async_durable_execution.lambda_service import (
+    from async_durable_execution.models import (
         ErrorObject,
         OperationStatus,
     )
@@ -3423,7 +3423,7 @@ def test_events_to_operations_multiple_operations():
     """Test events_to_operations with multiple different operations."""
     import datetime
 
-    from async_durable_execution.lambda_service import (
+    from async_durable_execution.models import (
         OperationStatus,
         OperationType,
     )

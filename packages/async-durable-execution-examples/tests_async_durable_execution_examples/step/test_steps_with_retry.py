@@ -1,7 +1,7 @@
 """Tests for steps_with_retry."""
 
 from async_durable_execution.execution import InvocationStatus
-from async_durable_execution.lambda_service import OperationType
+from async_durable_execution.models import OperationType
 from async_durable_execution_examples.step import steps_with_retry
 
 

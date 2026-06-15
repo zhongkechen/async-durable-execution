@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, TypeVar
 from async_durable_execution.exceptions import (
     ExecutionError,
 )
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     ErrorObject,
     OperationUpdate,
 )

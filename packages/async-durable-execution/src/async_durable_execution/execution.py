@@ -20,13 +20,16 @@ from async_durable_execution.exceptions import (
     InvocationError,
     SuspendExecution,
 )
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     DurableExecutionInvocationOutput,
-    DurableServiceClient,
     ErrorObject,
     InvocationStatus,
     Operation,
     OperationUpdate,
+)
+from async_durable_execution.lambda_service import (
+    DurableServiceClient,
+    LambdaApiClient,
     ThreadedSyncLambdaClient,
 )
 from async_durable_execution.plugin import (
@@ -38,8 +41,6 @@ from async_durable_execution.state import ExecutionState, ReplayStatus
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, MutableMapping
-
-    from mypy_boto3_lambda import LambdaClient as Boto3LambdaClient
 
     from async_durable_execution.types import LambdaContext
 
@@ -158,7 +159,7 @@ class DurableExecutionInvocationInputWithClient(DurableExecutionInvocationInput)
 def durable_execution(
     func: Callable[[Any, DurableContext], Awaitable[Any]] | None = None,
     *,
-    boto3_client: Boto3LambdaClient | None = None,
+    boto3_client: LambdaApiClient | None = None,
     plugins: list[DurableInstrumentationPlugin] | None = None,
 ) -> Callable[[Any, LambdaContext], Any]:
     """

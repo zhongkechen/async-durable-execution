@@ -19,14 +19,14 @@ from botocore.config import Config  # type: ignore
 from botocore.exceptions import ClientError  # type: ignore
 
 from async_durable_execution.execution import InvocationStatus
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     ErrorObject,
     OperationPayload,
     OperationStatus,
     OperationSubType,
     OperationType,
 )
-from async_durable_execution.lambda_service import Operation as SvcOperation
+from async_durable_execution.models import Operation as SvcOperation
 from async_durable_execution.serdes import ExtendedTypeSerDes
 from async_durable_execution_runner.checkpoint.processor import (
     CheckpointProcessor,

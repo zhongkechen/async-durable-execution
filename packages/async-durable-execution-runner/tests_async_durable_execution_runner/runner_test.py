@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from async_durable_execution.execution import InvocationStatus
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     CallbackDetails,
     ChainedInvokeDetails,
     ContextDetails,
@@ -18,7 +18,7 @@ from async_durable_execution.lambda_service import (
     StepDetails,
     WaitDetails,
 )
-from async_durable_execution.lambda_service import Operation as SvcOperation
+from async_durable_execution.models import Operation as SvcOperation
 from async_durable_execution_runner.exceptions import (
     DurableFunctionsTestError,
     InvalidParameterValueException,
@@ -1579,7 +1579,7 @@ async def test_durable_function_test_result_from_execution_history_failed():
     import datetime
 
     from async_durable_execution.execution import InvocationStatus
-    from async_durable_execution.lambda_service import ErrorObject
+    from async_durable_execution.models import ErrorObject
     from async_durable_execution_runner.model import (
         GetDurableExecutionHistoryResponse,
         GetDurableExecutionResponse,

@@ -6,7 +6,7 @@ succeeding on the 3rd attempt.
 """
 
 from async_durable_execution.execution import InvocationStatus
-from async_durable_execution.lambda_service import ErrorObject
+from async_durable_execution.models import ErrorObject
 from async_durable_execution_examples.with_retry import with_retry_callback
 
 

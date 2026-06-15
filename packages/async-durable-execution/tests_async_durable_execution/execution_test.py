@@ -31,13 +31,12 @@ from async_durable_execution.execution import (
 )
 
 # LambdaContext no longer needed - using duck typing
-from async_durable_execution.lambda_service import (
+from async_durable_execution.models import (
     CallbackDetails,
     CheckpointOutput,
     CheckpointUpdatedExecutionState,
     ContextDetails,
     DurableExecutionInvocationOutput,
-    DurableServiceClient,
     ErrorObject,
     ExecutionDetails,
     Operation,
@@ -49,6 +48,7 @@ from async_durable_execution.lambda_service import (
     StepDetails,
     WaitDetails,
 )
+from async_durable_execution.lambda_service import DurableServiceClient
 from async_durable_execution.plugin import DurableInstrumentationPlugin
 
 

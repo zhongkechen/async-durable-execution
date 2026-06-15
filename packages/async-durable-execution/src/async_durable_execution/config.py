@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
     from concurrent.futures import Future
 
-    from async_durable_execution.lambda_service import OperationSubType
+    from async_durable_execution.models import OperationSubType
     from async_durable_execution.retries import RetryDecision
     from async_durable_execution.serdes import SerDes
     from async_durable_execution.types import SummaryGenerator
