@@ -1,9 +1,8 @@
 """Implementation for run_in_child_context."""
 
 from __future__ import annotations
-import inspect
 import logging
-from typing import TYPE_CHECKING, TypeVar, cast
+from typing import TYPE_CHECKING, TypeVar
 
 from async_durable_execution.config import ChildConfig
 from async_durable_execution.exceptions import (
@@ -129,11 +128,9 @@ class ChildOperationExecutor(OperationExecutor[T]):
             # This is a fire-and-forget operation for performance - we don't need to wait for
             # persistence before executing the child context. The START checkpoint is purely
             # for observability and tracking the operation hierarchy.
-            checkpoint_result = self.state._create_checkpoint_async(
+            await self.state._create_checkpoint_async(
                 operation_update=start_operation, is_sync=False
             )
-            if inspect.isawaitable(checkpoint_result):
-                await checkpoint_result
 
         # Ready to execute (checkpoint exists or was just created)
         return CheckResult.create_is_ready_to_execute(checkpointed_result)
@@ -165,11 +162,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 checkpointed_result.is_replay_children(),
                 attempt=None if checkpointed_result.is_existent() else 1,
             )
-            raw_result_or_awaitable = wrapped_user_func()
-            if inspect.isawaitable(raw_result_or_awaitable):
-                raw_result: T = await cast("Awaitable[T]", raw_result_or_awaitable)
-            else:
-                raw_result = cast("T", raw_result_or_awaitable)
+            raw_result: T = await wrapped_user_func()
 
             if self.is_virtual:
                 logger.debug(
@@ -236,11 +229,9 @@ class ChildOperationExecutor(OperationExecutor[T]):
             # Must ensure the child context result is persisted before returning to the parent.
             # This guarantees the result is durable and child operations won't be re-executed on replay
             # (unless replay_children=True for large payloads).
-            checkpoint_result = self.state._create_checkpoint_async(
+            await self.state._create_checkpoint_async(
                 operation_update=success_operation
             )
-            if inspect.isawaitable(checkpoint_result):
-                await checkpoint_result
 
             logger.debug(
                 "✅ Successfully completed child context for id: %s, name: %s",
@@ -263,11 +254,9 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 # Checkpoint child context FAIL with blocking (is_sync=True, default).
                 # Must ensure the failure state is persisted before raising the exception.
                 # This guarantees the error is durable and child operations won't be re-executed on replay.
-                checkpoint_result = self.state._create_checkpoint_async(
+                await self.state._create_checkpoint_async(
                     operation_update=fail_operation
                 )
-                if inspect.isawaitable(checkpoint_result):
-                    await checkpoint_result
 
             # InvocationError and its derivatives can be retried.
             # When we encounter an invocation error (in all of its forms), we
@@ -279,12 +268,12 @@ class ChildOperationExecutor(OperationExecutor[T]):
             raise error_object.to_callable_runtime_error() from e
 
 
-def child_handler(
+async def child_handler(
     func: Callable[[], Awaitable[T]],
     state: ExecutionState,
     operation_identifier: OperationIdentifier,
     config: ChildConfig | None,
-) -> T | Awaitable[T]:
+) -> T:
     """Run a function in a child context.
 
     Create a ChildOperationExecutor and delegates to its process() method.
@@ -309,5 +298,4 @@ def child_handler(
         operation_identifier,
         config or ChildConfig(),
     )
-    awaitable = executor.process()
-    return awaitable
+    return await executor.process()

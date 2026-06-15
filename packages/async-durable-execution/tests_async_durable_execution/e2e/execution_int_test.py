@@ -54,7 +54,7 @@ def create_mock_checkpoint_with_operations():
         )
     ]
 
-    def mock_checkpoint(
+    async def mock_checkpoint(
         durable_execution_arn,
         checkpoint_token,
         updates,
@@ -123,7 +123,7 @@ async def test_step_different_ways_to_pass_args():
         # Mock the checkpoint method to track calls
         checkpoint_calls = []
 
-        def mock_checkpoint(
+        async def mock_checkpoint(
             durable_execution_arn,
             checkpoint_token,
             updates,
@@ -209,7 +209,7 @@ async def test_step_with_logger():
         # Mock the checkpoint method to track calls
         checkpoint_calls = []
 
-        def mock_checkpoint(
+        async def mock_checkpoint(
             durable_execution_arn,
             checkpoint_token,
             updates,
@@ -400,7 +400,7 @@ async def test_step_checkpoint_failure_propagates_error():
         mock_client_class.initialize_client.return_value = mock_client
 
         # Mock the checkpoint method to raise an error (using RuntimeError as a generic exception)
-        def mock_checkpoint_failure(
+        async def mock_checkpoint_failure(
             durable_execution_arn,
             checkpoint_token,
             updates,
@@ -536,7 +536,7 @@ async def test_durable_wait_for_callback_decorator():
 
         checkpoint_calls = []
 
-        def mock_checkpoint(
+        async def mock_checkpoint(
             durable_execution_arn,
             checkpoint_token,
             updates,

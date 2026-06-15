@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 import json
-import inspect
 import logging
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, TypeVar
@@ -152,16 +151,8 @@ async def _parallel_handler_async(
         operation_identifier.operation_id
     )
     if checkpoint.is_succeeded():
-        replay_result = executor.replay(execution_state, parallel_context)
-        if inspect.isawaitable(replay_result):
-            return await replay_result
-        return replay_result
-    execute_result = executor.execute(
-        execution_state, executor_context=parallel_context
-    )
-    if inspect.isawaitable(execute_result):
-        return await execute_result
-    return execute_result
+        return await executor.replay(execution_state, parallel_context)
+    return await executor.execute(execution_state, executor_context=parallel_context)
 
 
 class ParallelSummaryGenerator:

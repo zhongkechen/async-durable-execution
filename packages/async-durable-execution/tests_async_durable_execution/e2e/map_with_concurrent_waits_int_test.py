@@ -75,7 +75,7 @@ def _make_tracking_client() -> tuple[Mock, list]:
     calls: list[list] = []
     mock_client = Mock(spec=ThreadedSyncLambdaClient)
 
-    def _checkpoint(
+    async def _checkpoint(
         durable_execution_arn, checkpoint_token, updates, client_token=None
     ):
         calls.append(list(updates))

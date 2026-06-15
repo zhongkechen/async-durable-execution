@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 import json
-import inspect
 import logging
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Generic, TypeVar
@@ -162,15 +161,9 @@ async def _map_handler_async(
     )
     if checkpoint.is_succeeded():
         # if we've reached this point, then not only is the step succeeded, but it is also `replay_children`.
-        replay_result = executor.replay(execution_state, map_context)
-        if inspect.isawaitable(replay_result):
-            return await replay_result
-        return replay_result
+        return await executor.replay(execution_state, map_context)
     # we are making it explicit that we are now executing within the map_context
-    execute_result = executor.execute(execution_state, executor_context=map_context)
-    if inspect.isawaitable(execute_result):
-        return await execute_result
-    return execute_result
+    return await executor.execute(execution_state, executor_context=map_context)
 
 
 class MapSummaryGenerator:

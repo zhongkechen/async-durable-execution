@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 from collections.abc import Coroutine
 
 import pytest
@@ -59,9 +58,7 @@ def create_mock_checkpoint(status: OperationStatus) -> CheckpointedResult:
 
 
 async def run_async(awaitable: Any):
-    if inspect.isawaitable(awaitable):
-        return await cast(Coroutine[Any, Any, Any], awaitable)
-    return awaitable
+    return await cast(Coroutine[Any, Any, Any], awaitable)
 
 
 # Tests for CheckResult factory methods

@@ -1,7 +1,6 @@
 """Unit tests for wait handler."""
 
 import asyncio
-import inspect
 from unittest.mock import Mock
 
 import pytest
@@ -22,8 +21,6 @@ from async_durable_execution.state import CheckpointedResult, ExecutionState
 
 
 async def run_async(awaitable):
-    if not inspect.isawaitable(awaitable):
-        return awaitable
     return await awaitable
 
 
