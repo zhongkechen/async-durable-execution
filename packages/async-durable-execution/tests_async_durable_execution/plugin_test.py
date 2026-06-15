@@ -188,7 +188,7 @@ class TestPluginExecutorInit(unittest.TestCase):
         self.assertEqual(len(executor._plugins), 2)
 
 
-class TestPluginExecutor(unittest.TestCase):
+class TestPluginExecutor(unittest.IsolatedAsyncioTestCase):
     def test_no_thread_pool_when_plugins_is_none(self):
         """PluginExecutor should stay single-threaded when no plugins are configured."""
         executor = PluginExecutor(plugins=None)
@@ -209,19 +209,19 @@ class TestPluginExecutor(unittest.TestCase):
         with executor.run():
             pass
 
-    def test_on_invocation_start_is_safe_when_empty(self):
+    async def test_on_invocation_start_is_safe_when_empty(self):
         executor = PluginExecutor(plugins=[])
         # Should not raise
-        executor.on_invocation_start(
+        await executor.on_invocation_start(
             execution_arn="arn:exec",
             lambda_context=LAMBDA_CTX,
             execution_start_time=START_TS,
             is_first_invocation=False,
         )
 
-    def test_on_invocation_end_is_safe_when_empty(self):
+    async def test_on_invocation_end_is_safe_when_empty(self):
         executor = PluginExecutor(plugins=[])
-        executor.on_invocation_start(
+        await executor.on_invocation_start(
             execution_arn="arn:exec",
             lambda_context=LAMBDA_CTX,
             execution_start_time=START_TS,
@@ -232,11 +232,9 @@ class TestPluginExecutor(unittest.TestCase):
         )
 
         # Should not raise
-        executor.on_invocation_end(
-            output=output,
-        )
+        await executor.on_invocation_end(output=output)
 
-    def test_on_operation_action_is_safe_when_empty(self):
+    async def test_on_operation_action_is_safe_when_empty(self):
         executor = PluginExecutor(plugins=[])
         update = MagicMock()
         update.action = OperationAction.START
@@ -247,9 +245,9 @@ class TestPluginExecutor(unittest.TestCase):
         update.parent_id = None
 
         # Should not raise
-        executor.on_operation_action(update)
+        await executor.on_operation_action(update)
 
-    def test_on_operation_update_is_safe_when_empty(self):
+    async def test_on_operation_update_is_safe_when_empty(self):
         executor = PluginExecutor(plugins=[])
         op = MagicMock()
         op.operation_id = "op-1"
@@ -268,53 +266,53 @@ class TestPluginExecutor(unittest.TestCase):
         op.context_details = None
 
         # Should not raise
-        executor.on_operation_update(op)
+        await executor.on_operation_update(op)
 
 
-class TestPluginExecutorExecutePlugins(unittest.TestCase):
+class TestPluginExecutorExecutePlugins(unittest.IsolatedAsyncioTestCase):
     """Tests for the execute_plugins dispatch method."""
 
     def setUp(self):
         self.plugin = _TrackingPlugin()
         self.executor = PluginExecutor(plugins=[self.plugin])
 
-    def test_dispatch_invocation_start_info(self):
+    async def test_dispatch_invocation_start_info(self):
         with self.executor.run():
-            self.executor.execute_plugins(INVOCATION_START_INFO)
+            await self.executor.execute_plugins(INVOCATION_START_INFO)
         self.assertIn("invocation_start:req-1", self.plugin.calls)
 
-    def test_dispatch_invocation_end_info(self):
+    async def test_dispatch_invocation_end_info(self):
         with self.executor.run():
-            self.executor.execute_plugins(INVOCATION_END_INFO)
+            await self.executor.execute_plugins(INVOCATION_END_INFO)
         self.assertIn("invocation_end:req-1", self.plugin.calls)
 
-    def test_dispatch_operation_end_info(self):
+    async def test_dispatch_operation_end_info(self):
         with self.executor.run():
-            self.executor.execute_plugins(OPERATION_END_INFO)
+            await self.executor.execute_plugins(OPERATION_END_INFO)
         self.assertIn("operation_end:op-1", self.plugin.calls)
 
-    def test_dispatch_operation_start_info(self):
+    async def test_dispatch_operation_start_info(self):
         with self.executor.run():
-            self.executor.execute_plugins(OPERATION_START_INFO)
+            await self.executor.execute_plugins(OPERATION_START_INFO)
         self.assertIn("operation_start:op-2", self.plugin.calls)
 
-    def test_dispatch_user_function_start_info(self):
+    async def test_dispatch_user_function_start_info(self):
         with self.executor.run():
-            self.executor.execute_plugins(USER_FUNCTION_START_INFO)
+            await self.executor.execute_plugins(USER_FUNCTION_START_INFO)
         self.assertIn("user_function_start:op-1", self.plugin.calls)
 
-    def test_dispatch_user_function_end_info(self):
+    async def test_dispatch_user_function_end_info(self):
         with self.executor.run():
-            self.executor.execute_plugins(USER_FUNCTION_END_INFO)
+            await self.executor.execute_plugins(USER_FUNCTION_END_INFO)
         self.assertIn("user_function_end:op-1", self.plugin.calls)
 
-    def test_dispatch_unknown_type_logs_exception(self):
+    async def test_dispatch_unknown_type_logs_exception(self):
         """Unknown info types should be caught and logged."""
         with self.assertLogs("async_durable_execution.plugin", level=logging.ERROR):
             with self.executor.run():
-                self.executor.execute_plugins("not a valid info type")
+                await self.executor.execute_plugins("not a valid info type")
 
-    def test_plugin_exception_is_swallowed(self):
+    async def test_plugin_exception_is_swallowed(self):
         """If a plugin raises, the exception is logged and execution continues."""
         failing_plugin = _FailingPlugin()
         tracking_plugin = _TrackingPlugin()
@@ -322,24 +320,24 @@ class TestPluginExecutorExecutePlugins(unittest.TestCase):
 
         with self.assertLogs("async_durable_execution.plugin", level=logging.ERROR):
             with executor.run():
-                executor.execute_plugins(OPERATION_START_INFO)
+                await executor.execute_plugins(OPERATION_START_INFO)
 
         # The second plugin should still have been called
         self.assertIn("operation_start:op-2", tracking_plugin.calls)
 
-    def test_multiple_plugins_all_called(self):
+    async def test_multiple_plugins_all_called(self):
         p1 = _TrackingPlugin()
         p2 = _TrackingPlugin()
         executor = PluginExecutor(plugins=[p1, p2])
 
         with executor.run():
-            executor.execute_plugins(OPERATION_START_INFO)
+            await executor.execute_plugins(OPERATION_START_INFO)
 
         self.assertIn("operation_start:op-2", p1.calls)
         self.assertIn("operation_start:op-2", p2.calls)
 
 
-class TestPluginExecutorOnInvocationStart(unittest.TestCase):
+class TestPluginExecutorOnInvocationStart(unittest.IsolatedAsyncioTestCase):
     """Tests for PluginExecutor.on_invocation_start."""
 
     def setUp(self):
@@ -352,9 +350,9 @@ class TestPluginExecutorOnInvocationStart(unittest.TestCase):
         op.start_time = start_time or self.ts
         return op
 
-    def test_first_invocation_fires_invocation_start(self):
+    async def test_first_invocation_fires_invocation_start(self):
         with self.executor.run():
-            self.executor.on_invocation_start(
+            await self.executor.on_invocation_start(
                 execution_arn="arn:exec",
                 lambda_context=LAMBDA_CTX,
                 execution_start_time=START_TS,
@@ -378,9 +376,9 @@ class TestPluginExecutorOnInvocationStart(unittest.TestCase):
         ]
         self.assertEqual(1, len(invocation_calls))
 
-    def test_replay_invocation_fires_invocation_start(self):
+    async def test_replay_invocation_fires_invocation_start(self):
         with self.executor.run():
-            self.executor.on_invocation_start(
+            await self.executor.on_invocation_start(
                 execution_arn="arn:exec",
                 lambda_context=LAMBDA_CTX,
                 execution_start_time=START_TS,
@@ -393,9 +391,9 @@ class TestPluginExecutorOnInvocationStart(unittest.TestCase):
         ]
         self.assertEqual(1, len(invocation_calls))
 
-    def test_none_context_uses_none_request_id(self):
+    async def test_none_context_uses_none_request_id(self):
         with self.executor.run():
-            self.executor.on_invocation_start(
+            await self.executor.on_invocation_start(
                 execution_arn="arn:exec",
                 lambda_context=None,
                 execution_start_time=START_TS,
@@ -411,7 +409,7 @@ class TestPluginExecutorOnInvocationStart(unittest.TestCase):
         self.assertIn("invocation_start:None", self.plugin.calls)
 
 
-class TestPluginExecutorOnInvocationEnd(unittest.TestCase):
+class TestPluginExecutorOnInvocationEnd(unittest.IsolatedAsyncioTestCase):
     """Tests for PluginExecutor.on_invocation_end."""
 
     def setUp(self):
@@ -425,69 +423,63 @@ class TestPluginExecutorOnInvocationEnd(unittest.TestCase):
         op.end_time = end_ts
         return op
 
-    def test_succeeded_fires_invocation_end(self):
+    async def test_succeeded_fires_invocation_end(self):
         output = DurableExecutionInvocationOutput(
             status=InvocationStatus.SUCCEEDED, result=None, error=None
         )
 
         with self.executor.run():
-            self.executor.on_invocation_start(
+            await self.executor.on_invocation_start(
                 execution_arn="arn:exec",
                 lambda_context=LAMBDA_CTX,
                 execution_start_time=START_TS,
                 is_first_invocation=False,
             )
-            self.executor.on_invocation_end(
-                output=output,
-            )
+            await self.executor.on_invocation_end(output=output)
 
         self.assertIn("invocation_end:req-1", self.plugin.calls)
 
-    def test_failed_fires_invocation_end(self):
+    async def test_failed_fires_invocation_end(self):
         output = DurableExecutionInvocationOutput(
             status=InvocationStatus.FAILED, result=None, error=ERROR
         )
 
         with self.executor.run():
-            self.executor.on_invocation_start(
+            await self.executor.on_invocation_start(
                 execution_arn="arn:exec",
                 lambda_context=LAMBDA_CTX,
                 execution_start_time=START_TS,
                 is_first_invocation=False,
             )
-            self.executor.on_invocation_end(
-                output=output,
-            )
+            await self.executor.on_invocation_end(output=output)
 
         self.assertIn("invocation_end:req-1", self.plugin.calls)
 
-    def test_pending_fires_invocation_end(self):
+    async def test_pending_fires_invocation_end(self):
         output = DurableExecutionInvocationOutput(
             status=InvocationStatus.PENDING, result=None, error=None
         )
 
         with self.executor.run():
-            self.executor.on_invocation_start(
+            await self.executor.on_invocation_start(
                 execution_arn="arn:exec",
                 lambda_context=LAMBDA_CTX,
                 execution_start_time=START_TS,
                 is_first_invocation=False,
             )
-            self.executor.on_invocation_end(
-                output=output,
-            )
+            await self.executor.on_invocation_end(output=output)
 
         self.assertIn("invocation_end:req-1", self.plugin.calls)
 
 
-class TestPluginExecutorOnOperationAction(unittest.TestCase):
+class TestPluginExecutorOnOperationAction(unittest.IsolatedAsyncioTestCase):
     """Tests for PluginExecutor.on_operation_action."""
 
     def setUp(self):
         self.plugin = _TrackingPlugin()
         self.executor = PluginExecutor(plugins=[self.plugin])
 
-    def test_start_action_fires_operation_start(self):
+    async def test_start_action_fires_operation_start(self):
         update = MagicMock()
         update.action = OperationAction.START
         update.operation_id = "op-1"
@@ -497,30 +489,30 @@ class TestPluginExecutorOnOperationAction(unittest.TestCase):
         update.parent_id = "parent-1"
 
         with self.executor.run():
-            self.executor.on_operation_action(update)
+            await self.executor.on_operation_action(update)
 
         self.assertIn("operation_start:op-1", self.plugin.calls)
 
-    def test_non_start_action_does_not_fire(self):
+    async def test_non_start_action_does_not_fire(self):
         update = MagicMock()
         update.action = OperationAction.SUCCEED
         update.operation_id = "op-1"
 
-        self.executor.on_operation_action(update)
+        await self.executor.on_operation_action(update)
 
         self.assertEqual(self.plugin.calls, [])
 
-    def test_fail_action_does_not_fire(self):
+    async def test_fail_action_does_not_fire(self):
         update = MagicMock()
         update.action = OperationAction.FAIL
         update.operation_id = "op-1"
 
-        self.executor.on_operation_action(update)
+        await self.executor.on_operation_action(update)
 
         self.assertEqual(self.plugin.calls, [])
 
 
-class TestPluginExecutorOnOperationUpdate(unittest.TestCase):
+class TestPluginExecutorOnOperationUpdate(unittest.IsolatedAsyncioTestCase):
     """Tests for PluginExecutor.on_operation_update."""
 
     def setUp(self):
@@ -550,51 +542,51 @@ class TestPluginExecutorOnOperationUpdate(unittest.TestCase):
         op.context_details = context_details
         return op
 
-    def test_terminal_status_without_step_details_fires_operation_only(self):
+    async def test_terminal_status_without_step_details_fires_operation_only(self):
         op = self._make_operation(status=OperationStatus.FAILED, step_details=None)
 
         with self.executor.run():
-            self.executor.on_operation_update(op)
+            await self.executor.on_operation_update(op)
 
         self.assertIn("operation_end:op-1", self.plugin.calls)
 
-    def test_non_terminal_status_without_step_details_fires_nothing(self):
+    async def test_non_terminal_status_without_step_details_fires_nothing(self):
         op = self._make_operation(status=OperationStatus.STARTED, step_details=None)
 
         with self.executor.run():
-            self.executor.on_operation_update(op)
+            await self.executor.on_operation_update(op)
 
         self.assertEqual(self.plugin.calls, [])
 
-    def test_ready_status_fires_nothing(self):
+    async def test_ready_status_fires_nothing(self):
         op = self._make_operation(status=OperationStatus.READY, step_details=None)
 
         with self.executor.run():
-            self.executor.on_operation_update(op)
+            await self.executor.on_operation_update(op)
 
         self.assertEqual(self.plugin.calls, [])
 
-    def test_timed_out_is_terminal(self):
+    async def test_timed_out_is_terminal(self):
         op = self._make_operation(status=OperationStatus.TIMED_OUT, step_details=None)
 
         with self.executor.run():
-            self.executor.on_operation_update(op)
+            await self.executor.on_operation_update(op)
 
         self.assertIn("operation_end:op-1", self.plugin.calls)
 
-    def test_cancelled_is_terminal(self):
+    async def test_cancelled_is_terminal(self):
         op = self._make_operation(status=OperationStatus.CANCELLED, step_details=None)
 
         with self.executor.run():
-            self.executor.on_operation_update(op)
+            await self.executor.on_operation_update(op)
 
         self.assertIn("operation_end:op-1", self.plugin.calls)
 
-    def test_stopped_is_terminal(self):
+    async def test_stopped_is_terminal(self):
         op = self._make_operation(status=OperationStatus.STOPPED, step_details=None)
 
         with self.executor.run():
-            self.executor.on_operation_update(op)
+            await self.executor.on_operation_update(op)
 
         self.assertIn("operation_end:op-1", self.plugin.calls)
 

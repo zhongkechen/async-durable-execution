@@ -55,7 +55,11 @@ from async_durable_execution.plugin import DurableInstrumentationPlugin
 LARGE_RESULT = "large_success" * 1024 * 1024
 
 
-def test_durable_execution_invocation_input_from_dict():
+async def run_handler(handler, event, lambda_context):
+    return await handler._async_handler(event, lambda_context)
+
+
+async def test_durable_execution_invocation_input_from_dict():
     """Test that DurableExecutionInvocationInput.from_dict works correctly"""
     input_dict = {
         "DurableExecutionArn": "9692ca80-399d-4f52-8d0a-41acc9cd0492/9692ca80-399d-4f52-8d0a-41acc9cd0492",
@@ -92,7 +96,7 @@ def test_durable_execution_invocation_input_from_dict():
     )
 
 
-def test_initial_execution_state_from_dict_minimal():
+async def test_initial_execution_state_from_dict_minimal():
     """Test that InitialExecutionState.from_dict works correctly"""
     input_dict = {
         "Operations": [
@@ -112,7 +116,7 @@ def test_initial_execution_state_from_dict_minimal():
     assert result.operations[0].operation_id == "9692ca80-399d-4f52-8d0a-41acc9cd0492"
 
 
-def test_initial_execution_state_from_dict_no_operations():
+async def test_initial_execution_state_from_dict_no_operations():
     """Test that InitialExecutionState.from_dict handles missing Operations key."""
     input_dict = {"NextMarker": "test-marker"}
 
@@ -122,7 +126,7 @@ def test_initial_execution_state_from_dict_no_operations():
     assert result.next_marker == "test-marker"
 
 
-def test_initial_execution_state_from_dict_empty_operations():
+async def test_initial_execution_state_from_dict_empty_operations():
     """Test that InitialExecutionState.from_dict handles empty Operations list."""
     input_dict = {"Operations": [], "NextMarker": "test-marker"}
 
@@ -132,7 +136,7 @@ def test_initial_execution_state_from_dict_empty_operations():
     assert result.next_marker == "test-marker"
 
 
-def test_initial_execution_state_to_dict():
+async def test_initial_execution_state_to_dict():
     """Test InitialExecutionState.to_dict method."""
     operation = Operation(
         operation_id="op1",
@@ -149,7 +153,7 @@ def test_initial_execution_state_to_dict():
     assert result == expected
 
 
-def test_initial_execution_state_to_dict_empty():
+async def test_initial_execution_state_to_dict_empty():
     """Test InitialExecutionState.to_dict with empty operations."""
     state = InitialExecutionState(operations=[], next_marker="")
 
@@ -159,7 +163,7 @@ def test_initial_execution_state_to_dict_empty():
     assert result == expected
 
 
-def test_durable_execution_invocation_input_to_dict():
+async def test_durable_execution_invocation_input_to_dict():
     """Test DurableExecutionInvocationInput.to_dict method."""
     operation = Operation(
         operation_id="exec1",
@@ -187,7 +191,7 @@ def test_durable_execution_invocation_input_to_dict():
     assert result == expected
 
 
-def test_durable_execution_invocation_input_to_dict_not_local():
+async def test_durable_execution_invocation_input_to_dict_not_local():
     initial_state = InitialExecutionState(operations=[], next_marker="")
 
     invocation_input = DurableExecutionInvocationInput(
@@ -206,7 +210,7 @@ def test_durable_execution_invocation_input_to_dict_not_local():
     assert result == expected
 
 
-def test_durable_execution_invocation_input_with_client_inheritance():
+async def test_durable_execution_invocation_input_with_client_inheritance():
     """Test DurableExecutionInvocationInputWithClient inherits to_dict from parent."""
     mock_client = Mock(spec=DurableServiceClient)
     initial_state = InitialExecutionState(operations=[], next_marker="")
@@ -230,7 +234,7 @@ def test_durable_execution_invocation_input_with_client_inheritance():
     assert invocation_input.service_client == mock_client
 
 
-def test_durable_execution_invocation_input_with_client_from_parent():
+async def test_durable_execution_invocation_input_with_client_from_parent():
     """Test DurableExecutionInvocationInputWithClient.from_durable_execution_invocation_input."""
     mock_client = Mock(spec=DurableServiceClient)
     initial_state = InitialExecutionState(operations=[], next_marker="")
@@ -251,7 +255,7 @@ def test_durable_execution_invocation_input_with_client_from_parent():
     assert with_client.service_client == mock_client
 
 
-def test_operation_to_dict_complete():
+async def test_operation_to_dict_complete():
     """Test Operation.to_dict with all fields populated."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.UTC)
     end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.UTC)
@@ -282,7 +286,7 @@ def test_operation_to_dict_complete():
     assert result == expected
 
 
-def test_operation_to_dict_minimal():
+async def test_operation_to_dict_minimal():
     """Test Operation.to_dict with minimal required fields."""
     operation = Operation(
         operation_id="minimal_op",
@@ -300,7 +304,7 @@ def test_operation_to_dict_minimal():
     assert result == expected
 
 
-def test_durable_execution_invocation_output_from_dict():
+async def test_durable_execution_invocation_output_from_dict():
     """Test DurableExecutionInvocationOutput.from_dict method."""
     data = {
         "Status": "SUCCEEDED",
@@ -317,7 +321,7 @@ def test_durable_execution_invocation_output_from_dict():
     assert result.error.message == "Test error"
 
 
-def test_durable_execution_invocation_output_from_dict_no_error():
+async def test_durable_execution_invocation_output_from_dict_no_error():
     """Test DurableExecutionInvocationOutput.from_dict without error."""
     data = {"Status": "SUCCEEDED", "Result": '{"key": "value"}'}
 
@@ -328,7 +332,7 @@ def test_durable_execution_invocation_output_from_dict_no_error():
     assert result.error is None
 
 
-def test_durable_execution_invocation_output_from_dict_no_result():
+async def test_durable_execution_invocation_output_from_dict_no_result():
     """Test DurableExecutionInvocationOutput.from_dict without result."""
     data = {"Status": "PENDING"}
 
@@ -339,7 +343,7 @@ def test_durable_execution_invocation_output_from_dict_no_result():
     assert result.error is None
 
 
-def test_durable_execution_client_selection_env_normal_result():
+async def test_durable_execution_client_selection_env_normal_result():
     """Test durable_execution selects correct client from environment."""
     with patch(
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
@@ -383,7 +387,7 @@ def test_durable_execution_client_selection_env_normal_result():
         lambda_context.invoked_function_arn = None
         lambda_context.tenant_id = None
 
-        result = test_handler(event, lambda_context)
+        result = await run_handler(test_handler, event, lambda_context)
 
         assert result["Status"] == InvocationStatus.SUCCEEDED.value
         assert result["Result"] == '{"result": "success"}'
@@ -391,7 +395,7 @@ def test_durable_execution_client_selection_env_normal_result():
         mock_client.checkpoint.assert_not_called()
 
 
-def test_durable_execution_client_selection_env_large_result():
+async def test_durable_execution_client_selection_env_large_result():
     """Test durable_execution selects correct client from environment."""
     with patch(
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
@@ -435,7 +439,7 @@ def test_durable_execution_client_selection_env_large_result():
         lambda_context.invoked_function_arn = None
         lambda_context.tenant_id = None
 
-        result = test_handler(event, lambda_context)
+        result = await run_handler(test_handler, event, lambda_context)
 
         assert result["Status"] == InvocationStatus.SUCCEEDED.value
         assert not result["Result"]
@@ -443,7 +447,7 @@ def test_durable_execution_client_selection_env_large_result():
         mock_client.checkpoint.assert_called_once()
 
 
-def test_durable_execution_with_injected_client_success_normal_result():
+async def test_durable_execution_with_injected_client_success_normal_result():
     """Test durable_execution uses injected DurableServiceClient for successful execution."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -483,14 +487,14 @@ def test_durable_execution_with_injected_client_success_normal_result():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    result = test_handler(invocation_input, lambda_context)
+    result = await run_handler(test_handler, invocation_input, lambda_context)
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
     assert result["Result"] == '{"result": "success"}'
     mock_client.checkpoint.assert_not_called()
 
 
-def test_durable_execution_with_injected_client_success_large_result():
+async def test_durable_execution_with_injected_client_success_large_result():
     """Test durable_execution uses injected DurableServiceClient for successful execution."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -530,7 +534,7 @@ def test_durable_execution_with_injected_client_success_large_result():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    result = test_handler(invocation_input, lambda_context)
+    result = await run_handler(test_handler, invocation_input, lambda_context)
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
     assert not result.get("Result")
@@ -545,7 +549,7 @@ def test_durable_execution_with_injected_client_success_large_result():
     assert json.loads(updates[0].payload) == {"result": LARGE_RESULT}
 
 
-def test_durable_execution_with_injected_client_failure():
+async def test_durable_execution_with_injected_client_failure():
     """Test durable_execution uses injected DurableServiceClient for failed execution."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -585,7 +589,7 @@ def test_durable_execution_with_injected_client_failure():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    result = test_handler(invocation_input, lambda_context)
+    result = await run_handler(test_handler, invocation_input, lambda_context)
 
     # small error, should not call checkpoint
     assert result["Status"] == InvocationStatus.FAILED.value
@@ -594,7 +598,7 @@ def test_durable_execution_with_injected_client_failure():
     assert not mock_client.checkpoint.called
 
 
-def test_durable_execution_with_large_error_payload():
+async def test_durable_execution_with_large_error_payload():
     """Test that large error payloads trigger checkpoint."""
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
@@ -631,7 +635,7 @@ def test_durable_execution_with_large_error_payload():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    result = test_handler(invocation_input, lambda_context)
+    result = await run_handler(test_handler, invocation_input, lambda_context)
 
     assert result["Status"] == InvocationStatus.FAILED.value
     assert "Error" not in result
@@ -645,7 +649,7 @@ def test_durable_execution_with_large_error_payload():
     assert updates[0].error.message == LARGE_RESULT
 
 
-def test_durable_execution_fatal_error_handling():
+async def test_durable_execution_fatal_error_handling():
     """Test durable_execution handles FatalError correctly."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -680,10 +684,10 @@ def test_durable_execution_fatal_error_handling():
 
     # expect raise; backend will retry
     with pytest.raises(InvocationError, match="Retriable invocation error occurred"):
-        test_handler(invocation_input, lambda_context)
+        await run_handler(test_handler, invocation_input, lambda_context)
 
 
-def test_durable_execution_execution_error_handling():
+async def test_durable_execution_execution_error_handling():
     """Test durable_execution handles InvocationError correctly."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -717,7 +721,7 @@ def test_durable_execution_execution_error_handling():
     lambda_context.tenant_id = None
 
     # ExecutionError should return FAILED status with ErrorObject in result field
-    result = test_handler(invocation_input, lambda_context)
+    result = await run_handler(test_handler, invocation_input, lambda_context)
     assert result["Status"] == InvocationStatus.FAILED.value
 
     # Parse the ErrorObject from the result field
@@ -727,7 +731,7 @@ def test_durable_execution_execution_error_handling():
     assert error_data["ErrorType"] == "ExecutionError"
 
 
-def test_durable_execution_client_selection_default():
+async def test_durable_execution_client_selection_default():
     """Test durable_execution selects correct client using default initialization."""
     with patch(
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
@@ -771,13 +775,13 @@ def test_durable_execution_client_selection_default():
         lambda_context.invoked_function_arn = None
         lambda_context.tenant_id = None
 
-        result = test_handler(event, lambda_context)
+        result = await run_handler(test_handler, event, lambda_context)
 
         assert result["Status"] == InvocationStatus.SUCCEEDED.value
         mock_lambda_client.initialize_client.assert_called_once()
 
 
-def test_durable_handler_empty_input_payload():
+async def test_durable_handler_empty_input_payload():
     """Test durable_handler handles empty input payload correctly."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -810,13 +814,13 @@ def test_durable_handler_empty_input_payload():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    result = test_handler(invocation_input, lambda_context)
+    result = await run_handler(test_handler, invocation_input, lambda_context)
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
     assert result["Result"] == '{"result": "success"}'
 
 
-def test_durable_handler_whitespace_input_payload():
+async def test_durable_handler_whitespace_input_payload():
     """Test durable_handler handles whitespace-only input payload correctly."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -849,13 +853,13 @@ def test_durable_handler_whitespace_input_payload():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    result = test_handler(invocation_input, lambda_context)
+    result = await run_handler(test_handler, invocation_input, lambda_context)
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
     assert result["Result"] == '{"result": "success"}'
 
 
-def test_durable_handler_invalid_json_input_payload():
+async def test_durable_handler_invalid_json_input_payload():
     """Test durable_handler raises JSONDecodeError for invalid JSON input payload."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -889,10 +893,10 @@ def test_durable_handler_invalid_json_input_payload():
     lambda_context.tenant_id = None
 
     with pytest.raises(json.JSONDecodeError):
-        test_handler(invocation_input, lambda_context)
+        await run_handler(test_handler, invocation_input, lambda_context)
 
 
-def test_durable_handler_background_thread_failure():
+async def test_durable_handler_background_thread_failure():
     """Test durable_handler returns FAILED when checkpointing fails."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -937,13 +941,13 @@ def test_durable_handler_background_thread_failure():
     # Make the service client checkpoint call fail
     mock_client.checkpoint.side_effect = failing_checkpoint
 
-    response = test_handler(invocation_input, lambda_context)
+    response = await run_handler(test_handler, invocation_input, lambda_context)
     assert response["Status"] == InvocationStatus.FAILED.value
     assert response["Error"]["ErrorMessage"] == "Background checkpoint failed"
     assert response["Error"]["ErrorType"] == "RuntimeError"
 
 
-def test_durable_execution_suspend_execution():
+async def test_durable_execution_suspend_execution():
     """Test durable_execution handles SuspendExecution correctly."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -976,14 +980,14 @@ def test_durable_execution_suspend_execution():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    result = test_handler(invocation_input, lambda_context)
+    result = await run_handler(test_handler, invocation_input, lambda_context)
 
     assert result["Status"] == InvocationStatus.PENDING.value
     assert "Result" not in result
     assert "Error" not in result
 
 
-def test_durable_execution_checkpoint_error_in_background_thread():
+async def test_durable_execution_checkpoint_error_in_background_thread():
     """Test durable_execution propagates CheckpointError from background thread.
 
     This test simulates a CheckpointError occurring in the background checkpointing
@@ -1032,12 +1036,12 @@ def test_durable_execution_checkpoint_error_in_background_thread():
     # Make the service client checkpoint call fail with CheckpointError
     mock_client.checkpoint.side_effect = failing_checkpoint
 
-    response = test_handler(invocation_input, lambda_context)
+    response = await run_handler(test_handler, invocation_input, lambda_context)
     assert response["Status"] == InvocationStatus.FAILED.value
     assert response["Error"]["ErrorType"] == "CheckpointError"
 
 
-def test_durable_execution_checkpoint_execution_error_stops_background():
+async def test_durable_execution_checkpoint_execution_error_stops_background():
     """Test that CheckpointError handler stops background checkpointing.
 
     When user code raises CheckpointError, the handler should stop the background
@@ -1075,12 +1079,12 @@ def test_durable_execution_checkpoint_execution_error_stops_background():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    response = test_handler(invocation_input, lambda_context)
+    response = await run_handler(test_handler, invocation_input, lambda_context)
     assert response["Status"] == InvocationStatus.FAILED.value
     assert response["Error"]["ErrorType"] == "CheckpointError"
 
 
-def test_durable_execution_checkpoint_invocation_error_retries():
+async def test_durable_execution_checkpoint_invocation_error_retries():
     """Test that CheckpointError with INVOCATION category re-raises to trigger Lambda retry."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -1115,10 +1119,10 @@ def test_durable_execution_checkpoint_invocation_error_retries():
     lambda_context.tenant_id = None
 
     with pytest.raises(CheckpointError, match="Checkpoint system failed"):
-        test_handler(invocation_input, lambda_context)
+        await run_handler(test_handler, invocation_input, lambda_context)
 
 
-def test_durable_execution_background_thread_execution_error_returns_failed():
+async def test_durable_execution_background_thread_execution_error_returns_failed():
     """Test that background thread Execution errors return FAILED (permanent, no retry)."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -1160,12 +1164,12 @@ def test_durable_execution_background_thread_execution_error_returns_failed():
 
     mock_client.checkpoint.side_effect = failing_checkpoint
 
-    response = test_handler(invocation_input, lambda_context)
+    response = await run_handler(test_handler, invocation_input, lambda_context)
     assert response["Status"] == InvocationStatus.FAILED.value
     assert response["Error"]["ErrorType"] == "CheckpointError"
 
 
-def test_durable_execution_background_thread_invocation_error_retries():
+async def test_durable_execution_background_thread_invocation_error_retries():
     """Test that background thread Invocation errors re-raise to trigger Lambda retry."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -1208,10 +1212,10 @@ def test_durable_execution_background_thread_invocation_error_retries():
     mock_client.checkpoint.side_effect = failing_checkpoint
 
     with pytest.raises(CheckpointError, match="Background checkpoint failed"):
-        test_handler(invocation_input, lambda_context)
+        await run_handler(test_handler, invocation_input, lambda_context)
 
 
-def test_durable_execution_final_success_checkpoint_execution_error_returns_failed():
+async def test_durable_execution_final_success_checkpoint_execution_error_returns_failed():
     """Test that execution errors on final success checkpoint return FAILED (permanent, no retry)."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -1251,12 +1255,12 @@ def test_durable_execution_final_success_checkpoint_execution_error_returns_fail
 
     mock_client.checkpoint.side_effect = failing_final_checkpoint
 
-    response = test_handler(invocation_input, lambda_context)
+    response = await run_handler(test_handler, invocation_input, lambda_context)
     assert response["Status"] == InvocationStatus.FAILED.value
     assert response["Error"]["ErrorType"] == "CheckpointError"
 
 
-def test_durable_execution_final_success_checkpoint_invocation_error_retries():
+async def test_durable_execution_final_success_checkpoint_invocation_error_retries():
     """Test that invocation errors on final success checkpoint re-raise to trigger Lambda retry."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -1298,10 +1302,10 @@ def test_durable_execution_final_success_checkpoint_invocation_error_retries():
     mock_client.checkpoint.side_effect = failing_final_checkpoint
 
     with pytest.raises(CheckpointError, match="Final checkpoint failed"):
-        test_handler(invocation_input, lambda_context)
+        await run_handler(test_handler, invocation_input, lambda_context)
 
 
-def test_durable_execution_final_failure_checkpoint_execution_error_returns_failed():
+async def test_durable_execution_final_failure_checkpoint_execution_error_returns_failed():
     """Test that execution errors on final failure checkpoint return FAILED (permanent, no retry)."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -1343,12 +1347,12 @@ def test_durable_execution_final_failure_checkpoint_execution_error_returns_fail
 
     mock_client.checkpoint.side_effect = failing_final_checkpoint
 
-    response = test_handler(invocation_input, lambda_context)
+    response = await run_handler(test_handler, invocation_input, lambda_context)
     assert response["Status"] == InvocationStatus.FAILED.value
     assert response["Error"]["ErrorType"] == "CheckpointError"
 
 
-def test_durable_execution_final_failure_checkpoint_invocation_error_retries():
+async def test_durable_execution_final_failure_checkpoint_invocation_error_retries():
     """Test that invocation errors on final failure checkpoint re-raise to trigger Lambda retry."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -1391,10 +1395,10 @@ def test_durable_execution_final_failure_checkpoint_invocation_error_retries():
     mock_client.checkpoint.side_effect = failing_final_checkpoint
 
     with pytest.raises(CheckpointError, match="Final checkpoint failed"):
-        test_handler(invocation_input, lambda_context)
+        await run_handler(test_handler, invocation_input, lambda_context)
 
 
-def test_durable_handler_background_thread_failure_on_succeed_checkpoint():
+async def test_durable_handler_background_thread_failure_on_succeed_checkpoint():
     """Test durable_handler handles background thread failure on SUCCEED checkpoint.
 
     This test allows the START checkpoint to succeed but fails on the SUCCEED checkpoint,
@@ -1460,7 +1464,7 @@ def test_durable_handler_background_thread_failure_on_succeed_checkpoint():
     # Make the service client checkpoint call fail selectively
     mock_client.checkpoint.side_effect = selective_failing_checkpoint
 
-    response = test_handler(invocation_input, lambda_context)
+    response = await run_handler(test_handler, invocation_input, lambda_context)
     assert response["Status"] == InvocationStatus.FAILED.value
     assert (
         response["Error"]["ErrorMessage"] == "Background checkpoint failed on SUCCEED"
@@ -1487,7 +1491,7 @@ def test_durable_handler_background_thread_failure_on_succeed_checkpoint():
     assert succeed_update.action is OperationAction.SUCCEED
 
 
-def test_durable_handler_background_thread_failure_on_start_checkpoint():
+async def test_durable_handler_background_thread_failure_on_start_checkpoint():
     """Test durable_handler handles background thread failure on START checkpoint.
 
     This test fails on the START checkpoint, which should prevent the step from executing
@@ -1560,7 +1564,7 @@ def test_durable_handler_background_thread_failure_on_start_checkpoint():
     # Make the service client checkpoint call fail selectively
     mock_client.checkpoint.side_effect = selective_failing_checkpoint
 
-    response = test_handler(invocation_input, lambda_context)
+    response = await run_handler(test_handler, invocation_input, lambda_context)
     assert response["Status"] == InvocationStatus.FAILED.value
     assert response["Error"]["ErrorMessage"] == "Background checkpoint failed on START"
     assert response["Error"]["ErrorType"] == "RuntimeError"
@@ -1584,7 +1588,7 @@ def test_durable_handler_background_thread_failure_on_start_checkpoint():
     assert len(succeed_updates) == 0
 
 
-def test_durable_handler_background_thread_failure_on_large_result_checkpoint():
+async def test_durable_handler_background_thread_failure_on_large_result_checkpoint():
     """Test durable_handler handles background thread failure on large result checkpoint.
 
     This test verifies that when a large result checkpoint fails due to background thread
@@ -1645,7 +1649,7 @@ def test_durable_handler_background_thread_failure_on_large_result_checkpoint():
     # Make the service client checkpoint call fail on large result
     mock_client.checkpoint.side_effect = failing_checkpoint
 
-    response = test_handler(invocation_input, lambda_context)
+    response = await run_handler(test_handler, invocation_input, lambda_context)
     assert response["Status"] == InvocationStatus.FAILED.value
     assert (
         response["Error"]["ErrorMessage"]
@@ -1654,7 +1658,7 @@ def test_durable_handler_background_thread_failure_on_large_result_checkpoint():
     assert response["Error"]["ErrorType"] == "RuntimeError"
 
 
-def test_durable_handler_background_thread_failure_on_error_checkpoint():
+async def test_durable_handler_background_thread_failure_on_error_checkpoint():
     """Test durable_handler handles background thread failure on error checkpoint.
 
     This test verifies that when an error checkpoint fails due to background thread
@@ -1718,13 +1722,13 @@ def test_durable_handler_background_thread_failure_on_error_checkpoint():
     mock_client.checkpoint.side_effect = failing_checkpoint
 
     # Verify that errors are not raised, but returned because response is small
-    resp = test_handler(invocation_input, lambda_context)
+    resp = await run_handler(test_handler, invocation_input, lambda_context)
     assert resp["Error"]["ErrorMessage"] == "User function error"
     assert resp["Error"]["ErrorType"] == "ValueError"
     assert resp["Status"] == InvocationStatus.FAILED.value
 
 
-def test_durable_execution_logs_checkpoint_error_extras_from_background_thread():
+async def test_durable_execution_logs_checkpoint_error_extras_from_background_thread():
     """Test that CheckpointError extras are logged when raised from background thread."""
     mock_client = Mock(spec=DurableServiceClient)
     mock_logger = Mock()
@@ -1775,7 +1779,7 @@ def test_durable_execution_logs_checkpoint_error_extras_from_background_thread()
     mock_client.checkpoint.side_effect = failing_checkpoint
 
     with patch("async_durable_execution.execution.logger", mock_logger):
-        response = test_handler(invocation_input, lambda_context)
+        response = await run_handler(test_handler, invocation_input, lambda_context)
         assert response["Status"] == InvocationStatus.FAILED.value
         assert response["Error"]["ErrorType"] == "CheckpointError"
 
@@ -1787,7 +1791,7 @@ def test_durable_execution_logs_checkpoint_error_extras_from_background_thread()
     assert first_call[1]["extra"]["ResponseMetadata"] == metadata_obj
 
 
-def test_durable_execution_logs_boto_client_error_extras_from_background_thread():
+async def test_durable_execution_logs_boto_client_error_extras_from_background_thread():
     """Test that BotoClientError extras are logged when raised from background thread."""
 
     mock_client = Mock(spec=DurableServiceClient)
@@ -1839,7 +1843,7 @@ def test_durable_execution_logs_boto_client_error_extras_from_background_thread(
 
     with patch("async_durable_execution.execution.logger", mock_logger):
         with pytest.raises(BotoClientError):
-            test_handler(invocation_input, lambda_context)
+            await run_handler(test_handler, invocation_input, lambda_context)
 
     mock_logger.exception.assert_called_once()
     call_args = mock_logger.exception.call_args
@@ -1850,7 +1854,7 @@ def test_durable_execution_logs_boto_client_error_extras_from_background_thread(
     assert "extra" not in call_args[1]
 
 
-def test_durable_execution_logs_checkpoint_error_extras_from_user_code():
+async def test_durable_execution_logs_checkpoint_error_extras_from_user_code():
     """Test that CheckpointError extras are logged when raised directly from user code."""
     mock_client = Mock(spec=DurableServiceClient)
     mock_logger = Mock()
@@ -1895,7 +1899,7 @@ def test_durable_execution_logs_checkpoint_error_extras_from_user_code():
     lambda_context.tenant_id = None
 
     with patch("async_durable_execution.execution.logger", mock_logger):
-        response = test_handler(invocation_input, lambda_context)
+        response = await run_handler(test_handler, invocation_input, lambda_context)
         assert response["Status"] == InvocationStatus.FAILED.value
         assert response["Error"]["ErrorType"] == "CheckpointError"
 
@@ -1906,7 +1910,7 @@ def test_durable_execution_logs_checkpoint_error_extras_from_user_code():
     assert call_args[1]["extra"]["ResponseMetadata"] == metadata_obj
 
 
-def test_durable_execution_with_boto3_client_parameter():
+async def test_durable_execution_with_boto3_client_parameter():
     """Test durable_execution decorator accepts boto3_client parameter."""
     # GIVEN a custom boto3 Lambda client
     mock_boto3_client = Mock()
@@ -1949,14 +1953,14 @@ def test_durable_execution_with_boto3_client_parameter():
     lambda_context.tenant_id = None
 
     # WHEN the handler is invoked
-    result = test_handler(event, lambda_context)
+    result = await run_handler(test_handler, event, lambda_context)
 
     # THEN the execution succeeds using the custom client
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
     assert result["Result"] == '{"result": "success"}'
 
 
-def test_durable_execution_with_non_durable_payload_raises_error():
+async def test_durable_execution_with_non_durable_payload_raises_error():
     """Test that invoking a durable function with a regular event raises a helpful error."""
 
     # GIVEN a durable function
@@ -1984,10 +1988,10 @@ def test_durable_execution_with_non_durable_payload_raises_error():
             "Check your resource configurations to confirm the durability is set."
         ),
     ):
-        test_handler(regular_event, lambda_context)
+        await run_handler(test_handler, regular_event, lambda_context)
 
 
-def test_durable_execution_with_non_dict_event_raises_error():
+async def test_durable_execution_with_non_dict_event_raises_error():
     """Test that invoking a durable function with a non-dict event raises a helpful error."""
 
     # GIVEN a durable function
@@ -2015,7 +2019,7 @@ def test_durable_execution_with_non_dict_event_raises_error():
             "Check your resource configurations to confirm the durability is set."
         ),
     ):
-        test_handler(non_dict_event, lambda_context)
+        await run_handler(test_handler, non_dict_event, lambda_context)
 
 
 # =============================================================================
@@ -2023,7 +2027,7 @@ def test_durable_execution_with_non_dict_event_raises_error():
 # =============================================================================
 
 
-def test_initial_execution_state_to_json_dict_minimal():
+async def test_initial_execution_state_to_json_dict_minimal():
     """Test InitialExecutionState.to_json_dict with minimal data."""
     operation = Operation(
         operation_id="op1",
@@ -2039,7 +2043,7 @@ def test_initial_execution_state_to_json_dict_minimal():
     assert result == expected
 
 
-def test_initial_execution_state_to_json_dict_with_timestamps():
+async def test_initial_execution_state_to_json_dict_with_timestamps():
     """Test InitialExecutionState.to_json_dict converts datetime objects to millisecond timestamps."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.UTC)
     end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.UTC)
@@ -2067,7 +2071,7 @@ def test_initial_execution_state_to_json_dict_with_timestamps():
     assert result["NextMarker"] == "marker123"
 
 
-def test_initial_execution_state_to_json_dict_empty():
+async def test_initial_execution_state_to_json_dict_empty():
     """Test InitialExecutionState.to_json_dict with empty operations."""
     state = InitialExecutionState(operations=[], next_marker="")
 
@@ -2077,7 +2081,7 @@ def test_initial_execution_state_to_json_dict_empty():
     assert result == expected
 
 
-def test_initial_execution_state_from_json_dict_minimal():
+async def test_initial_execution_state_from_json_dict_minimal():
     """Test InitialExecutionState.from_json_dict with minimal data."""
     data = {
         "Operations": [
@@ -2099,7 +2103,7 @@ def test_initial_execution_state_from_json_dict_minimal():
     assert result.operations[0].status is OperationStatus.STARTED
 
 
-def test_initial_execution_state_from_json_dict_with_timestamps():
+async def test_initial_execution_state_from_json_dict_with_timestamps():
     """Test InitialExecutionState.from_json_dict converts millisecond timestamps to datetime objects."""
     start_ms = 1672574400000  # 2023-01-01 12:00:00 UTC
     end_ms = 1672578000000  # 2023-01-01 13:00:00 UTC
@@ -2130,7 +2134,7 @@ def test_initial_execution_state_from_json_dict_with_timestamps():
     assert operation.execution_details.input_payload == "test_payload"
 
 
-def test_initial_execution_state_from_json_dict_no_operations():
+async def test_initial_execution_state_from_json_dict_no_operations():
     """Test InitialExecutionState.from_json_dict handles missing Operations key."""
     data = {"NextMarker": "test-marker"}
 
@@ -2140,7 +2144,7 @@ def test_initial_execution_state_from_json_dict_no_operations():
     assert result.next_marker == "test-marker"
 
 
-def test_initial_execution_state_from_json_dict_empty_operations():
+async def test_initial_execution_state_from_json_dict_empty_operations():
     """Test InitialExecutionState.from_json_dict handles empty Operations list."""
     data = {"Operations": [], "NextMarker": "test-marker"}
 
@@ -2150,7 +2154,7 @@ def test_initial_execution_state_from_json_dict_empty_operations():
     assert result.next_marker == "test-marker"
 
 
-def test_initial_execution_state_json_roundtrip():
+async def test_initial_execution_state_json_roundtrip():
     """Test InitialExecutionState to_json_dict -> from_json_dict roundtrip preserves all data."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.UTC)
     next_attempt_time = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
@@ -2209,7 +2213,7 @@ def test_initial_execution_state_json_roundtrip():
     )
 
 
-def test_durable_execution_invocation_input_to_json_dict_minimal():
+async def test_durable_execution_invocation_input_to_json_dict_minimal():
     """Test DurableExecutionInvocationInput.to_json_dict with minimal data."""
     operation = Operation(
         operation_id="exec1",
@@ -2237,7 +2241,7 @@ def test_durable_execution_invocation_input_to_json_dict_minimal():
     assert result == expected
 
 
-def test_durable_execution_invocation_input_to_json_dict_with_timestamps():
+async def test_durable_execution_invocation_input_to_json_dict_with_timestamps():
     """Test DurableExecutionInvocationInput.to_json_dict converts datetime objects to millisecond timestamps."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.UTC)
     end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.UTC)
@@ -2274,7 +2278,7 @@ def test_durable_execution_invocation_input_to_json_dict_with_timestamps():
     assert result["CheckpointToken"] == "token123"
 
 
-def test_durable_execution_invocation_input_to_json_dict_empty_operations():
+async def test_durable_execution_invocation_input_to_json_dict_empty_operations():
     """Test DurableExecutionInvocationInput.to_json_dict with empty operations."""
     initial_state = InitialExecutionState(operations=[], next_marker="")
 
@@ -2294,7 +2298,7 @@ def test_durable_execution_invocation_input_to_json_dict_empty_operations():
     assert result == expected
 
 
-def test_durable_execution_invocation_input_from_json_dict_minimal():
+async def test_durable_execution_invocation_input_from_json_dict_minimal():
     """Test DurableExecutionInvocationInput.from_json_dict with minimal data."""
     data = {
         "DurableExecutionArn": "arn:test:execution/exec1",
@@ -2321,7 +2325,7 @@ def test_durable_execution_invocation_input_from_json_dict_minimal():
     assert result.initial_execution_state.operations[0].operation_id == "exec1"
 
 
-def test_durable_execution_invocation_input_from_json_dict_with_timestamps():
+async def test_durable_execution_invocation_input_from_json_dict_with_timestamps():
     """Test DurableExecutionInvocationInput.from_json_dict converts millisecond timestamps to datetime objects."""
     start_ms = 1672574400000  # 2023-01-01 12:00:00 UTC
     end_ms = 1672578000000  # 2023-01-01 13:00:00 UTC
@@ -2355,7 +2359,7 @@ def test_durable_execution_invocation_input_from_json_dict_with_timestamps():
     assert operation.execution_details.input_payload == "test_payload"
 
 
-def test_durable_execution_invocation_input_from_json_dict_empty_initial_state():
+async def test_durable_execution_invocation_input_from_json_dict_empty_initial_state():
     """Test DurableExecutionInvocationInput.from_json_dict handles missing InitialExecutionState."""
     data = {
         "DurableExecutionArn": "arn:test:execution/exec1",
@@ -2371,7 +2375,7 @@ def test_durable_execution_invocation_input_from_json_dict_empty_initial_state()
     assert not result.initial_execution_state.next_marker
 
 
-def test_durable_execution_invocation_input_json_roundtrip():
+async def test_durable_execution_invocation_input_json_roundtrip():
     """Test DurableExecutionInvocationInput to_json_dict -> from_json_dict roundtrip preserves all data."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.UTC)
     end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.UTC)
@@ -2482,7 +2486,7 @@ def test_durable_execution_invocation_input_json_roundtrip():
     )
 
 
-def test_durable_execution_invocation_input_json_dict_preserves_non_timestamp_fields():
+async def test_durable_execution_invocation_input_json_dict_preserves_non_timestamp_fields():
     """Test that to_json_dict preserves all non-timestamp fields unchanged."""
 
     context_details = ContextDetails(replay_children=True, result="context_result")
@@ -2527,7 +2531,7 @@ def test_durable_execution_invocation_input_json_dict_preserves_non_timestamp_fi
     assert result["InitialExecutionState"]["NextMarker"] == "marker123"
 
 
-def test_event_parsing_with_unix_millis_timestamps():
+async def test_event_parsing_with_unix_millis_timestamps():
     """Test that event parsing converts Unix millis timestamps to datetime objects.
 
     This reproduces the production bug where NextAttemptTimestamp was sent as
@@ -2607,7 +2611,7 @@ def test_event_parsing_with_unix_millis_timestamps():
     assert isinstance(scheduled_end < now or scheduled_end >= now, bool)
 
 
-def test_from_dict_leaves_timestamps_as_integers():
+async def test_from_dict_leaves_timestamps_as_integers():
     """Test that from_dict (the bug) leaves timestamps as integers.
 
     This demonstrates the bug behavior for documentation purposes.
@@ -2705,7 +2709,7 @@ def _make_lambda_context():
     return ctx
 
 
-def test_durable_execution_replays_when_paginated_state_has_prior_operations():
+async def test_durable_execution_replays_when_paginated_state_has_prior_operations():
     """Test paginated execution state starts in replay mode when prior operations exist."""
     mock_client = Mock(spec=DurableServiceClient)
     step_operation = Operation(
@@ -2724,7 +2728,7 @@ def test_durable_execution_replays_when_paginated_state_has_prior_operations():
     async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"is_replaying": context.state.is_replaying()}
 
-    result = test_handler(invocation_input, _make_lambda_context())
+    result = await run_handler(test_handler, invocation_input, _make_lambda_context())
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
     assert json.loads(result["Result"]) == {"is_replaying": True}
@@ -2735,7 +2739,7 @@ def test_durable_execution_replays_when_paginated_state_has_prior_operations():
     )
 
 
-def test_durable_execution_non_retryable_invocation_error_returns_failed():
+async def test_durable_execution_non_retryable_invocation_error_returns_failed():
     """Test that non-retryable InvocationError returns FAILED instead of retrying."""
     mock_client = Mock(spec=DurableServiceClient)
     non_retryable_error = GetExecutionStateError(
@@ -2749,12 +2753,14 @@ def test_durable_execution_non_retryable_invocation_error_returns_failed():
     async def test_handler(event: Any, context: DurableContext) -> dict:
         raise non_retryable_error
 
-    result = test_handler(_make_invocation_input(mock_client), _make_lambda_context())
+    result = await run_handler(
+        test_handler, _make_invocation_input(mock_client), _make_lambda_context()
+    )
     assert result["Status"] == InvocationStatus.FAILED.value
     assert result["Error"]["ErrorType"] == "GetExecutionStateError"
 
 
-def test_durable_execution_retryable_invocation_error_raises():
+async def test_durable_execution_retryable_invocation_error_raises():
     """Test that retryable InvocationError raises to trigger Lambda retry."""
     mock_client = Mock(spec=DurableServiceClient)
     retryable_error = GetExecutionStateError(
@@ -2768,10 +2774,12 @@ def test_durable_execution_retryable_invocation_error_raises():
         raise retryable_error
 
     with pytest.raises(GetExecutionStateError, match="Service error"):
-        test_handler(_make_invocation_input(mock_client), _make_lambda_context())
+        await run_handler(
+            test_handler, _make_invocation_input(mock_client), _make_lambda_context()
+        )
 
 
-def test_durable_execution_non_retryable_background_thread_error_returns_failed():
+async def test_durable_execution_non_retryable_background_thread_error_returns_failed():
     """Test that non-retryable error from background thread returns FAILED."""
     mock_client = Mock(spec=DurableServiceClient)
     non_retryable_error = GetExecutionStateError(
@@ -2792,7 +2800,9 @@ def test_durable_execution_non_retryable_background_thread_error_returns_failed(
         await context.step(step_result)
         return {"result": "success"}
 
-    result = test_handler(_make_invocation_input(mock_client), _make_lambda_context())
+    result = await run_handler(
+        test_handler, _make_invocation_input(mock_client), _make_lambda_context()
+    )
     assert result["Status"] == InvocationStatus.FAILED.value
     assert result["Error"]["ErrorType"] == "GetExecutionStateError"
 
@@ -2804,7 +2814,7 @@ def test_durable_execution_non_retryable_background_thread_error_returns_failed(
         ("ValidationException", 400, DurableApiErrorCategory.EXECUTION),
     ],
 )
-def test_durable_execution_non_retryable_initial_pagination_error_returns_failed(
+async def test_durable_execution_non_retryable_initial_pagination_error_returns_failed(
     error_code: str, status_code: int, error_category: DurableApiErrorCategory
 ):
     """Test that non-retryable errors during initial pagination return FAILED."""
@@ -2821,7 +2831,8 @@ def test_durable_execution_non_retryable_initial_pagination_error_returns_failed
     async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
-    result = test_handler(
+    result = await run_handler(
+        test_handler,
         _make_invocation_input(mock_client, next_marker="next-page-marker"),
         _make_lambda_context(),
     )
@@ -2829,7 +2840,7 @@ def test_durable_execution_non_retryable_initial_pagination_error_returns_failed
     assert result["Error"]["ErrorType"] == "GetExecutionStateError"
 
 
-def test_durable_execution_retryable_initial_pagination_error_raises():
+async def test_durable_execution_retryable_initial_pagination_error_raises():
     """Test that retryable error during initial pagination raises to trigger Lambda retry."""
     mock_client = Mock(spec=DurableServiceClient)
     retryable_error = GetExecutionStateError(
@@ -2844,7 +2855,8 @@ def test_durable_execution_retryable_initial_pagination_error_raises():
         return {"result": "success"}
 
     with pytest.raises(GetExecutionStateError, match="Service error"):
-        test_handler(
+        await run_handler(
+            test_handler,
             _make_invocation_input(mock_client, next_marker="next-page-marker"),
             _make_lambda_context(),
         )
@@ -2909,7 +2921,7 @@ class _FailingPlugin(DurableInstrumentationPlugin):
         raise RuntimeError("plugin boom")
 
 
-def test_durable_execution_with_plugins_success():
+async def test_durable_execution_with_plugins_success():
     """Test that plugins receive invocation start/end and execution end on success."""
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
@@ -2924,7 +2936,8 @@ def test_durable_execution_with_plugins_success():
     async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
-    result = test_handler(
+    result = await run_handler(
+        test_handler,
         _make_invocation_input(mock_client),
         _make_lambda_context(),
     )
@@ -2935,7 +2948,7 @@ def test_durable_execution_with_plugins_success():
     assert "invocation_end:SUCCEEDED" in plugin.calls
 
 
-def test_durable_execution_with_plugins_failure():
+async def test_durable_execution_with_plugins_failure():
     """Test that plugins receive invocation end and execution end on user error."""
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
@@ -2951,7 +2964,8 @@ def test_durable_execution_with_plugins_failure():
         msg = "user error"
         raise ValueError(msg)
 
-    result = test_handler(
+    result = await run_handler(
+        test_handler,
         _make_invocation_input(mock_client),
         _make_lambda_context(),
     )
@@ -2961,7 +2975,7 @@ def test_durable_execution_with_plugins_failure():
     assert "invocation_end:FAILED" in plugin.calls
 
 
-def test_durable_execution_with_plugins_pending():
+async def test_durable_execution_with_plugins_pending():
     """Test that plugins receive invocation end with PENDING status on suspend."""
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
@@ -2976,7 +2990,8 @@ def test_durable_execution_with_plugins_pending():
     async def test_handler(event: Any, context: DurableContext) -> dict:
         raise SuspendExecution("test")
 
-    result = test_handler(
+    result = await run_handler(
+        test_handler,
         _make_invocation_input(mock_client),
         _make_lambda_context(),
     )
@@ -2989,7 +3004,7 @@ def test_durable_execution_with_plugins_pending():
     assert len(execution_end_calls) == 0
 
 
-def test_durable_execution_supports_async_handler():
+async def test_durable_execution_supports_async_handler():
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
@@ -3003,7 +3018,8 @@ def test_durable_execution_supports_async_handler():
         context.logger.info("handled async invocation")
         return {"result": "async-success"}
 
-    result = test_handler(
+    result = await run_handler(
+        test_handler,
         _make_invocation_input(mock_client),
         _make_lambda_context(),
     )
@@ -3012,7 +3028,7 @@ def test_durable_execution_supports_async_handler():
     assert json.loads(result["Result"]) == {"result": "async-success"}
 
 
-def test_durable_execution_rejects_sync_handler():
+async def test_durable_execution_rejects_sync_handler():
     with pytest.raises(
         ValidationError,
         match="Non-async callables are no longer supported",
@@ -3023,7 +3039,7 @@ def test_durable_execution_rejects_sync_handler():
             return {"result": "sync-success"}
 
 
-def test_durable_execution_supports_async_steps_inside_async_handler():
+async def test_durable_execution_supports_async_steps_inside_async_handler():
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
@@ -3041,7 +3057,8 @@ def test_durable_execution_supports_async_steps_inside_async_handler():
         step_result = await context.step(async_step, name="async-step")
         return {"step_result": step_result}
 
-    result = test_handler(
+    result = await run_handler(
+        test_handler,
         _make_invocation_input(mock_client),
         _make_lambda_context(),
     )
@@ -3050,7 +3067,7 @@ def test_durable_execution_supports_async_steps_inside_async_handler():
     assert json.loads(result["Result"]) == {"step_result": "async-step-success"}
 
 
-def test_durable_execution_with_plugins_retryable_error():
+async def test_durable_execution_with_plugins_retryable_error():
     """Test that plugins receive invocation end with RETRY status on retryable error."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -3062,7 +3079,8 @@ def test_durable_execution_with_plugins_retryable_error():
         raise InvocationError(msg)
 
     with pytest.raises(InvocationError):
-        test_handler(
+        await run_handler(
+            test_handler,
             _make_invocation_input(mock_client),
             _make_lambda_context(),
         )
@@ -3071,7 +3089,7 @@ def test_durable_execution_with_plugins_retryable_error():
     assert "invocation_end:RETRY" in plugin.calls
 
 
-def test_durable_execution_with_multiple_plugins():
+async def test_durable_execution_with_multiple_plugins():
     """Test that multiple plugins all receive callbacks."""
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
@@ -3087,7 +3105,8 @@ def test_durable_execution_with_multiple_plugins():
     async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
-    result = test_handler(
+    result = await run_handler(
+        test_handler,
         _make_invocation_input(mock_client),
         _make_lambda_context(),
     )
@@ -3099,7 +3118,7 @@ def test_durable_execution_with_multiple_plugins():
     assert "invocation_end:SUCCEEDED" in plugin2.calls
 
 
-def test_durable_execution_with_failing_plugin_does_not_break_execution():
+async def test_durable_execution_with_failing_plugin_does_not_break_execution():
     """Test that a failing plugin does not prevent the handler from completing."""
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
@@ -3115,7 +3134,8 @@ def test_durable_execution_with_failing_plugin_does_not_break_execution():
     async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
-    result = test_handler(
+    result = await run_handler(
+        test_handler,
         _make_invocation_input(mock_client),
         _make_lambda_context(),
     )
@@ -3127,7 +3147,7 @@ def test_durable_execution_with_failing_plugin_does_not_break_execution():
     assert "invocation_end:SUCCEEDED" in recording_plugin.calls
 
 
-def test_durable_execution_with_no_plugins():
+async def test_durable_execution_with_no_plugins():
     """Test that passing no plugins (None) works correctly."""
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
@@ -3140,7 +3160,8 @@ def test_durable_execution_with_no_plugins():
     async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
-    result = test_handler(
+    result = await run_handler(
+        test_handler,
         _make_invocation_input(mock_client),
         _make_lambda_context(),
     )
@@ -3148,7 +3169,7 @@ def test_durable_execution_with_no_plugins():
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
 
 
-def test_durable_execution_with_empty_plugins_list():
+async def test_durable_execution_with_empty_plugins_list():
     """Test that passing an empty plugins list works correctly."""
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
@@ -3161,7 +3182,8 @@ def test_durable_execution_with_empty_plugins_list():
     async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
-    result = test_handler(
+    result = await run_handler(
+        test_handler,
         _make_invocation_input(mock_client),
         _make_lambda_context(),
     )
@@ -3169,7 +3191,7 @@ def test_durable_execution_with_empty_plugins_list():
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
 
 
-def test_durable_execution_decorator_with_plugins_and_boto3_client():
+async def test_durable_execution_decorator_with_plugins_and_boto3_client():
     """Test that plugins parameter works alongside boto3_client parameter."""
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
@@ -3186,7 +3208,8 @@ def test_durable_execution_decorator_with_plugins_and_boto3_client():
     async def test_handler(event: Any, context: DurableContext) -> dict:
         return {"result": "success"}
 
-    result = test_handler(
+    result = await run_handler(
+        test_handler,
         _make_invocation_input(mock_client),
         _make_lambda_context(),
     )

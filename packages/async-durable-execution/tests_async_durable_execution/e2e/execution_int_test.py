@@ -35,6 +35,10 @@ if TYPE_CHECKING:
     from async_durable_execution.types import StepContext
 
 
+async def run_handler(handler, event, lambda_context):
+    return await handler._async_handler(event, lambda_context)
+
+
 def create_mock_checkpoint_with_operations():
     """Create a mock checkpoint function that properly tracks operations.
 
@@ -78,7 +82,7 @@ def create_mock_checkpoint_with_operations():
     return mock_checkpoint, checkpoint_calls
 
 
-def test_step_different_ways_to_pass_args():
+async def test_step_different_ways_to_pass_args():
     async def step_plain(step_context: StepContext) -> str:
         return "from step plain"
 
@@ -162,7 +166,7 @@ def test_step_different_ways_to_pass_args():
         lambda_context.tenant_id = None
 
         # Execute the handler
-        result = my_handler(event, lambda_context)
+        result = await run_handler(my_handler, event, lambda_context)
 
         assert result["Status"] == InvocationStatus.SUCCEEDED.value
         assert (
@@ -182,7 +186,7 @@ def test_step_different_ways_to_pass_args():
         assert last_checkpoint.payload == '"from step plain"'
 
 
-def test_step_with_logger():
+async def test_step_with_logger():
     my_logger = Mock(spec=LoggerInterface)
 
     @durable_step
@@ -248,7 +252,7 @@ def test_step_with_logger():
         lambda_context.tenant_id = None
 
         # Execute the handler
-        result = my_handler(event, lambda_context)
+        result = await run_handler(my_handler, event, lambda_context)
 
         assert result["Status"] == InvocationStatus.SUCCEEDED.value
 
@@ -282,7 +286,7 @@ def test_step_with_logger():
         assert succeed_op.operation_id == operation_id
 
 
-def test_wait_inside_run_in_childcontext():
+async def test_wait_inside_run_in_childcontext():
     """A wait inside a child context should suspend the execution."""
 
     mock_inside_child = Mock()
@@ -335,7 +339,7 @@ def test_wait_inside_run_in_childcontext():
         lambda_context.tenant_id = None
 
         # Execute the handler
-        result = my_handler(event, lambda_context)
+        result = await run_handler(my_handler, event, lambda_context)
 
         # Assert the execution returns PENDING status
         assert result["Status"] == InvocationStatus.PENDING.value
@@ -370,7 +374,7 @@ class CustomError(Exception):
     """Custom exception for testing."""
 
 
-def test_step_checkpoint_failure_propagates_error():
+async def test_step_checkpoint_failure_propagates_error():
     """Test that errors during checkpoint invocation propagate correctly from background thread.
 
     This test demonstrates a bug: when a checkpoint fails in the background thread,
@@ -437,12 +441,12 @@ def test_step_checkpoint_failure_propagates_error():
 
         # Execute the handler - local runner surfaces execution failure in the
         # invocation payload rather than re-raising to the caller.
-        result = my_handler(event, lambda_context)
+        result = await run_handler(my_handler, event, lambda_context)
         assert result["Status"] == InvocationStatus.FAILED.value
         assert result["Error"]["ErrorMessage"] == "Checkpoint service unavailable"
 
 
-def test_wait_not_caught_by_exception():
+async def test_wait_not_caught_by_exception():
     """Do not catch Suspend exceptions."""
 
     @durable_execution
@@ -491,7 +495,7 @@ def test_wait_not_caught_by_exception():
         lambda_context.tenant_id = None
 
         # Execute the handler
-        result = my_handler(event, lambda_context)
+        result = await run_handler(my_handler, event, lambda_context)
         operation_ids = operation_id_sequence()
 
         # Assert the execution returns PENDING status
@@ -508,7 +512,7 @@ def test_wait_not_caught_by_exception():
         assert checkpoint.wait_options.wait_seconds == 1
 
 
-def test_durable_wait_for_callback_decorator():
+async def test_durable_wait_for_callback_decorator():
     """Test the durable_wait_for_callback decorator with additional parameters."""
 
     mock_submitter = Mock()
@@ -588,7 +592,7 @@ def test_durable_wait_for_callback_decorator():
         lambda_context.invoked_function_arn = "test-arn"
         lambda_context.tenant_id = None
 
-        result = my_handler(event, lambda_context)
+        result = await run_handler(my_handler, event, lambda_context)
 
         assert result["Status"] == InvocationStatus.PENDING.value
 
