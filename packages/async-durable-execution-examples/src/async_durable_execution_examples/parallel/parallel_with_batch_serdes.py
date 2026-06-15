@@ -81,19 +81,19 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     config = ParallelConfig(serdes=CustomBatchSerDes(), item_serdes=JsonSerDes())
 
     async def branch1(ctx: DurableContext) -> int:
-        async def run(_) -> int:
+        async def run() -> int:
             return 100
 
         return await ctx.step(run, name="branch1")
 
     async def branch2(ctx: DurableContext) -> int:
-        async def run(_) -> int:
+        async def run() -> int:
             return 200
 
         return await ctx.step(run, name="branch2")
 
     async def branch3(ctx: DurableContext) -> int:
-        async def run(_) -> int:
+        async def run() -> int:
             return 300
 
         return await ctx.step(run, name="branch3")

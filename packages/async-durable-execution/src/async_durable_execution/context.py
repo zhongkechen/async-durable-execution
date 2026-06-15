@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Concatenate, Generic, ParamSpec, TypeVar
 
 from async_durable_execution.async_tools import (
     assert_async_callable,
+    get_callable_name,
 )
 from async_durable_execution.config import (
     BatchedInput,
@@ -49,6 +50,7 @@ from async_durable_execution.serdes import (
     SerDes,
     deserialize,
 )
+from async_durable_execution.step_context import get_step_context as get_step_context  # noqa: F401
 from async_durable_execution.state import ExecutionState  # noqa: TC001
 from async_durable_execution.types import Callback as CallbackProtocol
 from async_durable_execution.types import (
@@ -56,7 +58,6 @@ from async_durable_execution.types import (
 )
 from async_durable_execution.types import (
     LoggerInterface,
-    StepContext,
     WaitForCallbackContext,
     WaitForConditionCheckContext,
 )
@@ -125,22 +126,6 @@ class ExecutionContext:
     durable_execution_arn: str
 
 
-def durable_step(
-    func: Callable[Concatenate[StepContext, Params], Awaitable[T]],
-) -> Callable[Params, Callable[[StepContext], Awaitable[T]]]:
-    """Wrap your callable into a named function that a Durable step can run."""
-    assert_async_callable(func)
-
-    def wrapper(*args, **kwargs):
-        async def function_with_arguments(context: StepContext):
-            return await func(context, *args, **kwargs)
-
-        function_with_arguments._original_name = func.__name__  # noqa: SLF001
-        return function_with_arguments
-
-    return wrapper
-
-
 def durable_with_child_context(
     func: Callable[Concatenate[DurableContext, Params], Awaitable[T]],
 ) -> Callable[Params, Callable[[DurableContext], Awaitable[T]]]:
@@ -176,14 +161,14 @@ def durable_parallel_branch(
     Example:
         @durable_parallel_branch(name="fetch-user-data")
         async def fetch_user(ctx: DurableContext, user_id: str) -> dict:
-            async def load_user(step_ctx: StepContext) -> dict:
+            async def load_user() -> dict:
                 return {"id": user_id, "name": "Jane"}
 
             return await ctx.step(load_user, name="load_user")
 
         @durable_parallel_branch(name="fetch-orders")
         async def fetch_orders(ctx: DurableContext, user_id: str) -> list:
-            async def load_orders(step_ctx: StepContext) -> list:
+            async def load_orders() -> list:
                 return ["order1", "order2"]
 
             return await ctx.step(load_orders, name="load_orders")
@@ -431,8 +416,7 @@ class DurableContext(DurableContextProtocol):
         Returns:
             str | None: The provided name, and if that doesn't exist the callable function's name if it has one.
         """
-        # callable's name will override name if name is falsy ('' or None)
-        return name or getattr(func, "_original_name", None)
+        return name or get_callable_name(func)
 
     def set_logger(self, new_logger: LoggerInterface):
         """Set the logger for the current context."""
@@ -715,12 +699,12 @@ class DurableContext(DurableContextProtocol):
 
     async def step(
         self,
-        func: Callable[[StepContext], Awaitable[T]],
+        func: Callable[[], Awaitable[T]],
         name: str | None = None,
         config: StepConfig | None = None,
     ) -> T:
         assert_async_callable(func)
-        step_name = self._resolve_step_name(name, func)
+        step_name = name or get_callable_name(func, include_original_name=False)
         logger.debug("Step name: %s", step_name)
         if not config:
             config = StepConfig()

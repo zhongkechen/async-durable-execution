@@ -10,10 +10,10 @@ from async_durable_execution.execution import durable_execution
 async def handler(_event: Any, context: DurableContext) -> dict[str, bool]:
     """Handler demonstrating step execution without replay."""
 
-    async def fetch_user_1(_) -> str:
+    async def fetch_user_1() -> str:
         return "user-1"
 
-    async def fetch_user_2(_) -> str:
+    async def fetch_user_2() -> str:
         return "user-2"
 
     await context.step(fetch_user_1, name="fetch-user-1")

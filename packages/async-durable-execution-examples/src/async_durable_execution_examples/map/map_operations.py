@@ -16,7 +16,7 @@ async def handler(_event: Any, context: DurableContext) -> list[int]:
     async def process_item(ctx: DurableContext, item: int, index: int, _) -> int:
         await asyncio.sleep(0)
 
-        async def double(_) -> int:
+        async def double() -> int:
             return item * 2
 
         return await ctx.step(double, name=f"map_item_{index}")

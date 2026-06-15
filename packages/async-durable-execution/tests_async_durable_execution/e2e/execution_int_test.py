@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any
+from functools import partial
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
+from async_durable_execution import get_step_context
 from async_durable_execution.context import (
     DurableContext,
-    durable_step,
     durable_wait_for_callback,
     durable_with_child_context,
 )
@@ -29,10 +30,6 @@ from async_durable_execution.models import (
 from async_durable_execution.logger import LoggerInterface
 
 from ..test_helpers import operation_id_sequence
-
-
-if TYPE_CHECKING:
-    from async_durable_execution.types import StepContext
 
 
 async def run_handler(handler, event, lambda_context):
@@ -83,25 +80,23 @@ def create_mock_checkpoint_with_operations():
 
 
 async def test_step_different_ways_to_pass_args():
-    async def step_plain(step_context: StepContext) -> str:
+    async def step_plain() -> str:
         return "from step plain"
 
-    @durable_step
-    async def step_no_args(step_context: StepContext) -> str:
+    async def step_no_args() -> str:
         return "from step no args"
 
-    @durable_step
-    async def step_with_args(step_context: StepContext, a: int, b: str) -> str:
+    async def step_with_args(a: int, b: str) -> str:
         return f"from step {a} {b}"
 
     @durable_execution
     async def my_handler(event, context: DurableContext) -> list[str]:
         results: list[str] = []
-        result: str = await context.step(step_with_args(a=123, b="str"))
+        result: str = await context.step(partial(step_with_args, a=123, b="str"))
         assert result == "from step 123 str"
         results.append(result)
 
-        result = await context.step(step_no_args())
+        result = await context.step(partial(step_no_args))
         assert result == "from step no args"
         results.append(result)
 
@@ -189,15 +184,15 @@ async def test_step_different_ways_to_pass_args():
 async def test_step_with_logger():
     my_logger = Mock(spec=LoggerInterface)
 
-    @durable_step
-    async def mystep(step_context: StepContext, a: int, b: str) -> str:
+    async def mystep(a: int, b: str) -> str:
+        step_context = get_step_context()
         step_context.logger.info("from step %s %s", a, b)
         return "result"
 
     @durable_execution
     async def my_handler(event, context: DurableContext):
         context.set_logger(my_logger)
-        result: str = await context.step(mystep(a=123, b="str"))
+        result: str = await context.step(partial(mystep, a=123, b="str"))
         assert result == "result"
 
     with patch(
@@ -383,14 +378,13 @@ async def test_step_checkpoint_failure_propagates_error():
     causing the execution to hang indefinitely.
     """
 
-    @durable_step
-    async def failing_step(step_context: StepContext) -> str:
+    async def failing_step() -> str:
         return "this should checkpoint but fail"
 
     @durable_execution
     async def my_handler(event, context: DurableContext):
         # This step will trigger a checkpoint that fails
-        result: str = await context.step(failing_step())
+        result: str = await context.step(failing_step)
         return result
 
     with patch(

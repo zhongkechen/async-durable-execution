@@ -39,29 +39,26 @@ before you deploy it.
 ```python
 import asyncio
 from datetime import timedelta
+from functools import partial
 from typing import Any
 
 from async_durable_execution import (
     DurableContext,
     durable_execution,
-    durable_step,
     durable_with_child_context,
 )
 
 
-@durable_step
 async def one(a: int, b: int) -> str:
     await asyncio.sleep(0)
     return f"{a} {b}"
 
 
-@durable_step
 async def two_1(a: int, b: int) -> str:
     await asyncio.sleep(0)
     return f"{a} {b}"
 
 
-@durable_step
 async def two_2(a: int, b: int) -> str:
     await asyncio.sleep(0)
     return f"{b} {a}"
@@ -69,12 +66,11 @@ async def two_2(a: int, b: int) -> str:
 
 @durable_with_child_context
 async def two(ctx: DurableContext, a: int, b: int) -> str:
-    two_1_result: str = ctx.step(two_1(a, b))
-    two_2_result: str = ctx.step(two_2(a, b))
+    two_1_result: str = ctx.step(partial(two_1, a, b))
+    two_2_result: str = ctx.step(partial(two_2, a, b))
     return f"{two_1_result} {two_2_result}"
 
 
-@durable_step
 async def three(a: int, b: int) -> str:
     await asyncio.sleep(0)
     return f"{a} {b}"
@@ -84,7 +80,7 @@ async def three(a: int, b: int) -> str:
 async def function_under_test(event: Any, context: DurableContext) -> list[str]:
     results: list[str] = []
 
-    result_one: str = context.step(one(1, 2))
+    result_one: str = context.step(partial(one, 1, 2))
     results.append(result_one)
 
     context.wait(duration=timedelta(seconds=1))
@@ -92,7 +88,7 @@ async def function_under_test(event: Any, context: DurableContext) -> list[str]:
     result_two: str = context.run_in_child_context(two(3, 4))
     results.append(result_two)
 
-    result_three: str = context.step(three(5, 6))
+    result_three: str = context.step(partial(three, 5, 6))
     results.append(result_three)
 
     return results

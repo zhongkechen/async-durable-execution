@@ -48,7 +48,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     ) -> dict[str, Any]:
         await asyncio.sleep(0)
 
-        async def build_result(_) -> dict[str, Any]:
+        async def build_result() -> dict[str, Any]:
             return {
                 "processed": item["name"],
                 "index": index,

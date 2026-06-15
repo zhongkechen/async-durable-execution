@@ -38,19 +38,19 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     config = ParallelConfig(item_serdes=CustomItemSerDes())
 
     async def task1(ctx: DurableContext) -> dict[str, Any]:
-        async def run(_) -> dict[str, Any]:
+        async def run() -> dict[str, Any]:
             return {"task": "task1", "value": 100}
 
         return await ctx.step(run, name="task1")
 
     async def task2(ctx: DurableContext) -> dict[str, Any]:
-        async def run(_) -> dict[str, Any]:
+        async def run() -> dict[str, Any]:
             return {"task": "task2", "value": 200}
 
         return await ctx.step(run, name="task2")
 
     async def task3(ctx: DurableContext) -> dict[str, Any]:
-        async def run(_) -> dict[str, Any]:
+        async def run() -> dict[str, Any]:
             return {"task": "task3", "value": 300}
 
         return await ctx.step(run, name="task3")

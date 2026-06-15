@@ -24,7 +24,7 @@ async def large_data_processor(child_context: DurableContext) -> dict[str, Any]:
 
     for i in range(1, 6):  # 1 to 5
 
-        async def build_chunk(_, size_in_kb: int = 50) -> str:
+        async def build_chunk(size_in_kb: int = 50) -> str:
             return await generate_large_string(size_in_kb)
 
         step_result: str = await child_context.step(

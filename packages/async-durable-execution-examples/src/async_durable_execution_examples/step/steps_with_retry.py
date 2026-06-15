@@ -3,8 +3,9 @@
 from datetime import timedelta
 from typing import Any
 
+from async_durable_execution import get_step_context
 from async_durable_execution.config import StepConfig
-from async_durable_execution.context import DurableContext, StepContext
+from async_durable_execution.context import DurableContext
 from async_durable_execution.execution import durable_execution
 from async_durable_execution.retries import (
     RetryStrategyConfig,
@@ -12,10 +13,9 @@ from async_durable_execution.retries import (
 )
 
 
-async def simulated_get_item(
-    step_context: StepContext, name: str, poll_count: int
-) -> dict[str, Any] | None:
+async def simulated_get_item(name: str, poll_count: int) -> dict[str, Any] | None:
     """Simulate getting an item with deterministic per-poll retry behavior."""
+    step_context = get_step_context()
     attempt = step_context.attempt or 1
 
     # Poll 1 fails once, then returns None on retry so the workflow polls again.
@@ -51,8 +51,8 @@ async def handler(event: Any, context: DurableContext) -> dict[str, Any]:
         while poll_count < max_polls:
             poll_count += 1
 
-            async def get_item(step_context: StepContext, item_name: str = name):
-                return await simulated_get_item(step_context, item_name, poll_count)
+            async def get_item(item_name: str = name):
+                return await simulated_get_item(item_name, poll_count)
 
             # Try to get the item with retry
             get_response = await context.step(

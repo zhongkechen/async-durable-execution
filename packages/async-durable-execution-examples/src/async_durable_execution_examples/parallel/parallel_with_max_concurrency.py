@@ -12,31 +12,31 @@ async def handler(_event: Any, context: DurableContext) -> list[str]:
     """Execute 5 tasks with concurrency limit of 2."""
 
     async def task1(ctx: DurableContext) -> str:
-        async def run(_) -> str:
+        async def run() -> str:
             return "task 1"
 
         return await ctx.step(run, name="task1")
 
     async def task2(ctx: DurableContext) -> str:
-        async def run(_) -> str:
+        async def run() -> str:
             return "task 2"
 
         return await ctx.step(run, name="task2")
 
     async def task3(ctx: DurableContext) -> str:
-        async def run(_) -> str:
+        async def run() -> str:
             return "task 3"
 
         return await ctx.step(run, name="task3")
 
     async def task4(ctx: DurableContext) -> str:
-        async def run(_) -> str:
+        async def run() -> str:
             return "task 4"
 
         return await ctx.step(run, name="task4")
 
     async def task5(ctx: DurableContext) -> str:
-        async def run(_) -> str:
+        async def run() -> str:
             return "task 5"
 
         return await ctx.step(run, name="task5")

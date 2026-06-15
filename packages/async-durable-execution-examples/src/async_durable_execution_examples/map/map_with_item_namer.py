@@ -22,7 +22,7 @@ async def handler(_event: Any, context: DurableContext) -> list[str]:
     ) -> str:
         await asyncio.sleep(0)
 
-        async def build_result(_) -> str:
+        async def build_result() -> str:
             return f"processed-{order['id']}-${order['amount']}"
 
         return await ctx.step(build_result, name=f"process_{order['id']}")

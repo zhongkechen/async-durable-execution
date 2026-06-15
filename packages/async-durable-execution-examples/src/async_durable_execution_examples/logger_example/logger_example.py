@@ -1,11 +1,11 @@
 """Example demonstrating logger usage in DurableContext."""
 
+from functools import partial
 from typing import Any
 
+from async_durable_execution import get_step_context
 from async_durable_execution.context import (
     DurableContext,
-    StepContext,
-    durable_step,
     durable_with_child_context,
 )
 from async_durable_execution.execution import durable_execution
@@ -18,7 +18,7 @@ async def child_workflow(ctx: DurableContext) -> str:
     ctx.logger.info("Running in child context")
 
     # Step in child context has nested step ID
-    async def child_step(_) -> str:
+    async def child_step() -> str:
         return "child-processed"
 
     child_result: str = await ctx.step(child_step, name="child_step")
@@ -28,8 +28,8 @@ async def child_workflow(ctx: DurableContext) -> str:
     return child_result
 
 
-@durable_step
-async def my_step(step_context: StepContext, my_arg: int) -> str:
+async def my_step(my_arg: int) -> str:
+    step_context = get_step_context()
     step_context.logger.info("Hello from my_step")
     step_context.logger.warning("Warning from my_step", extra={"my_arg": my_arg})
     step_context.logger.error(
@@ -45,12 +45,12 @@ async def handler(event: Any, context: DurableContext) -> str:
     context.logger.info("Starting workflow", extra={"eventId": event.get("id")})
 
     # Logger in steps - gets enriched with step ID and attempt number
-    async def process_data(_) -> str:
+    async def process_data() -> str:
         return "processed"
 
     result1: str = await context.step(process_data, name="process_data")
 
-    await context.step(my_step(123))
+    await context.step(partial(my_step, 123))
 
     context.logger.info("Step 1 completed", extra={"result": result1})
 

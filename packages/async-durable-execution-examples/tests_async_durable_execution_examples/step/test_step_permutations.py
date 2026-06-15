@@ -23,8 +23,7 @@ async def test_step_no_name(durable_runner):
         op for op in result.operations if op.operation_type == OperationType.STEP
     ]
     assert len(step_ops) == 1
-    # Should use function name when no name provided
-    assert step_ops[0].name is None or step_ops[0].name == "<lambda>"
+    assert step_ops[0].name == "unnamed_step"
 
 
 async def test_step_with_name(durable_runner):

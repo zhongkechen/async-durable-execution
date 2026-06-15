@@ -25,7 +25,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     async def process_item(
         ctx: DurableContext, item: int, index: int, _
     ) -> dict[str, Any]:
-        async def build_result(_) -> dict[str, Any]:
+        async def build_result() -> dict[str, Any]:
             return {
                 "itemId": item,
                 "index": index,

@@ -25,31 +25,31 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     step_config = StepConfig(retry_strategy=RetryStrategyConfig(max_attempts=1))
 
     async def task1(ctx: DurableContext) -> str:
-        async def run(_) -> str:
+        async def run() -> str:
             return "success 1"
 
         return await ctx.step(run, name="task1", config=step_config)
 
     async def task2(ctx: DurableContext) -> str:
-        async def run(_) -> str:
+        async def run() -> str:
             return await _failing_task(2)
 
         return await ctx.step(run, name="task2", config=step_config)
 
     async def task3(ctx: DurableContext) -> str:
-        async def run(_) -> str:
+        async def run() -> str:
             return "success 3"
 
         return await ctx.step(run, name="task3", config=step_config)
 
     async def task4(ctx: DurableContext) -> str:
-        async def run(_) -> str:
+        async def run() -> str:
             return await _failing_task(4)
 
         return await ctx.step(run, name="task4", config=step_config)
 
     async def task5(ctx: DurableContext) -> str:
-        async def run(_) -> str:
+        async def run() -> str:
             return "success 5"
 
         return await ctx.step(run, name="task5", config=step_config)

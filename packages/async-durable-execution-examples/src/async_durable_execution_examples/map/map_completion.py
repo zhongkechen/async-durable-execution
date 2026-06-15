@@ -42,7 +42,10 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     )
 
     async def process_item(
-        ctx: DurableContext, item: dict[str, Any], index: int, _
+        ctx: DurableContext,
+        item: dict[str, Any],
+        index: int,
+        _items: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """Process each item in the map."""
         context.logger.info(
@@ -56,7 +59,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         )
         step_config = StepConfig(retry_strategy=create_retry_strategy(retry_config))
 
-        async def step_function(_: DurableContext) -> dict[str, Any]:
+        async def step_function() -> dict[str, Any]:
             """Step that processes or fails based on item."""
             if item["shouldFail"]:
                 raise Exception(f"Processing failed for item {item['id']}")

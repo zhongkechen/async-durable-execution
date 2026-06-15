@@ -907,7 +907,7 @@ async def test_durable_handler_background_thread_failure():
 
     @durable_execution
     async def test_handler(event: Any, context: DurableContext) -> dict:
-        async def step_result(_step_context) -> str:
+        async def step_result() -> str:
             return "step_result"
 
         # Call a checkpoint operation so background thread error can propagate
@@ -1002,7 +1002,7 @@ async def test_durable_execution_checkpoint_error_in_background_thread():
 
     @durable_execution
     async def test_handler(event: Any, context: DurableContext) -> dict:
-        async def step_result(_step_context) -> str:
+        async def step_result() -> str:
             return "step_result"
 
         # Call a checkpoint operation so background thread error can propagate
@@ -1132,7 +1132,7 @@ async def test_durable_execution_background_thread_execution_error_returns_faile
 
     @durable_execution
     async def test_handler(event: Any, context: DurableContext) -> dict:
-        async def step_result(_step_context) -> str:
+        async def step_result() -> str:
             return "step_result"
 
         await context.step(step_result)
@@ -1179,7 +1179,7 @@ async def test_durable_execution_background_thread_invocation_error_retries():
 
     @durable_execution
     async def test_handler(event: Any, context: DurableContext) -> dict:
-        async def step_result(_step_context) -> str:
+        async def step_result() -> str:
             return "step_result"
 
         await context.step(step_result)
@@ -1430,7 +1430,7 @@ async def test_durable_handler_background_thread_failure_on_succeed_checkpoint()
 
     @durable_execution
     async def test_handler(event: Any, context: DurableContext) -> dict:
-        async def step_result(_step_context) -> str:
+        async def step_result() -> str:
             return "step_result"
 
         # Call a step operation which will trigger START and SUCCEED checkpoints
@@ -1522,10 +1522,10 @@ async def test_durable_handler_background_thread_failure_on_start_checkpoint():
 
     @durable_execution
     async def test_handler(event: Any, context: DurableContext) -> dict:
-        async def first_step_result(_step_context) -> str:
+        async def first_step_result() -> str:
             return "first_step_result"
 
-        async def second_step_result(_step_context) -> str:
+        async def second_step_result() -> str:
             return "second_step_result"
 
         # First step with AT_MOST_ONCE_PER_RETRY (synchronous START checkpoint)
@@ -1746,7 +1746,7 @@ async def test_durable_execution_logs_checkpoint_error_extras_from_background_th
 
     @durable_execution
     async def test_handler(event: Any, context: DurableContext) -> dict:
-        async def step_result(_step_context) -> str:
+        async def step_result() -> str:
             return "step_result"
 
         await context.step(step_result)
@@ -1809,7 +1809,7 @@ async def test_durable_execution_logs_boto_client_error_extras_from_background_t
 
     @durable_execution
     async def test_handler(event: Any, context: DurableContext) -> dict:
-        async def step_result(_step_context) -> str:
+        async def step_result() -> str:
             return "step_result"
 
         await context.step(step_result)
@@ -2794,7 +2794,7 @@ async def test_durable_execution_non_retryable_background_thread_error_returns_f
 
     @durable_execution
     async def test_handler(event: Any, context: DurableContext) -> dict:
-        async def step_result(_step_context) -> str:
+        async def step_result() -> str:
             return "step_result"
 
         await context.step(step_result)
@@ -3047,7 +3047,7 @@ async def test_durable_execution_supports_async_steps_inside_async_handler():
     )
     mock_client.checkpoint.return_value = mock_output
 
-    async def async_step(_step_context) -> str:
+    async def async_step() -> str:
         await asyncio.sleep(0)
         return "async-step-success"
 

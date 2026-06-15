@@ -16,7 +16,7 @@ async def handler(_event: Any, context: DurableContext) -> list[int]:
     async def process_item(ctx: DurableContext, item: int, index: int, _) -> int:
         await asyncio.sleep(0)
 
-        async def triple(_) -> int:
+        async def triple() -> int:
             return item * 3
 
         return await ctx.step(triple, name=f"process_{index}")
