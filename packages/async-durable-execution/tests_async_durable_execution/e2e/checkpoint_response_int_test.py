@@ -33,6 +33,10 @@ if TYPE_CHECKING:
     from async_durable_execution.types import StepContext
 
 
+async def run_handler(handler, event, lambda_context):
+    return await handler._async_handler(event, lambda_context)
+
+
 def create_mock_checkpoint_with_operations():
     """Create a mock checkpoint function that properly tracks operations.
 
@@ -76,7 +80,7 @@ def create_mock_checkpoint_with_operations():
     return mock_checkpoint, checkpoint_calls
 
 
-def test_end_to_end_step_operation_with_double_check():
+async def test_end_to_end_step_operation_with_double_check():
     """Test end-to-end step operation execution with double-check pattern.
 
     Verifies that the OperationExecutor.process() method properly calls
@@ -127,7 +131,7 @@ def test_end_to_end_step_operation_with_double_check():
         lambda_context.invoked_function_arn = "test-arn"
         lambda_context.tenant_id = None
 
-        result = my_handler(event, lambda_context)
+        result = await run_handler(my_handler, event, lambda_context)
 
         assert result["Status"] == InvocationStatus.SUCCEEDED.value
         assert result["Result"] == '"step_result"'
@@ -137,7 +141,7 @@ def test_end_to_end_step_operation_with_double_check():
         assert len(all_operations) == 2
 
 
-def test_end_to_end_multiple_operations_execute_sequentially():
+async def test_end_to_end_multiple_operations_execute_sequentially():
     """Test end-to-end execution with multiple operations.
 
     Verifies that multiple operations in a workflow execute correctly
@@ -190,7 +194,7 @@ def test_end_to_end_multiple_operations_execute_sequentially():
         lambda_context.invoked_function_arn = "test-arn"
         lambda_context.tenant_id = None
 
-        result = my_handler(event, lambda_context)
+        result = await run_handler(my_handler, event, lambda_context)
 
         assert result["Status"] == InvocationStatus.SUCCEEDED.value
         assert result["Result"] == '["result1", "result2"]'
@@ -200,7 +204,7 @@ def test_end_to_end_multiple_operations_execute_sequentially():
         assert len(all_operations) == 4
 
 
-def test_end_to_end_wait_operation_with_double_check():
+async def test_end_to_end_wait_operation_with_double_check():
     """Test end-to-end wait operation execution with double-check pattern.
 
     Verifies that wait operations properly use the double-check pattern
@@ -247,7 +251,7 @@ def test_end_to_end_wait_operation_with_double_check():
         lambda_context.tenant_id = None
 
         # Wait will suspend, so we expect PENDING status
-        result = my_handler(event, lambda_context)
+        result = await run_handler(my_handler, event, lambda_context)
 
         assert result["Status"] == InvocationStatus.PENDING.value
 
@@ -256,7 +260,7 @@ def test_end_to_end_wait_operation_with_double_check():
         assert len(all_operations) >= 1
 
 
-def test_end_to_end_checkpoint_synchronization_with_operations_list():
+async def test_end_to_end_checkpoint_synchronization_with_operations_list():
     """Test that synchronous checkpoints properly update operations list.
 
     Verifies that when is_sync=True, the operations list is updated
@@ -305,7 +309,7 @@ def test_end_to_end_checkpoint_synchronization_with_operations_list():
         lambda_context.invoked_function_arn = "test-arn"
         lambda_context.tenant_id = None
 
-        result = my_handler(event, lambda_context)
+        result = await run_handler(my_handler, event, lambda_context)
 
         assert result["Status"] == InvocationStatus.SUCCEEDED.value
 
@@ -314,7 +318,7 @@ def test_end_to_end_checkpoint_synchronization_with_operations_list():
         assert len(all_operations) >= 2  # At least START and SUCCEED
 
 
-def test_callback_deferred_error_handling_to_result():
+async def test_callback_deferred_error_handling_to_result():
     """Test callback deferred error handling pattern.
 
     Verifies that callback operations properly return callback_id through
@@ -414,14 +418,14 @@ def test_callback_deferred_error_handling_to_result():
         lambda_context.invoked_function_arn = "test-arn"
         lambda_context.tenant_id = None
 
-        result = my_handler(event, lambda_context)
+        result = await run_handler(my_handler, event, lambda_context)
 
         # Verify execution succeeded and code after callback executed
         assert result["Status"] == InvocationStatus.SUCCEEDED.value
         assert "code_executed_after_callback" in result["Result"]
 
 
-def test_end_to_end_invoke_operation_with_double_check():
+async def test_end_to_end_invoke_operation_with_double_check():
     """Test end-to-end invoke operation execution with double-check pattern.
 
     Verifies that invoke operations properly use the double-check pattern
@@ -467,7 +471,7 @@ def test_end_to_end_invoke_operation_with_double_check():
         lambda_context.tenant_id = None
 
         # Invoke will suspend, so we expect PENDING status
-        result = my_handler(event, lambda_context)
+        result = await run_handler(my_handler, event, lambda_context)
 
         assert result["Status"] == InvocationStatus.PENDING.value
 
@@ -476,7 +480,7 @@ def test_end_to_end_invoke_operation_with_double_check():
         assert len(all_operations) >= 1
 
 
-def test_end_to_end_child_context_with_async_checkpoint():
+async def test_end_to_end_child_context_with_async_checkpoint():
     """Test end-to-end child context execution with async checkpoint.
 
     Verifies that child context operations use async checkpoint (is_sync=False)
@@ -525,7 +529,7 @@ def test_end_to_end_child_context_with_async_checkpoint():
         lambda_context.invoked_function_arn = "test-arn"
         lambda_context.tenant_id = None
 
-        result = my_handler(event, lambda_context)
+        result = await run_handler(my_handler, event, lambda_context)
 
         assert result["Status"] == InvocationStatus.SUCCEEDED.value
         assert result["Result"] == '"child_result"'
@@ -535,7 +539,7 @@ def test_end_to_end_child_context_with_async_checkpoint():
         assert len(all_operations) == 2
 
 
-def test_end_to_end_child_context_replay_children_mode():
+async def test_end_to_end_child_context_replay_children_mode():
     """Test end-to-end child context with large payload and ReplayChildren mode.
 
     Verifies that child context with large result (>256KB) triggers replay_children mode,
@@ -624,7 +628,7 @@ def test_end_to_end_child_context_replay_children_mode():
         lambda_context.invoked_function_arn = "test-arn"
         lambda_context.tenant_id = None
 
-        result = my_handler(event, lambda_context)
+        result = await run_handler(my_handler, event, lambda_context)
 
         assert result["Status"] == InvocationStatus.SUCCEEDED.value
         # Function executed once during initial execution
@@ -641,7 +645,7 @@ def test_end_to_end_child_context_replay_children_mode():
         assert succeed_updates[0].context_options.replay_children is True
 
 
-def test_end_to_end_child_context_error_handling():
+async def test_end_to_end_child_context_error_handling():
     """Test end-to-end child context error handling.
 
     Verifies that child context that raises exception creates FAIL checkpoint
@@ -691,7 +695,7 @@ def test_end_to_end_child_context_error_handling():
         lambda_context.invoked_function_arn = "test-arn"
         lambda_context.tenant_id = None
 
-        result = my_handler(event, lambda_context)
+        result = await run_handler(my_handler, event, lambda_context)
 
         # Verify execution failed
         assert result["Status"] == InvocationStatus.FAILED.value
@@ -706,7 +710,7 @@ def test_end_to_end_child_context_error_handling():
         assert len(fail_updates) == 1
 
 
-def test_end_to_end_child_context_invocation_error_reraised():
+async def test_end_to_end_child_context_invocation_error_reraised():
     """Test end-to-end child context InvocationError re-raising.
 
     Verifies that child context that raises InvocationError creates FAIL checkpoint
@@ -760,7 +764,7 @@ def test_end_to_end_child_context_invocation_error_reraised():
 
         # InvocationError should be re-raised (not wrapped) to trigger Lambda retry
         with pytest.raises(InvocationError, match="Invocation failed in child"):
-            my_handler(event, lambda_context)
+            await run_handler(my_handler, event, lambda_context)
 
         # Verify FAIL checkpoint was created before re-raising
         all_operations = [op for batch in checkpoint_calls for op in batch]

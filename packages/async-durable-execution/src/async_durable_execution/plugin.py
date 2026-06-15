@@ -1,4 +1,3 @@
-import asyncio
 import contextlib
 import datetime
 import functools
@@ -225,12 +224,8 @@ class PluginExecutor:
             # log and ignore the exception
             logger.exception("Plugin %s exception ignored", plugin.__class__.__name__)
 
-    def execute_plugins(self, info):
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(self._execute_plugins_async(info))
-        return self._execute_plugins_async(info)
+    async def execute_plugins(self, info):
+        await self._execute_plugins_async(info)
 
     async def _execute_plugins_async(self, info) -> None:
         if not self._plugins:
@@ -238,24 +233,19 @@ class PluginExecutor:
         for plugin in self._plugins:
             await self._dispatch_plugin(plugin, info)
 
-    def on_invocation_start(
+    async def on_invocation_start(
         self,
         execution_arn: str,
         is_first_invocation: bool,
         execution_start_time: datetime.datetime | None,
         lambda_context: LambdaContext | None,
     ):
-        awaitable = self._on_invocation_start_async(
+        await self._on_invocation_start_async(
             execution_arn=execution_arn,
             is_first_invocation=is_first_invocation,
             execution_start_time=execution_start_time,
             lambda_context=lambda_context,
         )
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(awaitable)
-        return awaitable
 
     async def _on_invocation_start_async(
         self,
@@ -278,15 +268,11 @@ class PluginExecutor:
         )
         await self._execute_plugins_async(self._invocation_status)
 
-    def on_invocation_end(
+    async def on_invocation_end(
         self,
         output: "DurableExecutionInvocationOutput",
     ):
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(self._on_invocation_end_async(output=output))
-        return self._on_invocation_end_async(output=output)
+        await self._on_invocation_end_async(output=output)
 
     async def _on_invocation_end_async(
         self,
@@ -303,22 +289,17 @@ class PluginExecutor:
         )
         await self._execute_plugins_async(invocation_end_info)
 
-    def on_user_function_start(
+    async def on_user_function_start(
         self,
         operation_identifier: OperationIdentifier,
         is_replay_children: bool = False,
         attempt: int | None = None,
     ):
-        awaitable = self._on_user_function_start_async(
+        return await self._on_user_function_start_async(
             operation_identifier=operation_identifier,
             is_replay_children=is_replay_children,
             attempt=attempt,
         )
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(awaitable)
-        return awaitable
 
     async def _on_user_function_start_async(
         self,
@@ -340,13 +321,8 @@ class PluginExecutor:
         await self._execute_plugins_async(start_info)
         return start_info
 
-    def on_user_function_end(self, start_info: UserFunctionStartInfo, error):
-        awaitable = self._on_user_function_end_async(start_info=start_info, error=error)
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(awaitable)
-        return awaitable
+    async def on_user_function_end(self, start_info: UserFunctionStartInfo, error):
+        await self._on_user_function_end_async(start_info=start_info, error=error)
 
     async def _on_user_function_end_async(
         self, start_info: UserFunctionStartInfo, error
@@ -356,12 +332,8 @@ class PluginExecutor:
             UserFunctionEndInfo.from_start_info(start_info, error)
         )
 
-    def on_operation_action(self, update: OperationUpdate):
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(self._on_operation_action_async(update))
-        return self._on_operation_action_async(update)
+    async def on_operation_action(self, update: OperationUpdate):
+        await self._on_operation_action_async(update)
 
     async def _on_operation_action_async(self, update: OperationUpdate) -> None:
         """Execute any registered plugins for a given operation when an update is checkpointed
@@ -384,12 +356,8 @@ class PluginExecutor:
                 ),
             )
 
-    def on_operation_update(self, operation: Operation | None):
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(self._on_operation_update_async(operation))
-        return self._on_operation_update_async(operation)
+    async def on_operation_update(self, operation: Operation | None):
+        await self._on_operation_update_async(operation)
 
     async def _on_operation_update_async(self, operation: Operation | None) -> None:
         """Execute any registered plugins for a given operation when it receives an update
@@ -463,12 +431,8 @@ class PluginExecutor:
                         raise
 
             @functools.wraps(func)
-            def wrapper(event: Any, context: LambdaContext):
-                try:
-                    asyncio.get_running_loop()
-                except RuntimeError:
-                    return asyncio.run(wrapper_async(event, context))
-                return wrapper_async(event, context)
+            async def wrapper(event: Any, context: LambdaContext):
+                return await wrapper_async(event, context)
 
             return wrapper
 

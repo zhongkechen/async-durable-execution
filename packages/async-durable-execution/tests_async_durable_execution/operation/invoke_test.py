@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import asyncio
 from datetime import timedelta
 from unittest.mock import Mock, patch
 
@@ -33,7 +32,7 @@ from ..serdes_test import CustomDictSerDes
 
 
 # Test helper - maintains old handler signature for backward compatibility in tests
-def invoke_handler(function_name, payload, state, operation_identifier, config):
+async def invoke_handler(function_name, payload, state, operation_identifier, config):
     """Test helper that wraps InvokeOperationExecutor with old handler signature."""
     if not config:
         config = InvokeConfig()
@@ -44,10 +43,10 @@ def invoke_handler(function_name, payload, state, operation_identifier, config):
         operation_identifier=operation_identifier,
         config=config,
     )
-    return asyncio.run(executor.process())
+    return await executor.process()
 
 
-def test_invoke_handler_already_succeeded():
+async def test_invoke_handler_already_succeeded():
     """Test invoke_handler when operation already succeeded."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -61,7 +60,7 @@ def test_invoke_handler_already_succeeded():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    result = invoke_handler(
+    result = await invoke_handler(
         function_name="test_function",
         payload="test_input",
         state=mock_state,
@@ -75,7 +74,7 @@ def test_invoke_handler_already_succeeded():
     mock_state._create_checkpoint_async.assert_not_called()
 
 
-def test_invoke_handler_already_succeeded_none_result():
+async def test_invoke_handler_already_succeeded_none_result():
     """Test invoke_handler when operation succeeded with None result."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -89,7 +88,7 @@ def test_invoke_handler_already_succeeded_none_result():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    result = invoke_handler(
+    result = await invoke_handler(
         function_name="test_function",
         payload="test_input",
         state=mock_state,
@@ -102,7 +101,7 @@ def test_invoke_handler_already_succeeded_none_result():
     assert result is None
 
 
-def test_invoke_handler_already_succeeded_no_chained_invoke_details():
+async def test_invoke_handler_already_succeeded_no_chained_invoke_details():
     """Test invoke_handler when operation succeeded but has no chained_invoke_details."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -116,7 +115,7 @@ def test_invoke_handler_already_succeeded_no_chained_invoke_details():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    result = invoke_handler(
+    result = await invoke_handler(
         function_name="test_function",
         payload="test_input",
         state=mock_state,
@@ -132,7 +131,7 @@ def test_invoke_handler_already_succeeded_no_chained_invoke_details():
 @pytest.mark.parametrize(
     "kind", [OperationStatus.FAILED, OperationStatus.STOPPED, OperationStatus.TIMED_OUT]
 )
-def test_invoke_handler_already_terminated(kind: OperationStatus):
+async def test_invoke_handler_already_terminated(kind: OperationStatus):
     """Test invoke_handler when operation already failed."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -150,7 +149,7 @@ def test_invoke_handler_already_terminated(kind: OperationStatus):
     mock_state.get_checkpoint_result.return_value = mock_result
 
     with pytest.raises(CallableRuntimeError):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -161,7 +160,7 @@ def test_invoke_handler_already_terminated(kind: OperationStatus):
         )
 
 
-def test_invoke_handler_already_timed_out():
+async def test_invoke_handler_already_timed_out():
     """Test invoke_handler when operation already timed out."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -179,7 +178,7 @@ def test_invoke_handler_already_timed_out():
     mock_state.get_checkpoint_result.return_value = mock_result
 
     with pytest.raises(CallableRuntimeError):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -191,7 +190,7 @@ def test_invoke_handler_already_timed_out():
 
 
 @pytest.mark.parametrize("status", [OperationStatus.STARTED])
-def test_invoke_handler_already_started(status):
+async def test_invoke_handler_already_started(status):
     """Test invoke_handler when operation is already started."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -208,7 +207,7 @@ def test_invoke_handler_already_started(status):
     with pytest.raises(
         SuspendExecution, match="Invoke invoke6 started, suspending for completion"
     ):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -220,7 +219,7 @@ def test_invoke_handler_already_started(status):
 
 
 @pytest.mark.parametrize("status", [OperationStatus.STARTED, OperationStatus.PENDING])
-def test_invoke_handler_already_started_with_timeout(status):
+async def test_invoke_handler_already_started_with_timeout(status):
     """Test invoke_handler when operation is already started with timeout config."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -237,7 +236,7 @@ def test_invoke_handler_already_started_with_timeout(status):
     config = InvokeConfig[str, str](timeout=timedelta(seconds=30))
 
     with pytest.raises(TimedSuspendExecution):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -248,7 +247,7 @@ def test_invoke_handler_already_started_with_timeout(status):
         )
 
 
-def test_invoke_handler_new_operation():
+async def test_invoke_handler_new_operation():
     """Test invoke_handler when starting a new operation."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -268,7 +267,7 @@ def test_invoke_handler_new_operation():
     with pytest.raises(
         SuspendExecution, match="Invoke invoke8 started, suspending for completion"
     ):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -292,7 +291,7 @@ def test_invoke_handler_new_operation():
     assert operation_update.chained_invoke_options.function_name == "test_function"
 
 
-def test_invoke_handler_new_operation_with_timeout():
+async def test_invoke_handler_new_operation_with_timeout():
     """Test invoke_handler when starting a new operation with timeout."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -309,7 +308,7 @@ def test_invoke_handler_new_operation_with_timeout():
     config = InvokeConfig[str, str](timeout=timedelta(seconds=30))
 
     with pytest.raises(TimedSuspendExecution):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -320,7 +319,7 @@ def test_invoke_handler_new_operation_with_timeout():
         )
 
 
-def test_invoke_handler_new_operation_no_timeout():
+async def test_invoke_handler_new_operation_no_timeout():
     """Test invoke_handler when starting a new operation without timeout."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -337,7 +336,7 @@ def test_invoke_handler_new_operation_no_timeout():
     config = InvokeConfig[str, str](timeout=timedelta(seconds=0))
 
     with pytest.raises(SuspendExecution):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -348,7 +347,7 @@ def test_invoke_handler_new_operation_no_timeout():
         )
 
 
-def test_invoke_handler_no_config():
+async def test_invoke_handler_no_config():
     """Test invoke_handler when no config is provided."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -363,7 +362,7 @@ def test_invoke_handler_no_config():
     mock_state.get_checkpoint_result.side_effect = [not_found, started]
 
     with pytest.raises(SuspendExecution):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -383,7 +382,7 @@ def test_invoke_handler_no_config():
     assert "TenantId" not in chained_invoke_options
 
 
-def test_invoke_handler_custom_serdes():
+async def test_invoke_handler_custom_serdes():
     """Test invoke_handler with custom serialization."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -403,7 +402,7 @@ def test_invoke_handler_custom_serdes():
         serdes_payload=CustomDictSerDes(), serdes_result=CustomDictSerDes()
     )
 
-    result = invoke_handler(
+    result = await invoke_handler(
         function_name="test_function",
         payload={"key": "value", "number": 42, "list": [1, 2, 3]},
         state=mock_state,
@@ -417,7 +416,7 @@ def test_invoke_handler_custom_serdes():
     assert result == {"key": "value", "number": 42, "list": [1, 2, 3]}
 
 
-def test_invoke_handler_custom_serdes_new_operation():
+async def test_invoke_handler_custom_serdes_new_operation():
     """Test invoke_handler with custom serialization for new operation."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -437,7 +436,7 @@ def test_invoke_handler_custom_serdes_new_operation():
     complex_payload = {"key": "value", "number": 42, "list": [1, 2, 3]}
 
     with pytest.raises(SuspendExecution):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload=complex_payload,
             state=mock_state,
@@ -455,7 +454,7 @@ def test_invoke_handler_custom_serdes_new_operation():
     assert operation_update.payload == expected_serialized
 
 
-def test_suspend_with_optional_resume_delay_with_timeout():
+async def test_suspend_with_optional_resume_delay_with_timeout():
     """Test suspend_with_optional_resume_delay with timeout."""
     with pytest.raises(TimedSuspendExecution) as exc_info:
         suspend_with_optional_resume_delay("test message", 30)
@@ -463,7 +462,7 @@ def test_suspend_with_optional_resume_delay_with_timeout():
     assert "test message" in str(exc_info.value)
 
 
-def test_suspend_with_optional_resume_delay_no_timeout():
+async def test_suspend_with_optional_resume_delay_no_timeout():
     """Test suspend_with_optional_resume_delay without timeout."""
     with pytest.raises(SuspendExecution) as exc_info:
         suspend_with_optional_resume_delay("test message", None)
@@ -471,7 +470,7 @@ def test_suspend_with_optional_resume_delay_no_timeout():
     assert "test message" in str(exc_info.value)
 
 
-def test_suspend_with_optional_resume_delay_zero_timeout():
+async def test_suspend_with_optional_resume_delay_zero_timeout():
     """Test suspend_with_optional_resume_delay with zero timeout."""
     with pytest.raises(SuspendExecution) as exc_info:
         suspend_with_optional_resume_delay("test message", 0)
@@ -479,7 +478,7 @@ def test_suspend_with_optional_resume_delay_zero_timeout():
     assert "test message" in str(exc_info.value)
 
 
-def test_suspend_with_optional_resume_delay_negative_timeout():
+async def test_suspend_with_optional_resume_delay_negative_timeout():
     """Test suspend_with_optional_resume_delay with negative timeout."""
     with pytest.raises(SuspendExecution) as exc_info:
         suspend_with_optional_resume_delay("test message", -5)
@@ -488,7 +487,7 @@ def test_suspend_with_optional_resume_delay_negative_timeout():
 
 
 @pytest.mark.parametrize("status", [OperationStatus.STARTED, OperationStatus.PENDING])
-def test_invoke_handler_with_operation_name(status: OperationStatus):
+async def test_invoke_handler_with_operation_name(status: OperationStatus):
     """Test invoke_handler uses operation name in logs when available."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -503,7 +502,7 @@ def test_invoke_handler_with_operation_name(status: OperationStatus):
     mock_state.get_checkpoint_result.return_value = mock_result
 
     with pytest.raises(SuspendExecution):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -515,7 +514,7 @@ def test_invoke_handler_with_operation_name(status: OperationStatus):
 
 
 @pytest.mark.parametrize("status", [OperationStatus.STARTED, OperationStatus.PENDING])
-def test_invoke_handler_without_operation_name(status: OperationStatus):
+async def test_invoke_handler_without_operation_name(status: OperationStatus):
     """Test invoke_handler uses function name in logs when no operation name."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -530,7 +529,7 @@ def test_invoke_handler_without_operation_name(status: OperationStatus):
     mock_state.get_checkpoint_result.return_value = mock_result
 
     with pytest.raises(SuspendExecution):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -541,7 +540,7 @@ def test_invoke_handler_without_operation_name(status: OperationStatus):
         )
 
 
-def test_invoke_handler_with_none_payload():
+async def test_invoke_handler_with_none_payload():
     """Test invoke_handler when payload is None."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -556,7 +555,7 @@ def test_invoke_handler_with_none_payload():
     mock_state.get_checkpoint_result.side_effect = [not_found, started]
 
     with pytest.raises(SuspendExecution):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload=None,
             state=mock_state,
@@ -574,7 +573,7 @@ def test_invoke_handler_with_none_payload():
     assert operation_update.payload == "null"  # JSON serialization of None
 
 
-def test_invoke_handler_already_succeeded_with_none_payload():
+async def test_invoke_handler_already_succeeded_with_none_payload():
     """Test invoke_handler when operation succeeded and original payload was None."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -588,7 +587,7 @@ def test_invoke_handler_already_succeeded_with_none_payload():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    result = invoke_handler(
+    result = await invoke_handler(
         function_name="test_function",
         payload=None,
         state=mock_state,
@@ -603,7 +602,7 @@ def test_invoke_handler_already_succeeded_with_none_payload():
 
 
 @patch("async_durable_execution.operation.invoke.suspend_with_optional_resume_delay")
-def test_invoke_handler_suspend_does_not_raise(mock_suspend):
+async def test_invoke_handler_suspend_does_not_raise(mock_suspend):
     """Test invoke_handler when suspend_with_optional_resume_delay doesn't raise an exception."""
 
     mock_state = Mock(spec=ExecutionState)
@@ -625,7 +624,7 @@ def test_invoke_handler_suspend_does_not_raise(mock_suspend):
         ExecutionError,
         match="suspend_with_optional_resume_delay should have raised an exception, but did not.",
     ):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -638,7 +637,7 @@ def test_invoke_handler_suspend_does_not_raise(mock_suspend):
     mock_suspend.assert_called_once()
 
 
-def test_invoke_handler_with_tenant_id():
+async def test_invoke_handler_with_tenant_id():
     """Test invoke_handler passes tenant_id to checkpoint."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -655,7 +654,7 @@ def test_invoke_handler_with_tenant_id():
     config = InvokeConfig(tenant_id="test-tenant-123")
 
     with pytest.raises(SuspendExecution):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -675,7 +674,7 @@ def test_invoke_handler_with_tenant_id():
     assert chained_invoke_options["TenantId"] == "test-tenant-123"
 
 
-def test_invoke_handler_without_tenant_id():
+async def test_invoke_handler_without_tenant_id():
     """Test invoke_handler without tenant_id doesn't include it in checkpoint."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -692,7 +691,7 @@ def test_invoke_handler_without_tenant_id():
     config = InvokeConfig(tenant_id=None)
 
     with pytest.raises(SuspendExecution):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -712,7 +711,7 @@ def test_invoke_handler_without_tenant_id():
     assert "TenantId" not in chained_invoke_options
 
 
-def test_invoke_handler_default_config_no_tenant_id():
+async def test_invoke_handler_default_config_no_tenant_id():
     """Test invoke_handler with default config has no tenant_id."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -727,7 +726,7 @@ def test_invoke_handler_default_config_no_tenant_id():
     mock_state.get_checkpoint_result.side_effect = [not_found, started]
 
     with pytest.raises(SuspendExecution):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -747,7 +746,7 @@ def test_invoke_handler_default_config_no_tenant_id():
     assert "TenantId" not in chained_invoke_options
 
 
-def test_invoke_handler_defaults_to_json_serdes():
+async def test_invoke_handler_defaults_to_json_serdes():
     """Test invoke_handler uses DEFAULT_JSON_SERDES when config has no serdes."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -765,7 +764,7 @@ def test_invoke_handler_defaults_to_json_serdes():
     payload = {"key": "value", "number": 42}
 
     with pytest.raises(SuspendExecution):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload=payload,
             state=mock_state,
@@ -782,7 +781,7 @@ def test_invoke_handler_defaults_to_json_serdes():
     assert operation_update.payload == json.dumps(payload)
 
 
-def test_invoke_handler_result_defaults_to_json_serdes():
+async def test_invoke_handler_result_defaults_to_json_serdes():
     """Test invoke_handler uses DEFAULT_JSON_SERDES for result deserialization."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -799,7 +798,7 @@ def test_invoke_handler_result_defaults_to_json_serdes():
 
     config = InvokeConfig[dict, dict](serdes_payload=None, serdes_result=None)
 
-    result = invoke_handler(
+    result = await invoke_handler(
         function_name="test_function",
         payload={"input": "data"},
         state=mock_state,
@@ -818,7 +817,7 @@ def test_invoke_handler_result_defaults_to_json_serdes():
 # ============================================================================
 
 
-def test_invoke_immediate_response_get_checkpoint_result_called_twice():
+async def test_invoke_immediate_response_get_checkpoint_result_called_twice():
     """Test that get_checkpoint_result is called twice when checkpoint is created."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -834,7 +833,7 @@ def test_invoke_immediate_response_get_checkpoint_result_called_twice():
     mock_state.get_checkpoint_result.side_effect = [not_found, started]
 
     with pytest.raises(SuspendExecution):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -851,7 +850,7 @@ def test_invoke_immediate_response_get_checkpoint_result_called_twice():
     assert mock_state.get_checkpoint_result.call_count == 2
 
 
-def test_invoke_immediate_response_create_checkpoint_with_is_sync_true():
+async def test_invoke_immediate_response_create_checkpoint_with_is_sync_true():
     """Test that create_checkpoint is called with is_sync=True."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -867,7 +866,7 @@ def test_invoke_immediate_response_create_checkpoint_with_is_sync_true():
     mock_state.get_checkpoint_result.side_effect = [not_found, started]
 
     with pytest.raises(SuspendExecution):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -886,7 +885,7 @@ def test_invoke_immediate_response_create_checkpoint_with_is_sync_true():
     assert call_kwargs["is_sync"] is True
 
 
-def test_invoke_immediate_response_immediate_success():
+async def test_invoke_immediate_response_immediate_success():
     """Test immediate success: checkpoint returns SUCCEEDED on second check.
 
     When checkpoint returns SUCCEEDED on second check, operation returns result
@@ -908,7 +907,7 @@ def test_invoke_immediate_response_immediate_success():
     succeeded = CheckpointedResult.create_from_operation(succeeded_op)
     mock_state.get_checkpoint_result.side_effect = [not_found, succeeded]
 
-    result = invoke_handler(
+    result = await invoke_handler(
         function_name="test_function",
         payload="test_input",
         state=mock_state,
@@ -926,7 +925,7 @@ def test_invoke_immediate_response_immediate_success():
     assert mock_state.get_checkpoint_result.call_count == 2
 
 
-def test_invoke_immediate_response_immediate_success_with_none_result():
+async def test_invoke_immediate_response_immediate_success_with_none_result():
     """Test immediate success with None result."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -942,7 +941,7 @@ def test_invoke_immediate_response_immediate_success_with_none_result():
     succeeded = CheckpointedResult.create_from_operation(succeeded_op)
     mock_state.get_checkpoint_result.side_effect = [not_found, succeeded]
 
-    result = invoke_handler(
+    result = await invoke_handler(
         function_name="test_function",
         payload="test_input",
         state=mock_state,
@@ -961,7 +960,7 @@ def test_invoke_immediate_response_immediate_success_with_none_result():
     "status",
     [OperationStatus.FAILED, OperationStatus.TIMED_OUT, OperationStatus.STOPPED],
 )
-def test_invoke_immediate_response_immediate_failure(status: OperationStatus):
+async def test_invoke_immediate_response_immediate_failure(status: OperationStatus):
     """Test immediate failure: checkpoint returns FAILED/TIMED_OUT/STOPPED on second check.
 
     When checkpoint returns a failure status on second check, operation raises error
@@ -986,7 +985,7 @@ def test_invoke_immediate_response_immediate_failure(status: OperationStatus):
 
     # Verify error is raised without suspend
     with pytest.raises(CallableRuntimeError):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -1005,7 +1004,7 @@ def test_invoke_immediate_response_immediate_failure(status: OperationStatus):
     assert mock_state.get_checkpoint_result.call_count == 2
 
 
-def test_invoke_immediate_response_no_immediate_response():
+async def test_invoke_immediate_response_no_immediate_response():
     """Test no immediate response: checkpoint returns STARTED on second check.
 
     When checkpoint returns STARTED on second check, operation suspends normally.
@@ -1025,7 +1024,7 @@ def test_invoke_immediate_response_no_immediate_response():
 
     # Verify operation suspends
     with pytest.raises(SuspendExecution):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -1044,7 +1043,7 @@ def test_invoke_immediate_response_no_immediate_response():
     assert mock_state.get_checkpoint_result.call_count == 2
 
 
-def test_invoke_immediate_response_already_completed():
+async def test_invoke_immediate_response_already_completed():
     """Test already completed: checkpoint is already SUCCEEDED on first check.
 
     When checkpoint is already SUCCEEDED on first check, no checkpoint is created
@@ -1065,7 +1064,7 @@ def test_invoke_immediate_response_already_completed():
     succeeded = CheckpointedResult.create_from_operation(succeeded_op)
     mock_state.get_checkpoint_result.return_value = succeeded
 
-    result = invoke_handler(
+    result = await invoke_handler(
         function_name="test_function",
         payload="test_input",
         state=mock_state,
@@ -1083,7 +1082,7 @@ def test_invoke_immediate_response_already_completed():
     assert mock_state.get_checkpoint_result.call_count == 1
 
 
-def test_invoke_immediate_response_with_timeout_immediate_success():
+async def test_invoke_immediate_response_with_timeout_immediate_success():
     """Test immediate success with timeout configuration."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -1103,7 +1102,7 @@ def test_invoke_immediate_response_with_timeout_immediate_success():
 
     config = InvokeConfig[str, str](timeout=timedelta(seconds=30))
 
-    result = invoke_handler(
+    result = await invoke_handler(
         function_name="test_function",
         payload="test_input",
         state=mock_state,
@@ -1118,7 +1117,7 @@ def test_invoke_immediate_response_with_timeout_immediate_success():
     assert mock_state.get_checkpoint_result.call_count == 2
 
 
-def test_invoke_immediate_response_with_timeout_no_immediate_response():
+async def test_invoke_immediate_response_with_timeout_no_immediate_response():
     """Test no immediate response with timeout configuration.
 
     When no immediate response, operation should suspend with timeout.
@@ -1140,7 +1139,7 @@ def test_invoke_immediate_response_with_timeout_no_immediate_response():
 
     # Verify operation suspends with timeout
     with pytest.raises(TimedSuspendExecution):
-        invoke_handler(
+        await invoke_handler(
             function_name="test_function",
             payload="test_input",
             state=mock_state,
@@ -1156,7 +1155,7 @@ def test_invoke_immediate_response_with_timeout_no_immediate_response():
     assert mock_state.get_checkpoint_result.call_count == 2
 
 
-def test_invoke_immediate_response_with_custom_serdes():
+async def test_invoke_immediate_response_with_custom_serdes():
     """Test immediate success with custom serialization."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -1178,7 +1177,7 @@ def test_invoke_immediate_response_with_custom_serdes():
         serdes_payload=CustomDictSerDes(), serdes_result=CustomDictSerDes()
     )
 
-    result = invoke_handler(
+    result = await invoke_handler(
         function_name="test_function",
         payload={"key": "value", "number": 42, "list": [1, 2, 3]},
         state=mock_state,
@@ -1193,7 +1192,7 @@ def test_invoke_immediate_response_with_custom_serdes():
     assert mock_state.get_checkpoint_result.call_count == 2
 
 
-def test_invoke_suspends_when_second_check_returns_started():
+async def test_invoke_suspends_when_second_check_returns_started():
     """Test backward compatibility: when the second checkpoint check returns
     STARTED (not terminal), the invoke operation suspends normally.
 
@@ -1226,14 +1225,14 @@ def test_invoke_suspends_when_second_check_returns_started():
     )
 
     with pytest.raises(SuspendExecution):
-        asyncio.run(executor.process())
+        await executor.process()
 
     # Assert - behaves like "old way"
     assert mock_state.get_checkpoint_result.call_count == 2  # Double-check happened
     mock_state._create_checkpoint_async.assert_called_once()  # START checkpoint created
 
 
-def test_invoke_suspends_when_second_check_returns_started_duplicate():
+async def test_invoke_suspends_when_second_check_returns_started_duplicate():
     """Test backward compatibility: when the second checkpoint check returns
     STARTED (not terminal), the invoke operation suspends normally.
     """
@@ -1262,7 +1261,7 @@ def test_invoke_suspends_when_second_check_returns_started_duplicate():
     )
 
     with pytest.raises(SuspendExecution):
-        asyncio.run(executor.process())
+        await executor.process()
 
     # Assert - behaves like "old way"
     assert mock_state.get_checkpoint_result.call_count == 2  # Double-check happened
