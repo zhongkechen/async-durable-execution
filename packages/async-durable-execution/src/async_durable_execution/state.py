@@ -8,17 +8,14 @@ import inspect
 import json
 import logging
 from collections import deque
-import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from threading import Lock
 from typing import TYPE_CHECKING
 
 from async_durable_execution.async_tools import invoke_callable
 from async_durable_execution.exceptions import (
-    BackgroundThreadError,
     CallableRuntimeError,
     DurableExecutionsError,
     GetExecutionStateError,
@@ -37,10 +34,7 @@ from async_durable_execution.lambda_service import (
     OperationUpdate,
     StateOutput,
 )
-from async_durable_execution.plugin import (
-    PluginExecutor,
-)
-from async_durable_execution.threading import OrderedLock
+from async_durable_execution.plugin import PluginExecutor
 
 
 if TYPE_CHECKING:
@@ -71,31 +65,11 @@ class QueuedOperation:
 
     Attributes:
         operation_update: The operation update to be checkpointed, or None for empty checkpoints
-        completion_event: CompletionEvent for synchronous operations, or None for async operations
+        completion_future: Completion future for synchronous operations, or None for async operations
     """
 
     operation_update: OperationUpdate | None
     completion_future: asyncio.Future[None] | None = None
-
-    def __init__(
-        self,
-        operation_update: OperationUpdate | None,
-        completion_future: asyncio.Future[None] | None = None,
-        completion_event: asyncio.Future[None] | None = None,
-    ) -> None:
-        if completion_future is not None and completion_event is not None:
-            msg = "Provide either completion_future or completion_event, not both."
-            raise ValueError(msg)
-        object.__setattr__(self, "operation_update", operation_update)
-        object.__setattr__(
-            self,
-            "completion_future",
-            completion_future if completion_future is not None else completion_event,
-        )
-
-    @property
-    def completion_event(self) -> asyncio.Future[None] | None:
-        return self.completion_future
 
 
 class _CompatDeque(deque[QueuedOperation]):
@@ -133,38 +107,19 @@ class _CompatAsyncQueue(asyncio.Queue[QueuedOperation | None]):
 
 
 def _completion_done(completion) -> bool:
-    if completion is None:
-        return True
-    if hasattr(completion, "done"):
-        return completion.done()
-    if hasattr(completion, "is_set"):
-        return completion.is_set()
-    return False
+    return completion is None or completion.done()
 
 
 def _completion_set_result(completion) -> None:
     if completion is None:
         return
-    if hasattr(completion, "set_result"):
-        completion.set_result(None)
-        return
-    if hasattr(completion, "set"):
-        completion.set()
+    completion.set_result(None)
 
 
 def _completion_set_exception(completion, error: Exception) -> None:
     if completion is None:
         return
-    if hasattr(completion, "set_exception"):
-        completion.set_exception(error)
-        return
-    if hasattr(completion, "set"):
-        completion.set(
-            BackgroundThreadError(
-                "Background checkpoint processing failed",
-                error,
-            )
-        )
+    completion.set_exception(error)
 
 
 @dataclass(frozen=True)
@@ -345,8 +300,6 @@ class ExecutionState:
         self.operations: MutableMapping[str, Operation] = operations
         self._service_client: DurableServiceClient = service_client
         self._plugin_executor: PluginExecutor = plugin_executor
-        self._ordered_checkpoint_lock: OrderedLock = OrderedLock()
-        self._operations_lock: Lock = Lock()
 
         # Checkpoint batching configuration
         self._batcher_config: CheckpointBatcherConfig = (
@@ -356,8 +309,8 @@ class ExecutionState:
         # Checkpoint batching components
         self._checkpoint_queue: _CompatAsyncQueue = _CompatAsyncQueue()
         self._overflow_queue: _CompatDeque = _CompatDeque()
-        self._checkpointing_stopped = threading.Event()
-        self._checkpointing_failed = threading.Event()
+        self._checkpointing_stopped = asyncio.Event()
+        self._checkpointing_failed = asyncio.Event()
         self._checkpointing_failure: Exception | None = None
         self._checkpointing_task: asyncio.Task[None] | None = None
 
@@ -367,10 +320,7 @@ class ExecutionState:
         # Operations whose parent has completed
         self._parent_done: set[str] = set()
 
-        # Protects parent_to_children and parent_done
-        self._parent_done_lock: Lock = Lock()
         self._replay_status: ReplayStatus = replay_status
-        self._replay_status_lock: Lock = Lock()
         self._visited_operations: set[str] = set()
 
     async def fetch_paginated_operations(
@@ -391,9 +341,10 @@ class ExecutionState:
         checkpoint_token: str,
         next_marker: str | None,
     ) -> list[Operation]:
-        """Add initial operations and fetch all paginated operations from the Durable Functions API. This method is thread_safe.
+        """Add initial operations and fetch all paginated operations from the Durable Functions API.
 
-        The checkpoint_token is passed explicitly as a parameter rather than using the instance variable to ensure thread safety.
+        The checkpoint_token is passed explicitly as a parameter rather than using the
+        instance variable so pagination continues from the correct checkpoint state.
 
         Args:
             initial_operations: initial operations to be added to ExecutionState
@@ -434,10 +385,7 @@ class ExecutionState:
         finally:
             # Always store whatever operations we successfully fetched
             if all_operations:
-                with self._operations_lock:
-                    self.operations.update(
-                        {op.operation_id: op for op in all_operations}
-                    )
+                self.operations.update({op.operation_id: op for op in all_operations})
         return all_operations
 
     def get_input_payload(self) -> str | None:
@@ -478,28 +426,27 @@ class ExecutionState:
         Args:
             operation_id: The operation ID to check
         """
-        with self._replay_status_lock:
-            if self._replay_status == ReplayStatus.REPLAY:
-                self._visited_operations.add(operation_id)
-                completed_ops = {
-                    op_id
-                    for op_id, op in self.operations.items()
-                    if op.operation_type != OperationType.EXECUTION
-                    and op.status
-                    in {
-                        OperationStatus.SUCCEEDED,
-                        OperationStatus.FAILED,
-                        OperationStatus.CANCELLED,
-                        OperationStatus.STOPPED,
-                        OperationStatus.TIMED_OUT,
-                    }
+        if self._replay_status == ReplayStatus.REPLAY:
+            self._visited_operations.add(operation_id)
+            completed_ops = {
+                op_id
+                for op_id, op in self.operations.items()
+                if op.operation_type != OperationType.EXECUTION
+                and op.status
+                in {
+                    OperationStatus.SUCCEEDED,
+                    OperationStatus.FAILED,
+                    OperationStatus.CANCELLED,
+                    OperationStatus.STOPPED,
+                    OperationStatus.TIMED_OUT,
                 }
-                if completed_ops.issubset(self._visited_operations):
-                    logger.debug(
-                        "Transitioning from REPLAY to NEW status at operation %s",
-                        operation_id,
-                    )
-                    self._replay_status = ReplayStatus.NEW
+            }
+            if completed_ops.issubset(self._visited_operations):
+                logger.debug(
+                    "Transitioning from REPLAY to NEW status at operation %s",
+                    operation_id,
+                )
+                self._replay_status = ReplayStatus.NEW
 
     def is_replaying(self) -> bool:
         """Check if execution is currently in replay mode.
@@ -507,20 +454,17 @@ class ExecutionState:
         Returns:
             True if in REPLAY status, False if in NEW status
         """
-        with self._replay_status_lock:
-            return self._replay_status is ReplayStatus.REPLAY
+        return self._replay_status is ReplayStatus.REPLAY
 
     def mark_replaying_if_prior_operations_exist(self) -> None:
         """Mark execution state as replaying when non-execution operations exist."""
-        with self._operations_lock:
-            has_prior_operations: bool = any(
-                op.operation_type is not OperationType.EXECUTION
-                for op in self.operations.values()
-            )
+        has_prior_operations: bool = any(
+            op.operation_type is not OperationType.EXECUTION
+            for op in self.operations.values()
+        )
 
         if has_prior_operations:
-            with self._replay_status_lock:
-                self._replay_status = ReplayStatus.REPLAY
+            self._replay_status = ReplayStatus.REPLAY
 
     def get_checkpoint_result(self, checkpoint_id: str) -> CheckpointedResult:
         """Get checkpoint result.
@@ -540,10 +484,8 @@ class ExecutionState:
                 SUCCEEDED, or if the checkpoint doesn't exist, then return
                 CheckpointedResult with is_succeeded=False,result=None.
         """
-        # checking status are deliberately under a lighter non-serialized lock
-        with self._operations_lock:
-            if checkpoint := self.operations.get(checkpoint_id):
-                return CheckpointedResult.create_from_operation(checkpoint)
+        if checkpoint := self.operations.get(checkpoint_id):
+            return CheckpointedResult.create_from_operation(checkpoint)
 
         return CHECKPOINT_NOT_FOUND
 
@@ -561,7 +503,7 @@ class ExecutionState:
         self,
         operation_update: OperationUpdate | None = None,
         is_sync: bool = True,  # noqa: FBT001, FBT002
-    ) -> None:
+    ):
         """Create a checkpoint with optional synchronous behavior.
 
         This method enqueues a checkpoint operation for processing by the background
@@ -626,37 +568,32 @@ class ExecutionState:
         """
         # if this is CONTEXT complete, mark incomplete descendants as orphans so the children can't complete after the parent
         if operation_update is not None:
-            # Use single lock to coordinate completion and checkpoint validation
-            with self._parent_done_lock:
-                # Build parent-to-children map as operations are created
-                if operation_update.parent_id:
-                    if operation_update.parent_id not in self._parent_to_children:
-                        self._parent_to_children[operation_update.parent_id] = set()
-                    self._parent_to_children[operation_update.parent_id].add(
-                        operation_update.operation_id
-                    )
+            if operation_update.parent_id:
+                if operation_update.parent_id not in self._parent_to_children:
+                    self._parent_to_children[operation_update.parent_id] = set()
+                self._parent_to_children[operation_update.parent_id].add(
+                    operation_update.operation_id
+                )
 
-                # Handle CONTEXT completion - mark descendants while holding lock
-                if (
-                    operation_update.operation_type == OperationType.CONTEXT
-                    and operation_update.action
-                    in {OperationAction.SUCCEED, OperationAction.FAIL}
-                ):
-                    self._mark_orphans(operation_update.operation_id)
+            if (
+                operation_update.operation_type == OperationType.CONTEXT
+                and operation_update.action
+                in {OperationAction.SUCCEED, OperationAction.FAIL}
+            ):
+                self._mark_orphans(operation_update.operation_id)
 
-                # Check if this operation's parent is done
-                if operation_update.operation_id in self._parent_done:
-                    logger.debug(
-                        "Rejecting checkpoint for operation %s - parent is done",
-                        operation_update.operation_id,
-                    )
-                    error_msg = (
-                        "Parent context completed, child operation cannot checkpoint"
-                    )
-                    raise OrphanedChildException(
-                        error_msg,
-                        operation_id=operation_update.operation_id,
-                    )
+            if operation_update.operation_id in self._parent_done:
+                logger.debug(
+                    "Rejecting checkpoint for operation %s - parent is done",
+                    operation_update.operation_id,
+                )
+                error_msg = (
+                    "Parent context completed, child operation cannot checkpoint"
+                )
+                raise OrphanedChildException(
+                    error_msg,
+                    operation_id=operation_update.operation_id,
+                )
 
         if self._checkpointing_failure is not None:
             raise self._checkpointing_failure
@@ -685,48 +622,12 @@ class ExecutionState:
         else:
             logger.debug("Enqueued checkpoint operation for asynchronous processing")
 
-    async def create_checkpoint_sync(
-        self,
-        operation_update: OperationUpdate | None = None,
-    ):
-        await self._create_checkpoint_sync_async(operation_update=operation_update)
-
-    async def _create_checkpoint_sync_async(
-        self,
-        operation_update: OperationUpdate | None = None,
-    ) -> None:
-        """Create a synchronous checkpoint that raises original errors instead of BackgroundThreadError.
-
-        This method is identical to create_checkpoint(is_sync=True) except that if the background
-        checkpoint processing fails, it raises the original exception directly instead of wrapping
-        it in a BackgroundThreadError.
-
-        This is useful in execution contexts where you want the original checkpoint error to
-        propagate (e.g., CheckpointError, RuntimeError) rather than the wrapped BackgroundThreadError.
-        The method always blocks until the checkpoint is processed.
-
-        Args:
-            operation_update: The checkpoint to create. If None, creates an empty checkpoint.
-
-        Raises:
-            The original exception from the background checkpoint processing if it fails,
-            unwrapped from BackgroundThreadError (e.g., CheckpointError, RuntimeError).
-
-        Example:
-            # Instead of getting BackgroundThreadError wrapping a CheckpointError:
-            execution_state.create_checkpoint_sync(operation_update)
-            # Raises CheckpointError directly
-        """
-        await self._create_checkpoint_async(operation_update, is_sync=True)
-
     def _mark_orphans(self, context_id: str) -> None:
         """Mark all descendants (direct and transitive) as orphaned.
 
         This method uses BFS (Breadth-First Search) to recursively collect all
         descendants of the given context operation and marks them as orphaned.
         Once marked, these operations will be rejected if they attempt to checkpoint.
-
-        Must be called while holding _parent_done_lock.
 
         Args:
             context_id: The operation ID of the CONTEXT that has completed
@@ -770,9 +671,6 @@ class ExecutionState:
             )
 
     async def checkpoint_batches_forever(self):
-        await self._checkpoint_batches_forever_async()
-
-    async def _checkpoint_batches_forever_async(self) -> None:
         """Background coroutine that batches operations and processes results.
 
         Runs until shutdown is signaled. This method processes checkpoint operations
@@ -899,9 +797,6 @@ class ExecutionState:
             self._checkpoint_queue.put_nowait(None)
 
     async def _collect_checkpoint_batch(self):
-        return await self._collect_checkpoint_batch_async()
-
-    async def _collect_checkpoint_batch_async(self) -> list[QueuedOperation]:
         """Collect multiple checkpoint operations into a batch for API efficiency.
 
         Processes overflow queue first to maintain FIFO order, then collects from main queue.

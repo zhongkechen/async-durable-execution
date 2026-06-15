@@ -345,7 +345,7 @@ def durable_execution(
                     # Large results exceed Lambda response limits and must be stored durably
                     # before the execution completes.
                     try:
-                        await execution_state._create_checkpoint_async(
+                        await execution_state.create_checkpoint(
                             success_operation, is_sync=True
                         )
                     except CheckpointError as e:
@@ -420,8 +420,8 @@ def durable_execution(
                     # Large results exceed Lambda response limits and must be stored durably
                     # before the execution completes.
                     try:
-                        await execution_state._create_checkpoint_sync_async(
-                            failed_operation
+                        await execution_state.create_checkpoint(
+                            failed_operation, is_sync=True
                         )
                     except CheckpointError as e:
                         return handle_checkpoint_error(e).to_dict()

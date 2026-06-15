@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import datetime
 import json
-import threading
 import time
 import unittest.mock
 from unittest.mock import Mock, call, create_autospec, patch
@@ -14,7 +12,6 @@ from unittest.mock import Mock, call, create_autospec, patch
 import pytest
 
 from async_durable_execution.exceptions import (
-    BackgroundThreadError,
     CallableRuntimeError,
     DurableApiErrorCategory,
     GetExecutionStateError,
@@ -49,7 +46,6 @@ from async_durable_execution.state import (
     QueuedOperation,
     ReplayStatus,
 )
-from async_durable_execution.threading import CompletionEvent
 
 
 async def run_async(awaitable):
@@ -542,7 +538,9 @@ async def test_create_checkpoint():
     # Verify we can retrieve the queued operation
     queued_op = state._checkpoint_queue.get_nowait()
     assert queued_op.operation_update == operation_update
-    assert queued_op.completion_event is None  # Async operation has no completion event
+    assert (
+        queued_op.completion_future is None
+    )  # Async operation has no completion future
 
 
 async def test_create_checkpoint_with_none():
@@ -568,7 +566,7 @@ async def test_create_checkpoint_with_none():
     # Verify we can retrieve the queued operation
     queued_op = state._checkpoint_queue.get_nowait()
     assert queued_op.operation_update is None  # Empty checkpoint
-    assert queued_op.completion_event is None  # Async operation
+    assert queued_op.completion_future is None  # Async operation
 
 
 async def test_create_checkpoint_with_no_args():
@@ -594,7 +592,7 @@ async def test_create_checkpoint_with_no_args():
     # Verify we can retrieve the queued operation
     queued_op = state._checkpoint_queue.get_nowait()
     assert queued_op.operation_update is None  # Empty checkpoint (default)
-    assert queued_op.completion_event is None  # Async operation
+    assert queued_op.completion_future is None  # Async operation
 
 
 async def test_get_checkpoint_result_started():
@@ -866,42 +864,42 @@ async def test_fetch_paginated_operations_logs_error(caplog):
 
 
 # Test 8.1: QueuedOperation wrapper and CheckpointBatcherConfig
-async def test_queued_operation_creation_with_completion_event():
-    """Test QueuedOperation creation with completion event for synchronous operations."""
+async def test_queued_operation_creation_with_completion_future():
+    """Test QueuedOperation creation with completion future for synchronous operations."""
     operation_update = OperationUpdate(
         operation_id="test_op",
         operation_type=OperationType.STEP,
         action=OperationAction.START,
     )
-    completion_event = CompletionEvent()
+    completion_future = asyncio.get_running_loop().create_future()
 
-    queued_op = QueuedOperation(operation_update, completion_event)
+    queued_op = QueuedOperation(operation_update, completion_future)
 
     assert queued_op.operation_update == operation_update
-    assert queued_op.completion_event == completion_event
-    assert not completion_event.is_set()
+    assert queued_op.completion_future == completion_future
+    assert not completion_future.done()
 
 
-async def test_queued_operation_creation_without_completion_event():
-    """Test QueuedOperation creation without completion event for async operations."""
+async def test_queued_operation_creation_without_completion_future():
+    """Test QueuedOperation creation without completion future for async operations."""
     operation_update = OperationUpdate(
         operation_id="test_op",
         operation_type=OperationType.STEP,
         action=OperationAction.START,
     )
 
-    queued_op = QueuedOperation(operation_update, completion_event=None)
+    queued_op = QueuedOperation(operation_update, completion_future=None)
 
     assert queued_op.operation_update == operation_update
-    assert queued_op.completion_event is None
+    assert queued_op.completion_future is None
 
 
 async def test_queued_operation_with_none_operation_update():
     """Test QueuedOperation with None operation_update for empty checkpoints."""
-    queued_op = QueuedOperation(operation_update=None, completion_event=None)
+    queued_op = QueuedOperation(operation_update=None, completion_future=None)
 
     assert queued_op.operation_update is None
-    assert queued_op.completion_event is None
+    assert queued_op.completion_future is None
 
 
 async def test_checkpoint_batcher_config_default_values():
@@ -985,7 +983,7 @@ async def test_calculate_operation_size_with_operation():
         operation_type=OperationType.STEP,
         action=OperationAction.START,
     )
-    queued_op = QueuedOperation(operation_update, completion_event=None)
+    queued_op = QueuedOperation(operation_update, completion_future=None)
 
     size = ExecutionState._calculate_operation_size(queued_op)
 
@@ -998,7 +996,7 @@ async def test_calculate_operation_size_with_operation():
 
 async def test_calculate_operation_size_with_none():
     """Test _calculate_operation_size with None operation_update (empty checkpoint)."""
-    queued_op = QueuedOperation(operation_update=None, completion_event=None)
+    queued_op = QueuedOperation(operation_update=None, completion_future=None)
 
     size = ExecutionState._calculate_operation_size(queued_op)
 
@@ -1339,7 +1337,7 @@ async def test_nested_parallel_operations_deep_hierarchy():
 
 # Test 8.4: Thread safety and synchronous operations
 async def test_synchronous_checkpoint_blocks_until_complete():
-    """Test that create_checkpoint_sync returns only after checkpoint processing."""
+    """Test that create_checkpoint(is_sync=True) returns only after processing."""
     mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     mock_lambda_client.checkpoint.return_value = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
@@ -1363,14 +1361,14 @@ async def test_synchronous_checkpoint_blocks_until_complete():
         action=OperationAction.START,
     )
 
-    await state.create_checkpoint_sync(operation_update)
+    await state.create_checkpoint(operation_update, is_sync=True)
 
     mock_lambda_client.checkpoint.assert_called_once()
     assert state._checkpoint_queue.qsize() == 0
 
 
-async def test_concurrent_access_to_operations_dictionary():
-    """Test thread-safe concurrent access to operations dictionary."""
+async def test_operations_dictionary_access():
+    """Test checkpoint reads reflect direct state updates."""
     mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
 
     state = ExecutionState(
@@ -1381,62 +1379,15 @@ async def test_concurrent_access_to_operations_dictionary():
         plugin_executor=PluginExecutor(plugins=None),
     )
 
-    # Add initial operation
-    operation = Operation(
+    state.operations["op1"] = Operation(
         operation_id="op1",
         operation_type=OperationType.STEP,
         status=OperationStatus.SUCCEEDED,
     )
-    state.operations["op1"] = operation
 
-    results = []
-    errors = []
+    result = state.get_checkpoint_result("op1")
 
-    def reader_thread():
-        """Thread that reads from operations."""
-        try:
-            for _ in range(100):
-                result = state.get_checkpoint_result("op1")
-                results.append(result)
-                time.sleep(0.001)
-        except Exception as e:
-            errors.append(e)
-
-    def writer_thread():
-        """Thread that writes to operations."""
-        try:
-            for i in range(100):
-                new_op = Operation(
-                    operation_id=f"op{i}",
-                    operation_type=OperationType.STEP,
-                    status=OperationStatus.SUCCEEDED,
-                )
-                with state._operations_lock:
-                    state.operations[f"op{i}"] = new_op
-                time.sleep(0.001)
-        except Exception as e:
-            errors.append(e)
-
-    # Start multiple reader and writer threads
-    threads = []
-    for _ in range(3):
-        threads.extend(
-            [
-                threading.Thread(daemon=True, target=reader_thread),
-                threading.Thread(daemon=True, target=writer_thread),
-            ]
-        )
-
-    for thread in threads:
-        thread.start()
-
-    for thread in threads:
-        thread.join(timeout=5.0)
-
-    # Verify no errors occurred
-    assert len(errors) == 0
-    # Verify readers got results
-    assert len(results) > 0
+    assert result.is_succeeded()
 
 
 async def test_stop_checkpointing_signals_background_thread():
@@ -1533,8 +1484,8 @@ async def test_checkpointed_result_get_next_attempt_timestamp_none():
     assert result.get_next_attempt_timestamp() is None
 
 
-async def test_create_checkpoint_sync_with_parent_id():
-    """Test create_checkpoint_sync builds parent-child relationships."""
+async def test_create_checkpoint_with_parent_id():
+    """Test create_checkpoint builds parent-child relationships."""
     mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     mock_lambda_client.checkpoint.return_value = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
@@ -1575,8 +1526,8 @@ async def test_create_checkpoint_sync_with_parent_id():
     assert "child_1" in state._parent_to_children["parent_1"]
 
 
-async def test_create_checkpoint_sync_rejects_orphaned_operation():
-    """Test create_checkpoint_sync rejects operations whose parent is done."""
+async def test_create_checkpoint_rejects_orphaned_operation():
+    """Test create_checkpoint rejects operations whose parent is done."""
     mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     mock_lambda_client.checkpoint.return_value = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
@@ -1652,8 +1603,7 @@ async def test_mark_orphans_handles_cycles():
     state._parent_to_children["child2"] = {"child1"}  # Cycle
 
     # Mark orphans should handle this gracefully
-    with state._parent_done_lock:
-        state._mark_orphans("parent")
+    state._mark_orphans("parent")
 
     # Verify descendants were marked (cycle detection prevents infinite loop)
     assert "child1" in state._parent_done
@@ -1683,35 +1633,15 @@ async def test_checkpoint_batches_forever_exception_handling():
         operation_type=OperationType.STEP,
         action=OperationAction.START,
     )
-    completion_event = CompletionEvent()
-    queued_op = QueuedOperation(operation_update, completion_event)
+    completion_future = asyncio.get_running_loop().create_future()
+    queued_op = QueuedOperation(operation_update, completion_future)
     state._checkpoint_queue.put(queued_op)
 
-    # Run checkpoint_batches_forever in thread
-    def run_batching():
-        with contextlib.suppress(RuntimeError):
-            loop = asyncio.new_event_loop()
-            try:
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(state.checkpoint_batches_forever())
-            finally:
-                asyncio.set_event_loop(None)
-                loop.close()
+    await state.checkpoint_batches_forever()
 
-    thread = threading.Thread(daemon=True, target=run_batching)
-    thread.start()
-    thread.join(timeout=2.0)
-
-    # Verify completion event WAS signaled with error (new behavior)
-    # This ensures synchronous callers get BackgroundThreadError instead of hanging
-    assert completion_event.is_set()
-
-    # Verify the error is a BackgroundThreadError
-    try:
-        completion_event.wait()
-        pytest.fail("Should have raised BackgroundThreadError")
-    except BackgroundThreadError:
-        pass  # Expected
+    assert completion_future.done()
+    with pytest.raises(RuntimeError, match="API error"):
+        completion_future.result()
 
 
 async def test_collect_checkpoint_batch_shutdown_path():
@@ -1823,8 +1753,8 @@ async def test_collect_checkpoint_batch_overflow_put_back():
 
 
 # Additional edge case tests for remaining coverage
-async def test_create_checkpoint_sync_with_none_operation_update():
-    """Test create_checkpoint_sync with None operation_update (empty checkpoint)."""
+async def test_create_checkpoint_with_none_operation_update_sync():
+    """Test create_checkpoint with None operation_update (empty checkpoint)."""
     mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     mock_lambda_client.checkpoint.return_value = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
@@ -1865,7 +1795,7 @@ async def test_checkpoint_batches_forever_exception_with_no_sync_operations():
         operation_type=OperationType.STEP,
         action=OperationAction.START,
     )
-    queued_op = QueuedOperation(operation_update, completion_event=None)
+    queued_op = QueuedOperation(operation_update, completion_future=None)
     state._checkpoint_queue.put(queued_op)
 
     await state.checkpoint_batches_forever()
@@ -1899,10 +1829,8 @@ async def test_collect_checkpoint_batch_size_limit_during_time_window():
     )
     state._checkpoint_queue.put(QueuedOperation(small_op, None))
 
-    # Start collecting in background
-    def collect_batch():
-        time.sleep(0.05)  # Let first op be collected
-        # Enqueue large operation during time window
+    async def enqueue_large_operation() -> None:
+        await asyncio.sleep(0.05)  # Let first op be collected
         large_op = OperationUpdate(
             operation_id="large_op" * 20,  # Very large ID
             operation_type=OperationType.STEP,
@@ -1910,13 +1838,12 @@ async def test_collect_checkpoint_batch_size_limit_during_time_window():
         )
         state._checkpoint_queue.put(QueuedOperation(large_op, None))
 
-    thread = threading.Thread(daemon=True, target=collect_batch)
-    thread.start()
+    enqueue_task = asyncio.create_task(enqueue_large_operation())
 
     # Collect batch
     batch = await state._collect_checkpoint_batch()
 
-    thread.join(timeout=1.0)
+    await enqueue_task
 
     # Should have collected small op, large op should be in overflow
     assert len(batch) >= 1
@@ -2145,13 +2072,8 @@ async def test_collect_checkpoint_batch_overflow_queue_size_limit():
 # ============================================================================
 
 
-async def test_checkpoint_error_signals_completion_events_with_error():
-    """Test that completion events ARE signaled with error when checkpoint fails.
-
-    This verifies that when checkpoint_batches_forever encounters an error,
-    completion events are signaled with BackgroundThreadError to wake up
-    blocked callers and allow them to exit cleanly.
-    """
+async def test_checkpoint_error_signals_completion_futures_with_error():
+    """Test that completion futures are completed with error when checkpoint fails."""
     mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
     # Simulate checkpoint API failure
     mock_lambda_client.checkpoint.side_effect = RuntimeError("Checkpoint API error")
@@ -2171,26 +2093,22 @@ async def test_checkpoint_error_signals_completion_events_with_error():
         action=OperationAction.START,
     )
 
-    completion_event = CompletionEvent()
-    queued_op = QueuedOperation(operation_update, completion_event)
+    completion_future = asyncio.get_running_loop().create_future()
+    queued_op = QueuedOperation(operation_update, completion_future)
     state._checkpoint_queue.put(queued_op)
 
     await state.checkpoint_batches_forever()
 
-    # CRITICAL: Verify completion event WAS signaled with error
-    # This ensures synchronous callers wake up and can exit cleanly
-    assert completion_event.is_set()
-
-    # Verify that waiting on the event raises BackgroundThreadError
-    with pytest.raises(BackgroundThreadError):
-        completion_event.wait()
+    assert completion_future.done()
+    with pytest.raises(RuntimeError, match="Checkpoint API error"):
+        completion_future.result()
 
 
 async def test_synchronous_caller_receives_error_on_background_thread_failure():
     """Test that synchronous callers receive error when background thread fails.
 
     This verifies that when the background thread encounters an error, synchronous
-    callers waiting on completion events are woken up with BackgroundThreadError,
+    callers waiting on checkpoint futures receive the original error,
     allowing them to exit cleanly rather than hanging indefinitely.
     """
     mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
@@ -2281,22 +2199,18 @@ async def test_multiple_sync_operations_all_remain_blocked_on_error():
             operation_type=OperationType.STEP,
             action=OperationAction.START,
         )
-        completion_event = CompletionEvent()
-        completion_events.append(completion_event)
-        queued_op = QueuedOperation(operation_update, completion_event)
+        completion_future = asyncio.get_running_loop().create_future()
+        completion_events.append(completion_future)
+        queued_op = QueuedOperation(operation_update, completion_future)
         state._checkpoint_queue.put(queued_op)
 
     await state.checkpoint_batches_forever()
 
-    # CRITICAL: Verify ALL completion events are signaled with error
+    # CRITICAL: Verify ALL completion futures are completed with error
     for i, event in enumerate(completion_events):
-        assert event.is_set(), f"Completion event {i} should be signaled with error"
-        # Verify each has BackgroundThreadError
-        try:
-            event.wait()
-            pytest.fail(f"Event {i} should have raised BackgroundThreadError")
-        except BackgroundThreadError:
-            pass  # Expected
+        assert event.done(), f"Completion future {i} should be completed with error"
+        with pytest.raises(RuntimeError, match="Batch processing error"):
+            event.result()
 
 
 async def test_async_operations_not_affected_by_error_handling():
@@ -2323,7 +2237,7 @@ async def test_async_operations_not_affected_by_error_handling():
         operation_type=OperationType.STEP,
         action=OperationAction.START,
     )
-    queued_op = QueuedOperation(operation_update, completion_event=None)
+    queued_op = QueuedOperation(operation_update, completion_future=None)
     state._checkpoint_queue.put(queued_op)
 
     # Run checkpoint_batches_forever and verify it exits gracefully
@@ -2333,7 +2247,7 @@ async def test_async_operations_not_affected_by_error_handling():
     assert state._checkpointing_failed.is_set()
 
     # Test passes if no AttributeError or other issues occur
-    # (verifying the code handles None completion_event correctly)
+    # (verifying the code handles None completion_future correctly)
 
 
 async def test_mixed_sync_async_operations_only_sync_blocked_on_error():
@@ -2355,16 +2269,16 @@ async def test_mixed_sync_async_operations_only_sync_blocked_on_error():
         plugin_executor=PluginExecutor(plugins=None),
     )
 
-    # Create sync operation with completion event
+    # Create sync operation with completion future
     sync_op = OperationUpdate(
         operation_id="sync_op",
         operation_type=OperationType.STEP,
         action=OperationAction.START,
     )
-    sync_event = CompletionEvent()
-    state._checkpoint_queue.put(QueuedOperation(sync_op, sync_event))
+    sync_future = asyncio.get_running_loop().create_future()
+    state._checkpoint_queue.put(QueuedOperation(sync_op, sync_future))
 
-    # Create async operation without completion event
+    # Create async operation without completion future
     async_op = OperationUpdate(
         operation_id="async_op",
         operation_type=OperationType.STEP,
@@ -2374,18 +2288,12 @@ async def test_mixed_sync_async_operations_only_sync_blocked_on_error():
 
     await state.checkpoint_batches_forever()
 
-    # Verify sync operation's completion event WAS signaled with error
-    assert sync_event.is_set()
-
-    # Verify it has BackgroundThreadError
-    try:
-        sync_event.wait()
-        pytest.fail("Should have raised BackgroundThreadError")
-    except BackgroundThreadError:
-        pass  # Expected
+    assert sync_future.done()
+    with pytest.raises(RuntimeError, match="Mixed batch error"):
+        sync_future.result()
 
     # Test passes if no AttributeError occurs when processing async operation
-    # (verifying None completion_event is handled correctly)
+    # (verifying None completion_future is handled correctly)
 
 
 # ============================================================================
@@ -2965,7 +2873,7 @@ async def test_create_checkpoint_multiple_sync_calls_all_block():
     await run_async(scenario())
 
 
-async def test_create_checkpoint_sync_with_empty_checkpoint():
+async def test_create_checkpoint_with_empty_checkpoint_sync():
     """Test synchronous behavior with empty checkpoint (None operation_update).
 
     Verifies that empty checkpoints also block correctly when is_sync=True.
@@ -3010,8 +2918,8 @@ async def test_create_checkpoint_sync_with_empty_checkpoint():
     await run_async(scenario())
 
 
-async def test_create_checkpoint_sync_success():
-    """Test create_checkpoint_sync works normally when no error occurs."""
+async def test_create_checkpoint_sync_mode_success():
+    """Test create_checkpoint(is_sync=True) works normally when no error occurs."""
     mock_client = Mock(spec=ThreadedSyncLambdaClient)
     mock_client.checkpoint.return_value = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
@@ -3031,7 +2939,7 @@ async def test_create_checkpoint_sync_success():
             OperationIdentifier("test-op", OperationSubType.STEP, None, "test-step")
         )
 
-        await state.create_checkpoint_sync(operation_update)
+        await state.create_checkpoint(operation_update, is_sync=True)
 
         assert mock_client.checkpoint.call_count == 1
         await stop_checkpointing_task(state)
@@ -3039,8 +2947,8 @@ async def test_create_checkpoint_sync_success():
     await run_async(scenario())
 
 
-async def test_create_checkpoint_sync_unwraps_background_thread_error():
-    """Test create_checkpoint_sync unwraps BackgroundThreadError to original exception."""
+async def test_create_checkpoint_sync_mode_raises_original_error():
+    """Test create_checkpoint(is_sync=True) raises the original checkpoint error."""
     mock_client = Mock(spec=ThreadedSyncLambdaClient)
 
     # Make checkpoint fail with a specific error
@@ -3061,15 +2969,15 @@ async def test_create_checkpoint_sync_unwraps_background_thread_error():
         )
 
         with pytest.raises(RuntimeError, match="Original checkpoint error"):
-            await state.create_checkpoint_sync(operation_update)
+            await state.create_checkpoint(operation_update, is_sync=True)
 
         await stop_checkpointing_task(state)
 
     await run_async(scenario())
 
 
-async def test_create_checkpoint_sync_always_synchronous():
-    """Test create_checkpoint_sync is always synchronous and blocks until completion."""
+async def test_create_checkpoint_sync_mode_always_blocks():
+    """Test create_checkpoint(is_sync=True) blocks until completion."""
     mock_client = Mock(spec=ThreadedSyncLambdaClient)
 
     def delayed_checkpoint(**_kwargs):
@@ -3095,7 +3003,7 @@ async def test_create_checkpoint_sync_always_synchronous():
         )
 
         start_time = time.time()
-        await state.create_checkpoint_sync(operation_update)
+        await state.create_checkpoint(operation_update, is_sync=True)
         elapsed = time.time() - start_time
 
         assert mock_client.checkpoint.call_count == 1

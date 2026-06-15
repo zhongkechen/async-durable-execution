@@ -306,7 +306,7 @@ class BackgroundThreadError(BaseException):
 
     This exception is raised in the user thread when the background
     checkpoint processing thread encounters a fatal error. It propagates
-    through CompletionEvent.wait() to interrupt blocked user code.
+    through the awaiting checkpoint future to interrupt blocked user code.
 
     Attributes:
         source_exception: The original exception from the background thread
@@ -373,29 +373,6 @@ class TimedSuspendExecution(SuspendExecution):
             TimedSuspendExecution: Instance with calculated resume time
         """
         return cls(message, scheduled_timestamp=datetime_timestamp.timestamp())
-
-
-class OrderedLockError(DurableExecutionsError):
-    """An error from OrderedLock.
-
-    Typically raised when a previous lock in the sequentially ordered chain of lock acquire requests failed.
-
-    Because of the order guarantee of OrderedLock, subsequent queued up lock acquire requests cannot proceed,
-    and will get this error instead.
-
-    Attributes:
-        source_exception (Exception): The exception that caused the lock to break.
-    """
-
-    def __init__(self, message: str, source_exception: Exception | None = None) -> None:
-        """Initialize with the message and the exception source"""
-        msg = (
-            f"{message} {type(source_exception).__name__}: {source_exception}"
-            if source_exception
-            else message
-        )
-        super().__init__(msg)
-        self.source_exception: Exception | None = source_exception
 
 
 @dataclass(frozen=True)
