@@ -6,9 +6,7 @@ import logging
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from async_durable_execution.async_tools import (
-    invoke_callable,
-)
+from async_durable_execution.async_tools import invoke_callable_with_optional_context
 from async_durable_execution.concurrency.executor import ConcurrentExecutor
 from async_durable_execution.concurrency.models import (
     BatchResult,
@@ -20,7 +18,7 @@ from async_durable_execution.models import OperationSubType
 
 if TYPE_CHECKING:
     from async_durable_execution.context import DurableContext
-    from async_durable_execution.identifier import OperationIdentifier
+    from async_durable_execution.models import OperationIdentifier
     from async_durable_execution.serdes import SerDes
     from async_durable_execution.state import (
         CheckpointedResult,
@@ -71,7 +69,7 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
     def from_items(
         cls,
         items: Sequence[T],
-        func: Callable[[DurableContext, T, int, Sequence[T]], Awaitable[R]],
+        func: Callable[[T, int, Sequence[T]], Awaitable[R]],
         config: MapConfig[T],
     ) -> MapExecutor[T, R]:
         """Create MapExecutor from items and a callable."""
@@ -109,16 +107,33 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
     ) -> R:
         logger.debug("🗺️ Processing map item: %s", executable.index)
         item = self.items[executable.index]
-        result: R = await invoke_callable(
-            executable.func, child_context, item, executable.index, self.items
+        invoke_with_context = getattr(
+            type(child_context), "_invoke_user_callable", None
         )
+        if invoke_with_context is not None:
+            result: R = await child_context._invoke_user_callable(
+                executable.func,
+                item,
+                executable.index,
+                self.items,
+                context_position="prepend",
+            )
+        else:
+            result = await invoke_callable_with_optional_context(
+                executable.func,
+                child_context,
+                item,
+                executable.index,
+                self.items,
+                context_position="prepend",
+            )
         logger.debug("✅ Processed map item: %s", executable.index)
         return result
 
 
 def map_handler(
     items: Sequence[T],
-    func: Callable[[DurableContext, T, int, Sequence[T]], Awaitable[R]],
+    func: Callable[[T, int, Sequence[T]], Awaitable[R]],
     config: MapConfig | None,
     execution_state: ExecutionState,
     map_context: DurableContext,
@@ -137,7 +152,7 @@ def map_handler(
 
 async def _map_handler_async(
     items: Sequence[T],
-    func: Callable[[DurableContext, T, int, Sequence[T]], Awaitable[R]],
+    func: Callable[[T, int, Sequence[T]], Awaitable[R]],
     config: MapConfig | None,
     execution_state: ExecutionState,
     map_context: DurableContext,

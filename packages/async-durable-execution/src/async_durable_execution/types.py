@@ -92,6 +92,8 @@ class BatchResult(Protocol, Generic[T]):
 class DurableContext(Protocol):
     """Protocol defining the interface for durable execution contexts."""
 
+    logger: LoggerInterface
+
     @abstractmethod
     async def step(
         self,
@@ -105,7 +107,7 @@ class DurableContext(Protocol):
     @abstractmethod
     async def run_in_child_context(
         self,
-        func: Callable[[DurableContext], Awaitable[T]],
+        func: Callable[[], Awaitable[T]],
         name: str | None = None,
         config: ChildConfig | None = None,
     ) -> T:
@@ -116,9 +118,7 @@ class DurableContext(Protocol):
     async def map(
         self,
         inputs: Sequence[U],
-        func: Callable[
-            [DurableContext, U | BatchedInput[Any, U], int, Sequence[U]], Awaitable[T]
-        ],
+        func: Callable[[U | BatchedInput[Any, U], int, Sequence[U]], Awaitable[T]],
         name: str | None = None,
         config: MapConfig | None = None,
     ) -> BatchResult[T]:
@@ -128,9 +128,7 @@ class DurableContext(Protocol):
     @abstractmethod
     async def parallel(
         self,
-        functions: Sequence[
-            Callable[[DurableContext], Awaitable[T]] | ParallelBranch[T]
-        ],
+        functions: Sequence[Callable[[], Awaitable[T]] | ParallelBranch[T]],
         name: str | None = None,
         config: ParallelConfig | None = None,
     ) -> BatchResult[T]:
@@ -179,3 +177,6 @@ the child context to be re-executed during replay to reconstruct the full result
 
 class SummaryGenerator(Protocol[C_contra]):
     def __call__(self, result: C_contra) -> str: ...  # pragma: no cover
+
+
+Context = StepContext | DurableContext

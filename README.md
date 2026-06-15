@@ -48,31 +48,29 @@ Create a durable Lambda handler:
 ```python
 import asyncio
 from datetime import timedelta
-from functools import partial
 
 from async_durable_execution import (
-    DurableContext,
+    durable_step,
     durable_execution,
-    get_step_context,
+    get_context,
+    get_logger,
 )
 
 
+@durable_step
 async def validate_order(order_id: str) -> dict:
     await asyncio.sleep(0)
-    step_ctx = get_step_context()
-    step_ctx.logger.info("Validating order", extra={"order_id": order_id})
+    get_logger().info("Validating order", extra={"order_id": order_id})
     return {"order_id": order_id, "valid": True}
 
 
 @durable_execution
-async def handler(event: dict, context: DurableContext) -> dict:
+async def handler(event: dict) -> dict:
+    context = get_context()
     order_id = event["order_id"]
-    context.logger.info("Starting workflow", extra={"order_id": order_id})
+    get_logger().info("Starting workflow", extra={"order_id": order_id})
 
-    validation = await context.step(
-        partial(validate_order, order_id),
-        name="validate_order",
-    )
+    validation = await context.step(validate_order(order_id), name="validate_order")
     if not validation["valid"]:
         return {"status": "rejected", "order_id": order_id}
 
@@ -86,28 +84,26 @@ Async callables are required anywhere the SDK accepts user code, including `map(
 
 ```python
 import asyncio
-from functools import partial
 
 from async_durable_execution import (
-    DurableContext,
+    durable_step,
     durable_execution,
-    get_step_context,
+    get_context,
+    get_logger,
 )
 
 
+@durable_step
 async def fetch_order(order_id: str) -> dict:
     await asyncio.sleep(0)
-    step_ctx = get_step_context()
-    step_ctx.logger.info("Fetched order", extra={"order_id": order_id})
+    get_logger().info("Fetched order", extra={"order_id": order_id})
     return {"order_id": order_id, "status": "ready"}
 
 
 @durable_execution
-async def handler(event: dict, context: DurableContext) -> dict:
-    order = await context.step(
-        partial(fetch_order, event["order_id"]),
-        name="fetch_order",
-    )
+async def handler(event: dict) -> dict:
+    context = get_context()
+    order = await context.step(fetch_order(event["order_id"]), name="fetch_order")
     return {"order": order}
 ```
 

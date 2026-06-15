@@ -5,17 +5,12 @@ import math
 import re
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast, overload
 
-from async_durable_execution.async_tools import (
-    assert_async_callable,
-    invoke_callable,
-)
 from async_durable_execution.config import (
     JitterStrategy,
     duration_to_seconds,
 )
-from async_durable_execution.exceptions import SuspendExecution
 
 
 if TYPE_CHECKING:
@@ -223,70 +218,46 @@ class WithRetryConfig(Generic[T]):
     child_context_config: ChildConfig[T] | None = None
 
 
+@overload
 async def with_retry(
     context: DurableContext,
-    func: Callable[[DurableContext, int], Awaitable[T]],
+    func: Callable[[int], Awaitable[T]],
     config: WithRetryConfig[T],
     name: str | None = None,
+) -> T: ...
+
+
+@overload
+async def with_retry(
+    context: Callable[[int], Awaitable[T]],
+    func: WithRetryConfig[T],
+    config: None = None,
+    name: str | None = None,
+) -> T: ...
+
+
+async def with_retry(
+    context: DurableContext | Callable[[int], Awaitable[T]],
+    func: Callable[[int], Awaitable[T]] | WithRetryConfig[T],
+    config: WithRetryConfig[T] | None = None,
+    name: str | None = None,
 ) -> T:
-    """Retry a block of durable logic with configurable backoff.
+    """Compatibility wrapper for the context.with_retry implementation."""
+    from async_durable_execution import context as context_module
 
-    Semantically a run_in_child_context with a retry policy wrapped around
-    it — on failure the whole function body is re-run from the beginning
-    with configurable backoff.
+    context_with_retry_impl = cast(Any, getattr(context_module, "with_retry"))
 
-    Unlike context.step() which retries a single atomic operation,
-    with_retry retries an entire function body that may contain multiple
-    durable operations (steps, waits, invokes, callbacks, etc.).
-
-    Args:
-        context: The DurableContext to execute within.
-        func: A callable that accepts (DurableContext, attempt: int) and
-              returns T. The function body may contain multiple durable
-              operations.
-        config: WithRetryConfig containing a retry strategy callable plus
-              execution-mode options.
-        name: Optional name for the child context and backoff waits.
-              When provided, backoff waits are named
-              "{name}-backoff-{attempt}".
-
-    Returns:
-        The result of func on successful execution.
-
-    Raises:
-        The exception from the last failed attempt when retries are
-        exhausted or the retry strategy returns should_retry=False.
-        When wrap_with_run_in_child_context is True (default),
-        ChildOperationExecutor.process wraps non-InvocationError /
-        SuspendExecution exceptions as CallableRuntimeError with the
-        original error in cause.
-        When wrap_with_run_in_child_context is False, the original
-        exception propagates unchanged.
-        SuspendExecution: Re-raised immediately (SDK control flow).
-    """
-
-    async def run_loop(ctx: DurableContext) -> T:
-        assert_async_callable(func)
-        retry_strategy = config.retry_strategy or create_retry_strategy()
-        attempt = 0
-        while True:
-            attempt += 1
-            try:
-                return await invoke_callable(func, ctx, attempt)
-            except SuspendExecution:
-                raise  # SDK control flow - never intercept
-            except Exception as err:
-                decision = retry_strategy(err, attempt)
-                if not decision.should_retry:
-                    raise
-                wait_name = f"{name}-backoff-{attempt}" if name else None
-                await ctx.wait(duration=decision.delay, name=wait_name)
-
-    if config.wrap_with_run_in_child_context:
-        return await context.run_in_child_context(
-            run_loop,
-            name=name,
-            config=config.child_context_config,
+    if config is None:
+        return await context_with_retry_impl(
+            cast("Callable[[int], Awaitable[T]]", context),
+            cast("WithRetryConfig[T]", func),
+            None,
+            name,
         )
 
-    return await invoke_callable(run_loop, context)
+    return await context_with_retry_impl(
+        cast("DurableContext", context),
+        cast("Callable[[int], Awaitable[T]]", func),
+        config,
+        name,
+    )

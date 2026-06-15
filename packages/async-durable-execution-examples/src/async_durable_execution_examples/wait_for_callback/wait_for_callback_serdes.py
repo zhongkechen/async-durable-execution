@@ -4,10 +4,13 @@ import json
 from datetime import datetime, timedelta
 from typing import Any, TypedDict
 
-from async_durable_execution.config import WaitForCallbackConfig
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
-from async_durable_execution.serdes import SerDes
+from async_durable_execution import (
+    WaitForCallbackConfig,
+    WaitForCallbackContext,
+    durable_execution,
+    SerDes,
+    wait_for_callback,
+)
 
 
 class CustomDataMetadata(TypedDict):
@@ -64,12 +67,12 @@ class CustomSerdes(SerDes[CustomData]):
         )
 
 
-async def noop_submitter(_callback_id: str, _context: DurableContext) -> None:
+async def noop_submitter(_callback_id: str, _context: WaitForCallbackContext) -> None:
     return None
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with custom serdes."""
 
     config = WaitForCallbackConfig(
@@ -78,7 +81,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         serdes=CustomSerdes(),
     )
 
-    result: CustomData = await context.wait_for_callback(
+    result: CustomData = await wait_for_callback(
         noop_submitter,
         name="custom-serdes-callback",
         config=config,

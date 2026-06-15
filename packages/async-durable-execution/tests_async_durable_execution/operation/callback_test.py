@@ -10,9 +10,13 @@ from async_durable_execution.config import (
     StepConfig,
     WaitForCallbackConfig,
 )
-from async_durable_execution.context import Callback
+from async_durable_execution.context import (
+    Callback,
+    _reset_step_context,
+    _set_step_context,
+)
 from async_durable_execution.exceptions import CallbackError, ValidationError
-from async_durable_execution.identifier import OperationIdentifier
+from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
     CallbackDetails,
     CallbackOptions,
@@ -31,7 +35,6 @@ from async_durable_execution.operation.callback import (
 )
 from async_durable_execution.retries import RetryDecision
 from async_durable_execution.serdes import SerDes
-from async_durable_execution.step_context import _reset_step_context, _set_step_context
 from async_durable_execution.state import CheckpointedResult, ExecutionState
 from async_durable_execution.types import DurableContext, StepContext
 

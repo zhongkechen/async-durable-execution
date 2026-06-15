@@ -3,20 +3,21 @@
 from datetime import timedelta
 from typing import Any
 
-from async_durable_execution import get_step_context
-from async_durable_execution.config import StepConfig
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
-from async_durable_execution.retries import (
+from async_durable_execution import (
+    durable_step,
+    step,
+    wait,
+    StepConfig,
+    durable_execution,
     RetryStrategyConfig,
     create_retry_strategy,
 )
+from async_durable_execution import get_attempt
 
 
 async def simulated_get_item(name: str, poll_count: int) -> dict[str, Any] | None:
     """Simulate getting an item with deterministic per-poll retry behavior."""
-    step_context = get_step_context()
-    attempt = step_context.attempt or 1
+    attempt = get_attempt() or 1
 
     # Poll 1 fails once, then returns None on retry so the workflow polls again.
     if poll_count == 1 and attempt == 1:
@@ -31,7 +32,7 @@ async def simulated_get_item(name: str, poll_count: int) -> dict[str, Any] | Non
 
 
 @durable_execution
-async def handler(event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(event: Any) -> dict[str, Any]:
     """Handler demonstrating polling with retry logic."""
     name = event.get("name", "test-item")
 
@@ -51,12 +52,13 @@ async def handler(event: Any, context: DurableContext) -> dict[str, Any]:
         while poll_count < max_polls:
             poll_count += 1
 
+            @durable_step
             async def get_item(item_name: str = name):
                 return await simulated_get_item(item_name, poll_count)
 
             # Try to get the item with retry
-            get_response = await context.step(
-                get_item,
+            get_response = await step(
+                get_item(),
                 name=f"get_item_poll_{poll_count}",
                 config=step_config,
             )
@@ -67,7 +69,7 @@ async def handler(event: Any, context: DurableContext) -> dict[str, Any]:
                 break
 
             # Wait 1 second until next poll
-            await context.wait(timedelta(seconds=1))
+            await wait(timedelta(seconds=1))
 
     except RuntimeError as e:
         # Retries exhausted

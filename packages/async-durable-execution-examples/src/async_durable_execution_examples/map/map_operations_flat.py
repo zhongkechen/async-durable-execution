@@ -3,27 +3,33 @@
 import asyncio
 from typing import Any
 
-from async_durable_execution.config import MapConfig, NestingType
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
+from async_durable_execution import (
+    durable_step,
+    step,
+    MapConfig,
+    NestingType,
+    durable_execution,
+    map,
+)
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> list[int]:
-    """Process a list of items using context.map()."""
+async def handler(_event: Any) -> list[int]:
+    """Process a list of items using map()."""
     items = [1, 2, 3, 4, 5]
 
-    async def process_item(ctx: DurableContext, item: int, index: int, _) -> int:
+    async def process_item(item: int, index: int, _) -> int:
         await asyncio.sleep(0)
 
+        @durable_step
         async def double() -> int:
             return item * 2
 
-        return await ctx.step(double, name=f"map_item_{index}")
+        return await step(double(), name=f"map_item_{index}")
 
-    # Use context.map() to process items concurrently and extract results immediately
+    # Use map() to process items concurrently and extract results immediately
     return (
-        await context.map(
+        await map(
             inputs=items,
             func=process_item,
             name="map_operation",

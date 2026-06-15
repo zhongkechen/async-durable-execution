@@ -4,10 +4,13 @@ import json
 from datetime import datetime, timedelta
 from typing import Any
 
-from async_durable_execution.config import CallbackConfig
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
-from async_durable_execution.serdes import SerDes, SerDesContext
+from async_durable_execution import (
+    CallbackConfig,
+    durable_execution,
+    SerDes,
+    SerDesContext,
+    create_callback,
+)
 
 
 class CustomData:
@@ -54,14 +57,14 @@ class CustomDataSerDes(SerDes[CustomData]):
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating createCallback with custom serdes."""
     callback_config = CallbackConfig(
         timeout=timedelta(seconds=30),
         serdes=CustomDataSerDes(),
     )
 
-    callback = await context.create_callback(
+    callback = await create_callback(
         name="custom-serdes-callback",
         config=callback_config,
     )

@@ -3,20 +3,23 @@
 from datetime import timedelta
 from typing import Any
 
-from async_durable_execution.config import StepConfig
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
-from async_durable_execution.retries import (
+from async_durable_execution import (
+    durable_step,
+    step,
+    StepConfig,
+    durable_execution,
     RetryStrategyConfig,
     create_retry_strategy,
+    run_in_child_context,
+    wait,
 )
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> dict[str, bool]:
+async def handler(_event: Any) -> dict[str, bool]:
     """Handler demonstrating runInChildContext with failing step."""
 
-    async def child_with_failure(ctx: DurableContext) -> None:
+    async def child_with_failure() -> None:
         """Child context with a failing step."""
 
         retry_config = RetryStrategyConfig(
@@ -27,18 +30,19 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, bool]:
         )
         step_config = StepConfig(retry_strategy=create_retry_strategy(retry_config))
 
+        @durable_step
         async def failing_step() -> None:
             """Step that always fails."""
             raise Exception("Step failed in child context")
 
-        await ctx.step(
-            failing_step,
+        await step(
+            failing_step(),
             name="failing-step",
             config=step_config,
         )
 
     try:
-        await context.run_in_child_context(
+        await run_in_child_context(
             child_with_failure,
             name="child-with-failure",
         )
@@ -46,6 +50,6 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, bool]:
         # Catch and ignore child context and step errors
         result = {"success": True, "error": str(error)}
 
-    await context.wait(timedelta(seconds=1), name="wait-after-failure")
+    await wait(timedelta(seconds=1), name="wait-after-failure")
 
     return result

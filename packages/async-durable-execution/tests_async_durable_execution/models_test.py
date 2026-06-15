@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from async_durable_execution.exceptions import CallableRuntimeError
-from async_durable_execution.identifier import OperationIdentifier
+from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
     CallbackDetails,
     CallbackOptions,

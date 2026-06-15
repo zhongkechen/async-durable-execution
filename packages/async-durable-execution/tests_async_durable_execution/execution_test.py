@@ -4,13 +4,13 @@ import asyncio
 import datetime
 import json
 import time
-from typing import Any
+from typing import Any, cast
 from unittest.mock import Mock, patch
 
 import pytest
 
 from async_durable_execution.config import StepConfig, StepSemantics
-from async_durable_execution.context import DurableContext
+from async_durable_execution.context import DurableContext, get_context
 from async_durable_execution.exceptions import (
     BotoClientError,
     CheckpointError,
@@ -3026,6 +3026,39 @@ async def test_durable_execution_supports_async_handler():
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
     assert json.loads(result["Result"]) == {"result": "async-success"}
+
+
+async def test_durable_execution_handler_can_use_get_context_without_parameter():
+    mock_client = Mock(spec=DurableServiceClient)
+    mock_output = CheckpointOutput(
+        checkpoint_token="new_token",  # noqa: S106
+        new_execution_state=CheckpointUpdatedExecutionState(),
+    )
+    mock_client.checkpoint.return_value = mock_output
+
+    @durable_execution
+    async def test_handler(event: Any) -> dict:
+        context = cast(DurableContext, get_context())
+        assert event == {}
+
+        async def load_value() -> str:
+            await asyncio.sleep(0)
+            return "from-context"
+
+        result = await context.step(load_value)
+        return {"value": result, "has_logger": hasattr(context, "logger")}
+
+    result = await run_handler(
+        test_handler,
+        _make_invocation_input(mock_client),
+        _make_lambda_context(),
+    )
+
+    assert result["Status"] == InvocationStatus.SUCCEEDED.value
+    assert json.loads(result["Result"]) == {
+        "value": "from-context",
+        "has_logger": True,
+    }
 
 
 async def test_durable_execution_rejects_sync_handler():

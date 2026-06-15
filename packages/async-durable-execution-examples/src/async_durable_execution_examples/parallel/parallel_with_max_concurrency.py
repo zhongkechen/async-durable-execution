@@ -2,48 +2,57 @@
 
 from typing import Any
 
-from async_durable_execution.config import ParallelConfig
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
+from async_durable_execution import (
+    durable_step,
+    step,
+    ParallelConfig,
+    durable_execution,
+    parallel,
+)
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> list[str]:
+async def handler(_event: Any) -> list[str]:
     """Execute 5 tasks with concurrency limit of 2."""
 
-    async def task1(ctx: DurableContext) -> str:
+    async def task1() -> str:
+        @durable_step
         async def run() -> str:
             return "task 1"
 
-        return await ctx.step(run, name="task1")
+        return await step(run(), name="task1")
 
-    async def task2(ctx: DurableContext) -> str:
+    async def task2() -> str:
+        @durable_step
         async def run() -> str:
             return "task 2"
 
-        return await ctx.step(run, name="task2")
+        return await step(run(), name="task2")
 
-    async def task3(ctx: DurableContext) -> str:
+    async def task3() -> str:
+        @durable_step
         async def run() -> str:
             return "task 3"
 
-        return await ctx.step(run, name="task3")
+        return await step(run(), name="task3")
 
-    async def task4(ctx: DurableContext) -> str:
+    async def task4() -> str:
+        @durable_step
         async def run() -> str:
             return "task 4"
 
-        return await ctx.step(run, name="task4")
+        return await step(run(), name="task4")
 
-    async def task5(ctx: DurableContext) -> str:
+    async def task5() -> str:
+        @durable_step
         async def run() -> str:
             return "task 5"
 
-        return await ctx.step(run, name="task5")
+        return await step(run(), name="task5")
 
     # Extract results immediately to avoid BatchResult serialization
     return (
-        await context.parallel(
+        await parallel(
             functions=[task1, task2, task3, task4, task5],
             name="parallel_with_concurrency",
             config=ParallelConfig(max_concurrency=2),

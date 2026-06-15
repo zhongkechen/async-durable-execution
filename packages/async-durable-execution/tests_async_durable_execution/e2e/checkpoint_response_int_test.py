@@ -7,12 +7,13 @@ that's implemented via the OperationExecutor base class pattern.
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import cast
 from unittest.mock import Mock, patch
 
 import pytest
 
 from async_durable_execution.config import ChildConfig
-from async_durable_execution.context import DurableContext
+from async_durable_execution.context import DurableContext, get_context
 from async_durable_execution.exceptions import InvocationError
 from async_durable_execution.execution import (
     InvocationStatus,
@@ -477,7 +478,8 @@ async def test_end_to_end_child_context_with_async_checkpoint():
     and execute correctly without waiting for immediate response.
     """
 
-    async def child_function(ctx: DurableContext) -> str:
+    async def child_function() -> str:
+        _ = cast(DurableContext, get_context())
         return "child_result"
 
     @durable_execution
@@ -537,7 +539,8 @@ async def test_end_to_end_child_context_replay_children_mode():
     """
     execution_count = {"count": 0}
 
-    async def child_function_with_large_result(ctx: DurableContext) -> str:
+    async def child_function_with_large_result() -> str:
+        _ = cast(DurableContext, get_context())
         execution_count["count"] += 1
         return "large" * 256 * 1024
 
@@ -642,7 +645,8 @@ async def test_end_to_end_child_context_error_handling():
     and error is wrapped as CallableRuntimeError.
     """
 
-    async def child_function_that_fails(ctx: DurableContext) -> str:
+    async def child_function_that_fails() -> str:
+        _ = cast(DurableContext, get_context())
         msg = "Child function error"
         raise ValueError(msg)
 
@@ -707,7 +711,8 @@ async def test_end_to_end_child_context_invocation_error_reraised():
     and re-raises InvocationError (not wrapped) to enable retry at execution handler level.
     """
 
-    async def child_function_with_invocation_error(ctx: DurableContext) -> str:
+    async def child_function_with_invocation_error() -> str:
+        _ = cast(DurableContext, get_context())
         msg = "Invocation failed in child"
         raise InvocationError(msg)
 

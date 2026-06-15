@@ -5,13 +5,9 @@ import datetime
 from collections.abc import Mapping, MutableMapping
 from dataclasses import MISSING, dataclass, field, fields
 from enum import Enum
-from typing import TYPE_CHECKING, Any, TypeAlias, get_args, get_origin, get_type_hints
+from typing import Any, TypeAlias, get_args, get_origin, get_type_hints
 
 from async_durable_execution.exceptions import CallableRuntimeError
-
-
-if TYPE_CHECKING:
-    from async_durable_execution.identifier import OperationIdentifier
 
 # Replace with `type` it when dropping support to Python 3.11
 ReplayChildren: TypeAlias = bool
@@ -237,6 +233,20 @@ class OperationType(Enum):
                 return OperationType.CONTEXT
             case _:
                 raise ValueError(f"Unknown operation sub-type {sub_type}")
+
+
+@dataclass(frozen=True)
+class OperationIdentifier:
+    """Container for operation id, parent id, and name."""
+
+    operation_id: str
+    sub_type: OperationSubType
+    parent_id: str | None = None
+    name: str | None = None
+
+    @property
+    def type(self) -> OperationType:
+        return OperationType.from_sub_type(self.sub_type)
 
 
 class InvocationStatus(Enum):

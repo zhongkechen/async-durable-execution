@@ -3,9 +3,14 @@
 from datetime import timedelta
 from typing import Any
 
-from async_durable_execution.config import MapConfig
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
+from async_durable_execution import (
+    durable_step,
+    step,
+    MapConfig,
+    durable_execution,
+    map,
+    wait,
+)
 
 
 async def generate_large_string(size_in_kb: int) -> str:
@@ -14,7 +19,7 @@ async def generate_large_string(size_in_kb: int) -> str:
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating large scale map with substantial data."""
     # Create array of 50 items (more manageable for testing)
     items = list(range(1, 51))  # 1 to 50
@@ -22,9 +27,8 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     config = MapConfig(max_concurrency=10)  # Process 10 items concurrently
     data = await generate_large_string(100)
 
-    async def process_item(
-        ctx: DurableContext, item: int, index: int, _
-    ) -> dict[str, Any]:
+    async def process_item(item: int, index: int, _) -> dict[str, Any]:
+        @durable_step
         async def build_result() -> dict[str, Any]:
             return {
                 "itemId": item,
@@ -34,16 +38,16 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
                 "processed": True,
             }
 
-        return await ctx.step(build_result)
+        return await step(build_result())
 
-    results = await context.map(
+    results = await map(
         inputs=items,
         func=process_item,
         name="large-scale-map",
         config=config,
     )
 
-    await context.wait(timedelta(seconds=1), name="wait1")
+    await wait(timedelta(seconds=1), name="wait1")
 
     # Process results immediately after map operation
     # Note: After wait operations, the BatchResult may be summarized
@@ -62,7 +66,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         "allItemsProcessed": all_items_processed,
     }
 
-    await context.wait(timedelta(seconds=1), name="wait2")
+    await wait(timedelta(seconds=1), name="wait2")
 
     return {
         "success": True,

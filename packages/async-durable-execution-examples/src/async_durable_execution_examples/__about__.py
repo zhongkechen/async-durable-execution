@@ -1,7 +1,6 @@
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
-
 _DIST_NAME = "async-durable-execution-examples"
 
 

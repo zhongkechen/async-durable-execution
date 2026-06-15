@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from datetime import timedelta
 from functools import partial
-from typing import Any
+from typing import Any, cast
 from unittest.mock import Mock, patch
 
 import pytest
-from async_durable_execution import get_step_context
+from async_durable_execution import durable_step, get_step_context, step
 from async_durable_execution.context import (
     DurableContext,
     durable_wait_for_callback,
-    durable_with_child_context,
+    get_context,
 )
 from async_durable_execution.execution import (
     InvocationStatus,
@@ -96,7 +96,7 @@ async def test_step_different_ways_to_pass_args():
         assert result == "from step 123 str"
         results.append(result)
 
-        result = await context.step(partial(step_no_args))
+        result = await context.step(step_no_args)
         assert result == "from step no args"
         results.append(result)
 
@@ -179,6 +179,77 @@ async def test_step_different_ways_to_pass_args():
         assert last_checkpoint.operation_type is OperationType.STEP
         assert last_checkpoint.action is OperationAction.SUCCEED
         assert last_checkpoint.payload == '"from step plain"'
+
+
+async def test_durable_step_decorator_creates_step_operation():
+    @durable_step
+    async def decorated_step(status_code: int) -> str:
+        step_context = get_step_context()
+        step_context.logger.info("status=%s", status_code)
+        return f"status:{status_code}"
+
+    @durable_execution
+    async def my_handler(event, context: DurableContext) -> str:
+        del event, context
+        return await step(decorated_step(200))
+
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
+        mock_client = Mock()
+        mock_client_class.initialize_client.return_value = mock_client
+
+        checkpoint_calls = []
+
+        async def mock_checkpoint(
+            durable_execution_arn,
+            checkpoint_token,
+            updates,
+            client_token="token",  # noqa: S107
+        ):
+            checkpoint_calls.append(updates)
+
+            return CheckpointOutput(
+                checkpoint_token="new_token",  # noqa: S106
+                new_execution_state=CheckpointUpdatedExecutionState(),
+            )
+
+        mock_client.checkpoint = mock_checkpoint
+
+        event = {
+            "DurableExecutionArn": "test-arn/execution-1",
+            "CheckpointToken": "test-token",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "execution-1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+            "LocalRunner": True,
+        }
+
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request-id"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 0  # noqa: SLF001
+        lambda_context.invoked_function_arn = "test-arn"
+        lambda_context.tenant_id = None
+
+        result = await run_handler(my_handler, event, lambda_context)
+
+        assert result["Status"] == InvocationStatus.SUCCEEDED.value
+        assert result["Result"] == '"status:200"'
+
+        all_operations = [op for batch in checkpoint_calls for op in batch]
+        assert len(all_operations) == 2
+        assert all_operations[0].name == "decorated_step"
+        assert all_operations[1].name == "decorated_step"
 
 
 async def test_step_with_logger():
@@ -286,14 +357,14 @@ async def test_wait_inside_run_in_childcontext():
 
     mock_inside_child = Mock()
 
-    @durable_with_child_context
-    async def func(child_context: DurableContext, a: int, b: int):
+    async def func(a: int, b: int):
+        child_context = cast(DurableContext, get_context())
         mock_inside_child(a, b)
         await child_context.wait(timedelta(seconds=1))
 
     @durable_execution
     async def my_handler(event, context):
-        await context.run_in_child_context(func(10, 20))
+        await context.run_in_child_context(partial(func, 10, 20), name="func")
 
     # Mock the lambda client
     with patch(

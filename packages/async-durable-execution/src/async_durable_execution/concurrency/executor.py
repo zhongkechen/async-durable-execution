@@ -24,7 +24,7 @@ from async_durable_execution.exceptions import (
     SuspendExecution,
     TimedSuspendExecution,
 )
-from async_durable_execution.identifier import OperationIdentifier
+from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import ErrorObject
 from async_durable_execution.operation.child import child_handler
 

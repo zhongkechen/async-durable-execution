@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 from async_durable_execution.exceptions import SuspendExecution
-from async_durable_execution.identifier import OperationIdentifier
+from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
     DurableExecutionInvocationOutput,
     ErrorObject,

@@ -3,21 +3,22 @@
 from datetime import timedelta
 from typing import Any
 
-from async_durable_execution.config import (
+from async_durable_execution import (
     CompletionConfig,
     MapConfig,
     StepConfig,
-)
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
-from async_durable_execution.retries import (
+    durable_step,
+    step,
+    get_logger,
+    durable_execution,
     RetryStrategyConfig,
     create_retry_strategy,
+    map,
 )
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating map with completion config issue."""
     # Test data: Items 2 and 4 will fail (40% failure rate)
     items = [
@@ -34,21 +35,20 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         tolerated_failure_percentage=50,
     )
 
-    context.logger.info(
+    get_logger().info(
         "Starting map with config: min_successful=2, tolerated_failure_percentage=50"
     )
-    context.logger.info(
+    get_logger().info(
         f"Items pattern: {', '.join(['FAIL' if i['shouldFail'] else 'SUCCESS' for i in items])}"
     )
 
     async def process_item(
-        ctx: DurableContext,
         item: dict[str, Any],
         index: int,
         _items: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """Process each item in the map."""
-        context.logger.info(
+        get_logger().info(
             f"Processing item {item['id']} (index {index}), shouldFail: {item['shouldFail']}"
         )
 
@@ -59,6 +59,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         )
         step_config = StepConfig(retry_strategy=create_retry_strategy(retry_config))
 
+        @durable_step
         async def step_function() -> dict[str, Any]:
             """Step that processes or fails based on item."""
             if item["shouldFail"]:
@@ -69,8 +70,8 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
                 "result": f"Item {item['id']} processed successfully",
             }
 
-        return await ctx.step(
-            step_function,
+        return await step(
+            step_function(),
             name=f"process-item-{index}",
             config=step_config,
         )
@@ -80,20 +81,20 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         completion_config=completion_config,
     )
 
-    results = await context.map(
+    results = await map(
         inputs=items,
         func=process_item,
         name="completion-config-items",
         config=config,
     )
 
-    context.logger.info("Map completed with results:")
-    context.logger.info(f"Total items processed: {results.total_count}")
-    context.logger.info(f"Successful items: {results.success_count}")
-    context.logger.info(f"Failed items: {results.failure_count}")
-    context.logger.info(f"Has failures: {results.has_failure}")
-    context.logger.info(f"Batch status: {results.status}")
-    context.logger.info(f"Completion reason: {results.completion_reason}")
+    get_logger().info("Map completed with results:")
+    get_logger().info(f"Total items processed: {results.total_count}")
+    get_logger().info(f"Successful items: {results.success_count}")
+    get_logger().info(f"Failed items: {results.failure_count}")
+    get_logger().info(f"Has failures: {results.has_failure}")
+    get_logger().info(f"Batch status: {results.status}")
+    get_logger().info(f"Completion reason: {results.completion_reason}")
 
     return {
         "totalItems": results.total_count,

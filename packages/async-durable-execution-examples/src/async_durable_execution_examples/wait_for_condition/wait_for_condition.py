@@ -4,16 +4,16 @@ import asyncio
 from datetime import timedelta
 from typing import Any
 
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
-from async_durable_execution.waits import (
+from async_durable_execution import (
+    durable_execution,
     WaitForConditionConfig,
     WaitForConditionDecision,
+    wait_for_condition,
 )
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> int:
+async def handler(_event: Any) -> int:
     """Handler demonstrating wait-for-condition pattern."""
 
     async def condition_function(state: int, _) -> int:
@@ -29,6 +29,6 @@ async def handler(_event: Any, context: DurableContext) -> int:
 
     config = WaitForConditionConfig(wait_strategy=wait_strategy, initial_state=0)
 
-    result = await context.wait_for_condition(check=condition_function, config=config)
+    result = await wait_for_condition(check=condition_function, config=config)
 
     return result

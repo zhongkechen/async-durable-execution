@@ -3,17 +3,21 @@
 import json
 from typing import Any
 
-from async_durable_execution.concurrency.models import (
+from async_durable_execution import (
+    durable_step,
+    step,
     BatchItem,
     BatchItemStatus,
     BatchResult,
     CompletionReason,
+    ParallelConfig,
+    durable_execution,
+    ErrorObject,
+    JsonSerDes,
+    SerDes,
+    SerDesContext,
+    parallel,
 )
-from async_durable_execution.config import ParallelConfig
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
-from async_durable_execution.models import ErrorObject
-from async_durable_execution.serdes import JsonSerDes, SerDes, SerDesContext
 
 
 class CustomBatchSerDes(SerDes[BatchResult]):
@@ -74,31 +78,33 @@ class CustomBatchSerDes(SerDes[BatchResult]):
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Execute parallel tasks with custom batch-level serialization."""
-
     # Use custom serdes for the entire BatchResult, default JSON for individual functions
     config = ParallelConfig(serdes=CustomBatchSerDes(), item_serdes=JsonSerDes())
 
-    async def branch1(ctx: DurableContext) -> int:
+    async def branch1() -> int:
+        @durable_step
         async def run() -> int:
             return 100
 
-        return await ctx.step(run, name="branch1")
+        return await step(run(), name="branch1")
 
-    async def branch2(ctx: DurableContext) -> int:
+    async def branch2() -> int:
+        @durable_step
         async def run() -> int:
             return 200
 
-        return await ctx.step(run, name="branch2")
+        return await step(run(), name="branch2")
 
-    async def branch3(ctx: DurableContext) -> int:
+    async def branch3() -> int:
+        @durable_step
         async def run() -> int:
             return 300
 
-        return await ctx.step(run, name="branch3")
+        return await step(run(), name="branch3")
 
-    results = await context.parallel(
+    results = await parallel(
         functions=[branch1, branch2, branch3],
         name="parallel_with_batch_serdes",
         config=config,
