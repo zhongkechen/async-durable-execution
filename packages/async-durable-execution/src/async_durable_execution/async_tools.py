@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import functools
 import inspect
-import asyncio
-from collections.abc import Awaitable, Callable, Coroutine
-from typing import Any, TypeVar, cast
+from collections.abc import Awaitable, Callable
+from typing import TypeVar, cast
 
 from async_durable_execution.exceptions import ValidationError
 
@@ -46,11 +45,3 @@ def assert_async_callable(
 async def invoke_callable(func: Callable[..., Awaitable[T]], *args, **kwargs) -> T:
     assert_async_callable(func)
     return await cast("Awaitable[T]", func(*args, **kwargs))
-
-
-def run_or_return(awaitable: Awaitable[T]) -> T | Awaitable[T]:
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(cast(Coroutine[Any, Any, T], awaitable))
-    return awaitable

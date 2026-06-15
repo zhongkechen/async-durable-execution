@@ -1,11 +1,9 @@
 """Implementation for the Durable create_callback and wait_for_callback operations."""
 
 from __future__ import annotations
-
 import inspect
 from typing import TYPE_CHECKING, Any
 
-from async_durable_execution.async_tools import run_or_return
 from async_durable_execution.config import StepConfig
 from async_durable_execution.exceptions import CallbackError
 from async_durable_execution.lambda_service import (
@@ -158,9 +156,10 @@ def wait_for_callback_handler(
     name: str | None = None,
     config: WaitForCallbackConfig | None = None,
 ) -> Any:
-    return run_or_return(
-        _wait_for_callback_handler_async(context, submitter, name=name, config=config)
+    awaitable = _wait_for_callback_handler_async(
+        context, submitter, name=name, config=config
     )
+    return awaitable
 
 
 async def _wait_for_callback_handler_async(

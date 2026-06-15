@@ -11,7 +11,6 @@ from uuid import uuid4
 import boto3  # type: ignore
 from botocore.config import Config  # type: ignore
 
-from async_durable_execution.async_tools import run_or_return
 from async_durable_execution.execution import (
     DurableExecutionInvocationInput,
     DurableExecutionInvocationInputWithClient,
