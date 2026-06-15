@@ -1,7 +1,6 @@
 """Implementation for Durable Map operation."""
 
 from __future__ import annotations
-
 import json
 import inspect
 import logging
@@ -10,7 +9,6 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 
 from async_durable_execution.async_tools import (
     invoke_callable,
-    run_or_return,
 )
 from async_durable_execution.concurrency.executor import ConcurrentExecutor
 from async_durable_execution.concurrency.models import (
@@ -104,7 +102,8 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
         return super().get_iteration_name(index)
 
     def execute_item(self, child_context, executable: Executable[Callable]):
-        return run_or_return(self._execute_item_async(child_context, executable))
+        awaitable = self._execute_item_async(child_context, executable)
+        return awaitable
 
     async def _execute_item_async(
         self, child_context, executable: Executable[Callable]
@@ -126,16 +125,15 @@ def map_handler(
     map_context: DurableContext,
     operation_identifier: OperationIdentifier,
 ):
-    return run_or_return(
-        _map_handler_async(
-            items,
-            func,
-            config,
-            execution_state,
-            map_context,
-            operation_identifier,
-        )
+    awaitable = _map_handler_async(
+        items,
+        func,
+        config,
+        execution_state,
+        map_context,
+        operation_identifier,
     )
+    return awaitable
 
 
 async def _map_handler_async(

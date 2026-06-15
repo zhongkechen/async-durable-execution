@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
+import asyncio
 from datetime import timedelta
 from unittest.mock import Mock, patch
 
 import pytest
-from async_durable_execution.async_tools import run_or_return
 from async_durable_execution.config import InvokeConfig
 from async_durable_execution.exceptions import (
     CallableRuntimeError,
@@ -44,7 +44,7 @@ def invoke_handler(function_name, payload, state, operation_identifier, config):
         operation_identifier=operation_identifier,
         config=config,
     )
-    return run_or_return(executor.process())
+    return asyncio.run(executor.process())
 
 
 def test_invoke_handler_already_succeeded():
@@ -1226,7 +1226,7 @@ def test_invoke_suspends_when_second_check_returns_started():
     )
 
     with pytest.raises(SuspendExecution):
-        run_or_return(executor.process())
+        asyncio.run(executor.process())
 
     # Assert - behaves like "old way"
     assert mock_state.get_checkpoint_result.call_count == 2  # Double-check happened
@@ -1262,7 +1262,7 @@ def test_invoke_suspends_when_second_check_returns_started_duplicate():
     )
 
     with pytest.raises(SuspendExecution):
-        run_or_return(executor.process())
+        asyncio.run(executor.process())
 
     # Assert - behaves like "old way"
     assert mock_state.get_checkpoint_result.call_count == 2  # Double-check happened

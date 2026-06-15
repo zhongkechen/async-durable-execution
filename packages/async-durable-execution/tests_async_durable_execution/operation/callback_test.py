@@ -6,8 +6,6 @@ from datetime import timedelta
 from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
-
-from async_durable_execution.async_tools import run_or_return
 from async_durable_execution.config import (
     CallbackConfig,
     StepConfig,
@@ -46,7 +44,7 @@ def create_callback_handler(state, operation_identifier, config=None):
         operation_identifier=operation_identifier,
         config=config,
     )
-    return run_or_return(executor.process())
+    return asyncio.run(executor.process())
 
 
 def test_create_callback_handler_new_operation_with_config():
@@ -292,7 +290,7 @@ def test_wait_for_callback_handler_basic():
     mock_context.step = Mock()
     mock_submitter = Mock()
 
-    result = wait_for_callback_handler(mock_context, mock_submitter)
+    result = asyncio.run(wait_for_callback_handler(mock_context, mock_submitter))
 
     assert result == "callback_result"
     mock_context.step.assert_called_once()
@@ -309,8 +307,8 @@ def test_wait_for_callback_handler_with_name_and_config():
     mock_submitter = Mock()
     config = WaitForCallbackConfig()
 
-    result = wait_for_callback_handler(
-        mock_context, mock_submitter, "test_callback", config
+    result = asyncio.run(
+        wait_for_callback_handler(mock_context, mock_submitter, "test_callback", config)
     )
 
     assert result == "named_callback_result"
@@ -338,7 +336,7 @@ def test_wait_for_callback_handler_submitter_called_with_callback_id():
 
     mock_context.step.side_effect = capture_step_call
 
-    wait_for_callback_handler(mock_context, mock_submitter, "test")
+    asyncio.run(wait_for_callback_handler(mock_context, mock_submitter, "test"))
 
     # Verify submitter was called with callback_id and WaitForCallbackContext
     assert mock_submitter.call_count == 1
@@ -393,7 +391,9 @@ def test_wait_for_callback_handler_with_none_callback_id():
 
     mock_context.step.side_effect = execute_step
 
-    result = wait_for_callback_handler(mock_context, mock_submitter, "test")
+    result = asyncio.run(
+        wait_for_callback_handler(mock_context, mock_submitter, "test")
+    )
 
     assert result == "result_with_none_id"
     # Verify submitter was called with None callback_id and WaitForCallbackContext
@@ -420,7 +420,9 @@ def test_wait_for_callback_handler_with_empty_string_callback_id():
 
     mock_context.step.side_effect = execute_step
 
-    result = wait_for_callback_handler(mock_context, mock_submitter, "test")
+    result = asyncio.run(
+        wait_for_callback_handler(mock_context, mock_submitter, "test")
+    )
 
     assert result == "result_with_empty_id"
     # Verify submitter was called with empty string callback_id and WaitForCallbackContext
@@ -444,7 +446,9 @@ def test_wait_for_callback_handler_with_large_data():
     mock_context.create_callback.return_value = mock_callback
     mock_submitter = Mock()
 
-    result = wait_for_callback_handler(mock_context, mock_submitter, "large_data_test")
+    result = asyncio.run(
+        wait_for_callback_handler(mock_context, mock_submitter, "large_data_test")
+    )
 
     assert result == large_result
     assert len(result["data"]) == 1000
@@ -462,7 +466,9 @@ def test_wait_for_callback_handler_with_unicode_names():
         mock_context.create_callback.return_value = mock_callback
         mock_submitter = Mock()
 
-        result = wait_for_callback_handler(mock_context, mock_submitter, name)
+        result = asyncio.run(
+            wait_for_callback_handler(mock_context, mock_submitter, name)
+        )
 
         assert result == f"result_for_{name}"
         expected_name = f"{name} submitter"
@@ -652,7 +658,7 @@ def test_wait_for_callback_handler_submitter_exception_handling():
     mock_context.step.side_effect = step_side_effect
 
     with pytest.raises(ValueError, match="Submitter failed"):
-        wait_for_callback_handler(mock_context, failing_submitter, "test")
+        asyncio.run(wait_for_callback_handler(mock_context, failing_submitter, "test"))
 
 
 def test_wait_for_callback_handler_callback_result_exception():
@@ -665,7 +671,7 @@ def test_wait_for_callback_handler_callback_result_exception():
     mock_submitter = Mock()
 
     with pytest.raises(RuntimeError, match="Callback result failed"):
-        wait_for_callback_handler(mock_context, mock_submitter, "test")
+        asyncio.run(wait_for_callback_handler(mock_context, mock_submitter, "test"))
 
 
 def test_wait_for_callback_handler_empty_name_handling():
@@ -677,7 +683,9 @@ def test_wait_for_callback_handler_empty_name_handling():
     mock_context.create_callback.return_value = mock_callback
     mock_submitter = Mock()
 
-    result = wait_for_callback_handler(mock_context, mock_submitter, "", None)
+    result = asyncio.run(
+        wait_for_callback_handler(mock_context, mock_submitter, "", None)
+    )
 
     assert result == "empty_name_result"
     mock_context.step.assert_called_once()
@@ -697,7 +705,9 @@ def test_wait_for_callback_handler_complex_callback_result():
     mock_context.create_callback.return_value = mock_callback
     mock_submitter = Mock()
 
-    result = wait_for_callback_handler(mock_context, mock_submitter, "complex_test")
+    result = asyncio.run(
+        wait_for_callback_handler(mock_context, mock_submitter, "complex_test")
+    )
 
     assert result == complex_result
     mock_callback.result.assert_called_once()
@@ -712,7 +722,9 @@ def test_wait_for_callback_handler_step_name_formatting():
     mock_context.create_callback.return_value = mock_callback
     mock_submitter = Mock()
 
-    wait_for_callback_handler(mock_context, mock_submitter, "test with spaces")
+    asyncio.run(
+        wait_for_callback_handler(mock_context, mock_submitter, "test with spaces")
+    )
 
     step_calls = mock_context.step.call_args_list
     assert len(step_calls) == 1
@@ -733,8 +745,8 @@ def test_wait_for_callback_handler_config_propagation():
         timeout=timedelta(minutes=2), heartbeat_timeout=timedelta(seconds=30)
     )
 
-    result = wait_for_callback_handler(
-        mock_context, mock_submitter, "config_test", config
+    result = asyncio.run(
+        wait_for_callback_handler(mock_context, mock_submitter, "config_test", config)
     )
 
     assert result == "config_result"
@@ -762,8 +774,10 @@ def test_wait_for_callback_handler_step_config_propagation():
         retry_strategy=test_retry_strategy, serdes=mock_serdes
     )
 
-    result = wait_for_callback_handler(
-        mock_context, mock_submitter, "step_config_test", config
+    result = asyncio.run(
+        wait_for_callback_handler(
+            mock_context, mock_submitter, "step_config_test", config
+        )
     )
 
     assert result == "step_config_result"
@@ -790,8 +804,8 @@ def test_wait_for_callback_handler_with_various_result_types():
         mock_context.create_callback.return_value = mock_callback
         mock_submitter = Mock()
 
-        result = wait_for_callback_handler(
-            mock_context, mock_submitter, f"type_test_{i}"
+        result = asyncio.run(
+            wait_for_callback_handler(mock_context, mock_submitter, f"type_test_{i}")
         )
 
         assert result == expected_result
@@ -845,8 +859,10 @@ def test_callback_lifecycle_complete_flow():
 
     mock_context.step.side_effect = execute_step
 
-    result = wait_for_callback_handler(
-        mock_context, mock_submitter, "lifecycle_test", config
+    result = asyncio.run(
+        wait_for_callback_handler(
+            mock_context, mock_submitter, "lifecycle_test", config
+        )
     )
 
     assert result == {"status": "completed", "data": "test_data"}
@@ -948,7 +964,7 @@ def test_callback_error_propagation():
     mock_context.create_callback.side_effect = ValueError("Context creation failed")
 
     with pytest.raises(ValueError, match="Context creation failed"):
-        wait_for_callback_handler(mock_context, Mock(), "error_test")
+        asyncio.run(wait_for_callback_handler(mock_context, Mock(), "error_test"))
 
 
 def test_callback_with_complex_submitter():
@@ -978,7 +994,9 @@ def test_callback_with_complex_submitter():
 
     mock_context.step.side_effect = execute_step
 
-    result = wait_for_callback_handler(mock_context, complex_submitter, "complex_test")
+    result = asyncio.run(
+        wait_for_callback_handler(mock_context, complex_submitter, "complex_test")
+    )
 
     assert result == "complex_result"
     assert submission_log == ["received_id: complex_cb789", "api_call_success"]
@@ -1052,7 +1070,9 @@ def test_callback_name_variations():
         mock_context.create_callback.return_value = mock_callback
         mock_submitter = Mock()
 
-        result = wait_for_callback_handler(mock_context, mock_submitter, name)
+        result = asyncio.run(
+            wait_for_callback_handler(mock_context, mock_submitter, name)
+        )
 
         assert result == f"result_for_{name}"
         expected_name = f"{name} submitter" if name else "submitter"
@@ -1271,7 +1291,7 @@ def test_callback_result_raises_error_for_failed_callbacks():
 
     # Verify that result() raises CallbackError
     with pytest.raises(CallbackError, match="Callback failed"):
-        callback.result()
+        asyncio.run(callback.result())
 
 
 def test_callback_result_raises_error_for_timed_out_callbacks():
@@ -1308,7 +1328,7 @@ def test_callback_result_raises_error_for_timed_out_callbacks():
 
     # Verify that result() raises CallbackError
     with pytest.raises(CallbackError, match="Callback timed out"):
-        callback.result()
+        asyncio.run(callback.result())
 
 
 def test_callback_result_appends_timeout_type_from_error_metadata():
@@ -1343,7 +1363,7 @@ def test_callback_result_appends_timeout_type_from_error_metadata():
     )
 
     with pytest.raises(CallbackError, match="Callback timed out: Callback.Timeout"):
-        callback.result()
+        asyncio.run(callback.result())
 
 
 def test_callback_result_does_not_duplicate_timeout_type_in_message():
@@ -1378,7 +1398,7 @@ def test_callback_result_does_not_duplicate_timeout_type_in_message():
     )
 
     with pytest.raises(CallbackError, match="^Callback timed out: Callback.Timeout$"):
-        callback.result()
+        asyncio.run(callback.result())
 
 
 def test_callback_immediate_response_no_immediate_response():
@@ -1538,7 +1558,7 @@ def test_callback_deferred_error_handling_code_execution_between_create_and_resu
     )
 
     with pytest.raises(CallbackError, match="Callback failed"):
-        callback.result()
+        asyncio.run(callback.result())
 
     # Verify code between create_callback() and callback.result() executed
     assert execution_log == [
@@ -1613,7 +1633,7 @@ def test_callback_returns_id_when_second_check_returns_started():
         ),
         config=CallbackConfig(),
     )
-    callback_id = run_or_return(executor.process())
+    callback_id = asyncio.run(executor.process())
 
     # Assert - behaves like "old way"
     assert callback_id == "cb-123"
@@ -1647,7 +1667,7 @@ def test_callback_returns_id_when_second_check_returns_started_duplicate():
         ),
         config=CallbackConfig(),
     )
-    callback_id = run_or_return(executor.process())
+    callback_id = asyncio.run(executor.process())
 
     # Assert - behaves like "old way"
     assert callback_id == "cb-123"

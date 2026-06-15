@@ -1,7 +1,6 @@
 """Ready-made retry strategies and retry creators."""
 
 from __future__ import annotations
-
 import math
 import inspect
 import re
@@ -12,7 +11,6 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 from async_durable_execution.async_tools import (
     assert_async_callable,
     invoke_callable,
-    run_or_return,
 )
 from async_durable_execution.config import (
     JitterStrategy,
@@ -226,12 +224,12 @@ class WithRetryConfig(Generic[T]):
     child_context_config: ChildConfig[T] | None = None
 
 
-def with_retry(
+async def with_retry(
     context: DurableContext,
     func: Callable[[DurableContext, int], Awaitable[T]],
     config: WithRetryConfig[T],
     name: str | None = None,
-) -> T | Awaitable[T]:
+) -> T:
     """Retry a block of durable logic with configurable backoff.
 
     Semantically a run_in_child_context with a retry policy wrapped around
@@ -294,7 +292,7 @@ def with_retry(
             config=config.child_context_config,
         )
         if inspect.isawaitable(child_result):
-            return run_or_return(child_result)
+            return await child_result
         return child_result
 
-    return run_or_return(invoke_callable(run_loop, context))
+    return await invoke_callable(run_loop, context)

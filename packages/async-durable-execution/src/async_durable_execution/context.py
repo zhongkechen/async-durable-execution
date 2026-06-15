@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import hashlib
 import inspect
 import logging
@@ -9,7 +8,6 @@ from typing import TYPE_CHECKING, Any, Concatenate, Generic, ParamSpec, TypeVar,
 
 from async_durable_execution.async_tools import (
     assert_async_callable,
-    run_or_return,
 )
 from async_durable_execution.config import (
     BatchedInput,
@@ -268,7 +266,7 @@ class Callback(Generic[T], CallbackProtocol[T]):  # noqa: PYI059
         self.serdes: SerDes[T] | None = serdes
 
     def result(self):
-        return run_or_return(self._result_async())
+        return self._result_async()
 
     async def _result_async(self) -> T | None:
         """Return the result of the future. Will block until result is available.
@@ -529,7 +527,7 @@ class DurableContext(DurableContextProtocol):
         self.state.track_replay(operation_id=operation_id)
         return result
 
-    def map(
+    async def map(
         self,
         inputs: Sequence[U],
         func: Callable[
@@ -538,7 +536,7 @@ class DurableContext(DurableContextProtocol):
         name: str | None = None,
         config: MapConfig | None = None,
     ):
-        return run_or_return(self._map_async(inputs, func, name=name, config=config))
+        return await self._map_async(inputs, func, name=name, config=config)
 
     async def _map_async(
         self,
@@ -597,7 +595,7 @@ class DurableContext(DurableContextProtocol):
         self.state.track_replay(operation_id=operation_id)
         return result
 
-    def parallel(
+    async def parallel(
         self,
         functions: Sequence[
             Callable[[DurableContext], Awaitable[T]] | ParallelBranch[T]
@@ -605,7 +603,7 @@ class DurableContext(DurableContextProtocol):
         name: str | None = None,
         config: ParallelConfig | None = None,
     ):
-        return run_or_return(self._parallel_async(functions, name=name, config=config))
+        return await self._parallel_async(functions, name=name, config=config)
 
     async def _parallel_async(
         self,

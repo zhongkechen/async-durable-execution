@@ -1690,7 +1690,7 @@ async def test_checkpoint_batches_forever_exception_handling():
     # Run checkpoint_batches_forever in thread
     def run_batching():
         with contextlib.suppress(RuntimeError):
-            state.checkpoint_batches_forever()
+            asyncio.run(state.checkpoint_batches_forever())
 
     thread = threading.Thread(daemon=True, target=run_batching)
     thread.start()

@@ -132,14 +132,6 @@ class _CompatAsyncQueue(asyncio.Queue[QueuedOperation | None]):
         return _ImmediateAwaitable()
 
 
-def _run_or_return(awaitable):
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(awaitable)
-    return awaitable
-
-
 def _completion_done(completion) -> bool:
     if completion is None:
         return True
@@ -381,18 +373,16 @@ class ExecutionState:
         self._replay_status_lock: Lock = Lock()
         self._visited_operations: set[str] = set()
 
-    def fetch_paginated_operations(
+    async def fetch_paginated_operations(
         self,
         initial_operations: list[Operation],
         checkpoint_token: str,
         next_marker: str | None,
     ):
-        return _run_or_return(
-            self._fetch_paginated_operations_async(
-                initial_operations=initial_operations,
-                checkpoint_token=checkpoint_token,
-                next_marker=next_marker,
-            )
+        return await self._fetch_paginated_operations_async(
+            initial_operations=initial_operations,
+            checkpoint_token=checkpoint_token,
+            next_marker=next_marker,
         )
 
     async def _fetch_paginated_operations_async(
@@ -557,16 +547,14 @@ class ExecutionState:
 
         return CHECKPOINT_NOT_FOUND
 
-    def create_checkpoint(
+    async def create_checkpoint(
         self,
         operation_update: OperationUpdate | None = None,
         is_sync: bool = True,  # noqa: FBT001, FBT002
     ):
-        return _run_or_return(
-            self._create_checkpoint_async(
-                operation_update=operation_update,
-                is_sync=is_sync,
-            )
+        await self._create_checkpoint_async(
+            operation_update=operation_update,
+            is_sync=is_sync,
         )
 
     async def _create_checkpoint_async(
@@ -697,13 +685,11 @@ class ExecutionState:
         else:
             logger.debug("Enqueued checkpoint operation for asynchronous processing")
 
-    def create_checkpoint_sync(
+    async def create_checkpoint_sync(
         self,
         operation_update: OperationUpdate | None = None,
     ):
-        return _run_or_return(
-            self._create_checkpoint_sync_async(operation_update=operation_update)
-        )
+        await self._create_checkpoint_sync_async(operation_update=operation_update)
 
     async def _create_checkpoint_sync_async(
         self,
@@ -783,8 +769,8 @@ class ExecutionState:
                 self.checkpoint_batches_forever()
             )
 
-    def checkpoint_batches_forever(self):
-        return _run_or_return(self._checkpoint_batches_forever_async())
+    async def checkpoint_batches_forever(self):
+        await self._checkpoint_batches_forever_async()
 
     async def _checkpoint_batches_forever_async(self) -> None:
         """Background coroutine that batches operations and processes results.
@@ -912,8 +898,8 @@ class ExecutionState:
         if self._checkpointing_task is not None and not self._checkpoint_queue.full():
             self._checkpoint_queue.put_nowait(None)
 
-    def _collect_checkpoint_batch(self):
-        return _run_or_return(self._collect_checkpoint_batch_async())
+    async def _collect_checkpoint_batch(self):
+        return await self._collect_checkpoint_batch_async()
 
     async def _collect_checkpoint_batch_async(self) -> list[QueuedOperation]:
         """Collect multiple checkpoint operations into a batch for API efficiency.

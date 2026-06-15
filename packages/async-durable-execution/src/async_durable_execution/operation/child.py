@@ -1,12 +1,10 @@
 """Implementation for run_in_child_context."""
 
 from __future__ import annotations
-
 import inspect
 import logging
 from typing import TYPE_CHECKING, TypeVar, cast
 
-from async_durable_execution.async_tools import run_or_return
 from async_durable_execution.config import ChildConfig
 from async_durable_execution.exceptions import (
     InvocationError,
@@ -311,4 +309,5 @@ def child_handler(
         operation_identifier,
         config or ChildConfig(),
     )
-    return run_or_return(executor.process())
+    awaitable = executor.process()
+    return awaitable
