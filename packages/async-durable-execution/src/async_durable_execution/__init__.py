@@ -11,7 +11,6 @@ from async_durable_execution.config import ParallelBranch
 from async_durable_execution.context import (
     DurableContext,
     durable_parallel_branch,
-    durable_step,
     durable_wait_for_callback,
     durable_with_child_context,
 )
@@ -26,8 +25,9 @@ from async_durable_execution.exceptions import (
 # Core decorator - used in every durable function
 from async_durable_execution.execution import durable_execution
 from async_durable_execution.retries import WithRetryConfig, with_retry
+from async_durable_execution.step_context import get_step_context
 
-# Essential context types - passed to user functions
+# Essential step context helpers
 from async_durable_execution.types import StepContext
 
 
@@ -43,8 +43,8 @@ __all__ = [
     "__version__",
     "durable_execution",
     "durable_parallel_branch",
-    "durable_step",
     "durable_wait_for_callback",
     "durable_with_child_context",
+    "get_step_context",
     "with_retry",
 ]

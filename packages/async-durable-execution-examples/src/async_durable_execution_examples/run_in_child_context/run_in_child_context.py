@@ -16,7 +16,7 @@ async def multiply_by_two(value: int) -> int:
 async def child_operation(ctx: DurableContext, value: int) -> int:
     await asyncio.sleep(0)
 
-    async def multiply(_) -> int:
+    async def multiply() -> int:
         return await multiply_by_two(value)
 
     return await ctx.step(multiply, name="multiply")

@@ -5,6 +5,7 @@ import hashlib
 import json
 import random
 from datetime import timedelta
+from functools import partial
 from itertools import islice
 from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
@@ -553,8 +554,8 @@ async def test_step_increments_counter(mock_executor_class):
 
 
 @patch("async_durable_execution.context.StepOperationExecutor")
-async def test_step_with_original_name(mock_executor_class):
-    """Test step with callable that has _original_name attribute."""
+async def test_step_with_partial_resolves_underlying_function_name(mock_executor_class):
+    """Test step derives its name from the underlying async function for partials."""
     mock_executor = make_async_executor("named_result")
 
     mock_executor_class.return_value = mock_executor
@@ -562,12 +563,15 @@ async def test_step_with_original_name(mock_executor_class):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_callable = AsyncMock()
-    mock_callable._original_name = "original_function"  # noqa: SLF001
+
+    async def original_function(value: str) -> str:
+        return value
+
+    mock_callable = partial(original_function, "value")
 
     context = create_test_context(state=mock_state)
 
-    await run_async(context.step(mock_callable, name="override_name"))
+    await run_async(context.step(mock_callable))
 
     # Get expected ID
     seq = operation_id_sequence()
@@ -576,7 +580,7 @@ async def test_step_with_original_name(mock_executor_class):
     mock_executor_class.assert_called_once_with(
         state=mock_state,
         operation_identifier=OperationIdentifier(
-            expected_id, OperationSubType.STEP, None, "override_name"
+            expected_id, OperationSubType.STEP, None, "original_function"
         ),
         config=ANY,
         func=mock_callable,

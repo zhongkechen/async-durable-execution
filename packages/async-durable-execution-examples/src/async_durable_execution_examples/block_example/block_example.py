@@ -22,7 +22,7 @@ async def nested_block(ctx: DurableContext) -> str:
 async def parent_block(ctx: DurableContext) -> dict[str, str]:
     """Parent block with nested operations."""
 
-    async def build_nested_result(_) -> str:
+    async def build_nested_result() -> str:
         return "nested step result"
 
     # Nested step

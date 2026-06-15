@@ -31,6 +31,7 @@ from async_durable_execution.models import (
 from async_durable_execution.logger import Logger
 from async_durable_execution.operation.step import StepOperationExecutor
 from async_durable_execution.retries import RetryDecision
+from async_durable_execution.step_context import get_step_context
 from async_durable_execution.state import CheckpointedResult, ExecutionState
 
 from ..serdes_test import CustomDictSerDes
@@ -272,8 +273,8 @@ async def test_step_handler_passes_attempt_to_step_context():
     mock_logger = Mock(spec=Logger)
     mock_logger.with_log_info.return_value = mock_logger
 
-    async def step_callable(step_context):
-        return step_context.attempt
+    async def step_callable():
+        return get_step_context().attempt
 
     result = await step_handler(
         step_callable,
@@ -284,6 +285,14 @@ async def test_step_handler_passes_attempt_to_step_context():
     )
 
     assert result == 1
+
+
+def test_get_step_context_raises_outside_step():
+    with pytest.raises(
+        RuntimeError,
+        match="get_step_context\\(\\) can only be used while a step function is executing\\.",
+    ):
+        get_step_context()
 
 
 async def test_step_handler_success_at_most_once():

@@ -13,13 +13,13 @@ async def handler(_event: Any, context: DurableContext) -> list[str]:
     """Execute multiple operations in parallel using context.parallel()."""
 
     async def task1(ctx: DurableContext) -> str:
-        async def run(_) -> str:
+        async def run() -> str:
             return "task 1 completed"
 
         return await ctx.step(run, name="task1")
 
     async def task2(ctx: DurableContext) -> str:
-        async def run(_) -> str:
+        async def run() -> str:
             return "task 2 completed"
 
         return await ctx.step(run, name="task2")

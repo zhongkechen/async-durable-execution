@@ -7,13 +7,12 @@ that's implemented via the OperationExecutor base class pattern.
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import TYPE_CHECKING
 from unittest.mock import Mock, patch
 
 import pytest
 
 from async_durable_execution.config import ChildConfig
-from async_durable_execution.context import DurableContext, durable_step
+from async_durable_execution.context import DurableContext
 from async_durable_execution.exceptions import InvocationError
 from async_durable_execution.execution import (
     InvocationStatus,
@@ -27,10 +26,6 @@ from async_durable_execution.models import (
     OperationStatus,
     OperationType,
 )
-
-
-if TYPE_CHECKING:
-    from async_durable_execution.types import StepContext
 
 
 async def run_handler(handler, event, lambda_context):
@@ -88,13 +83,12 @@ async def test_end_to_end_step_operation_with_double_check():
     immediate response handling.
     """
 
-    @durable_step
-    async def my_step(step_context: StepContext) -> str:
+    async def my_step() -> str:
         return "step_result"
 
     @durable_execution
     async def my_handler(event, context: DurableContext) -> str:
-        result: str = await context.step(my_step())
+        result: str = await context.step(my_step)
         return result
 
     with patch(
@@ -148,17 +142,15 @@ async def test_end_to_end_multiple_operations_execute_sequentially():
     with the immediate response handling pattern.
     """
 
-    @durable_step
-    async def step1(step_context: StepContext) -> str:
+    async def step1() -> str:
         return "result1"
 
-    @durable_step
-    async def step2(step_context: StepContext) -> str:
+    async def step2() -> str:
         return "result2"
 
     @durable_execution
     async def my_handler(event, context: DurableContext) -> list[str]:
-        return [await context.step(step1()), await context.step(step2())]
+        return [await context.step(step1), await context.step(step2)]
 
     with patch(
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
@@ -267,13 +259,12 @@ async def test_end_to_end_checkpoint_synchronization_with_operations_list():
     before the second status check occurs.
     """
 
-    @durable_step
-    async def my_step(step_context: StepContext) -> str:
+    async def my_step() -> str:
         return "result"
 
     @durable_execution
     async def my_handler(event, context: DurableContext) -> str:
-        return await context.step(my_step())
+        return await context.step(my_step)
 
     with patch(
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
@@ -325,8 +316,7 @@ async def test_callback_deferred_error_handling_to_result():
     the immediate response handling pattern, enabling deferred error handling.
     """
 
-    @durable_step
-    async def step_after_callback(step_context: StepContext) -> str:
+    async def step_after_callback() -> str:
         return "code_executed_after_callback"
 
     @durable_execution
@@ -336,7 +326,7 @@ async def test_callback_deferred_error_handling_to_result():
 
         # This code executes even if callback will eventually fail
         # This is the deferred error handling pattern
-        result = await context.step(step_after_callback())
+        result = await context.step(step_after_callback)
 
         return f"{callback.callback_id}:{result}"
 

@@ -14,7 +14,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     # Mix waitForCallback with other operation types
     await context.wait(timedelta(seconds=1), name="initial-wait")
 
-    async def fetch_user_data(_) -> dict[str, Any]:
+    async def fetch_user_data() -> dict[str, Any]:
         return {"userId": 123, "name": "John Doe"}
 
     step_result: dict[str, Any] = await context.step(
@@ -33,7 +33,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
 
     await context.wait(timedelta(seconds=2), name="final-wait")
 
-    async def finalize_processing(_) -> dict[str, Any]:
+    async def finalize_processing() -> dict[str, Any]:
         return {
             "status": "completed",
             "timestamp": 1_717_894_400_000,

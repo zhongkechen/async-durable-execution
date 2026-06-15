@@ -34,8 +34,8 @@ id = str(uuid.uuid4())           # Different on each replay!
 timestamp = time.time()          # Different on each replay!
 
 # ✅ CORRECT: Non-deterministic code inside steps
-id = context.step(lambda _: str(uuid.uuid4()), name="generate-id")
-timestamp = context.step(lambda _: time.time(), name="get-time")
+id = context.step(lambda: str(uuid.uuid4()), name="generate-id")
+timestamp = context.step(lambda: time.time(), name="get-time")
 ```
 
 **Must be in steps:** `time.time()`, `random.random()`, UUID generation, API calls, database queries, file system operations.
@@ -46,14 +46,13 @@ You CANNOT call durable operations inside a step function.
 
 ```python
 # ❌ WRONG: Nested durable operations
-@durable_step
-async def process(step_ctx: StepContext):
+async def process():
     context.wait(duration=timedelta(seconds=1))  # ERROR!
 
 # ✅ CORRECT: Use run_in_child_context for grouping
 async def process(child_ctx: DurableContext):
     child_ctx.wait(duration=timedelta(seconds=1))
-    child_ctx.step(some_step())
+    child_ctx.step(some_step)
 
 context.run_in_child_context(process, name="process")
 ```
@@ -65,15 +64,14 @@ Variables mutated inside steps are NOT preserved across replays.
 ```python
 # ❌ WRONG: Counter mutations lost
 counter = 0
-@durable_step
-async def increment(step_ctx: StepContext):
+async def increment():
     nonlocal counter
     counter += 1
-context.step(increment())
+context.step(increment)
 print(counter)  # 0 on replay!
 
 # ✅ CORRECT: Return values from steps
-counter = context.step(lambda _: counter + 1, name="increment")
+counter = context.step(lambda: counter + 1, name="increment")
 ```
 
 ### Rule 4: Side Effects Outside Steps Repeat
@@ -89,7 +87,7 @@ send_email(...)    # Sends multiple emails!
 
 # ✅ CORRECT
 context.logger.info("Starting")  # Deduplicated automatically
-context.step(lambda _: send_email(...), name="email")
+context.step(lambda: send_email(...), name="email")
 ```
 
 ## IAM Permissions
@@ -195,22 +193,23 @@ async def handler(event: dict, context: DurableContext) -> dict:
 ### Steps - Atomic Operations
 
 ```python
-from async_durable_execution import durable_step, StepContext
+from functools import partial
+
+from async_durable_execution import get_step_context
 from async_durable_execution.config import StepConfig
 from async_durable_execution.retries import RetryStrategyConfig, create_retry_strategy
 
 
-# Define step function with decorator
-@durable_step
-async def fetch_user(step_ctx: StepContext, user_id: str) -> dict:
+async def fetch_user(user_id: str) -> dict:
+    step_ctx = get_step_context()
     return {"id": user_id, "name": "Jane"}
 
 
 # Execute step (uses function name automatically)
-result = context.step(fetch_user(user_id))
+result = context.step(partial(fetch_user, user_id))
 
 # Named step with lambda
-result = context.step(lambda _: fetch_data(), name="fetch-user")
+result = context.step(lambda: fetch_data(), name="fetch-user")
 
 # With retry configuration
 retry_config = RetryStrategyConfig(
@@ -219,7 +218,7 @@ retry_config = RetryStrategyConfig(
     backoff_rate=2.0,
 )
 result = context.step(
-    fetch_user(user_id),
+    partial(fetch_user, user_id),
     config=StepConfig(retry_strategy=create_retry_strategy(retry_config))
 )
 ```
@@ -307,7 +306,7 @@ from async_durable_execution.concurrency import MapConfig, CompletionConfig
 
 
 async def process_item(ctx: DurableContext, item: dict, index: int, items: Sequence[dict]) -> dict:
-    return ctx.step(lambda _: process(item), name=f"process-{index}")
+    return ctx.step(lambda: process(item), name=f"process-{index}")
 
 
 results = context.map(
@@ -334,11 +333,11 @@ from async_durable_execution.concurrency import ParallelConfig
 
 
 async def task1(ctx: DurableContext):
-    return ctx.step(lambda _: fetch_data1(), name="fetch1")
+    return ctx.step(lambda: fetch_data1(), name="fetch1")
 
 
 async def task2(ctx: DurableContext):
-    return ctx.step(lambda _: fetch_data2(), name="fetch2")
+    return ctx.step(lambda: fetch_data2(), name="fetch2")
 
 
 results = context.parallel(
@@ -412,7 +411,7 @@ async def handler(event: dict, context: DurableContext) -> str:
 
     while True:
         result = context.step(
-            lambda _: invoke_ai_model(messages),
+            lambda: invoke_ai_model(messages),
             name="invoke-model"
         )
 
@@ -421,7 +420,7 @@ async def handler(event: dict, context: DurableContext) -> str:
 
         tool = result["tool"]
         tool_result = context.step(
-            lambda _: execute_tool(tool, result["response"]),
+            lambda: execute_tool(tool, result["response"]),
             name=f"tool-{tool['name']}"
         )
         messages.append({"role": "assistant", "content": tool_result})
@@ -466,7 +465,7 @@ async def handler(event: dict, context: DurableContext) -> dict:
         return {"success": True}
     except Exception as error:
         for name, comp_fn in reversed(compensations):
-            context.step(lambda _: comp_fn(), name=name)
+            context.step(lambda: comp_fn(), name=name)
         raise error
 ```
 

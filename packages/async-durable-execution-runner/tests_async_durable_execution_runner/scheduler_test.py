@@ -454,6 +454,18 @@ def test_scheduler_cleanup_on_stop():
     assert not scheduler.is_started()
 
 
+def test_scheduler_call_later_after_stop_returns_cancelled_future():
+    """Test call_later returns a cancelled future after shutdown starts."""
+    scheduler = Scheduler()
+    scheduler.start()
+    scheduler.stop()
+
+    future = scheduler.call_later(lambda: None, delay=0.01)
+
+    assert future.done()
+    assert future.cancelled()
+
+
 def test_scheduler_multiple_events():
     """Test scheduler with multiple events."""
     scheduler = Scheduler()

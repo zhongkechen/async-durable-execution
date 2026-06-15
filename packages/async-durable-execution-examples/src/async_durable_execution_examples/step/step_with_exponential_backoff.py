@@ -22,7 +22,7 @@ async def handler(_event: Any, context: DurableContext) -> str:
 
     step_config = StepConfig(retry_strategy=create_retry_strategy(retry_config))
 
-    async def retry_step(_) -> str:
+    async def retry_step() -> str:
         return "Step with exponential backoff"
 
     result = await context.step(retry_step, name="retry_step", config=step_config)

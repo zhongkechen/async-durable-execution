@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import Future
 import itertools
 import logging
 import threading
@@ -11,7 +12,6 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from concurrent.futures import Future
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +69,7 @@ class Scheduler:
             target=self._start_loop, daemon=True
         )
         self._running: bool = False
+        self._stopping: bool = False
         self._events: set[asyncio.Event] = set()
 
     def __enter__(self):
@@ -95,8 +96,18 @@ class Scheduler:
             return
 
         self._running = False
-        self._loop.call_soon_threadsafe(self._cleanup_and_stop)
-        self._thread.join()
+        self._stopping = True
+
+        try:
+            cleanup_future: Future[None] = asyncio.run_coroutine_threadsafe(
+                self._cleanup_and_stop(), self._loop
+            )
+            cleanup_future.result(timeout=5.0)
+        finally:
+            self._thread.join()
+            if not self._loop.is_closed():
+                self._loop.close()
+            self._stopping = False
 
     def is_started(self) -> bool:
         """Return True if the scheduler is started."""
@@ -112,16 +123,23 @@ class Scheduler:
             return 0
         return len(asyncio.all_tasks(self._loop))
 
-    def _cleanup_and_stop(self):
-        """Cancel all tasks and clear all events. Stop the event-loop."""
-        # Cancel all tasks
-        for task in asyncio.all_tasks(self._loop):
+    async def _cleanup_and_stop(self) -> None:
+        """Cancel all tasks, drain cancellations, clear events, and stop the loop."""
+        current_task = asyncio.current_task()
+        tasks = [
+            task for task in asyncio.all_tasks(self._loop) if task is not current_task
+        ]
+
+        for task in tasks:
             task.cancel()
+
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
         # Clear events (don't set them)
         self._events.clear()
 
-        self._loop.stop()
+        self._loop.call_soon(self._loop.stop)
 
     def _start_loop(self):
         """Initialize the event-loop. The ready event notifies that the loop is started."""
@@ -153,6 +171,11 @@ class Scheduler:
 
         Returns: Future that completes when the scheduled work is done.
         """
+        if not self._running or self._stopping or self._loop.is_closed():
+            cancelled_future: Future[Any] = Future()
+            cancelled_future.cancel()
+            return cancelled_future
+
         # infinite counter if count = None, else it maxes out at count
         loop_iter: itertools.count[int] | range = (
             itertools.count() if count is None else range(count)
@@ -180,10 +203,10 @@ class Scheduler:
                 # might want to handle more things here
                 raise
 
-        future: Future[Any] = asyncio.run_coroutine_threadsafe(
+        scheduled_future: Future[Any] = asyncio.run_coroutine_threadsafe(
             delayed_func(), self._loop
         )
-        return future
+        return scheduled_future
 
     def create_event(self) -> Event:
         """Create an event controlled by the Scheduler to signal between threads and coroutines."""

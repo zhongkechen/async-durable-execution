@@ -12,29 +12,29 @@ async def handler(event: dict[str, Any], context: DurableContext) -> dict[str, A
     """Comprehensive example demonstrating all major durable operations."""
     print(f"Starting comprehensive operations example with event: {event}")
 
-    async def run_step_one(_) -> str:
+    async def run_step_one() -> str:
         return "Step 1 completed successfully"
 
     async def map_item(ctx: DurableContext, item: int, index: int, _) -> int:
-        async def get_item(_) -> int:
+        async def get_item() -> int:
             return item
 
         return await ctx.step(get_item, name=f"map-step-{index}")
 
     async def fruit_step_1(ctx: DurableContext) -> str:
-        async def get_fruit(_) -> str:
+        async def get_fruit() -> str:
             return "apple"
 
         return await ctx.step(get_fruit, name="fruit-step-1")
 
     async def fruit_step_2(ctx: DurableContext) -> str:
-        async def get_fruit(_) -> str:
+        async def get_fruit() -> str:
             return "banana"
 
         return await ctx.step(get_fruit, name="fruit-step-2")
 
     async def fruit_step_3(ctx: DurableContext) -> str:
-        async def get_fruit(_) -> str:
+        async def get_fruit() -> str:
             return "orange"
 
         return await ctx.step(get_fruit, name="fruit-step-3")

@@ -23,7 +23,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         name="first-callback",
     )
 
-    async def process_callback_data(_) -> dict[str, Any]:
+    async def process_callback_data() -> dict[str, Any]:
         return {"processed": True, "step": 1}
 
     # Step operation between callbacks

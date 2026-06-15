@@ -95,7 +95,7 @@ class DurableContext(Protocol):
     @abstractmethod
     async def step(
         self,
-        func: Callable[[StepContext], Awaitable[T]],
+        func: Callable[[], Awaitable[T]],
         name: str | None = None,
         config: StepConfig | None = None,
     ) -> T:

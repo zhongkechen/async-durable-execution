@@ -11,19 +11,19 @@ async def handler(_event: Any, context: DurableContext) -> str:
     config = ParallelConfig(completion_config=CompletionConfig.first_successful())
 
     async def task1(ctx: DurableContext) -> str:
-        async def run(_) -> str:
+        async def run() -> str:
             return "Task 1"
 
         return await ctx.step(run, name="task1")
 
     async def task2(ctx: DurableContext) -> str:
-        async def run(_) -> str:
+        async def run() -> str:
             return "Task 2"
 
         return await ctx.step(run, name="task2")
 
     async def task3(ctx: DurableContext) -> str:
-        async def run(_) -> str:
+        async def run() -> str:
             return "Task 3"
 
         return await ctx.step(run, name="task3")

@@ -31,6 +31,7 @@ from async_durable_execution.operation.callback import (
 )
 from async_durable_execution.retries import RetryDecision
 from async_durable_execution.serdes import SerDes
+from async_durable_execution.step_context import _reset_step_context, _set_step_context
 from async_durable_execution.state import CheckpointedResult, ExecutionState
 from async_durable_execution.types import DurableContext, StepContext
 
@@ -44,6 +45,16 @@ async def create_callback_handler(state, operation_identifier, config=None):
         config=config,
     )
     return await executor.process()
+
+
+async def execute_step_with_mock_context(func):
+    step_context = Mock(spec=StepContext)
+    step_context.logger = Mock()
+    token = _set_step_context(step_context)
+    try:
+        return await func()
+    finally:
+        _reset_step_context(token)
 
 
 async def test_create_callback_handler_new_operation_with_config():
@@ -328,9 +339,7 @@ async def test_wait_for_callback_handler_submitter_called_with_callback_id():
 
     async def capture_step_call(func, name, config=None):
         # Execute the step callable to verify submitter is called correctly
-        step_context = Mock(spec=StepContext)
-        step_context.logger = Mock()
-        await func(step_context)
+        await execute_step_with_mock_context(func)
 
     mock_context.step.side_effect = capture_step_call
 
@@ -383,9 +392,7 @@ async def test_wait_for_callback_handler_with_none_callback_id():
     mock_submitter = AsyncMock(return_value=None)
 
     async def execute_step(func, name, config=None):
-        step_context = Mock(spec=StepContext)
-        step_context.logger = Mock()
-        return await func(step_context)
+        return await execute_step_with_mock_context(func)
 
     mock_context.step.side_effect = execute_step
 
@@ -410,9 +417,7 @@ async def test_wait_for_callback_handler_with_empty_string_callback_id():
     mock_submitter = AsyncMock(return_value=None)
 
     async def execute_step(func, name, config=None):
-        step_context = Mock(spec=StepContext)
-        step_context.logger = Mock()
-        return await func(step_context)
+        return await execute_step_with_mock_context(func)
 
     mock_context.step.side_effect = execute_step
 
@@ -643,9 +648,7 @@ async def test_wait_for_callback_handler_submitter_exception_handling():
         raise ValueError(msg)
 
     async def step_side_effect(func, name, config=None):
-        step_context = Mock(spec=StepContext)
-        step_context.logger = Mock()
-        await func(step_context)
+        await execute_step_with_mock_context(func)
 
     mock_context.step.side_effect = step_side_effect
 
@@ -841,9 +844,7 @@ async def test_callback_lifecycle_complete_flow():
         return "submitted"
 
     async def execute_step(func, name, config=None):
-        step_context = Mock(spec=StepContext)
-        step_context.logger = Mock()
-        return await func(step_context)
+        return await execute_step_with_mock_context(func)
 
     mock_context.step.side_effect = execute_step
 
@@ -976,9 +977,7 @@ async def test_callback_with_complex_submitter():
         raise ValueError(msg)
 
     async def execute_step(func, name, config):
-        step_context = Mock(spec=StepContext)
-        step_context.logger = Mock()
-        return await func(step_context)
+        return await execute_step_with_mock_context(func)
 
     mock_context.step.side_effect = execute_step
 

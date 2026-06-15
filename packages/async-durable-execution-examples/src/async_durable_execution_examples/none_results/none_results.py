@@ -20,7 +20,7 @@ async def parent_context(ctx: DurableContext) -> None:
 async def handler(_event: Any, context: DurableContext) -> str:
     """Handler demonstrating operations with undefined/None results."""
 
-    async def fetch_user(_) -> None:
+    async def fetch_user() -> None:
         return None
 
     await context.step(fetch_user, name="fetch-user")

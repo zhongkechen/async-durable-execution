@@ -30,7 +30,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     async def process_item(ctx: DurableContext, item: int, index: int, _) -> int:
         await asyncio.sleep(0)
 
-        async def run(_) -> int:
+        async def run() -> int:
             return await _process_with_failures(item)
 
         return await ctx.step(

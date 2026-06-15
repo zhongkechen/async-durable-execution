@@ -21,6 +21,28 @@ def is_async_callable(func: Callable[..., object]) -> bool:
     return call is not None and inspect.iscoroutinefunction(call)
 
 
+def get_callable_name(
+    func: Callable[..., object],
+    *,
+    include_original_name: bool = True,
+) -> str | None:
+    if isinstance(func, functools.partial):
+        return get_callable_name(
+            func.func,
+            include_original_name=include_original_name,
+        )
+
+    if include_original_name:
+        original_name = getattr(func, "_original_name", None)
+        if original_name is not None:
+            return original_name
+
+    if inspect.isfunction(func) or inspect.ismethod(func):
+        return getattr(func, "__name__", None)
+
+    return None
+
+
 def assert_async_callable(
     func: Callable[..., object],
     *,
@@ -29,9 +51,7 @@ def assert_async_callable(
     if is_async_callable(func):
         return
 
-    name = getattr(func, "_original_name", None) or getattr(func, "__name__", None)
-    if name is None and isinstance(func, functools.partial):
-        name = getattr(func.func, "__name__", None)
+    name = get_callable_name(func)
     if name is None:
         name = type(func).__name__
 

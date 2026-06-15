@@ -25,6 +25,10 @@ from async_durable_execution.operation.base import (
 )
 from async_durable_execution.retries import RetryDecision, RetryPresets
 from async_durable_execution.serdes import deserialize, serialize
+from async_durable_execution.step_context import (
+    _reset_step_context,
+    _set_step_context,
+)
 from async_durable_execution.suspend import (
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
@@ -55,7 +59,7 @@ class StepOperationExecutor(OperationExecutor[T]):
 
     def __init__(
         self,
-        func: Callable[[StepContext], Awaitable[T]],
+        func: Callable[[], Awaitable[T]],
         config: StepConfig,
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
@@ -227,7 +231,11 @@ class StepOperationExecutor(OperationExecutor[T]):
                 False,
                 attempt,
             )
-            raw_result: T = await wrapped_user_func(step_context)
+            token = _set_step_context(step_context)
+            try:
+                raw_result = await wrapped_user_func()
+            finally:
+                _reset_step_context(token)
 
             serialized_result: str = serialize(
                 serdes=self.config.serdes,

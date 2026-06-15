@@ -12,7 +12,7 @@ from async_durable_execution.execution import durable_execution
 async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     """Handler demonstrating createCallback mixed with other operations."""
 
-    async def fetch_data(_) -> dict[str, Any]:
+    async def fetch_data() -> dict[str, Any]:
         return {"userId": 123, "name": "John Doe"}
 
     step_result: dict[str, Any] = await context.step(

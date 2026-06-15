@@ -10,7 +10,7 @@ async def handler(_event: Any, context: DurableContext) -> str:
     # Step with AT_MOST_ONCE_PER_RETRY semantics
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
 
-    async def at_most_once_step(_) -> str:
+    async def at_most_once_step() -> str:
         return "AT_MOST_ONCE_PER_RETRY semantics"
 
     result = await context.step(

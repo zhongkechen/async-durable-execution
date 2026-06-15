@@ -27,7 +27,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, bool]:
         )
         step_config = StepConfig(retry_strategy=create_retry_strategy(retry_config))
 
-        async def failing_step(_) -> None:
+        async def failing_step() -> None:
             """Step that always fails."""
             raise Exception("Step failed in child context")
 

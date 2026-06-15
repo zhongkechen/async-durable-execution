@@ -15,7 +15,7 @@ from async_durable_execution.execution import durable_execution
 async def fetch_orders(ctx: DurableContext) -> str:
     await asyncio.sleep(0)
 
-    async def load_orders(_) -> str:
+    async def load_orders() -> str:
         return "orders-loaded"
 
     return await ctx.step(load_orders, name="load_orders")
@@ -25,7 +25,7 @@ async def fetch_orders(ctx: DurableContext) -> str:
 async def fetch_preferences(ctx: DurableContext) -> str:
     await asyncio.sleep(0)
 
-    async def load_prefs(_) -> str:
+    async def load_prefs() -> str:
         return "prefs-loaded"
 
     return await ctx.step(load_prefs, name="load_prefs")
@@ -36,19 +36,19 @@ async def handler(_event: Any, context: DurableContext) -> list[str]:
     """Execute parallel branches using all supported patterns."""
 
     async def fetch_user_data(ctx: DurableContext) -> str:
-        async def load_user(_) -> str:
+        async def load_user() -> str:
             return "user-data-loaded"
 
         return await ctx.step(load_user, name="load_user")
 
     async def fetch_metrics(ctx: DurableContext) -> str:
-        async def load_metrics(_) -> str:
+        async def load_metrics() -> str:
             return "metrics-loaded"
 
         return await ctx.step(load_metrics, name="load_metrics")
 
     async def load_config(ctx: DurableContext) -> str:
-        async def load_value(_) -> str:
+        async def load_value() -> str:
             return "config-loaded"
 
         return await ctx.step(load_value, name="load_config")

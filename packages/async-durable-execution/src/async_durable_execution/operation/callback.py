@@ -13,6 +13,7 @@ from async_durable_execution.operation.base import (
     CheckResult,
     OperationExecutor,
 )
+from async_durable_execution.step_context import get_step_context
 from async_durable_execution.types import WaitForCallbackContext
 
 
@@ -31,7 +32,6 @@ if TYPE_CHECKING:
     from async_durable_execution.types import (
         Callback,
         DurableContext,
-        StepContext,
     )
 
 
@@ -176,7 +176,8 @@ async def _wait_for_callback_handler_async(
         name=f"{name_with_space}create callback id", config=config
     )
 
-    async def submitter_step(step_context: StepContext):
+    async def submitter_step():
+        step_context = get_step_context()
         return await submitter(
             callback.callback_id,
             WaitForCallbackContext(logger=step_context.logger),
