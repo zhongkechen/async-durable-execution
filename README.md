@@ -21,7 +21,7 @@ This fork is specifically focused on making async Python work naturally with dur
 - **Waits and callbacks** - Pause for time or external signals without blocking Lambda
 - **Parallel and map operations** - Fan out work with configurable completion criteria
 - **Child contexts** - Structure complex workflows into isolated subflows
-- **Replay-safe logging** - Use `context.logger` for structured, de-duplicated logs
+- **Replay-safe logging** - Use standard `logging` loggers enriched by the durable context filter
 - **Local and cloud testing** - Validate workflows with the testing SDK
 - **Async Python support** - Use `async def` for handlers, steps, child contexts, callback submitters, and wait-for-condition checks
 
@@ -47,20 +47,22 @@ Create a durable Lambda handler:
 
 ```python
 import asyncio
+import logging
 from datetime import timedelta
 
 from async_durable_execution import (
     durable_step,
     durable_execution,
     get_context,
-    get_logger,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @durable_step
 async def validate_order(order_id: str) -> dict:
     await asyncio.sleep(0)
-    get_logger().info("Validating order", extra={"order_id": order_id})
+    logger.info("Validating order", extra={"order_id": order_id})
     return {"order_id": order_id, "valid": True}
 
 
@@ -68,7 +70,7 @@ async def validate_order(order_id: str) -> dict:
 async def handler(event: dict) -> dict:
     context = get_context()
     order_id = event["order_id"]
-    get_logger().info("Starting workflow", extra={"order_id": order_id})
+    logger.info("Starting workflow", extra={"order_id": order_id})
 
     validation = await context.step(validate_order(order_id), name="validate_order")
     if not validation["valid"]:
@@ -84,19 +86,21 @@ Async callables are required anywhere the SDK accepts user code, including `map(
 
 ```python
 import asyncio
+import logging
 
 from async_durable_execution import (
     durable_step,
     durable_execution,
     get_context,
-    get_logger,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @durable_step
 async def fetch_order(order_id: str) -> dict:
     await asyncio.sleep(0)
-    get_logger().info("Fetched order", extra={"order_id": order_id})
+    logger.info("Fetched order", extra={"order_id": order_id})
     return {"order_id": order_id, "status": "ready"}
 
 

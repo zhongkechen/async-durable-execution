@@ -3,6 +3,7 @@
 import asyncio
 import datetime
 import json
+import logging
 import time
 from typing import Any, cast
 from unittest.mock import Mock, patch
@@ -3015,7 +3016,7 @@ async def test_durable_execution_supports_async_handler():
     @durable_execution
     async def test_handler(event: Any, context: DurableContext) -> dict:
         await asyncio.sleep(0)
-        context.logger.info("handled async invocation")
+        logging.getLogger(__name__).info("handled async invocation")
         return {"result": "async-success"}
 
     result = await run_handler(
@@ -3057,7 +3058,7 @@ async def test_durable_execution_handler_can_use_get_context_without_parameter()
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
     assert json.loads(result["Result"]) == {
         "value": "from-context",
-        "has_logger": True,
+        "has_logger": False,
     }
 
 

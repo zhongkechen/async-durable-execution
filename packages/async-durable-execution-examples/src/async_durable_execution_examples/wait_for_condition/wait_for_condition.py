@@ -6,6 +6,8 @@ from typing import Any
 
 from async_durable_execution import (
     durable_execution,
+    get_context,
+    WaitForConditionCheckContext,
     WaitForConditionConfig,
     WaitForConditionDecision,
     wait_for_condition,
@@ -16,9 +18,10 @@ from async_durable_execution import (
 async def handler(_event: Any) -> int:
     """Handler demonstrating wait-for-condition pattern."""
 
-    async def condition_function(state: int, _) -> int:
+    async def condition_function(state: int) -> int:
         """Increment state by 1."""
         await asyncio.sleep(0)
+        assert isinstance(get_context(), WaitForConditionCheckContext)
         return state + 1
 
     def wait_strategy(state: int, attempt: int) -> dict[str, Any]:

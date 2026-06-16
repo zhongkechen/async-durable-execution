@@ -28,11 +28,12 @@ from async_durable_execution.models import (
     OperationType,
     StepDetails,
 )
-from async_durable_execution.logger import Logger
+import logging
+from async_durable_execution.context import get_context
 from async_durable_execution.operation.step import StepOperationExecutor
 from async_durable_execution.retries import RetryDecision
-from async_durable_execution.context import get_context, get_step_context
 from async_durable_execution.state import CheckpointedResult, ExecutionState
+from async_durable_execution.types import StepContext
 
 from ..serdes_test import CustomDictSerDes
 
@@ -52,7 +53,7 @@ def _asyncify(func):
 
 
 # Test helper - maintains old handler signature for backward compatibility in tests
-async def step_handler(func, state, operation_identifier, config, context_logger):
+async def step_handler(func, state, operation_identifier, config):
     """Test helper that wraps StepOperationExecutor with old handler signature."""
     if not config:
         config = StepConfig()
@@ -67,7 +68,6 @@ async def step_handler(func, state, operation_identifier, config, context_logger
         config=config,
         state=state,
         operation_identifier=operation_identifier,
-        context_logger=context_logger,
     )
     return await _invoke_maybe_async(executor.process())
 
@@ -86,14 +86,13 @@ async def test_step_handler_already_succeeded():
     mock_state.get_checkpoint_result.return_value = mock_result
 
     mock_callable = Mock(return_value="should_not_call")
-    mock_logger = Mock(spec=Logger)
+    mock_logger = Mock(spec=logging.Logger)
 
     result = await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier("step1", OperationSubType.STEP, None, "test_step"),
         None,
-        mock_logger,
     )
 
     assert result == "test_result"
@@ -115,14 +114,13 @@ async def test_step_handler_already_succeeded_none_result():
     mock_state.get_checkpoint_result.return_value = mock_result
 
     mock_callable = Mock()
-    mock_logger = Mock(spec=Logger)
+    mock_logger = Mock(spec=logging.Logger)
 
     result = await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier("step2", OperationSubType.STEP, None, "test_step"),
         None,
-        mock_logger,
     )
 
     assert result is None
@@ -146,7 +144,7 @@ async def test_step_handler_already_failed():
     mock_state.get_checkpoint_result.return_value = mock_result
 
     mock_callable = Mock()
-    mock_logger = Mock(spec=Logger)
+    mock_logger = Mock(spec=logging.Logger)
 
     with pytest.raises(CallableRuntimeError):
         await step_handler(
@@ -154,7 +152,6 @@ async def test_step_handler_already_failed():
             mock_state,
             OperationIdentifier("step3", OperationSubType.STEP, None, "test_step"),
             None,
-            mock_logger,
         )
 
     mock_callable.assert_not_called()
@@ -175,7 +172,7 @@ async def test_step_handler_started_at_most_once():
 
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
     mock_callable = Mock()
-    mock_logger = Mock(spec=Logger)
+    mock_logger = Mock(spec=logging.Logger)
 
     with pytest.raises(SuspendExecution):
         await step_handler(
@@ -183,7 +180,6 @@ async def test_step_handler_started_at_most_once():
             mock_state,
             OperationIdentifier("step4", OperationSubType.STEP, None, "test_step"),
             config,
-            mock_logger,
         )
 
 
@@ -206,14 +202,13 @@ async def test_step_handler_started_at_least_once():
     config = StepConfig(step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="success_result")
     mock_state.wrap_user_function.return_value = mock_callable
-    mock_logger = Mock(spec=Logger)
+    mock_logger = Mock(spec=logging.Logger)
 
     await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier("step5", OperationSubType.STEP, None, "test_step"),
         config,
-        mock_logger,
     )
 
 
@@ -227,15 +222,13 @@ async def test_step_handler_success_at_least_once():
     config = StepConfig(step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="success_result")
     mock_state.wrap_user_function.return_value = mock_callable
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     result = await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier("step6", OperationSubType.STEP, None, "test_step"),
         config,
-        mock_logger,
     )
 
     assert result == "success_result"
@@ -270,18 +263,18 @@ async def test_step_handler_passes_attempt_to_step_context():
         func
     )
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     async def step_callable():
-        return get_step_context().attempt
+        current_context = get_context()
+        assert isinstance(current_context, StepContext)
+        return current_context.attempt
 
     result = await step_handler(
         step_callable,
         mock_state,
         OperationIdentifier("step_attempt", OperationSubType.STEP, None, "test_step"),
         StepConfig(step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY),
-        mock_logger,
     )
 
     assert result == 1
@@ -297,8 +290,7 @@ async def test_step_handler_get_context_returns_step_context():
         func
     )
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     async def step_callable():
         return get_context().attempt
@@ -308,18 +300,17 @@ async def test_step_handler_get_context_returns_step_context():
         mock_state,
         OperationIdentifier("step_context", OperationSubType.STEP, None, "test_step"),
         StepConfig(step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY),
-        mock_logger,
     )
 
     assert result == 1
 
 
-def test_get_step_context_raises_outside_step():
+def test_get_context_raises_outside_execution():
     with pytest.raises(
         RuntimeError,
-        match="get_step_context\\(\\) can only be used while a step function is executing\\.",
+        match="get_context\\(\\) can only be used while a durable function, step function, wait_for_callback submitter, or wait_for_condition check is executing\\.",
     ):
-        get_step_context()
+        get_context()
 
 
 async def test_step_handler_success_at_most_once():
@@ -341,15 +332,13 @@ async def test_step_handler_success_at_most_once():
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="success_result")
     mock_state.wrap_user_function.return_value = mock_callable
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     result = await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier("step7", OperationSubType.STEP, None, "test_step"),
         config,
-        mock_logger,
     )
 
     assert result == "success_result"
@@ -383,8 +372,7 @@ async def test_step_handler_non_retriable_execution_error():
 
     mock_callable = Mock(side_effect=ExecutionError("Do Not Retry"))
     mock_state.wrap_user_function.return_value = mock_callable
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     with pytest.raises(ExecutionError, match="Do Not Retry"):
         await step_handler(
@@ -392,7 +380,6 @@ async def test_step_handler_non_retriable_execution_error():
             mock_state,
             OperationIdentifier("step8", OperationSubType.STEP, None, "test_step"),
             None,
-            mock_logger,
         )
 
 
@@ -409,8 +396,7 @@ async def test_step_handler_retry_success():
     config = StepConfig(retry_strategy=mock_retry_strategy)
     mock_callable = Mock(side_effect=RuntimeError("Test error"))
     mock_state.wrap_user_function.return_value = mock_callable
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     with pytest.raises(SuspendExecution, match="Retry scheduled"):
         await step_handler(
@@ -418,7 +404,6 @@ async def test_step_handler_retry_success():
             mock_state,
             OperationIdentifier("step9", OperationSubType.STEP, None, "test_step"),
             config,
-            mock_logger,
         )
 
     assert mock_state._create_checkpoint_async.call_count == 2
@@ -453,8 +438,7 @@ async def test_step_handler_retry_exhausted():
     config = StepConfig(retry_strategy=mock_retry_strategy)
     mock_callable = Mock(side_effect=RuntimeError("Test error"))
     mock_state.wrap_user_function.return_value = mock_callable
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     with pytest.raises(CallableRuntimeError):
         await step_handler(
@@ -462,7 +446,6 @@ async def test_step_handler_retry_exhausted():
             mock_state,
             OperationIdentifier("step10", OperationSubType.STEP, None, "test_step"),
             config,
-            mock_logger,
         )
 
     assert mock_state._create_checkpoint_async.call_count == 2
@@ -498,8 +481,7 @@ async def test_step_handler_retry_interrupted_error():
     interrupted_error = StepInterruptedError("Step interrupted")
     mock_callable = Mock(side_effect=interrupted_error)
     mock_state.wrap_user_function.return_value = mock_callable
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     with pytest.raises(StepInterruptedError, match="Step interrupted"):
         await step_handler(
@@ -507,7 +489,6 @@ async def test_step_handler_retry_interrupted_error():
             mock_state,
             OperationIdentifier("step11", OperationSubType.STEP, None, "test_step"),
             config,
-            mock_logger,
         )
 
 
@@ -536,8 +517,7 @@ async def test_step_handler_retry_with_existing_attempts():
     )
     config = StepConfig(retry_strategy=mock_retry_strategy)
     mock_callable = Mock(side_effect=RuntimeError("Test error"))
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     with pytest.raises(SuspendExecution, match="Retry scheduled"):
         await step_handler(
@@ -545,7 +525,6 @@ async def test_step_handler_retry_with_existing_attempts():
             mock_state,
             OperationIdentifier("step12", OperationSubType.STEP, None, "test_step"),
             config,
-            mock_logger,
         )
 
     # Verify retry strategy was not called because we already have attempt timestamp in the checkpointed location
@@ -572,8 +551,7 @@ async def test_step_handler_pending_without_existing_attempts():
     )
     config = StepConfig(retry_strategy=mock_retry_strategy)
     mock_callable = Mock(side_effect=RuntimeError("Test error"))
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     with pytest.raises(SuspendExecution, match="No timestamp provided"):
         await step_handler(
@@ -581,7 +559,6 @@ async def test_step_handler_pending_without_existing_attempts():
             mock_state,
             OperationIdentifier("step12", OperationSubType.STEP, None, "test_step"),
             config,
-            mock_logger,
         )
 
     # Verify retry strategy was not called because we already have attempt timestamp in the checkpointed location
@@ -610,8 +587,7 @@ async def test_step_handler_retry_handler_no_exception(mock_retry_handler):
 
     mock_callable = Mock(side_effect=RuntimeError("Test error"))
     mock_state.wrap_user_function.return_value = mock_callable
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     with pytest.raises(
         ExecutionError,
@@ -622,7 +598,6 @@ async def test_step_handler_retry_handler_no_exception(mock_retry_handler):
             mock_state,
             OperationIdentifier("step13", OperationSubType.STEP, None, "test_step"),
             None,
-            mock_logger,
         )
 
     mock_retry_handler.assert_called_once()
@@ -640,15 +615,13 @@ async def test_step_handler_custom_serdes_success():
     complex_result = {"key": "value", "number": 42, "list": [1, 2, 3]}
     mock_callable = Mock(return_value=complex_result)
     mock_state.wrap_user_function.return_value = mock_callable
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier("step6", OperationSubType.STEP, None, "test_step"),
         config,
-        mock_logger,
     )
 
     expected_checkpoointed_result = (
@@ -675,14 +648,13 @@ async def test_step_handler_custom_serdes_already_succeeded():
     mock_state.get_checkpoint_result.return_value = mock_result
 
     mock_callable = Mock(return_value="should_not_call")
-    mock_logger = Mock(spec=Logger)
+    mock_logger = Mock(spec=logging.Logger)
 
     result = await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier("step1", OperationSubType.STEP, None, "test_step"),
         StepConfig(serdes=CustomDictSerDes()),
-        mock_logger,
     )
 
     assert result == {"key": "value", "number": 42, "list": [1, 2, 3]}
@@ -711,8 +683,7 @@ async def test_step_immediate_response_get_checkpoint_called_twice():
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="success_result")
     mock_state.wrap_user_function.return_value = mock_callable
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     result = await step_handler(
         mock_callable,
@@ -721,7 +692,6 @@ async def test_step_immediate_response_get_checkpoint_called_twice():
             "step_immediate_1", OperationSubType.STEP, None, "test_step"
         ),
         config,
-        mock_logger,
     )
 
     # Verify get_checkpoint_result was called twice (before and after checkpoint creation)
@@ -748,8 +718,7 @@ async def test_step_immediate_response_create_checkpoint_sync_at_most_once():
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="success_result")
     mock_state.wrap_user_function.return_value = mock_callable
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     await step_handler(
         mock_callable,
@@ -758,7 +727,6 @@ async def test_step_immediate_response_create_checkpoint_sync_at_most_once():
             "step_immediate_2", OperationSubType.STEP, None, "test_step"
         ),
         config,
-        mock_logger,
     )
 
     # Verify START checkpoint was created with is_sync=True
@@ -778,8 +746,7 @@ async def test_step_immediate_response_create_checkpoint_async_at_least_once():
     config = StepConfig(step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="success_result")
     mock_state.wrap_user_function.return_value = mock_callable
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     await step_handler(
         mock_callable,
@@ -788,7 +755,6 @@ async def test_step_immediate_response_create_checkpoint_async_at_least_once():
             "step_immediate_3", OperationSubType.STEP, None, "test_step"
         ),
         config,
-        mock_logger,
     )
 
     # Verify START checkpoint was created with is_sync=False
@@ -820,8 +786,7 @@ async def test_step_immediate_response_immediate_success():
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="immediate_success_result")
     mock_state.wrap_user_function.return_value = mock_callable
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     result = await step_handler(
         mock_callable,
@@ -830,7 +795,6 @@ async def test_step_immediate_response_immediate_success():
             "step_immediate_4", OperationSubType.STEP, None, "test_step"
         ),
         config,
-        mock_logger,
     )
 
     # Verify operation executed normally (no immediate response in current implementation)
@@ -861,8 +825,7 @@ async def test_step_immediate_response_immediate_failure():
     # Make the step function raise an error
     mock_callable = Mock(side_effect=RuntimeError("Step execution error"))
     mock_state.wrap_user_function.return_value = mock_callable
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     # Configure retry strategy to not retry
     mock_retry_strategy = Mock(
@@ -882,7 +845,6 @@ async def test_step_immediate_response_immediate_failure():
                 "step_immediate_5", OperationSubType.STEP, None, "test_step"
             ),
             config,
-            mock_logger,
         )
 
     mock_callable.assert_called_once()
@@ -910,8 +872,7 @@ async def test_step_immediate_response_no_immediate_response():
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="normal_execution_result")
     mock_state.wrap_user_function.return_value = mock_callable
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     result = await step_handler(
         mock_callable,
@@ -920,7 +881,6 @@ async def test_step_immediate_response_no_immediate_response():
             "step_immediate_6", OperationSubType.STEP, None, "test_step"
         ),
         config,
-        mock_logger,
     )
 
     # Verify step function was executed
@@ -947,7 +907,7 @@ async def test_step_immediate_response_already_completed():
 
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="should_not_call")
-    mock_logger = Mock(spec=Logger)
+    mock_logger = Mock(spec=logging.Logger)
 
     result = await step_handler(
         mock_callable,
@@ -956,7 +916,6 @@ async def test_step_immediate_response_already_completed():
             "step_immediate_7", OperationSubType.STEP, None, "test_step"
         ),
         config,
-        mock_logger,
     )
 
     # Verify operation returned immediately without creating checkpoint
@@ -988,8 +947,7 @@ async def test_step_executes_function_when_second_check_returns_started():
 
     mock_step_function = Mock(return_value="result")
     mock_state.wrap_user_function.return_value = _asyncify(mock_step_function)
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     executor = StepOperationExecutor(
         func=mock_step_function,
@@ -998,7 +956,6 @@ async def test_step_executes_function_when_second_check_returns_started():
         operation_identifier=OperationIdentifier(
             "step-1", OperationSubType.STEP, None, "test_step"
         ),
-        context_logger=mock_logger,
     )
     result = await executor.process()
 
@@ -1040,15 +997,13 @@ async def test_step_creates_start_checkpoint_when_status_is_ready():
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="ready_step_result")
     mock_state.wrap_user_function.return_value = mock_callable
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     result = await step_handler(
         mock_callable,
         mock_state,
         OperationIdentifier("step_ready_1", OperationSubType.STEP, None, "test_step"),
         config,
-        mock_logger,
     )
 
     assert result == "ready_step_result"

@@ -4,7 +4,6 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    WaitForCallbackContext,
     durable_execution,
     run_in_child_context,
     wait,
@@ -12,7 +11,7 @@ from async_durable_execution import (
 )
 
 
-async def noop_submitter(_callback_id: str, _context: WaitForCallbackContext) -> None:
+async def noop_submitter(_callback_id: str) -> None:
     return None
 
 

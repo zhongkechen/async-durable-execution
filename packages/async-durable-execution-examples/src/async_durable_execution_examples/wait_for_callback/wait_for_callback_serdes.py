@@ -6,7 +6,6 @@ from typing import Any, TypedDict
 
 from async_durable_execution import (
     WaitForCallbackConfig,
-    WaitForCallbackContext,
     durable_execution,
     SerDes,
     wait_for_callback,
@@ -67,7 +66,7 @@ class CustomSerdes(SerDes[CustomData]):
         )
 
 
-async def noop_submitter(_callback_id: str, _context: WaitForCallbackContext) -> None:
+async def noop_submitter(_callback_id: str) -> None:
     return None
 
 

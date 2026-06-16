@@ -28,7 +28,7 @@ async def handler(_event: Any) -> dict[str, Any]:
         name="fetch-user-data",
     )
 
-    async def submitter(_callback_id, _context) -> None:
+    async def submitter(_callback_id) -> None:
         """Submitter uses data from previous step."""
         await asyncio.sleep(0.1)
 

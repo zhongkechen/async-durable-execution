@@ -31,7 +31,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     async def retryable_callback_flow(attempt: int) -> str:
         """The retryable block: create a callback and wait for the result."""
 
-        async def submitter(callback_id: str, _callback_ctx) -> None:
+        async def submitter(callback_id: str) -> None:
             """Submit the callback ID to an external system."""
             # In real usage, this would send the callback_id to an external
             # system (e.g., via API call, SQS message, etc.)

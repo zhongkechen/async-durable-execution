@@ -5,6 +5,10 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, TypeVar
 
+from async_durable_execution.context import (
+    _reset_context,
+    _set_context,
+)
 from async_durable_execution.exceptions import (
     ExecutionError,
 )
@@ -12,7 +16,6 @@ from async_durable_execution.models import (
     ErrorObject,
     OperationUpdate,
 )
-from async_durable_execution.logger import LogInfo
 from async_durable_execution.operation.base import (
     CheckResult,
     OperationExecutor,
@@ -22,14 +25,16 @@ from async_durable_execution.suspend import (
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
 )
-from async_durable_execution.types import WaitForConditionCheckContext
+from async_durable_execution.types import (
+    StepContext,
+    WaitForConditionCheckContext,
+)
 
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from async_durable_execution.models import OperationIdentifier
-    from async_durable_execution.logger import Logger
     from async_durable_execution.state import (
         CheckpointedResult,
         ExecutionState,
@@ -54,11 +59,10 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
 
     def __init__(
         self,
-        check: Callable[[T, WaitForConditionCheckContext], Awaitable[T]],
+        check: Callable[[T], Awaitable[T]],
         config: WaitForConditionConfig[T],
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
-        context_logger: Logger,
     ):
         """Initialize the wait_for_condition executor.
 
@@ -67,13 +71,11 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             config: Configuration for the wait_for_condition operation
             state: The execution state
             operation_identifier: The operation identifier
-            context_logger: Logger for the operation context
         """
         self.check = check
         self.config = config
         self.state = state
         self.operation_identifier = operation_identifier
-        self.context_logger = context_logger
 
     async def check_result_status(self) -> CheckResult[T]:
         """Check operation status and create START checkpoint if needed.
@@ -178,24 +180,34 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             attempt = checkpointed_result.operation.step_details.attempt + 1
 
         try:
-            # Execute the check function with the injected logger
-            check_context = WaitForConditionCheckContext(
-                logger=self.context_logger.with_log_info(
-                    LogInfo.from_operation_identifier(
-                        execution_state=self.state,
-                        op_id=self.operation_identifier,
-                        attempt=attempt,
-                    )
-                )
+            step_context = StepContext(
+                attempt=attempt,
+                execution_state=self.state,
+                execution_arn=self.state.durable_execution_arn,
+                parent_id=self.operation_identifier.parent_id,
+                operation_id=self.operation_identifier.operation_id,
+                operation_name=self.operation_identifier.name,
             )
-
             wrapped_user_func = self.state.wrap_user_function(
                 self.check,
                 self.operation_identifier,
                 False,
                 attempt,
             )
-            new_state = await wrapped_user_func(current_state, check_context)
+            token = _set_context(
+                WaitForConditionCheckContext(
+                    attempt=attempt,
+                    execution_state=step_context.execution_state,
+                    execution_arn=step_context.execution_arn,
+                    parent_id=step_context.parent_id,
+                    operation_id=step_context.operation_id,
+                    operation_name=step_context.operation_name,
+                )
+            )
+            try:
+                new_state = await wrapped_user_func(current_state)
+            finally:
+                _reset_context(token)
 
             # Check if condition is met with the wait strategy
             decision: WaitForConditionDecision = self.config.wait_strategy(

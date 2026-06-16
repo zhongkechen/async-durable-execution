@@ -18,7 +18,7 @@ async def handler(_event: Any) -> dict[str, Any]:
         timeout=timedelta(seconds=1), heartbeat_timeout=timedelta(seconds=2)
     )
 
-    async def submitter(_callback_id, _context) -> None:
+    async def submitter(_callback_id) -> None:
         """Submitter succeeds but callback never completes."""
         return None
 

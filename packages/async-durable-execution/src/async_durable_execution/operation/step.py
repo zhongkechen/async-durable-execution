@@ -19,7 +19,6 @@ from async_durable_execution.models import (
     OperationUpdate,
 )
 from async_durable_execution.context import _reset_context, _set_context
-from async_durable_execution.logger import Logger, LogInfo
 from async_durable_execution.operation.base import (
     CheckResult,
     OperationExecutor,
@@ -60,7 +59,6 @@ class StepOperationExecutor(OperationExecutor[T]):
         config: StepConfig,
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
-        context_logger: Logger,
     ):
         """Initialize the step operation executor.
 
@@ -69,13 +67,11 @@ class StepOperationExecutor(OperationExecutor[T]):
             config: The step configuration
             state: The execution state
             operation_identifier: The operation identifier
-            context_logger: The logger for the step context
         """
         self.func = func
         self.config = config
         self.state = state
         self.operation_identifier = operation_identifier
-        self.context_logger = context_logger
         self._checkpoint_created = False  # Track if we created the checkpoint
 
     async def check_result_status(self) -> CheckResult[T]:
@@ -210,14 +206,12 @@ class StepOperationExecutor(OperationExecutor[T]):
             attempt = checkpointed_result.operation.step_details.attempt + 1
 
         step_context: StepContext = StepContext(
-            logger=self.context_logger.with_log_info(
-                LogInfo.from_operation_identifier(
-                    execution_state=self.state,
-                    op_id=self.operation_identifier,
-                    attempt=attempt,
-                )
-            ),
             attempt=attempt,
+            execution_state=self.state,
+            execution_arn=self.state.durable_execution_arn,
+            parent_id=self.operation_identifier.parent_id,
+            operation_id=self.operation_identifier.operation_id,
+            operation_name=self.operation_identifier.name,
         )
 
         try:

@@ -13,7 +13,7 @@ from async_durable_execution import (
 async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with anonymous submitter."""
 
-    async def submitter(_callback_id, _context) -> None:
+    async def submitter(_callback_id) -> None:
         await asyncio.sleep(1)
 
     result: str = await wait_for_callback(submitter)

@@ -19,7 +19,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     await wait(timedelta(seconds=1), name="wait-invocation-1")
 
     # First callback operation
-    async def first_submitter(callback_id: str, _context) -> None:
+    async def first_submitter(callback_id: str) -> None:
         """Submitter for first callback."""
         print(f"First callback submitted with ID: {callback_id}")
 
@@ -41,7 +41,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     await wait(timedelta(seconds=1), name="wait-invocation-2")
 
     # Second callback operation
-    async def second_submitter(callback_id: str, _context) -> None:
+    async def second_submitter(callback_id: str) -> None:
         """Submitter for second callback."""
         print(f"Second callback submitted with ID: {callback_id}")
 

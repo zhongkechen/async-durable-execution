@@ -30,12 +30,10 @@ from async_durable_execution.context import (
     durable_step,
     durable_parallel_branch,
     get_context,
-    get_logger,
     invoke,
     map as map_operation,
     parallel,
     run_in_child_context,
-    set_logger,
     step,
     wait,
     wait_for_callback,
@@ -112,8 +110,6 @@ async def test_durable_context():
 
 async def test_module_level_context_functions_delegate_to_durable_context():
     mock_context = Mock()
-    mock_logger = Mock()
-    mock_context.logger = mock_logger
 
     async def step_side_effect(*, func, name=None, config=None):
         await func()
@@ -128,7 +124,6 @@ async def test_module_level_context_functions_delegate_to_durable_context():
     mock_context.parallel = AsyncMock(return_value="parallel-result")
     mock_context.wait_for_callback = AsyncMock(return_value="callback-wait-result")
     mock_context.wait_for_condition = AsyncMock(return_value="condition-result")
-    mock_context.set_logger = Mock()
 
     async def step_func() -> str:
         return "value"
@@ -142,10 +137,10 @@ async def test_module_level_context_functions_delegate_to_durable_context():
     async def parallel_func() -> str:
         return "parallel"
 
-    async def submitter(callback_id: str, callback_context) -> None:
+    async def submitter(callback_id: str) -> None:
         return None
 
-    async def check(state: str, check_context) -> str:
+    async def check(state: str) -> str:
         return state
 
     config = WaitForConditionConfig(
@@ -156,7 +151,6 @@ async def test_module_level_context_functions_delegate_to_durable_context():
     token = _set_context(mock_context)
     try:
         assert await step(step_func, name="step-name") == "step-result"
-        assert get_logger() is mock_logger
         await wait(timedelta(seconds=1), name="wait-name")
         assert await create_callback(name="callback-name") == "callback-result"
         assert await invoke("fn", {"x": 1}, name="invoke-name") == "invoke-result"
@@ -175,7 +169,6 @@ async def test_module_level_context_functions_delegate_to_durable_context():
             await wait_for_condition(check, config, name="condition-name")
             == "condition-result"
         )
-        set_logger(mock_logger)
     finally:
         _reset_context(token)
 
@@ -224,7 +217,6 @@ async def test_module_level_context_functions_delegate_to_durable_context():
         config=config,
         name="condition-name",
     )
-    mock_context.set_logger.assert_called_once_with(mock_logger)
 
 
 async def test_durable_step_returns_bound_callable_without_context():
@@ -274,7 +266,7 @@ async def test_durable_step_returns_bound_callable_inside_step_context():
 
 
 async def test_module_level_context_functions_raise_in_step_context():
-    step_context = StepContext(logger=Mock(), attempt=1)
+    step_context = StepContext(attempt=1)
 
     async def noop() -> None:
         return None
@@ -631,7 +623,6 @@ async def test_step_basic(mock_executor_class):
         ),
         config=ANY,  # StepConfig() is created in context.step()
         func=mock_callable,
-        context_logger=ANY,
     )
     mock_executor.process.assert_called_once()
 
@@ -670,7 +661,6 @@ async def test_step_with_name_and_config(mock_executor_class):
         ),
         config=config,
         func=mock_callable,
-        context_logger=ANY,
     )
     mock_executor.process.assert_called_once()
 
@@ -706,7 +696,6 @@ async def test_step_with_parent_id(mock_executor_class):
         ),
         config=ANY,
         func=mock_callable,
-        context_logger=ANY,
     )
     mock_executor.process.assert_called_once()
 
@@ -779,7 +768,6 @@ async def test_step_with_callable_resolves_underlying_function_name(
         ),
         config=ANY,
         func=mock_callable,
-        context_logger=ANY,
     )
     mock_executor.process.assert_called_once()
 
@@ -1794,7 +1782,7 @@ async def test_wait_for_condition_validation_errors():
         await run_async(context.wait_for_condition(None, config))
 
     # Test None config
-    async def dummy_check(state, check_context):
+    async def dummy_check(state):
         return state
 
     with pytest.raises(
@@ -1857,7 +1845,7 @@ async def test_context_wait_for_condition_handler_call():
     """Test that wait_for_condition method calls through to wait_for_condition_handler (line 425)."""
     execution_calls = []
 
-    async def test_check(state, check_context):
+    async def test_check(state):
         execution_calls.append("check_called")
         return state
 

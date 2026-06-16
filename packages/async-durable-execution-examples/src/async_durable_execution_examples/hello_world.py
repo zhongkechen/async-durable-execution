@@ -9,28 +9,30 @@ This example demonstrates:
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
     durable_step,
-    get_logger,
     step,
     durable_execution,
     wait,
 )
 
+logger = logging.getLogger(__name__)
+
 
 @durable_step
 async def step_1() -> None:
     """First step that logs a message."""
-    get_logger().info("Hello from step1")
+    logger.info("Hello from step1")
 
 
 @durable_step
 async def step_2(status_code: int) -> str:
     """Second step that returns a message."""
-    get_logger().info("Returning message with status code: %d", status_code)
+    logger.info("Returning message with status code: %d", status_code)
     return f"Hello from Durable Lambda! (status: {status_code})"
 
 
@@ -52,7 +54,7 @@ async def handler(event: Any) -> dict[str, Any]:
     # The execution will suspend here and resume after 10 seconds
     await wait(timedelta(seconds=10))
 
-    get_logger().info("Waited for 10 seconds")
+    logger.info("Waited for 10 seconds")
 
     # Execute Step #2 - returns a message with status code
     message = await step(step_2(status_code=200))
