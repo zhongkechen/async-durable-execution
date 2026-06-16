@@ -3,11 +3,13 @@
 from datetime import timedelta
 from typing import Any
 
-from async_durable_execution.context import (
-    DurableContext,
-    durable_with_child_context,
+from async_durable_execution import (
+    durable_step,
+    step,
+    durable_execution,
+    run_in_child_context,
+    wait,
 )
-from async_durable_execution.execution import durable_execution
 
 
 async def generate_large_string(size_in_kb: int) -> str:
@@ -15,8 +17,7 @@ async def generate_large_string(size_in_kb: int) -> str:
     return "A" * 1024 * size_in_kb
 
 
-@durable_with_child_context
-async def large_data_processor(child_context: DurableContext) -> dict[str, Any]:
+async def large_data_processor() -> dict[str, Any]:
     """Process large data in child context."""
     # Generate data using a loop - each step returns ~50KB of data (under the step limit)
     step_results: list[str] = []
@@ -24,13 +25,11 @@ async def large_data_processor(child_context: DurableContext) -> dict[str, Any]:
 
     for i in range(1, 6):  # 1 to 5
 
+        @durable_step
         async def build_chunk(size_in_kb: int = 50) -> str:
             return await generate_large_string(size_in_kb)
 
-        step_result: str = await child_context.step(
-            build_chunk,  # 50KB
-            name=f"generate-data-{i}",
-        )
+        step_result: str = await step(build_chunk(), name=f"generate-data-{i}")
 
         step_results.append(step_result)
         step_sizes.append(len(step_result))
@@ -47,15 +46,15 @@ async def large_data_processor(child_context: DurableContext) -> dict[str, Any]:
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating runInChildContext with large data."""
     # Use runInChildContext to handle large data that would exceed 256k step limit
-    large_data_result: dict[str, Any] = await context.run_in_child_context(
-        large_data_processor(), name="large-data-processor"
+    large_data_result: dict[str, Any] = await run_in_child_context(
+        large_data_processor, name="large-data-processor"
     )
 
     # Add a wait after runInChildContext to test persistence across invocations
-    await context.wait(timedelta(seconds=1), name="post-processing-wait")
+    await wait(timedelta(seconds=1), name="post-processing-wait")
 
     # Verify the data is still intact after the wait
     data_integrity_check = (

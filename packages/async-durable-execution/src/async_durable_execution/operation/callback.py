@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from async_durable_execution.config import StepConfig
+from async_durable_execution.context import get_step_context
 from async_durable_execution.exceptions import CallbackError
 from async_durable_execution.models import (
     CallbackOptions,
@@ -13,7 +14,6 @@ from async_durable_execution.operation.base import (
     CheckResult,
     OperationExecutor,
 )
-from async_durable_execution.step_context import get_step_context
 from async_durable_execution.types import WaitForCallbackContext
 
 
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
         CallbackConfig,
         WaitForCallbackConfig,
     )
-    from async_durable_execution.identifier import OperationIdentifier
+    from async_durable_execution.models import OperationIdentifier
     from async_durable_execution.state import (
         CheckpointedResult,
         ExecutionState,
@@ -149,19 +149,7 @@ class CallbackOperationExecutor(OperationExecutor[str]):
         return checkpointed_result.operation.callback_details.callback_id
 
 
-def wait_for_callback_handler(
-    context: DurableContext,
-    submitter: Callable[[str, WaitForCallbackContext], Awaitable[Any]],
-    name: str | None = None,
-    config: WaitForCallbackConfig | None = None,
-) -> Any:
-    awaitable = _wait_for_callback_handler_async(
-        context, submitter, name=name, config=config
-    )
-    return awaitable
-
-
-async def _wait_for_callback_handler_async(
+async def wait_for_callback_handler(
     context: DurableContext,
     submitter: Callable[[str, WaitForCallbackContext], Awaitable[Any]],
     name: str | None = None,

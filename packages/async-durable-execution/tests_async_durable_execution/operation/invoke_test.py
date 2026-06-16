@@ -14,7 +14,7 @@ from async_durable_execution.exceptions import (
     SuspendExecution,
     TimedSuspendExecution,
 )
-from async_durable_execution.identifier import OperationIdentifier
+from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
     ChainedInvokeDetails,
     ErrorObject,

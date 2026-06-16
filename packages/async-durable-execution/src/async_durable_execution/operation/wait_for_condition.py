@@ -28,7 +28,7 @@ from async_durable_execution.types import WaitForConditionCheckContext
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from async_durable_execution.identifier import OperationIdentifier
+    from async_durable_execution.models import OperationIdentifier
     from async_durable_execution.logger import Logger
     from async_durable_execution.state import (
         CheckpointedResult,

@@ -3,13 +3,15 @@
 from datetime import timedelta
 from typing import Any
 
-from async_durable_execution.config import WaitForCallbackConfig
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
+from async_durable_execution import (
+    WaitForCallbackConfig,
+    durable_execution,
+    wait_for_callback,
+)
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating waitForCallback timeout."""
 
     config = WaitForCallbackConfig(
@@ -21,7 +23,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
         return None
 
     try:
-        result: str = await context.wait_for_callback(
+        result: str = await wait_for_callback(
             submitter,
             config=config,
         )

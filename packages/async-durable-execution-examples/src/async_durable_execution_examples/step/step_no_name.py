@@ -1,14 +1,18 @@
 from typing import Any
 
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
+from async_durable_execution import (
+    durable_step,
+    step,
+    durable_execution,
+)
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> str:
+async def handler(_event: Any) -> str:
     # Step without explicit name - should use function name
+    @durable_step
     async def unnamed_step() -> str:
         return "Step without name"
 
-    result = await context.step(unnamed_step)
+    result = await step(unnamed_step())
     return f"Result: {result}"

@@ -80,18 +80,23 @@ class ThreadedSyncLambdaClient(DurableServiceClient):
         Returns:
             ThreadedSyncLambdaClient: A new client wrapping the cached boto3 client.
         """
-        if cls._cached_boto_client is None:
-            cls._cached_boto_client = cast(
-                "LambdaApiClient",
-                boto3.client(
-                    "lambda",
-                    config=Config(
-                        connect_timeout=5,
-                        read_timeout=50,
-                        user_agent_extra=f"async-durable-execution/{__version__}{'-bundled' if _is_in_var_dir() else ''}",
-                    ),
+
+        user_agent_suffix = "-bundled" if _is_in_var_dir() else ""
+        user_agent = f"async-durable-execution/{__version__}{user_agent_suffix}"
+
+        def create_client():
+            return boto3.client(
+                "lambda",
+                config=Config(
+                    connect_timeout=5,
+                    read_timeout=50,
+                    user_agent_extra=user_agent,
                 ),
             )
+
+        if cls._cached_boto_client is None:
+            cls._cached_boto_client = create_client()
+
         return cls(client=cls._cached_boto_client)
 
     async def checkpoint(

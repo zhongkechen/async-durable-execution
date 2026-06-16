@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import pytest
 
 from async_durable_execution.exceptions import SuspendExecution
-from async_durable_execution.identifier import OperationIdentifier
+from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
     Operation,
     OperationAction,

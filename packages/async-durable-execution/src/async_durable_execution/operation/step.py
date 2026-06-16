@@ -18,6 +18,7 @@ from async_durable_execution.models import (
     ErrorObject,
     OperationUpdate,
 )
+from async_durable_execution.context import _reset_context, _set_context
 from async_durable_execution.logger import Logger, LogInfo
 from async_durable_execution.operation.base import (
     CheckResult,
@@ -25,10 +26,6 @@ from async_durable_execution.operation.base import (
 )
 from async_durable_execution.retries import RetryDecision, RetryPresets
 from async_durable_execution.serdes import deserialize, serialize
-from async_durable_execution.step_context import (
-    _reset_step_context,
-    _set_step_context,
-)
 from async_durable_execution.suspend import (
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
@@ -39,7 +36,7 @@ from async_durable_execution.types import StepContext
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from async_durable_execution.identifier import OperationIdentifier
+    from async_durable_execution.models import OperationIdentifier
     from async_durable_execution.state import (
         CheckpointedResult,
         ExecutionState,
@@ -231,11 +228,11 @@ class StepOperationExecutor(OperationExecutor[T]):
                 False,
                 attempt,
             )
-            token = _set_step_context(step_context)
+            token = _set_context(step_context)
             try:
                 raw_result = await wrapped_user_func()
             finally:
-                _reset_step_context(token)
+                _reset_context(token)
 
             serialized_result: str = serialize(
                 serdes=self.config.serdes,

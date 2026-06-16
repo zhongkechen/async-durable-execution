@@ -2,18 +2,20 @@
 
 from typing import Any
 
-from async_durable_execution.config import (
+from async_durable_execution import (
+    durable_step,
+    step,
     CompletionConfig,
     ParallelConfig,
     StepConfig,
+    durable_execution,
+    RetryStrategyConfig,
+    parallel,
 )
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
-from async_durable_execution.retries import RetryStrategyConfig
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Execute tasks with failure tolerance."""
 
     # Tolerate up to 2 failures
@@ -24,37 +26,42 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     # Disable retries so failures happen immediately
     step_config = StepConfig(retry_strategy=RetryStrategyConfig(max_attempts=1))
 
-    async def task1(ctx: DurableContext) -> str:
+    async def task1() -> str:
+        @durable_step
         async def run() -> str:
             return "success 1"
 
-        return await ctx.step(run, name="task1", config=step_config)
+        return await step(run(), name="task1", config=step_config)
 
-    async def task2(ctx: DurableContext) -> str:
+    async def task2() -> str:
+        @durable_step
         async def run() -> str:
             return await _failing_task(2)
 
-        return await ctx.step(run, name="task2", config=step_config)
+        return await step(run(), name="task2", config=step_config)
 
-    async def task3(ctx: DurableContext) -> str:
+    async def task3() -> str:
+        @durable_step
         async def run() -> str:
             return "success 3"
 
-        return await ctx.step(run, name="task3", config=step_config)
+        return await step(run(), name="task3", config=step_config)
 
-    async def task4(ctx: DurableContext) -> str:
+    async def task4() -> str:
+        @durable_step
         async def run() -> str:
             return await _failing_task(4)
 
-        return await ctx.step(run, name="task4", config=step_config)
+        return await step(run(), name="task4", config=step_config)
 
-    async def task5(ctx: DurableContext) -> str:
+    async def task5() -> str:
+        @durable_step
         async def run() -> str:
             return "success 5"
 
-        return await ctx.step(run, name="task5", config=step_config)
+        return await step(run(), name="task5", config=step_config)
 
-    results = await context.parallel(
+    results = await parallel(
         functions=[task1, task2, task3, task4, task5],
         name="parallel_with_tolerance",
         config=config,

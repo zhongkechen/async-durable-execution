@@ -4,7 +4,7 @@ import logging
 from collections.abc import Mapping
 from unittest.mock import Mock
 
-from async_durable_execution.identifier import OperationIdentifier
+from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
     Operation,
     OperationStatus,

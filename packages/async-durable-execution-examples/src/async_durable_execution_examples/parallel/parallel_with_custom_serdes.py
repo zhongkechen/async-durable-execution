@@ -3,10 +3,15 @@
 import json
 from typing import Any
 
-from async_durable_execution.config import ParallelConfig
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
-from async_durable_execution.serdes import SerDes, SerDesContext
+from async_durable_execution import (
+    durable_step,
+    step,
+    ParallelConfig,
+    durable_execution,
+    SerDes,
+    SerDesContext,
+    parallel,
+)
 
 
 class CustomItemSerDes(SerDes[dict[str, Any]]):
@@ -25,7 +30,7 @@ class CustomItemSerDes(SerDes[dict[str, Any]]):
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Execute parallel tasks with custom item serialization.
 
     This example demonstrates using item_serdes to customize serialization
@@ -37,25 +42,28 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     # The BatchResult will use default JSON serialization
     config = ParallelConfig(item_serdes=CustomItemSerDes())
 
-    async def task1(ctx: DurableContext) -> dict[str, Any]:
+    async def task1() -> dict[str, Any]:
+        @durable_step
         async def run() -> dict[str, Any]:
             return {"task": "task1", "value": 100}
 
-        return await ctx.step(run, name="task1")
+        return await step(run(), name="task1")
 
-    async def task2(ctx: DurableContext) -> dict[str, Any]:
+    async def task2() -> dict[str, Any]:
+        @durable_step
         async def run() -> dict[str, Any]:
             return {"task": "task2", "value": 200}
 
-        return await ctx.step(run, name="task2")
+        return await step(run(), name="task2")
 
-    async def task3(ctx: DurableContext) -> dict[str, Any]:
+    async def task3() -> dict[str, Any]:
+        @durable_step
         async def run() -> dict[str, Any]:
             return {"task": "task3", "value": 300}
 
-        return await ctx.step(run, name="task3")
+        return await step(run(), name="task3")
 
-    results = await context.parallel(
+    results = await parallel(
         functions=[task1, task2, task3],
         name="parallel_with_custom_serdes",
         config=config,

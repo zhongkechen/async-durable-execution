@@ -3,66 +3,74 @@
 from datetime import timedelta
 from typing import Any
 
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
+from async_durable_execution import (
+    durable_step,
+    step,
+    durable_execution,
+    map,
+    parallel,
+    wait,
+)
 
 
 @durable_execution
-async def handler(event: dict[str, Any], context: DurableContext) -> dict[str, Any]:
+async def handler(event: dict[str, Any]) -> dict[str, Any]:
     """Comprehensive example demonstrating all major durable operations."""
     print(f"Starting comprehensive operations example with event: {event}")
 
+    @durable_step
     async def run_step_one() -> str:
         return "Step 1 completed successfully"
 
-    async def map_item(ctx: DurableContext, item: int, index: int, _) -> int:
+    async def map_item(item: int, index: int, _) -> int:
+        @durable_step
         async def get_item() -> int:
             return item
 
-        return await ctx.step(get_item, name=f"map-step-{index}")
+        return await step(get_item(), name=f"map-step-{index}")
 
-    async def fruit_step_1(ctx: DurableContext) -> str:
+    async def fruit_step_1() -> str:
+        @durable_step
         async def get_fruit() -> str:
             return "apple"
 
-        return await ctx.step(get_fruit, name="fruit-step-1")
+        return await step(get_fruit(), name="fruit-step-1")
 
-    async def fruit_step_2(ctx: DurableContext) -> str:
+    async def fruit_step_2() -> str:
+        @durable_step
         async def get_fruit() -> str:
             return "banana"
 
-        return await ctx.step(get_fruit, name="fruit-step-2")
+        return await step(get_fruit(), name="fruit-step-2")
 
-    async def fruit_step_3(ctx: DurableContext) -> str:
+    async def fruit_step_3() -> str:
+        @durable_step
         async def get_fruit() -> str:
             return "orange"
 
-        return await ctx.step(get_fruit, name="fruit-step-3")
+        return await step(get_fruit(), name="fruit-step-3")
 
-    # Step 1: ctx.step - Simple step that returns a result
-    step1_result: str = await context.step(
-        run_step_one,
-        name="step1",
-    )
+    # Step 1: step() - Simple step that returns a result
+    step1_result: str = await step(run_step_one(), name="step1")
 
-    # Step 2: ctx.wait - Wait for 1 second
-    await context.wait(timedelta(seconds=1))
+    # Step 2: wait() - Wait for 1 second
+    await wait(timedelta(seconds=1))
 
-    # Step 3: ctx.map - Map with 5 iterations returning numbers 1 to 5
+    # Step 3: map() - Map with 5 iterations returning numbers 1 to 5
     map_input = [1, 2, 3, 4, 5]
 
     map_results = (
-        await context.map(
+        await map(
             inputs=map_input,
             func=map_item,
             name="map-numbers",
         )
     ).to_dict()
 
-    # Step 4: ctx.parallel - 3 branches, each returning a fruit name
+    # Step 4: parallel() - 3 branches, each returning a fruit name
 
     parallel_results = (
-        await context.parallel(functions=[fruit_step_1, fruit_step_2, fruit_step_3])
+        await parallel(functions=[fruit_step_1, fruit_step_2, fruit_step_3])
     ).to_dict()
 
     # Final result combining all operations

@@ -1,65 +1,65 @@
-"""Example demonstrating logger usage in DurableContext."""
+"""Example demonstrating logger usage in durable contexts."""
 
-from functools import partial
 from typing import Any
 
-from async_durable_execution import get_step_context
-from async_durable_execution.context import (
-    DurableContext,
-    durable_with_child_context,
+from async_durable_execution import (
+    durable_step,
+    get_logger,
+    step,
+    durable_execution,
+    run_in_child_context,
 )
-from async_durable_execution.execution import durable_execution
 
 
-@durable_with_child_context
-async def child_workflow(ctx: DurableContext) -> str:
+async def child_workflow() -> str:
     """Child workflow with its own logging context."""
     # Child context logger has step_id populated with child context ID
-    ctx.logger.info("Running in child context")
+    get_logger().info("Running in child context")
 
     # Step in child context has nested step ID
+    @durable_step
     async def child_step() -> str:
         return "child-processed"
 
-    child_result: str = await ctx.step(child_step, name="child_step")
+    child_result: str = await step(child_step(), name="child_step")
 
-    ctx.logger.info("Child workflow completed", extra={"result": child_result})
+    get_logger().info("Child workflow completed", extra={"result": child_result})
 
     return child_result
 
 
+@durable_step
 async def my_step(my_arg: int) -> str:
-    step_context = get_step_context()
-    step_context.logger.info("Hello from my_step")
-    step_context.logger.warning("Warning from my_step", extra={"my_arg": my_arg})
-    step_context.logger.error(
-        "Error from my_step", extra={"my_arg": my_arg, "type": "error"}
-    )
+    get_logger().info("Hello from my_step")
+    get_logger().warning("Warning from my_step", extra={"my_arg": my_arg})
+    get_logger().error("Error from my_step", extra={"my_arg": my_arg, "type": "error"})
     return f"from my_step: {my_arg}"
 
 
 @durable_execution
-async def handler(event: Any, context: DurableContext) -> str:
+async def handler(event: Any) -> str:
     """Handler demonstrating logger usage."""
     # Top-level context logger: no step_id field
-    context.logger.info("Starting workflow", extra={"eventId": event.get("id")})
+    get_logger().info("Starting workflow", extra={"eventId": event.get("id")})
 
     # Logger in steps - gets enriched with step ID and attempt number
+    @durable_step
     async def process_data() -> str:
         return "processed"
 
-    result1: str = await context.step(process_data, name="process_data")
+    result1: str = await step(process_data(), name="process_data")
 
-    await context.step(partial(my_step, 123))
+    await step(my_step(123))
 
-    context.logger.info("Step 1 completed", extra={"result": result1})
+    get_logger().info("Step 1 completed", extra={"result": result1})
 
     # Child contexts inherit the parent's logger and have their own step ID
-    result2: str = await context.run_in_child_context(
-        child_workflow(), name="child_workflow"
+    result2: str = await run_in_child_context(
+        child_workflow,
+        name="child_workflow",
     )
 
-    context.logger.info(
+    get_logger().info(
         "Workflow completed", extra={"result1": result1, "result2": result2}
     )
 

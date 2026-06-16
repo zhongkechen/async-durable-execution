@@ -4,12 +4,12 @@ import asyncio
 from datetime import timedelta
 from typing import Any
 
-from async_durable_execution.config import WaitForCallbackConfig
-from async_durable_execution.context import (
-    DurableContext,
+from async_durable_execution import (
+    WaitForCallbackConfig,
     WaitForCallbackContext,
+    durable_execution,
+    wait_for_callback,
 )
-from async_durable_execution.execution import durable_execution
 
 
 async def submitter(_callback_id: str, _context: WaitForCallbackContext) -> None:
@@ -18,14 +18,14 @@ async def submitter(_callback_id: str, _context: WaitForCallbackContext) -> None
 
 
 @durable_execution
-async def handler(event: dict[str, Any], context: DurableContext) -> dict[str, Any]:
+async def handler(event: dict[str, Any]) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with heartbeat timeout."""
 
     config = WaitForCallbackConfig(
         timeout=timedelta(seconds=120), heartbeat_timeout=timedelta(seconds=15)
     )
 
-    result: str = await context.wait_for_callback(submitter, config=config)
+    result: str = await wait_for_callback(submitter, config=config)
 
     return {
         "callbackResult": result,

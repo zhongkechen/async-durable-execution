@@ -3,32 +3,35 @@
 import asyncio
 from typing import Any
 
-from async_durable_execution.config import MapConfig
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
+from async_durable_execution import (
+    durable_step,
+    step,
+    MapConfig,
+    durable_execution,
+    map,
+)
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> list[str]:
-    """Process orders using context.map() with custom iteration names."""
+async def handler(_event: Any) -> list[str]:
+    """Process orders using map() with custom iteration names."""
     orders = [
         {"id": "order-101", "amount": 25},
         {"id": "order-102", "amount": 50},
         {"id": "order-103", "amount": 75},
     ]
 
-    async def process_order(
-        ctx: DurableContext, order: dict[str, Any], index: int, _
-    ) -> str:
+    async def process_order(order: dict[str, Any], index: int, _) -> str:
         await asyncio.sleep(0)
 
+        @durable_step
         async def build_result() -> str:
             return f"processed-{order['id']}-${order['amount']}"
 
-        return await ctx.step(build_result, name=f"process_{order['id']}")
+        return await step(build_result(), name=f"process_{order['id']}")
 
     return (
-        await context.map(
+        await map(
             inputs=orders,
             func=process_order,
             name="process_orders",

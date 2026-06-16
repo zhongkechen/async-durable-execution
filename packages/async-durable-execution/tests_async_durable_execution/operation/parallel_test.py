@@ -24,7 +24,7 @@ from async_durable_execution.config import (
     ParallelConfig,
 )
 from async_durable_execution.context import DurableContext, ExecutionContext
-from async_durable_execution.identifier import OperationIdentifier
+from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import OperationSubType
 from async_durable_execution.operation import child
 from async_durable_execution.operation.parallel import (

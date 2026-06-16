@@ -13,7 +13,7 @@ from async_durable_execution.exceptions import (
     CheckpointError,
     GetExecutionStateError,
 )
-from async_durable_execution.identifier import OperationIdentifier
+from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
     CallbackDetails,
     CallbackOptions,

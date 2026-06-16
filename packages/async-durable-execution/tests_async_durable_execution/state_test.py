@@ -17,7 +17,7 @@ from async_durable_execution.exceptions import (
     GetExecutionStateError,
     OrphanedChildException,
 )
-from async_durable_execution.identifier import OperationIdentifier
+from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
     CallbackDetails,
     ChainedInvokeDetails,

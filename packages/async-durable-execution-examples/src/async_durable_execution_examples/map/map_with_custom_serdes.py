@@ -4,10 +4,15 @@ import asyncio
 import json
 from typing import Any
 
-from async_durable_execution.config import MapConfig
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
-from async_durable_execution.serdes import SerDes, SerDesContext
+from async_durable_execution import (
+    durable_step,
+    step,
+    MapConfig,
+    durable_execution,
+    SerDes,
+    SerDesContext,
+    map,
+)
 
 
 class CustomItemSerDes(SerDes[dict[str, Any]]):
@@ -26,7 +31,7 @@ class CustomItemSerDes(SerDes[dict[str, Any]]):
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Process items with custom item serialization.
 
     This example demonstrates using item_serdes to customize serialization
@@ -43,11 +48,10 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     # The BatchResult will use default JSON serialization
     config = MapConfig(item_serdes=CustomItemSerDes())
 
-    async def process_item(
-        ctx: DurableContext, item: dict[str, Any], index: int, _
-    ) -> dict[str, Any]:
+    async def process_item(item: dict[str, Any], index: int, _) -> dict[str, Any]:
         await asyncio.sleep(0)
 
+        @durable_step
         async def build_result() -> dict[str, Any]:
             return {
                 "processed": item["name"],
@@ -55,9 +59,9 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
                 "doubled_id": item["id"] * 2,
             }
 
-        return await ctx.step(build_result, name=f"process_{index}")
+        return await step(build_result(), name=f"process_{index}")
 
-    results = await context.map(
+    results = await map(
         inputs=items,
         func=process_item,
         name="map_with_custom_serdes",

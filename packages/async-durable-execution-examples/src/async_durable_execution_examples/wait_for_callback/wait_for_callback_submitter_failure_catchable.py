@@ -4,17 +4,17 @@ import asyncio
 from datetime import timedelta
 from typing import Any
 
-from async_durable_execution.config import WaitForCallbackConfig
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
-from async_durable_execution.retries import (
+from async_durable_execution import (
+    WaitForCallbackConfig,
+    durable_execution,
     RetryStrategyConfig,
     create_retry_strategy,
+    wait_for_callback,
 )
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with failing submitter."""
 
     async def submitter(_callback_id, _context) -> None:
@@ -36,7 +36,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     )
 
     try:
-        result: str = await context.wait_for_callback(
+        result: str = await wait_for_callback(
             submitter,
             name="failing-submitter-callback",
             config=config,

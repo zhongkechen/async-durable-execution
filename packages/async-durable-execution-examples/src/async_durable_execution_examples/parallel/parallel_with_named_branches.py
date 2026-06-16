@@ -3,58 +3,66 @@
 import asyncio
 from typing import Any
 
-from async_durable_execution.config import ParallelBranch, ParallelConfig
-from async_durable_execution.context import (
-    DurableContext,
+from async_durable_execution import (
+    durable_step,
+    step,
+    ParallelBranch,
+    ParallelConfig,
     durable_parallel_branch,
+    durable_execution,
+    parallel,
 )
-from async_durable_execution.execution import durable_execution
 
 
 @durable_parallel_branch(name="fetch-orders")
-async def fetch_orders(ctx: DurableContext) -> str:
+async def fetch_orders() -> str:
     await asyncio.sleep(0)
 
+    @durable_step
     async def load_orders() -> str:
         return "orders-loaded"
 
-    return await ctx.step(load_orders, name="load_orders")
+    return await step(load_orders(), name="load_orders")
 
 
 @durable_parallel_branch()
-async def fetch_preferences(ctx: DurableContext) -> str:
+async def fetch_preferences() -> str:
     await asyncio.sleep(0)
 
+    @durable_step
     async def load_prefs() -> str:
         return "prefs-loaded"
 
-    return await ctx.step(load_prefs, name="load_prefs")
+    return await step(load_prefs(), name="load_prefs")
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> list[str]:
+async def handler(_event: Any) -> list[str]:
     """Execute parallel branches using all supported patterns."""
 
-    async def fetch_user_data(ctx: DurableContext) -> str:
+    async def fetch_user_data() -> str:
+        @durable_step
         async def load_user() -> str:
             return "user-data-loaded"
 
-        return await ctx.step(load_user, name="load_user")
+        return await step(load_user(), name="load_user")
 
-    async def fetch_metrics(ctx: DurableContext) -> str:
+    async def fetch_metrics() -> str:
+        @durable_step
         async def load_metrics() -> str:
             return "metrics-loaded"
 
-        return await ctx.step(load_metrics, name="load_metrics")
+        return await step(load_metrics(), name="load_metrics")
 
-    async def load_config(ctx: DurableContext) -> str:
+    async def load_config() -> str:
+        @durable_step
         async def load_value() -> str:
             return "config-loaded"
 
-        return await ctx.step(load_value, name="load_config")
+        return await step(load_value(), name="load_config")
 
     return (
-        await context.parallel(
+        await parallel(
             functions=[
                 # 1. Named parallel branch with ParallelBranch
                 ParallelBranch(

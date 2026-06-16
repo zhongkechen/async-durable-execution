@@ -3,18 +3,21 @@
 import asyncio
 from typing import Any
 
-from async_durable_execution.config import (
+from async_durable_execution import (
     CompletionConfig,
     MapConfig,
+    RetryStrategyConfig,
     StepConfig,
+    create_retry_strategy,
+    durable_execution,
+    durable_step,
+    map,
+    step,
 )
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
-from async_durable_execution.retries import RetryStrategyConfig
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Process items with failure tolerance."""
     items = list(range(1, 11))  # [1, 2, 3, ..., 10]
 
@@ -25,21 +28,24 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     )
 
     # Disable retries so failures happen immediately
-    step_config = StepConfig(retry_strategy=RetryStrategyConfig(max_attempts=1))
+    step_config = StepConfig(
+        retry_strategy=create_retry_strategy(RetryStrategyConfig(max_attempts=1))
+    )
 
-    async def process_item(ctx: DurableContext, item: int, index: int, _) -> int:
+    async def process_item(item: int, index: int, _) -> int:
         await asyncio.sleep(0)
 
+        @durable_step
         async def run() -> int:
             return await _process_with_failures(item)
 
-        return await ctx.step(
-            run,
+        return await step(
+            run(),
             name=f"item_{index}",
             config=step_config,
         )
 
-    results = await context.map(
+    results = await map(
         inputs=items,
         func=process_item,
         name="map_with_tolerance",

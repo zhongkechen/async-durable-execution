@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, MutableMapping
 
     from async_durable_execution.context import ExecutionState
-    from async_durable_execution.identifier import OperationIdentifier
+    from async_durable_execution.models import OperationIdentifier
 
 
 @dataclass(frozen=True)

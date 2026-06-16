@@ -3,23 +3,24 @@
 from datetime import timedelta
 from typing import Any
 
-from async_durable_execution.context import (
-    DurableContext,
-    durable_with_child_context,
+from async_durable_execution import (
+    WaitForCallbackContext,
+    durable_execution,
+    run_in_child_context,
+    wait,
+    wait_for_callback,
 )
-from async_durable_execution.execution import durable_execution
 
 
-async def noop_submitter(_callback_id: str, _context: DurableContext) -> None:
+async def noop_submitter(_callback_id: str, _context: WaitForCallbackContext) -> None:
     return None
 
 
-@durable_with_child_context
-async def child_context_with_callback(child_context: DurableContext) -> dict[str, Any]:
+async def child_context_with_callback() -> dict[str, Any]:
     """Child context containing wait and callback operations."""
-    await child_context.wait(timedelta(seconds=1), name="child-wait")
+    await wait(timedelta(seconds=1), name="child-wait")
 
-    child_callback_result: str = await child_context.wait_for_callback(
+    child_callback_result: str = await wait_for_callback(
         noop_submitter, name="child-callback-op"
     )
 
@@ -30,14 +31,15 @@ async def child_context_with_callback(child_context: DurableContext) -> dict[str
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating waitForCallback within child contexts."""
-    parent_result: str = await context.wait_for_callback(
+    parent_result: str = await wait_for_callback(
         noop_submitter, name="parent-callback-op"
     )
 
-    child_context_result: dict[str, Any] = await context.run_in_child_context(
-        child_context_with_callback(), name="child-context-with-callback"
+    child_context_result: dict[str, Any] = await run_in_child_context(
+        child_context_with_callback,
+        name="child-context-with-callback",
     )
 
     return {

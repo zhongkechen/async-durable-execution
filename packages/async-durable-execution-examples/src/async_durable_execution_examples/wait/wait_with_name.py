@@ -1,12 +1,14 @@
 from datetime import timedelta
 from typing import Any
 
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
+from async_durable_execution import (
+    durable_execution,
+    wait,
+)
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> str:
+async def handler(_event: Any) -> str:
     # Wait with explicit name
-    await context.wait(timedelta(seconds=2), name="custom_wait")
+    await wait(timedelta(seconds=2), name="custom_wait")
     return "Wait with name completed"

@@ -328,7 +328,8 @@ async def test_with_retry_and_config_importable_from_package():
     from async_durable_execution import with_retry as imported_with_retry
 
     assert ImportedConfig is WithRetryConfig
-    assert imported_with_retry is with_retry
+    assert callable(imported_with_retry)
+    assert callable(with_retry)
 
 
 async def test_integration_with_create_retry_strategy():

@@ -4,12 +4,9 @@ import asyncio
 import json
 from datetime import timedelta
 from functools import partial
-from typing import Any
+from typing import Any, cast
 
-from async_durable_execution.context import (
-    DurableContext,
-    durable_with_child_context,
-)
+from async_durable_execution.context import DurableContext, get_context
 from async_durable_execution.execution import (
     InvocationStatus,
     durable_execution,
@@ -36,9 +33,9 @@ async def test_basic_durable_function() -> None:
         # print("[DEBUG] two_2 called")
         return f"{b} {a}"
 
-    @durable_with_child_context
-    async def two(ctx: DurableContext, a: int, b: int) -> str:
+    async def two(a: int, b: int) -> str:
         # print("[DEBUG] two called")
+        ctx = cast(DurableContext, get_context())
         two_1_result: str = await ctx.step(partial(two_1, a, b))
         two_2_result: str = await ctx.step(partial(two_2, a, b))
         return f"{two_1_result} {two_2_result}"
@@ -48,7 +45,8 @@ async def test_basic_durable_function() -> None:
         return f"{a} {b}"
 
     @durable_execution
-    async def function_under_test(event: Any, context: DurableContext) -> list[str]:
+    async def function_under_test(event: Any) -> list[str]:
+        context = cast(DurableContext, get_context())
         results: list[str] = []
 
         result_one: str = await context.step(partial(one, 1, 2))
@@ -56,7 +54,10 @@ async def test_basic_durable_function() -> None:
 
         await context.wait(timedelta(seconds=1))
 
-        result_two: str = await context.run_in_child_context(two(3, 4))
+        result_two: str = await context.run_in_child_context(
+            partial(two, 3, 4),
+            name="two",
+        )
         results.append(result_two)
 
         result_three: str = await context.step(partial(three, 5, 6))

@@ -8,19 +8,19 @@ with exponential backoff between attempts.
 from datetime import timedelta
 from typing import Any
 
-from async_durable_execution.config import WaitForCallbackConfig
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
-from async_durable_execution.retries import (
+from async_durable_execution import (
+    WaitForCallbackConfig,
     RetryStrategyConfig,
     WithRetryConfig,
     create_retry_strategy,
+    durable_execution,
     with_retry,
+    wait_for_callback,
 )
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating with_retry around a wait_for_callback.
 
     The external system may fail to process the callback multiple times.
@@ -28,7 +28,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     with exponential backoff between attempts.
     """
 
-    async def retryable_callback_flow(ctx: DurableContext, attempt: int) -> str:
+    async def retryable_callback_flow(attempt: int) -> str:
         """The retryable block: create a callback and wait for the result."""
 
         async def submitter(callback_id: str, _callback_ctx) -> None:
@@ -41,7 +41,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
             heartbeat_timeout=timedelta(seconds=60),
         )
 
-        return await ctx.wait_for_callback(
+        return await wait_for_callback(
             submitter, name=f"external-call-attempt-{attempt}", config=config
         )
 
@@ -56,10 +56,7 @@ async def handler(_event: Any, context: DurableContext) -> dict[str, Any]:
     )
 
     result = await with_retry(
-        context,
-        func=retryable_callback_flow,
-        config=retry_config,
-        name="callback-with-retry",
+        retryable_callback_flow, retry_config, name="callback-with-retry"
     )
 
     return {

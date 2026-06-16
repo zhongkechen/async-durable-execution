@@ -516,6 +516,3 @@ class ExecutionCounters:
                 return True
 
         return False
-
-
-# endegion concurrency models

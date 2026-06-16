@@ -43,9 +43,8 @@ from functools import partial
 from typing import Any
 
 from async_durable_execution import (
-    DurableContext,
     durable_execution,
-    durable_with_child_context,
+    get_context,
 )
 
 
@@ -64,10 +63,10 @@ async def two_2(a: int, b: int) -> str:
     return f"{b} {a}"
 
 
-@durable_with_child_context
-async def two(ctx: DurableContext, a: int, b: int) -> str:
-    two_1_result: str = ctx.step(partial(two_1, a, b))
-    two_2_result: str = ctx.step(partial(two_2, a, b))
+async def two(a: int, b: int) -> str:
+    ctx = get_context()
+    two_1_result: str = ctx.step(two_1(a, b))
+    two_2_result: str = ctx.step(two_2(a, b))
     return f"{two_1_result} {two_2_result}"
 
 
@@ -77,18 +76,19 @@ async def three(a: int, b: int) -> str:
 
 
 @durable_execution
-async def function_under_test(event: Any, context: DurableContext) -> list[str]:
+async def function_under_test(event: Any) -> list[str]:
+    context = get_context()
     results: list[str] = []
 
-    result_one: str = context.step(partial(one, 1, 2))
+    result_one: str = context.step(one(1, 2))
     results.append(result_one)
 
     context.wait(duration=timedelta(seconds=1))
 
-    result_two: str = context.run_in_child_context(two(3, 4))
+    result_two: str = context.run_in_child_context(partial(two, 3, 4), name="two")
     results.append(result_two)
 
-    result_three: str = context.step(partial(three, 5, 6))
+    result_three: str = context.step(three(5, 6))
     results.append(result_three)
 
     return results

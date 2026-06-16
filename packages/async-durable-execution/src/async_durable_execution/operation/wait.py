@@ -14,7 +14,7 @@ from async_durable_execution.suspend import suspend_with_optional_resume_delay
 
 
 if TYPE_CHECKING:
-    from async_durable_execution.identifier import OperationIdentifier
+    from async_durable_execution.models import OperationIdentifier
     from async_durable_execution.state import (
         CheckpointedResult,
         ExecutionState,

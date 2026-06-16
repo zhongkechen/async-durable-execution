@@ -2,21 +2,26 @@
 
 from typing import Any
 
-from async_durable_execution.context import DurableContext
-from async_durable_execution.execution import durable_execution
+from async_durable_execution import (
+    durable_step,
+    step,
+    durable_execution,
+)
 
 
 @durable_execution
-async def handler(_event: Any, context: DurableContext) -> dict[str, bool]:
+async def handler(_event: Any) -> dict[str, bool]:
     """Handler demonstrating step execution without replay."""
 
+    @durable_step
     async def fetch_user_1() -> str:
         return "user-1"
 
+    @durable_step
     async def fetch_user_2() -> str:
         return "user-2"
 
-    await context.step(fetch_user_1, name="fetch-user-1")
-    await context.step(fetch_user_2, name="fetch-user-2")
+    await step(fetch_user_1(), name="fetch-user-1")
+    await step(fetch_user_2(), name="fetch-user-2")
 
     return {"completed": True}

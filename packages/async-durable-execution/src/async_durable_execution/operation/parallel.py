@@ -6,9 +6,7 @@ import logging
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, TypeVar
 
-from async_durable_execution.async_tools import (
-    invoke_callable,
-)
+from async_durable_execution.async_tools import invoke_callable_with_optional_context
 from async_durable_execution.concurrency.executor import ConcurrentExecutor
 from async_durable_execution.concurrency.models import Executable
 from async_durable_execution.config import (
@@ -22,7 +20,7 @@ from async_durable_execution.models import OperationSubType
 if TYPE_CHECKING:
     from async_durable_execution.concurrency.models import BatchResult
     from async_durable_execution.context import DurableContext
-    from async_durable_execution.identifier import OperationIdentifier
+    from async_durable_execution.models import OperationIdentifier
     from async_durable_execution.serdes import SerDes
     from async_durable_execution.state import ExecutionState
     from async_durable_execution.types import SummaryGenerator
@@ -63,9 +61,7 @@ class ParallelExecutor(ConcurrentExecutor[Callable, R]):
     @classmethod
     def from_callables(
         cls,
-        callables: Sequence[
-            Callable[[DurableContext], Awaitable[R]] | ParallelBranch[R]
-        ],
+        callables: Sequence[Callable[[], Awaitable[R]] | ParallelBranch[R]],
         config: ParallelConfig,
     ) -> ParallelExecutor:
         """Create ParallelExecutor from a sequence of callables or ParallelBranch instances.
@@ -106,13 +102,31 @@ class ParallelExecutor(ConcurrentExecutor[Callable, R]):
         self, child_context, executable: Executable[Callable]
     ) -> R:
         logger.debug("🔀 Processing parallel branch: %s", executable.index)
-        result: R = await invoke_callable(executable.func, child_context)
+        target = (
+            executable.func.func
+            if isinstance(executable.func, ParallelBranch)
+            else executable.func
+        )
+        invoke_with_context = getattr(
+            type(child_context), "_invoke_user_callable", None
+        )
+        if invoke_with_context is not None:
+            result: R = await child_context._invoke_user_callable(
+                target,
+                context_position="prepend",
+            )
+        else:
+            result = await invoke_callable_with_optional_context(
+                target,
+                child_context,
+                context_position="prepend",
+            )
         logger.debug("✅ Processed parallel branch: %s", executable.index)
         return result
 
 
 def parallel_handler(
-    callables: Sequence[Callable[[DurableContext], Awaitable[R]] | ParallelBranch[R]],
+    callables: Sequence[Callable[[], Awaitable[R]] | ParallelBranch[R]],
     config: ParallelConfig | None,
     execution_state: ExecutionState,
     parallel_context: DurableContext,
@@ -129,7 +143,7 @@ def parallel_handler(
 
 
 async def _parallel_handler_async(
-    callables: Sequence[Callable[[DurableContext], Awaitable[R]] | ParallelBranch[R]],
+    callables: Sequence[Callable[[], Awaitable[R]] | ParallelBranch[R]],
     config: ParallelConfig | None,
     execution_state: ExecutionState,
     parallel_context: DurableContext,
