@@ -11,8 +11,7 @@ from async_durable_execution import (
     durable_step,
     step,
     durable_execution,
-    RetryStrategyConfig,
-    create_retry_strategy,
+    RetryStrategyBuilder,
     map,
 )
 
@@ -54,12 +53,12 @@ async def handler(_event: Any) -> dict[str, Any]:
             f"Processing item {item['id']} (index {index}), shouldFail: {item['shouldFail']}"
         )
 
-        retry_config = RetryStrategyConfig(
+        retry_config = RetryStrategyBuilder(
             max_attempts=2,
             initial_delay=timedelta(seconds=1),
             max_delay=timedelta(seconds=1),
         )
-        step_config = StepConfig(retry_strategy=create_retry_strategy(retry_config))
+        step_config = StepConfig(retry_strategy=retry_config.build())
 
         @durable_step
         async def step_function() -> dict[str, Any]:

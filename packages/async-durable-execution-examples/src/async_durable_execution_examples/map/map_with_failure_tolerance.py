@@ -6,9 +6,8 @@ from typing import Any
 from async_durable_execution import (
     CompletionConfig,
     MapConfig,
-    RetryStrategyConfig,
+    RetryStrategyBuilder,
     StepConfig,
-    create_retry_strategy,
     durable_execution,
     durable_step,
     map,
@@ -29,7 +28,7 @@ async def handler(_event: Any) -> dict[str, Any]:
 
     # Disable retries so failures happen immediately
     step_config = StepConfig(
-        retry_strategy=create_retry_strategy(RetryStrategyConfig(max_attempts=1))
+        retry_strategy=RetryStrategyBuilder(max_attempts=1).build()
     )
 
     async def process_item(item: int, index: int, _) -> int:

@@ -9,14 +9,13 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
+    RetryStrategyBuilder,
     WaitForCallbackConfig,
-    RetryStrategyConfig,
-    WithRetryConfig,
-    create_retry_strategy,
     durable_execution,
     with_retry,
     wait_for_callback,
 )
+from async_durable_execution.config import WithRetryConfig
 
 
 @durable_execution
@@ -46,13 +45,11 @@ async def handler(_event: Any) -> dict[str, Any]:
         )
 
     retry_config = WithRetryConfig(
-        retry_strategy=create_retry_strategy(
-            RetryStrategyConfig(
-                max_attempts=5,
-                initial_delay=timedelta(seconds=2),
-                backoff_rate=1.0,
-            )
-        ),
+        retry_strategy=RetryStrategyBuilder(
+            max_attempts=5,
+            initial_delay=timedelta(seconds=2),
+            backoff_rate=1.0,
+        ).build(),
     )
 
     result = await with_retry(

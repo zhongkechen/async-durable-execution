@@ -5,8 +5,13 @@ from __future__ import annotations
 from abc import abstractmethod
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar, Mapping
 
+from async_durable_execution.models import (
+    OperationUpdate,
+    CheckpointOutput,
+    StateOutput,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -212,3 +217,35 @@ class SummaryGenerator(Protocol[C_contra]):
 Context = (
     StepContext | WaitForCallbackContext | WaitForConditionCheckContext | DurableContext
 )
+
+
+class DurableServiceClient(Protocol):
+    """Durable Service clients must implement this interface."""
+
+    async def checkpoint(
+        self,
+        durable_execution_arn: str,
+        checkpoint_token: str,
+        updates: list[OperationUpdate],
+        client_token: str | None,
+    ) -> CheckpointOutput: ...  # pragma: no cover
+
+    async def get_execution_state(
+        self,
+        durable_execution_arn: str,
+        checkpoint_token: str,
+        next_marker: str,
+        max_items: int = 1000,
+    ) -> StateOutput: ...  # pragma: no cover
+
+
+class LambdaApiClient(Protocol):
+    """Minimal Lambda client surface needed by durable execution."""
+
+    def checkpoint_durable_execution(
+        self, **kwargs: Any
+    ) -> Mapping[str, Any]: ...  # pragma: no cover
+
+    def get_durable_execution_state(
+        self, **kwargs: Any
+    ) -> Mapping[str, Any]: ...  # pragma: no cover

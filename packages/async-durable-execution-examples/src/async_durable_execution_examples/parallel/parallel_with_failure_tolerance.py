@@ -9,7 +9,7 @@ from async_durable_execution import (
     ParallelConfig,
     StepConfig,
     durable_execution,
-    RetryStrategyConfig,
+    RetryStrategyBuilder,
     parallel,
 )
 
@@ -24,7 +24,9 @@ async def handler(_event: Any) -> dict[str, Any]:
     )
 
     # Disable retries so failures happen immediately
-    step_config = StepConfig(retry_strategy=RetryStrategyConfig(max_attempts=1))
+    step_config = StepConfig(
+        retry_strategy=RetryStrategyBuilder(max_attempts=1).build()
+    )
 
     async def task1() -> str:
         @durable_step

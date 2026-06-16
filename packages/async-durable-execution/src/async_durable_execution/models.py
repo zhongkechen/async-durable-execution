@@ -15,6 +15,95 @@ OperationPayload: TypeAlias = str
 TimeoutSeconds: TypeAlias = int
 
 
+@dataclass(frozen=True)
+class RetryDecision:
+    """Decision about whether to retry an operation and with what delay."""
+
+    should_retry: bool
+    delay: datetime.timedelta
+
+    def __post_init__(self):
+        if self.delay.total_seconds() < 0:
+            msg = "delay must be non-negative"
+            raise ValueError(msg)
+
+    @property
+    def delay_seconds(self) -> int:
+        """Get delay in seconds."""
+        return int(self.delay.total_seconds())
+
+    @classmethod
+    def retry(cls, delay: datetime.timedelta) -> "RetryDecision":
+        """Create a retry decision."""
+        return cls(should_retry=True, delay=delay)
+
+    @classmethod
+    def retry_after_delay(cls, delay_seconds: int | float) -> "RetryDecision":
+        """Create a retry decision from a delay in seconds."""
+        return cls.retry(datetime.timedelta(seconds=delay_seconds))
+
+    @classmethod
+    def no_retry(cls) -> "RetryDecision":
+        """Create a no-retry decision."""
+        return cls(should_retry=False, delay=datetime.timedelta())
+
+
+@dataclass(frozen=True)
+class WaitDecision:
+    """Decision about whether to wait and with what delay."""
+
+    should_wait: bool
+    delay: datetime.timedelta
+
+    def __post_init__(self):
+        if self.delay.total_seconds() < 0:
+            msg = "delay must be non-negative"
+            raise ValueError(msg)
+
+    @property
+    def delay_seconds(self) -> int:
+        """Get delay in seconds."""
+        return int(self.delay.total_seconds())
+
+    @classmethod
+    def wait(cls, delay: datetime.timedelta) -> "WaitDecision":
+        """Create a wait decision."""
+        return cls(should_wait=True, delay=delay)
+
+    @classmethod
+    def no_wait(cls) -> "WaitDecision":
+        """Create a no-wait decision."""
+        return cls(should_wait=False, delay=datetime.timedelta())
+
+
+@dataclass(frozen=True)
+class WaitForConditionDecision:
+    """Decision about whether to continue waiting."""
+
+    should_continue: bool
+    delay: datetime.timedelta
+
+    def __post_init__(self):
+        if self.delay.total_seconds() < 0:
+            msg = "delay must be non-negative"
+            raise ValueError(msg)
+
+    @property
+    def delay_seconds(self) -> int:
+        """Get delay in seconds."""
+        return int(self.delay.total_seconds())
+
+    @classmethod
+    def continue_waiting(cls, delay: datetime.timedelta) -> "WaitForConditionDecision":
+        """Create a decision to continue waiting."""
+        return cls(should_continue=True, delay=delay)
+
+    @classmethod
+    def stop_polling(cls) -> "WaitForConditionDecision":
+        """Create a decision to stop polling."""
+        return cls(should_continue=False, delay=datetime.timedelta())
+
+
 def _metadata(
     *,
     alias: str,

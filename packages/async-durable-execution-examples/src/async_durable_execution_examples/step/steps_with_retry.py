@@ -9,8 +9,7 @@ from async_durable_execution import (
     wait,
     StepConfig,
     durable_execution,
-    RetryStrategyConfig,
-    create_retry_strategy,
+    RetryStrategyBuilder,
 )
 from async_durable_execution import get_attempt
 
@@ -37,12 +36,12 @@ async def handler(event: Any) -> dict[str, Any]:
     name = event.get("name", "test-item")
 
     # Retry configuration for steps
-    retry_config = RetryStrategyConfig(
+    retry_config = RetryStrategyBuilder(
         max_attempts=5,
         retryable_error_types=[RuntimeError],
     )
 
-    step_config = StepConfig(create_retry_strategy(retry_config))
+    step_config = StepConfig(retry_config.build())
 
     item = None
     poll_count = 0

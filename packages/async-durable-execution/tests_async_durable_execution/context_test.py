@@ -54,10 +54,8 @@ from async_durable_execution.models import (
     OperationType,
 )
 from async_durable_execution.state import CheckpointedResult, ExecutionState
-from async_durable_execution.waits import (
-    WaitForConditionConfig,
-    WaitForConditionDecision,
-)
+from async_durable_execution.config import WaitForConditionConfig
+from async_durable_execution.models import WaitForConditionDecision
 from async_durable_execution.types import StepContext
 
 from .serdes_test import CustomDictSerDes
@@ -144,7 +142,7 @@ async def test_module_level_context_functions_delegate_to_durable_context():
         return state
 
     config = WaitForConditionConfig(
-        wait_strategy=lambda state, attempt: WaitForConditionDecision.STOP,
+        wait_strategy=lambda state, attempt: WaitForConditionDecision.stop_polling(),
         initial_state="pending",
     )
 
@@ -812,7 +810,7 @@ async def test_invoke_with_name_and_config(mock_executor_class):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    config = InvokeConfig[str, str](timeout=timedelta(seconds=30))
+    config = InvokeConfig[str, str]()
 
     context = create_test_context(state=mock_state)
     [context._create_step_id() for _ in range(5)]  # Set counter to 5 # noqa: SLF001
@@ -948,7 +946,6 @@ async def test_invoke_with_custom_serdes(mock_executor_class):
     config = InvokeConfig[dict, dict](
         serdes_payload=payload_serdes,
         serdes_result=result_serdes,
-        timeout=timedelta(minutes=1),
     )
 
     context = create_test_context(state=mock_state)
@@ -1850,7 +1847,7 @@ async def test_context_wait_for_condition_handler_call():
         return state
 
     async def test_wait_strategy(state, attempt):
-        return WaitForConditionDecision.STOP
+        return WaitForConditionDecision.stop_polling()
 
     # Create mock state and context
     state = Mock()

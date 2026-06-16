@@ -1,29 +1,34 @@
 """AWS Lambda Durable Executions Python SDK."""
 
 # Package metadata
-from async_durable_execution.__about__ import __version__
+from .__about__ import __version__
 
 # Main context - used in every durable function
 # Helper decorators - commonly used for step functions
 # Concurrency
-from async_durable_execution.concurrency.models import (
+from .concurrency.models import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
     CompletionReason,
 )
-from async_durable_execution.config import (
+from .config import (
     CallbackConfig,
     CompletionConfig,
     MapConfig,
     NestingType,
     ParallelBranch,
     ParallelConfig,
+    RetryPresets,
+    RetryStrategyBuilder,
     StepConfig,
     StepSemantics,
+    WaitStrategyBuilder,
     WaitForCallbackConfig,
+    WaitForConditionConfig,
+    WithRetryConfig,
 )
-from async_durable_execution.context import (
+from .context import (
     DurableContext,
     WaitForCallbackContext,
     create_callback,
@@ -42,38 +47,33 @@ from async_durable_execution.context import (
     wait_for_condition,
     with_retry,
 )
-from async_durable_execution.models import ErrorObject
-from async_durable_execution.models import OperationIdentifier
+from .models import (
+    ErrorObject,
+    OperationIdentifier,
+    RetryDecision,
+    WaitDecision,
+    WaitForConditionDecision,
+)
 
 # Most common exceptions - users need to handle these exceptions
-from async_durable_execution.exceptions import (
+from .exceptions import (
     DurableExecutionsError,
     InvocationError,
     ValidationError,
 )
 
 # Core decorator - used in every durable function
-from async_durable_execution.execution import durable_execution
-from async_durable_execution.plugin import DurableInstrumentationPlugin
-from async_durable_execution.retries import (
-    RetryStrategyConfig,
-    WithRetryConfig,
-    create_retry_strategy,
-)
-from async_durable_execution.serdes import JsonSerDes, SerDes, SerDesContext
+from .execution import durable_execution
+from .plugin import DurableInstrumentationPlugin
+from .serdes import JsonSerDes, SerDes, SerDesContext
 
 # Essential step context helpers
-from async_durable_execution.types import (
+from .types import (
     Callback,
     Context,
     StepContext,
     WaitForConditionCheckContext,
 )
-from async_durable_execution.waits import (
-    WaitForConditionConfig,
-    WaitForConditionDecision,
-)
-
 
 __all__ = [
     "BatchItem",
@@ -95,7 +95,9 @@ __all__ = [
     "OperationIdentifier",
     "ParallelBranch",
     "ParallelConfig",
-    "RetryStrategyConfig",
+    "RetryDecision",
+    "RetryPresets",
+    "RetryStrategyBuilder",
     "SerDes",
     "SerDesContext",
     "StepConfig",
@@ -104,13 +106,14 @@ __all__ = [
     "ValidationError",
     "WaitForCallbackConfig",
     "WaitForCallbackContext",
+    "WaitDecision",
     "WaitForConditionCheckContext",
     "WaitForConditionConfig",
     "WaitForConditionDecision",
+    "WaitStrategyBuilder",
     "WithRetryConfig",
     "__version__",
     "create_callback",
-    "create_retry_strategy",
     "durable_execution",
     "durable_parallel_branch",
     "durable_step",

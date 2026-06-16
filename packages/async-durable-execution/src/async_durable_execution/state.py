@@ -32,7 +32,7 @@ from async_durable_execution.models import (
     OperationUpdate,
     StateOutput,
 )
-from async_durable_execution.lambda_service import DurableServiceClient
+from async_durable_execution.types import DurableServiceClient
 from async_durable_execution.plugin import PluginExecutor
 
 

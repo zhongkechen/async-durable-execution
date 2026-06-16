@@ -194,10 +194,11 @@ async def handler(event: dict, context: DurableContext) -> dict:
 
 ```python
 from functools import partial
+from datetime import timedelta
 
 from async_durable_execution import get_step_context
 from async_durable_execution.config import StepConfig
-from async_durable_execution.retries import RetryStrategyConfig, create_retry_strategy
+from async_durable_execution.config import RetryStrategyBuilder
 
 
 async def fetch_user(user_id: str) -> dict:
@@ -212,14 +213,14 @@ result = context.step(partial(fetch_user, user_id))
 result = context.step(lambda: fetch_data(), name="fetch-user")
 
 # With retry configuration
-retry_config = RetryStrategyConfig(
+retry_config = RetryStrategyBuilder(
     max_attempts=3,
-    initial_delay_seconds=1,
+    initial_delay=timedelta(seconds=1),
     backoff_rate=2.0,
 )
 result = context.step(
     partial(fetch_user, user_id),
-    config=StepConfig(retry_strategy=create_retry_strategy(retry_config))
+    config=StepConfig(retry_strategy=retry_config.build())
 )
 ```
 
@@ -262,7 +263,7 @@ result = context.run_in_child_context(process_order, name="process-order")
 ### Wait for Callback - External Integration
 
 ```python
-from async_durable_execution.waits import WaitForCallbackConfig
+from async_durable_execution.config import WaitForCallbackConfig
 
 
 async def submit_approval(callback_id: str):
@@ -279,7 +280,8 @@ result = context.wait_for_callback(
 ### Wait for Condition - Polling
 
 ```python
-from async_durable_execution.waits import WaitForConditionConfig, ExponentialBackoff
+from async_durable_execution.config import WaitForConditionConfig, WaitStrategyBuilder
+from async_durable_execution.models import WaitForConditionDecision
 
 
 async def check_job(state: dict, check_ctx) -> dict:
@@ -291,8 +293,10 @@ result = context.wait_for_condition(
     check=check_job,
     config=WaitForConditionConfig(
         initial_state={"job_id": "job-123", "status": "pending"},
-        condition=lambda state: state["status"] == "completed",
-        wait_strategy=ExponentialBackoff(initial_wait=timedelta(seconds=2))
+        wait_strategy=WaitStrategyBuilder(
+            should_continue_polling=lambda state: state["status"] != "completed",
+            initial_delay=timedelta(seconds=2),
+        ).build()
     ),
     name="wait-for-job"
 )

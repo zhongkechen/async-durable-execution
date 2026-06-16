@@ -34,15 +34,13 @@ from async_durable_execution.types import (
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from async_durable_execution.config import WaitForConditionConfig
     from async_durable_execution.models import OperationIdentifier
     from async_durable_execution.state import (
         CheckpointedResult,
         ExecutionState,
     )
-    from async_durable_execution.waits import (
-        WaitForConditionConfig,
-        WaitForConditionDecision,
-    )
+    from async_durable_execution.models import WaitForConditionDecision
 
 
 T = TypeVar("T")

@@ -31,7 +31,7 @@ from async_durable_execution.models import (
 import logging
 from async_durable_execution.context import get_context
 from async_durable_execution.operation.step import StepOperationExecutor
-from async_durable_execution.retries import RetryDecision
+from async_durable_execution.models import RetryDecision
 from async_durable_execution.state import CheckpointedResult, ExecutionState
 from async_durable_execution.types import StepContext
 

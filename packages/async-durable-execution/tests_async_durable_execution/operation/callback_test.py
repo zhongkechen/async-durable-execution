@@ -34,7 +34,7 @@ from async_durable_execution.operation.callback import (
     CallbackOperationExecutor,
     wait_for_callback_handler,
 )
-from async_durable_execution.retries import RetryDecision
+from async_durable_execution.models import RetryDecision
 from async_durable_execution.serdes import SerDes
 from async_durable_execution.state import CheckpointedResult, ExecutionState
 from async_durable_execution.types import (
