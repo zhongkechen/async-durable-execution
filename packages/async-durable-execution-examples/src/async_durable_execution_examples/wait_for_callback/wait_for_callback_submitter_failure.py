@@ -6,8 +6,7 @@ from typing import Any
 from async_durable_execution import (
     WaitForCallbackConfig,
     durable_execution,
-    RetryStrategyConfig,
-    create_retry_strategy,
+    RetryStrategyBuilder,
     wait_for_callback,
 )
 
@@ -24,13 +23,11 @@ async def handler(event: dict[str, Any]) -> dict[str, Any]:
     config = WaitForCallbackConfig(
         timeout=timedelta(seconds=10),
         heartbeat_timeout=timedelta(seconds=20),
-        retry_strategy=create_retry_strategy(
-            config=RetryStrategyConfig(
-                max_attempts=3,
-                initial_delay=timedelta(seconds=1),
-                max_delay=timedelta(seconds=1),
-            )
-        ),
+        retry_strategy=RetryStrategyBuilder(
+            max_attempts=3,
+            initial_delay=timedelta(seconds=1),
+            max_delay=timedelta(seconds=1),
+        ).build(),
     )
 
     result: str = await wait_for_callback(

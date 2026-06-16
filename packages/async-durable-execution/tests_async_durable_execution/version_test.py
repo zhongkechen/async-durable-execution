@@ -1,11 +1,6 @@
 """Tests for DurableExecutionsPythonLanguageSDK module."""
 
 
-def test_async_durable_execution_importable():
-    """Test async_durable_execution is importable."""
-    import async_durable_execution  # noqa: PLC0415, F401
-
-
 def test_version_is_accessible():
     """Test __version__ is accessible from package root."""
     import async_durable_execution  # noqa: PLC0415

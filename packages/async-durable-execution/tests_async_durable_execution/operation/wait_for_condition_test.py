@@ -31,10 +31,8 @@ from async_durable_execution.operation.wait_for_condition import (
 )
 from async_durable_execution.state import CheckpointedResult, ExecutionState
 from async_durable_execution.types import WaitForConditionCheckContext
-from async_durable_execution.waits import (
-    WaitForConditionConfig,
-    WaitForConditionDecision,
-)
+from async_durable_execution.config import WaitForConditionConfig
+from async_durable_execution.models import WaitForConditionDecision
 
 from ..serdes_test import CustomDictSerDes
 

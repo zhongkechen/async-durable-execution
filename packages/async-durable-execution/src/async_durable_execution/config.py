@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import math
 import random
+import re
 from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum, StrEnum
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from async_durable_execution.exceptions import ValidationError
+from async_durable_execution.models import (
+    RetryDecision,
+    WaitDecision,
+    WaitForConditionDecision,
+)
 
 
 P = TypeVar("P")  # Payload type
@@ -21,7 +28,6 @@ if TYPE_CHECKING:
     from concurrent.futures import Future
 
     from async_durable_execution.models import OperationSubType
-    from async_durable_execution.retries import RetryDecision
     from async_durable_execution.serdes import SerDes
     from async_durable_execution.types import SummaryGenerator
 
@@ -329,6 +335,34 @@ class ChildConfig(Generic[T]):
     is_virtual: bool = False
 
 
+@dataclass(frozen=True)
+class WithRetryConfig(Generic[T]):
+    """Configuration for with_retry.
+
+    Holds a retry strategy callable (same type used by StepConfig) and
+    adds execution-mode options specific to with_retry.
+
+    Attributes:
+        retry_strategy: A callable that decides whether to retry and with
+            what delay. Accepts (Exception, int) and returns RetryDecision.
+            Use RetryStrategyBuilder(...).build() to build one, or provide
+            a custom callable. If None, the default retry strategy
+            (RetryStrategyBuilder defaults) is used.
+        wrap_with_run_in_child_context: Whether to wrap the retry loop in
+            a child context for isolation. Default True. When True, final
+            failure is rethrown as CallableRuntimeError with the original
+            exception on `cause`. When False, the original error is
+            rethrown unchanged.
+        child_context_config: Optional ChildConfig forwarded to
+            run_in_child_context when wrapping is enabled. Ignored when
+            wrap_with_run_in_child_context is False.
+    """
+
+    retry_strategy: Callable[[Exception, int], RetryDecision] | None = None
+    wrap_with_run_in_child_context: bool = True
+    child_context_config: ChildConfig[T] | None = None
+
+
 class ItemsPerBatchUnit(Enum):
     COUNT = ("COUNT",)
     BYTES = "BYTES"
@@ -461,10 +495,6 @@ class InvokeConfig(Generic[P, R]):
     timeout behavior, serialization, and tenant isolation.
 
     Args:
-        timeout: Maximum duration to wait for the invoked function to complete.
-            Default is no timeout. Use this to prevent long-running invocations
-            from blocking execution indefinitely.
-
         serdes_payload: Custom serialization/deserialization for the payload
             sent to the invoked function. Defaults to DEFAULT_JSON_SERDES when
             not set.
@@ -478,18 +508,9 @@ class InvokeConfig(Generic[P, R]):
     """
 
     # retry_strategy: Callable[[Exception, int], RetryDecision] | None = None
-    timeout: timedelta = field(default_factory=timedelta)
     serdes_payload: SerDes[P] | None = None
     serdes_result: SerDes[R] | None = None
     tenant_id: str | None = None
-
-    def __post_init__(self):
-        duration_to_seconds(self.timeout, "timeout")
-
-    @property
-    def timeout_seconds(self) -> int:
-        """Get timeout in seconds."""
-        return duration_to_seconds(self.timeout, "timeout")
 
 
 @dataclass(frozen=True)
@@ -520,6 +541,15 @@ class WaitForCallbackConfig(CallbackConfig):
     """Configuration for wait for callback."""
 
     retry_strategy: Callable[[Exception, int], RetryDecision] | None = None
+
+
+@dataclass(frozen=True)
+class WaitForConditionConfig(Generic[T]):
+    """Configuration for wait_for_condition."""
+
+    wait_strategy: Callable[[T, int], WaitForConditionDecision]
+    initial_state: T
+    serdes: SerDes | None = None
 
 
 class StepFuture(Generic[T]):
@@ -572,3 +602,179 @@ class JitterStrategy(StrEnum):
             case _:  # default is FULL
                 # Full jitter: random(0, delay)
                 return random.random() * delay  # noqa: S311
+
+
+@dataclass
+class WaitStrategyBuilder(Generic[T]):
+    should_continue_polling: Callable[[T], bool]
+    max_attempts: int = 60
+    initial_delay: timedelta = field(default_factory=lambda: timedelta(seconds=5))
+    max_delay: timedelta = field(
+        default_factory=lambda: timedelta(minutes=5)
+    )  # 5 minutes
+    backoff_rate: Numeric = 1.5
+    jitter_strategy: JitterStrategy = field(default=JitterStrategy.FULL)
+    timeout: timedelta | None = None  # Not implemented yet
+
+    def __post_init__(self):
+        duration_to_seconds(self.initial_delay, "initial_delay")
+        duration_to_seconds(self.max_delay, "max_delay")
+        if self.timeout is not None:
+            duration_to_seconds(self.timeout, "timeout")
+
+    @property
+    def initial_delay_seconds(self) -> int:
+        """Get initial delay in seconds."""
+        return duration_to_seconds(self.initial_delay, "initial_delay")
+
+    @property
+    def max_delay_seconds(self) -> int:
+        """Get max delay in seconds."""
+        return duration_to_seconds(self.max_delay, "max_delay")
+
+    @property
+    def timeout_seconds(self) -> int | None:
+        """Get timeout in seconds."""
+        if self.timeout is None:
+            return None
+        return duration_to_seconds(self.timeout, "timeout")
+
+    def build(self) -> Callable[[T, int], WaitDecision]:
+        """Build a wait strategy callable from this builder."""
+
+        def wait_strategy(result: T, attempts_made: int) -> WaitDecision:
+            if not self.should_continue_polling(result):
+                return WaitDecision.no_wait()
+
+            if attempts_made >= self.max_attempts:
+                return WaitDecision.no_wait()
+
+            base_delay: float = min(
+                self.initial_delay_seconds * (self.backoff_rate ** (attempts_made - 1)),
+                self.max_delay_seconds,
+            )
+            delay_with_jitter: float = self.jitter_strategy.apply_jitter(base_delay)
+            final_delay: int = max(1, math.ceil(delay_with_jitter))
+
+            return WaitDecision.wait(timedelta(seconds=final_delay))
+
+        return wait_strategy
+
+
+@dataclass
+class RetryStrategyBuilder:
+    max_attempts: int = 3
+    initial_delay: timedelta = field(default_factory=lambda: timedelta(seconds=5))
+    max_delay: timedelta = field(
+        default_factory=lambda: timedelta(minutes=5)
+    )  # 5 minutes
+    backoff_rate: Numeric = 2.0
+    jitter_strategy: JitterStrategy = field(default=JitterStrategy.FULL)
+    retryable_errors: list[str | re.Pattern] | None = None
+    retryable_error_types: list[type[Exception]] | None = None
+
+    def __post_init__(self):
+        duration_to_seconds(self.initial_delay, "initial_delay")
+        duration_to_seconds(self.max_delay, "max_delay")
+
+    @property
+    def initial_delay_seconds(self) -> int:
+        """Get initial delay in seconds."""
+        return duration_to_seconds(self.initial_delay, "initial_delay")
+
+    @property
+    def max_delay_seconds(self) -> int:
+        """Get max delay in seconds."""
+        return duration_to_seconds(self.max_delay, "max_delay")
+
+    def build(self) -> Callable[[Exception, int], RetryDecision]:
+        """Build a retry strategy callable from this builder."""
+        default_retryable_error_pattern = re.compile(r".*")
+        should_use_default_errors: bool = (
+            self.retryable_errors is None and self.retryable_error_types is None
+        )
+
+        retryable_errors: list[str | re.Pattern] = (
+            self.retryable_errors
+            if self.retryable_errors is not None
+            else (
+                [default_retryable_error_pattern] if should_use_default_errors else []
+            )
+        )
+        retryable_error_types: list[type[Exception]] = self.retryable_error_types or []
+
+        def retry_strategy(error: Exception, attempts_made: int) -> RetryDecision:
+            if attempts_made >= self.max_attempts:
+                return RetryDecision.no_retry()
+
+            is_retryable_error_message: bool = any(
+                pattern.search(str(error))
+                if isinstance(pattern, re.Pattern)
+                else pattern in str(error)
+                for pattern in retryable_errors
+            )
+            is_retryable_error_type: bool = any(
+                isinstance(error, error_type) for error_type in retryable_error_types
+            )
+
+            if not is_retryable_error_message and not is_retryable_error_type:
+                return RetryDecision.no_retry()
+
+            base_delay: float = min(
+                self.initial_delay_seconds * (self.backoff_rate ** (attempts_made - 1)),
+                self.max_delay_seconds,
+            )
+            delay_with_jitter: float = self.jitter_strategy.apply_jitter(base_delay)
+            final_delay: int = max(1, math.ceil(delay_with_jitter))
+
+            return RetryDecision.retry(timedelta(seconds=final_delay))
+
+        return retry_strategy
+
+
+class RetryPresets:
+    """Default retry presets."""
+
+    @classmethod
+    def none(cls) -> Callable[[Exception, int], RetryDecision]:
+        """No retries."""
+        return RetryStrategyBuilder(max_attempts=1).build()
+
+    @classmethod
+    def default(cls) -> Callable[[Exception, int], RetryDecision]:
+        """Default retries, will be used automatically if retryConfig is missing."""
+        return RetryStrategyBuilder(
+            max_attempts=6,
+            initial_delay=timedelta(seconds=5),
+            max_delay=timedelta(minutes=1),
+            backoff_rate=2,
+            jitter_strategy=JitterStrategy.FULL,
+        ).build()
+
+    @classmethod
+    def transient(cls) -> Callable[[Exception, int], RetryDecision]:
+        """Quick retries for transient errors."""
+        return RetryStrategyBuilder(
+            max_attempts=3, backoff_rate=2, jitter_strategy=JitterStrategy.HALF
+        ).build()
+
+    @classmethod
+    def resource_availability(cls) -> Callable[[Exception, int], RetryDecision]:
+        """Longer retries for resource availability."""
+        return RetryStrategyBuilder(
+            max_attempts=5,
+            initial_delay=timedelta(seconds=5),
+            max_delay=timedelta(minutes=5),
+            backoff_rate=2,
+        ).build()
+
+    @classmethod
+    def critical(cls) -> Callable[[Exception, int], RetryDecision]:
+        """Aggressive retries for critical operations."""
+        return RetryStrategyBuilder(
+            max_attempts=10,
+            initial_delay=timedelta(seconds=1),
+            max_delay=timedelta(minutes=1),
+            backoff_rate=1.5,
+            jitter_strategy=JitterStrategy.NONE,
+        ).build()

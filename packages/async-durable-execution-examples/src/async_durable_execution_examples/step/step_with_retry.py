@@ -5,8 +5,7 @@ from async_durable_execution import (
     step,
     StepConfig,
     durable_execution,
-    RetryStrategyConfig,
-    create_retry_strategy,
+    RetryStrategyBuilder,
     get_attempt,
 )
 
@@ -24,14 +23,14 @@ async def unreliable_operation() -> str:
 
 @durable_execution
 async def handler(_event: Any) -> str:
-    retry_config = RetryStrategyConfig(
+    retry_config = RetryStrategyBuilder(
         max_attempts=3,
         retryable_error_types=[RuntimeError],
     )
 
     result: str = await step(
         unreliable_operation(),
-        config=StepConfig(create_retry_strategy(retry_config)),
+        config=StepConfig(retry_config.build()),
     )
 
     return result

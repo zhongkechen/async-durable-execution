@@ -41,7 +41,7 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.lambda_service import ThreadedSyncLambdaClient
+from async_durable_execution.client import ThreadedSyncLambdaClient
 from async_durable_execution.plugin import PluginExecutor
 from async_durable_execution.state import (
     CheckpointBatcherConfig,

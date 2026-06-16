@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Mapping
-from typing import Any, Protocol, cast
+from typing import Any, cast
 
 import boto3
 from botocore.config import Config
@@ -15,49 +14,9 @@ from async_durable_execution.models import (
     OperationUpdate,
     StateOutput,
 )
+from async_durable_execution.types import DurableServiceClient, LambdaApiClient
 
 logger = logging.getLogger(__name__)
-
-
-def _is_in_var_dir(module_file: str = __file__) -> bool:
-    """Return True if this SDK is installed under /var/lang/.
-
-    Lambda bundled Python runtimes install packages at
-    /var/lang/lib/pythonX.Y/site-packages/.
-    """
-    return module_file.startswith("/var/lang/")
-
-
-class DurableServiceClient(Protocol):
-    """Durable Service clients must implement this interface."""
-
-    async def checkpoint(
-        self,
-        durable_execution_arn: str,
-        checkpoint_token: str,
-        updates: list[OperationUpdate],
-        client_token: str | None,
-    ) -> CheckpointOutput: ...  # pragma: no cover
-
-    async def get_execution_state(
-        self,
-        durable_execution_arn: str,
-        checkpoint_token: str,
-        next_marker: str,
-        max_items: int = 1000,
-    ) -> StateOutput: ...  # pragma: no cover
-
-
-class LambdaApiClient(Protocol):
-    """Minimal Lambda client surface needed by durable execution."""
-
-    def checkpoint_durable_execution(
-        self, **kwargs: Any
-    ) -> Mapping[str, Any]: ...  # pragma: no cover
-
-    def get_durable_execution_state(
-        self, **kwargs: Any
-    ) -> Mapping[str, Any]: ...  # pragma: no cover
 
 
 class ThreadedSyncLambdaClient(DurableServiceClient):
@@ -81,8 +40,7 @@ class ThreadedSyncLambdaClient(DurableServiceClient):
             ThreadedSyncLambdaClient: A new client wrapping the cached boto3 client.
         """
 
-        user_agent_suffix = "-bundled" if _is_in_var_dir() else ""
-        user_agent = f"async-durable-execution/{__version__}{user_agent_suffix}"
+        user_agent = f"async-durable-execution/{__version__}-async"
 
         def create_client():
             return boto3.client(
@@ -151,4 +109,4 @@ class ThreadedSyncLambdaClient(DurableServiceClient):
             raise error from None
 
 
-__all__ = ["DurableServiceClient", "LambdaApiClient", "ThreadedSyncLambdaClient"]
+__all__ = ["ThreadedSyncLambdaClient"]

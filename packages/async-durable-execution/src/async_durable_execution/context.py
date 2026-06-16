@@ -31,8 +31,10 @@ from async_durable_execution.config import (
     MapConfig,
     ParallelBranch,
     ParallelConfig,
+    WaitForConditionConfig,
     StepConfig,
     WaitForCallbackConfig,
+    WithRetryConfig,
     duration_to_seconds,
 )
 from async_durable_execution.exceptions import (
@@ -45,7 +47,7 @@ from async_durable_execution.models import (
     CallbackTimeoutType,
     OperationSubType,
 )
-from async_durable_execution.retries import WithRetryConfig, create_retry_strategy
+from async_durable_execution.config import RetryStrategyBuilder
 from async_durable_execution.logger import (
     get_current_context,
     reset_current_context,
@@ -77,7 +79,6 @@ if TYPE_CHECKING:
     from async_durable_execution.concurrency.models import BatchResult
     from async_durable_execution.state import CheckpointedResult
     from async_durable_execution.types import LambdaContext
-    from async_durable_execution.waits import WaitForConditionConfig
 
 P = TypeVar("P")  # Payload type
 R = TypeVar("R")  # Result type
@@ -375,7 +376,9 @@ async def with_retry(
             msg = "with_retry() must run inside a durable context."
             raise RuntimeError(msg)
         durable_ctx = cast(DurableContext, ctx)
-        retry_strategy = resolved_config.retry_strategy or create_retry_strategy()
+        retry_strategy = (
+            resolved_config.retry_strategy or RetryStrategyBuilder().build()
+        )
         attempt = 0
         while True:
             attempt += 1

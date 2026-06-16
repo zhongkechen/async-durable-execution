@@ -1,57 +1,23 @@
-"""Tests for wait strategies and wait_for_condition implementations."""
+"""Tests for wait strategy configuration."""
 
 from datetime import timedelta
 from unittest.mock import patch
 
-from async_durable_execution.config import JitterStrategy
-from async_durable_execution.serdes import JsonSerDes
-from async_durable_execution.waits import (
-    WaitDecision,
+from async_durable_execution.config import (
+    JitterStrategy,
     WaitForConditionConfig,
-    WaitForConditionDecision,
-    WaitStrategyConfig,
-    create_wait_strategy,
+    WaitStrategyBuilder,
 )
+from async_durable_execution.models import WaitForConditionDecision
+from async_durable_execution.serdes import JsonSerDes
 
 
-class TestWaitDecision:
-    """Test WaitDecision factory methods."""
-
-    def test_wait_factory(self):
-        """Test wait factory method."""
-        decision = WaitDecision.wait(timedelta(seconds=30))
-        assert decision.should_wait is True
-        assert decision.delay_seconds == 30
-
-    def test_no_wait_factory(self):
-        """Test no_wait factory method."""
-        decision = WaitDecision.no_wait()
-        assert decision.should_wait is False
-        assert decision.delay_seconds == 0
-
-
-class TestWaitForConditionDecision:
-    """Test WaitForConditionDecision factory methods."""
-
-    def test_continue_waiting_factory(self):
-        """Test continue_waiting factory method."""
-        decision = WaitForConditionDecision.continue_waiting(timedelta(seconds=45))
-        assert decision.should_continue is True
-        assert decision.delay_seconds == 45
-
-    def test_stop_polling_factory(self):
-        """Test stop_polling factory method."""
-        decision = WaitForConditionDecision.stop_polling()
-        assert decision.should_continue is False
-        assert decision.delay_seconds == 0
-
-
-class TestWaitStrategyConfig:
-    """Test WaitStrategyConfig defaults and behavior."""
+class TestWaitStrategyBuilder:
+    """Test WaitStrategyBuilder defaults and behavior."""
 
     def test_default_config(self):
         """Test default configuration values."""
-        config = WaitStrategyConfig(should_continue_polling=lambda x: True)
+        config = WaitStrategyBuilder(should_continue_polling=lambda x: True)
         assert config.max_attempts == 60
         assert config.initial_delay_seconds == 5
         assert config.max_delay_seconds == 300
@@ -65,8 +31,8 @@ class TestCreateWaitStrategy:
 
     def test_condition_met_returns_no_wait(self):
         """Test strategy returns no_wait when condition is met."""
-        config = WaitStrategyConfig(should_continue_polling=lambda x: False)
-        strategy = create_wait_strategy(config)
+        config = WaitStrategyBuilder(should_continue_polling=lambda x: False)
+        strategy = config.build()
 
         result = "completed"
         decision = strategy(result, 1)
@@ -74,10 +40,10 @@ class TestCreateWaitStrategy:
 
     def test_max_attempts_exceeded(self):
         """Test strategy returns no_wait when max attempts exceeded."""
-        config = WaitStrategyConfig(
+        config = WaitStrategyBuilder(
             should_continue_polling=lambda x: True, max_attempts=5
         )
-        strategy = create_wait_strategy(config)
+        strategy = config.build()
 
         result = "pending"
         decision = strategy(result, 5)
@@ -85,8 +51,8 @@ class TestCreateWaitStrategy:
 
     def test_should_continue_polling(self):
         """Test strategy continues when condition not met."""
-        config = WaitStrategyConfig(should_continue_polling=lambda x: x == "pending")
-        strategy = create_wait_strategy(config)
+        config = WaitStrategyBuilder(should_continue_polling=lambda x: x == "pending")
+        strategy = config.build()
 
         result = "pending"
         decision = strategy(result, 1)
@@ -96,47 +62,45 @@ class TestCreateWaitStrategy:
     def test_exponential_backoff_calculation(self, mock_random):
         """Test exponential backoff delay calculation."""
         mock_random.return_value = 0.5
-        config = WaitStrategyConfig(
+        config = WaitStrategyBuilder(
             should_continue_polling=lambda x: True,
             initial_delay=timedelta(seconds=2),
             backoff_rate=2.0,
             jitter_strategy=JitterStrategy.FULL,
         )
-        strategy = create_wait_strategy(config)
+        strategy = config.build()
 
         result = "pending"
 
-        # First attempt: 2 * (2^0) = 2, FULL jitter with 0.5 = 0.5 * 2 = 1
         decision = strategy(result, 1)
         assert decision.delay_seconds == 1
 
-        # Second attempt: 2 * (2^1) = 4, FULL jitter with 0.5 = 0.5 * 4 = 2
         decision = strategy(result, 2)
         assert decision.delay_seconds == 2
 
     def test_max_delay_cap(self):
         """Test delay is capped at max_delay_seconds."""
-        config = WaitStrategyConfig(
+        config = WaitStrategyBuilder(
             should_continue_polling=lambda x: True,
             initial_delay=timedelta(seconds=100),
             max_delay=timedelta(seconds=50),
             backoff_rate=2.0,
             jitter_strategy=JitterStrategy.NONE,
         )
-        strategy = create_wait_strategy(config)
+        strategy = config.build()
 
         result = "pending"
-        decision = strategy(result, 2)  # Would be 200 without cap
+        decision = strategy(result, 2)
         assert decision.delay_seconds == 50
 
     def test_minimum_delay_one_second(self):
         """Test delay is at least 1 second."""
-        config = WaitStrategyConfig(
+        config = WaitStrategyBuilder(
             should_continue_polling=lambda x: True,
             initial_delay=timedelta(seconds=0),
             jitter_strategy=JitterStrategy.NONE,
         )
-        strategy = create_wait_strategy(config)
+        strategy = config.build()
 
         result = "pending"
         decision = strategy(result, 1)
@@ -146,42 +110,40 @@ class TestCreateWaitStrategy:
     def test_full_jitter_integration(self, mock_random):
         """Test full jitter integration in wait strategy."""
         mock_random.return_value = 0.8
-        config = WaitStrategyConfig(
+        config = WaitStrategyBuilder(
             should_continue_polling=lambda x: True,
             initial_delay=timedelta(seconds=10),
             jitter_strategy=JitterStrategy.FULL,
         )
-        strategy = create_wait_strategy(config)
+        strategy = config.build()
 
         result = "pending"
         decision = strategy(result, 1)
-        # FULL jitter: 0.8 * 10 = 8
         assert decision.delay_seconds == 8
 
     @patch("random.random")
     def test_half_jitter_integration(self, mock_random):
         """Test half jitter integration in wait strategy."""
-        mock_random.return_value = 0.0  # Minimum jitter
-        config = WaitStrategyConfig(
+        mock_random.return_value = 0.0
+        config = WaitStrategyBuilder(
             should_continue_polling=lambda x: True,
             initial_delay=timedelta(seconds=10),
             jitter_strategy=JitterStrategy.HALF,
         )
-        strategy = create_wait_strategy(config)
+        strategy = config.build()
 
         result = "pending"
         decision = strategy(result, 1)
-        # HALF jitter: 10/2 + 0.0 * (10/2) = 5
         assert decision.delay_seconds == 5
 
     def test_none_jitter_integration(self):
         """Test no jitter integration in wait strategy."""
-        config = WaitStrategyConfig(
+        config = WaitStrategyBuilder(
             should_continue_polling=lambda x: True,
             initial_delay=timedelta(seconds=10),
             jitter_strategy=JitterStrategy.NONE,
         )
-        strategy = create_wait_strategy(config)
+        strategy = config.build()
 
         result = "pending"
         decision = strategy(result, 1)
@@ -198,17 +160,15 @@ class TestWaitStrategyWithStatefulConditions:
             def __init__(self, count):
                 self.count = count
 
-        config = WaitStrategyConfig(
+        config = WaitStrategyBuilder(
             should_continue_polling=lambda s: s.count < 3, max_attempts=10
         )
-        strategy = create_wait_strategy(config)
+        strategy = config.build()
 
-        # Should continue when count < 3
         state1 = State(1)
         decision1 = strategy(state1, 1)
         assert decision1.should_wait is True
 
-        # Should stop when count >= 3
         state2 = State(3)
         decision2 = strategy(state2, 1)
         assert decision2.should_wait is False
@@ -219,20 +179,17 @@ class TestWaitStrategyWithStatefulConditions:
         def complex_condition(result):
             return result.get("status") == "pending" and result.get("retries", 0) < 5
 
-        config = WaitStrategyConfig(should_continue_polling=complex_condition)
-        strategy = create_wait_strategy(config)
+        config = WaitStrategyBuilder(should_continue_polling=complex_condition)
+        strategy = config.build()
 
-        # Should continue
         result1 = {"status": "pending", "retries": 2}
         decision1 = strategy(result1, 1)
         assert decision1.should_wait is True
 
-        # Should stop - status changed
         result2 = {"status": "completed", "retries": 2}
         decision2 = strategy(result2, 1)
         assert decision2.should_wait is False
 
-        # Should stop - retries exceeded
         result3 = {"status": "pending", "retries": 5}
         decision3 = strategy(result3, 1)
         assert decision3.should_wait is False
@@ -243,76 +200,71 @@ class TestEdgeCases:
 
     def test_zero_backoff_rate(self):
         """Test behavior with zero backoff rate."""
-        config = WaitStrategyConfig(
+        config = WaitStrategyBuilder(
             should_continue_polling=lambda x: True,
             initial_delay=timedelta(seconds=5),
             backoff_rate=0,
             jitter_strategy=JitterStrategy.NONE,
         )
-        strategy = create_wait_strategy(config)
+        strategy = config.build()
 
         result = "pending"
         decision = strategy(result, 1)
-        # 5 * (0^0) = 5 * 1 = 5
         assert decision.delay_seconds == 5
 
     def test_fractional_backoff_rate(self):
         """Test behavior with fractional backoff rate."""
-        config = WaitStrategyConfig(
+        config = WaitStrategyBuilder(
             should_continue_polling=lambda x: True,
             initial_delay=timedelta(seconds=8),
             backoff_rate=0.5,
             jitter_strategy=JitterStrategy.NONE,
         )
-        strategy = create_wait_strategy(config)
+        strategy = config.build()
 
         result = "pending"
         decision = strategy(result, 2)
-        # 8 * (0.5^1) = 4
         assert decision.delay_seconds == 4
 
     def test_large_backoff_rate(self):
         """Test behavior with large backoff rate hits max delay."""
-        config = WaitStrategyConfig(
+        config = WaitStrategyBuilder(
             should_continue_polling=lambda x: True,
             initial_delay=timedelta(seconds=10),
             max_delay=timedelta(seconds=100),
             backoff_rate=10.0,
             jitter_strategy=JitterStrategy.NONE,
         )
-        strategy = create_wait_strategy(config)
+        strategy = config.build()
 
         result = "pending"
         decision = strategy(result, 3)
-        # 10 * (10^2) = 1000, capped at 100
         assert decision.delay_seconds == 100
 
     def test_attempt_at_boundary(self):
         """Test behavior at max_attempts boundary."""
-        config = WaitStrategyConfig(
+        config = WaitStrategyBuilder(
             should_continue_polling=lambda x: True, max_attempts=3
         )
-        strategy = create_wait_strategy(config)
+        strategy = config.build()
 
         result = "pending"
 
-        # At boundary - should not wait
         decision = strategy(result, 3)
         assert decision.should_wait is False
 
-        # Just before boundary - should wait
         decision = strategy(result, 2)
         assert decision.should_wait is True
 
     def test_negative_delay_clamped_to_one(self):
         """Test negative delay is clamped to 1."""
-        config = WaitStrategyConfig(
+        config = WaitStrategyBuilder(
             should_continue_polling=lambda x: True,
             initial_delay=timedelta(seconds=0),
             backoff_rate=0,
             jitter_strategy=JitterStrategy.NONE,
         )
-        strategy = create_wait_strategy(config)
+        strategy = config.build()
 
         result = "pending"
         decision = strategy(result, 1)
@@ -322,16 +274,15 @@ class TestEdgeCases:
     def test_rounding_behavior(self, mock_random):
         """Test delay rounding behavior."""
         mock_random.return_value = 0.3
-        config = WaitStrategyConfig(
+        config = WaitStrategyBuilder(
             should_continue_polling=lambda x: True,
             initial_delay=timedelta(seconds=3),
             jitter_strategy=JitterStrategy.FULL,
         )
-        strategy = create_wait_strategy(config)
+        strategy = config.build()
 
         result = "pending"
         decision = strategy(result, 1)
-        # FULL jitter: 0.3 * 3 = 0.9, ceil(0.9) = 1
         assert decision.delay_seconds == 1
 
 
@@ -371,8 +322,8 @@ class TestWaitStrategyCallableConditions:
 
     def test_lambda_condition(self):
         """Test with lambda condition."""
-        config = WaitStrategyConfig(should_continue_polling=lambda x: x < 10)
-        strategy = create_wait_strategy(config)
+        config = WaitStrategyBuilder(should_continue_polling=lambda x: x < 10)
+        strategy = config.build()
 
         decision1 = strategy(5, 1)
         assert decision1.should_wait is True
@@ -386,8 +337,8 @@ class TestWaitStrategyCallableConditions:
         def is_pending(status):
             return status == "pending"
 
-        config = WaitStrategyConfig(should_continue_polling=is_pending)
-        strategy = create_wait_strategy(config)
+        config = WaitStrategyBuilder(should_continue_polling=is_pending)
+        strategy = config.build()
 
         decision1 = strategy("pending", 1)
         assert decision1.should_wait is True
@@ -406,8 +357,8 @@ class TestWaitStrategyCallableConditions:
                 return value < self.threshold
 
         checker = Checker(100)
-        config = WaitStrategyConfig(should_continue_polling=checker.should_continue)
-        strategy = create_wait_strategy(config)
+        config = WaitStrategyBuilder(should_continue_polling=checker.should_continue)
+        strategy = config.build()
 
         decision1 = strategy(50, 1)
         assert decision1.should_wait is True

@@ -38,11 +38,10 @@ from async_durable_execution.models import (
     WaitDetails,
     WaitOptions,
 )
-from async_durable_execution.lambda_service import (
-    DurableServiceClient,
+from async_durable_execution.client import (
     ThreadedSyncLambdaClient,
-    _is_in_var_dir,
 )
+from async_durable_execution.types import DurableServiceClient
 
 
 # =============================================================================
@@ -58,7 +57,7 @@ def reset_lambda_client_cache():
     ThreadedSyncLambdaClient._cached_boto_client = None  # noqa: SLF001
 
 
-@patch("async_durable_execution.lambda_service.boto3")
+@patch("async_durable_execution.client.boto3")
 async def test_lambda_client_checkpoint(mock_boto3):
     """Test ThreadedSyncLambdaClient.checkpoint method."""
     mock_client = Mock()
@@ -212,7 +211,7 @@ async def test_lambda_client_checkpoint_with_exception():
         await lambda_client.checkpoint("arn123", "token123", [update], None)
 
 
-@patch("async_durable_execution.lambda_service.logger")
+@patch("async_durable_execution.client.logger")
 async def test_lambda_client_checkpoint_logs_response_metadata(mock_logger):
     """Test ThreadedSyncLambdaClient.checkpoint logs ResponseMetadata from boto3 exception."""
     mock_client = Mock()
@@ -248,7 +247,7 @@ async def test_lambda_client_checkpoint_logs_response_metadata(mock_logger):
     )
 
 
-@patch("async_durable_execution.lambda_service.logger")
+@patch("async_durable_execution.client.logger")
 async def test_lambda_client_get_execution_state_logs_response_metadata(mock_logger):
     """Test ThreadedSyncLambdaClient.get_execution_state logs ResponseMetadata from boto3 exception."""
     mock_client = Mock()
@@ -340,7 +339,7 @@ async def test_lambda_client_initialize_client_default(
     config = call_args[1]["config"]
     assert config.connect_timeout == 5
     assert config.read_timeout == 50
-    assert config.user_agent_extra == f"async-durable-execution/{__version__}"
+    assert config.user_agent_extra == f"async-durable-execution/{__version__}-async"
     assert isinstance(client, ThreadedSyncLambdaClient)
 
 
@@ -364,7 +363,7 @@ async def test_lambda_client_initialize_client_with_endpoint(
     config = call_args[1]["config"]
     assert config.connect_timeout == 5
     assert config.read_timeout == 50
-    assert config.user_agent_extra == f"async-durable-execution/{__version__}"
+    assert config.user_agent_extra == f"async-durable-execution/{__version__}-async"
     assert isinstance(client, ThreadedSyncLambdaClient)
 
 
@@ -404,9 +403,7 @@ async def test_durable_service_client_protocol_get_execution_state():
 
 
 @patch.dict("os.environ", {}, clear=True)
-@patch(
-    "async_durable_execution.lambda_service.ThreadedSyncLambdaClient.initialize_client"
-)
+@patch("async_durable_execution.client.ThreadedSyncLambdaClient.initialize_client")
 async def test_lambda_client_initialize_client_defaults(mock_init):
     """Test ThreadedSyncLambdaClient.initialize_client with default environment values."""
     ThreadedSyncLambdaClient.initialize_client()
@@ -445,75 +442,8 @@ async def test_lambda_client_initialize_client_no_endpoint(
     assert call_args[0] == ("lambda",)
     assert "config" in call_args[1]
     config = call_args[1]["config"]
-    assert config.user_agent_extra == f"async-durable-execution/{__version__}"
+    assert config.user_agent_extra == f"async-durable-execution/{__version__}-async"
     assert isinstance(client, ThreadedSyncLambdaClient)
-
-
-@patch(
-    "async_durable_execution.lambda_service._is_in_var_dir",
-    return_value=True,
-)
-@patch("boto3.client")
-async def test_lambda_client_user_agent_runtime_bundled(
-    mock_boto_client, _mock_is_in_var_dir, reset_lambda_client_cache
-):
-    """user_agent_extra includes -bundled when SDK is in /var/lang/."""
-    mock_client = Mock()
-    mock_boto_client.return_value = mock_client
-
-    client = ThreadedSyncLambdaClient.initialize_client()
-
-    call_args = mock_boto_client.call_args
-    config = call_args[1]["config"]
-    assert config.user_agent_extra == f"async-durable-execution/{__version__}-bundled"
-    assert isinstance(client, ThreadedSyncLambdaClient)
-
-
-@patch(
-    "async_durable_execution.lambda_service._is_in_var_dir",
-    return_value=False,
-)
-@patch("boto3.client")
-async def test_lambda_client_user_agent_not_runtime_bundled(
-    mock_boto_client, _mock_is_in_var_dir, reset_lambda_client_cache
-):
-    """user_agent_extra omits -bundled when SDK is not in /var/lang."""
-    mock_client = Mock()
-    mock_boto_client.return_value = mock_client
-
-    client = ThreadedSyncLambdaClient.initialize_client()
-
-    call_args = mock_boto_client.call_args
-    config = call_args[1]["config"]
-    assert config.user_agent_extra == f"async-durable-execution/{__version__}"
-    assert isinstance(client, ThreadedSyncLambdaClient)
-
-
-@pytest.mark.parametrize(
-    "path,expected",
-    [
-        # Lambda bundled runtime site-packages
-        (
-            "/var/lang/lib/python3.13/site-packages/async_durable_execution/lambda_service.py",
-            True,
-        ),
-        (
-            "/var/lang/lib/python3.12/site-packages/async_durable_execution/lambda_service.py",
-            True,
-        ),
-        # Customer deployment package
-        ("/var/task/async_durable_execution/lambda_service.py", False),
-        # Lambda Layer
-        ("/opt/python/async_durable_execution/lambda_service.py", False),
-        # Trailing-slash guard: /var/langsurprise must not match
-        ("/var/langsurprise/lib/python3.13/site-packages/x.py", False),
-        # Local dev
-        ("/Users/me/project/.venv/lib/python3.12/site-packages/x.py", False),
-        ("", False),
-    ],
-)
-async def test_is_in_var_dir(path, expected):
-    assert _is_in_var_dir(path) is expected
 
 
 async def test_lambda_client_checkpoint_with_non_none_client_token():

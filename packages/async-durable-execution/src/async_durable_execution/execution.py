@@ -26,9 +26,7 @@ from async_durable_execution.models import (
     Operation,
     OperationUpdate,
 )
-from async_durable_execution.lambda_service import (
-    DurableServiceClient,
-    LambdaApiClient,
+from async_durable_execution.client import (
     ThreadedSyncLambdaClient,
 )
 from async_durable_execution.logger import configure_durable_logger
@@ -42,8 +40,11 @@ from async_durable_execution.state import ExecutionState, ReplayStatus
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, MutableMapping
 
-    from async_durable_execution.types import LambdaContext
-
+    from async_durable_execution.types import (
+        LambdaContext,
+        DurableServiceClient,
+        LambdaApiClient,
+    )
 
 logger = logging.getLogger(__name__)
 _default_logger_configured = False

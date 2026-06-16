@@ -34,7 +34,7 @@ from async_durable_execution.models import (
     StateOutput,
     StepDetails,
 )
-from async_durable_execution.lambda_service import ThreadedSyncLambdaClient
+from async_durable_execution.client import ThreadedSyncLambdaClient
 from async_durable_execution.plugin import (
     DurableInstrumentationPlugin,
     PluginExecutor,

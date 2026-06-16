@@ -19,10 +19,6 @@ from async_durable_execution.config import (
     StepSemantics,
     TerminationMode,
 )
-from async_durable_execution.waits import (
-    WaitForConditionConfig,
-    WaitForConditionDecision,
-)
 
 
 def test_batched_input():
@@ -82,36 +78,6 @@ def test_parallel_config_defaults():
     config = ParallelConfig()
     assert config.max_concurrency is None
     assert isinstance(config.completion_config, CompletionConfig)
-
-
-def test_wait_for_condition_decision_continue():
-    """Test WaitForConditionDecision.continue_waiting factory method."""
-    decision = WaitForConditionDecision.continue_waiting(timedelta(seconds=30))
-    assert decision.should_continue is True
-    assert decision.delay_seconds == 30
-
-
-def test_wait_for_condition_decision_stop():
-    """Test WaitForConditionDecision.stop_polling factory method."""
-    decision = WaitForConditionDecision.stop_polling()
-    assert decision.should_continue is False
-    assert decision.delay_seconds == 0
-
-
-def test_wait_for_condition_config():
-    """Test WaitForConditionConfig with custom values."""
-
-    def wait_strategy(state, attempt):
-        return WaitForConditionDecision.continue_waiting(timedelta(seconds=10))
-
-    serdes = Mock()
-    config = WaitForConditionConfig(
-        wait_strategy=wait_strategy, initial_state="test_state", serdes=serdes
-    )
-
-    assert config.wait_strategy is wait_strategy
-    assert config.initial_state == "test_state"
-    assert config.serdes is serdes
 
 
 def test_step_semantics_enum():
@@ -270,8 +236,9 @@ def test_step_future_without_name():
 def test_invoke_config_defaults():
     """Test InvokeConfig defaults."""
     config = InvokeConfig()
+    assert config.serdes_payload is None
+    assert config.serdes_result is None
     assert config.tenant_id is None
-    assert config.timeout_seconds == 0
 
 
 def test_invoke_config_with_tenant_id():
