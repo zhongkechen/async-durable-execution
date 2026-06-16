@@ -4,7 +4,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from async_durable_execution.config import StepConfig
-from async_durable_execution.context import get_step_context
+from async_durable_execution.context import (
+    _reset_context,
+    _set_context,
+    get_context,
+)
 from async_durable_execution.exceptions import CallbackError
 from async_durable_execution.models import (
     CallbackOptions,
@@ -151,7 +155,7 @@ class CallbackOperationExecutor(OperationExecutor[str]):
 
 async def wait_for_callback_handler(
     context: DurableContext,
-    submitter: Callable[[str, WaitForCallbackContext], Awaitable[Any]],
+    submitter: Callable[[str], Awaitable[Any]],
     name: str | None = None,
     config: WaitForCallbackConfig | None = None,
 ) -> Any:
@@ -165,11 +169,20 @@ async def wait_for_callback_handler(
     )
 
     async def submitter_step():
-        step_context = get_step_context()
-        return await submitter(
-            callback.callback_id,
-            WaitForCallbackContext(logger=step_context.logger),
+        step_context = get_context()
+        callback_context = WaitForCallbackContext(
+            callback_id=callback.callback_id,
+            execution_state=getattr(step_context, "execution_state", None),
+            execution_arn=getattr(step_context, "execution_arn", None),
+            parent_id=getattr(step_context, "parent_id", None),
+            operation_id=getattr(step_context, "operation_id", None),
+            operation_name=getattr(step_context, "operation_name", None),
         )
+        token = _set_context(callback_context)
+        try:
+            return await submitter(callback.callback_id)
+        finally:
+            _reset_context(token)
 
     step_config = (
         StepConfig(

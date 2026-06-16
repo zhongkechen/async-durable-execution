@@ -17,7 +17,7 @@ from async_durable_execution import (
 async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with failing submitter."""
 
-    async def submitter(_callback_id, _context) -> None:
+    async def submitter(_callback_id) -> None:
         """Submitter function that fails after a delay."""
         await asyncio.sleep(0.5)
         # Submitter fails

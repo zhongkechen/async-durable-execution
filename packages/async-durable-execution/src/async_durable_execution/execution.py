@@ -31,6 +31,7 @@ from async_durable_execution.lambda_service import (
     LambdaApiClient,
     ThreadedSyncLambdaClient,
 )
+from async_durable_execution.logger import configure_durable_logger
 from async_durable_execution.plugin import (
     DurableInstrumentationPlugin,
     PluginExecutor,
@@ -45,6 +46,7 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+_default_logger_configured = False
 
 # 6MB in bytes, minus 50 bytes for envelope
 LAMBDA_RESPONSE_SIZE_LIMIT = 6 * 1024 * 1024 - 50
@@ -215,6 +217,7 @@ def durable_execution(
     async def _wrapper_async(
         event: Any, context: LambdaContext
     ) -> MutableMapping[str, Any]:
+        global _default_logger_configured
         invocation_input: DurableExecutionInvocationInput
         service_client: DurableServiceClient
 
@@ -293,6 +296,9 @@ def durable_execution(
         durable_context: DurableContext = DurableContext.from_lambda_context(
             state=execution_state, lambda_context=context
         )
+        if not _default_logger_configured:
+            configure_durable_logger(logging.getLogger())
+            _default_logger_configured = True
 
         try:
             execution_operation = execution_state.get_execution_operation()

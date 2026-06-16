@@ -8,6 +8,9 @@ from datetime import timedelta
 from unittest.mock import Mock
 
 import pytest
+from async_durable_execution.context import (
+    get_context,
+)
 from async_durable_execution.exceptions import (
     CallableRuntimeError,
     InvocationError,
@@ -22,7 +25,7 @@ from async_durable_execution.models import (
     OperationType,
     StepDetails,
 )
-from async_durable_execution.logger import Logger, LogInfo
+import logging
 from async_durable_execution.operation.wait_for_condition import (
     WaitForConditionOperationExecutor,
 )
@@ -51,9 +54,7 @@ def _asyncify(func):
 
 
 # Test helper - maintains old handler signature for backward compatibility in tests
-async def wait_for_condition_handler(
-    check, config, state, operation_identifier, context_logger
-):
+async def wait_for_condition_handler(check, config, state, operation_identifier):
     """Test helper that wraps WaitForConditionOperationExecutor with old handler signature."""
     if hasattr(state, "wrap_user_function") and hasattr(
         state.wrap_user_function, "return_value"
@@ -66,7 +67,6 @@ async def wait_for_condition_handler(
         config=config,
         state=state,
         operation_identifier=operation_identifier,
-        context_logger=context_logger,
     )
     return await _invoke_maybe_async(executor.process())
 
@@ -79,14 +79,13 @@ async def test_wait_for_condition_first_execution_condition_met():
         CheckpointedResult.create_not_found()
     )
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -101,7 +100,6 @@ async def test_wait_for_condition_first_execution_condition_met():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     assert result == 6
@@ -116,14 +114,13 @@ async def test_wait_for_condition_first_execution_condition_not_met():
         CheckpointedResult.create_not_found()
     )
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -139,7 +136,6 @@ async def test_wait_for_condition_first_execution_condition_not_met():
             operation_identifier=op_id,
             check=check_func,
             config=config,
-            context_logger=mock_logger,
         )
 
     assert mock_state._create_checkpoint_async.call_count == 2  # START and RETRY
@@ -158,12 +154,12 @@ async def test_wait_for_condition_already_succeeded():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    mock_logger = Mock(spec=Logger)
+    mock_logger = Mock(spec=logging.Logger)
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -178,7 +174,6 @@ async def test_wait_for_condition_already_succeeded():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     assert result == 42
@@ -198,12 +193,12 @@ async def test_wait_for_condition_already_succeeded_none_result():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    mock_logger = Mock(spec=Logger)
+    mock_logger = Mock(spec=logging.Logger)
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -218,7 +213,6 @@ async def test_wait_for_condition_already_succeeded_none_result():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     assert result is None
@@ -239,12 +233,12 @@ async def test_wait_for_condition_already_failed():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    mock_logger = Mock(spec=Logger)
+    mock_logger = Mock(spec=logging.Logger)
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -260,7 +254,6 @@ async def test_wait_for_condition_already_failed():
             operation_identifier=op_id,
             check=check_func,
             config=config,
-            context_logger=mock_logger,
         )
 
 
@@ -277,14 +270,13 @@ async def test_wait_for_condition_retry_with_state():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -299,7 +291,6 @@ async def test_wait_for_condition_retry_with_state():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     assert result == 11  # 10 (from checkpoint) + 1
@@ -319,14 +310,13 @@ async def test_wait_for_condition_retry_without_state():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -341,7 +331,6 @@ async def test_wait_for_condition_retry_without_state():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     assert result == 6  # 5 (initial) + 1
@@ -360,14 +349,13 @@ async def test_wait_for_condition_retry_invalid_json_state():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -382,7 +370,6 @@ async def test_wait_for_condition_retry_invalid_json_state():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     assert result == 6  # Falls back to initial state
@@ -396,14 +383,13 @@ async def test_wait_for_condition_check_function_exception():
         CheckpointedResult.create_not_found()
     )
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         msg = "Test error"
         raise ValueError(msg)
 
@@ -420,22 +406,18 @@ async def test_wait_for_condition_check_function_exception():
             operation_identifier=op_id,
             check=check_func,
             config=config,
-            context_logger=mock_logger,
         )
 
     assert mock_state._create_checkpoint_async.call_count == 2  # START and FAIL
 
 
 async def test_wait_for_condition_check_context():
-    """Test that check function receives proper context."""
+    """Test that check context is available via contextvars."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
     mock_state.get_checkpoint_result.return_value = (
         CheckpointedResult.create_not_found()
     )
-
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
@@ -443,9 +425,9 @@ async def test_wait_for_condition_check_context():
 
     captured_context = None
 
-    def check_func(state, context):
+    def check_func(state):
         nonlocal captured_context
-        captured_context = context
+        captured_context = get_context()
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -460,11 +442,10 @@ async def test_wait_for_condition_check_context():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     assert isinstance(captured_context, WaitForConditionCheckContext)
-    assert captured_context.logger is mock_logger
+    assert captured_context.attempt == 1
 
 
 async def test_wait_for_condition_delay_seconds_none():
@@ -475,14 +456,13 @@ async def test_wait_for_condition_delay_seconds_none():
         CheckpointedResult.create_not_found()
     )
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -498,7 +478,6 @@ async def test_wait_for_condition_delay_seconds_none():
             operation_identifier=op_id,
             check=check_func,
             config=config,
-            context_logger=mock_logger,
         )
 
 
@@ -519,14 +498,13 @@ async def test_wait_for_condition_no_operation_in_checkpoint():
 
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -541,7 +519,6 @@ async def test_wait_for_condition_no_operation_in_checkpoint():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     assert result == 11  # Uses attempt=1 by default
@@ -572,14 +549,13 @@ async def test_wait_for_condition_operation_no_step_details():
 
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -594,7 +570,6 @@ async def test_wait_for_condition_operation_no_step_details():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     assert result == 11  # Uses attempt=1 by default
@@ -608,14 +583,13 @@ async def test_wait_for_condition_custom_delay_seconds():
         CheckpointedResult.create_not_found()
     )
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -633,7 +607,6 @@ async def test_wait_for_condition_custom_delay_seconds():
             operation_identifier=op_id,
             check=check_func,
             config=config,
-            context_logger=mock_logger,
         )
 
 
@@ -650,14 +623,13 @@ async def test_wait_for_condition_attempt_number_passed_to_strategy():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -676,7 +648,6 @@ async def test_wait_for_condition_attempt_number_passed_to_strategy():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     assert captured_attempt == 4
@@ -696,14 +667,13 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -726,7 +696,6 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     assert captured_attempts[-1] == 1, "First execution should have attempt=1"
@@ -746,7 +715,6 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     assert captured_attempts[-1] == 2, (
@@ -768,7 +736,6 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     assert captured_attempts[-1] == 3, (
@@ -790,7 +757,6 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     assert captured_attempts[-1] == 4, (
@@ -814,14 +780,13 @@ async def test_wait_for_condition_state_passed_to_strategy():
         CheckpointedResult.create_not_found()
     )
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state * 2
 
     mock_state.wrap_user_function.return_value = check_func
@@ -840,28 +805,32 @@ async def test_wait_for_condition_state_passed_to_strategy():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     assert captured_state == 10  # 5 * 2
 
 
 async def test_wait_for_condition_logger_with_log_info():
-    """Test that logger is properly configured with log info."""
+    """Test that the active context carries durable log metadata."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test:execution:123"
     mock_state.get_checkpoint_result.return_value = (
         CheckpointedResult.create_not_found()
     )
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    captured_context = None
+
+    def check_func(state):
+        nonlocal captured_context
+        captured_context = get_context()
+        assert isinstance(captured_context, WaitForConditionCheckContext)
+        assert captured_context.attempt == 1
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -876,13 +845,14 @@ async def test_wait_for_condition_logger_with_log_info():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
-    # Verify logger.with_log_info was called
-    mock_logger.with_log_info.assert_called_once()
-    call_args = mock_logger.with_log_info.call_args[0][0]
-    assert isinstance(call_args, LogInfo)
+    assert captured_context is not None
+    assert isinstance(captured_context, WaitForConditionCheckContext)
+    assert captured_context.execution_arn == "arn:aws:test:execution:123"
+    assert captured_context.operation_id == "op1"
+    assert captured_context.operation_name == "test_wait"
+    assert captured_context.attempt == 1
 
 
 async def test_wait_for_condition_zero_delay_seconds():
@@ -893,14 +863,13 @@ async def test_wait_for_condition_zero_delay_seconds():
         CheckpointedResult.create_not_found()
     )
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -918,7 +887,6 @@ async def test_wait_for_condition_zero_delay_seconds():
             operation_identifier=op_id,
             check=check_func,
             config=config,
-            context_logger=mock_logger,
         )
 
 
@@ -929,15 +897,14 @@ async def test_wait_for_condition_custom_serdes_first_execution_condition_met():
         CheckpointedResult.create_not_found()
     )
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
     complex_result = {"key": "value", "number": 42, "list": [1, 2, 3]}
 
-    def check_func(state, context):
+    def check_func(state):
         return complex_result
 
     mock_state.wrap_user_function.return_value = check_func
@@ -954,7 +921,6 @@ async def test_wait_for_condition_custom_serdes_first_execution_condition_met():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
     expected_checkpoointed_result = (
         '{"key": "VALUE", "number": "84", "list": [1, 2, 3]}'
@@ -979,12 +945,12 @@ async def test_wait_for_condition_custom_serdes_already_succeeded():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    mock_logger = Mock(spec=Logger)
+    mock_logger = Mock(spec=logging.Logger)
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state + 1
 
     config = WaitForConditionConfig(
@@ -998,7 +964,6 @@ async def test_wait_for_condition_custom_serdes_already_succeeded():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     assert result == {"key": "value", "number": 42, "list": [1, 2, 3]}
@@ -1021,14 +986,13 @@ async def test_wait_for_condition_pending():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         msg = "Should not be called"
         raise InvocationError(msg)
 
@@ -1046,7 +1010,6 @@ async def test_wait_for_condition_pending():
             operation_identifier=op_id,
             check=check_func,
             config=config,
-            context_logger=mock_logger,
         )
 
 
@@ -1064,14 +1027,13 @@ async def test_wait_for_condition_pending_without_next_attempt():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         msg = "Should not be called"
         raise InvocationError(msg)
 
@@ -1090,7 +1052,6 @@ async def test_wait_for_condition_pending_without_next_attempt():
             operation_identifier=op_id,
             check=check_func,
             config=config,
-            context_logger=mock_logger,
         )
 
 
@@ -1105,14 +1066,13 @@ async def test_wait_for_condition_checkpoint_called_once_with_is_sync_false():
         CheckpointedResult.create_not_found()
     )
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -1127,7 +1087,6 @@ async def test_wait_for_condition_checkpoint_called_once_with_is_sync_false():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     # Verify get_checkpoint_result called only once (no second check for async checkpoint)
@@ -1152,13 +1111,13 @@ async def test_wait_for_condition_immediate_success_without_executing_check():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    mock_logger = Mock(spec=Logger)
+    mock_logger = Mock(spec=logging.Logger)
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
     # Check function should NOT be called
-    def check_func(state, context):
+    def check_func(state):
         msg = "Check function should not be called for immediate success"
         raise AssertionError(msg)
 
@@ -1172,7 +1131,6 @@ async def test_wait_for_condition_immediate_success_without_executing_check():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     # Verify result returned without executing check function
@@ -1196,13 +1154,13 @@ async def test_wait_for_condition_immediate_failure_without_executing_check():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    mock_logger = Mock(spec=Logger)
+    mock_logger = Mock(spec=logging.Logger)
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
     # Check function should NOT be called
-    def check_func(state, context):
+    def check_func(state):
         msg = "Check function should not be called for immediate failure"
         raise AssertionError(msg)
 
@@ -1218,7 +1176,6 @@ async def test_wait_for_condition_immediate_failure_without_executing_check():
             operation_identifier=op_id,
             check=check_func,
             config=config,
-            context_logger=mock_logger,
         )
 
     # Verify no new checkpoints created
@@ -1243,15 +1200,14 @@ async def test_wait_for_condition_pending_suspends_without_executing_check():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
     # Check function should NOT be called
-    def check_func(state, context):
+    def check_func(state):
         msg = "Check function should not be called for pending status"
         raise AssertionError(msg)
 
@@ -1269,7 +1225,6 @@ async def test_wait_for_condition_pending_suspends_without_executing_check():
             operation_identifier=op_id,
             check=check_func,
             config=config,
-            context_logger=mock_logger,
         )
 
     # Verify no new checkpoints created
@@ -1284,8 +1239,7 @@ async def test_wait_for_condition_no_checkpoint_executes_check_function():
         CheckpointedResult.create_not_found()
     )
 
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
@@ -1293,7 +1247,7 @@ async def test_wait_for_condition_no_checkpoint_executes_check_function():
 
     check_called = False
 
-    def check_func(state, context):
+    def check_func(state):
         nonlocal check_called
         check_called = True
         return state + 1
@@ -1310,7 +1264,6 @@ async def test_wait_for_condition_no_checkpoint_executes_check_function():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     # Verify check function was executed
@@ -1334,12 +1287,12 @@ async def test_wait_for_condition_already_completed_no_checkpoint_created():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.get_checkpoint_result.return_value = mock_result
 
-    mock_logger = Mock(spec=Logger)
+    mock_logger = Mock(spec=logging.Logger)
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state, context):
+    def check_func(state):
         return state + 1
 
     config = WaitForConditionConfig(
@@ -1352,7 +1305,6 @@ async def test_wait_for_condition_already_completed_no_checkpoint_created():
         operation_identifier=op_id,
         check=check_func,
         config=config,
-        context_logger=mock_logger,
     )
 
     # Verify result returned
@@ -1378,8 +1330,7 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal():
     )
 
     mock_check_function = Mock(return_value="final_state")
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
     mock_state.wrap_user_function.return_value = _asyncify(mock_check_function)
 
     def mock_wait_strategy(state, attempt):
@@ -1397,7 +1348,6 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal():
         operation_identifier=OperationIdentifier(
             "wfc-1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wfc"
         ),
-        context_logger=mock_logger,
     )
     result = await executor.process()
 
@@ -1427,8 +1377,7 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal_du
 
     mock_check_function = Mock(return_value="final_state")
     mock_state.wrap_user_function.return_value = _asyncify(mock_check_function)
-    mock_logger = Mock(spec=Logger)
-    mock_logger.with_log_info.return_value = mock_logger
+    mock_logger = Mock(spec=logging.Logger)
 
     def mock_wait_strategy(state, attempt):
         return WaitForConditionDecision.stop_polling()
@@ -1443,7 +1392,6 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal_du
         operation_identifier=OperationIdentifier(
             "wfc-1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wfc"
         ),
-        context_logger=mock_logger,
     )
     result = await executor.process()
 

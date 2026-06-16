@@ -31,17 +31,15 @@ from async_durable_execution.context import (
     durable_step,
     durable_wait_for_callback,
     get_context,
-    get_logger,
-    get_step_context,
     invoke,
     map,
     parallel,
     run_in_child_context,
+    get_attempt,
     step,
     wait,
     wait_for_callback,
     wait_for_condition,
-    get_attempt,
     with_retry,
 )
 from async_durable_execution.models import ErrorObject
@@ -65,7 +63,12 @@ from async_durable_execution.retries import (
 from async_durable_execution.serdes import JsonSerDes, SerDes, SerDesContext
 
 # Essential step context helpers
-from async_durable_execution.types import Callback, Context, StepContext
+from async_durable_execution.types import (
+    Callback,
+    Context,
+    StepContext,
+    WaitForConditionCheckContext,
+)
 from async_durable_execution.waits import (
     WaitForConditionConfig,
     WaitForConditionDecision,
@@ -101,6 +104,7 @@ __all__ = [
     "ValidationError",
     "WaitForCallbackConfig",
     "WaitForCallbackContext",
+    "WaitForConditionCheckContext",
     "WaitForConditionConfig",
     "WaitForConditionDecision",
     "WithRetryConfig",
@@ -113,8 +117,6 @@ __all__ = [
     "durable_wait_for_callback",
     "get_attempt",
     "get_context",
-    "get_logger",
-    "get_step_context",
     "invoke",
     "map",
     "parallel",

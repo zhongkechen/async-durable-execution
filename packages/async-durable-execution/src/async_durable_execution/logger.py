@@ -1,18 +1,32 @@
-"""Custom logging."""
+"""Logging helpers for durable execution contexts."""
 
 from __future__ import annotations
 
+import logging
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from async_durable_execution.types import LoggerInterface
+from async_durable_execution.types import (
+    Context,
+    LoggerInterface,
+    StepContext,
+    WaitForCallbackContext,
+    WaitForConditionCheckContext,
+)
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, MutableMapping
-
     from async_durable_execution.context import ExecutionState
     from async_durable_execution.models import OperationIdentifier
+
+
+_current_context: ContextVar[Context | None] = ContextVar(
+    "async_durable_execution.current_context",
+    default=None,
+)
+_configured_logger_ids: set[int] = set()
+_configured_handler_ids: set[int] = set()
 
 
 @dataclass(frozen=True)
@@ -30,7 +44,6 @@ class LogInfo:
         op_id: OperationIdentifier,
         attempt: int | None = None,
     ) -> LogInfo:
-        """Create new log info from an execution arn, OperationIdentifier and attempt."""
         return cls(
             execution_state=execution_state,
             parent_id=op_id.parent_id,
@@ -40,7 +53,6 @@ class LogInfo:
         )
 
     def with_parent_id(self, parent_id: str) -> LogInfo:
-        """Clone the log info with a new parent id."""
         return LogInfo(
             execution_state=self.execution_state,
             parent_id=parent_id,
@@ -50,83 +62,98 @@ class LogInfo:
         )
 
 
-class Logger(LoggerInterface):
-    def __init__(
-        self,
-        logger: LoggerInterface,
-        default_extra: Mapping[str, object],
-        execution_state: ExecutionState,
-    ) -> None:
-        self._logger = logger
-        self._default_extra = default_extra
-        self._execution_state = execution_state
+class DurableContextFilter(logging.Filter):
+    """Add durable execution metadata from the active contextvar to log records."""
 
-    @classmethod
-    def from_log_info(cls, logger: LoggerInterface, info: LogInfo) -> Logger:
-        """Create a new logger with the given LogInfo."""
-        extra: MutableMapping[str, object] = {
-            "executionArn": info.execution_state.durable_execution_arn
-        }
-        if info.parent_id:
-            extra["parentId"] = info.parent_id
-        if info.name:
-            # Use 'operation_name' instead of 'name' as key because the stdlib LogRecord internally reserved 'name' parameter
-            extra["operationName"] = info.name
-        if info.attempt is not None:
-            extra["attempt"] = info.attempt
-        if info.operation_id:
-            extra["operationId"] = info.operation_id
-        return cls(
-            logger=logger, default_extra=extra, execution_state=info.execution_state
-        )
+    def filter(self, record: logging.LogRecord) -> bool:
+        context = _current_context.get()
+        if context is None:
+            return True
 
-    def with_log_info(self, info: LogInfo) -> Logger:
-        """Clone the existing logger with new LogInfo."""
-        return Logger.from_log_info(
-            logger=self._logger,
-            info=info,
-        )
+        if _is_replaying(context):
+            return False
 
-    def get_logger(self) -> LoggerInterface:
-        """Get the underlying logger."""
-        return self._logger
+        for key, value in build_context_log_extra(context).items():
+            if value is not None and not hasattr(record, key):
+                setattr(record, key, value)
+        return True
 
-    def debug(
-        self, msg: object, *args: object, extra: Mapping[str, object] | None = None
-    ) -> None:
-        self._log(self._logger.debug, msg, *args, extra=extra)
 
-    def info(
-        self, msg: object, *args: object, extra: Mapping[str, object] | None = None
-    ) -> None:
-        self._log(self._logger.info, msg, *args, extra=extra)
+def build_context_log_extra(context: Context) -> dict[str, object]:
+    """Build structured log fields from the active execution context."""
+    extra: dict[str, object] = {}
+    execution_arn = getattr(context, "execution_arn", None)
+    if execution_arn:
+        extra["executionArn"] = context.execution_arn
+    parent_id = getattr(context, "parent_id", None)
+    if parent_id:
+        extra["parentId"] = context.parent_id
+    operation_id = getattr(context, "operation_id", None)
+    if operation_id:
+        extra["operationId"] = context.operation_id
+    operation_name = getattr(context, "operation_name", None)
+    if operation_name:
+        extra["operationName"] = context.operation_name
+    if isinstance(context, WaitForCallbackContext):
+        extra["callbackId"] = context.callback_id
+    attempt = getattr(context, "attempt", None)
+    if attempt is not None:
+        extra["attempt"] = attempt
+    return extra
 
-    def warning(
-        self, msg: object, *args: object, extra: Mapping[str, object] | None = None
-    ) -> None:
-        self._log(self._logger.warning, msg, *args, extra=extra)
 
-    def error(
-        self, msg: object, *args: object, extra: Mapping[str, object] | None = None
-    ) -> None:
-        self._log(self._logger.error, msg, *args, extra=extra)
+def configure_durable_logger(logger: LoggerInterface) -> LoggerInterface:
+    """Attach DurableContextFilter to a stdlib-compatible logger and handlers."""
+    add_filter = getattr(logger, "addFilter", None)
+    filters = getattr(logger, "filters", ())
+    if not callable(add_filter):
+        return logger
 
-    def exception(
-        self, msg: object, *args: object, extra: Mapping[str, object] | None = None
-    ) -> None:
-        self._log(self._logger.exception, msg, *args, extra=extra)
-
-    def _log(
-        self,
-        log_func: Callable,
-        msg: object,
-        *args: object,
-        extra: Mapping[str, object] | None = None,
+    logger_id = id(logger)
+    if logger_id not in _configured_logger_ids and not any(
+        isinstance(item, DurableContextFilter) for item in filters
     ):
-        if not self._should_log():
-            return
-        merged_extra = {**self._default_extra, **(extra or {})}
-        log_func(msg, *args, extra=merged_extra)
+        add_filter(DurableContextFilter())
+        _configured_logger_ids.add(logger_id)
 
-    def _should_log(self) -> bool:
-        return not self._execution_state.is_replaying()
+    for handler in getattr(logger, "handlers", ()):
+        handler_id = id(handler)
+        if handler_id in _configured_handler_ids:
+            continue
+        if not any(isinstance(item, DurableContextFilter) for item in handler.filters):
+            handler.addFilter(DurableContextFilter())
+        _configured_handler_ids.add(handler_id)
+    return logger
+
+
+def set_current_context(context: Context) -> Token[Context | None]:
+    return _current_context.set(context)
+
+
+def reset_current_context(token: Token[Context | None]) -> None:
+    _current_context.reset(token)
+
+
+def get_current_context() -> Context | None:
+    return _current_context.get()
+
+
+def _is_replaying(context: Context) -> bool:
+    state = getattr(context, "state", None)
+    if state is None and isinstance(
+        context,
+        (StepContext, WaitForCallbackContext, WaitForConditionCheckContext),
+    ):
+        state = context.execution_state
+    if state is None:
+        return False
+    return bool(state.is_replaying())
+
+
+__all__ = [
+    "DurableContextFilter",
+    "LoggerInterface",
+    "LogInfo",
+    "build_context_log_extra",
+    "configure_durable_logger",
+]

@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import functools
-from contextvars import ContextVar, Token
+from contextvars import Token
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import (
@@ -11,6 +11,7 @@ from typing import (
     Any,
     Concatenate,
     Generic,
+    TypeVar as TypingTypeVar,
     ParamSpec,
     TypeVar,
     cast,
@@ -45,7 +46,11 @@ from async_durable_execution.models import (
     OperationSubType,
 )
 from async_durable_execution.retries import WithRetryConfig, create_retry_strategy
-from async_durable_execution.logger import Logger, LogInfo
+from async_durable_execution.logger import (
+    get_current_context,
+    reset_current_context,
+    set_current_context,
+)
 from async_durable_execution.operation.child import child_handler
 from async_durable_execution.operation.map import map_handler
 from async_durable_execution.operation.parallel import parallel_handler
@@ -61,7 +66,6 @@ from async_durable_execution.types import (
     DurableContext as DurableContextProtocol,
 )
 from async_durable_execution.types import (
-    LoggerInterface,
     StepContext,
     WaitForCallbackContext,
     WaitForConditionCheckContext,
@@ -85,49 +89,51 @@ Params = ParamSpec("Params")
 logger = logging.getLogger(__name__)
 
 PASS_THROUGH_SERDES: SerDes[Any] = PassThroughSerDes()
-
-_current_context: ContextVar[Context | None] = ContextVar(
-    "async_durable_execution.current_context",
-    default=None,
+ContextType = TypingTypeVar(
+    "ContextType",
+    StepContext,
+    WaitForCallbackContext,
+    WaitForConditionCheckContext,
 )
 
 
 def get_context() -> Context:
-    """Return the current durable or step context."""
-    current_context = _current_context.get()
+    """Return the current execution context."""
+    current_context = get_current_context()
     if current_context is None:
         msg = (
-            "get_context() can only be used while a durable function or step "
-            "function is executing."
+            "get_context() can only be used while a durable function, step "
+            "function, wait_for_callback submitter, or wait_for_condition check "
+            "is executing."
         )
         raise RuntimeError(msg)
     return current_context
 
 
-def get_step_context() -> StepContext:
-    """Return the StepContext for the currently executing step."""
-    current_context = _current_context.get()
-    if current_context is None or not isinstance(current_context, StepContext):
-        msg = "get_step_context() can only be used while a step function is executing."
-        raise RuntimeError(msg)
+def _get_context_as(
+    context_type: type[ContextType],
+    message: str,
+) -> ContextType:
+    current_context = get_current_context()
+    if current_context is None or not isinstance(current_context, context_type):
+        raise RuntimeError(message)
     return current_context
 
 
 def get_attempt() -> int | None:
-    return get_step_context().attempt
-
-
-def get_logger() -> LoggerInterface:
-    """Return the replay-aware logger for the current durable or step context."""
-    return get_context().logger
+    current_context = _get_context_as(
+        StepContext,
+        "get_attempt() can only be used while a step function is executing.",
+    )
+    return current_context.attempt
 
 
 def _set_context(context: Context) -> Token[Context | None]:
-    return _current_context.set(context)
+    return set_current_context(context)
 
 
 def _reset_context(token: Token[Context | None]) -> None:
-    _current_context.reset(token)
+    reset_current_context(token)
 
 
 def _set_step_context(step_context: StepContext) -> Token[Context | None]:
@@ -140,7 +146,10 @@ def _reset_step_context(token: Token[Context | None]) -> None:
 
 def _get_durable_context(operation_name: str) -> DurableContext:
     current_context = get_context()
-    if isinstance(current_context, StepContext):
+    if isinstance(
+        current_context,
+        (StepContext, WaitForCallbackContext, WaitForConditionCheckContext),
+    ):
         msg = (
             f"{operation_name}() can only be used while a durable function or child "
             "context is executing."
@@ -282,7 +291,7 @@ async def wait(duration: timedelta, name: str | None = None) -> None:
 
 
 async def wait_for_callback(
-    submitter: Callable[[str, WaitForCallbackContext], Awaitable[Any]],
+    submitter: Callable[[str], Awaitable[Any]],
     name: str | None = None,
     config: WaitForCallbackConfig | None = None,
 ) -> Any:
@@ -294,7 +303,7 @@ async def wait_for_callback(
 
 
 async def wait_for_condition(
-    check: Callable[[T, WaitForConditionCheckContext], Awaitable[T]],
+    check: Callable[[T], Awaitable[T]],
     config: WaitForConditionConfig[T],
     name: str | None = None,
 ) -> T:
@@ -303,10 +312,6 @@ async def wait_for_condition(
         config=config,
         name=name,
     )
-
-
-def set_logger(new_logger: LoggerInterface) -> None:
-    _get_durable_context("set_logger").set_logger(new_logger)
 
 
 @overload
@@ -506,15 +511,15 @@ def durable_parallel_branch(
 
 
 def durable_wait_for_callback(
-    func: Callable[Concatenate[str, WaitForCallbackContext, Params], Awaitable[T]],
-) -> Callable[Params, Callable[[str, WaitForCallbackContext], Awaitable[T]]]:
+    func: Callable[Concatenate[str, Params], Awaitable[T]],
+) -> Callable[Params, Callable[[str], Awaitable[T]]]:
     """Wrap your callable into a wait_for_callback submitter function.
 
     This decorator allows you to define a submitter function with additional
     parameters that will be bound when called.
 
     Args:
-        func: A callable that takes callback_id, context, and additional parameters
+        func: A callable that takes callback_id and additional parameters
 
     Returns:
         A wrapper function that binds the additional parameters and returns
@@ -524,11 +529,12 @@ def durable_wait_for_callback(
         @durable_wait_for_callback
         async def submit_to_external_system(
             callback_id: str,
-            context: WaitForCallbackContext,
             task_name: str,
             priority: int
         ):
-            context.logger.info(f"Submitting {task_name} with callback {callback_id}")
+            logging.getLogger(__name__).info(
+                "Submitting %s with callback %s", task_name, callback_id
+            )
             external_api.submit_task(
                 task_name=task_name,
                 priority=priority,
@@ -543,10 +549,8 @@ def durable_wait_for_callback(
     assert_async_callable(func)
 
     def wrapper(*args, **kwargs):
-        async def submitter_with_arguments(
-            callback_id: str, context: WaitForCallbackContext
-        ):
-            return await func(callback_id, context, *args, **kwargs)
+        async def submitter_with_arguments(callback_id: str):
+            return await func(callback_id, *args, **kwargs)
 
         submitter_with_arguments._original_name = func.__name__  # noqa: SLF001
         return submitter_with_arguments
@@ -621,7 +625,6 @@ class DurableContext(DurableContextProtocol):
         execution_context: ExecutionContext,
         lambda_context: LambdaContext | None = None,
         parent_id: str | None = None,
-        logger: Logger | None = None,
         step_id_prefix: str | None = None,
     ) -> None:
         self.state: ExecutionState = state
@@ -638,15 +641,11 @@ class DurableContext(DurableContextProtocol):
         self._is_virtual: bool = self._parent_id != self._step_id_prefix
         self._step_counter = _StepCounter()
 
-        log_info = LogInfo(
-            execution_state=state,
-            parent_id=parent_id,
-        )
-        self._log_info = log_info
-        self.logger: Logger = logger or Logger.from_log_info(
-            logger=logging.getLogger(),
-            info=log_info,
-        )
+        self.execution_state: ExecutionState = state
+        self.execution_arn: str = state.durable_execution_arn
+        self.parent_id: str | None = parent_id
+        self.operation_id: str | None = step_id_prefix
+        self.operation_name: str | None = None
 
     @property
     def is_virtual(self) -> bool:
@@ -707,12 +706,6 @@ class DurableContext(DurableContextProtocol):
             lambda_context=self.lambda_context,
             parent_id=child_parent_id,
             step_id_prefix=operation_id,
-            logger=self.logger.with_log_info(
-                LogInfo(
-                    execution_state=self.state,
-                    parent_id=child_parent_id,
-                )
-            ),
         )
 
     @staticmethod
@@ -723,13 +716,6 @@ class DurableContext(DurableContextProtocol):
             str | None: The provided name, and if that doesn't exist the callable function's name if it has one.
         """
         return name or get_callable_name(func)
-
-    def set_logger(self, new_logger: LoggerInterface):
-        """Set the logger for the current context."""
-        self.logger = Logger.from_log_info(
-            logger=new_logger,
-            info=self._log_info,
-        )
 
     async def _invoke_user_callable(
         self,
@@ -1027,7 +1013,6 @@ class DurableContext(DurableContextProtocol):
                 parent_id=self._parent_id,
                 name=step_name,
             ),
-            context_logger=self.logger,
         )
         result: T = await executor.process()
         self.state.track_replay(operation_id=operation_id)
@@ -1061,7 +1046,7 @@ class DurableContext(DurableContextProtocol):
 
     async def wait_for_callback(
         self,
-        submitter: Callable[[str, WaitForCallbackContext], Awaitable[Any]],
+        submitter: Callable[[str], Awaitable[Any]],
         name: str | None = None,
         config: WaitForCallbackConfig | None = None,
     ) -> Any:
@@ -1085,14 +1070,14 @@ class DurableContext(DurableContextProtocol):
 
     async def wait_for_condition(
         self,
-        check: Callable[[T, WaitForConditionCheckContext], Awaitable[T]],
+        check: Callable[[T], Awaitable[T]],
         config: WaitForConditionConfig[T],
         name: str | None = None,
     ) -> T:
         """Wait for a condition to be met by polling.
 
         Args:
-            check (Callable[[T, WaitForConditionCheckContext], T]): Function that checks the condition and returns updated state
+            check (Callable[[T], T]): Function that checks the condition and returns updated state
             config (WaitForConditionConfig[T]): Configuration including wait strategy and initial state
             name (str | None): Optional name for the operation
 
@@ -1120,7 +1105,6 @@ class DurableContext(DurableContextProtocol):
                     parent_id=self._parent_id,
                     name=name,
                 ),
-                context_logger=self.logger,
             )
         )
         result: T = await executor.process()

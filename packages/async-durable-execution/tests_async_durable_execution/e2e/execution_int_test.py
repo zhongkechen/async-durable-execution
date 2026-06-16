@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from functools import partial
 from typing import Any, cast
 from unittest.mock import Mock, patch
 
 import pytest
-from async_durable_execution import durable_step, get_step_context, step
+from async_durable_execution import durable_step, step
 from async_durable_execution.context import (
     DurableContext,
     durable_wait_for_callback,
@@ -27,8 +28,6 @@ from async_durable_execution.models import (
     OperationStatus,
     OperationType,
 )
-from async_durable_execution.logger import LoggerInterface
-
 from ..test_helpers import operation_id_sequence
 
 
@@ -184,8 +183,8 @@ async def test_step_different_ways_to_pass_args():
 async def test_durable_step_decorator_creates_step_operation():
     @durable_step
     async def decorated_step(status_code: int) -> str:
-        step_context = get_step_context()
-        step_context.logger.info("status=%s", status_code)
+        assert get_context() is not None
+        logging.getLogger(__name__).info("status=%s", status_code)
         return f"status:{status_code}"
 
     @durable_execution
@@ -253,22 +252,22 @@ async def test_durable_step_decorator_creates_step_operation():
 
 
 async def test_step_with_logger():
-    my_logger = Mock(spec=LoggerInterface)
-
     async def mystep(a: int, b: str) -> str:
-        step_context = get_step_context()
-        step_context.logger.info("from step %s %s", a, b)
+        assert get_context() is not None
+        logging.getLogger(__name__).info("from step %s %s", a, b)
         return "result"
 
     @durable_execution
     async def my_handler(event, context: DurableContext):
-        context.set_logger(my_logger)
         result: str = await context.step(partial(mystep, a=123, b="str"))
         assert result == "result"
 
-    with patch(
-        "async_durable_execution.execution.ThreadedSyncLambdaClient"
-    ) as mock_client_class:
+    with (
+        patch(
+            "async_durable_execution.execution.ThreadedSyncLambdaClient"
+        ) as mock_client_class,
+        patch.object(logging.getLogger(__name__), "info") as mock_info,
+    ):
         mock_client = Mock()
         mock_client_class.initialize_client.return_value = mock_client
 
@@ -326,30 +325,18 @@ async def test_step_with_logger():
         # Flatten all operations from all batches
         all_operations = [op for batch in checkpoint_calls for op in batch]
         assert len(all_operations) == 2
-        operation_id = next(operation_id_sequence())
 
-        my_logger.info.assert_called_once_with(
-            "from step %s %s",
-            123,
-            "str",
-            extra={
-                "executionArn": "test-arn/execution-1",
-                "operationName": "mystep",
-                "attempt": 1,
-                "operationId": operation_id,
-            },
-        )
+        mock_info.assert_called_once_with("from step %s %s", 123, "str")
 
         # Check the START operation
         start_op = all_operations[0]
         assert start_op.operation_type == OperationType.STEP
         assert start_op.action == OperationAction.START
-        assert start_op.operation_id == operation_id
         # Check the SUCCEED operation
         succeed_op = all_operations[1]
         assert succeed_op.operation_type == OperationType.STEP
         assert succeed_op.action == OperationAction.SUCCEED
-        assert succeed_op.operation_id == operation_id
+        assert succeed_op.operation_id == start_op.operation_id
 
 
 async def test_wait_inside_run_in_childcontext():
@@ -583,9 +570,13 @@ async def test_durable_wait_for_callback_decorator():
     mock_submitter = Mock()
 
     @durable_wait_for_callback
-    async def submit_to_external_system(callback_id, context, task_name, priority):
+    async def submit_to_external_system(callback_id, task_name, priority):
+        callback_context = get_context()
+        assert callback_context.callback_id == callback_id
         mock_submitter(callback_id, task_name, priority)
-        context.logger.info("Submitting %s with callback %s", task_name, callback_id)
+        logging.getLogger(__name__).info(
+            "Submitting %s with callback %s", task_name, callback_id
+        )
 
     @durable_execution
     async def my_handler(event, context):

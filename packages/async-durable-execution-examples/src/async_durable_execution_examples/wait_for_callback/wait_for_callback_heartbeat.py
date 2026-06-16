@@ -6,13 +6,12 @@ from typing import Any
 
 from async_durable_execution import (
     WaitForCallbackConfig,
-    WaitForCallbackContext,
     durable_execution,
     wait_for_callback,
 )
 
 
-async def submitter(_callback_id: str, _context: WaitForCallbackContext) -> None:
+async def submitter(_callback_id: str) -> None:
     """Simulate long-running submitter function."""
     await asyncio.sleep(5)
 

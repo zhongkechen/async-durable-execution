@@ -16,7 +16,7 @@ from async_durable_execution import (
 async def handler(event: dict[str, Any]) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with submitter retry and exponential backoff."""
 
-    async def submitter(callback_id: str, _context) -> None:
+    async def submitter(callback_id: str) -> None:
         """Submitter function that can fail based on event parameter."""
         print(f"Submitting callback to external system - callbackId: {callback_id}")
         raise Exception("Simulated submitter failure")
