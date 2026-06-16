@@ -1,13 +1,15 @@
 """DurableExecutionsPythonTestingLibrary module."""
 
-from async_durable_execution_runner.__about__ import __version__
-from async_durable_execution_runner.runner import (
+from .__about__ import __version__
+from .runner import (
     DurableFunctionCloudTestRunner,
     DurableFunctionLocalTestRunner,
     DurableFunctionTestResult,
     WebRunner,
     WebRunnerConfig,
     create_runner,
+    ContextOperation,
+    StepOperation,
 )
 
 
@@ -19,4 +21,6 @@ __all__ = [
     "WebRunnerConfig",
     "__version__",
     "create_runner",
+    "ContextOperation",
+    "StepOperation",
 ]

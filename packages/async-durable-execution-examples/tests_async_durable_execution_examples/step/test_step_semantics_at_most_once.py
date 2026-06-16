@@ -1,7 +1,7 @@
 """Tests for step_semantics_at_most_once example."""
 
-from async_durable_execution.execution import InvocationStatus
-from async_durable_execution.models import OperationType
+from async_durable_execution import InvocationStatus
+from async_durable_execution import OperationType
 from async_durable_execution_examples.step import step_semantics_at_most_once
 
 

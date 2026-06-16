@@ -10,28 +10,28 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution_runner.checkpoint.validators.operations.callback import (
+from .operations.callback import (
     CallbackOperationValidator,
 )
-from async_durable_execution_runner.checkpoint.validators.operations.context import (
+from .operations.context import (
     ContextOperationValidator,
 )
-from async_durable_execution_runner.checkpoint.validators.operations.execution import (
+from .operations.execution import (
     ExecutionOperationValidator,
 )
-from async_durable_execution_runner.checkpoint.validators.operations.invoke import (
+from .operations.invoke import (
     ChainedInvokeOperationValidator,
 )
-from async_durable_execution_runner.checkpoint.validators.operations.step import (
+from .operations.step import (
     StepOperationValidator,
 )
-from async_durable_execution_runner.checkpoint.validators.operations.wait import (
+from .operations.wait import (
     WaitOperationValidator,
 )
-from async_durable_execution_runner.checkpoint.validators.transitions import (
+from .transitions import (
     ValidActionsByOperationTypeValidator,
 )
-from async_durable_execution_runner.exceptions import (
+from ...exceptions import (
     InvalidParameterValueException,
 )
 
@@ -39,7 +39,7 @@ from async_durable_execution_runner.exceptions import (
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    from async_durable_execution_runner.execution import Execution
+    from ...execution import Execution
 
 MAX_ERROR_PAYLOAD_SIZE_BYTES = 32768
 

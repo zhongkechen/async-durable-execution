@@ -73,7 +73,7 @@ Use the `durable_runner` pytest fixture as a factory context manager:
 
 ```python
 import pytest
-from async_durable_execution.execution import InvocationStatus
+from async_durable_execution import InvocationStatus
 from examples.src import my_example
 
 

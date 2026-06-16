@@ -8,39 +8,39 @@ import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from async_durable_execution.async_tools import (
+from .async_tools import (
     assert_async_callable,
 )
-from async_durable_execution.context import DurableContext
-from async_durable_execution.exceptions import (
+from .context import DurableContext
+from .exceptions import (
     BotoClientError,
     CheckpointError,
     ExecutionError,
     InvocationError,
     SuspendExecution,
 )
-from async_durable_execution.models import (
+from .models import (
     DurableExecutionInvocationOutput,
     ErrorObject,
     InvocationStatus,
     Operation,
     OperationUpdate,
 )
-from async_durable_execution.client import (
+from .client import (
     ThreadedSyncLambdaClient,
 )
-from async_durable_execution.logger import configure_durable_logger
-from async_durable_execution.plugin import (
+from .logger import configure_durable_logger
+from .plugin import (
     DurableInstrumentationPlugin,
     PluginExecutor,
 )
-from async_durable_execution.state import ExecutionState, ReplayStatus
+from .state import ExecutionState, ReplayStatus
 
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, MutableMapping
 
-    from async_durable_execution.types import (
+    from .types import (
         LambdaContext,
         DurableServiceClient,
         LambdaApiClient,
@@ -294,7 +294,7 @@ def durable_execution(
                 )
                 raise
 
-        durable_context: DurableContext = DurableContext.from_lambda_context(
+        durable_context: DurableContext = DurableContext(
             state=execution_state, lambda_context=context
         )
         if not _default_logger_configured:

@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
+    durable_child_context,
     durable_execution,
     run_in_child_context,
     wait,
@@ -15,6 +16,7 @@ async def noop_submitter(_callback_id: str) -> None:
     return None
 
 
+@durable_child_context
 async def inner_child_context() -> dict[str, Any]:
     """Inner child context with deep nested callback."""
     await wait(timedelta(seconds=5), name="deep-wait")
@@ -30,6 +32,7 @@ async def inner_child_context() -> dict[str, Any]:
     }
 
 
+@durable_child_context
 async def outer_child_context() -> dict[str, Any]:
     """Outer child context with inner callback and nested context."""
     inner_result: str = await wait_for_callback(
@@ -39,7 +42,7 @@ async def outer_child_context() -> dict[str, Any]:
 
     # Nested child context with another callback
     deep_nested_result: dict[str, Any] = await run_in_child_context(
-        inner_child_context,
+        inner_child_context(),
         name="inner-child-context",
     )
 
@@ -59,7 +62,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     )
 
     nested_result: dict[str, Any] = await run_in_child_context(
-        outer_child_context,
+        outer_child_context(),
         name="outer-child-context",
     )
 

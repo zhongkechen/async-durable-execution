@@ -12,8 +12,8 @@ from async_durable_execution.config import (
 )
 from async_durable_execution.context import (
     Callback,
-    _reset_step_context,
-    _set_step_context,
+    _reset_context,
+    _set_context,
     get_context,
 )
 from async_durable_execution.exceptions import CallbackError, ValidationError
@@ -57,11 +57,11 @@ async def create_callback_handler(state, operation_identifier, config=None):
 
 async def execute_step_with_mock_context(func):
     step_context = Mock(spec=StepContext)
-    token = _set_step_context(step_context)
+    token = _set_context(step_context)
     try:
         return await func()
     finally:
-        _reset_step_context(token)
+        _reset_context(token)
 
 
 async def test_create_callback_handler_new_operation_with_config():

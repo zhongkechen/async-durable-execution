@@ -1,6 +1,6 @@
 """Tests for run_in_child_context example."""
 
-from async_durable_execution.execution import InvocationStatus
+from async_durable_execution import InvocationStatus
 from async_durable_execution_examples.run_in_child_context import run_in_child_context
 
 

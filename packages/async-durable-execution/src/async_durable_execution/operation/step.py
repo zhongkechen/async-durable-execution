@@ -5,39 +5,39 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, TypeVar
 
-from async_durable_execution.config import (
+from ..config import (
     RetryPresets,
     StepConfig,
     StepSemantics,
 )
-from async_durable_execution.exceptions import (
+from ..exceptions import (
     ExecutionError,
     InvalidStateError,
     StepInterruptedError,
 )
-from async_durable_execution.models import (
+from ..models import (
     ErrorObject,
     OperationUpdate,
     RetryDecision,
 )
-from async_durable_execution.context import _reset_context, _set_context
-from async_durable_execution.operation.base import (
+from ..context import _reset_context, _set_context
+from .base import (
     CheckResult,
     OperationExecutor,
 )
-from async_durable_execution.serdes import deserialize, serialize
-from async_durable_execution.suspend import (
+from ..serdes import deserialize, serialize
+from ..suspend import (
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
 )
-from async_durable_execution.types import StepContext
+from ..types import StepContext
 
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from async_durable_execution.models import OperationIdentifier
-    from async_durable_execution.state import (
+    from ..models import OperationIdentifier
+    from ..state import (
         CheckpointedResult,
         ExecutionState,
     )

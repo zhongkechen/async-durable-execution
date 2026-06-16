@@ -1,17 +1,16 @@
 """Functional tests, covering end-to-end DurableTestRunner."""
 
-import asyncio
 import json
 from datetime import timedelta
 from functools import partial
-from typing import Any, cast
+from typing import Any
 
-from async_durable_execution.context import DurableContext, get_context
-from async_durable_execution.execution import (
+from async_durable_execution import (
     InvocationStatus,
     durable_execution,
 )
-from async_durable_execution_runner.runner import (
+from async_durable_execution import run_in_child_context, step, wait
+from async_durable_execution_runner import (
     ContextOperation,
     DurableFunctionLocalTestRunner,
     DurableFunctionTestResult,
@@ -35,9 +34,8 @@ async def test_basic_durable_function() -> None:
 
     async def two(a: int, b: int) -> str:
         # print("[DEBUG] two called")
-        ctx = cast(DurableContext, get_context())
-        two_1_result: str = await ctx.step(partial(two_1, a, b))
-        two_2_result: str = await ctx.step(partial(two_2, a, b))
+        two_1_result: str = await step(partial(two_1, a, b))
+        two_2_result: str = await step(partial(two_2, a, b))
         return f"{two_1_result} {two_2_result}"
 
     async def three(a: int, b: int) -> str:
@@ -46,21 +44,20 @@ async def test_basic_durable_function() -> None:
 
     @durable_execution
     async def function_under_test(event: Any) -> list[str]:
-        context = cast(DurableContext, get_context())
         results: list[str] = []
 
-        result_one: str = await context.step(partial(one, 1, 2))
+        result_one: str = await step(partial(one, 1, 2))
         results.append(result_one)
 
-        await context.wait(timedelta(seconds=1))
+        await wait(timedelta(seconds=1))
 
-        result_two: str = await context.run_in_child_context(
+        result_two: str = await run_in_child_context(
             partial(two, 3, 4),
             name="two",
         )
         results.append(result_two)
 
-        result_three: str = await context.step(partial(three, 5, 6))
+        result_three: str = await step(partial(three, 5, 6))
         results.append(result_three)
 
         return results

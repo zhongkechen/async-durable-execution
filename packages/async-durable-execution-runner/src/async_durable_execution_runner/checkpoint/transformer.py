@@ -9,22 +9,22 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution_runner.checkpoint.processors.callback import (
+from .processors.callback import (
     CallbackProcessor,
 )
-from async_durable_execution_runner.checkpoint.processors.context import (
+from .processors.context import (
     ContextProcessor,
 )
-from async_durable_execution_runner.checkpoint.processors.execution import (
+from .processors.execution import (
     ExecutionProcessor,
 )
-from async_durable_execution_runner.checkpoint.processors.step import (
+from .processors.step import (
     StepProcessor,
 )
-from async_durable_execution_runner.checkpoint.processors.wait import (
+from .processors.wait import (
     WaitProcessor,
 )
-from async_durable_execution_runner.exceptions import (
+from ..exceptions import (
     InvalidParameterValueException,
 )
 
@@ -32,7 +32,7 @@ from async_durable_execution_runner.exceptions import (
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    from async_durable_execution_runner.checkpoint.processors.base import (
+    from .processors.base import (
         OperationProcessor,
     )
 

@@ -12,11 +12,11 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from async_durable_execution.async_tools import invoke_callable
-from async_durable_execution.concurrency.executor import (
+from async_durable_execution.operation.concurrency import (
     ConcurrentExecutor,
     TimerScheduler,
 )
-from async_durable_execution.concurrency.models import (
+from async_durable_execution.models import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
@@ -34,7 +34,6 @@ from async_durable_execution.config import (
 )
 from async_durable_execution.context import (
     DurableContext,
-    ExecutionContext,
 )
 from async_durable_execution.exceptions import (
     CallableRuntimeError,
@@ -91,7 +90,9 @@ def create_execution_state():
 def create_executor_context(state, step_id="1", parent_id="parent"):
     context = Mock()
     context._parent_id = parent_id  # noqa: SLF001
-    context._create_step_id_for_logical_step = lambda *args: step_id  # noqa: SLF001
+    context._step_counter._create_step_id_for_logical_step = (  # noqa: SLF001
+        lambda *args: step_id
+    )
     context.create_child_context = lambda *args, **kwargs: Mock(state=state)
     return context
 
@@ -364,7 +365,7 @@ async def test_batch_result_from_dict_default_completion_reason():
         # No completionReason provided
     }
 
-    with patch("async_durable_execution.concurrency.models.logger") as mock_logger:
+    with patch("async_durable_execution.models.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.ALL_COMPLETED
         # Verify warning was logged
@@ -382,7 +383,7 @@ async def test_batch_result_from_dict_infer_all_completed_all_succeeded():
         # No completionReason provided
     }
 
-    with patch("async_durable_execution.concurrency.models.logger") as mock_logger:
+    with patch("async_durable_execution.models.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.ALL_COMPLETED
         mock_logger.warning.assert_called_once()
@@ -405,7 +406,7 @@ async def test_batch_result_from_dict_infer_failure_tolerance_exceeded_all_faile
     }
 
     # With no completion config and failures, should fail-fast
-    with patch("async_durable_execution.concurrency.models.logger") as mock_logger:
+    with patch("async_durable_execution.models.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
         mock_logger.warning.assert_called_once()
@@ -429,7 +430,7 @@ async def test_batch_result_from_dict_infer_all_completed_mixed_success_failure(
     }
 
     # With no config and with failures, fail-fast
-    with patch("async_durable_execution.concurrency.models.logger") as mock_logger:
+    with patch("async_durable_execution.models.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
         mock_logger.warning.assert_called_once()
@@ -446,7 +447,7 @@ async def test_batch_result_from_dict_infer_min_successful_reached_has_started()
         # No completionReason provided
     }
 
-    with patch("async_durable_execution.concurrency.models.logger") as mock_logger:
+    with patch("async_durable_execution.models.logger") as mock_logger:
         result = BatchResult.from_dict(data, CompletionConfig(1))
         assert result.completion_reason == CompletionReason.MIN_SUCCESSFUL_REACHED
         mock_logger.warning.assert_called_once()
@@ -459,7 +460,7 @@ async def test_batch_result_from_dict_infer_empty_items():
         # No completionReason provided
     }
 
-    with patch("async_durable_execution.concurrency.models.logger") as mock_logger:
+    with patch("async_durable_execution.models.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.ALL_COMPLETED
         mock_logger.warning.assert_called_once()
@@ -474,7 +475,7 @@ async def test_batch_result_from_dict_with_explicit_completion_reason():
         "completionReason": "MIN_SUCCESSFUL_REACHED",
     }
 
-    with patch("async_durable_execution.concurrency.models.logger") as mock_logger:
+    with patch("async_durable_execution.models.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.MIN_SUCCESSFUL_REACHED
         # No warning should be logged when completionReason is provided
@@ -2360,7 +2361,7 @@ async def test_batch_result_from_dict_with_completion_config():
     # With started items, should infer MIN_SUCCESSFUL_REACHED
     completion_config = CompletionConfig(min_successful=1)
 
-    with patch("async_durable_execution.concurrency.models.logger") as mock_logger:
+    with patch("async_durable_execution.models.logger") as mock_logger:
         result = BatchResult.from_dict(data, completion_config)
         assert result.completion_reason == CompletionReason.MIN_SUCCESSFUL_REACHED
         mock_logger.warning.assert_called_once()
@@ -2387,7 +2388,7 @@ async def test_batch_result_from_dict_all_completed():
     }
 
     # With no config and failures, fail-fast
-    with patch("async_durable_execution.concurrency.models.logger") as mock_logger:
+    with patch("async_durable_execution.models.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
         mock_logger.warning.assert_called_once()
@@ -2505,7 +2506,9 @@ async def test_operation_id_determinism_across_shuffles():
         def create_step_id(index):
             return f"step_{index}"
 
-        executor_context._create_step_id_for_logical_step = create_step_id  # noqa SLF001
+        executor_context._step_counter._create_step_id_for_logical_step = (  # noqa: SLF001
+            create_step_id
+        )
 
         def create_child_context(operation_id, *, is_virtual=False):
             child_ctx = Mock()
@@ -2515,7 +2518,7 @@ async def test_operation_id_determinism_across_shuffles():
         executor_context.create_child_context = create_child_context
 
         with patch(
-            "async_durable_execution.concurrency.executor.child_handler",
+            "async_durable_execution.operation.concurrency.child_handler",
             patched_child_handler,
         ):
             await run_async(executor.execute(execution_state, executor_context))
@@ -2571,7 +2574,7 @@ async def test_concurrent_executor_replay_with_succeeded_operations():
 
     # Mock executor context
     mock_executor_context = Mock()
-    mock_executor_context._create_step_id_for_logical_step = (  # noqa
+    mock_executor_context._step_counter._create_step_id_for_logical_step = (  # noqa: SLF001
         mock_create_step_id_for_logical_step
     )
 
@@ -2622,7 +2625,9 @@ async def test_concurrent_executor_replay_with_failed_operations():
 
     # Mock executor context
     mock_executor_context = Mock()
-    mock_executor_context._create_step_id_for_logical_step = Mock(return_value="op_1")  # noqa: SLF001
+    mock_executor_context._step_counter._create_step_id_for_logical_step = Mock(  # noqa: SLF001
+        return_value="op_1"
+    )
 
     result = await run_async(
         executor.replay(mock_execution_state, mock_executor_context)
@@ -2663,7 +2668,9 @@ async def test_concurrent_executor_replay_with_replay_children():
 
     # Mock executor context
     mock_executor_context = Mock()
-    mock_executor_context._create_step_id_for_logical_step = Mock(return_value="op_1")  # noqa: SLF001
+    mock_executor_context._step_counter._create_step_id_for_logical_step = Mock(  # noqa: SLF001
+        return_value="op_1"
+    )
 
     # Mock _execute_item_in_child_context to return a result
     with patch.object(
@@ -2880,7 +2887,9 @@ async def test_executor_exits_early_with_min_successful():
     executor_context = create_executor_context(
         execution_state, step_id="step", parent_id="parent"
     )
-    executor_context._create_step_id_for_logical_step = lambda idx: f"step_{idx}"  # noqa: SLF001
+    executor_context._step_counter._create_step_id_for_logical_step = (  # noqa: SLF001
+        lambda idx: f"step_{idx}"
+    )
 
     start_time = time.time()
     result = await run_async(executor.execute(execution_state, executor_context))
@@ -2946,7 +2955,9 @@ async def test_executor_returns_with_incomplete_branches():
     executor_context = create_executor_context(
         execution_state, step_id="step", parent_id="parent"
     )
-    executor_context._create_step_id_for_logical_step = lambda idx: f"step_{idx}"  # noqa: SLF001
+    executor_context._step_counter._create_step_id_for_logical_step = (  # noqa: SLF001
+        lambda idx: f"step_{idx}"
+    )
 
     result = await run_async(executor.execute(execution_state, executor_context))
 
@@ -3003,7 +3014,9 @@ async def test_executor_returns_before_slow_branch_completes():
     executor_context = create_executor_context(
         execution_state, step_id="step", parent_id="parent"
     )
-    executor_context._create_step_id_for_logical_step = lambda idx: f"step_{idx}"  # noqa: SLF001
+    executor_context._step_counter._create_step_id_for_logical_step = (  # noqa: SLF001
+        lambda idx: f"step_{idx}"
+    )
 
     result = await run_async(executor.execute(execution_state, executor_context))
 
@@ -3293,12 +3306,8 @@ async def test_flat_mode_stamps_grandparent_as_inner_op_parent_id():
 
     # Build a real DurableContext that represents the map/parallel op.
     map_op_id = "map-op-id"
-    execution_context = ExecutionContext(
-        durable_execution_arn="arn:aws:durable:us-east-1:0:execution/test"
-    )
     executor_context = DurableContext(
         state=execution_state,
-        execution_context=execution_context,
         parent_id=map_op_id,  # This context *is* the map/parallel op.
     )
 
@@ -3346,12 +3355,8 @@ async def test_nested_mode_stamps_branch_op_as_inner_op_parent_id():
     execution_state.get_checkpoint_result.return_value = mock_checkpoint
 
     map_op_id = "map-op-id"
-    execution_context = ExecutionContext(
-        durable_execution_arn="arn:aws:durable:us-east-1:0:execution/test"
-    )
     executor_context = DurableContext(
         state=execution_state,
-        execution_context=execution_context,
         parent_id=map_op_id,
     )
 
@@ -3416,12 +3421,8 @@ async def test_flat_mode_produces_deterministic_step_ids_across_runs():
         mock_checkpoint.is_replay_children.return_value = False
         execution_state.get_checkpoint_result.return_value = mock_checkpoint
 
-        execution_context = ExecutionContext(
-            durable_execution_arn="arn:aws:durable:us-east-1:0:execution/test"
-        )
         executor_context = DurableContext(
             state=execution_state,
-            execution_context=execution_context,
             parent_id="map-op-id",
         )
 

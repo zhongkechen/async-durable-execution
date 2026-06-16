@@ -1,6 +1,5 @@
 """Additional concurrent tests for wait and retry operations."""
 
-import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 
@@ -50,26 +49,20 @@ def test_concurrent_wait_and_retry_completion():
 
     execution.operations.extend([wait_op, step_op])
 
-    results = []
-    results_lock = threading.Lock()
-
     def complete_wait():
         result = execution.complete_wait("wait-1")
-        with results_lock:
-            results.append(f"wait-completed-{result.status.value}")
+        return f"wait-completed-{result.status.value}"
 
     def complete_retry():
         result = execution.complete_retry("step-1")
-        with results_lock:
-            results.append(f"retry-completed-{result.status.value}")
+        return f"retry-completed-{result.status.value}"
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         futures = []
         futures.append(executor.submit(complete_wait))
         futures.append(executor.submit(complete_retry))
 
-        for future in as_completed(futures):
-            future.result()
+        results = [future.result() for future in as_completed(futures)]
 
     assert len(results) == 2
     assert "wait-completed-SUCCEEDED" in results

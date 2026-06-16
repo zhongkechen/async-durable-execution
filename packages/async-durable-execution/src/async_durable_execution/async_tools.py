@@ -5,7 +5,7 @@ import inspect
 from collections.abc import Awaitable, Callable
 from typing import TypeVar, cast
 
-from async_durable_execution.exceptions import ValidationError
+from .exceptions import ValidationError
 
 
 T = TypeVar("T")

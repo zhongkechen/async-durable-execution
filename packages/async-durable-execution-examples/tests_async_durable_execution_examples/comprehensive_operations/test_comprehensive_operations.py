@@ -1,6 +1,6 @@
 """Tests for comprehensive_operations."""
 
-from async_durable_execution.execution import InvocationStatus
+from async_durable_execution import InvocationStatus
 from async_durable_execution_examples.comprehensive_operations import (
     comprehensive_operations,
 )

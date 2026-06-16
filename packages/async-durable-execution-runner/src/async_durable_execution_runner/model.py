@@ -38,7 +38,7 @@ from async_durable_execution.models import (
 from async_durable_execution.types import (
     LambdaContext as LambdaContextProtocol,
 )
-from async_durable_execution_runner.exceptions import (
+from .exceptions import (
     InvalidParameterValueException,
 )
 

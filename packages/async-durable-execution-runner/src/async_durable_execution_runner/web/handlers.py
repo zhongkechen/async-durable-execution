@@ -7,7 +7,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, cast
 
-from async_durable_execution_runner.exceptions import (
+from ..exceptions import (
     AwsApiException,
     ExecutionAlreadyStartedException,
     ExecutionConflictException,
@@ -15,7 +15,7 @@ from async_durable_execution_runner.exceptions import (
     InvalidParameterValueException,
     ServiceException,
 )
-from async_durable_execution_runner.model import (
+from ..model import (
     CheckpointDurableExecutionRequest,
     CheckpointDurableExecutionResponse,
     GetDurableExecutionHistoryResponse,
@@ -32,11 +32,11 @@ from async_durable_execution_runner.model import (
     StopDurableExecutionRequest,
     StopDurableExecutionResponse,
 )
-from async_durable_execution_runner.web.models import (
+from .models import (
     HTTPRequest,
     HTTPResponse,
 )
-from async_durable_execution_runner.web.routes import (
+from .routes import (
     CallbackFailureRoute,
     CallbackHeartbeatRoute,
     CallbackSuccessRoute,
@@ -50,8 +50,8 @@ from async_durable_execution_runner.web.routes import (
 
 
 if TYPE_CHECKING:
-    from async_durable_execution_runner.executor import Executor
-    from async_durable_execution_runner.web.routes import Route
+    from ..executor import Executor
+    from .routes import Route
 
 logger = logging.getLogger(__name__)
 

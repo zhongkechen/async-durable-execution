@@ -18,7 +18,7 @@ import boto3  # type: ignore
 from botocore.config import Config  # type: ignore
 from botocore.exceptions import ClientError  # type: ignore
 
-from async_durable_execution.execution import InvocationStatus
+from async_durable_execution import InvocationStatus
 from async_durable_execution.models import (
     ErrorObject,
     OperationPayload,
@@ -28,51 +28,51 @@ from async_durable_execution.models import (
 )
 from async_durable_execution.models import Operation as SvcOperation
 from async_durable_execution.serdes import ExtendedTypeSerDes
-from async_durable_execution_runner.checkpoint.processor import (
+from .checkpoint.processor import (
     CheckpointProcessor,
 )
-from async_durable_execution_runner.client import InMemoryServiceClient
-from async_durable_execution_runner.exceptions import (
+from .client import InMemoryServiceClient
+from .exceptions import (
     DurableFunctionsLocalRunnerError,
     DurableFunctionsTestError,
     InvalidParameterValueException,
     ResourceNotFoundException,
 )
-from async_durable_execution_runner.executor import Executor
-from async_durable_execution_runner.invoker import (
+from .executor import Executor
+from .invoker import (
     InProcessInvoker,
     LambdaInvoker,
     create_lambda_client,
 )
-from async_durable_execution_runner.model import (
+from .model import (
     GetDurableExecutionHistoryResponse,
     GetDurableExecutionResponse,
     StartDurableExecutionInput,
     StartDurableExecutionOutput,
     events_to_operations,
 )
-from async_durable_execution_runner.scheduler import Scheduler
-from async_durable_execution_runner.stores.base import (
+from .scheduler import Scheduler
+from .stores.base import (
     ExecutionStore,
     StoreType,
 )
-from async_durable_execution_runner.stores.filesystem import (
+from .stores.filesystem import (
     FileSystemExecutionStore,
 )
-from async_durable_execution_runner.stores.memory import (
+from .stores.memory import (
     InMemoryExecutionStore,
 )
-from async_durable_execution_runner.stores.sqlite import SQLiteExecutionStore
-from async_durable_execution_runner.web.server import WebServer
+from .stores.sqlite import SQLiteExecutionStore
+from .web.server import WebServer
 
 
 if TYPE_CHECKING:
     import datetime
     from collections.abc import Callable, MutableMapping
 
-    from async_durable_execution_runner.execution import Execution
-    from async_durable_execution_runner.model import Event
-    from async_durable_execution_runner.web.server import WebServiceConfig
+    from .execution import Execution
+    from .model import Event
+    from .web.server import WebServiceConfig
 
 
 logger = logging.getLogger(__name__)

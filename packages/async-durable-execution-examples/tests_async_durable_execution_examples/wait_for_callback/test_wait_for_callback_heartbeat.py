@@ -3,7 +3,7 @@
 import json
 import time
 
-from async_durable_execution.execution import InvocationStatus
+from async_durable_execution import InvocationStatus
 from async_durable_execution_examples.wait_for_callback import (
     wait_for_callback_heartbeat,
 )

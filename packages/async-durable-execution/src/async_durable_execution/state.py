@@ -13,16 +13,16 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from async_durable_execution.async_tools import invoke_callable
-from async_durable_execution.exceptions import (
+from .async_tools import invoke_callable
+from .exceptions import (
     CallableRuntimeError,
     DurableExecutionsError,
     GetExecutionStateError,
     OrphanedChildException,
     SuspendExecution,
 )
-from async_durable_execution.models import OperationIdentifier
-from async_durable_execution.models import (
+from .models import OperationIdentifier
+from .models import (
     CheckpointOutput,
     ErrorObject,
     Operation,
@@ -32,8 +32,8 @@ from async_durable_execution.models import (
     OperationUpdate,
     StateOutput,
 )
-from async_durable_execution.types import DurableServiceClient
-from async_durable_execution.plugin import PluginExecutor
+from .types import DurableServiceClient
+from .plugin import PluginExecutor
 
 
 if TYPE_CHECKING:

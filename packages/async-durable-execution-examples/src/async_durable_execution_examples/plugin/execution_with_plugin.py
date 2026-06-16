@@ -1,15 +1,15 @@
 """Demonstrates handler execution without any durable operations."""
 
 import logging
-from functools import partial
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
-    step,
-    durable_execution,
     DurableInstrumentationPlugin,
+    durable_child_context,
+    durable_execution,
+    durable_step,
     run_in_child_context,
+    step,
 )
 
 
@@ -40,6 +40,7 @@ async def add_numbers(a: int, b: int) -> int:
     return a + b
 
 
+@durable_child_context
 async def add_numbers_in_child(a: int, b: int):
     result: int = await step(
         add_numbers(a, b),
@@ -51,7 +52,7 @@ async def add_numbers_in_child(a: int, b: int):
 @durable_execution(plugins=[MyPlugin()])
 async def handler(_event: Any) -> int:
     result: int = await run_in_child_context(
-        partial(add_numbers_in_child, 6, 4),
+        add_numbers_in_child(6, 4),
         name="add-6-and-4",
     )
     return await step(

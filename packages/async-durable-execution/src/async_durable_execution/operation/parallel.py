@@ -6,24 +6,22 @@ import logging
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, TypeVar
 
-from async_durable_execution.async_tools import invoke_callable_with_optional_context
-from async_durable_execution.concurrency.executor import ConcurrentExecutor
-from async_durable_execution.concurrency.models import Executable
-from async_durable_execution.config import (
+from ..async_tools import invoke_callable_with_optional_context
+from async_durable_execution.operation.concurrency import ConcurrentExecutor
+from ..config import (
     NestingType,
     ParallelBranch,
     ParallelConfig,
 )
-from async_durable_execution.models import OperationSubType
+from ..models import Executable, OperationSubType
 
 
 if TYPE_CHECKING:
-    from async_durable_execution.concurrency.models import BatchResult
-    from async_durable_execution.context import DurableContext
-    from async_durable_execution.models import OperationIdentifier
-    from async_durable_execution.serdes import SerDes
-    from async_durable_execution.state import ExecutionState
-    from async_durable_execution.types import SummaryGenerator
+    from ..context import DurableContext
+    from ..models import BatchResult, OperationIdentifier
+    from ..serdes import SerDes
+    from ..state import ExecutionState
+    from ..types import SummaryGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -125,30 +123,13 @@ class ParallelExecutor(ConcurrentExecutor[Callable, R]):
         return result
 
 
-def parallel_handler(
+async def parallel_handler(
     callables: Sequence[Callable[[], Awaitable[R]] | ParallelBranch[R]],
     config: ParallelConfig | None,
     execution_state: ExecutionState,
     parallel_context: DurableContext,
     operation_identifier: OperationIdentifier,
 ):
-    awaitable = _parallel_handler_async(
-        callables,
-        config,
-        execution_state,
-        parallel_context,
-        operation_identifier,
-    )
-    return awaitable
-
-
-async def _parallel_handler_async(
-    callables: Sequence[Callable[[], Awaitable[R]] | ParallelBranch[R]],
-    config: ParallelConfig | None,
-    execution_state: ExecutionState,
-    parallel_context: DurableContext,
-    operation_identifier: OperationIdentifier,
-) -> BatchResult[R]:
     """Execute multiple operations in parallel."""
     # Summary Generator Construction (matches TypeScript implementation):
     # Construct the summary generator at the handler level, just like TypeScript does in parallel-handler.ts.

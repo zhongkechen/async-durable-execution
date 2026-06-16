@@ -54,7 +54,7 @@ json_dict = exception.to_dict()
 # Result: {"Type": "InvalidParameterValueException", "message": "Invalid parameter value"}
 
 # HTTP response creation
-from async_durable_execution_runner.web.models import HTTPResponse
+from .web.models import HTTPResponse
 
 response = HTTPResponse.create_error_from_exception(exception)
 # Creates HTTP 400 response with AWS-compliant JSON body

@@ -8,25 +8,25 @@ from async_durable_execution.models import (
     OperationAction,
     OperationType,
 )
-from async_durable_execution_runner.checkpoint.validators.operations.callback import (
+from .operations.callback import (
     VALID_ACTIONS_FOR_CALLBACK,
 )
-from async_durable_execution_runner.checkpoint.validators.operations.context import (
+from .operations.context import (
     VALID_ACTIONS_FOR_CONTEXT,
 )
-from async_durable_execution_runner.checkpoint.validators.operations.execution import (
+from .operations.execution import (
     VALID_ACTIONS_FOR_EXECUTION,
 )
-from async_durable_execution_runner.checkpoint.validators.operations.invoke import (
+from .operations.invoke import (
     VALID_ACTIONS_FOR_INVOKE,
 )
-from async_durable_execution_runner.checkpoint.validators.operations.step import (
+from .operations.step import (
     VALID_ACTIONS_FOR_STEP,
 )
-from async_durable_execution_runner.checkpoint.validators.operations.wait import (
+from .operations.wait import (
     VALID_ACTIONS_FOR_WAIT,
 )
-from async_durable_execution_runner.exceptions import (
+from ...exceptions import (
     InvalidParameterValueException,
 )
 

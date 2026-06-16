@@ -17,19 +17,19 @@ from async_durable_execution.execution import (
     DurableExecutionInvocationOutput,
     InitialExecutionState,
 )
-from async_durable_execution_runner.exceptions import (
+from .exceptions import (
     DurableFunctionsTestError,
     InvalidParameterValueException,
     ResourceNotFoundException,
 )
-from async_durable_execution_runner.model import LambdaContext
+from .model import LambdaContext
 
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from async_durable_execution_runner.client import InMemoryServiceClient
-    from async_durable_execution_runner.execution import Execution
+    from .client import InMemoryServiceClient
+    from .execution import Execution
 
 
 # Max Lambda function timeout is 15 minutes (900s); we give headroom for

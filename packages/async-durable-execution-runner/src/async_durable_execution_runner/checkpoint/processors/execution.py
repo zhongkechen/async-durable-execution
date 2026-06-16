@@ -10,13 +10,13 @@ from async_durable_execution.models import (
     OperationAction,
     OperationUpdate,
 )
-from async_durable_execution_runner.checkpoint.processors.base import (
+from .base import (
     OperationProcessor,
 )
 
 
 if TYPE_CHECKING:
-    from async_durable_execution_runner.observer import ExecutionNotifier
+    from ...observer import ExecutionNotifier
 
 
 class ExecutionProcessor(OperationProcessor):

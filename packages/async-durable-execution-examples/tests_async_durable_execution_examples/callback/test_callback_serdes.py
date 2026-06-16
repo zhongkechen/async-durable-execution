@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from async_durable_execution.execution import InvocationStatus
+from async_durable_execution import InvocationStatus
 from async_durable_execution_examples.callback import callback_serdes
 from async_durable_execution_examples.callback.callback_serdes import (
     CustomData,

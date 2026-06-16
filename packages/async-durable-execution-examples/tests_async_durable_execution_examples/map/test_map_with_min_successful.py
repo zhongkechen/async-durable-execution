@@ -1,7 +1,7 @@
 """Tests for map with min_successful."""
 
-from async_durable_execution.execution import InvocationStatus
-from async_durable_execution.models import OperationStatus
+from async_durable_execution import InvocationStatus
+from async_durable_execution import OperationStatus
 from async_durable_execution_examples.map import map_with_min_successful
 
 

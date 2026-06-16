@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from async_durable_execution.execution import InvocationStatus
+from async_durable_execution import InvocationStatus
 from async_durable_execution.models import (
     CallbackDetails,
     ChainedInvokeDetails,
@@ -1071,7 +1071,7 @@ async def test_durable_function_test_result_from_execution_history():
     """Test DurableFunctionTestResult.from_execution_history factory method."""
     import datetime
 
-    from async_durable_execution.execution import InvocationStatus
+    from async_durable_execution import InvocationStatus
     from async_durable_execution_runner.model import (
         Event,
         EventResult,
@@ -1160,7 +1160,7 @@ async def test_cloud_runner_init(mock_boto3):
 @patch("async_durable_execution_runner.runner.boto3")
 async def test_cloud_runner_run_success(mock_boto3):
     """Test DurableFunctionCloudTestRunner.run with successful execution."""
-    from async_durable_execution.execution import InvocationStatus
+    from async_durable_execution import InvocationStatus
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
     )
@@ -1265,7 +1265,7 @@ async def test_durable_function_test_result_from_execution_history_with_exceptio
     """Test from_execution_history handles events_to_operations exception."""
     import datetime
 
-    from async_durable_execution.execution import InvocationStatus
+    from async_durable_execution import InvocationStatus
     from async_durable_execution_runner.model import (
         Event,
         GetDurableExecutionHistoryResponse,
@@ -1497,7 +1497,7 @@ async def test_durable_function_test_result_from_execution_history_unknown_statu
     """Test from_execution_history with unknown status defaults to FAILED."""
     import datetime
 
-    from async_durable_execution.execution import InvocationStatus
+    from async_durable_execution import InvocationStatus
     from async_durable_execution_runner.model import (
         GetDurableExecutionHistoryResponse,
         GetDurableExecutionResponse,
@@ -1578,7 +1578,7 @@ async def test_durable_function_test_result_from_execution_history_failed():
     """Test from_execution_history with failed execution."""
     import datetime
 
-    from async_durable_execution.execution import InvocationStatus
+    from async_durable_execution import InvocationStatus
     from async_durable_execution.models import ErrorObject
     from async_durable_execution_runner.model import (
         GetDurableExecutionHistoryResponse,
@@ -2202,7 +2202,7 @@ async def test_cloud_runner_wait_for_result_fetch_history_exception(mock_boto3):
 @patch("async_durable_execution_runner.runner.boto3")
 async def test_cloud_runner_wait_for_result_success(mock_boto3):
     """Test wait_for_result successful execution."""
-    from async_durable_execution.execution import InvocationStatus
+    from async_durable_execution import InvocationStatus
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,
     )

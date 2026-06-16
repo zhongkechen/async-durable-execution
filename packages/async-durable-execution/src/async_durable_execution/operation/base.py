@@ -6,11 +6,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from async_durable_execution.exceptions import InvalidStateError
+from ..exceptions import InvalidStateError
 
 
 if TYPE_CHECKING:
-    from async_durable_execution.state import CheckpointedResult
+    from ..state import CheckpointedResult
 
 T = TypeVar("T")
 

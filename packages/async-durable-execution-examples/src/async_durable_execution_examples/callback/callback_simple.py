@@ -8,7 +8,7 @@ from async_durable_execution import (
 )
 
 if TYPE_CHECKING:
-    from async_durable_execution.types import Callback
+    from async_durable_execution import Callback
 
 
 @durable_execution

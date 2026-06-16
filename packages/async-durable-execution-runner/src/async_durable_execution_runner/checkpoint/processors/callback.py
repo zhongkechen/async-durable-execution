@@ -14,17 +14,17 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution_runner.checkpoint.processors.base import (
+from .base import (
     OperationProcessor,
 )
-from async_durable_execution_runner.exceptions import (
+from ...exceptions import (
     InvalidParameterValueException,
 )
-from async_durable_execution_runner.token import CallbackToken
+from ...token import CallbackToken
 
 
 if TYPE_CHECKING:
-    from async_durable_execution_runner.observer import ExecutionNotifier
+    from ...observer import ExecutionNotifier
 
 
 class CallbackProcessor(OperationProcessor):

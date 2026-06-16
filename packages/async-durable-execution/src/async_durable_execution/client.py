@@ -7,14 +7,14 @@ from typing import Any, cast
 import boto3
 from botocore.config import Config
 
-from async_durable_execution.__about__ import __version__
-from async_durable_execution.exceptions import CheckpointError, GetExecutionStateError
-from async_durable_execution.models import (
+from .__about__ import __version__
+from .exceptions import CheckpointError, GetExecutionStateError
+from .models import (
     CheckpointOutput,
     OperationUpdate,
     StateOutput,
 )
-from async_durable_execution.types import DurableServiceClient, LambdaApiClient
+from .types import DurableServiceClient, LambdaApiClient
 
 logger = logging.getLogger(__name__)
 

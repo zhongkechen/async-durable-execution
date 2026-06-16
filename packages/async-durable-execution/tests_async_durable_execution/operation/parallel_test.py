@@ -8,10 +8,10 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from async_durable_execution.concurrency.executor import ConcurrentExecutor
+from async_durable_execution.operation.concurrency import ConcurrentExecutor
 
 # Mock the executor.execute method to return a BatchResult
-from async_durable_execution.concurrency.models import (
+from async_durable_execution.models import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
@@ -23,7 +23,7 @@ from async_durable_execution.config import (
     NestingType,
     ParallelConfig,
 )
-from async_durable_execution.context import DurableContext, ExecutionContext
+from async_durable_execution.context import DurableContext, StepCounter
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import OperationSubType
 from async_durable_execution.operation import child
@@ -44,19 +44,14 @@ async def _invoke_maybe_async(func, *args, **kwargs):
 def create_test_context(
     state: ExecutionState | None = None, parent_id: str | None = None
 ) -> DurableContext:
-    """Helper to create DurableContext for tests with required execution_context."""
+    """Helper to create DurableContext for tests."""
     if state is None:
         state = Mock(spec=ExecutionState)
         state.durable_execution_arn = (
             "arn:aws:durable:us-east-1:123456789012:execution/test"
         )
 
-    execution_context = ExecutionContext(
-        durable_execution_arn=state.durable_execution_arn
-    )
-    return DurableContext(
-        state=state, execution_context=execution_context, parent_id=parent_id
-    )
+    return DurableContext(state=state, parent_id=parent_id)
 
 
 def _mock_call_kwargs_by_operation_id(mock: Mock) -> dict[str, Mapping[str, Any]]:
@@ -304,7 +299,9 @@ async def test_parallel_handler_creates_executor_with_correct_config():
     )
 
     executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = lambda *args: "1"  # noqa SLF001
+    executor_context._step_counter._create_step_id_for_logical_step = (  # noqa: SLF001
+        lambda *args: "1"
+    )
     executor_context.create_child_context = lambda *args, **kwargs: Mock()
 
     with patch.object(ParallelExecutor, "from_callables") as mock_from_callables:
@@ -344,7 +341,9 @@ async def test_parallel_handler_creates_executor_with_default_config_when_none()
     )
 
     executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = lambda *args: "1"  # noqa SLF001
+    executor_context._step_counter._create_step_id_for_logical_step = (  # noqa: SLF001
+        lambda *args: "1"
+    )
     executor_context.create_child_context = lambda *args, **kwargs: Mock()
 
     with patch.object(ParallelExecutor, "from_callables") as mock_from_callables:
@@ -445,7 +444,9 @@ async def test_parallel_handler_with_serdes():
     )
 
     executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = lambda *args: "1"  # noqa SLF001
+    executor_context._step_counter._create_step_id_for_logical_step = (  # noqa: SLF001
+        lambda *args: "1"
+    )
     child_context = Mock()
     child_context.state.wrap_user_function = lambda func, *args, **kwargs: (
         lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
@@ -487,7 +488,9 @@ async def test_parallel_handler_with_summary_generator():
     )
 
     executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = Mock(return_value="1")  # noqa SLF001
+    executor_context._step_counter._create_step_id_for_logical_step = Mock(  # noqa: SLF001
+        return_value="1"
+    )
     executor_context.create_child_context = Mock(return_value=Mock())
 
     # Call parallel_handler
@@ -499,7 +502,9 @@ async def test_parallel_handler_with_summary_generator():
     assert executor_context.create_child_context.call_count == 1
 
     # Verify that _create_step_id_for_logical_step was called once with unique value
-    assert executor_context._create_step_id_for_logical_step.call_count == 1  # noqa SLF001
+    assert (
+        executor_context._step_counter._create_step_id_for_logical_step.call_count == 1
+    )  # noqa: SLF001
 
 
 async def test_parallel_executor_from_callables_with_summary_generator():
@@ -543,7 +548,9 @@ async def test_parallel_handler_default_summary_generator():
     )
 
     executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = Mock(side_effect=["1", "2"])  # noqa SLF001
+    executor_context._step_counter._create_step_id_for_logical_step = Mock(  # noqa: SLF001
+        side_effect=["1", "2"]
+    )
     executor_context.create_child_context = Mock(return_value=Mock())
 
     # Call parallel_handler with None config (should use default)
@@ -555,8 +562,12 @@ async def test_parallel_handler_default_summary_generator():
     assert executor_context.create_child_context.call_count == 2
 
     # Verify that _create_step_id_for_logical_step was called twice with unique values
-    assert executor_context._create_step_id_for_logical_step.call_count == 2  # noqa SLF001
-    calls = executor_context._create_step_id_for_logical_step.call_args_list  # noqa SLF001
+    assert (
+        executor_context._step_counter._create_step_id_for_logical_step.call_count == 2
+    )  # noqa: SLF001
+    calls = (
+        executor_context._step_counter._create_step_id_for_logical_step.call_args_list
+    )  # noqa: SLF001
     # Verify unique values were passed
     assert calls[0] != calls[1]
 
@@ -589,7 +600,7 @@ async def test_parallel_handler_with_explicit_none_summary_generator():
     )
 
     executor_context = Mock()
-    executor_context._create_step_id_for_logical_step = Mock(  # noqa: SLF001
+    executor_context._step_counter._create_step_id_for_logical_step = Mock(  # noqa: SLF001
         side_effect=["1", "2", "3"]
     )
     executor_context.create_child_context = Mock(return_value=Mock())
@@ -638,7 +649,7 @@ async def test_parallel_handler_replay_mechanism():
 
     # Mock parallel context
     parallel_context = Mock()
-    parallel_context._create_step_id_for_logical_step = Mock(  # noqa: SLF001
+    parallel_context._step_counter._create_step_id_for_logical_step = Mock(  # noqa: SLF001
         side_effect=["child_1", "child_2"]
     )
 
@@ -697,7 +708,9 @@ async def test_parallel_handler_replay_with_replay_children():
 
     # Mock parallel context
     parallel_context = Mock()
-    parallel_context._create_step_id_for_logical_step = Mock(return_value="child_1")  # noqa: SLF001
+    parallel_context._step_counter._create_step_id_for_logical_step = Mock(  # noqa: SLF001
+        return_value="child_1"
+    )
 
     # Mock the executor's replay method and _execute_item_in_child_context
     with (
@@ -879,7 +892,7 @@ async def test_parallel_item_serialize(mock_serialize, item_serdes, batch_serdes
             else f"child-{i}"
         )
 
-    with patch.object(DurableContext, "_create_step_id_for_logical_step", create_id):
+    with patch.object(StepCounter, "_create_step_id_for_logical_step", create_id):
         context = create_test_context(state=mock_state)
 
         async def branch_a(ctx):
@@ -950,7 +963,7 @@ async def test_parallel_item_deserialize(mock_deserialize, item_serdes, batch_se
             else f"child-{i}"
         )
 
-    with patch.object(DurableContext, "_create_step_id_for_logical_step", create_id):
+    with patch.object(StepCounter, "_create_step_id_for_logical_step", create_id):
         context = create_test_context(state=mock_state)
 
         async def branch_a(ctx):
@@ -996,7 +1009,7 @@ async def test_parallel_result_serialization_roundtrip():
 
     execution_state = MockExecutionState()
     parallel_context = Mock()
-    parallel_context._create_step_id_for_logical_step = Mock(  # noqa SLF001
+    parallel_context._step_counter._create_step_id_for_logical_step = Mock(  # noqa: SLF001
         side_effect=["1", "2", "3"]
     )
     child_context = Mock()
@@ -1080,7 +1093,7 @@ async def test_parallel_handler_serializes_batch_result():
                 )
 
             with patch.object(
-                DurableContext, "_create_step_id_for_logical_step", create_id
+                StepCounter, "_create_step_id_for_logical_step", create_id
             ):
                 context = create_test_context(state=mock_state)
 
@@ -1148,7 +1161,7 @@ async def test_parallel_default_serdes_serializes_batch_result():
                 )
 
             with patch.object(
-                DurableContext, "_create_step_id_for_logical_step", create_id
+                StepCounter, "_create_step_id_for_logical_step", create_id
             ):
                 context = create_test_context(state=mock_state)
 
@@ -1221,7 +1234,7 @@ async def test_parallel_custom_serdes_serializes_batch_result():
                 )
 
             with patch.object(
-                DurableContext, "_create_step_id_for_logical_step", create_id
+                StepCounter, "_create_step_id_for_logical_step", create_id
             ):
                 context = create_test_context(state=mock_state)
 

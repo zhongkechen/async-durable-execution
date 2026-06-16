@@ -1,6 +1,6 @@
 """Tests for step example."""
 
-from async_durable_execution.execution import InvocationStatus
+from async_durable_execution import InvocationStatus
 from async_durable_execution_examples.plugin import execution_with_plugin
 
 

@@ -11,6 +11,7 @@ from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
+from async_durable_execution.async_tools import get_callable_name
 from async_durable_execution.config import (
     CallbackConfig,
     ChildConfig,
@@ -23,7 +24,6 @@ from async_durable_execution.config import (
 from async_durable_execution.context import (
     Callback,
     DurableContext,
-    ExecutionContext,
     _reset_context,
     _set_context,
     create_callback,
@@ -86,19 +86,14 @@ def create_async_child_state() -> Mock:
 def create_test_context(
     state: ExecutionState | None = None, parent_id: str | None = None
 ) -> DurableContext:
-    """Helper to create DurableContext for tests with required execution_context."""
+    """Helper to create DurableContext for tests."""
     if state is None:
         state = Mock(spec=ExecutionState)
         state.durable_execution_arn = (
             "arn:aws:durable:us-east-1:123456789012:execution/test"
         )
 
-    execution_context = ExecutionContext(
-        durable_execution_arn=state.durable_execution_arn
-    )
-    return DurableContext(
-        state=state, execution_context=execution_context, parent_id=parent_id
-    )
+    return DurableContext(state=state, parent_id=parent_id)
 
 
 async def test_durable_context():
@@ -517,7 +512,9 @@ async def test_create_callback_with_name_and_config(mock_executor_class):
     operation_ids = operation_id_sequence()
     [next(operation_ids) for _ in range(5)]  # Skip 5 IDs
     expected_operation_id = next(operation_ids)  # Get the 6th ID
-    [context._create_step_id() for _ in range(5)]  # Set counter to 5 # noqa: SLF001
+    [
+        context._step_counter.create_step_id() for _ in range(5)
+    ]  # Set counter to 5 # noqa: SLF001
 
     callback = await run_async(context.create_callback(config=config))
 
@@ -550,7 +547,9 @@ async def test_create_callback_with_parent_id(mock_executor_class):
     operation_ids = operation_id_sequence("parent123")
     [next(operation_ids) for _ in range(2)]  # Skip 2 IDs
     expected_operation_id = next(operation_ids)  # Get the 3rd ID
-    [context._create_step_id() for _ in range(2)]  # Set counter to 2 # noqa: SLF001
+    [
+        context._step_counter.create_step_id() for _ in range(2)
+    ]  # Set counter to 2 # noqa: SLF001
 
     callback = await run_async(context.create_callback())
 
@@ -577,7 +576,9 @@ async def test_create_callback_increments_counter(mock_executor_class):
     )
 
     context = create_test_context(state=mock_state)
-    [context._create_step_id() for _ in range(10)]  # Set counter to 10 # noqa: SLF001
+    [
+        context._step_counter.create_step_id() for _ in range(10)
+    ]  # Set counter to 10 # noqa: SLF001
 
     callback1 = await run_async(context.create_callback())
     callback2 = await run_async(context.create_callback())
@@ -642,7 +643,9 @@ async def test_step_with_name_and_config(mock_executor_class):
     config = StepConfig()
 
     context = create_test_context(state=mock_state)
-    [context._create_step_id() for _ in range(5)]  # Set counter to 5 # noqa: SLF001
+    [
+        context._step_counter.create_step_id() for _ in range(5)
+    ]  # Set counter to 5 # noqa: SLF001
 
     result = await run_async(context.step(mock_callable, config=config))
 
@@ -678,7 +681,9 @@ async def test_step_with_parent_id(mock_executor_class):
         return None
 
     context = create_test_context(state=mock_state, parent_id="parent123")
-    [context._create_step_id() for _ in range(2)]  # Set counter to 2 # noqa: SLF001
+    [
+        context._step_counter.create_step_id() for _ in range(2)
+    ]  # Set counter to 2 # noqa: SLF001
 
     await run_async(context.step(mock_callable))
 
@@ -713,7 +718,9 @@ async def test_step_increments_counter(mock_executor_class):
         return None
 
     context = create_test_context(state=mock_state)
-    [context._create_step_id() for _ in range(10)]  # Set counter to 10 # noqa: SLF001
+    [
+        context._step_counter.create_step_id() for _ in range(10)
+    ]  # Set counter to 10 # noqa: SLF001
 
     await run_async(context.step(mock_callable))
     await run_async(context.step(mock_callable))
@@ -813,7 +820,9 @@ async def test_invoke_with_name_and_config(mock_executor_class):
     config = InvokeConfig[str, str]()
 
     context = create_test_context(state=mock_state)
-    [context._create_step_id() for _ in range(5)]  # Set counter to 5 # noqa: SLF001
+    [
+        context._step_counter.create_step_id() for _ in range(5)
+    ]  # Set counter to 5 # noqa: SLF001
 
     result = await run_async(
         context.invoke(
@@ -850,7 +859,9 @@ async def test_invoke_with_parent_id(mock_executor_class):
     )
 
     context = create_test_context(state=mock_state, parent_id="parent123")
-    [context._create_step_id() for _ in range(2)]  # Set counter to 2 # noqa: SLF001
+    [
+        context._step_counter.create_step_id() for _ in range(2)
+    ]  # Set counter to 2 # noqa: SLF001
 
     await run_async(context.invoke("test_function", None))
 
@@ -881,7 +892,9 @@ async def test_invoke_increments_counter(mock_executor_class):
     )
 
     context = create_test_context(state=mock_state)
-    [context._create_step_id() for _ in range(10)]  # Set counter to 10 # noqa: SLF001
+    [
+        context._step_counter.create_step_id() for _ in range(10)
+    ]  # Set counter to 10 # noqa: SLF001
 
     await run_async(context.invoke("function1", "payload1"))
     await run_async(context.invoke("function2", "payload2"))
@@ -1014,7 +1027,9 @@ async def test_wait_with_name(mock_executor_class):
     )
 
     context = create_test_context(state=mock_state)
-    [context._create_step_id() for _ in range(5)]  # Set counter to 5 # noqa: SLF001
+    [
+        context._step_counter.create_step_id() for _ in range(5)
+    ]  # Set counter to 5 # noqa: SLF001
 
     await run_async(context.wait(timedelta(minutes=1), name="test_wait"))
 
@@ -1044,7 +1059,9 @@ async def test_wait_with_parent_id(mock_executor_class):
     )
 
     context = create_test_context(state=mock_state, parent_id="parent123")
-    [context._create_step_id() for _ in range(2)]  # Set counter to 2 # noqa: SLF001
+    [
+        context._step_counter.create_step_id() for _ in range(2)
+    ]  # Set counter to 2 # noqa: SLF001
 
     await run_async(context.wait(timedelta(seconds=45)))
 
@@ -1074,7 +1091,9 @@ async def test_wait_increments_counter(mock_executor_class):
     )
 
     context = create_test_context(state=mock_state)
-    [context._create_step_id() for _ in range(10)]  # Set counter to 10 # noqa: SLF001
+    [
+        context._step_counter.create_step_id() for _ in range(10)
+    ]  # Set counter to 10 # noqa: SLF001
 
     await run_async(context.wait(timedelta(seconds=15)))
     await run_async(context.wait(timedelta(seconds=25)))
@@ -1173,7 +1192,9 @@ async def test_run_in_child_context_with_name_and_config(mock_handler):
     config = ChildConfig()
 
     context = create_test_context(state=mock_state)
-    [context._create_step_id() for _ in range(3)]  # Set counter to 3 # noqa: SLF001
+    [
+        context._step_counter.create_step_id() for _ in range(3)
+    ]  # Set counter to 3 # noqa: SLF001
 
     result = await run_async(context.run_in_child_context(mock_callable, config=config))
 
@@ -1207,7 +1228,9 @@ async def test_run_in_child_context_with_parent_id(mock_executor_class):
     )  # Ensure Mock doesn't have _original_name
 
     context = create_test_context(state=mock_state, parent_id="parent456")
-    [context._create_step_id() for _ in range(1)]  # Set counter to 1 # noqa: SLF001
+    [
+        context._step_counter.create_step_id() for _ in range(1)
+    ]  # Set counter to 1 # noqa: SLF001
 
     await run_async(context.run_in_child_context(mock_callable))
 
@@ -1270,7 +1293,9 @@ async def test_run_in_child_context_increments_counter(mock_executor_class):
     )  # Ensure _original_name doesn't exist
 
     context = create_test_context(state=mock_state)
-    [context._create_step_id() for _ in range(5)]  # Set counter to 5 # noqa: SLF001
+    [
+        context._step_counter.create_step_id() for _ in range(5)
+    ]  # Set counter to 5 # noqa: SLF001
 
     await run_async(context.run_in_child_context(mock_callable))
     await run_async(context.run_in_child_context(mock_callable))
@@ -1624,7 +1649,7 @@ async def test_parallel_resolves_name_from_callable(mock_handler):
     context = create_test_context(state=mock_state)
 
     # Use _resolve_step_name to test name resolution
-    resolved_name = context._resolve_step_name(None, mock_callable)  # noqa: SLF001
+    resolved_name = get_callable_name(mock_callable)  # noqa: SLF001
     assert resolved_name == "parallel_tasks"
 
     await run_async(context.parallel(callables))
@@ -1979,8 +2004,8 @@ async def test_invoke_without_tenant_id_defaults_to_none(mock_executor_class):
     assert call_args["config"].tenant_id is None
 
 
-async def test_execution_context_exists_on_durable_context():
-    """Test that DurableContext has execution_context attribute."""
+async def test_durable_execution_arn_exists_on_durable_context():
+    """Test that DurableContext exposes durable_execution_arn directly."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test-execution"
@@ -1988,23 +2013,23 @@ async def test_execution_context_exists_on_durable_context():
 
     context = create_test_context(state=mock_state)
 
-    assert hasattr(context, "execution_context")
-    assert context.execution_context is not None
+    assert hasattr(context, "durable_execution_arn")
+    assert context.durable_execution_arn is not None
 
 
-async def test_execution_context_has_correct_arn():
-    """Test that ExecutionContext contains the correct durable_execution_arn."""
+async def test_durable_execution_arn_has_correct_value():
+    """Test that DurableContext contains the correct durable_execution_arn."""
     expected_arn = "arn:aws:durable:us-west-2:987654321098:execution/my-execution"
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = expected_arn
 
     context = create_test_context(state=mock_state)
 
-    assert context.execution_context.durable_execution_arn == expected_arn
+    assert context.durable_execution_arn == expected_arn
 
 
-async def test_execution_context_is_immutable():
-    """Test that ExecutionContext is frozen and immutable."""
+async def test_durable_execution_arn_is_derived_from_state_at_construction():
+    """Test that DurableContext caches durable_execution_arn from state."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
@@ -2012,13 +2037,13 @@ async def test_execution_context_is_immutable():
 
     context = create_test_context(state=mock_state)
 
-    # Attempt to modify should raise FrozenInstanceError for frozen dataclass
-    with pytest.raises(AttributeError, match="cannot assign to field"):
-        context.execution_context.durable_execution_arn = "new-arn"
+    original_arn = context.durable_execution_arn
+    mock_state.durable_execution_arn = "new-arn"
+    assert context.durable_execution_arn == original_arn
 
 
-async def test_execution_context_propagates_to_child_context():
-    """Test that child contexts inherit the same execution_context."""
+async def test_durable_execution_arn_propagates_to_child_context():
+    """Test that child contexts inherit the same durable_execution_arn."""
     parent_arn = "arn:aws:durable:eu-west-1:111222333444:execution/parent-exec"
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = parent_arn
@@ -2026,29 +2051,24 @@ async def test_execution_context_propagates_to_child_context():
     parent_context = create_test_context(state=mock_state)
     child_context = parent_context.create_child_context("parent-op-123")
 
-    assert child_context.execution_context is not None
-    assert child_context.execution_context.durable_execution_arn == parent_arn
-    # Should be the same instance (not a copy)
-    assert child_context.execution_context is parent_context.execution_context
+    assert child_context.durable_execution_arn == parent_arn
+    assert child_context.durable_execution_arn == parent_context.durable_execution_arn
 
 
-async def test_from_lambda_context_creates_execution_context():
-    """Test that from_lambda_context factory creates ExecutionContext."""
+async def test_from_lambda_context_sets_durable_execution_arn():
+    """Test that from_lambda_context factory sets durable_execution_arn."""
     expected_arn = "arn:aws:durable:ap-south-1:555666777888:execution/lambda-exec"
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = expected_arn
     mock_lambda_context = Mock()
 
-    context = DurableContext.from_lambda_context(
-        state=mock_state, lambda_context=mock_lambda_context
-    )
+    context = DurableContext(state=mock_state, lambda_context=mock_lambda_context)
 
-    assert context.execution_context is not None
-    assert context.execution_context.durable_execution_arn == expected_arn
+    assert context.durable_execution_arn == expected_arn
 
 
-async def test_execution_context_type():
-    """Test that execution_context is of type ExecutionContext."""
+async def test_execution_arn_alias_matches_durable_execution_arn():
+    """Test that execution_arn mirrors durable_execution_arn."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
@@ -2056,7 +2076,7 @@ async def test_execution_context_type():
 
     context = create_test_context(state=mock_state)
 
-    assert isinstance(context.execution_context, ExecutionContext)
+    assert context.execution_arn == context.durable_execution_arn
 
 
 async def test_should_default_step_id_prefix_to_parent_id_when_not_specified():
@@ -2065,13 +2085,8 @@ async def test_should_default_step_id_prefix_to_parent_id_when_not_specified():
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    execution_context = ExecutionContext(
-        durable_execution_arn=mock_state.durable_execution_arn
-    )
-
     ctx = DurableContext(
         state=mock_state,
-        execution_context=execution_context,
         parent_id="parent-op-1",
     )
 
@@ -2086,13 +2101,8 @@ async def test_should_mark_context_virtual_when_parent_id_differs_from_step_pref
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    execution_context = ExecutionContext(
-        durable_execution_arn=mock_state.durable_execution_arn
-    )
-
     ctx = DurableContext(
         state=mock_state,
-        execution_context=execution_context,
         parent_id="grandparent-op",
         step_id_prefix="branch-op",
     )
@@ -2113,19 +2123,16 @@ async def test_should_use_step_id_prefix_when_generating_step_ids():
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    execution_context = ExecutionContext(
-        durable_execution_arn=mock_state.durable_execution_arn
-    )
-
     virtual = DurableContext(
         state=mock_state,
-        execution_context=execution_context,
         parent_id="grandparent-op",
         step_id_prefix="branch-op",
     )
     expected_prefixed = hashlib.blake2b(b"branch-op-1").hexdigest()[:64]
 
-    assert virtual._create_step_id_for_logical_step(1) == expected_prefixed  # noqa: SLF001
+    assert (
+        virtual._step_counter._create_step_id_for_logical_step(1) == expected_prefixed
+    )  # noqa: SLF001
 
 
 async def test_should_use_parent_id_as_step_prefix_when_non_virtual():
@@ -2141,18 +2148,13 @@ async def test_should_use_parent_id_as_step_prefix_when_non_virtual():
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    execution_context = ExecutionContext(
-        durable_execution_arn=mock_state.durable_execution_arn
-    )
-
     non_virtual = DurableContext(
         state=mock_state,
-        execution_context=execution_context,
         parent_id="parent-op",
     )
     expected = hashlib.blake2b(b"parent-op-1").hexdigest()[:64]
 
-    assert non_virtual._create_step_id_for_logical_step(1) == expected  # noqa: SLF001
+    assert non_virtual._step_counter._create_step_id_for_logical_step(1) == expected  # noqa: SLF001
     assert non_virtual.is_virtual is False
 
 
@@ -2206,7 +2208,7 @@ async def test_should_create_virtual_child_with_none_parent_when_parent_is_root(
     assert child.is_virtual is True
 
     expected = hashlib.blake2b(b"child-op-1").hexdigest()[:64]
-    assert child._create_step_id_for_logical_step(1) == expected  # noqa: SLF001
+    assert child._step_counter._create_step_id_for_logical_step(1) == expected  # noqa: SLF001
 
 
 async def test_should_propagate_outer_parent_id_when_virtual_is_nested_in_virtual():
@@ -2251,7 +2253,7 @@ async def test_should_propagate_outer_parent_id_when_virtual_is_nested_in_virtua
     # own operation id; they must not leak the outer ancestor into the
     # step-id namespace.
     expected = hashlib.blake2b(b"inner-branch-op-1").hexdigest()[:64]
-    assert inner_branch._create_step_id_for_logical_step(1) == expected  # noqa: SLF001
+    assert inner_branch._step_counter._create_step_id_for_logical_step(1) == expected  # noqa: SLF001
 
 
 async def test_durable_parallel_branch_returns_parallel_branch_with_name():

@@ -1,6 +1,6 @@
 """Tests for simple_execution."""
 
-from async_durable_execution.execution import InvocationStatus
+from async_durable_execution import InvocationStatus
 from async_durable_execution_examples.simple_execution import simple_execution
 
 

@@ -9,6 +9,7 @@ from async_durable_execution import (
     durable_execution,
     run_in_child_context,
     wait,
+    durable_child_context,
 )
 
 
@@ -17,6 +18,12 @@ async def generate_large_string(size_in_kb: int) -> str:
     return "A" * 1024 * size_in_kb
 
 
+@durable_step
+async def build_chunk(size_in_kb: int = 50) -> str:
+    return await generate_large_string(size_in_kb)
+
+
+@durable_child_context
 async def large_data_processor() -> dict[str, Any]:
     """Process large data in child context."""
     # Generate data using a loop - each step returns ~50KB of data (under the step limit)
@@ -24,11 +31,6 @@ async def large_data_processor() -> dict[str, Any]:
     step_sizes: list[int] = []
 
     for i in range(1, 6):  # 1 to 5
-
-        @durable_step
-        async def build_chunk(size_in_kb: int = 50) -> str:
-            return await generate_large_string(size_in_kb)
-
         step_result: str = await step(build_chunk(), name=f"generate-data-{i}")
 
         step_results.append(step_result)
@@ -50,7 +52,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating runInChildContext with large data."""
     # Use runInChildContext to handle large data that would exceed 256k step limit
     large_data_result: dict[str, Any] = await run_in_child_context(
-        large_data_processor, name="large-data-processor"
+        large_data_processor(), name="large-data-processor"
     )
 
     # Add a wait after runInChildContext to test persistence across invocations

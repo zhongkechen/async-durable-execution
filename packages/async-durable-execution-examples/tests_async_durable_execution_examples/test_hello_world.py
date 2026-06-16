@@ -1,6 +1,6 @@
 """Integration tests for hello world example."""
 
-from async_durable_execution.execution import InvocationStatus
+from async_durable_execution import InvocationStatus
 from async_durable_execution_examples import hello_world
 
 

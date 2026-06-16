@@ -26,7 +26,7 @@ resume as soon as `delay_seconds` have passed
 import datetime
 from typing import NoReturn
 
-from async_durable_execution.exceptions import (
+from .exceptions import (
     SuspendExecution,
     TimedSuspendExecution,
 )

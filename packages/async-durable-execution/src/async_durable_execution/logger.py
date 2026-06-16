@@ -7,7 +7,7 @@ from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from async_durable_execution.types import (
+from .types import (
     Context,
     LoggerInterface,
     StepContext,
@@ -17,8 +17,8 @@ from async_durable_execution.types import (
 
 
 if TYPE_CHECKING:
-    from async_durable_execution.context import ExecutionState
-    from async_durable_execution.models import OperationIdentifier
+    from .context import ExecutionState
+    from .models import OperationIdentifier
 
 
 _current_context: ContextVar[Context | None] = ContextVar(

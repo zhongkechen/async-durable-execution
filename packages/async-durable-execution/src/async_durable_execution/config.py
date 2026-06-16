@@ -10,8 +10,8 @@ from datetime import timedelta
 from enum import Enum, StrEnum
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from async_durable_execution.exceptions import ValidationError
-from async_durable_execution.models import (
+from .exceptions import ValidationError
+from .models import (
     RetryDecision,
     WaitDecision,
     WaitForConditionDecision,
@@ -27,9 +27,9 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
     from concurrent.futures import Future
 
-    from async_durable_execution.models import OperationSubType
-    from async_durable_execution.serdes import SerDes
-    from async_durable_execution.types import SummaryGenerator
+    from .models import OperationSubType
+    from .serdes import SerDes
+    from .types import SummaryGenerator
 
 
 Numeric = int | float  # deliberately leaving off complex
