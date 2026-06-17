@@ -21,7 +21,7 @@ async def handler(_event: Any) -> str:
         await wait(timedelta(seconds=2), name="wait_2_seconds")
 
     async def wait_5_seconds() -> None:
-        await wait(timedelta(seconds=5), name="wait_5_seconds")
+        await wait(timedelta(seconds=3), name="wait_5_seconds")
 
     # Call get_results() to extract data and avoid BatchResult serialization
     (

@@ -18,13 +18,13 @@ async def handler(_event: Any) -> dict[str, Any]:
 
     async def submitter(_callback_id) -> None:
         """Submitter function that fails after a delay."""
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.05)
         # Submitter fails
         raise Exception("Submitter failed")
 
     config = WaitForCallbackConfig(
-        timeout=timedelta(seconds=10),
-        heartbeat_timeout=timedelta(seconds=20),
+        timeout=timedelta(seconds=3),
+        heartbeat_timeout=timedelta(seconds=3),
         retry_strategy=RetryStrategyBuilder(
             max_attempts=3,
             initial_delay=timedelta(seconds=1),

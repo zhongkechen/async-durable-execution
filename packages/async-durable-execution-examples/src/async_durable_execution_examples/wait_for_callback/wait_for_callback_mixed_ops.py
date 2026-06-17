@@ -37,7 +37,7 @@ async def handler(_event: Any) -> dict[str, Any]:
         name="wait-for-callback",
     )
 
-    await wait(timedelta(seconds=2), name="final-wait")
+    await wait(timedelta(seconds=1), name="final-wait")
 
     @durable_step
     async def finalize_processing() -> dict[str, Any]:

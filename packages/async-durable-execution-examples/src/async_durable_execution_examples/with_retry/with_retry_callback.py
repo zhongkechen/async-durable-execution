@@ -36,8 +36,8 @@ async def handler(_event: Any) -> dict[str, Any]:
             # system (e.g., via API call, SQS message, etc.)
 
         config = WaitForCallbackConfig(
-            timeout=timedelta(seconds=30),
-            heartbeat_timeout=timedelta(seconds=60),
+            timeout=timedelta(seconds=3),
+            heartbeat_timeout=timedelta(seconds=3),
         )
 
         return await wait_for_callback(
@@ -47,7 +47,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     retry_config = WithRetryConfig(
         retry_strategy=RetryStrategyBuilder(
             max_attempts=5,
-            initial_delay=timedelta(seconds=2),
+            initial_delay=timedelta(seconds=1),
             backoff_rate=1.0,
         ).build(),
     )

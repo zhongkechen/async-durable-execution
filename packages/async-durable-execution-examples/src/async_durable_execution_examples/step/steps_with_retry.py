@@ -38,6 +38,7 @@ async def handler(event: Any) -> dict[str, Any]:
     # Retry configuration for steps
     retry_config = RetryStrategyBuilder(
         max_attempts=5,
+        initial_delay=timedelta(seconds=1),
         retryable_error_types=[RuntimeError],
     )
 
@@ -67,7 +68,7 @@ async def handler(event: Any) -> dict[str, Any]:
                 item = get_response
                 break
 
-            # Wait 1 second until next poll
+            # Keep polling delays short so the example suite stays fast.
             await wait(timedelta(seconds=1))
 
     except RuntimeError as e:

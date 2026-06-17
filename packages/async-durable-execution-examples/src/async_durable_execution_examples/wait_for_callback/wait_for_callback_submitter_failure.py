@@ -21,8 +21,8 @@ async def handler(event: dict[str, Any]) -> dict[str, Any]:
         raise Exception("Simulated submitter failure")
 
     config = WaitForCallbackConfig(
-        timeout=timedelta(seconds=10),
-        heartbeat_timeout=timedelta(seconds=20),
+        timeout=timedelta(seconds=3),
+        heartbeat_timeout=timedelta(seconds=3),
         retry_strategy=RetryStrategyBuilder(
             max_attempts=3,
             initial_delay=timedelta(seconds=1),

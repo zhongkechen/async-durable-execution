@@ -1,7 +1,7 @@
 """Tests for wait_for_callback_heartbeat_sends."""
 
+import asyncio
 import json
-import time
 
 from async_durable_execution import InvocationStatus
 from async_durable_execution_examples.wait_for_callback import (
@@ -27,8 +27,8 @@ async def test_handle_wait_for_callback_heartbeat_scenarios_during_long_running_
         await runner.send_callback_heartbeat(callback_id=callback_id)
 
         # Wait a bit more to simulate callback processing time
-        wait_time = 7.0
-        time.sleep(wait_time)
+        wait_time = 0.2
+        await asyncio.sleep(wait_time)
 
         # Send another heartbeat
         await runner.send_callback_heartbeat(callback_id=callback_id)

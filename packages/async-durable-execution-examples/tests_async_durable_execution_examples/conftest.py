@@ -4,7 +4,7 @@ import inspect
 import logging
 import os
 import sys
-from enum import StrEnum
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 from function_naming import to_function_name_suffix
 
 
-class RunnerMode(StrEnum):
+class RunnerMode(str, Enum):
     """Runner mode for local or cloud execution."""
 
     LOCAL = "local"

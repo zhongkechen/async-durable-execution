@@ -53,7 +53,7 @@ async def handler(event: dict[str, Any]) -> dict[str, Any]:
     # Step 1: step() - Simple step that returns a result
     step1_result: str = await step(run_step_one(), name="step1")
 
-    # Step 2: wait() - Wait for 1 second
+    # Step 2: wait() - Keep the delay short so example tests stay fast.
     await wait(timedelta(seconds=1))
 
     # Step 3: map() - Map with 5 iterations returning numbers 1 to 5
