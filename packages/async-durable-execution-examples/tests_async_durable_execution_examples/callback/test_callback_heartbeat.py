@@ -1,7 +1,7 @@
 """Tests for create_callback_heartbeat."""
 
+import asyncio
 import json
-import time
 
 from async_durable_execution import InvocationStatus
 from async_durable_execution_examples.callback import callback_heartbeat
@@ -11,9 +11,9 @@ async def test_handle_callback_operations_with_failure_uncaught(durable_runner):
     """Test handling callback operations with failure."""
     test_payload = {"shouldCatchError": False}
 
-    heartbeat_interval = 5
-    total_duration = 20
-    num_heartbeats = total_duration // heartbeat_interval
+    heartbeat_interval = 0.1
+    total_duration = 0.4
+    num_heartbeats = 4
 
     with durable_runner(
         handler=callback_heartbeat.handler, input=test_payload, timeout=30
@@ -27,7 +27,7 @@ async def test_handle_callback_operations_with_failure_uncaught(durable_runner):
                 f"Sending heartbeat {i + 1}/{num_heartbeats} at {(i + 1) * heartbeat_interval}s"
             )
             await runner.send_callback_heartbeat(callback_id=callback_id)
-            time.sleep(heartbeat_interval)
+            await asyncio.sleep(heartbeat_interval)
 
         callback_result = json.dumps(
             {

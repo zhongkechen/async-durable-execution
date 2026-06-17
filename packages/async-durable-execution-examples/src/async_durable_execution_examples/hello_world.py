@@ -50,11 +50,10 @@ async def handler(event: Any) -> dict[str, Any]:
     # Execute Step #1 - logs a message
     await step(step_1())
 
-    # Pause for 10 seconds without consuming CPU cycles or incurring usage charges
-    # The execution will suspend here and resume after 10 seconds
-    await wait(timedelta(seconds=10))
+    # Pause briefly without consuming CPU cycles or incurring usage charges.
+    await wait(timedelta(seconds=1))
 
-    logger.info("Waited for 10 seconds")
+    logger.info("Waited for the scheduled delay")
 
     # Execute Step #2 - returns a message with status code
     message = await step(step_2(status_code=200))

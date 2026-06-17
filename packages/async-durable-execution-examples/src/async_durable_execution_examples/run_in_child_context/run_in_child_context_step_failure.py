@@ -28,7 +28,7 @@ async def child_with_failure() -> None:
     retry_config = RetryStrategyBuilder(
         max_attempts=3,
         initial_delay=timedelta(seconds=1),
-        max_delay=timedelta(seconds=10),
+        max_delay=timedelta(seconds=1),
         backoff_rate=2.0,
     )
     step_config = StepConfig(retry_strategy=retry_config.build())

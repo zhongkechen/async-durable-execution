@@ -19,7 +19,7 @@ async def noop_submitter(_callback_id: str) -> None:
 @durable_child_context
 async def inner_child_context() -> dict[str, Any]:
     """Inner child context with deep nested callback."""
-    await wait(timedelta(seconds=5), name="deep-wait")
+    await wait(timedelta(seconds=1), name="deep-wait")
 
     nested_callback_result: str = await wait_for_callback(
         noop_submitter,

@@ -14,7 +14,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with anonymous submitter."""
 
     async def submitter(_callback_id) -> None:
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.05)
 
     result: str = await wait_for_callback(submitter)
 

@@ -13,7 +13,7 @@ from async_durable_execution import (
 
 async def submitter(_callback_id: str) -> None:
     """Simulate long-running submitter function."""
-    await asyncio.sleep(5)
+    await asyncio.sleep(0.05)
 
 
 @durable_execution
@@ -21,7 +21,7 @@ async def handler(event: dict[str, Any]) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with heartbeat timeout."""
 
     config = WaitForCallbackConfig(
-        timeout=timedelta(seconds=120), heartbeat_timeout=timedelta(seconds=15)
+        timeout=timedelta(seconds=3), heartbeat_timeout=timedelta(seconds=1)
     )
 
     result: str = await wait_for_callback(submitter, config=config)

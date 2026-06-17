@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
@@ -25,6 +26,7 @@ async def unreliable_operation() -> str:
 async def handler(_event: Any) -> str:
     retry_config = RetryStrategyBuilder(
         max_attempts=3,
+        initial_delay=timedelta(seconds=1),
         retryable_error_types=[RuntimeError],
     )
 
