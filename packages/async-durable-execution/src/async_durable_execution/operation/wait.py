@@ -5,17 +5,17 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from async_durable_execution.models import OperationUpdate, WaitOptions
-from async_durable_execution.operation.base import (
+from ..models import OperationUpdate, WaitOptions
+from .base import (
     CheckResult,
     OperationExecutor,
 )
-from async_durable_execution.suspend import suspend_with_optional_resume_delay
+from ..suspend import suspend_with_optional_resume_delay
 
 
 if TYPE_CHECKING:
-    from async_durable_execution.models import OperationIdentifier
-    from async_durable_execution.state import (
+    from ..models import OperationIdentifier
+    from ..state import (
         CheckpointedResult,
         ExecutionState,
     )

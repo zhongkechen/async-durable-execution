@@ -8,7 +8,7 @@ from async_durable_execution.models import (
     StateOutput,
 )
 from async_durable_execution.types import DurableServiceClient
-from async_durable_execution_runner.checkpoint.processor import (
+from .checkpoint.processor import (
     CheckpointProcessor,
 )
 

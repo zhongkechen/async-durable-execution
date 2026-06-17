@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar, Mapping
 
-from async_durable_execution.models import (
+from .models import (
     OperationUpdate,
     CheckpointOutput,
     StateOutput,
@@ -16,7 +16,7 @@ from async_durable_execution.models import (
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Mapping, Sequence
 
-    from async_durable_execution.config import (
+    from .config import (
         BatchedInput,
         CallbackConfig,
         ChildConfig,
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
         StepConfig,
         WaitForCallbackConfig,
     )
-    from async_durable_execution.state import ExecutionState
+    from .state import ExecutionState
 
 T = TypeVar("T")
 U = TypeVar("U")

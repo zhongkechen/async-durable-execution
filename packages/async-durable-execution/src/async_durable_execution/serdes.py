@@ -32,12 +32,12 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Any, Generic, Protocol, TypeVar
 
-from async_durable_execution.concurrency.models import BatchResult
-from async_durable_execution.exceptions import (
+from .exceptions import (
     DurableExecutionsError,
     ExecutionError,
     SerDesError,
 )
+from .models import BatchResult
 
 
 logger = logging.getLogger(__name__)

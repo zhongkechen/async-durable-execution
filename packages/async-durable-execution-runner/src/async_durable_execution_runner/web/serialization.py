@@ -15,7 +15,7 @@ from botocore.model import ServiceModel  # type: ignore
 from botocore.parsers import create_parser  # type: ignore
 from botocore.serialize import create_serializer  # type: ignore
 
-from async_durable_execution_runner.exceptions import (
+from ..exceptions import (
     InvalidParameterValueException,
 )
 

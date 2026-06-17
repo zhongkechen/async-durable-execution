@@ -12,16 +12,16 @@ from async_durable_execution.models import (
     OperationUpdate,
     StepDetails,
 )
-from async_durable_execution_runner.checkpoint.processors.base import (
+from .base import (
     OperationProcessor,
 )
-from async_durable_execution_runner.exceptions import (
+from ...exceptions import (
     InvalidParameterValueException,
 )
 
 
 if TYPE_CHECKING:
-    from async_durable_execution_runner.observer import ExecutionNotifier
+    from ...observer import ExecutionNotifier
 
 
 class StepProcessor(OperationProcessor):

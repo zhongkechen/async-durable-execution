@@ -6,25 +6,21 @@ import logging
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from async_durable_execution.async_tools import invoke_callable_with_optional_context
-from async_durable_execution.concurrency.executor import ConcurrentExecutor
-from async_durable_execution.concurrency.models import (
-    BatchResult,
-    Executable,
-)
-from async_durable_execution.config import MapConfig, NestingType
-from async_durable_execution.models import OperationSubType
+from ..async_tools import invoke_callable_with_optional_context
+from async_durable_execution.operation.concurrency import ConcurrentExecutor
+from ..config import MapConfig, NestingType
+from ..models import BatchResult, Executable, OperationSubType
 
 
 if TYPE_CHECKING:
-    from async_durable_execution.context import DurableContext
-    from async_durable_execution.models import OperationIdentifier
-    from async_durable_execution.serdes import SerDes
-    from async_durable_execution.state import (
+    from ..context import DurableContext
+    from ..models import OperationIdentifier
+    from ..serdes import SerDes
+    from ..state import (
         CheckpointedResult,
         ExecutionState,
     )
-    from async_durable_execution.types import SummaryGenerator
+    from ..types import SummaryGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +127,7 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
         return result
 
 
-def map_handler(
+async def map_handler(
     items: Sequence[T],
     func: Callable[[T, int, Sequence[T]], Awaitable[R]],
     config: MapConfig | None,
@@ -139,25 +135,6 @@ def map_handler(
     map_context: DurableContext,
     operation_identifier: OperationIdentifier,
 ):
-    awaitable = _map_handler_async(
-        items,
-        func,
-        config,
-        execution_state,
-        map_context,
-        operation_identifier,
-    )
-    return awaitable
-
-
-async def _map_handler_async(
-    items: Sequence[T],
-    func: Callable[[T, int, Sequence[T]], Awaitable[R]],
-    config: MapConfig | None,
-    execution_state: ExecutionState,
-    map_context: DurableContext,
-    operation_identifier: OperationIdentifier,
-) -> BatchResult[R]:
     """Execute a callable for each item in parallel."""
     # Summary Generator Construction (matches TypeScript implementation):
     # Construct the summary generator at the handler level, just like TypeScript does in map-handler.ts.

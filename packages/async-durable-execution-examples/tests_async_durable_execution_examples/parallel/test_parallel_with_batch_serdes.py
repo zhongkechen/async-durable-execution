@@ -1,7 +1,7 @@
 """Tests for parallel with batch-level serdes."""
 
-from async_durable_execution.execution import InvocationStatus
-from async_durable_execution.models import OperationStatus
+from async_durable_execution import InvocationStatus
+from async_durable_execution import OperationStatus
 from async_durable_execution_examples.parallel import parallel_with_batch_serdes
 
 

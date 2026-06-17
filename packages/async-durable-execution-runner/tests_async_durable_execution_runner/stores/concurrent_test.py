@@ -1,7 +1,6 @@
 """Concurrent access tests for execution stores."""
 
 import tempfile
-import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -21,8 +20,6 @@ from async_durable_execution_runner.stores.sqlite import SQLiteExecutionStore
 def test_concurrent_save_load():
     """Test concurrent save and load operations."""
     store = InMemoryExecutionStore()
-    results = []
-    results_lock = threading.Lock()
 
     def save_execution(i: int):
         input_data = StartDurableExecutionInput(
@@ -38,41 +35,33 @@ def test_concurrent_save_load():
         execution = Execution.new(input_data)
         execution.durable_execution_arn = f"arn-{i}"
         store.save(execution)
-        with results_lock:
-            results.append(f"saved-{i}")
+        return f"saved-{i}"
 
     def load_execution(i: int):
         try:
             execution = store.load(f"arn-{i}")
-            with results_lock:
-                results.append(f"loaded-{execution.start_input.execution_name}")
+            return f"loaded-{execution.start_input.execution_name}"
         except KeyError:
-            with results_lock:
-                results.append(f"not-found-{i}")
+            return f"not-found-{i}"
 
     with ThreadPoolExecutor(max_workers=10) as executor:
         # Submit save operations first
         futures = [executor.submit(save_execution, i) for i in range(5)]
         # Wait for saves to complete
-        for future in as_completed(futures):
-            future.result()
+        save_results = [future.result() for future in as_completed(futures)]
 
         # Then submit load operations
-        futures = []
-        for i in range(5):
-            futures.append(executor.submit(load_execution, i))
+        futures = [executor.submit(load_execution, i) for i in range(5)]
         # Wait for loads to complete
-        for future in as_completed(futures):
-            future.result()
+        load_results = [future.result() for future in as_completed(futures)]
 
+    results = save_results + load_results
     assert len(results) == 10
 
 
 def test_concurrent_update_list():
     """Test concurrent update and list operations."""
     store = InMemoryExecutionStore()
-    results = []
-    results_lock = threading.Lock()
 
     # Pre-populate store
     for i in range(3):
@@ -94,13 +83,11 @@ def test_concurrent_update_list():
         execution = store.load(f"arn-{i}")
         execution.is_complete = True
         store.update(execution)
-        with results_lock:
-            results.append(f"updated-{i}")
+        return f"updated-{i}"
 
     def list_executions():
         executions = store.list_all()
-        with results_lock:
-            results.append(f"listed-{len(executions)}")
+        return f"listed-{len(executions)}"
 
     with ThreadPoolExecutor(max_workers=6) as executor:
         # Submit update operations
@@ -109,8 +96,7 @@ def test_concurrent_update_list():
         futures.extend([executor.submit(list_executions) for _ in range(3)])
 
         # Wait for all operations to complete
-        for future in as_completed(futures):
-            future.result()
+        results = [future.result() for future in as_completed(futures)]
 
     assert len(results) == 6
     final_list = store.list_all()
@@ -137,8 +123,6 @@ def temp_db_path():
 def test_concurrent_filesystem_save_load(temp_storage_dir):
     """Test concurrent save and load operations with filesystem store."""
     store = FileSystemExecutionStore.create(temp_storage_dir)
-    results = []
-    results_lock = threading.Lock()
 
     def save_execution(i: int):
         input_data = StartDurableExecutionInput(
@@ -155,37 +139,31 @@ def test_concurrent_filesystem_save_load(temp_storage_dir):
         execution.durable_execution_arn = f"arn-{i}"
         execution.start()
         store.save(execution)
-        with results_lock:
-            results.append(f"saved-{i}")
+        return f"saved-{i}"
 
     def load_execution(i: int):
         try:
             execution = store.load(f"arn-{i}")
-            with results_lock:
-                results.append(f"loaded-{execution.start_input.execution_name}")
+            return f"loaded-{execution.start_input.execution_name}"
         except KeyError:
-            with results_lock:
-                results.append(f"not-found-{i}")
+            return f"not-found-{i}"
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         # Submit save operations first
         futures = [executor.submit(save_execution, i) for i in range(4)]
-        for future in as_completed(futures):
-            future.result()
+        save_results = [future.result() for future in as_completed(futures)]
 
         # Then submit load operations
         futures = [executor.submit(load_execution, i) for i in range(4)]
-        for future in as_completed(futures):
-            future.result()
+        load_results = [future.result() for future in as_completed(futures)]
 
+    results = save_results + load_results
     assert len(results) == 8
 
 
 def test_concurrent_sqlite_save_load(temp_db_path):
     """Test concurrent save and load operations with SQLite store."""
     store = SQLiteExecutionStore.create_and_initialize(temp_db_path)
-    results = []
-    results_lock = threading.Lock()
 
     def save_execution(i: int):
         input_data = StartDurableExecutionInput(
@@ -202,37 +180,31 @@ def test_concurrent_sqlite_save_load(temp_db_path):
         execution.durable_execution_arn = f"arn-{i}"
         execution.start()
         store.save(execution)
-        with results_lock:
-            results.append(f"saved-{i}")
+        return f"saved-{i}"
 
     def load_execution(i: int):
         try:
             execution = store.load(f"arn-{i}")
-            with results_lock:
-                results.append(f"loaded-{execution.start_input.execution_name}")
+            return f"loaded-{execution.start_input.execution_name}"
         except KeyError:
-            with results_lock:
-                results.append(f"not-found-{i}")
+            return f"not-found-{i}"
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         # Submit save operations first
         futures = [executor.submit(save_execution, i) for i in range(4)]
-        for future in as_completed(futures):
-            future.result()
+        save_results = [future.result() for future in as_completed(futures)]
 
         # Then submit load operations
         futures = [executor.submit(load_execution, i) for i in range(4)]
-        for future in as_completed(futures):
-            future.result()
+        load_results = [future.result() for future in as_completed(futures)]
 
+    results = save_results + load_results
     assert len(results) == 8
 
 
 def test_concurrent_query_operations():
     """Test concurrent query operations on memory store."""
     store = InMemoryExecutionStore()
-    results = []
-    results_lock = threading.Lock()
 
     # Pre-populate store with test data
     for i in range(10):
@@ -262,8 +234,7 @@ def test_concurrent_query_operations():
         else:
             executions, next_marker = store.query()
 
-        with results_lock:
-            results.append(f"{query_type}-{len(executions)}")
+        return f"{query_type}-{len(executions)}"
 
     with ThreadPoolExecutor(max_workers=4) as executor:
         futures = [
@@ -272,7 +243,6 @@ def test_concurrent_query_operations():
             executor.submit(query_store, "pagination"),
             executor.submit(query_store, "all"),
         ]
-        for future in as_completed(futures):
-            future.result()
+        results = [future.result() for future in as_completed(futures)]
 
     assert len(results) == 4

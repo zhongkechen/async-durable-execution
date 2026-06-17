@@ -1,6 +1,6 @@
 """Tests for wait operation permutations."""
 
-from async_durable_execution.execution import InvocationStatus
+from async_durable_execution import InvocationStatus
 from async_durable_execution_examples.wait import wait_with_name
 
 

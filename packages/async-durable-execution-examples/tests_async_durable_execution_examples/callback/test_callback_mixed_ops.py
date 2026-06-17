@@ -2,7 +2,7 @@
 
 import json
 
-from async_durable_execution.execution import InvocationStatus
+from async_durable_execution import InvocationStatus
 from async_durable_execution_examples.callback import callback_mixed_ops
 
 

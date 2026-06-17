@@ -5,13 +5,13 @@ from __future__ import annotations
 from threading import Lock
 from typing import TYPE_CHECKING
 
-from async_durable_execution_runner.stores.base import (
+from .base import (
     BaseExecutionStore,
 )
 
 
 if TYPE_CHECKING:
-    from async_durable_execution_runner.execution import Execution
+    from ..execution import Execution
 
 
 class InMemoryExecutionStore(BaseExecutionStore):

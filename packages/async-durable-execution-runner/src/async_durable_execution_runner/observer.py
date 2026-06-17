@@ -6,7 +6,7 @@ import threading
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from async_durable_execution_runner.token import CallbackToken
+from .token import CallbackToken
 
 
 if TYPE_CHECKING:

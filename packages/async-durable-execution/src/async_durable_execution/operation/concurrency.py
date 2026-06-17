@@ -8,7 +8,7 @@ import time
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
-from async_durable_execution.concurrency.models import (
+from async_durable_execution.models import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
@@ -24,8 +24,7 @@ from async_durable_execution.exceptions import (
     SuspendExecution,
     TimedSuspendExecution,
 )
-from async_durable_execution.models import OperationIdentifier
-from async_durable_execution.models import ErrorObject
+from async_durable_execution.models import ErrorObject, OperationIdentifier
 from async_durable_execution.operation.child import child_handler
 
 
@@ -316,8 +315,10 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
         executor_context: DurableContext,
         executable: Executable[CallableType],
     ) -> ResultType:
-        operation_id: str = executor_context._create_step_id_for_logical_step(  # noqa: SLF001
-            executable.index
+        operation_id: str = (
+            executor_context._step_counter._create_step_id_for_logical_step(  # noqa: SLF001
+                executable.index
+            )
         )
         name: str = self.get_iteration_name(executable.index)
         is_virtual: bool = self.nesting_type is NestingType.FLAT
@@ -354,8 +355,10 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
     ) -> BatchResult[ResultType]:
         items: list[BatchItem[ResultType]] = []
         for executable in self.executables:
-            operation_id = executor_context._create_step_id_for_logical_step(  # noqa: SLF001
-                executable.index
+            operation_id = (
+                executor_context._step_counter._create_step_id_for_logical_step(  # noqa: SLF001
+                    executable.index
+                )
             )
             checkpoint = execution_state.get_checkpoint_result(operation_id)
 

@@ -15,7 +15,7 @@ from async_durable_execution import (
     with_retry,
     wait_for_callback,
 )
-from async_durable_execution.config import WithRetryConfig
+from async_durable_execution import WithRetryConfig
 
 
 @durable_execution

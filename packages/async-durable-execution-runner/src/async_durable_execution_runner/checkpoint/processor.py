@@ -10,23 +10,23 @@ from async_durable_execution.models import (
     OperationUpdate,
     StateOutput,
 )
-from async_durable_execution_runner.checkpoint.transformer import (
+from .transformer import (
     OperationTransformer,
 )
-from async_durable_execution_runner.checkpoint.validators.checkpoint import (
+from .validators.checkpoint import (
     CheckpointValidator,
 )
-from async_durable_execution_runner.exceptions import (
+from ..exceptions import (
     InvalidParameterValueException,
 )
-from async_durable_execution_runner.observer import ExecutionNotifier
-from async_durable_execution_runner.token import CheckpointToken
+from ..observer import ExecutionNotifier
+from ..token import CheckpointToken
 
 
 if TYPE_CHECKING:
-    from async_durable_execution_runner.execution import Execution
-    from async_durable_execution_runner.scheduler import Scheduler
-    from async_durable_execution_runner.stores.base import ExecutionStore
+    from ..execution import Execution
+    from ..scheduler import Scheduler
+    from ..stores.base import ExecutionStore
 
 
 class CheckpointProcessor:

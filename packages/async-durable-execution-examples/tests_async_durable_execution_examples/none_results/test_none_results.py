@@ -1,6 +1,6 @@
 """Tests for undefined_results."""
 
-from async_durable_execution.execution import InvocationStatus
+from async_durable_execution import InvocationStatus
 from async_durable_execution_examples.none_results import none_results
 
 

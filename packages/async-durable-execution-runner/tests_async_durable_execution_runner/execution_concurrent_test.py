@@ -1,6 +1,5 @@
 """Concurrent access tests for Execution class."""
 
-import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from async_durable_execution_runner.execution import Execution
@@ -20,19 +19,13 @@ def test_concurrent_token_generation():
         input='{"test": "data"}',
     )
     execution = Execution.new(input_data)
-    tokens = []
-    tokens_lock = threading.Lock()
 
     def generate_token():
-        token = execution.get_new_checkpoint_token()
-        with tokens_lock:
-            tokens.append(token)
+        return execution.get_new_checkpoint_token()
 
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = [executor.submit(generate_token) for _ in range(20)]
-
-        for future in as_completed(futures):
-            future.result()
+        tokens = [future.result() for future in as_completed(futures)]
 
     # All tokens should be unique and sequential
     assert len(tokens) == 20
@@ -53,18 +46,14 @@ def test_concurrent_operations_modification():
         input='{"test": "data"}',
     )
     execution = Execution.new(input_data)
-    results = []
-    results_lock = threading.Lock()
 
     def start_execution():
         execution.start()
-        with results_lock:
-            results.append("started")
+        return "started"
 
     def get_operations():
         ops = execution.get_navigable_operations()
-        with results_lock:
-            results.append(f"ops-{len(ops)}")
+        return f"ops-{len(ops)}"
 
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = []
@@ -73,8 +62,7 @@ def test_concurrent_operations_modification():
         # Multiple read operations
         futures.extend([executor.submit(get_operations) for _ in range(4)])
 
-        for future in as_completed(futures):
-            future.result()
+        results = [future.result() for future in as_completed(futures)]
 
     assert len(results) == 5
     assert "started" in results

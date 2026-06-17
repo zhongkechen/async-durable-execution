@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from async_durable_execution.concurrency.models import (
+from async_durable_execution.models import (
     BatchItem,
     BatchItemStatus,
     BatchResult,

@@ -8,7 +8,7 @@ from async_durable_execution.models import (
     OperationStatus,
     OperationUpdate,
 )
-from async_durable_execution_runner.exceptions import (
+from ....exceptions import (
     InvalidParameterValueException,
 )
 

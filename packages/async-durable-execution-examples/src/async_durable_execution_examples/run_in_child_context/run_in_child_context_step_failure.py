@@ -11,38 +11,41 @@ from async_durable_execution import (
     RetryStrategyBuilder,
     run_in_child_context,
     wait,
+    durable_child_context,
 )
+
+
+@durable_step
+async def failing_step() -> None:
+    """Step that always fails."""
+    raise Exception("Step failed in child context")
+
+
+@durable_child_context
+async def child_with_failure() -> None:
+    """Child context with a failing step."""
+
+    retry_config = RetryStrategyBuilder(
+        max_attempts=3,
+        initial_delay=timedelta(seconds=1),
+        max_delay=timedelta(seconds=10),
+        backoff_rate=2.0,
+    )
+    step_config = StepConfig(retry_strategy=retry_config.build())
+
+    await step(
+        failing_step(),
+        name="failing-step",
+        config=step_config,
+    )
 
 
 @durable_execution
 async def handler(_event: Any) -> dict[str, bool]:
     """Handler demonstrating runInChildContext with failing step."""
-
-    async def child_with_failure() -> None:
-        """Child context with a failing step."""
-
-        retry_config = RetryStrategyBuilder(
-            max_attempts=3,
-            initial_delay=timedelta(seconds=1),
-            max_delay=timedelta(seconds=10),
-            backoff_rate=2.0,
-        )
-        step_config = StepConfig(retry_strategy=retry_config.build())
-
-        @durable_step
-        async def failing_step() -> None:
-            """Step that always fails."""
-            raise Exception("Step failed in child context")
-
-        await step(
-            failing_step(),
-            name="failing-step",
-            config=step_config,
-        )
-
     try:
         await run_in_child_context(
-            child_with_failure,
+            child_with_failure(),
             name="child-with-failure",
         )
     except Exception as error:

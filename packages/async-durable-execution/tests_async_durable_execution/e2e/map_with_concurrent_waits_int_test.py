@@ -3,7 +3,7 @@
 Python equivalent of the Java MapWithConditionAndCallbackExample referenced in
 issue #325. Verifies that when many concurrent map branches resume from timed
 wait operations simultaneously, the empty checkpoints produced by the
-resubmitter (executor.py) are coalesced into minimal API calls instead of
+resubmitter (concurrency.py) are coalesced into minimal API calls instead of
 being split across multiple batches.
 
 Background

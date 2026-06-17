@@ -99,7 +99,7 @@ async def function_under_test(event: Any) -> list[str]:
 ```python
 import asyncio
 
-from async_durable_execution.execution import InvocationStatus
+from async_durable_execution import InvocationStatus
 from async_durable_execution_runner import (
     ContextOperation,
     create_runner,

@@ -22,7 +22,7 @@ from async_durable_execution.models import (
 
 
 if TYPE_CHECKING:
-    from async_durable_execution_runner.observer import ExecutionNotifier
+    from ...observer import ExecutionNotifier
 
 
 class OperationProcessor:

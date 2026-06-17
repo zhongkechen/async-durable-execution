@@ -1,6 +1,6 @@
 """Tests for multiple_waits."""
 
-from async_durable_execution.execution import InvocationStatus
+from async_durable_execution import InvocationStatus
 from async_durable_execution_examples.wait import multiple_wait
 
 

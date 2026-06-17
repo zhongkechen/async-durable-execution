@@ -4,15 +4,17 @@ import logging
 from typing import Any
 
 from async_durable_execution import (
+    durable_child_context,
     durable_step,
-    step,
     durable_execution,
     run_in_child_context,
+    step,
 )
 
 logger = logging.getLogger(__name__)
 
 
+@durable_child_context
 async def child_workflow() -> str:
     """Child workflow with its own logging context."""
     logger.info("Running in child context")
@@ -55,7 +57,7 @@ async def handler(event: Any) -> str:
 
     # Child contexts inherit the parent's logger and have their own step ID
     result2: str = await run_in_child_context(
-        child_workflow,
+        child_workflow(),
         name="child_workflow",
     )
 

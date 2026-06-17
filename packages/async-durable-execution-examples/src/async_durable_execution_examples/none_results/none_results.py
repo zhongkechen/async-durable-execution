@@ -4,14 +4,16 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
-    step,
+    durable_child_context,
     durable_execution,
+    durable_step,
     run_in_child_context,
+    step,
     wait,
 )
 
 
+@durable_child_context
 async def parent_context() -> None:
     """Parent context that returns None."""
     return None
@@ -27,7 +29,7 @@ async def handler(_event: Any) -> str:
 
     await step(fetch_user(), name="fetch-user")
 
-    await run_in_child_context(parent_context, name="parent")
+    await run_in_child_context(parent_context(), name="parent")
 
     await wait(timedelta(seconds=1), name="wait")
 

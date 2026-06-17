@@ -196,21 +196,19 @@ async def handler(event: dict, context: DurableContext) -> dict:
 from functools import partial
 from datetime import timedelta
 
-from async_durable_execution import get_step_context
-from async_durable_execution.config import StepConfig
-from async_durable_execution.config import RetryStrategyBuilder
+from async_durable_execution import StepConfig, step
+from async_durable_execution import RetryStrategyBuilder
 
 
 async def fetch_user(user_id: str) -> dict:
-    step_ctx = get_step_context()
     return {"id": user_id, "name": "Jane"}
 
 
 # Execute step (uses function name automatically)
-result = context.step(partial(fetch_user, user_id))
+result = step(partial(fetch_user, user_id))
 
 # Named step with lambda
-result = context.step(lambda: fetch_data(), name="fetch-user")
+result = step(lambda: fetch_data(), name="fetch-user")
 
 # With retry configuration
 retry_config = RetryStrategyBuilder(
@@ -218,7 +216,7 @@ retry_config = RetryStrategyBuilder(
     initial_delay=timedelta(seconds=1),
     backoff_rate=2.0,
 )
-result = context.step(
+result = step(
     partial(fetch_user, user_id),
     config=StepConfig(retry_strategy=retry_config.build())
 )
@@ -228,10 +226,11 @@ result = context.step(
 
 ```python
 from datetime import timedelta
+from async_durable_execution import wait
 
-context.wait(duration=timedelta(seconds=30))
-context.wait(duration=timedelta(hours=1))
-context.wait(duration=timedelta(days=7), name="rate-limit-delay")
+wait(duration=timedelta(seconds=30))
+wait(duration=timedelta(hours=1))
+wait(duration=timedelta(days=7), name="rate-limit-delay")
 ```
 
 ### Invoke - Call Other Functions
@@ -241,7 +240,7 @@ Invoke another durable Lambda function. **Must use qualified function name** (wi
 ```python
 import os
 
-result = context.invoke(
+result = invoke(
     function_name=os.environ["PAYMENT_PROCESSOR_ARN"],
     payload={"amount": 100, "currency": "USD"},
     name="process-payment"
@@ -251,26 +250,26 @@ result = context.invoke(
 ### Child Context - Group Operations
 
 ```python
-async def process_order(child_ctx: DurableContext) -> dict:
-    validated = child_ctx.step(validate_step(data), name="validate")
-    child_ctx.wait(duration=timedelta(seconds=1))
-    processed = child_ctx.step(process_step(validated), name="process")
+async def process_order() -> dict:
+    validated = step(validate_step(data), name="validate")
+    wait(duration=timedelta(seconds=1))
+    processed = step(process_step(validated), name="process")
     return processed
 
-result = context.run_in_child_context(process_order, name="process-order")
+result = run_in_child_context(process_order, name="process-order")
 ```
 
 ### Wait for Callback - External Integration
 
 ```python
-from async_durable_execution.config import WaitForCallbackConfig
+from async_durable_execution import WaitForCallbackConfig
 
 
 async def submit_approval(callback_id: str):
     send_approval_email(callback_id)
 
 
-result = context.wait_for_callback(
+result = wait_for_callback(
     submitter=submit_approval,
     config=WaitForCallbackConfig(timeout=timedelta(hours=24)),
     name="wait-for-approval"
@@ -280,8 +279,8 @@ result = context.wait_for_callback(
 ### Wait for Condition - Polling
 
 ```python
-from async_durable_execution.config import WaitForConditionConfig, WaitStrategyBuilder
-from async_durable_execution.models import WaitForConditionDecision
+from async_durable_execution import WaitForConditionConfig, WaitStrategyBuilder
+from async_durable_execution import WaitForConditionDecision
 
 
 async def check_job(state: dict, check_ctx) -> dict:
@@ -289,7 +288,7 @@ async def check_job(state: dict, check_ctx) -> dict:
     return {"job_id": state["job_id"], "status": status}
 
 
-result = context.wait_for_condition(
+result = wait_for_condition(
     check=check_job,
     config=WaitForConditionConfig(
         initial_state={"job_id": "job-123", "status": "pending"},
@@ -306,14 +305,14 @@ result = context.wait_for_condition(
 
 ```python
 from collections.abc import Sequence
-from async_durable_execution.concurrency import MapConfig, CompletionConfig
+from async_durable_execution import MapConfig, CompletionConfig
 
 
-async def process_item(ctx: DurableContext, item: dict, index: int, items: Sequence[dict]) -> dict:
-    return ctx.step(lambda: process(item), name=f"process-{index}")
+async def process_item(item: dict, index: int, items: Sequence[dict]) -> dict:
+    return step(lambda: process(item), name=f"process-{index}")
 
 
-results = context.map(
+results = map(
     items=items,
     func=process_item,
     config=MapConfig(
@@ -333,18 +332,18 @@ all_results = results.get_results()
 ### Parallel - Parallel Branches
 
 ```python
-from async_durable_execution.concurrency import ParallelConfig
+from async_durable_execution import ParallelConfig
 
 
-async def task1(ctx: DurableContext):
-    return ctx.step(lambda: fetch_data1(), name="fetch1")
+async def task1():
+    return step(lambda: fetch_data1(), name="fetch1")
 
 
-async def task2(ctx: DurableContext):
-    return ctx.step(lambda: fetch_data2(), name="fetch2")
+async def task2():
+    return step(lambda: fetch_data2(), name="fetch2")
 
 
-results = context.parallel(
+results = parallel(
     branches=[
         {"name": "task1", "func": task1},
         {"name": "task2", "func": task2},
@@ -410,11 +409,11 @@ async def handler(event: dict, context: DurableContext) -> dict:
 
 ```python
 @durable_execution
-async def handler(event: dict, context: DurableContext) -> str:
+async def handler(event: dict) -> str:
     messages = [{"role": "user", "content": event["prompt"]}]
 
     while True:
-        result = context.step(
+        result = step(
             lambda: invoke_ai_model(messages),
             name="invoke-model"
         )
@@ -423,7 +422,7 @@ async def handler(event: dict, context: DurableContext) -> str:
             return result["response"]
 
         tool = result["tool"]
-        tool_result = context.step(
+        tool_result = step(
             lambda: execute_tool(tool, result["response"]),
             name=f"tool-{tool['name']}"
         )
@@ -434,20 +433,20 @@ async def handler(event: dict, context: DurableContext) -> str:
 
 ```python
 @durable_execution
-async def handler(event: dict, context: DurableContext) -> dict:
-    plan = context.step(generate_plan(event), name="generate-plan")
+async def handler(event: dict) -> dict:
+    plan = step(generate_plan(event), name="generate-plan")
 
     async def submit_approval(callback_id: str):
         send_approval_email(event["approver_email"], plan, callback_id)
 
-    answer = context.wait_for_callback(
+    answer = wait_for_callback(
         submitter=submit_approval,
         config=WaitForCallbackConfig(timeout=timedelta(hours=24)),
         name="wait-for-approval"
     )
 
     if answer == "APPROVED":
-        context.step(perform_action(plan), name="execute")
+        step(perform_action(plan), name="execute")
         return {"status": "completed"}
     return {"status": "rejected"}
 ```
@@ -456,20 +455,20 @@ async def handler(event: dict, context: DurableContext) -> dict:
 
 ```python
 @durable_execution
-async def handler(event: dict, context: DurableContext) -> dict:
+async def handler(event: dict) -> dict:
     compensations = []
 
     try:
-        context.step(book_flight(event), name="book-flight")
+        step(book_flight(event), name="book-flight")
         compensations.append(("cancel-flight", lambda: cancel_flight(event)))
 
-        context.step(book_hotel(event), name="book-hotel")
+        step(book_hotel(event), name="book-hotel")
         compensations.append(("cancel-hotel", lambda: cancel_hotel(event)))
 
         return {"success": True}
     except Exception as error:
         for name, comp_fn in reversed(compensations):
-            context.step(lambda: comp_fn(), name=name)
+            step(lambda: comp_fn(), name=name)
         raise error
 ```
 

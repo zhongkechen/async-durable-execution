@@ -6,7 +6,7 @@ import logging
 from collections.abc import Mapping
 from unittest.mock import Mock
 
-from async_durable_execution.context import DurableContext, ExecutionContext
+from async_durable_execution.context import DurableContext
 from async_durable_execution.logger import (
     DurableContextFilter,
     LogInfo,
@@ -111,13 +111,7 @@ EXECUTION_STATE = ExecutionState(
 
 
 def create_durable_context(parent_id: str | None = None) -> DurableContext:
-    return DurableContext(
-        state=EXECUTION_STATE,
-        execution_context=ExecutionContext(
-            durable_execution_arn=EXECUTION_STATE.durable_execution_arn
-        ),
-        parent_id=parent_id,
-    )
+    return DurableContext(state=EXECUTION_STATE, parent_id=parent_id)
 
 
 def test_powertools_logger_compatibility():

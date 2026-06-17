@@ -1,6 +1,6 @@
 """Tests for no_replay_execution."""
 
-from async_durable_execution.execution import InvocationStatus
+from async_durable_execution import InvocationStatus
 from async_durable_execution_examples.no_replay_execution import no_replay_execution
 
 

@@ -1,6 +1,6 @@
 """Tests for block_example."""
 
-from async_durable_execution.execution import InvocationStatus
+from async_durable_execution import InvocationStatus
 from async_durable_execution_examples.block_example import block_example
 
 

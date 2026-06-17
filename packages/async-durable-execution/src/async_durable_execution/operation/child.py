@@ -4,29 +4,29 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, TypeVar
 
-from async_durable_execution.config import ChildConfig
-from async_durable_execution.exceptions import (
+from ..config import ChildConfig
+from ..exceptions import (
     InvocationError,
     SuspendExecution,
 )
-from async_durable_execution.models import (
+from ..models import (
     ContextOptions,
     ErrorObject,
     OperationSubType,
     OperationUpdate,
 )
-from async_durable_execution.operation.base import (
+from .base import (
     CheckResult,
     OperationExecutor,
 )
-from async_durable_execution.serdes import deserialize, serialize
+from ..serdes import deserialize, serialize
 
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from async_durable_execution.models import OperationIdentifier
-    from async_durable_execution.state import (
+    from ..models import OperationIdentifier
+    from ..state import (
         CheckpointedResult,
         ExecutionState,
     )

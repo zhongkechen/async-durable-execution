@@ -24,16 +24,16 @@ from urllib.request import Request, urlopen
 import boto3  # type: ignore
 from botocore.exceptions import ConnectionError  # type: ignore
 
-from async_durable_execution_runner.exceptions import (
+from .exceptions import (
     DurableFunctionsLocalRunnerError,
     DurableFunctionsTestError,
 )
-from async_durable_execution_runner.model import (
+from .model import (
     StartDurableExecutionInput,
 )
-from async_durable_execution_runner.runner import WebRunner, WebRunnerConfig
-from async_durable_execution_runner.stores.base import StoreType
-from async_durable_execution_runner.web.server import WebServiceConfig
+from .runner import WebRunner, WebRunnerConfig
+from .stores.base import StoreType
+from .web.server import WebServiceConfig
 
 
 logger = logging.getLogger(__name__)

@@ -5,29 +5,29 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, TypeVar
 
-from async_durable_execution.exceptions import ExecutionError
-from async_durable_execution.models import (
+from ..exceptions import ExecutionError
+from ..models import (
     ChainedInvokeOptions,
     OperationUpdate,
 )
 
 # Import base classes for operation executor pattern
-from async_durable_execution.operation.base import (
+from .base import (
     CheckResult,
     OperationExecutor,
 )
-from async_durable_execution.serdes import (
+from ..serdes import (
     DEFAULT_JSON_SERDES,
     deserialize,
     serialize,
 )
-from async_durable_execution.suspend import suspend_with_optional_resume_delay
+from ..suspend import suspend_with_optional_resume_delay
 
 
 if TYPE_CHECKING:
-    from async_durable_execution.config import InvokeConfig
-    from async_durable_execution.models import OperationIdentifier
-    from async_durable_execution.state import (
+    from ..config import InvokeConfig
+    from ..models import OperationIdentifier
+    from ..state import (
         CheckpointedResult,
         ExecutionState,
     )

@@ -1,7 +1,7 @@
 """Tests for step operation permutations."""
 
-from async_durable_execution.execution import InvocationStatus
-from async_durable_execution.models import OperationType
+from async_durable_execution import InvocationStatus
+from async_durable_execution import OperationType
 from async_durable_execution_examples.step import (
     step_no_name,
     step_with_exponential_backoff,

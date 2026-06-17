@@ -7,14 +7,14 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from async_durable_execution_runner.exceptions import (
+from ..exceptions import (
     AwsApiException,
     InvalidParameterValueException,
 )
 
 # Removed deprecated imports from web.errors
-from async_durable_execution_runner.web.routes import Route
-from async_durable_execution_runner.web.serialization import (
+from .routes import Route
+from .serialization import (
     AwsRestJsonDeserializer,
     JSONSerializer,
     Serializer,

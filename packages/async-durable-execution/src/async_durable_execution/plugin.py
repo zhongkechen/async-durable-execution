@@ -7,9 +7,9 @@ from collections.abc import Callable, MutableMapping
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
-from async_durable_execution.exceptions import SuspendExecution
-from async_durable_execution.models import OperationIdentifier
-from async_durable_execution.models import (
+from .exceptions import SuspendExecution
+from .models import OperationIdentifier
+from .models import (
     DurableExecutionInvocationOutput,
     ErrorObject,
     InvocationStatus,
@@ -20,7 +20,7 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.types import LambdaContext
+from .types import LambdaContext
 
 
 logger = logging.getLogger(__name__)

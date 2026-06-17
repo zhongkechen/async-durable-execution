@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
+    durable_child_context,
     durable_execution,
     durable_step,
     run_in_child_context,
@@ -12,6 +13,7 @@ from async_durable_execution import (
 )
 
 
+@durable_child_context
 async def nested_block() -> str:
     """Nested block with its own child context."""
     # Wait in the nested block
@@ -19,6 +21,7 @@ async def nested_block() -> str:
     return "nested block result"
 
 
+@durable_child_context
 async def parent_block() -> dict[str, str]:
     """Parent block with nested operations."""
 
@@ -34,7 +37,7 @@ async def parent_block() -> dict[str, str]:
 
     # Nested block with its own child context
     nested_block_result: str = await run_in_child_context(
-        nested_block, name="nested_block"
+        nested_block(), name="nested_block"
     )
 
     return {
@@ -48,7 +51,7 @@ async def handler(_event: Any) -> dict[str, str]:
     """Handler demonstrating nested child contexts."""
     # Run parent block which contains nested operations
     result: dict[str, str] = await run_in_child_context(
-        parent_block,
+        parent_block(),
         name="parent_block",
     )
 

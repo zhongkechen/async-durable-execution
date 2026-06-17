@@ -6,11 +6,14 @@ from .__about__ import __version__
 # Main context - used in every durable function
 # Helper decorators - commonly used for step functions
 # Concurrency
-from .concurrency.models import (
+from .models import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
     CompletionReason,
+    InvocationStatus,
+    OperationType,
+    OperationStatus,
 )
 from .config import (
     CallbackConfig,
@@ -46,6 +49,7 @@ from .context import (
     wait_for_callback,
     wait_for_condition,
     with_retry,
+    durable_child_context,
 )
 from .models import (
     ErrorObject,
@@ -129,4 +133,8 @@ __all__ = [
     "wait_for_callback",
     "wait_for_condition",
     "with_retry",
+    "InvocationStatus",
+    "OperationType",
+    "OperationStatus",
+    "durable_child_context",
 ]

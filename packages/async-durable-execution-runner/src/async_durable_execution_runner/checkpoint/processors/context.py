@@ -10,16 +10,16 @@ from async_durable_execution.models import (
     OperationStatus,
     OperationUpdate,
 )
-from async_durable_execution_runner.checkpoint.processors.base import (
+from .base import (
     OperationProcessor,
 )
-from async_durable_execution_runner.exceptions import (
+from ...exceptions import (
     InvalidParameterValueException,
 )
 
 
 if TYPE_CHECKING:
-    from async_durable_execution_runner.observer import ExecutionNotifier
+    from ...observer import ExecutionNotifier
 
 
 class ContextProcessor(OperationProcessor):

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from urllib.parse import unquote
 
-from async_durable_execution_runner.exceptions import (
+from ..exceptions import (
     UnknownRouteError,
 )
 

@@ -1,6 +1,6 @@
 """Tests for wait_for_callback_submitter_retry_success."""
 
-from async_durable_execution.execution import InvocationStatus
+from async_durable_execution import InvocationStatus
 from async_durable_execution_examples.wait_for_callback import (
     wait_for_callback_submitter_failure,
 )

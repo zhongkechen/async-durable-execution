@@ -3,37 +3,37 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
-from async_durable_execution.config import StepConfig
-from async_durable_execution.context import (
+from ..config import StepConfig
+from ..context import (
     _reset_context,
     _set_context,
     get_context,
 )
-from async_durable_execution.exceptions import CallbackError
-from async_durable_execution.models import (
+from ..exceptions import CallbackError
+from ..models import (
     CallbackOptions,
     OperationUpdate,
 )
-from async_durable_execution.operation.base import (
+from .base import (
     CheckResult,
     OperationExecutor,
 )
-from async_durable_execution.types import WaitForCallbackContext
+from ..types import WaitForCallbackContext
 
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from async_durable_execution.config import (
+    from ..config import (
         CallbackConfig,
         WaitForCallbackConfig,
     )
-    from async_durable_execution.models import OperationIdentifier
-    from async_durable_execution.state import (
+    from ..models import OperationIdentifier
+    from ..state import (
         CheckpointedResult,
         ExecutionState,
     )
-    from async_durable_execution.types import (
+    from ..types import (
         Callback,
         DurableContext,
     )

@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import TYPE_CHECKING, Self
 from urllib.parse import parse_qs, urlparse
 
-from async_durable_execution_runner.exceptions import (
+from ..exceptions import (
     AwsApiException,
     ServiceException,
     UnknownRouteError,
@@ -16,11 +16,11 @@ from async_durable_execution_runner.exceptions import (
 
 
 if TYPE_CHECKING:
-    from async_durable_execution_runner.executor import Executor
+    from ..executor import Executor
 
 
 # Removed deprecated imports from web.errors
-from async_durable_execution_runner.web.handlers import (
+from .handlers import (
     CheckpointDurableExecutionHandler,
     EndpointHandler,
     GetDurableExecutionHandler,
@@ -37,11 +37,11 @@ from async_durable_execution_runner.web.handlers import (
     StopDurableExecutionHandler,
     UpdateLambdaEndpointHandler,
 )
-from async_durable_execution_runner.web.models import (
+from .models import (
     HTTPRequest,
     HTTPResponse,
 )
-from async_durable_execution_runner.web.routes import (
+from .routes import (
     BytesPayloadRoute,
     CallbackFailureRoute,
     CallbackHeartbeatRoute,

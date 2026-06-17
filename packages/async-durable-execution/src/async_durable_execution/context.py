@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import functools
 import hashlib
 import logging
-import functools
 from contextvars import Token
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import (
     TYPE_CHECKING,
@@ -18,12 +18,12 @@ from typing import (
     overload,
 )
 
-from async_durable_execution.async_tools import (
+from .async_tools import (
     assert_async_callable,
     get_callable_name,
     invoke_callable_with_optional_context,
 )
-from async_durable_execution.config import (
+from .config import (
     BatchedInput,
     CallbackConfig,
     ChildConfig,
@@ -37,48 +37,25 @@ from async_durable_execution.config import (
     WithRetryConfig,
     duration_to_seconds,
 )
-from async_durable_execution.exceptions import (
-    CallbackError,
-    SuspendExecution,
-    ValidationError,
-)
-from async_durable_execution.models import OperationIdentifier
-from async_durable_execution.models import (
-    CallbackTimeoutType,
-    OperationSubType,
-)
-from async_durable_execution.config import RetryStrategyBuilder
-from async_durable_execution.logger import (
-    get_current_context,
-    reset_current_context,
-    set_current_context,
-)
-from async_durable_execution.operation.child import child_handler
-from async_durable_execution.operation.map import map_handler
-from async_durable_execution.operation.parallel import parallel_handler
-from async_durable_execution.serdes import (
-    PassThroughSerDes,
-    SerDes,
-    deserialize,
-)
-from async_durable_execution.state import ExecutionState  # noqa: TC001
-from async_durable_execution.types import Callback as CallbackProtocol
-from async_durable_execution.types import (
+from .config import RetryStrategyBuilder
+from .exceptions import CallbackError, SuspendExecution, ValidationError
+from .logger import get_current_context, reset_current_context, set_current_context
+from .models import CallbackTimeoutType, OperationSubType, OperationIdentifier
+from .serdes import PassThroughSerDes, SerDes, deserialize
+from .state import ExecutionState
+from .types import (
     Context,
+    Callback as CallbackProtocol,
     DurableContext as DurableContextProtocol,
 )
-from async_durable_execution.types import (
-    StepContext,
-    WaitForCallbackContext,
-    WaitForConditionCheckContext,
-)
+from .types import StepContext, WaitForCallbackContext, WaitForConditionCheckContext
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Sequence
 
-    from async_durable_execution.concurrency.models import BatchResult
-    from async_durable_execution.state import CheckpointedResult
-    from async_durable_execution.types import LambdaContext
+    from .models import BatchResult
+    from .state import CheckpointedResult
+    from .types import LambdaContext
 
 P = TypeVar("P")  # Payload type
 R = TypeVar("R")  # Result type
@@ -137,14 +114,6 @@ def _reset_context(token: Token[Context | None]) -> None:
     reset_current_context(token)
 
 
-def _set_step_context(step_context: StepContext) -> Token[Context | None]:
-    return _set_context(step_context)
-
-
-def _reset_step_context(token: Token[Context | None]) -> None:
-    _reset_context(token)
-
-
 def _get_durable_context(operation_name: str) -> DurableContext:
     current_context = get_context()
     if isinstance(
@@ -159,20 +128,9 @@ def _get_durable_context(operation_name: str) -> DurableContext:
     return cast(DurableContext, current_context)
 
 
-from async_durable_execution.operation.callback import (  # noqa: E402
-    CallbackOperationExecutor,
-    wait_for_callback_handler,
-)
-from async_durable_execution.operation.invoke import InvokeOperationExecutor  # noqa: E402
-from async_durable_execution.operation.step import StepOperationExecutor  # noqa: E402
-from async_durable_execution.operation.wait import WaitOperationExecutor  # noqa: E402
-from async_durable_execution.operation.wait_for_condition import (  # noqa: E402
-    WaitForConditionOperationExecutor,
-)
-
-
-class _StepCounter:
-    def __init__(self) -> None:
+class StepCounter:
+    def __init__(self, prefix: str | None) -> None:
+        self._prefix = prefix
         self._value = 0
 
     def increment(self) -> int:
@@ -181,6 +139,35 @@ class _StepCounter:
 
     def get_current(self) -> int:
         return self._value
+
+    def _create_step_id_for_logical_step(self, step: int) -> str:
+        """
+        Generate a step_id based on the given logical step.
+        This allows us to recover operation ids or even look
+        forward without changing the internal state of this context.
+        """
+        prefix: str | None = self._prefix
+        step_id: str = f"{prefix}-{step}" if prefix else str(step)
+        return hashlib.blake2b(step_id.encode()).hexdigest()[:64]
+
+    def create_step_id(self) -> str:
+        """Generate a step id, incrementing in order of invocation.
+
+        This method is an internal implementation detail. Do not rely the exact format of
+        the id generated by this method. It is subject to change without notice.
+        """
+        new_counter: int = self.increment()
+        return self._create_step_id_for_logical_step(new_counter)
+
+
+from .operation.callback import CallbackOperationExecutor, wait_for_callback_handler
+from .operation.child import child_handler
+from .operation.invoke import InvokeOperationExecutor
+from .operation.map import map_handler
+from .operation.parallel import parallel_handler
+from .operation.step import StepOperationExecutor
+from .operation.wait import WaitOperationExecutor
+from .operation.wait_for_condition import WaitForConditionOperationExecutor
 
 
 def _format_callback_error_message(checkpointed_result: CheckpointedResult) -> str:
@@ -200,27 +187,317 @@ def _format_callback_error_message(checkpointed_result: CheckpointedResult) -> s
     return message
 
 
-@dataclass(frozen=True)
-class ExecutionContext:
-    """Readonly metadata about the current durable execution context.
+def _resolve_operation_name(name: str | None, func: Callable) -> str | None:
+    """Return explicit name or a stable callable-derived fallback."""
+    return name or get_callable_name(func)
 
-    This class provides immutable access to execution-level metadata.
 
-    Attributes:
-        durable_execution_arn: The Amazon Resource Name (ARN) of the current
-            durable execution.
-    """
+async def _create_callback_in_context(
+    context: DurableContext,
+    name: str | None = None,
+    config: CallbackConfig | None = None,
+) -> Callback:
+    if not config:
+        config = CallbackConfig()
+    operation_id: str = context._step_counter.create_step_id()
 
-    durable_execution_arn: str
+    executor: CallbackOperationExecutor = CallbackOperationExecutor(
+        state=context.state,
+        operation_identifier=OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=OperationSubType.CALLBACK,
+            parent_id=context.parent_id,
+            name=name,
+        ),
+        config=config,
+    )
+    callback_id: str = await executor.process()
+    result: Callback = Callback(
+        callback_id=callback_id,
+        operation_id=operation_id,
+        state=context.state,
+        serdes=config.serdes,
+    )
+    context.state.track_replay(operation_id=operation_id)
+    return result
+
+
+async def _invoke_in_context(
+    context: DurableContext,
+    function_name: str,
+    payload: P,
+    name: str | None = None,
+    config: InvokeConfig[P, R] | None = None,
+) -> R:
+    if not config:
+        config = InvokeConfig[P, R]()
+    operation_id = context._step_counter.create_step_id()
+
+    executor: InvokeOperationExecutor[R] = InvokeOperationExecutor(
+        function_name=function_name,
+        payload=payload,
+        state=context.state,
+        operation_identifier=OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=OperationSubType.CHAINED_INVOKE,
+            parent_id=context.parent_id,
+            name=name,
+        ),
+        config=config,
+    )
+    result: R = await executor.process()
+    context.state.track_replay(operation_id=operation_id)
+    return result
+
+
+async def _map_in_context(
+    context: DurableContext,
+    inputs: Sequence[U],
+    func: Callable[[U | BatchedInput[Any, U], int, Sequence[U]], Awaitable[T]],
+    name: str | None = None,
+    config: MapConfig | None = None,
+) -> BatchResult[T]:
+    assert_async_callable(func)
+    map_name: str | None = _resolve_operation_name(name, func)
+
+    operation_id = context._step_counter.create_step_id()
+    operation_identifier = OperationIdentifier(
+        operation_id=operation_id,
+        sub_type=OperationSubType.MAP,
+        parent_id=context.parent_id,
+        name=map_name,
+    )
+    map_context = context.create_child_context(operation_id=operation_id)
+
+    async def map_in_child_context() -> BatchResult[T]:
+        return await map_handler(
+            items=inputs,
+            func=func,
+            config=config,
+            execution_state=context.state,
+            map_context=map_context,
+            operation_identifier=operation_identifier,
+        )
+
+    result = await child_handler(
+        func=map_in_child_context,
+        state=context.state,
+        operation_identifier=operation_identifier,
+        config=ChildConfig(
+            sub_type=OperationSubType.MAP,
+            serdes=getattr(config, "serdes", None),
+            item_serdes=None,
+        ),
+    )
+    context.state.track_replay(operation_id=operation_id)
+    return result
+
+
+async def _parallel_in_context(
+    context: DurableContext,
+    functions: Sequence[Callable[[], Awaitable[T]] | ParallelBranch[T]],
+    name: str | None = None,
+    config: ParallelConfig | None = None,
+) -> BatchResult[T]:
+    for index, function in enumerate(functions):
+        target = function.func if isinstance(function, ParallelBranch) else function
+        assert_async_callable(target, label=f"functions[{index}]")
+
+    operation_id = context._step_counter.create_step_id()
+    parallel_context = context.create_child_context(operation_id=operation_id)
+    operation_identifier = OperationIdentifier(
+        operation_id=operation_id,
+        sub_type=OperationSubType.PARALLEL,
+        parent_id=context.parent_id,
+        name=name,
+    )
+
+    async def parallel_in_child_context() -> BatchResult[T]:
+        return await parallel_handler(
+            callables=functions,
+            config=config,
+            execution_state=context.state,
+            parallel_context=parallel_context,
+            operation_identifier=operation_identifier,
+        )
+
+    result = await child_handler(
+        func=parallel_in_child_context,
+        state=context.state,
+        operation_identifier=operation_identifier,
+        config=ChildConfig(
+            sub_type=OperationSubType.PARALLEL,
+            serdes=getattr(config, "serdes", None),
+            item_serdes=None,
+        ),
+    )
+    context.state.track_replay(operation_id=operation_id)
+    return result
+
+
+async def _run_in_child_context_in_context(
+    context: DurableContext,
+    func: Callable[[], Awaitable[T]],
+    name: str | None = None,
+    config: ChildConfig | None = None,
+) -> T:
+    assert_async_callable(func)
+    step_name: str | None = _resolve_operation_name(name, func)
+    operation_id = context._step_counter.create_step_id()
+    sub_type = (
+        config.sub_type
+        if config and config.sub_type
+        else OperationSubType.RUN_IN_CHILD_CONTEXT
+    )
+
+    is_virtual: bool = config.is_virtual if config else False
+    child_context = context.create_child_context(
+        operation_id=operation_id,
+        is_virtual=is_virtual,
+    )
+
+    async def callable_with_child_context():
+        return await child_context._invoke_user_callable(
+            func,
+            context_position="prepend",
+        )
+
+    result = await child_handler(
+        func=callable_with_child_context,
+        state=context.state,
+        operation_identifier=OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=sub_type,
+            parent_id=context.parent_id,
+            name=step_name,
+        ),
+        config=config,
+    )
+    context.state.track_replay(operation_id=operation_id)
+    return result
+
+
+async def _step_in_context(
+    context: DurableContext,
+    func: Callable[[], Awaitable[T]],
+    name: str | None = None,
+    config: StepConfig | None = None,
+) -> T:
+    assert_async_callable(func)
+    step_name = name or get_callable_name(func, include_original_name=False)
+    logger.debug("Step name: %s", step_name)
+    if not config:
+        config = StepConfig()
+    operation_id = context._step_counter.create_step_id()
+
+    executor: StepOperationExecutor[T] = StepOperationExecutor(
+        func=func,
+        config=config,
+        state=context.state,
+        operation_identifier=OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=OperationSubType.STEP,
+            parent_id=context.parent_id,
+            name=step_name,
+        ),
+    )
+    result: T = await executor.process()
+    context.state.track_replay(operation_id=operation_id)
+    return result
+
+
+async def _wait_in_context(
+    context: DurableContext,
+    duration: timedelta,
+    name: str | None = None,
+) -> None:
+    seconds = duration_to_seconds(duration)
+    if seconds < 1:
+        msg = "duration must be at least 1 second"
+        raise ValidationError(msg)
+    operation_id = context._step_counter.create_step_id()
+
+    executor: WaitOperationExecutor = WaitOperationExecutor(
+        seconds=seconds,
+        state=context.state,
+        operation_identifier=OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=OperationSubType.WAIT,
+            parent_id=context.parent_id,
+            name=name,
+        ),
+    )
+    await executor.process()
+    context.state.track_replay(operation_id=operation_id)
+
+
+async def _wait_for_callback_in_context(
+    context: DurableContext,
+    submitter: Callable[[str], Awaitable[Any]],
+    name: str | None = None,
+    config: WaitForCallbackConfig | None = None,
+) -> Any:
+    assert_async_callable(submitter, label="submitter")
+    step_name: str | None = _resolve_operation_name(name, submitter)
+    logger.debug("wait_for_callback name: %s", step_name)
+
+    async def wait_in_child_context():
+        current_context = get_context()
+        return await wait_for_callback_handler(
+            current_context,
+            submitter,
+            step_name,
+            config,
+        )
+
+    return await context.run_in_child_context(
+        wait_in_child_context,
+        step_name,
+    )
+
+
+async def _wait_for_condition_in_context(
+    context: DurableContext,
+    check: Callable[[T], Awaitable[T]],
+    config: WaitForConditionConfig[T],
+    name: str | None = None,
+) -> T:
+    if check is None:
+        msg = "`check` is required for wait_for_condition"
+        raise ValidationError(msg)
+    if not config:
+        msg = "`config` is required for wait_for_condition"
+        raise ValidationError(msg)
+    assert_async_callable(check, label="check")
+
+    operation_id = context._step_counter.create_step_id()
+    executor: WaitForConditionOperationExecutor[T] = WaitForConditionOperationExecutor(
+        check=check,
+        config=config,
+        state=context.state,
+        operation_identifier=OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=OperationSubType.WAIT_FOR_CONDITION,
+            parent_id=context.parent_id,
+            name=name,
+        ),
+    )
+    result: T = await executor.process()
+    context.state.track_replay(operation_id=operation_id)
+    return result
 
 
 async def create_callback(
     name: str | None = None, config: CallbackConfig | None = None
 ) -> Callback:
-    return await _get_durable_context("create_callback").create_callback(
-        name=name,
-        config=config,
-    )
+    context = _get_durable_context("create_callback")
+    if isinstance(context, DurableContext):
+        return await _create_callback_in_context(
+            context,
+            name=name,
+            config=config,
+        )
+    return await context.create_callback(name=name, config=config)
 
 
 async def invoke(
@@ -229,7 +506,16 @@ async def invoke(
     name: str | None = None,
     config: InvokeConfig[P, R] | None = None,
 ) -> R:
-    return await _get_durable_context("invoke").invoke(
+    context = _get_durable_context("invoke")
+    if isinstance(context, DurableContext):
+        return await _invoke_in_context(
+            context,
+            function_name=function_name,
+            payload=payload,
+            name=name,
+            config=config,
+        )
+    return await context.invoke(
         function_name=function_name,
         payload=payload,
         name=name,
@@ -243,12 +529,16 @@ async def map(
     name: str | None = None,
     config: MapConfig | None = None,
 ):
-    return await _get_durable_context("map").map(
-        inputs=inputs,
-        func=func,
-        name=name,
-        config=config,
-    )
+    context = _get_durable_context("map")
+    if isinstance(context, DurableContext):
+        return await _map_in_context(
+            context,
+            inputs=inputs,
+            func=func,
+            name=name,
+            config=config,
+        )
+    return await context.map(inputs=inputs, func=func, name=name, config=config)
 
 
 async def parallel(
@@ -256,11 +546,15 @@ async def parallel(
     name: str | None = None,
     config: ParallelConfig | None = None,
 ):
-    return await _get_durable_context("parallel").parallel(
-        functions=functions,
-        name=name,
-        config=config,
-    )
+    context = _get_durable_context("parallel")
+    if isinstance(context, DurableContext):
+        return await _parallel_in_context(
+            context,
+            functions=functions,
+            name=name,
+            config=config,
+        )
+    return await context.parallel(functions=functions, name=name, config=config)
 
 
 async def run_in_child_context(
@@ -268,11 +562,15 @@ async def run_in_child_context(
     name: str | None = None,
     config: ChildConfig | None = None,
 ) -> T:
-    return await _get_durable_context("run_in_child_context").run_in_child_context(
-        func=func,
-        name=name,
-        config=config,
-    )
+    context = _get_durable_context("run_in_child_context")
+    if isinstance(context, DurableContext):
+        return await _run_in_child_context_in_context(
+            context,
+            func=func,
+            name=name,
+            config=config,
+        )
+    return await context.run_in_child_context(func=func, name=name, config=config)
 
 
 async def step(
@@ -280,15 +578,23 @@ async def step(
     name: str | None = None,
     config: StepConfig | None = None,
 ) -> T:
-    return await _get_durable_context("step").step(
-        func=func,
-        name=name,
-        config=config,
-    )
+    context = _get_durable_context("step")
+    if isinstance(context, DurableContext):
+        return await _step_in_context(
+            context,
+            func=func,
+            name=name,
+            config=config,
+        )
+    return await context.step(func=func, name=name, config=config)
 
 
 async def wait(duration: timedelta, name: str | None = None) -> None:
-    await _get_durable_context("wait").wait(duration=duration, name=name)
+    context = _get_durable_context("wait")
+    if isinstance(context, DurableContext):
+        await _wait_in_context(context, duration=duration, name=name)
+        return
+    await context.wait(duration=duration, name=name)
 
 
 async def wait_for_callback(
@@ -296,7 +602,15 @@ async def wait_for_callback(
     name: str | None = None,
     config: WaitForCallbackConfig | None = None,
 ) -> Any:
-    return await _get_durable_context("wait_for_callback").wait_for_callback(
+    context = _get_durable_context("wait_for_callback")
+    if isinstance(context, DurableContext):
+        return await _wait_for_callback_in_context(
+            context,
+            submitter=submitter,
+            name=name,
+            config=config,
+        )
+    return await context.wait_for_callback(
         submitter=submitter,
         name=name,
         config=config,
@@ -308,11 +622,15 @@ async def wait_for_condition(
     config: WaitForConditionConfig[T],
     name: str | None = None,
 ) -> T:
-    return await _get_durable_context("wait_for_condition").wait_for_condition(
-        check=check,
-        config=config,
-        name=name,
-    )
+    context = _get_durable_context("wait_for_condition")
+    if isinstance(context, DurableContext):
+        return await _wait_for_condition_in_context(
+            context,
+            check=check,
+            config=config,
+            name=name,
+        )
+    return await context.wait_for_condition(check=check, config=config, name=name)
 
 
 @overload
@@ -405,9 +723,23 @@ async def with_retry(
                 if not decision.should_retry:
                     raise
                 wait_name = f"{name}-backoff-{attempt}" if name else None
-                await durable_ctx.wait(duration=decision.delay, name=wait_name)
+                if isinstance(durable_ctx, DurableContext):
+                    await _wait_in_context(
+                        durable_ctx,
+                        duration=decision.delay,
+                        name=wait_name,
+                    )
+                else:
+                    await durable_ctx.wait(duration=decision.delay, name=wait_name)
 
     if resolved_config.wrap_with_run_in_child_context:
+        if isinstance(resolved_context, DurableContext):
+            return await _run_in_child_context_in_context(
+                resolved_context,
+                run_loop,
+                name=name,
+                config=resolved_config.child_context_config,
+            )
         return await resolved_context.run_in_child_context(
             run_loop,
             name=name,
@@ -433,6 +765,24 @@ def durable_step(
     The returned callable is suitable for passing to `step()` or `context.step()`,
     which keeps durable step creation explicit while avoiding manual `partial(...)`
     wrapping at the callsite.
+    """
+    assert_async_callable(func)
+
+    @functools.wraps(func)
+    def wrapper(
+        *args: Params.args, **kwargs: Params.kwargs
+    ) -> Callable[[], Awaitable[T]]:
+        return functools.partial(func, *args, **kwargs)
+
+    return wrapper
+
+
+def durable_child_context(
+    func: Callable[Params, Awaitable[T]],
+) -> Callable[Params, Callable[[], Awaitable[T]]]:
+    """Wrap an async function so calling it returns a zero-argument child context callable.
+
+    The returned callable is suitable for passing to `run_in_child_context()`.
     """
     assert_async_callable(func)
 
@@ -621,83 +971,41 @@ class Callback(Generic[T], CallbackProtocol[T]):  # noqa: PYI059
         raise SuspendExecution(msg)
 
 
+@dataclass(eq=False)
 class DurableContext(DurableContextProtocol):
-    def __init__(
-        self,
-        state: ExecutionState,
-        execution_context: ExecutionContext,
-        lambda_context: LambdaContext | None = None,
-        parent_id: str | None = None,
-        step_id_prefix: str | None = None,
-    ) -> None:
-        self.state: ExecutionState = state
-        self.execution_context: ExecutionContext = execution_context
-        self.lambda_context = lambda_context
-        # operations inside this context use this id as their parent
-        self._parent_id: str | None = parent_id
-        # child operations use this to generate deterministic step ids.
-        # differs from `parent_id` only for virtual contexts.
-        self._step_id_prefix: str | None = (
-            step_id_prefix if step_id_prefix is not None else parent_id
+    state: ExecutionState
+    lambda_context: LambdaContext | None = None
+    parent_id: str | None = None
+    step_id_prefix: str | None = None
+    durable_execution_arn: str = field(init=False)
+    _parent_id: str | None = field(init=False, repr=False)
+    _step_id_prefix: str | None = field(init=False, repr=False)
+    is_virtual: bool = field(init=False)
+    _step_counter: StepCounter = field(init=False, repr=False)
+    execution_state: ExecutionState = field(init=False)
+    execution_arn: str = field(init=False)
+    operation_id: str | None = field(init=False)
+    operation_name: str | None = field(init=False, default=None)
+
+    def __post_init__(self) -> None:
+        self.durable_execution_arn = self.state.durable_execution_arn
+        self._parent_id = self.parent_id
+        self._step_id_prefix = (
+            self.step_id_prefix if self.step_id_prefix is not None else self.parent_id
         )
-        # cached at construction to make invariant even if parent/prefix mutates.
-        self._is_virtual: bool = self._parent_id != self._step_id_prefix
-        self._step_counter = _StepCounter()
+        self.is_virtual = self.parent_id != self._step_id_prefix
+        self._step_counter = StepCounter(self._step_id_prefix)
 
-        self.execution_state: ExecutionState = state
-        self.execution_arn: str = state.durable_execution_arn
-        self.parent_id: str | None = parent_id
-        self.operation_id: str | None = step_id_prefix
-        self.operation_name: str | None = None
-
-    @property
-    def is_virtual(self) -> bool:
-        """True if this context does not checkpoint its own start and completion.
-
-        You create a virtual context by `create_child_context(..., is_virtual=True)`.
-        FLAT-mode `map`/`parallel` branches uses virtual contexts. Inner operations
-        use the grandfather as parent (enclosing non-virtual ancestor, skipping the branch level
-        in the hierarchy), while step ids are still prefixed with the branch's own
-        operation id so replay stays deterministic.
-        """
-        return self._is_virtual
-
-    @staticmethod
-    def from_lambda_context(
-        state: ExecutionState,
-        lambda_context: LambdaContext,
-    ):
-        return DurableContext(
-            state=state,
-            execution_context=ExecutionContext(
-                durable_execution_arn=state.durable_execution_arn
-            ),
-            lambda_context=lambda_context,
-            parent_id=None,
-        )
+        self.execution_state = self.state
+        self.execution_arn = self.state.durable_execution_arn
+        self.operation_id = self.step_id_prefix
+        self.operation_name = None
 
     def create_child_context(
         self, operation_id: str, *, is_virtual: bool = False
     ) -> DurableContext:
-        """Create a child context for the given operation.
-
-        Args:
-            operation_id: The operation id that owns the child context. Used as
-                the child's step-id prefix in all cases.
-            is_virtual: When `True`, create a virtual child whose inner
-                operations report to this context's own `_parent_id` (one
-                level up the hierarchy). When `False` (default), produce a
-                regular child whose inner operations report to
-                `operation_id`.
-
-        Returns:
-            A new `DurableContext` child for the current context.
-        """
-        # For a virtual child, propagate the current `_parent_id` so its
-        # inner operations refer to the grandparent rather than the parent.
-        # For a regular non-virtual child, the child's own `operation_id` is
-        # the parent id for its inner operations (standard nesting).
-        child_parent_id: str | None = self._parent_id if is_virtual else operation_id
+        """Create a child context for the given operation."""
+        child_parent_id: str | None = self.parent_id if is_virtual else operation_id
         logger.debug(
             "Creating child context for operation %s (is_virtual=%s)",
             operation_id,
@@ -705,20 +1013,10 @@ class DurableContext(DurableContextProtocol):
         )
         return DurableContext(
             state=self.state,
-            execution_context=self.execution_context,
             lambda_context=self.lambda_context,
             parent_id=child_parent_id,
             step_id_prefix=operation_id,
         )
-
-    @staticmethod
-    def _resolve_step_name(name: str | None, func: Callable) -> str | None:
-        """Resolve the step name.
-
-        Returns:
-            str | None: The provided name, and if that doesn't exist the callable function's name if it has one.
-        """
-        return name or get_callable_name(func)
 
     async def _invoke_user_callable(
         self,
@@ -739,65 +1037,10 @@ class DurableContext(DurableContextProtocol):
         finally:
             _reset_context(token)
 
-    def _create_step_id_for_logical_step(self, step: int) -> str:
-        """
-        Generate a step_id based on the given logical step.
-        This allows us to recover operation ids or even look
-        forward without changing the internal state of this context.
-        """
-        prefix: str | None = self._step_id_prefix
-        step_id: str = f"{prefix}-{step}" if prefix else str(step)
-        return hashlib.blake2b(step_id.encode()).hexdigest()[:64]
-
-    def _create_step_id(self) -> str:
-        """Generate a step id, incrementing in order of invocation.
-
-        This method is an internal implementation detail. Do not rely the exact format of
-        the id generated by this method. It is subject to change without notice.
-        """
-        new_counter: int = self._step_counter.increment()
-        return self._create_step_id_for_logical_step(new_counter)
-
     async def create_callback(
         self, name: str | None = None, config: CallbackConfig | None = None
     ) -> Callback:
-        """Create a callback.
-
-        This generates a future with a callback id. External systems can signal
-        your Durable Function to proceed by using this callback id with the
-        SendDurableExecutionCallbackSuccess, SendDurableExecutionCallbackFailure and
-        SendDurableExecutionCallbackHeartbeat APIs.
-
-        Args:
-            name (str): Optional name for the operation.
-            config (CallbackConfig): Configuration for the callback.
-
-        Return:
-            Callback future. Use result() on this future to wait for the callback resuilt.
-        """
-        if not config:
-            config = CallbackConfig()
-        operation_id: str = self._create_step_id()
-
-        executor: CallbackOperationExecutor = CallbackOperationExecutor(
-            state=self.state,
-            operation_identifier=OperationIdentifier(
-                operation_id=operation_id,
-                sub_type=OperationSubType.CALLBACK,
-                parent_id=self._parent_id,
-                name=name,
-            ),
-            config=config,
-        )
-        callback_id: str = await executor.process()
-        result: Callback = Callback(
-            callback_id=callback_id,
-            operation_id=operation_id,
-            state=self.state,
-            serdes=config.serdes,
-        )
-        self.state.track_replay(operation_id=operation_id)
-        return result
+        return await _create_callback_in_context(self, name=name, config=config)
 
     async def invoke(
         self,
@@ -806,36 +1049,13 @@ class DurableContext(DurableContextProtocol):
         name: str | None = None,
         config: InvokeConfig[P, R] | None = None,
     ) -> R:
-        """Invoke another Durable Function.
-
-        Args:
-            function_name: Name of the function to invoke
-            payload: Input payload to send to the function
-            name: Optional name for the operation
-            config: Optional configuration for the invoke operation
-
-        Returns:
-            The result of the invoked function
-        """
-        if not config:
-            config = InvokeConfig[P, R]()
-        operation_id = self._create_step_id()
-
-        executor: InvokeOperationExecutor[R] = InvokeOperationExecutor(
+        return await _invoke_in_context(
+            self,
             function_name=function_name,
             payload=payload,
-            state=self.state,
-            operation_identifier=OperationIdentifier(
-                operation_id=operation_id,
-                sub_type=OperationSubType.CHAINED_INVOKE,
-                parent_id=self._parent_id,
-                name=name,
-            ),
+            name=name,
             config=config,
         )
-        result: R = await executor.process()
-        self.state.track_replay(operation_id=operation_id)
-        return result
 
     async def map(
         self,
@@ -843,99 +1063,27 @@ class DurableContext(DurableContextProtocol):
         func: Callable[[U | BatchedInput[Any, U], int, Sequence[U]], Awaitable[T]],
         name: str | None = None,
         config: MapConfig | None = None,
-    ):
-        """Execute a callable for each item in parallel."""
-        assert_async_callable(func)
-        map_name: str | None = self._resolve_step_name(name, func)
-
-        operation_id = self._create_step_id()
-        operation_identifier = OperationIdentifier(
-            operation_id=operation_id,
-            sub_type=OperationSubType.MAP,
-            parent_id=self._parent_id,
-            name=map_name,
+    ) -> BatchResult[T]:
+        return await _map_in_context(
+            self,
+            inputs=inputs,
+            func=func,
+            name=name,
+            config=config,
         )
-        map_context = self.create_child_context(operation_id=operation_id)
-
-        async def map_in_child_context() -> BatchResult[T]:
-            # map_context is a child_context of the context upon which `.map`
-            # was called. We are calling it `map_context` to make it explicit
-            # that any operations happening from hereon are done on the context
-            # that owns the branches
-            return await map_handler(
-                items=inputs,
-                func=func,
-                config=config,
-                execution_state=self.state,
-                map_context=map_context,
-                operation_identifier=operation_identifier,
-            )
-
-        result = await child_handler(
-            func=map_in_child_context,
-            state=self.state,
-            operation_identifier=operation_identifier,
-            config=ChildConfig(
-                sub_type=OperationSubType.MAP,
-                serdes=getattr(config, "serdes", None),
-                # child_handler should only know the serdes of the parent serdes,
-                # the item serdes will be passed when we are actually executing
-                # the branch within its own child_handler.
-                item_serdes=None,
-            ),
-        )
-        self.state.track_replay(operation_id=operation_id)
-        return result
 
     async def parallel(
         self,
         functions: Sequence[Callable[[], Awaitable[T]] | ParallelBranch[T]],
         name: str | None = None,
         config: ParallelConfig | None = None,
-    ):
-        """Execute multiple callables in parallel."""
-        for index, function in enumerate(functions):
-            target = function.func if isinstance(function, ParallelBranch) else function
-            assert_async_callable(target, label=f"functions[{index}]")
-
-        # _create_step_id() is thread-safe. rest of method is safe, since using local copy of parent id
-        operation_id = self._create_step_id()
-        parallel_context = self.create_child_context(operation_id=operation_id)
-        operation_identifier = OperationIdentifier(
-            operation_id=operation_id,
-            sub_type=OperationSubType.PARALLEL,
-            parent_id=self._parent_id,
+    ) -> BatchResult[T]:
+        return await _parallel_in_context(
+            self,
+            functions=functions,
             name=name,
+            config=config,
         )
-
-        async def parallel_in_child_context() -> BatchResult[T]:
-            # parallel_context is a child_context of the context upon which `.map`
-            # was called. We are calling it `parallel_context` to make it explicit
-            # that any operations happening from hereon are done on the context
-            # that owns the branches
-            return await parallel_handler(
-                callables=functions,
-                config=config,
-                execution_state=self.state,
-                parallel_context=parallel_context,
-                operation_identifier=operation_identifier,
-            )
-
-        result = await child_handler(
-            func=parallel_in_child_context,
-            state=self.state,
-            operation_identifier=operation_identifier,
-            config=ChildConfig(
-                sub_type=OperationSubType.PARALLEL,
-                serdes=getattr(config, "serdes", None),
-                # child_handler should only know the serdes of the parent serdes,
-                # the item serdes will be passed when we are actually executing
-                # the branch within its own child_handler.
-                item_serdes=None,
-            ),
-        )
-        self.state.track_replay(operation_id=operation_id)
-        return result
 
     async def run_in_child_context(
         self,
@@ -943,55 +1091,12 @@ class DurableContext(DurableContextProtocol):
         name: str | None = None,
         config: ChildConfig | None = None,
     ) -> T:
-        """Run the callable and pass a child context to it.
-
-        Use this to nest and group operations.
-
-        Args:
-            callable (Callable[[], T]): Run this callable inside a child durable
-                context. Access that context with get_context().
-            name (str | None): name for the operation.
-            config (ChildConfig | None = None): child context configuration.
-
-        Returns:
-            T: The result of the callable.
-        """
-        assert_async_callable(func)
-        step_name: str | None = self._resolve_step_name(name, func)
-        # _create_step_id() is thread-safe. rest of method is safe, since using local copy of parent id
-        operation_id = self._create_step_id()
-        sub_type = (
-            config.sub_type
-            if config and config.sub_type
-            else OperationSubType.RUN_IN_CHILD_CONTEXT
-        )
-
-        is_virtual: bool = config.is_virtual if config else False
-
-        child_context = self.create_child_context(
-            operation_id=operation_id,
-            is_virtual=is_virtual,
-        )
-
-        async def callable_with_child_context():
-            return await child_context._invoke_user_callable(
-                func,
-                context_position="prepend",
-            )
-
-        result = await child_handler(
-            func=callable_with_child_context,
-            state=self.state,
-            operation_identifier=OperationIdentifier(
-                operation_id=operation_id,
-                sub_type=sub_type,
-                parent_id=self._parent_id,
-                name=step_name,
-            ),
+        return await _run_in_child_context_in_context(
+            self,
+            func=func,
+            name=name,
             config=config,
         )
-        self.state.track_replay(operation_id=operation_id)
-        return result
 
     async def step(
         self,
@@ -999,53 +1104,15 @@ class DurableContext(DurableContextProtocol):
         name: str | None = None,
         config: StepConfig | None = None,
     ) -> T:
-        assert_async_callable(func)
-        step_name = name or get_callable_name(func, include_original_name=False)
-        logger.debug("Step name: %s", step_name)
-        if not config:
-            config = StepConfig()
-        operation_id = self._create_step_id()
-
-        executor: StepOperationExecutor[T] = StepOperationExecutor(
+        return await _step_in_context(
+            self,
             func=func,
+            name=name,
             config=config,
-            state=self.state,
-            operation_identifier=OperationIdentifier(
-                operation_id=operation_id,
-                sub_type=OperationSubType.STEP,
-                parent_id=self._parent_id,
-                name=step_name,
-            ),
         )
-        result: T = await executor.process()
-        self.state.track_replay(operation_id=operation_id)
-        return result
 
     async def wait(self, duration: timedelta, name: str | None = None) -> None:
-        """Wait for a specified amount of time.
-
-        Args:
-            duration: Length of time to wait
-            name: Optional name for the wait step
-        """
-        seconds = duration_to_seconds(duration)
-        if seconds < 1:
-            msg = "duration must be at least 1 second"
-            raise ValidationError(msg)
-        operation_id = self._create_step_id()
-
-        executor: WaitOperationExecutor = WaitOperationExecutor(
-            seconds=seconds,
-            state=self.state,
-            operation_identifier=OperationIdentifier(
-                operation_id=operation_id,
-                sub_type=OperationSubType.WAIT,
-                parent_id=self._parent_id,
-                name=name,
-            ),
-        )
-        await executor.process()
-        self.state.track_replay(operation_id=operation_id)
+        await _wait_in_context(self, duration=duration, name=name)
 
     async def wait_for_callback(
         self,
@@ -1053,22 +1120,11 @@ class DurableContext(DurableContextProtocol):
         name: str | None = None,
         config: WaitForCallbackConfig | None = None,
     ) -> Any:
-        assert_async_callable(submitter, label="submitter")
-        step_name: str | None = self._resolve_step_name(name, submitter)
-        logger.debug("wait_for_callback name: %s", step_name)
-
-        async def wait_in_child_context():
-            current_context = get_context()
-            return await wait_for_callback_handler(
-                current_context,
-                submitter,
-                step_name,
-                config,
-            )
-
-        return await self.run_in_child_context(
-            wait_in_child_context,
-            step_name,
+        return await _wait_for_callback_in_context(
+            self,
+            submitter=submitter,
+            name=name,
+            config=config,
         )
 
     async def wait_for_condition(
@@ -1077,39 +1133,9 @@ class DurableContext(DurableContextProtocol):
         config: WaitForConditionConfig[T],
         name: str | None = None,
     ) -> T:
-        """Wait for a condition to be met by polling.
-
-        Args:
-            check (Callable[[T], T]): Function that checks the condition and returns updated state
-            config (WaitForConditionConfig[T]): Configuration including wait strategy and initial state
-            name (str | None): Optional name for the operation
-
-        Returns:
-            The final state when condition is met.
-        """
-        if check is None:
-            msg = "`check` is required for wait_for_condition"
-            raise ValidationError(msg)
-        if not config:
-            msg = "`config` is required for wait_for_condition"
-            raise ValidationError(msg)
-        assert_async_callable(check, label="check")
-
-        operation_id = self._create_step_id()
-
-        executor: WaitForConditionOperationExecutor[T] = (
-            WaitForConditionOperationExecutor(
-                check=check,
-                config=config,
-                state=self.state,
-                operation_identifier=OperationIdentifier(
-                    operation_id=operation_id,
-                    sub_type=OperationSubType.WAIT_FOR_CONDITION,
-                    parent_id=self._parent_id,
-                    name=name,
-                ),
-            )
+        return await _wait_for_condition_in_context(
+            self,
+            check=check,
+            config=config,
+            name=name,
         )
-        result: T = await executor.process()
-        self.state.track_replay(operation_id=operation_id)
-        return result

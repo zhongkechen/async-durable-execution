@@ -22,13 +22,13 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution_runner.exceptions import (
+from .exceptions import (
     IllegalStateException,
     InvalidParameterValueException,
     ResourceNotFoundException,
 )
-from async_durable_execution_runner.execution import Execution
-from async_durable_execution_runner.model import (
+from .execution import Execution
+from .model import (
     TERMINAL_STATUSES,
     CheckpointDurableExecutionResponse,
     CheckpointUpdatedExecutionState,
@@ -45,26 +45,26 @@ from async_durable_execution_runner.model import (
     StartDurableExecutionOutput,
     StopDurableExecutionResponse,
 )
-from async_durable_execution_runner.model import (
+from .model import (
     Event as HistoryEvent,
 )
-from async_durable_execution_runner.model import (
+from .model import (
     Execution as ExecutionSummary,
 )
-from async_durable_execution_runner.observer import ExecutionObserver
-from async_durable_execution_runner.token import CallbackToken
+from .observer import ExecutionObserver
+from .token import CallbackToken
 
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
     from concurrent.futures import Future
 
-    from async_durable_execution_runner.checkpoint.processor import (
+    from .checkpoint.processor import (
         CheckpointProcessor,
     )
-    from async_durable_execution_runner.invoker import Invoker
-    from async_durable_execution_runner.scheduler import Event, Scheduler
-    from async_durable_execution_runner.stores.base import ExecutionStore
+    from .invoker import Invoker
+    from .scheduler import Event, Scheduler
+    from .stores.base import ExecutionStore
 
 logger = logging.getLogger(__name__)
 
