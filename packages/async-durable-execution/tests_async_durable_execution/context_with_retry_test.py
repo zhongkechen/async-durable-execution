@@ -6,7 +6,7 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import TYPE_CHECKING, TypeVar
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -15,7 +15,7 @@ from async_durable_execution.config import (
     RetryStrategyBuilder,
     WithRetryConfig,
 )
-from async_durable_execution.context import with_retry
+from async_durable_execution import with_retry, with_retry as imported_with_retry
 from async_durable_execution.exceptions import SuspendExecution
 
 
@@ -80,6 +80,53 @@ class MockDurableContext:
         raise NotImplementedError("create_callback not used in with_retry tests")
 
 
+async def _call_with_retry(
+    ctx: MockDurableContext,
+    func,
+    config: WithRetryConfig,
+    *,
+    name: str | None = None,
+):
+    """Invoke with_retry() against a patched ambient context."""
+
+    async def fake_wait_in_context(
+        context: MockDurableContext,
+        duration: timedelta,
+        name: str | None = None,
+    ) -> None:
+        assert context is ctx
+        ctx.wait_calls.append(WaitCall(duration=duration, name=name))
+
+    async def fake_run_in_child_context_in_context(
+        context: MockDurableContext,
+        func,
+        name: str | None = None,
+        config=None,
+    ):
+        assert context is ctx
+        result = await func()
+        ctx.child_context_calls.append(
+            RunInChildContextCall(name=name, config=config, result=result)
+        )
+        return result
+
+    with (
+        patch(
+            "async_durable_execution.operation.with_retry._get_durable_context",
+            return_value=ctx,
+        ),
+        patch(
+            "async_durable_execution.operation.with_retry._wait_in_context",
+            new=AsyncMock(side_effect=fake_wait_in_context),
+        ),
+        patch(
+            "async_durable_execution.operation.with_retry._run_in_child_context_in_context",
+            new=AsyncMock(side_effect=fake_run_in_child_context_in_context),
+        ),
+    ):
+        return await with_retry(func, config, name=name)
+
+
 def _make_config(
     max_attempts: int = 3,
     initial_delay: timedelta | None = None,
@@ -103,10 +150,10 @@ async def test_success_on_first_attempt_returns_result_without_retry():
     ctx = MockDurableContext()
     config = _make_config(wrap_with_run_in_child_context=False)
 
-    async def tracking_func(ctx: DurableContext, attempt: int) -> str:
+    async def tracking_func(attempt: int) -> str:
         return "success"
 
-    result = await with_retry(ctx, tracking_func, config)
+    result = await _call_with_retry(ctx, tracking_func, config)
 
     assert result == "success"
     assert len(ctx.wait_calls) == 0
@@ -119,14 +166,14 @@ async def test_function_fails_then_succeeds_returns_successful_result():
 
     call_count = 0
 
-    async def failing_then_succeeding(ctx: DurableContext, attempt: int) -> str:
+    async def failing_then_succeeding(attempt: int) -> str:
         nonlocal call_count
         call_count += 1
         if attempt < 3:
             raise ValueError(f"fail on attempt {attempt}")
         return "eventual success"
 
-    result = await with_retry(ctx, failing_then_succeeding, config)
+    result = await _call_with_retry(ctx, failing_then_succeeding, config)
 
     assert result == "eventual success"
     assert call_count == 3
@@ -140,7 +187,7 @@ async def test_async_function_fails_then_succeeds_returns_successful_result():
 
     call_count = 0
 
-    async def failing_then_succeeding(ctx: DurableContext, attempt: int) -> str:
+    async def failing_then_succeeding(attempt: int) -> str:
         nonlocal call_count
         await asyncio.sleep(0)
         call_count += 1
@@ -148,7 +195,7 @@ async def test_async_function_fails_then_succeeds_returns_successful_result():
             raise ValueError(f"fail on attempt {attempt}")
         return "eventual success"
 
-    result = await with_retry(ctx, failing_then_succeeding, config)
+    result = await _call_with_retry(ctx, failing_then_succeeding, config)
 
     assert result == "eventual success"
     assert call_count == 3
@@ -160,11 +207,11 @@ async def test_retry_strategy_returns_should_retry_false_reraises_exception():
     ctx = MockDurableContext()
     config = _make_config(max_attempts=1, wrap_with_run_in_child_context=False)
 
-    async def always_fails(ctx: DurableContext, attempt: int) -> None:
+    async def always_fails(attempt: int) -> None:
         raise RuntimeError("permanent failure")
 
     with pytest.raises(RuntimeError, match="permanent failure"):
-        await with_retry(ctx, always_fails, config)
+        await _call_with_retry(ctx, always_fails, config)
 
     assert len(ctx.wait_calls) == 0
 
@@ -174,11 +221,11 @@ async def test_suspend_execution_is_reraised_immediately():
     ctx = MockDurableContext()
     config = _make_config(max_attempts=5, wrap_with_run_in_child_context=False)
 
-    async def raises_suspend(ctx: DurableContext, attempt: int) -> None:
+    async def raises_suspend(attempt: int) -> None:
         raise SuspendExecution("suspending")
 
     with pytest.raises(SuspendExecution, match="suspending"):
-        await with_retry(ctx, raises_suspend, config)
+        await _call_with_retry(ctx, raises_suspend, config)
 
     assert len(ctx.wait_calls) == 0
 
@@ -188,12 +235,12 @@ async def test_async_suspend_execution_is_reraised_immediately():
     ctx = MockDurableContext()
     config = _make_config(max_attempts=5, wrap_with_run_in_child_context=False)
 
-    async def raises_suspend(ctx: DurableContext, attempt: int) -> None:
+    async def raises_suspend(attempt: int) -> None:
         await asyncio.sleep(0)
         raise SuspendExecution("suspending")
 
     with pytest.raises(SuspendExecution, match="suspending"):
-        await with_retry(ctx, raises_suspend, config)
+        await _call_with_retry(ctx, raises_suspend, config)
 
     assert len(ctx.wait_calls) == 0
 
@@ -203,10 +250,10 @@ async def test_default_config_wraps_in_child_context():
     ctx = MockDurableContext()
     config = _make_config(wrap_with_run_in_child_context=True)
 
-    async def simple_func(ctx: DurableContext, attempt: int) -> str:
+    async def simple_func(attempt: int) -> str:
         return "child result"
 
-    result = await with_retry(ctx, simple_func, config)
+    result = await _call_with_retry(ctx, simple_func, config)
 
     assert result == "child result"
     assert len(ctx.child_context_calls) == 1
@@ -217,10 +264,10 @@ async def test_wrap_with_run_in_child_context_false_skips_child_context():
     ctx = MockDurableContext()
     config = _make_config(wrap_with_run_in_child_context=False)
 
-    async def simple_func(ctx: DurableContext, attempt: int) -> str:
+    async def simple_func(attempt: int) -> str:
         return "direct result"
 
-    result = await with_retry(ctx, simple_func, config)
+    result = await _call_with_retry(ctx, simple_func, config)
 
     assert result == "direct result"
     assert len(ctx.child_context_calls) == 0
@@ -233,14 +280,14 @@ async def test_no_name_creates_anonymous_child_context_and_anonymous_waits():
 
     call_count = 0
 
-    async def fails_once(ctx: DurableContext, attempt: int) -> str:
+    async def fails_once(attempt: int) -> str:
         nonlocal call_count
         call_count += 1
         if attempt == 1:
             raise ValueError("transient")
         return "ok"
 
-    result = await with_retry(ctx, fails_once, config, name=None)
+    result = await _call_with_retry(ctx, fails_once, config, name=None)
 
     assert result == "ok"
     assert len(ctx.child_context_calls) == 1
@@ -256,14 +303,14 @@ async def test_name_is_forwarded_to_child_context_and_backoff_waits():
 
     call_count = 0
 
-    async def fails_twice(ctx: DurableContext, attempt: int) -> str:
+    async def fails_twice(attempt: int) -> str:
         nonlocal call_count
         call_count += 1
         if attempt <= 2:
             raise ValueError("transient")
         return "done"
 
-    result = await with_retry(ctx, fails_twice, config, name="my-retry")
+    result = await _call_with_retry(ctx, fails_twice, config, name="my-retry")
 
     assert result == "done"
     assert len(ctx.child_context_calls) == 1
@@ -284,10 +331,10 @@ async def test_child_context_config_is_forwarded():
         child_context_config=mock_child_config,
     )
 
-    async def simple_func(ctx: DurableContext, attempt: int) -> str:
+    async def simple_func(attempt: int) -> str:
         return "result"
 
-    await with_retry(ctx, simple_func, config, name="test")
+    await _call_with_retry(ctx, simple_func, config, name="test")
 
     assert len(ctx.child_context_calls) == 1
     assert ctx.child_context_calls[0].config is mock_child_config
@@ -300,13 +347,13 @@ async def test_attempt_number_starts_at_1_and_increments():
 
     recorded_attempts: list[int] = []
 
-    async def record_attempts(ctx: DurableContext, attempt: int) -> str:
+    async def record_attempts(attempt: int) -> str:
         recorded_attempts.append(attempt)
         if attempt < 4:
             raise ValueError("not yet")
         return "done"
 
-    result = await with_retry(ctx, record_attempts, config)
+    result = await _call_with_retry(ctx, record_attempts, config)
 
     assert result == "done"
     assert recorded_attempts == [1, 2, 3, 4]
@@ -314,7 +361,6 @@ async def test_attempt_number_starts_at_1_and_increments():
 
 async def test_with_retry_importable_from_package():
     """with_retry is re-exported from the package root."""
-    from async_durable_execution import with_retry as imported_with_retry
 
     assert callable(imported_with_retry)
     assert callable(with_retry)
@@ -336,14 +382,14 @@ async def test_integration_with_retry_strategy_builder():
 
     call_count = 0
 
-    async def fails_three_times(ctx: DurableContext, attempt: int) -> str:
+    async def fails_three_times(attempt: int) -> str:
         nonlocal call_count
         call_count += 1
         if attempt <= 3:
             raise ValueError(f"fail {attempt}")
         return "success after retries"
 
-    result = await with_retry(ctx, fails_three_times, config)
+    result = await _call_with_retry(ctx, fails_three_times, config)
 
     assert result == "success after retries"
     assert call_count == 4
@@ -366,10 +412,10 @@ async def test_integration_retries_exhausted_raises_last_exception():
         wrap_with_run_in_child_context=False,
     )
 
-    async def always_fails(ctx: DurableContext, attempt: int) -> None:
+    async def always_fails(attempt: int) -> None:
         raise RuntimeError(f"error on attempt {attempt}")
 
     with pytest.raises(RuntimeError, match="error on attempt 3"):
-        await with_retry(ctx, always_fails, config)
+        await _call_with_retry(ctx, always_fails, config)
 
     assert len(ctx.wait_calls) == 2

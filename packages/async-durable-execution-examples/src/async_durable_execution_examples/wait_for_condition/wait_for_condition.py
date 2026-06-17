@@ -6,7 +6,7 @@ from typing import Any
 
 from async_durable_execution import (
     durable_execution,
-    get_context,
+    get_current_context,
     WaitForConditionCheckContext,
     WaitForConditionConfig,
     WaitForConditionDecision,
@@ -21,7 +21,7 @@ async def handler(_event: Any) -> int:
     async def condition_function(state: int) -> int:
         """Increment state by 1."""
         await asyncio.sleep(0)
-        assert isinstance(get_context(), WaitForConditionCheckContext)
+        assert isinstance(get_current_context(), WaitForConditionCheckContext)
         return state + 1
 
     def wait_strategy(state: int, attempt: int) -> dict[str, Any]:

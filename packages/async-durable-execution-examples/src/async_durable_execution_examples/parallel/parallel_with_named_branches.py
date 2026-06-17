@@ -4,6 +4,7 @@ import asyncio
 from typing import Any
 
 from async_durable_execution import (
+    DurableContext,
     durable_step,
     step,
     ParallelBranch,
@@ -15,7 +16,7 @@ from async_durable_execution import (
 
 
 @durable_parallel_branch(name="fetch-orders")
-async def fetch_orders() -> str:
+async def fetch_orders(_ctx: DurableContext) -> str:
     await asyncio.sleep(0)
 
     @durable_step
@@ -26,7 +27,7 @@ async def fetch_orders() -> str:
 
 
 @durable_parallel_branch()
-async def fetch_preferences() -> str:
+async def fetch_preferences(_ctx: DurableContext) -> str:
     await asyncio.sleep(0)
 
     @durable_step

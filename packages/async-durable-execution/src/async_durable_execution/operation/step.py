@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import functools
 import logging
-from typing import TYPE_CHECKING, TypeVar
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, TypeVar, ParamSpec
 
+from .. import get_current_context
+from ..async_tools import assert_async_callable, get_callable_name
 from ..config import (
     RetryPresets,
     StepConfig,
@@ -17,26 +21,27 @@ from ..exceptions import (
 )
 from ..models import (
     ErrorObject,
+    OperationIdentifier,
     OperationUpdate,
     RetryDecision,
+    OperationSubType,
 )
-from ..context import _reset_context, _set_context
+from ..context import reset_current_context, set_current_context
+from .child import _get_durable_context
 from .base import (
     CheckResult,
     OperationExecutor,
+    OperationContext,
 )
 from ..serdes import deserialize, serialize
 from ..suspend import (
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
 )
-from ..types import StepContext
-
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from ..models import OperationIdentifier
     from ..state import (
         CheckpointedResult,
         ExecutionState,
@@ -45,6 +50,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+Params = ParamSpec("Params")
 
 
 class StepOperationExecutor(OperationExecutor[T]):
@@ -89,8 +95,9 @@ class StepOperationExecutor(OperationExecutor[T]):
             StepInterruptedError: For interrupted AT_MOST_ONCE operations
             SuspendExecution: For PENDING operations waiting for retry
         """
+        operation_id = self.operation_identifier.require_operation_id()
         checkpointed_result: CheckpointedResult = self.state.get_checkpoint_result(
-            self.operation_identifier.operation_id
+            operation_id
         )
 
         # Terminal success - deserialize and return
@@ -106,7 +113,7 @@ class StepOperationExecutor(OperationExecutor[T]):
             result: T = deserialize(
                 serdes=self.config.serdes,
                 data=checkpointed_result.result,
-                operation_id=self.operation_identifier.operation_id,
+                operation_id=operation_id,
                 durable_execution_arn=self.state.durable_execution_arn,
             )
             return CheckResult.create_completed(result)
@@ -172,7 +179,7 @@ class StepOperationExecutor(OperationExecutor[T]):
             if is_sync:
                 # Refresh checkpoint result to check for immediate response
                 refreshed_result: CheckpointedResult = self.state.get_checkpoint_result(
-                    self.operation_identifier.operation_id
+                    operation_id
                 )
 
                 # START checkpoint only returns STARTED status
@@ -201,6 +208,7 @@ class StepOperationExecutor(OperationExecutor[T]):
             ExecutionError: For fatal errors that should not be retried
             May raise other exceptions that will be handled by retry_handler
         """
+        operation_id = self.operation_identifier.require_operation_id()
         # Get current attempt - checkpointed attempts + 1
         attempt: int = 1
         if checkpointed_result.operation and checkpointed_result.operation.step_details:
@@ -209,10 +217,7 @@ class StepOperationExecutor(OperationExecutor[T]):
         step_context: StepContext = StepContext(
             attempt=attempt,
             execution_state=self.state,
-            execution_arn=self.state.durable_execution_arn,
-            parent_id=self.operation_identifier.parent_id,
-            operation_id=self.operation_identifier.operation_id,
-            operation_name=self.operation_identifier.name,
+            operation_identifier=self.operation_identifier,
         )
 
         try:
@@ -223,16 +228,16 @@ class StepOperationExecutor(OperationExecutor[T]):
                 False,
                 attempt,
             )
-            token = _set_context(step_context)
+            token = set_current_context(step_context)
             try:
                 raw_result = await wrapped_user_func()
             finally:
-                _reset_context(token)
+                reset_current_context(token)
 
             serialized_result: str = serialize(
                 serdes=self.config.serdes,
                 value=raw_result,
-                operation_id=self.operation_identifier.operation_id,
+                operation_id=operation_id,
                 durable_execution_arn=self.state.durable_execution_arn,
             )
 
@@ -368,3 +373,73 @@ class StepOperationExecutor(OperationExecutor[T]):
             raise error
 
         raise error_object.to_callable_runtime_error()
+
+
+async def step(
+    func: Callable[[], Awaitable[T]],
+    name: str | None = None,
+    config: StepConfig | None = None,
+) -> T:
+    context = _get_durable_context()
+    assert_async_callable(func)
+    step_name = name or get_callable_name(func, include_original_name=False)
+    logger.debug("Step name: %s", step_name)
+    if not config:
+        config = StepConfig()
+    operation_id = context.step_counter.create_step_id()
+
+    executor: StepOperationExecutor[T] = StepOperationExecutor(
+        func=func,
+        config=config,
+        state=context.execution_state,
+        operation_identifier=OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=OperationSubType.STEP,
+            parent_id=context.parent_id,
+            name=step_name,
+        ),
+    )
+    result: T = await executor.process()
+    context.execution_state.track_replay(operation_id=operation_id)
+    return result
+
+
+def durable_step(
+    func: Callable[Params, Awaitable[T]],
+) -> Callable[Params, Callable[[], Awaitable[T]]]:
+    """Wrap an async function so calling it returns a zero-argument step callable.
+
+    The returned callable is suitable for passing to `step()`,
+    which keeps durable step creation explicit while avoiding manual `partial(...)`
+    wrapping at the callsite.
+    """
+    assert_async_callable(func)
+
+    @functools.wraps(func)
+    def wrapper(
+        *args: Params.args, **kwargs: Params.kwargs
+    ) -> Callable[[], Awaitable[T]]:
+        return functools.partial(func, *args, **kwargs)
+
+    return wrapper
+
+
+@dataclass(frozen=True)
+class StepContext(OperationContext):
+    attempt: int | None = None
+
+
+def get_attempt() -> int | None:
+    current_context = get_step_context(
+        "get_attempt() can only be used while a step function is executing.",
+    )
+    return current_context.attempt
+
+
+def get_step_context(
+    message: str,
+):
+    current_context = get_current_context()
+    if current_context is None or not isinstance(current_context, StepContext):
+        raise RuntimeError(message)
+    return current_context

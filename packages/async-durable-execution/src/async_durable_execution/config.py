@@ -249,7 +249,7 @@ class ParallelBranch(Generic[T]):
         async def fetch_orders(ctx: DurableContext) -> dict:
             ...
 
-        await context.parallel(
+        await parallel(
             functions=[
                 ParallelBranch(func=fetch_user, name="fetch-user-data"),
                 ParallelBranch(func=fetch_orders, name="fetch-order-history"),

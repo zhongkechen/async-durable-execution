@@ -6,7 +6,7 @@ from async_durable_execution import (
     WaitForCallbackContext,
     WaitForCallbackConfig,
     durable_execution,
-    get_context,
+    get_current_context,
     wait_for_callback,
 )
 
@@ -14,7 +14,7 @@ from async_durable_execution import (
 async def external_system_call(_callback_id: str) -> None:
     """Simulate calling an external system with callback ID."""
     await asyncio.sleep(0)
-    assert isinstance(get_context(), WaitForCallbackContext)
+    assert isinstance(get_current_context(), WaitForCallbackContext)
     # In real usage, this would make an API call to an external system
     # passing the callback_id for the system to call back when done
 

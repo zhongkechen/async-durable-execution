@@ -5,10 +5,15 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, TypeVar
 
+from .child import _get_durable_context
+
+from ..config import InvokeConfig
 from ..exceptions import ExecutionError
 from ..models import (
     ChainedInvokeOptions,
+    OperationIdentifier,
     OperationUpdate,
+    OperationSubType,
 )
 
 # Import base classes for operation executor pattern
@@ -25,8 +30,6 @@ from ..suspend import suspend_with_optional_resume_delay
 
 
 if TYPE_CHECKING:
-    from ..config import InvokeConfig
-    from ..models import OperationIdentifier
     from ..state import (
         CheckpointedResult,
         ExecutionState,
@@ -85,8 +88,9 @@ class InvokeOperationExecutor(OperationExecutor[R]):
             CallableRuntimeError: For FAILED, TIMED_OUT, or STOPPED operations
             SuspendExecution: For STARTED operations waiting for completion
         """
+        operation_id = self.operation_identifier.require_operation_id()
         checkpointed_result: CheckpointedResult = self.state.get_checkpoint_result(
-            self.operation_identifier.operation_id
+            operation_id
         )
 
         # Terminal success - deserialize and return
@@ -97,7 +101,7 @@ class InvokeOperationExecutor(OperationExecutor[R]):
             result: R = deserialize(
                 serdes=self.config.serdes_result or DEFAULT_JSON_SERDES,
                 data=checkpointed_result.result,
-                operation_id=self.operation_identifier.operation_id,
+                operation_id=operation_id,
                 durable_execution_arn=self.state.durable_execution_arn,
             )
             return CheckResult.create_completed(result)
@@ -123,7 +127,7 @@ class InvokeOperationExecutor(OperationExecutor[R]):
             serialized_payload: str = serialize(
                 serdes=self.config.serdes_payload or DEFAULT_JSON_SERDES,
                 value=self.payload,
-                operation_id=self.operation_identifier.operation_id,
+                operation_id=operation_id,
                 durable_execution_arn=self.state.durable_execution_arn,
             )
             start_operation: OperationUpdate = OperationUpdate.create_invoke_start(
@@ -173,3 +177,31 @@ class InvokeOperationExecutor(OperationExecutor[R]):
         # This line should never be reached since suspend_with_optional_resume_delay always raises
         error_msg: str = "suspend_with_optional_resume_delay should have raised an exception, but did not."
         raise ExecutionError(error_msg) from None
+
+
+async def invoke(
+    function_name: str,
+    payload: P,
+    name: str | None = None,
+    config: InvokeConfig[P, R] | None = None,
+) -> R:
+    context = _get_durable_context("invoke")
+    if not config:
+        config = InvokeConfig[P, R]()
+    operation_id = context.step_counter.create_step_id()
+
+    executor: InvokeOperationExecutor[R] = InvokeOperationExecutor(
+        function_name=function_name,
+        payload=payload,
+        state=context.execution_state,
+        operation_identifier=OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=OperationSubType.CHAINED_INVOKE,
+            parent_id=context.parent_id,
+            name=name,
+        ),
+        config=config,
+    )
+    result: R = await executor.process()
+    context.execution_state.track_replay(operation_id=operation_id)
+    return result

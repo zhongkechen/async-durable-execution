@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from ..models import OperationUpdate, WaitOptions
+from ..exceptions import ValidationError
+from ..config import duration_to_seconds
+from .child import _get_durable_context, DurableContext
+from ..models import OperationIdentifier, OperationUpdate, WaitOptions, OperationSubType
 from .base import (
     CheckResult,
     OperationExecutor,
@@ -14,7 +18,6 @@ from ..suspend import suspend_with_optional_resume_delay
 
 
 if TYPE_CHECKING:
-    from ..models import OperationIdentifier
     from ..state import (
         CheckpointedResult,
         ExecutionState,
@@ -60,7 +63,7 @@ class WaitOperationExecutor(OperationExecutor[None]):
             SuspendExecution: When wait timer has not completed
         """
         checkpointed_result: CheckpointedResult = self.state.get_checkpoint_result(
-            self.operation_identifier.operation_id
+            self.operation_identifier.require_operation_id()
         )
 
         # Terminal success - wait completed
@@ -112,3 +115,33 @@ class WaitOperationExecutor(OperationExecutor[None]):
         """
         msg: str = f"Wait for {self.seconds} seconds"
         suspend_with_optional_resume_delay(msg, self.seconds)  # throws suspend
+
+
+async def _wait_in_context(
+    context: DurableContext,
+    duration: timedelta,
+    name: str | None = None,
+) -> None:
+    seconds = duration_to_seconds(duration)
+    if seconds < 1:
+        msg = "duration must be at least 1 second"
+        raise ValidationError(msg)
+    operation_id = context.step_counter.create_step_id()
+
+    executor: WaitOperationExecutor = WaitOperationExecutor(
+        seconds=seconds,
+        state=context.execution_state,
+        operation_identifier=OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=OperationSubType.WAIT,
+            parent_id=context.parent_id,
+            name=name,
+        ),
+    )
+    await executor.process()
+    context.execution_state.track_replay(operation_id=operation_id)
+
+
+async def wait(duration: timedelta, name: str | None = None) -> None:
+    context = _get_durable_context("wait")
+    await _wait_in_context(context, duration=duration, name=name)

@@ -9,7 +9,7 @@ from async_durable_execution_examples.parallel import parallel_flat
 
 
 async def test_parallel_flat(durable_runner):
-    """Test parallel example using context.parallel()."""
+    """Test parallel example using parallel()."""
     with durable_runner(
         handler=parallel_flat.handler, input="test", timeout=100
     ) as runner:

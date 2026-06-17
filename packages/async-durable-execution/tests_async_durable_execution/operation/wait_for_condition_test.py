@@ -9,7 +9,7 @@ from unittest.mock import Mock
 
 import pytest
 from async_durable_execution.context import (
-    get_context,
+    get_current_context,
 )
 from async_durable_execution.exceptions import (
     CallableRuntimeError,
@@ -30,7 +30,7 @@ from async_durable_execution.operation.wait_for_condition import (
     WaitForConditionOperationExecutor,
 )
 from async_durable_execution.state import CheckpointedResult, ExecutionState
-from async_durable_execution.types import WaitForConditionCheckContext
+from async_durable_execution import WaitForConditionCheckContext
 from async_durable_execution.config import WaitForConditionConfig
 from async_durable_execution.models import WaitForConditionDecision
 
@@ -425,7 +425,7 @@ async def test_wait_for_condition_check_context():
 
     def check_func(state):
         nonlocal captured_context
-        captured_context = get_context()
+        captured_context = get_current_context()
         return state + 1
 
     mock_state.wrap_user_function.return_value = check_func
@@ -826,7 +826,7 @@ async def test_wait_for_condition_logger_with_log_info():
 
     def check_func(state):
         nonlocal captured_context
-        captured_context = get_context()
+        captured_context = get_current_context()
         assert isinstance(captured_context, WaitForConditionCheckContext)
         assert captured_context.attempt == 1
         return state + 1
@@ -847,7 +847,7 @@ async def test_wait_for_condition_logger_with_log_info():
 
     assert captured_context is not None
     assert isinstance(captured_context, WaitForConditionCheckContext)
-    assert captured_context.execution_arn == "arn:aws:test:execution:123"
+    assert captured_context.durable_execution_arn == "arn:aws:test:execution:123"
     assert captured_context.operation_id == "op1"
     assert captured_context.operation_name == "test_wait"
     assert captured_context.attempt == 1

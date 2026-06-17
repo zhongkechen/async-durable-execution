@@ -29,11 +29,11 @@ from async_durable_execution.models import (
     StepDetails,
 )
 import logging
-from async_durable_execution.context import get_context
+from async_durable_execution.context import get_current_context
 from async_durable_execution.operation.step import StepOperationExecutor
 from async_durable_execution.models import RetryDecision
 from async_durable_execution.state import CheckpointedResult, ExecutionState
-from async_durable_execution.types import StepContext
+from async_durable_execution import StepContext
 
 from ..serdes_test import CustomDictSerDes
 
@@ -266,7 +266,7 @@ async def test_step_handler_passes_attempt_to_step_context():
     mock_logger = Mock(spec=logging.Logger)
 
     async def step_callable():
-        current_context = get_context()
+        current_context = get_current_context()
         assert isinstance(current_context, StepContext)
         return current_context.attempt
 
@@ -293,7 +293,7 @@ async def test_step_handler_get_context_returns_step_context():
     mock_logger = Mock(spec=logging.Logger)
 
     async def step_callable():
-        return get_context().attempt
+        return get_current_context().attempt
 
     result = await step_handler(
         step_callable,
@@ -310,7 +310,7 @@ def test_get_context_raises_outside_execution():
         RuntimeError,
         match="get_context\\(\\) can only be used while a durable function, step function, wait_for_callback submitter, or wait_for_condition check is executing\\.",
     ):
-        get_context()
+        get_current_context()
 
 
 async def test_step_handler_success_at_most_once():

@@ -1010,11 +1010,15 @@ class DurableFunctionCloudTestRunner:
 
         # Invoke Lambda function
         try:
-            response = await asyncio.to_thread(
-                self.lambda_client.invoke,
-                FunctionName=self.function_name,
-                InvocationType="RequestResponse",
-                Payload=payload,
+            response: dict[str, Any] = await asyncio.to_thread(
+                lambda: cast(
+                    dict[str, Any],
+                    self.lambda_client.invoke(
+                        FunctionName=self.function_name,
+                        InvocationType="RequestResponse",
+                        Payload=payload,
+                    ),
+                )
             )
         except Exception as e:
             msg = f"Failed to invoke Lambda function {self.function_name}: {e}"
@@ -1062,11 +1066,15 @@ class DurableFunctionCloudTestRunner:
         )
         payload = json.dumps(self._default_input)
         try:
-            response = await asyncio.to_thread(
-                self.lambda_client.invoke,
-                FunctionName=self.function_name,
-                InvocationType="Event",
-                Payload=payload,
+            response: dict[str, Any] = await asyncio.to_thread(
+                lambda: cast(
+                    dict[str, Any],
+                    self.lambda_client.invoke(
+                        FunctionName=self.function_name,
+                        InvocationType="Event",
+                        Payload=payload,
+                    ),
+                )
             )
         except Exception as e:
             msg = f"Failed to invoke Lambda function {self.function_name}: {e}"
@@ -1079,7 +1087,13 @@ class DurableFunctionCloudTestRunner:
             msg = f"Lambda invocation failed with status {status_code}: {error_payload}"
             raise DurableFunctionsTestError(msg)
 
-        return response.get("DurableExecutionArn")
+        execution_arn = cast(str | None, response.get("DurableExecutionArn"))
+        if execution_arn is None:
+            msg = (
+                f"No DurableExecutionArn in response for function {self.function_name}"
+            )
+            raise DurableFunctionsTestError(msg)
+        return execution_arn
 
     async def send_callback_success(
         self, callback_id: str, result: bytes | None = None

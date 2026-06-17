@@ -3,18 +3,27 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypeVar
 
+from .step import StepContext
+from ..async_tools import assert_async_callable
+
+from ..config import WaitForConditionConfig
 from ..context import (
-    _reset_context,
-    _set_context,
+    reset_current_context,
+    set_current_context,
 )
+from .child import _get_durable_context
 from ..exceptions import (
     ExecutionError,
+    ValidationError,
 )
 from ..models import (
     ErrorObject,
+    OperationIdentifier,
     OperationUpdate,
+    OperationSubType,
 )
 from .base import (
     CheckResult,
@@ -25,17 +34,10 @@ from ..suspend import (
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
 )
-from ..types import (
-    StepContext,
-    WaitForConditionCheckContext,
-)
-
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from ..config import WaitForConditionConfig
-    from ..models import OperationIdentifier
     from ..state import (
         CheckpointedResult,
         ExecutionState,
@@ -88,9 +90,8 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             CallableRuntimeError: For FAILED operations
             SuspendExecution: For PENDING operations waiting for retry
         """
-        checkpointed_result = self.state.get_checkpoint_result(
-            self.operation_identifier.operation_id
-        )
+        operation_id = self.operation_identifier.require_operation_id()
+        checkpointed_result = self.state.get_checkpoint_result(operation_id)
 
         # Check if already completed
         if checkpointed_result.is_succeeded():
@@ -104,7 +105,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             result = deserialize(
                 serdes=self.config.serdes,
                 data=checkpointed_result.result,
-                operation_id=self.operation_identifier.operation_id,
+                operation_id=operation_id,
                 durable_execution_arn=self.state.durable_execution_arn,
             )
             return CheckResult.create_completed(result)
@@ -152,12 +153,13 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             Raises error if check function fails
         """
         # Determine current state from checkpoint
+        operation_id = self.operation_identifier.require_operation_id()
         if checkpointed_result.is_started_or_ready() and checkpointed_result.result:
             try:
                 current_state = deserialize(
                     serdes=self.config.serdes,
                     data=checkpointed_result.result,
-                    operation_id=self.operation_identifier.operation_id,
+                    operation_id=operation_id,
                     durable_execution_arn=self.state.durable_execution_arn,
                 )
             except Exception:
@@ -181,10 +183,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             step_context = StepContext(
                 attempt=attempt,
                 execution_state=self.state,
-                execution_arn=self.state.durable_execution_arn,
-                parent_id=self.operation_identifier.parent_id,
-                operation_id=self.operation_identifier.operation_id,
-                operation_name=self.operation_identifier.name,
+                operation_identifier=self.operation_identifier,
             )
             wrapped_user_func = self.state.wrap_user_function(
                 self.check,
@@ -192,20 +191,17 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 False,
                 attempt,
             )
-            token = _set_context(
+            token = set_current_context(
                 WaitForConditionCheckContext(
                     attempt=attempt,
                     execution_state=step_context.execution_state,
-                    execution_arn=step_context.execution_arn,
-                    parent_id=step_context.parent_id,
-                    operation_id=step_context.operation_id,
-                    operation_name=step_context.operation_name,
+                    operation_identifier=self.operation_identifier,
                 )
             )
             try:
                 new_state = await wrapped_user_func(current_state)
             finally:
-                _reset_context(token)
+                reset_current_context(token)
 
             # Check if condition is met with the wait strategy
             decision: WaitForConditionDecision = self.config.wait_strategy(
@@ -215,7 +211,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             serialized_state = serialize(
                 serdes=self.config.serdes,
                 value=new_state,
-                operation_id=self.operation_identifier.operation_id,
+                operation_id=operation_id,
                 durable_execution_arn=self.state.durable_execution_arn,
             )
 
@@ -300,3 +296,41 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             "wait_for_condition should never reach this point"  # pragma: no cover
         )
         raise ExecutionError(msg)  # pragma: no cover
+
+
+async def wait_for_condition(
+    check: Callable[[T], Awaitable[T]],
+    config: WaitForConditionConfig[T],
+    name: str | None = None,
+) -> T:
+    context = _get_durable_context("wait_for_condition")
+    if check is None:
+        msg = "`check` is required for wait_for_condition"
+        raise ValidationError(msg)
+    if not config:
+        msg = "`config` is required for wait_for_condition"
+        raise ValidationError(msg)
+    assert_async_callable(check, label="check")
+
+    operation_id = context.step_counter.create_step_id()
+    executor: WaitForConditionOperationExecutor[T] = WaitForConditionOperationExecutor(
+        check=check,
+        config=config,
+        state=context.execution_state,
+        operation_identifier=OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=OperationSubType.WAIT_FOR_CONDITION,
+            parent_id=context.parent_id,
+            name=name,
+        ),
+    )
+    result: T = await executor.process()
+    context.execution_state.track_replay(operation_id=operation_id)
+    return result
+
+
+@dataclass(frozen=True)
+class WaitForConditionCheckContext(StepContext):
+    """Context available during wait_for_condition checker execution."""
+
+    pass

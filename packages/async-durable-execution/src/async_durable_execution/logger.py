@@ -3,28 +3,21 @@
 from __future__ import annotations
 
 import logging
-from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from async_durable_execution import ValidationError
+from .operation.base import OperationContext
+from .context import _current_context
 from .types import (
-    Context,
     LoggerInterface,
-    StepContext,
-    WaitForCallbackContext,
-    WaitForConditionCheckContext,
 )
-
+from . import WaitForCallbackContext
 
 if TYPE_CHECKING:
-    from .context import ExecutionState
+    from .state import ExecutionState
     from .models import OperationIdentifier
 
-
-_current_context: ContextVar[Context | None] = ContextVar(
-    "async_durable_execution.current_context",
-    default=None,
-)
 _configured_logger_ids: set[int] = set()
 _configured_handler_ids: set[int] = set()
 
@@ -79,23 +72,25 @@ class DurableContextFilter(logging.Filter):
         return True
 
 
-def build_context_log_extra(context: Context) -> dict[str, object]:
+def build_context_log_extra(context: OperationContext) -> dict[str, object]:
     """Build structured log fields from the active execution context."""
     extra: dict[str, object] = {}
-    execution_arn = getattr(context, "execution_arn", None)
+    execution_arn = context.durable_execution_arn
     if execution_arn:
-        extra["executionArn"] = context.execution_arn
-    parent_id = getattr(context, "parent_id", None)
+        extra["executionArn"] = execution_arn
+    parent_id = context.parent_id
     if parent_id:
         extra["parentId"] = context.parent_id
-    operation_id = getattr(context, "operation_id", None)
+    operation_id = context.operation_id
     if operation_id:
         extra["operationId"] = context.operation_id
-    operation_name = getattr(context, "operation_name", None)
+    operation_name = context.operation_name
     if operation_name:
         extra["operationName"] = context.operation_name
-    if isinstance(context, WaitForCallbackContext):
-        extra["callbackId"] = context.callback_id
+
+    callback_id = getattr(context, "callback_id", None)
+    if callback_id:
+        extra["callbackId"] = callback_id
     attempt = getattr(context, "attempt", None)
     if attempt is not None:
         extra["attempt"] = attempt
@@ -126,27 +121,12 @@ def configure_durable_logger(logger: LoggerInterface) -> LoggerInterface:
     return logger
 
 
-def set_current_context(context: Context) -> Token[Context | None]:
-    return _current_context.set(context)
-
-
-def reset_current_context(token: Token[Context | None]) -> None:
-    _current_context.reset(token)
-
-
-def get_current_context() -> Context | None:
-    return _current_context.get()
-
-
-def _is_replaying(context: Context) -> bool:
-    state = getattr(context, "state", None)
-    if state is None and isinstance(
-        context,
-        (StepContext, WaitForCallbackContext, WaitForConditionCheckContext),
-    ):
-        state = context.execution_state
+def _is_replaying(context: OperationContext) -> bool:
+    state = context.execution_state
     if state is None:
-        return False
+        raise ValidationError(
+            "The execution state is None",
+        )
     return bool(state.is_replaying())
 
 

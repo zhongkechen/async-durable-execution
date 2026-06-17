@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class OperationInfo:
-    operation_id: str
+    operation_id: str | None
     operation_type: OperationType
     sub_type: OperationSubType | None
     name: str | None

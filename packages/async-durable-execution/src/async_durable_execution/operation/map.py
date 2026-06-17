@@ -3,24 +3,29 @@
 from __future__ import annotations
 import json
 import logging
-from collections.abc import Awaitable, Callable, Sequence
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar, Sequence, Callable, Any, Awaitable
 
-from ..async_tools import invoke_callable_with_optional_context
+from ..async_tools import get_callable_name
+from .child import child_handler, _get_durable_context
+
+from ..async_tools import (
+    invoke_user_callable,
+    invoke_callable,
+    assert_async_callable,
+)
 from async_durable_execution.operation.concurrency import ConcurrentExecutor
-from ..config import MapConfig, NestingType
-from ..models import BatchResult, Executable, OperationSubType
+from ..config import MapConfig, NestingType, BatchedInput, ChildConfig
+from ..models import BatchResult, Executable, OperationIdentifier, OperationSubType
 
 
 if TYPE_CHECKING:
-    from ..context import DurableContext
-    from ..models import OperationIdentifier
     from ..serdes import SerDes
     from ..state import (
         CheckpointedResult,
         ExecutionState,
     )
     from ..types import SummaryGenerator
+    from .child import DurableContext
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +33,7 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 # Result type
 R = TypeVar("R")
+U = TypeVar("U")
 
 
 class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI059
@@ -94,35 +100,16 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
             return self._item_namer(self.items[index], index)
         return super().get_iteration_name(index)
 
-    def execute_item(self, child_context, executable: Executable[Callable]):
-        awaitable = self._execute_item_async(child_context, executable)
-        return awaitable
-
-    async def _execute_item_async(
-        self, child_context, executable: Executable[Callable]
-    ) -> R:
+    async def execute_item(self, child_context, executable: Executable[Callable]):
         logger.debug("🗺️ Processing map item: %s", executable.index)
         item = self.items[executable.index]
-        invoke_with_context = getattr(
-            type(child_context), "_invoke_user_callable", None
+        result: R = await invoke_user_callable(
+            child_context,
+            executable.func,
+            item,
+            executable.index,
+            self.items,
         )
-        if invoke_with_context is not None:
-            result: R = await child_context._invoke_user_callable(
-                executable.func,
-                item,
-                executable.index,
-                self.items,
-                context_position="prepend",
-            )
-        else:
-            result = await invoke_callable_with_optional_context(
-                executable.func,
-                child_context,
-                item,
-                executable.index,
-                self.items,
-                context_position="prepend",
-            )
         logger.debug("✅ Processed map item: %s", executable.index)
         return result
 
@@ -149,7 +136,7 @@ async def map_handler(
     )
 
     checkpoint: CheckpointedResult = execution_state.get_checkpoint_result(
-        operation_identifier.operation_id
+        operation_identifier.require_operation_id()
     )
     if checkpoint.is_succeeded():
         # if we've reached this point, then not only is the step succeeded, but it is also `replay_children`.
@@ -169,3 +156,46 @@ class MapSummaryGenerator:
             "type": "MapResult",
         }
         return json.dumps(fields)
+
+
+async def map(
+    inputs: Sequence[U],
+    func: Callable[[U | BatchedInput[Any, U], int, Sequence[U]], Awaitable[T]],
+    name: str | None = None,
+    config: MapConfig | None = None,
+):
+    context = _get_durable_context("map")
+    assert_async_callable(func)
+    map_name: str | None = name or get_callable_name(func)
+
+    operation_id = context.step_counter.create_step_id()
+    operation_identifier = OperationIdentifier(
+        operation_id=operation_id,
+        sub_type=OperationSubType.MAP,
+        parent_id=context.parent_id,
+        name=map_name,
+    )
+    map_context = context.create_child_context(operation_id=operation_id)
+
+    async def map_in_child_context() -> BatchResult[T]:
+        return await map_handler(
+            items=inputs,
+            func=func,
+            config=config,
+            execution_state=context.execution_state,
+            map_context=map_context,
+            operation_identifier=operation_identifier,
+        )
+
+    result = await child_handler(
+        func=map_in_child_context,
+        state=context.execution_state,
+        operation_identifier=operation_identifier,
+        config=ChildConfig(
+            sub_type=OperationSubType.MAP,
+            serdes=getattr(config, "serdes", None),
+            item_serdes=None,
+        ),
+    )
+    context.execution_state.track_replay(operation_id=operation_id)
+    return result

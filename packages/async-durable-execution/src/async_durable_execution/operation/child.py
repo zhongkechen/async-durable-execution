@@ -1,10 +1,22 @@
 """Implementation for run_in_child_context."""
 
 from __future__ import annotations
-import logging
-from typing import TYPE_CHECKING, TypeVar
 
+import functools
+import logging
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, TypeVar, cast, ParamSpec
+
+from .base import (
+    CheckResult,
+    OperationExecutor,
+    OperationContext,
+)
+from ..async_tools import assert_async_callable, invoke_user_callable
+from ..async_tools import get_callable_name
 from ..config import ChildConfig
+from ..context import OperationIdGenerator
+from ..context import get_current_context
 from ..exceptions import (
     InvocationError,
     SuspendExecution,
@@ -12,20 +24,16 @@ from ..exceptions import (
 from ..models import (
     ContextOptions,
     ErrorObject,
+    OperationIdentifier,
     OperationSubType,
     OperationUpdate,
 )
-from .base import (
-    CheckResult,
-    OperationExecutor,
-)
 from ..serdes import deserialize, serialize
-
+from ..types import LambdaContext
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from ..models import OperationIdentifier
     from ..state import (
         CheckpointedResult,
         ExecutionState,
@@ -34,6 +42,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+Params = ParamSpec("Params")
 
 # Checkpoint size limit in bytes (256KB)
 CHECKPOINT_SIZE_LIMIT = 256 * 1024
@@ -82,8 +91,9 @@ class ChildOperationExecutor(OperationExecutor[T]):
         Raises:
             CallableRuntimeError: For FAILED operations
         """
+        operation_id = self.operation_identifier.require_operation_id()
         checkpointed_result: CheckpointedResult = self.state.get_checkpoint_result(
-            self.operation_identifier.operation_id
+            operation_id
         )
 
         # Terminal success without replay_children - deserialize and return
@@ -102,7 +112,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
             result: T = deserialize(
                 serdes=self.config.serdes,
                 data=checkpointed_result.result,
-                operation_id=self.operation_identifier.operation_id,
+                operation_id=operation_id,
                 durable_execution_arn=self.state.durable_execution_arn,
             )
             return CheckResult.create_completed(result)
@@ -155,6 +165,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
             self.operation_identifier.name,
         )
         try:
+            operation_id = self.operation_identifier.require_operation_id()
             # TODO: fix attempt (checkpointed_result.is_existent is always True)
             wrapped_user_func = self.state.wrap_user_function(
                 self.func,
@@ -185,7 +196,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
             serialized_result: str = serialize(
                 serdes=self.config.serdes,
                 value=raw_result,
-                operation_id=self.operation_identifier.operation_id,
+                operation_id=operation_id,
                 durable_execution_arn=self.state.durable_execution_arn,
             )
 
@@ -299,3 +310,137 @@ async def child_handler(
         config or ChildConfig(),
     )
     return await executor.process()
+
+
+def durable_child_context(
+    func: Callable[Params, Awaitable[T]],
+) -> Callable[Params, Callable[[], Awaitable[T]]]:
+    """Wrap an async function so calling it returns a zero-argument child context callable.
+
+    The returned callable is suitable for passing to `run_in_child_context()`.
+    """
+    assert_async_callable(func)
+
+    @functools.wraps(func)
+    def wrapper(
+        *args: Params.args, **kwargs: Params.kwargs
+    ) -> Callable[[], Awaitable[T]]:
+        return functools.partial(func, *args, **kwargs)
+
+    return wrapper
+
+
+@dataclass(frozen=True)
+class DurableContext(OperationContext):
+    lambda_context: LambdaContext | None = None
+    step_id_prefix: str | None = None
+
+    @functools.cached_property
+    def step_counter(self):
+        return OperationIdGenerator(self.operation_id_generator_prefix)
+
+    @property
+    def is_virtual(self) -> bool:
+        return self.operation_identifier.parent_id != self.operation_id_generator_prefix
+
+    @property
+    def operation_id_generator_prefix(self):
+        return (
+            self.step_id_prefix
+            if self.step_id_prefix is not None
+            else self.operation_identifier.parent_id
+        )
+
+    def create_child_context(
+        self, operation_id: str, *, is_virtual: bool = False
+    ) -> DurableContext:
+        """Create a child context for the given operation."""
+        child_parent_id: str | None = self.parent_id if is_virtual else operation_id
+        logger.debug(
+            "Creating child context for operation %s (is_virtual=%s)",
+            operation_id,
+            is_virtual,
+        )
+        return DurableContext(
+            execution_state=self.execution_state,
+            operation_identifier=OperationIdentifier(
+                operation_id=None,
+                sub_type=OperationSubType.EXECUTION,
+                parent_id=child_parent_id,
+            ),
+            lambda_context=self.lambda_context,
+            step_id_prefix=operation_id,
+        )
+
+
+async def _run_in_child_context_in_context(
+    context: DurableContext,
+    func: Callable[[], Awaitable[T]],
+    name: str | None = None,
+    config: ChildConfig | None = None,
+) -> T:
+    assert_async_callable(func)
+    step_name: str | None = name or get_callable_name(func)
+    operation_id = context.step_counter.create_step_id()
+    sub_type = (
+        config.sub_type
+        if config and config.sub_type
+        else OperationSubType.RUN_IN_CHILD_CONTEXT
+    )
+
+    is_virtual: bool = config.is_virtual if config else False
+    child_context = context.create_child_context(
+        operation_id=operation_id,
+        is_virtual=is_virtual,
+    )
+
+    async def callable_with_child_context():
+        return await invoke_user_callable(
+            child_context,
+            func,
+        )
+
+    result = await child_handler(
+        func=callable_with_child_context,
+        state=context.execution_state,
+        operation_identifier=OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=sub_type,
+            parent_id=context.parent_id,
+            name=step_name,
+        ),
+        config=config,
+    )
+    context.execution_state.track_replay(operation_id=operation_id)
+    return result
+
+
+async def run_in_child_context(
+    func: Callable[[], Awaitable[T]],
+    name: str | None = None,
+    config: ChildConfig | None = None,
+) -> T:
+    context = _get_durable_context("run_in_child_context")
+    return await _run_in_child_context_in_context(
+        context,
+        func=func,
+        name=name,
+        config=config,
+    )
+
+
+def _get_durable_context(operation_name: str | None = None) -> DurableContext:
+    current_context = get_current_context()
+    if (
+        current_context is None
+        or not hasattr(current_context, "execution_state")
+        or not hasattr(current_context, "operation_identifier")
+        or not hasattr(current_context, "step_counter")
+        or not hasattr(current_context, "create_child_context")
+    ):
+        msg = (
+            f"{operation_name or 'Durable operations'} can only be used while a durable function or child "
+            "context is executing."
+        )
+        raise RuntimeError(msg)
+    return cast(DurableContext, current_context)

@@ -32,25 +32,25 @@ from .config import (
     WithRetryConfig,
 )
 from .context import (
-    DurableContext,
-    WaitForCallbackContext,
-    create_callback,
-    durable_parallel_branch,
-    durable_step,
-    durable_wait_for_callback,
-    get_context,
-    invoke,
-    map,
-    parallel,
-    run_in_child_context,
-    get_attempt,
-    step,
-    wait,
-    wait_for_callback,
-    wait_for_condition,
-    with_retry,
-    durable_child_context,
+    get_current_context,
 )
+from .operation.with_retry import with_retry
+from .operation.map import map
+from .operation.wait_for_condition import (
+    wait_for_condition,
+    WaitForConditionCheckContext,
+)
+from .operation.invoke import invoke
+from .operation.parallel import parallel, durable_parallel_branch
+from .operation.callback import (
+    create_callback,
+    durable_wait_for_callback,
+    wait_for_callback,
+    WaitForCallbackContext,
+    Callback,
+)
+from .operation.child import durable_child_context, run_in_child_context, DurableContext
+from .operation.step import step, durable_step, StepContext, get_attempt
 from .models import (
     ErrorObject,
     OperationIdentifier,
@@ -68,16 +68,9 @@ from .exceptions import (
 
 # Core decorator - used in every durable function
 from .execution import durable_execution
+from .operation.wait import wait
 from .plugin import DurableInstrumentationPlugin
 from .serdes import JsonSerDes, SerDes, SerDesContext
-
-# Essential step context helpers
-from .types import (
-    Callback,
-    Context,
-    StepContext,
-    WaitForConditionCheckContext,
-)
 
 __all__ = [
     "BatchItem",
@@ -87,7 +80,6 @@ __all__ = [
     "CallbackConfig",
     "CompletionConfig",
     "CompletionReason",
-    "Context",
     "DurableContext",
     "DurableInstrumentationPlugin",
     "DurableExecutionsError",
@@ -123,7 +115,7 @@ __all__ = [
     "durable_step",
     "durable_wait_for_callback",
     "get_attempt",
-    "get_context",
+    "get_current_context",
     "invoke",
     "map",
     "parallel",

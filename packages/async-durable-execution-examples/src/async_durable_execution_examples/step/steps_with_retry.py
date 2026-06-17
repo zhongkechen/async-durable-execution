@@ -10,8 +10,8 @@ from async_durable_execution import (
     StepConfig,
     durable_execution,
     RetryStrategyBuilder,
+    get_attempt,
 )
-from async_durable_execution import get_attempt
 
 
 async def simulated_get_item(name: str, poll_count: int) -> dict[str, Any] | None:

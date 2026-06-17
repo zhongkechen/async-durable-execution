@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from dataclasses import dataclass
-from datetime import timedelta
-from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar, Mapping
+from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar, runtime_checkable
 
 from .models import (
     OperationUpdate,
@@ -14,18 +12,8 @@ from .models import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Mapping, Sequence
+    from collections.abc import Mapping
 
-    from .config import (
-        BatchedInput,
-        CallbackConfig,
-        ChildConfig,
-        MapConfig,
-        ParallelBranch,
-        ParallelConfig,
-        StepConfig,
-        WaitForCallbackConfig,
-    )
     from .state import ExecutionState
 
 T = TypeVar("T")
@@ -56,40 +44,7 @@ class LoggerInterface(Protocol):
     ) -> None: ...  # pragma: no cover
 
 
-@dataclass(frozen=True)
-class StepContext:
-    attempt: int | None = None
-    execution_state: ExecutionState | None = None
-    execution_arn: str | None = None
-    parent_id: str | None = None
-    operation_id: str | None = None
-    operation_name: str | None = None
-
-
-@dataclass(frozen=True)
-class WaitForCallbackContext:
-    """Context available during wait_for_callback submitter execution."""
-
-    callback_id: str
-    execution_state: ExecutionState | None = None
-    execution_arn: str | None = None
-    parent_id: str | None = None
-    operation_id: str | None = None
-    operation_name: str | None = None
-
-
-@dataclass(frozen=True)
-class WaitForConditionCheckContext:
-    """Context available during wait_for_condition checker execution."""
-
-    attempt: int | None = None
-    execution_state: ExecutionState | None = None
-    execution_arn: str | None = None
-    parent_id: str | None = None
-    operation_id: str | None = None
-    operation_name: str | None = None
-
-
+@runtime_checkable
 class Callback(Protocol, Generic[C_co]):
     """Protocol for callback futures."""
 
@@ -107,79 +62,6 @@ class BatchResult(Protocol, Generic[T]):
     @abstractmethod
     def get_results(self) -> list[T]:
         """Get all successful results."""
-        ...  # pragma: no cover
-
-
-class DurableContext(Protocol):
-    """Protocol defining the interface for durable execution contexts."""
-
-    execution_state: ExecutionState | None
-    execution_arn: str | None
-    parent_id: str | None
-    operation_id: str | None
-    operation_name: str | None
-
-    @abstractmethod
-    async def step(
-        self,
-        func: Callable[[], Awaitable[T]],
-        name: str | None = None,
-        config: StepConfig | None = None,
-    ) -> T:
-        """Execute a step durably."""
-        ...  # pragma: no cover
-
-    @abstractmethod
-    async def run_in_child_context(
-        self,
-        func: Callable[[], Awaitable[T]],
-        name: str | None = None,
-        config: ChildConfig | None = None,
-    ) -> T:
-        """Run callable in a child context."""
-        ...  # pragma: no cover
-
-    @abstractmethod
-    async def map(
-        self,
-        inputs: Sequence[U],
-        func: Callable[[U | BatchedInput[Any, U], int, Sequence[U]], Awaitable[T]],
-        name: str | None = None,
-        config: MapConfig | None = None,
-    ) -> BatchResult[T]:
-        """Apply function durably to each item in inputs."""
-        ...  # pragma: no cover
-
-    @abstractmethod
-    async def parallel(
-        self,
-        functions: Sequence[Callable[[], Awaitable[T]] | ParallelBranch[T]],
-        name: str | None = None,
-        config: ParallelConfig | None = None,
-    ) -> BatchResult[T]:
-        """Execute callables durably in parallel."""
-        ...  # pragma: no cover
-
-    @abstractmethod
-    async def wait(self, duration: timedelta, name: str | None = None) -> None:
-        """Wait for a specified amount of time."""
-        ...  # pragma: no cover
-
-    @abstractmethod
-    async def create_callback(
-        self, name: str | None = None, config: CallbackConfig | None = None
-    ) -> Callback:
-        """Create a callback."""
-        ...  # pragma: no cover
-
-    @abstractmethod
-    async def wait_for_callback(
-        self,
-        submitter: Callable[[str], Awaitable[Any]],
-        name: str | None = None,
-        config: WaitForCallbackConfig | None = None,
-    ) -> Any:
-        """Wait for an external callback using a submitter that receives callback_id."""
         ...  # pragma: no cover
 
 
@@ -214,9 +96,13 @@ class SummaryGenerator(Protocol[C_contra]):
     def __call__(self, result: C_contra) -> str: ...  # pragma: no cover
 
 
-Context = (
-    StepContext | WaitForCallbackContext | WaitForConditionCheckContext | DurableContext
-)
+@runtime_checkable
+class DurableContext(Protocol):
+    execution_state: ExecutionState | None
+    durable_execution_arn: str | None
+    parent_id: str | None
+    operation_id: str | None
+    operation_name: str | None
 
 
 class DurableServiceClient(Protocol):
