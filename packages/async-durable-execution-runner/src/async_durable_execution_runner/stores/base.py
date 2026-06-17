@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC
+from datetime import timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Protocol
 
@@ -83,7 +83,7 @@ class BaseExecutionStore(ExecutionStore):
                             operation.start_timestamp.timestamp()
                             if hasattr(operation.start_timestamp, "timestamp")
                             else operation.start_timestamp.replace(
-                                tzinfo=UTC
+                                tzinfo=timezone.utc
                             ).timestamp()
                         )
                         if started_after and timestamp < float(started_after):
@@ -103,7 +103,7 @@ class BaseExecutionStore(ExecutionStore):
                     return (
                         op.start_timestamp.timestamp()
                         if hasattr(op.start_timestamp, "timestamp")
-                        else op.start_timestamp.replace(tzinfo=UTC).timestamp()
+                        else op.start_timestamp.replace(tzinfo=timezone.utc).timestamp()
                     )
             except Exception:  # noqa: BLE001, S110
                 pass

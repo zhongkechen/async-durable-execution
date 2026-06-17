@@ -1,7 +1,7 @@
 """Tests for invoker module."""
 
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
 import pytest
@@ -183,8 +183,8 @@ async def test_lambda_invoker_invoke_success():
         operation_id="op-1",
         parent_id=None,
         name="test-execution",
-        start_timestamp=datetime.now(UTC),
-        end_timestamp=datetime.now(UTC),
+        start_timestamp=datetime.now(timezone.utc),
+        end_timestamp=datetime.now(timezone.utc),
         operation_type=OperationType.EXECUTION,
         status=OperationStatus.SUCCEEDED,
         execution_details=ExecutionDetails(input_payload='{"test": "data"}'),

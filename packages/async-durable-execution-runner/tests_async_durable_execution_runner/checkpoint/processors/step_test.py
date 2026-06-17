@@ -1,6 +1,6 @@
 """Tests for step operation processor."""
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from unittest.mock import Mock
 
 import pytest
@@ -75,7 +75,7 @@ def test_process_start_action_with_current_operation():
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
 
     current_op = Mock()
-    current_op.start_timestamp = datetime.now(UTC)
+    current_op.start_timestamp = datetime.now(timezone.utc)
 
     update = OperationUpdate(
         operation_id="step-123",
@@ -95,7 +95,7 @@ def test_process_retry_action():
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
 
     current_op = Mock()
-    current_op.start_timestamp = datetime.now(UTC)
+    current_op.start_timestamp = datetime.now(timezone.utc)
     current_op.step_details = StepDetails(attempt=1, result="previous-result")
     current_op.execution_details = None
     current_op.context_details = None
@@ -131,7 +131,7 @@ def test_process_retry_action_without_step_options():
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
 
     current_op = Mock()
-    current_op.start_timestamp = datetime.now(UTC)
+    current_op.start_timestamp = datetime.now(timezone.utc)
     current_op.step_details = StepDetails(attempt=0)
     current_op.execution_details = None
     current_op.context_details = None
@@ -180,7 +180,7 @@ def test_process_retry_action_without_current_step_details():
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
 
     current_op = Mock()
-    current_op.start_timestamp = datetime.now(UTC)
+    current_op.start_timestamp = datetime.now(timezone.utc)
     current_op.step_details = None
     current_op.execution_details = None
     current_op.context_details = None
@@ -229,7 +229,7 @@ def test_process_succeed_action_with_current_operation():
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
 
     current_op = Mock()
-    current_op.start_timestamp = datetime.now(UTC)
+    current_op.start_timestamp = datetime.now(timezone.utc)
     current_op.step_details = StepDetails()
 
     update = OperationUpdate(
@@ -275,7 +275,7 @@ def test_process_fail_action_with_current_operation():
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
 
     current_op = Mock()
-    current_op.start_timestamp = datetime.now(UTC)
+    current_op.start_timestamp = datetime.now(timezone.utc)
     current_op.step_details = StepDetails()
 
     error = ErrorObject.from_message("step failed")
@@ -354,7 +354,7 @@ def test_retry_preserves_current_operation_details():
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
 
     current_op = Mock()
-    current_op.start_timestamp = datetime.now(UTC)
+    current_op.start_timestamp = datetime.now(timezone.utc)
     current_op.step_details = StepDetails(
         attempt=2, result="old-result", error=ErrorObject.from_message("old-error")
     )

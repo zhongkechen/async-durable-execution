@@ -845,7 +845,7 @@ class ExecutionState:
 
                     effective_operation_count = 1
                     break
-                except TimeoutError:
+                except asyncio.TimeoutError:
                     continue
 
             # If stopped and no operation retrieved, return empty batch
@@ -906,7 +906,7 @@ class ExecutionState:
                     total_size += op_size
                     effective_operation_count += 1
 
-            except TimeoutError:
+            except asyncio.TimeoutError:
                 break
 
         empty_count = sum(1 for q in batch if q.operation_update is None)

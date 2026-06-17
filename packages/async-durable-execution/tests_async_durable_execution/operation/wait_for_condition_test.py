@@ -977,7 +977,7 @@ async def test_wait_for_condition_pending():
         step_details=StepDetails(
             result='{"key": "VALUE", "number": "84", "list": [1, 2, 3]}',
             next_attempt_timestamp=datetime.datetime.fromtimestamp(
-                1764547200, tz=datetime.UTC
+                1764547200, tz=datetime.timezone.utc
             ),
         ),
     )
@@ -1191,7 +1191,7 @@ async def test_wait_for_condition_pending_suspends_without_executing_check():
         step_details=StepDetails(
             result=json.dumps(10),
             next_attempt_timestamp=datetime.datetime.fromtimestamp(
-                1764547200, tz=datetime.UTC
+                1764547200, tz=datetime.timezone.utc
             ),
         ),
     )

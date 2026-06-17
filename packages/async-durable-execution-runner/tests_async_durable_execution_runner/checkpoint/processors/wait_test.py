@@ -1,6 +1,6 @@
 """Tests for wait operation processor."""
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from unittest.mock import Mock
 
 import pytest
@@ -67,7 +67,7 @@ def test_process_start_action():
     assert result.status == OperationStatus.STARTED
     assert result.name == "test-wait"
     assert result.wait_details is not None
-    assert result.wait_details.scheduled_end_timestamp > datetime.now(UTC)
+    assert result.wait_details.scheduled_end_timestamp > datetime.now(timezone.utc)
 
     assert len(notifier.wait_timer_calls) == 1
     assert notifier.wait_timer_calls[0] == (execution_arn, "wait-123", 30)
@@ -163,7 +163,7 @@ def test_process_cancel_action():
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
 
     current_op = Mock()
-    current_op.start_timestamp = datetime.now(UTC)
+    current_op.start_timestamp = datetime.now(timezone.utc)
 
     update = OperationUpdate(
         operation_id="wait-123",
@@ -266,7 +266,7 @@ def test_wait_details_created_correctly():
         wait_options=wait_options,
     )
 
-    before_time = datetime.now(UTC)
+    before_time = datetime.now(timezone.utc)
     result = processor.process(update, None, notifier, execution_arn)
 
     assert result.wait_details.scheduled_end_timestamp > before_time
@@ -299,7 +299,7 @@ def test_cancel_no_timer_scheduled():
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
 
     current_op = Mock()
-    current_op.start_timestamp = datetime.now(UTC)
+    current_op.start_timestamp = datetime.now(timezone.utc)
 
     update = OperationUpdate(
         operation_id="wait-123",

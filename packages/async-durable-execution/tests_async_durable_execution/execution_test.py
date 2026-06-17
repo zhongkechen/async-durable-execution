@@ -259,8 +259,8 @@ async def test_durable_execution_invocation_input_with_client_from_parent():
 
 async def test_operation_to_dict_complete():
     """Test Operation.to_dict with all fields populated."""
-    start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.UTC)
-    end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.UTC)
+    start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
+    end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.timezone.utc)
 
     operation = Operation(
         operation_id="op1",
@@ -2047,8 +2047,8 @@ async def test_initial_execution_state_to_json_dict_minimal():
 
 async def test_initial_execution_state_to_json_dict_with_timestamps():
     """Test InitialExecutionState.to_json_dict converts datetime objects to millisecond timestamps."""
-    start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.UTC)
-    end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.UTC)
+    start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
+    end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.timezone.utc)
 
     operation = Operation(
         operation_id="op1",
@@ -2126,8 +2126,10 @@ async def test_initial_execution_state_from_json_dict_with_timestamps():
 
     result = InitialExecutionState.from_json_dict(data)
 
-    expected_start = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
-    expected_end = datetime.datetime(2023, 1, 1, 13, 0, 0, tzinfo=datetime.UTC)
+    expected_start = datetime.datetime(
+        2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc
+    )
+    expected_end = datetime.datetime(2023, 1, 1, 13, 0, 0, tzinfo=datetime.timezone.utc)
 
     assert len(result.operations) == 1
     operation = result.operations[0]
@@ -2158,8 +2160,10 @@ async def test_initial_execution_state_from_json_dict_empty_operations():
 
 async def test_initial_execution_state_json_roundtrip():
     """Test InitialExecutionState to_json_dict -> from_json_dict roundtrip preserves all data."""
-    start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.UTC)
-    next_attempt_time = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
+    start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
+    next_attempt_time = datetime.datetime(
+        2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc
+    )
 
     error = ErrorObject(
         message="Test error",
@@ -2245,8 +2249,8 @@ async def test_durable_execution_invocation_input_to_json_dict_minimal():
 
 async def test_durable_execution_invocation_input_to_json_dict_with_timestamps():
     """Test DurableExecutionInvocationInput.to_json_dict converts datetime objects to millisecond timestamps."""
-    start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.UTC)
-    end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.UTC)
+    start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
+    end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.timezone.utc)
 
     operation = Operation(
         operation_id="exec1",
@@ -2352,8 +2356,10 @@ async def test_durable_execution_invocation_input_from_json_dict_with_timestamps
 
     result = DurableExecutionInvocationInput.from_json_dict(data)
 
-    expected_start = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
-    expected_end = datetime.datetime(2023, 1, 1, 13, 0, 0, tzinfo=datetime.UTC)
+    expected_start = datetime.datetime(
+        2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc
+    )
+    expected_end = datetime.datetime(2023, 1, 1, 13, 0, 0, tzinfo=datetime.timezone.utc)
 
     operation = result.initial_execution_state.operations[0]
     assert operation.start_timestamp == expected_start
@@ -2379,9 +2385,11 @@ async def test_durable_execution_invocation_input_from_json_dict_empty_initial_s
 
 async def test_durable_execution_invocation_input_json_roundtrip():
     """Test DurableExecutionInvocationInput to_json_dict -> from_json_dict roundtrip preserves all data."""
-    start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.UTC)
-    end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.UTC)
-    next_attempt_time = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
+    start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
+    end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.timezone.utc)
+    next_attempt_time = datetime.datetime(
+        2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc
+    )
 
     error = ErrorObject(
         message="Test error",
@@ -2592,23 +2600,23 @@ async def test_event_parsing_with_unix_millis_timestamps():
     # Verify EXECUTION operation timestamps
     assert isinstance(operations[0].start_timestamp, datetime.datetime)
     assert isinstance(operations[0].end_timestamp, datetime.datetime)
-    assert operations[0].start_timestamp.tzinfo == datetime.UTC
-    assert operations[0].end_timestamp.tzinfo == datetime.UTC
+    assert operations[0].start_timestamp.tzinfo == datetime.timezone.utc
+    assert operations[0].end_timestamp.tzinfo == datetime.timezone.utc
 
     # Verify STEP operation with NextAttemptTimestamp (the critical one!)
     assert operations[1].step_details is not None
     next_attempt = operations[1].step_details.next_attempt_timestamp
     assert isinstance(next_attempt, datetime.datetime)
-    assert next_attempt.tzinfo == datetime.UTC
+    assert next_attempt.tzinfo == datetime.timezone.utc
 
     # Verify WAIT operation with ScheduledEndTimestamp
     assert operations[2].wait_details is not None
     scheduled_end = operations[2].wait_details.scheduled_end_timestamp
     assert isinstance(scheduled_end, datetime.datetime)
-    assert scheduled_end.tzinfo == datetime.UTC
+    assert scheduled_end.tzinfo == datetime.timezone.utc
 
     # Verify timestamps can be compared with datetime.now() without TypeError
-    now = datetime.datetime.now(tz=datetime.UTC)
+    now = datetime.datetime.now(tz=datetime.timezone.utc)
     assert isinstance(next_attempt < now or next_attempt >= now, bool)
     assert isinstance(scheduled_end < now or scheduled_end >= now, bool)
 
@@ -2664,7 +2672,7 @@ async def test_from_dict_leaves_timestamps_as_integers():
         match="'<' not supported between instances of 'int' and 'datetime.datetime'",
     ):
         _ = operations[0].step_details.next_attempt_timestamp < datetime.datetime.now(
-            tz=datetime.UTC
+            tz=datetime.timezone.utc
         )
 
     with pytest.raises(
@@ -2672,7 +2680,7 @@ async def test_from_dict_leaves_timestamps_as_integers():
         match="'<' not supported between instances of 'int' and 'datetime.datetime'",
     ):
         _ = operations[1].wait_details.scheduled_end_timestamp < datetime.datetime.now(
-            tz=datetime.UTC
+            tz=datetime.timezone.utc
         )
 
 

@@ -1,7 +1,7 @@
 """Tests for model classes and serialization helpers."""
 
 import datetime
-from datetime import UTC
+from datetime import timezone
 from unittest.mock import patch
 
 import pytest
@@ -229,7 +229,7 @@ async def test_step_details_from_dict():
     data = {
         "Attempt": 2,
         "NextAttemptTimestamp": datetime.datetime(
-            2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
         ),
         "Result": "step_result",
         "Error": error_data,
@@ -237,7 +237,7 @@ async def test_step_details_from_dict():
     details = StepDetails.from_dict(data)
     assert details.attempt == 2
     assert details.next_attempt_timestamp == datetime.datetime(
-        2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC
+        2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
     )
     assert details.result == "step_result"
     assert details.error.message == "Step error"
@@ -249,7 +249,7 @@ async def test_step_details_all_fields():
     data = {
         "Attempt": 3,
         "NextAttemptTimestamp": datetime.datetime(
-            2023, 1, 1, 12, 0, 0, tzinfo=datetime.UTC
+            2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc
         ),
         "Result": "step_success",
         "Error": error_data,
@@ -257,7 +257,7 @@ async def test_step_details_all_fields():
     details = StepDetails.from_dict(data)
     assert details.attempt == 3
     assert details.next_attempt_timestamp == datetime.datetime(
-        2023, 1, 1, 12, 0, 0, tzinfo=datetime.UTC
+        2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc
     )
     assert details.result == "step_success"
     assert details.error.message == "Step failed"
@@ -276,7 +276,7 @@ async def test_step_details_minimal():
 
 async def test_wait_details_from_dict():
     """Test WaitDetails.from_dict method."""
-    timestamp = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
+    timestamp = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc)
     data = {"ScheduledEndTimestamp": timestamp}
     details = WaitDetails.from_dict(data)
     assert details.scheduled_end_timestamp == timestamp
@@ -699,7 +699,7 @@ async def test_operation_update_create_execution_succeed(mock_datetime):
     """Test OperationUpdate.create_execution_succeed factory method."""
 
     mock_datetime.datetime.now.return_value = datetime.datetime.fromtimestamp(
-        1672531200.0, tz=datetime.UTC
+        1672531200.0, tz=datetime.timezone.utc
     )
     update = OperationUpdate.create_execution_succeed("success_payload")
     assert update.operation_id == "execution-result-1672531200000"
@@ -1246,7 +1246,9 @@ async def test_operation_to_dict_with_all_details():
         attempt=2, next_attempt_timestamp="2023-01-01", result="step_result", error=None
     )
     wait_details = WaitDetails(
-        scheduled_end_timestamp=datetime.datetime(2023, 1, 1, tzinfo=datetime.UTC)
+        scheduled_end_timestamp=datetime.datetime(
+            2023, 1, 1, tzinfo=datetime.timezone.utc
+        )
     )
     callback_details = CallbackDetails(
         callback_id="cb123", result="callback_result", error=None
@@ -1259,8 +1261,8 @@ async def test_operation_to_dict_with_all_details():
         status=OperationStatus.SUCCEEDED,
         parent_id="parent",
         name="test_op",
-        start_timestamp=datetime.datetime(2023, 1, 1, tzinfo=datetime.UTC),
-        end_timestamp=datetime.datetime(2023, 1, 2, tzinfo=datetime.UTC),
+        start_timestamp=datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
+        end_timestamp=datetime.datetime(2023, 1, 2, tzinfo=datetime.timezone.utc),
         execution_details=execution_details,
         context_details=context_details,
         step_details=step_details,
@@ -1276,7 +1278,7 @@ async def test_operation_to_dict_with_all_details():
     assert result["ContextDetails"]["Result"] == "context_result"
     assert result["StepDetails"]["Attempt"] == 2
     assert result["WaitDetails"]["ScheduledEndTimestamp"] == datetime.datetime(
-        2023, 1, 1, tzinfo=datetime.UTC
+        2023, 1, 1, tzinfo=datetime.timezone.utc
     )
     assert result["CallbackDetails"]["CallbackId"] == "cb123"
     assert result["ChainedInvokeDetails"]["Result"] == "invoke_result"
@@ -1476,8 +1478,8 @@ async def test_operation_from_dict_with_subtype():
 
 async def test_operation_from_dict_complete():
     """Test Operation.from_dict with all fields."""
-    start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.UTC)
-    end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.UTC)
+    start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
+    end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.timezone.utc)
     data = {
         "Id": "op1",
         "Type": "STEP",
@@ -1536,8 +1538,8 @@ async def test_operation_to_dict_all_optional_fields():
         status=OperationStatus.SUCCEEDED,
         parent_id="parent1",
         name="test-step",
-        start_timestamp=datetime.datetime(2023, 1, 1, tzinfo=datetime.UTC),
-        end_timestamp=datetime.datetime(2023, 1, 2, tzinfo=datetime.UTC),
+        start_timestamp=datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
+        end_timestamp=datetime.datetime(2023, 1, 2, tzinfo=datetime.timezone.utc),
         sub_type=OperationSubType.STEP,
     )
 
@@ -1546,9 +1548,11 @@ async def test_operation_to_dict_all_optional_fields():
     assert result["ParentId"] == "parent1"
     assert result["Name"] == "test-step"
     assert result["StartTimestamp"] == datetime.datetime(
-        2023, 1, 1, tzinfo=datetime.UTC
+        2023, 1, 1, tzinfo=datetime.timezone.utc
     )
-    assert result["EndTimestamp"] == datetime.datetime(2023, 1, 2, tzinfo=datetime.UTC)
+    assert result["EndTimestamp"] == datetime.datetime(
+        2023, 1, 2, tzinfo=datetime.timezone.utc
+    )
     assert result["SubType"] == "Step"
 
 
@@ -1698,8 +1702,8 @@ async def test_operation_to_json_dict_minimal():
 
 async def test_operation_to_json_dict_with_timestamps():
     """Test Operation.to_json_dict converts datetime objects to millisecond timestamps."""
-    start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.UTC)
-    end_time = datetime.datetime(2023, 1, 1, 11, 30, 0, tzinfo=datetime.UTC)
+    start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
+    end_time = datetime.datetime(2023, 1, 1, 11, 30, 0, tzinfo=datetime.timezone.utc)
 
     operation = Operation(
         operation_id="op1",
@@ -1724,7 +1728,9 @@ async def test_operation_to_json_dict_with_timestamps():
 
 async def test_operation_to_json_dict_with_step_details_timestamp():
     """Test Operation.to_json_dict converts StepDetails.NextAttemptTimestamp to milliseconds."""
-    next_attempt_time = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
+    next_attempt_time = datetime.datetime(
+        2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc
+    )
     step_details = StepDetails(
         attempt=2, next_attempt_timestamp=next_attempt_time, result="step_result"
     )
@@ -1746,7 +1752,9 @@ async def test_operation_to_json_dict_with_step_details_timestamp():
 
 async def test_operation_to_json_dict_with_wait_details_timestamp():
     """Test Operation.to_json_dict converts WaitDetails.ScheduledEndTimestamp to milliseconds."""
-    scheduled_end_time = datetime.datetime(2023, 1, 1, 15, 0, 0, tzinfo=datetime.UTC)
+    scheduled_end_time = datetime.datetime(
+        2023, 1, 1, 15, 0, 0, tzinfo=datetime.timezone.utc
+    )
     wait_details = WaitDetails(scheduled_end_timestamp=scheduled_end_time)
 
     operation = Operation(
@@ -1764,10 +1772,14 @@ async def test_operation_to_json_dict_with_wait_details_timestamp():
 
 async def test_operation_to_json_dict_with_all_timestamps():
     """Test Operation.to_json_dict with all timestamp fields present."""
-    start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.UTC)
-    end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.UTC)
-    next_attempt_time = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
-    scheduled_end_time = datetime.datetime(2023, 1, 1, 13, 0, 0, tzinfo=datetime.UTC)
+    start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
+    end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.timezone.utc)
+    next_attempt_time = datetime.datetime(
+        2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc
+    )
+    scheduled_end_time = datetime.datetime(
+        2023, 1, 1, 13, 0, 0, tzinfo=datetime.timezone.utc
+    )
 
     step_details = StepDetails(
         attempt=1, next_attempt_timestamp=next_attempt_time, result="step_result"
@@ -1854,8 +1866,12 @@ async def test_operation_from_json_dict_with_timestamps():
 
     operation = Operation.from_json_dict(data)
 
-    expected_start = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
-    expected_end = datetime.datetime(2023, 1, 1, 13, 30, 0, tzinfo=datetime.UTC)
+    expected_start = datetime.datetime(
+        2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc
+    )
+    expected_end = datetime.datetime(
+        2023, 1, 1, 13, 30, 0, tzinfo=datetime.timezone.utc
+    )
 
     assert operation.start_timestamp == expected_start
     assert operation.end_timestamp == expected_end
@@ -1878,7 +1894,9 @@ async def test_operation_from_json_dict_with_step_details_timestamp():
     }
 
     operation = Operation.from_json_dict(data)
-    expected_time = datetime.datetime(2023, 1, 1, 14, 0, 0, tzinfo=datetime.UTC)
+    expected_time = datetime.datetime(
+        2023, 1, 1, 14, 0, 0, tzinfo=datetime.timezone.utc
+    )
 
     assert operation.step_details.next_attempt_timestamp == expected_time
     assert operation.step_details.attempt == 2
@@ -1897,7 +1915,9 @@ async def test_operation_from_json_dict_with_wait_details_timestamp():
     }
 
     operation = Operation.from_json_dict(data)
-    expected_time = datetime.datetime(2023, 1, 1, 17, 0, 0, tzinfo=datetime.UTC)
+    expected_time = datetime.datetime(
+        2023, 1, 1, 17, 0, 0, tzinfo=datetime.timezone.utc
+    )
 
     assert operation.wait_details.scheduled_end_timestamp == expected_time
 
@@ -1927,16 +1947,16 @@ async def test_operation_from_json_dict_with_all_timestamps():
 
     # Verify all timestamps are converted correctly
     assert operation.start_timestamp == datetime.datetime(
-        2023, 1, 1, 12, 0, 0, tzinfo=datetime.UTC
+        2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc
     )
     assert operation.end_timestamp == datetime.datetime(
-        2023, 1, 1, 13, 0, 0, tzinfo=datetime.UTC
+        2023, 1, 1, 13, 0, 0, tzinfo=datetime.timezone.utc
     )
     assert operation.step_details.next_attempt_timestamp == datetime.datetime(
-        2023, 1, 1, 14, 0, 0, tzinfo=datetime.UTC
+        2023, 1, 1, 14, 0, 0, tzinfo=datetime.timezone.utc
     )
     assert operation.wait_details.scheduled_end_timestamp == datetime.datetime(
-        2023, 1, 1, 15, 0, 0, tzinfo=datetime.UTC
+        2023, 1, 1, 15, 0, 0, tzinfo=datetime.timezone.utc
     )
 
 
@@ -1966,10 +1986,14 @@ async def test_operation_from_json_dict_with_none_timestamps():
 
 async def test_operation_json_roundtrip():
     """Test Operation to_json_dict -> from_json_dict roundtrip preserves all data."""
-    start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.UTC)
-    end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.UTC)
-    next_attempt_time = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
-    scheduled_end_time = datetime.datetime(2023, 1, 1, 13, 0, 0, tzinfo=datetime.UTC)
+    start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
+    end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.timezone.utc)
+    next_attempt_time = datetime.datetime(
+        2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc
+    )
+    scheduled_end_time = datetime.datetime(
+        2023, 1, 1, 13, 0, 0, tzinfo=datetime.timezone.utc
+    )
 
     error = ErrorObject(
         message="Test error",
@@ -2072,16 +2096,16 @@ async def test_operation_json_dict_preserves_non_timestamp_fields():
 async def test_timestamp_converter_to_unix_millis_valid_datetime():
     """Test converting valid datetime to Unix timestamp in milliseconds."""
     # Test epoch
-    epoch = datetime.datetime(1970, 1, 1, tzinfo=UTC)
+    epoch = datetime.datetime(1970, 1, 1, tzinfo=timezone.utc)
     assert TimestampConverter.to_unix_millis(epoch) == 0
 
     # Test specific datetime
-    dt = datetime.datetime(2024, 1, 1, 12, 30, 45, 123456, tzinfo=UTC)
+    dt = datetime.datetime(2024, 1, 1, 12, 30, 45, 123456, tzinfo=timezone.utc)
     expected_ms = int(dt.timestamp() * 1000)
     assert TimestampConverter.to_unix_millis(dt) == expected_ms
 
     # Test current time
-    now = datetime.datetime.now(UTC)
+    now = datetime.datetime.now(timezone.utc)
     result = TimestampConverter.to_unix_millis(now)
     assert isinstance(result, int)
     assert result > 0
@@ -2095,19 +2119,21 @@ async def test_timestamp_converter_to_unix_millis_none():
 async def test_timestamp_converter_to_unix_millis_edge_cases():
     """Test edge cases for datetime to Unix timestamp conversion."""
     # Test year 2038 (Unix timestamp overflow boundary for 32-bit systems)
-    dt_2038 = datetime.datetime(2038, 1, 19, 3, 14, 7, tzinfo=UTC)
+    dt_2038 = datetime.datetime(2038, 1, 19, 3, 14, 7, tzinfo=timezone.utc)
     result = TimestampConverter.to_unix_millis(dt_2038)
     assert isinstance(result, int)
     assert result > 0
 
     # Test far future date
-    far_future = datetime.datetime(2100, 12, 31, 23, 59, 59, tzinfo=UTC)
+    far_future = datetime.datetime(2100, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
     result = TimestampConverter.to_unix_millis(far_future)
     assert isinstance(result, int)
     assert result > 0
 
     # Test microseconds precision (should be truncated in milliseconds)
-    dt_with_microseconds = datetime.datetime(2024, 1, 1, 0, 0, 0, 123456, tzinfo=UTC)
+    dt_with_microseconds = datetime.datetime(
+        2024, 1, 1, 0, 0, 0, 123456, tzinfo=timezone.utc
+    )
     result = TimestampConverter.to_unix_millis(dt_with_microseconds)
     # Verify milliseconds precision (microseconds should be truncated)
     expected = int(dt_with_microseconds.timestamp() * 1000)
@@ -2118,20 +2144,20 @@ async def test_timestamp_converter_from_unix_millis_valid_timestamp():
     """Test converting valid Unix timestamp in milliseconds to datetime."""
     # Test epoch
     assert TimestampConverter.from_unix_millis(0) == datetime.datetime(
-        1970, 1, 1, tzinfo=UTC
+        1970, 1, 1, tzinfo=timezone.utc
     )
 
     # Test specific timestamp
     ms = 1704110445123  # 2024-01-01 12:30:45.123 UTC
     result = TimestampConverter.from_unix_millis(ms)
-    expected = datetime.datetime.fromtimestamp(ms / 1000, tz=UTC)
+    expected = datetime.datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
     assert result == expected
-    assert result.tzinfo == UTC
+    assert result.tzinfo == timezone.utc
 
     # Test positive timestamp
     ms = 1609459200000  # 2021-01-01 00:00:00 UTC
     result = TimestampConverter.from_unix_millis(ms)
-    assert result == datetime.datetime(2021, 1, 1, tzinfo=UTC)
+    assert result == datetime.datetime(2021, 1, 1, tzinfo=timezone.utc)
 
 
 async def test_timestamp_converter_from_unix_millis_none():
@@ -2142,7 +2168,7 @@ async def test_timestamp_converter_from_unix_millis_none():
 async def test_timestamp_converter_from_unix_millis_zero():
     """Test converting zero timestamp returns epoch."""
     result = TimestampConverter.from_unix_millis(0)
-    assert result == datetime.datetime(1970, 1, 1, tzinfo=UTC)
+    assert result == datetime.datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 async def test_timestamp_converter_from_unix_millis_negative():
@@ -2150,7 +2176,7 @@ async def test_timestamp_converter_from_unix_millis_negative():
     # Test negative timestamp (before 1970)
     ms = -86400000  # 1969-12-31 00:00:00 UTC
     result = TimestampConverter.from_unix_millis(ms)
-    expected = datetime.datetime.fromtimestamp(ms / 1000, tz=UTC)
+    expected = datetime.datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
     assert result == expected
     assert result.year == 1969
 
@@ -2160,27 +2186,29 @@ async def test_timestamp_converter_from_unix_millis_large_timestamp():
     # Test year 2038 boundary
     ms = 2147483647000  # 2038-01-19 03:14:07 UTC
     result = TimestampConverter.from_unix_millis(ms)
-    expected = datetime.datetime.fromtimestamp(ms / 1000, tz=UTC)
+    expected = datetime.datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
     assert result == expected
 
     # Test far future
     ms = 4102444800000  # 2100-01-01 00:00:00 UTC
     result = TimestampConverter.from_unix_millis(ms)
-    expected = datetime.datetime.fromtimestamp(ms / 1000, tz=UTC)
+    expected = datetime.datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
     assert result == expected
 
 
 async def test_timestamp_converter_roundtrip_conversion():
     """Test roundtrip conversion: datetime -> millis -> datetime."""
     original_datetimes = [
-        datetime.datetime(1970, 1, 1, tzinfo=UTC),  # Epoch
-        datetime.datetime(2024, 1, 1, 12, 30, 45, tzinfo=UTC),  # Specific date
+        datetime.datetime(1970, 1, 1, tzinfo=timezone.utc),  # Epoch
+        datetime.datetime(2024, 1, 1, 12, 30, 45, tzinfo=timezone.utc),  # Specific date
         datetime.datetime(
-            2024, 12, 31, 23, 59, 59, 999000, tzinfo=UTC
+            2024, 12, 31, 23, 59, 59, 999000, tzinfo=timezone.utc
         ),  # End of year with millis
-        datetime.datetime.now(UTC),  # Current time
-        datetime.datetime(2038, 1, 19, 3, 14, 7, tzinfo=UTC),  # 2038 boundary
-        datetime.datetime(1969, 12, 31, 23, 59, 59, tzinfo=UTC),  # Before epoch
+        datetime.datetime.now(timezone.utc),  # Current time
+        datetime.datetime(2038, 1, 19, 3, 14, 7, tzinfo=timezone.utc),  # 2038 boundary
+        datetime.datetime(
+            1969, 12, 31, 23, 59, 59, tzinfo=timezone.utc
+        ),  # Before epoch
     ]
 
     for original in original_datetimes:
@@ -2206,7 +2234,9 @@ async def test_timestamp_converter_roundtrip_with_none():
 async def test_timestamp_converter_precision_handling():
     """Test precision handling in timestamp conversions."""
     # Test that microseconds are properly handled in millisecond conversion
-    dt_with_microseconds = datetime.datetime(2024, 1, 1, 0, 0, 0, 123456, tzinfo=UTC)
+    dt_with_microseconds = datetime.datetime(
+        2024, 1, 1, 0, 0, 0, 123456, tzinfo=timezone.utc
+    )
 
     # Convert to milliseconds (should truncate microseconds to nearest millisecond)
     millis = TimestampConverter.to_unix_millis(dt_with_microseconds)
@@ -2225,13 +2255,13 @@ async def test_timestamp_converter_timezone_handling():
 
     for ms in test_timestamps:
         result = TimestampConverter.from_unix_millis(ms)
-        assert result.tzinfo == UTC
+        assert result.tzinfo == timezone.utc
 
 
 async def test_timestamp_converter_type_validation():
     """Test that methods return correct types."""
     # Test to_unix_millis return type
-    dt = datetime.datetime(2024, 1, 1, tzinfo=UTC)
+    dt = datetime.datetime(2024, 1, 1, tzinfo=timezone.utc)
     result = TimestampConverter.to_unix_millis(dt)
     assert isinstance(result, int)
 
@@ -2250,7 +2280,7 @@ async def test_timestamp_converter_type_validation():
 async def test_timestamp_converter_static_methods():
     """Test that TimestampConverter methods are static and can be called without instance."""
     # Should be able to call without creating instance
-    dt = datetime.datetime(2024, 1, 1, tzinfo=UTC)
+    dt = datetime.datetime(2024, 1, 1, tzinfo=timezone.utc)
 
     # Call as static methods
     millis = TimestampConverter.to_unix_millis(dt)
@@ -2258,20 +2288,20 @@ async def test_timestamp_converter_static_methods():
 
     assert isinstance(millis, int)
     assert isinstance(converted_back, datetime.datetime)
-    assert converted_back.tzinfo == UTC
+    assert converted_back.tzinfo == timezone.utc
 
 
 async def test_timestamp_converter_millisecond_boundaries():
     """Test conversion at millisecond boundaries."""
     # Test exact millisecond values
     test_cases = [
-        (datetime.datetime(2024, 1, 1, 0, 0, 0, 0, tzinfo=UTC), 1704067200000),
+        (datetime.datetime(2024, 1, 1, 0, 0, 0, 0, tzinfo=timezone.utc), 1704067200000),
         (
-            datetime.datetime(2024, 1, 1, 0, 0, 0, 500000, tzinfo=UTC),
+            datetime.datetime(2024, 1, 1, 0, 0, 0, 500000, tzinfo=timezone.utc),
             1704067200500,
         ),  # 500ms
         (
-            datetime.datetime(2024, 1, 1, 0, 0, 0, 999000, tzinfo=UTC),
+            datetime.datetime(2024, 1, 1, 0, 0, 0, 999000, tzinfo=timezone.utc),
             1704067200999,
         ),  # 999ms
     ]

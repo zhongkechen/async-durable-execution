@@ -504,7 +504,7 @@ async def test_step_handler_retry_with_existing_attempts():
         step_details=StepDetails(
             attempt=2,
             next_attempt_timestamp=datetime.datetime.fromtimestamp(
-                1764547200, tz=datetime.UTC
+                1764547200, tz=datetime.timezone.utc
             ),
         ),
     )

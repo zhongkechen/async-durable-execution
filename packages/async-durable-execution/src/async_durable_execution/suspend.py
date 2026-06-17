@@ -50,10 +50,10 @@ def suspend_with_optional_resume_timestamp(
         msg = f"No timestamp provided. Suspending without retry timestamp. Original operation: [{msg}]"
         raise SuspendExecution(msg)
 
-    if datetime_timestamp < datetime.datetime.now(tz=datetime.UTC):
+    if datetime_timestamp < datetime.datetime.now(tz=datetime.timezone.utc):
         msg = f"Invalid timestamp {datetime_timestamp}, suspending with immediate retry, original operation: [{msg}]"
         raise TimedSuspendExecution.from_datetime(
-            msg, datetime.datetime.now(tz=datetime.UTC)
+            msg, datetime.datetime.now(tz=datetime.timezone.utc)
         )
 
     raise TimedSuspendExecution.from_datetime(msg, datetime_timestamp)

@@ -8,7 +8,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Self, TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 
 BAD_REQUEST_ERROR: int = 400
@@ -143,7 +143,7 @@ class BotoClientError(InvocationError):
         self.error_category: DurableApiErrorCategory = error_category
 
     @classmethod
-    def from_exception(cls, exception: Exception) -> Self:
+    def from_exception(cls, exception: Exception) -> BotoClientError:
         response = getattr(exception, "response", {})
         response_metadata = response.get("ResponseMetadata")
         error = response.get("Error")

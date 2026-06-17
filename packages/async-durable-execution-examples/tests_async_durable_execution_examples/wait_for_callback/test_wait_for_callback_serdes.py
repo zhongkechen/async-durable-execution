@@ -1,6 +1,6 @@
 """Tests for wait_for_callback_serdes."""
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from async_durable_execution import InvocationStatus
 from async_durable_execution_examples.wait_for_callback import wait_for_callback_serdes
@@ -26,7 +26,7 @@ async def test_handle_wait_for_callback_with_custom_serdes_configuration(
         test_data = {
             "id": 42,
             "message": "Hello Custom Serdes",
-            "timestamp": datetime(2025, 6, 15, 12, 30, 45, tzinfo=UTC),
+            "timestamp": datetime(2025, 6, 15, 12, 30, 45, tzinfo=timezone.utc),
             "metadata": {
                 "version": "2.0.0",
                 "processed": True,

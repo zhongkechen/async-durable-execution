@@ -74,10 +74,18 @@ from async_durable_execution_runner.model import (
 
 
 # Test timestamp constants
-TIMESTAMP_2023_01_01_00_00 = datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC)
-TIMESTAMP_2023_01_01_00_01 = datetime.datetime(2023, 1, 1, 0, 1, 0, tzinfo=datetime.UTC)
-TIMESTAMP_2023_01_01_00_02 = datetime.datetime(2023, 1, 1, 0, 2, 0, tzinfo=datetime.UTC)
-TIMESTAMP_2023_01_02_00_00 = datetime.datetime(2023, 1, 2, 0, 0, 0, tzinfo=datetime.UTC)
+TIMESTAMP_2023_01_01_00_00 = datetime.datetime(
+    2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+)
+TIMESTAMP_2023_01_01_00_01 = datetime.datetime(
+    2023, 1, 1, 0, 1, 0, tzinfo=datetime.timezone.utc
+)
+TIMESTAMP_2023_01_01_00_02 = datetime.datetime(
+    2023, 1, 1, 0, 2, 0, tzinfo=datetime.timezone.utc
+)
+TIMESTAMP_2023_01_02_00_00 = datetime.datetime(
+    2023, 1, 2, 0, 0, 0, tzinfo=datetime.timezone.utc
+)
 
 DEFAULT_START_DURABLE_EXECUTION_INPUT_DATA = {
     "AccountId": "123456789012",
@@ -2978,7 +2986,9 @@ def test_events_to_operations_execution_started():
     """Test events_to_operations with ExecutionStarted event."""
     event = Event(
         event_type="ExecutionStarted",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id="exec-1",
         execution_started_details=ExecutionStartedDetails(
             input=EventInput(payload="test-input", truncated=False),
@@ -3000,7 +3010,9 @@ def test_events_to_operations_callback_lifecycle():
 
     started_event = Event(
         event_type="CallbackStarted",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id="cb-1",
         name="test-callback",
         callback_started_details=CallbackStartedDetails(callback_id="callback-123"),
@@ -3008,7 +3020,9 @@ def test_events_to_operations_callback_lifecycle():
 
     succeeded_event = Event(
         event_type="CallbackSucceeded",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 1, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 1, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id="cb-1",
         callback_succeeded_details=CallbackSucceededDetails(
             result=EventResult(payload="callback-result", truncated=False)
@@ -3031,7 +3045,9 @@ def test_events_to_operations_missing_event_type():
     """Test events_to_operations raises error for missing event_type."""
     event = Event(
         event_type=None,
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
     )
 
     with pytest.raises(
@@ -3044,7 +3060,9 @@ def test_events_to_operations_unknown_event_type():
     """Test events_to_operations raises error for unknown event type."""
     event = Event(
         event_type="UnknownEventType",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id="op-1",
     )
 
@@ -3058,7 +3076,9 @@ def test_events_to_operations_missing_operation_id():
     """Test events_to_operations raises error for missing operation_id."""
     event = Event(
         event_type="StepStarted",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id=None,
     )
 
@@ -3086,7 +3106,9 @@ def test_events_to_operations_step_with_retry():
 
     succeeded_event = Event(
         event_type="StepSucceeded",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 1, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 1, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id="step-1",
         name="test-step",
         step_succeeded_details=StepSucceededDetails(
@@ -3120,7 +3142,7 @@ def test_events_to_operations_step_failed_with_next_attempt():
         events_to_operations,
     )
 
-    event_time = datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC)
+    event_time = datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
     failed_event = Event(
         event_type="StepFailed",
         event_timestamp=event_time,
@@ -3164,7 +3186,9 @@ def test_events_to_operations_context_succeeded():
 
     succeeded_event = Event(
         event_type="ContextSucceeded",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 1, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 1, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id="ctx-1",
         name="test-context",
         context_succeeded_details=ContextSucceededDetails(
@@ -3198,7 +3222,9 @@ def test_events_to_operations_chained_invoke_succeeded():
 
     succeeded_event = Event(
         event_type="ChainedInvokeSucceeded",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 1, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 1, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id="invoke-1",
         name="test-invoke",
         chained_invoke_succeeded_details=ChainedInvokeSucceededDetails(
@@ -3219,7 +3245,9 @@ def test_events_to_operations_skips_invocation_completed():
     """Test events_to_operations skips InvocationCompleted events."""
     invocation_event = Event(
         event_type="InvocationCompleted",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id="invocation-1",
     )
 
@@ -3245,14 +3273,18 @@ def test_events_to_operations_callback_failed():
 
     started_event = Event(
         event_type="CallbackStarted",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id="cb-1",
         callback_started_details=CallbackStartedDetails(callback_id="callback-123"),
     )
 
     failed_event = Event(
         event_type="CallbackFailed",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 1, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 1, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id="cb-1",
         callback_failed_details=CallbackFailedDetails(
             error=EventError(
@@ -3289,14 +3321,18 @@ def test_events_to_operations_callback_timed_out():
 
     started_event = Event(
         event_type="CallbackStarted",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id="cb-1",
         callback_started_details=CallbackStartedDetails(callback_id="callback-123"),
     )
 
     timed_out_event = Event(
         event_type="CallbackTimedOut",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 1, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 1, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id="cb-1",
         callback_timed_out_details=CallbackTimedOutDetails(
             error=EventError(
@@ -3328,10 +3364,14 @@ def test_events_to_operations_wait_started():
         events_to_operations,
     )
 
-    scheduled_time = datetime.datetime(2023, 1, 1, 1, 0, 0, tzinfo=datetime.UTC)
+    scheduled_time = datetime.datetime(
+        2023, 1, 1, 1, 0, 0, tzinfo=datetime.timezone.utc
+    )
     wait_event = Event(
         event_type="WaitStarted",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id="wait-1",
         name="test-wait",
         wait_started_details=WaitStartedDetails(
@@ -3364,7 +3404,9 @@ def test_events_to_operations_context_failed():
 
     failed_event = Event(
         event_type="ContextFailed",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 1, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 1, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id="ctx-1",
         context_failed_details=ContextFailedDetails(
             error=EventError(
@@ -3400,7 +3442,9 @@ def test_events_to_operations_chained_invoke_failed():
 
     failed_event = Event(
         event_type="ChainedInvokeFailed",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 1, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 1, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id="invoke-1",
         chained_invoke_failed_details=ChainedInvokeFailedDetails(
             error=EventError(
@@ -3437,13 +3481,17 @@ def test_events_to_operations_multiple_operations():
     events = [
         Event(
             event_type="StepStarted",
-            event_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
+            event_timestamp=datetime.datetime(
+                2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+            ),
             operation_id="step-1",
             name="step-one",
         ),
         Event(
             event_type="StepSucceeded",
-            event_timestamp=datetime.datetime(2023, 1, 1, 0, 1, 0, tzinfo=datetime.UTC),
+            event_timestamp=datetime.datetime(
+                2023, 1, 1, 0, 1, 0, tzinfo=datetime.timezone.utc
+            ),
             operation_id="step-1",
             step_succeeded_details=StepSucceededDetails(
                 result=EventResult(payload="result-1", truncated=False)
@@ -3451,7 +3499,9 @@ def test_events_to_operations_multiple_operations():
         ),
         Event(
             event_type="WaitStarted",
-            event_timestamp=datetime.datetime(2023, 1, 1, 0, 2, 0, tzinfo=datetime.UTC),
+            event_timestamp=datetime.datetime(
+                2023, 1, 1, 0, 2, 0, tzinfo=datetime.timezone.utc
+            ),
             operation_id="wait-1",
             name="wait-one",
         ),
@@ -3483,8 +3533,8 @@ def test_events_to_operations_merges_timestamps():
         events_to_operations,
     )
 
-    start_time = datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC)
-    end_time = datetime.datetime(2023, 1, 1, 0, 1, 0, tzinfo=datetime.UTC)
+    start_time = datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
+    end_time = datetime.datetime(2023, 1, 1, 0, 1, 0, tzinfo=datetime.timezone.utc)
 
     events = [
         Event(
@@ -3513,7 +3563,9 @@ def test_events_to_operations_preserves_parent_id():
     """Test events_to_operations preserves parent_id from events."""
     event = Event(
         event_type="StepStarted",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id="step-1",
         parent_id="parent-ctx",
         name="child-step",
@@ -3529,7 +3581,9 @@ def test_events_to_operations_preserves_sub_type():
     """Test events_to_operations preserves sub_type from events."""
     event = Event(
         event_type="StepStarted",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id="step-1",
         sub_type="Step",
     )
@@ -3546,7 +3600,9 @@ def test_events_to_operations_invalid_sub_type():
     invalid_sub_type: str = "INVALID_SUB_TYPE"
     event = Event(
         event_type="StepStarted",
-        event_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
+        event_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         operation_id="step-1",
         sub_type=invalid_sub_type,
     )
@@ -3560,8 +3616,12 @@ def test_events_to_operations_invalid_sub_type():
 
 def test_invocation_completed_details_to_json_dict():
     """Test InvocationCompletedDetails.to_json_dict() converts datetime to Unix milliseconds."""
-    start_time = datetime.datetime(2023, 1, 1, 0, 0, 0, 123456, tzinfo=datetime.UTC)
-    end_time = datetime.datetime(2023, 1, 1, 0, 1, 0, 456789, tzinfo=datetime.UTC)
+    start_time = datetime.datetime(
+        2023, 1, 1, 0, 0, 0, 123456, tzinfo=datetime.timezone.utc
+    )
+    end_time = datetime.datetime(
+        2023, 1, 1, 0, 1, 0, 456789, tzinfo=datetime.timezone.utc
+    )
 
     details = InvocationCompletedDetails(
         start_timestamp=start_time, end_timestamp=end_time, request_id="req-123"
@@ -3591,10 +3651,10 @@ def test_invocation_completed_details_from_json_dict():
 
     # Verify timestamps are converted to datetime objects
     assert details.start_timestamp == datetime.datetime(
-        2023, 1, 1, 0, 0, 0, 123000, tzinfo=datetime.UTC
+        2023, 1, 1, 0, 0, 0, 123000, tzinfo=datetime.timezone.utc
     )
     assert details.end_timestamp == datetime.datetime(
-        2023, 1, 1, 0, 1, 0, 456000, tzinfo=datetime.UTC
+        2023, 1, 1, 0, 1, 0, 456000, tzinfo=datetime.timezone.utc
     )
     assert details.request_id == "req-456"
 
@@ -3603,10 +3663,10 @@ def test_invocation_completed_details_json_round_trip():
     """Test InvocationCompletedDetails to_json_dict/from_json_dict round-trip."""
     original = InvocationCompletedDetails(
         start_timestamp=datetime.datetime(
-            2023, 6, 15, 12, 30, 45, 678000, tzinfo=datetime.UTC
+            2023, 6, 15, 12, 30, 45, 678000, tzinfo=datetime.timezone.utc
         ),
         end_timestamp=datetime.datetime(
-            2023, 6, 15, 12, 31, 50, 123000, tzinfo=datetime.UTC
+            2023, 6, 15, 12, 31, 50, 123000, tzinfo=datetime.timezone.utc
         ),
         request_id="round-trip-test",
     )
@@ -3625,8 +3685,8 @@ def test_invocation_completed_details_json_round_trip():
 
 def test_invocation_completed_details_to_dict_preserves_datetime():
     """Test InvocationCompletedDetails.to_dict() preserves datetime objects (not converted)."""
-    start_time = datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC)
-    end_time = datetime.datetime(2023, 1, 1, 0, 1, 0, tzinfo=datetime.UTC)
+    start_time = datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
+    end_time = datetime.datetime(2023, 1, 1, 0, 1, 0, tzinfo=datetime.timezone.utc)
 
     details = InvocationCompletedDetails(
         start_timestamp=start_time, end_timestamp=end_time, request_id="req-789"

@@ -2,7 +2,7 @@
 
 import tempfile
 import time
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -638,10 +638,10 @@ def test_sqlite_execution_store_time_filtering(store):
     mid_time = (
         execution1.get_operation_execution_started().start_timestamp.timestamp() + 0.005
     )
-    mid_time_iso = datetime.fromtimestamp(mid_time, tz=UTC).isoformat()
+    mid_time_iso = datetime.fromtimestamp(mid_time, tz=timezone.utc).isoformat()
     end_time_iso = datetime.fromtimestamp(
         execution2.get_operation_execution_started().start_timestamp.timestamp() + 1,
-        tz=UTC,
+        tz=timezone.utc,
     ).isoformat()
 
     # Test started_after filter

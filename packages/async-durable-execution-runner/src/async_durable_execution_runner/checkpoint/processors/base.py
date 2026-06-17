@@ -44,7 +44,7 @@ class OperationProcessor:
         start_time: datetime.datetime | None = (
             current_operation.start_timestamp
             if current_operation
-            else datetime.datetime.now(tz=datetime.UTC)
+            else datetime.datetime.now(tz=datetime.timezone.utc)
         )
         return start_time
 
@@ -61,7 +61,7 @@ class OperationProcessor:
             OperationStatus.TIMED_OUT,
             OperationStatus.STOPPED,
         }:
-            return datetime.datetime.now(tz=datetime.UTC)
+            return datetime.datetime.now(tz=datetime.timezone.utc)
         return None
 
     def _create_execution_details(
@@ -193,7 +193,7 @@ class OperationProcessor:
                 )
             else:
                 scheduled_end_timestamp = datetime.datetime.now(
-                    tz=datetime.UTC
+                    tz=datetime.timezone.utc
                 ) + timedelta(seconds=update.wait_options.wait_seconds)
             return WaitDetails(scheduled_end_timestamp=scheduled_end_timestamp)
         return None

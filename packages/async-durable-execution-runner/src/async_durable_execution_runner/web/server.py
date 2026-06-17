@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlparse
 
 from ..exceptions import (
@@ -234,7 +234,7 @@ class WebServer(ThreadingHTTPServer):
             MetricsRoute: MetricsHandler(self.executor),
         }
 
-    def __enter__(self) -> Self:
+    def __enter__(self) -> WebServer:
         """Context manager entry."""
         return self
 

@@ -46,4 +46,4 @@ class InMemoryServiceClient(DurableServiceClient):
     def stop(self, execution_arn: str, payload: bytes | None) -> datetime.datetime:  # noqa: ARG002
         # TODO: implement
         # Return current time for in-memory testing
-        return datetime.datetime.now(tz=datetime.UTC)
+        return datetime.datetime.now(tz=datetime.timezone.utc)

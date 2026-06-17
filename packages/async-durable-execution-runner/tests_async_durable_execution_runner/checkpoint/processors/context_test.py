@@ -1,6 +1,6 @@
 """Tests for context operation processor."""
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from unittest.mock import Mock
 
 import pytest
@@ -73,7 +73,7 @@ def test_process_start_action_with_current_operation():
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
 
     current_op = Mock()
-    current_op.start_timestamp = datetime.now(UTC)
+    current_op.start_timestamp = datetime.now(timezone.utc)
 
     update = OperationUpdate(
         operation_id="context-123",
@@ -116,7 +116,7 @@ def test_process_succeed_action_with_current_operation():
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
 
     current_op = Mock()
-    current_op.start_timestamp = datetime.now(UTC)
+    current_op.start_timestamp = datetime.now(timezone.utc)
 
     update = OperationUpdate(
         operation_id="context-123",
@@ -161,7 +161,7 @@ def test_process_fail_action_with_current_operation():
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
 
     current_op = Mock()
-    current_op.start_timestamp = datetime.now(UTC)
+    current_op.start_timestamp = datetime.now(timezone.utc)
 
     error = ErrorObject.from_message("context failed")
     update = OperationUpdate(

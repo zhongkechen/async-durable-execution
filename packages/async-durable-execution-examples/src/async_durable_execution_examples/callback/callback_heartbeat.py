@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 @durable_execution
 async def handler(_event: Any) -> str:
     callback_config = CallbackConfig(
-        timeout=timedelta(seconds=3), heartbeat_timeout=timedelta(seconds=1)
+        timeout=timedelta(seconds=60), heartbeat_timeout=timedelta(seconds=10)
     )
 
     callback: Callback[str] = await create_callback(

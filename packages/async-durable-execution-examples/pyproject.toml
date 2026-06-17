@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 name = "async-durable-execution-examples"
 dynamic = ["version"]
 description = "Examples for the async durable execution Python packages"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 authors = [{ name = "Zhongke Chen" }]
 dependencies = [
   "async-durable-execution",
@@ -35,7 +35,7 @@ packages = ["src/async_durable_execution_examples"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py310"
 
 [tool.ruff.lint]
 preview = true
