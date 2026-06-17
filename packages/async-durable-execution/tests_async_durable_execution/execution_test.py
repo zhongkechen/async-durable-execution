@@ -26,9 +26,9 @@ from async_durable_execution.exceptions import (
 )
 from async_durable_execution.execution import (
     DurableExecutionInvocationInput,
-    DurableExecutionInvocationInputWithClient,
     InitialExecutionState,
     InvocationStatus,
+    _bind_service_client_to_handler,
     durable_execution,
 )
 
@@ -57,7 +57,11 @@ from async_durable_execution.plugin import DurableInstrumentationPlugin
 LARGE_RESULT = "large_success" * 1024 * 1024
 
 
-async def run_handler(handler, event, lambda_context):
+async def run_handler(handler, event, lambda_context, service_client=None):
+    if service_client is not None:
+        handler = _bind_service_client_to_handler(handler, service_client)
+    if isinstance(event, DurableExecutionInvocationInput):
+        event = event.to_json_dict()
     return await handler._async_handler(event, lambda_context)
 
 
@@ -210,51 +214,6 @@ async def test_durable_execution_invocation_input_to_dict_not_local():
     }
 
     assert result == expected
-
-
-async def test_durable_execution_invocation_input_with_client_inheritance():
-    """Test DurableExecutionInvocationInputWithClient inherits to_dict from parent."""
-    mock_client = Mock(spec=DurableServiceClient)
-    initial_state = InitialExecutionState(operations=[], next_marker="")
-
-    invocation_input = DurableExecutionInvocationInputWithClient(
-        durable_execution_arn="arn:test:execution/exec1",
-        checkpoint_token="token123",  # noqa: S106
-        initial_execution_state=initial_state,
-        service_client=mock_client,
-    )
-
-    # Should inherit to_dict from parent class
-    result = invocation_input.to_dict()
-    expected = {
-        "DurableExecutionArn": "arn:test:execution/exec1",
-        "CheckpointToken": "token123",
-        "InitialExecutionState": initial_state.to_dict(),
-    }
-
-    assert result == expected
-    assert invocation_input.service_client == mock_client
-
-
-async def test_durable_execution_invocation_input_with_client_from_parent():
-    """Test DurableExecutionInvocationInputWithClient.from_durable_execution_invocation_input."""
-    mock_client = Mock(spec=DurableServiceClient)
-    initial_state = InitialExecutionState(operations=[], next_marker="")
-
-    parent_input = DurableExecutionInvocationInput(
-        durable_execution_arn="arn:test:execution/exec1",
-        checkpoint_token="token123",  # noqa: S106
-        initial_execution_state=initial_state,
-    )
-
-    with_client = DurableExecutionInvocationInputWithClient.from_durable_execution_invocation_input(
-        parent_input, mock_client
-    )
-
-    assert with_client.durable_execution_arn == parent_input.durable_execution_arn
-    assert with_client.checkpoint_token == parent_input.checkpoint_token
-    assert with_client.initial_execution_state == parent_input.initial_execution_state
-    assert with_client.service_client == mock_client
 
 
 async def test_operation_to_dict_complete():
@@ -474,11 +433,10 @@ async def test_durable_execution_with_injected_client_success_normal_result():
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -489,7 +447,9 @@ async def test_durable_execution_with_injected_client_success_normal_result():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    result = await run_handler(test_handler, invocation_input, lambda_context)
+    result = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
     assert result["Result"] == '{"result": "success"}'
@@ -521,11 +481,10 @@ async def test_durable_execution_with_injected_client_success_large_result():
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -536,7 +495,9 @@ async def test_durable_execution_with_injected_client_success_large_result():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    result = await run_handler(test_handler, invocation_input, lambda_context)
+    result = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
     assert not result.get("Result")
@@ -576,11 +537,10 @@ async def test_durable_execution_with_injected_client_failure():
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -591,7 +551,9 @@ async def test_durable_execution_with_injected_client_failure():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    result = await run_handler(test_handler, invocation_input, lambda_context)
+    result = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
 
     # small error, should not call checkpoint
     assert result["Status"] == InvocationStatus.FAILED.value
@@ -622,11 +584,10 @@ async def test_durable_execution_with_large_error_payload():
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -637,7 +598,9 @@ async def test_durable_execution_with_large_error_payload():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    result = await run_handler(test_handler, invocation_input, lambda_context)
+    result = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
 
     assert result["Status"] == InvocationStatus.FAILED.value
     assert "Error" not in result
@@ -669,11 +632,10 @@ async def test_durable_execution_fatal_error_handling():
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -686,7 +648,9 @@ async def test_durable_execution_fatal_error_handling():
 
     # expect raise; backend will retry
     with pytest.raises(InvocationError, match="Retriable invocation error occurred"):
-        await run_handler(test_handler, invocation_input, lambda_context)
+        await run_handler(
+            test_handler, invocation_input, lambda_context, service_client=mock_client
+        )
 
 
 async def test_durable_execution_execution_error_handling():
@@ -707,11 +671,10 @@ async def test_durable_execution_execution_error_handling():
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -723,7 +686,9 @@ async def test_durable_execution_execution_error_handling():
     lambda_context.tenant_id = None
 
     # ExecutionError should return FAILED status with ErrorObject in result field
-    result = await run_handler(test_handler, invocation_input, lambda_context)
+    result = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
     assert result["Status"] == InvocationStatus.FAILED.value
 
     # Parse the ErrorObject from the result field
@@ -752,7 +717,7 @@ async def test_durable_execution_client_selection_default():
         async def test_handler(event: Any) -> dict:
             return {"result": "success"}
 
-        # Create regular event dict instead of DurableExecutionInvocationInputWithClient
+        # Create a regular event dict instead of a durable invocation input object
         event = {
             "DurableExecutionArn": "arn:test:execution/exec1",
             "CheckpointToken": "token123",
@@ -801,11 +766,10 @@ async def test_durable_handler_empty_input_payload():
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -816,7 +780,9 @@ async def test_durable_handler_empty_input_payload():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    result = await run_handler(test_handler, invocation_input, lambda_context)
+    result = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
     assert result["Result"] == '{"result": "success"}'
@@ -840,11 +806,10 @@ async def test_durable_handler_whitespace_input_payload():
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -855,7 +820,9 @@ async def test_durable_handler_whitespace_input_payload():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    result = await run_handler(test_handler, invocation_input, lambda_context)
+    result = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
     assert result["Result"] == '{"result": "success"}'
@@ -879,11 +846,10 @@ async def test_durable_handler_invalid_json_input_payload():
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -895,7 +861,9 @@ async def test_durable_handler_invalid_json_input_payload():
     lambda_context.tenant_id = None
 
     with pytest.raises(json.JSONDecodeError):
-        await run_handler(test_handler, invocation_input, lambda_context)
+        await run_handler(
+            test_handler, invocation_input, lambda_context, service_client=mock_client
+        )
 
 
 async def test_durable_handler_background_thread_failure():
@@ -925,11 +893,10 @@ async def test_durable_handler_background_thread_failure():
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -943,7 +910,9 @@ async def test_durable_handler_background_thread_failure():
     # Make the service client checkpoint call fail
     mock_client.checkpoint.side_effect = failing_checkpoint
 
-    response = await run_handler(test_handler, invocation_input, lambda_context)
+    response = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
     assert response["Status"] == InvocationStatus.FAILED.value
     assert response["Error"]["ErrorMessage"] == "Background checkpoint failed"
     assert response["Error"]["ErrorType"] == "RuntimeError"
@@ -967,11 +936,10 @@ async def test_durable_execution_suspend_execution():
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -982,7 +950,9 @@ async def test_durable_execution_suspend_execution():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    result = await run_handler(test_handler, invocation_input, lambda_context)
+    result = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
 
     assert result["Status"] == InvocationStatus.PENDING.value
     assert "Result" not in result
@@ -1020,11 +990,10 @@ async def test_durable_execution_checkpoint_error_in_background_thread():
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -1038,7 +1007,9 @@ async def test_durable_execution_checkpoint_error_in_background_thread():
     # Make the service client checkpoint call fail with CheckpointError
     mock_client.checkpoint.side_effect = failing_checkpoint
 
-    response = await run_handler(test_handler, invocation_input, lambda_context)
+    response = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
     assert response["Status"] == InvocationStatus.FAILED.value
     assert response["Error"]["ErrorType"] == "CheckpointError"
 
@@ -1066,11 +1037,10 @@ async def test_durable_execution_checkpoint_execution_error_stops_background():
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -1081,7 +1051,9 @@ async def test_durable_execution_checkpoint_execution_error_stops_background():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    response = await run_handler(test_handler, invocation_input, lambda_context)
+    response = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
     assert response["Status"] == InvocationStatus.FAILED.value
     assert response["Error"]["ErrorType"] == "CheckpointError"
 
@@ -1105,11 +1077,10 @@ async def test_durable_execution_checkpoint_invocation_error_retries():
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -1121,7 +1092,9 @@ async def test_durable_execution_checkpoint_invocation_error_retries():
     lambda_context.tenant_id = None
 
     with pytest.raises(CheckpointError, match="Checkpoint system failed"):
-        await run_handler(test_handler, invocation_input, lambda_context)
+        await run_handler(
+            test_handler, invocation_input, lambda_context, service_client=mock_client
+        )
 
 
 async def test_durable_execution_background_thread_execution_error_returns_failed():
@@ -1149,11 +1122,10 @@ async def test_durable_execution_background_thread_execution_error_returns_faile
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -1166,7 +1138,9 @@ async def test_durable_execution_background_thread_execution_error_returns_faile
 
     mock_client.checkpoint.side_effect = failing_checkpoint
 
-    response = await run_handler(test_handler, invocation_input, lambda_context)
+    response = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
     assert response["Status"] == InvocationStatus.FAILED.value
     assert response["Error"]["ErrorType"] == "CheckpointError"
 
@@ -1196,11 +1170,10 @@ async def test_durable_execution_background_thread_invocation_error_retries():
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -1214,7 +1187,9 @@ async def test_durable_execution_background_thread_invocation_error_retries():
     mock_client.checkpoint.side_effect = failing_checkpoint
 
     with pytest.raises(CheckpointError, match="Background checkpoint failed"):
-        await run_handler(test_handler, invocation_input, lambda_context)
+        await run_handler(
+            test_handler, invocation_input, lambda_context, service_client=mock_client
+        )
 
 
 async def test_durable_execution_final_success_checkpoint_execution_error_returns_failed():
@@ -1240,11 +1215,10 @@ async def test_durable_execution_final_success_checkpoint_execution_error_return
     )
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -1257,7 +1231,9 @@ async def test_durable_execution_final_success_checkpoint_execution_error_return
 
     mock_client.checkpoint.side_effect = failing_final_checkpoint
 
-    response = await run_handler(test_handler, invocation_input, lambda_context)
+    response = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
     assert response["Status"] == InvocationStatus.FAILED.value
     assert response["Error"]["ErrorType"] == "CheckpointError"
 
@@ -1286,11 +1262,10 @@ async def test_durable_execution_final_success_checkpoint_invocation_error_retri
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -1304,7 +1279,9 @@ async def test_durable_execution_final_success_checkpoint_invocation_error_retri
     mock_client.checkpoint.side_effect = failing_final_checkpoint
 
     with pytest.raises(CheckpointError, match="Final checkpoint failed"):
-        await run_handler(test_handler, invocation_input, lambda_context)
+        await run_handler(
+            test_handler, invocation_input, lambda_context, service_client=mock_client
+        )
 
 
 async def test_durable_execution_final_failure_checkpoint_execution_error_returns_failed():
@@ -1332,11 +1309,10 @@ async def test_durable_execution_final_failure_checkpoint_execution_error_return
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -1349,7 +1325,9 @@ async def test_durable_execution_final_failure_checkpoint_execution_error_return
 
     mock_client.checkpoint.side_effect = failing_final_checkpoint
 
-    response = await run_handler(test_handler, invocation_input, lambda_context)
+    response = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
     assert response["Status"] == InvocationStatus.FAILED.value
     assert response["Error"]["ErrorType"] == "CheckpointError"
 
@@ -1379,11 +1357,10 @@ async def test_durable_execution_final_failure_checkpoint_invocation_error_retri
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -1397,7 +1374,9 @@ async def test_durable_execution_final_failure_checkpoint_invocation_error_retri
     mock_client.checkpoint.side_effect = failing_final_checkpoint
 
     with pytest.raises(CheckpointError, match="Final checkpoint failed"):
-        await run_handler(test_handler, invocation_input, lambda_context)
+        await run_handler(
+            test_handler, invocation_input, lambda_context, service_client=mock_client
+        )
 
 
 async def test_durable_handler_background_thread_failure_on_succeed_checkpoint():
@@ -1448,11 +1427,10 @@ async def test_durable_handler_background_thread_failure_on_succeed_checkpoint()
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -1466,7 +1444,9 @@ async def test_durable_handler_background_thread_failure_on_succeed_checkpoint()
     # Make the service client checkpoint call fail selectively
     mock_client.checkpoint.side_effect = selective_failing_checkpoint
 
-    response = await run_handler(test_handler, invocation_input, lambda_context)
+    response = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
     assert response["Status"] == InvocationStatus.FAILED.value
     assert (
         response["Error"]["ErrorMessage"] == "Background checkpoint failed on SUCCEED"
@@ -1548,11 +1528,10 @@ async def test_durable_handler_background_thread_failure_on_start_checkpoint():
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -1566,7 +1545,9 @@ async def test_durable_handler_background_thread_failure_on_start_checkpoint():
     # Make the service client checkpoint call fail selectively
     mock_client.checkpoint.side_effect = selective_failing_checkpoint
 
-    response = await run_handler(test_handler, invocation_input, lambda_context)
+    response = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
     assert response["Status"] == InvocationStatus.FAILED.value
     assert response["Error"]["ErrorMessage"] == "Background checkpoint failed on START"
     assert response["Error"]["ErrorType"] == "RuntimeError"
@@ -1633,11 +1614,10 @@ async def test_durable_handler_background_thread_failure_on_large_result_checkpo
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -1651,7 +1631,9 @@ async def test_durable_handler_background_thread_failure_on_large_result_checkpo
     # Make the service client checkpoint call fail on large result
     mock_client.checkpoint.side_effect = failing_checkpoint
 
-    response = await run_handler(test_handler, invocation_input, lambda_context)
+    response = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
     assert response["Status"] == InvocationStatus.FAILED.value
     assert (
         response["Error"]["ErrorMessage"]
@@ -1705,11 +1687,10 @@ async def test_durable_handler_background_thread_failure_on_error_checkpoint():
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -1724,7 +1705,9 @@ async def test_durable_handler_background_thread_failure_on_error_checkpoint():
     mock_client.checkpoint.side_effect = failing_checkpoint
 
     # Verify that errors are not raised, but returned because response is small
-    resp = await run_handler(test_handler, invocation_input, lambda_context)
+    resp = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
     assert resp["Error"]["ErrorMessage"] == "User function error"
     assert resp["Error"]["ErrorType"] == "ValueError"
     assert resp["Status"] == InvocationStatus.FAILED.value
@@ -1763,11 +1746,10 @@ async def test_durable_execution_logs_checkpoint_error_extras_from_background_th
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -1781,7 +1763,9 @@ async def test_durable_execution_logs_checkpoint_error_extras_from_background_th
     mock_client.checkpoint.side_effect = failing_checkpoint
 
     with patch("async_durable_execution.execution.logger", mock_logger):
-        response = await run_handler(test_handler, invocation_input, lambda_context)
+        response = await run_handler(
+            test_handler, invocation_input, lambda_context, service_client=mock_client
+        )
         assert response["Status"] == InvocationStatus.FAILED.value
         assert response["Error"]["ErrorType"] == "CheckpointError"
 
@@ -1826,11 +1810,10 @@ async def test_durable_execution_logs_boto_client_error_extras_from_background_t
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -1845,7 +1828,12 @@ async def test_durable_execution_logs_boto_client_error_extras_from_background_t
 
     with patch("async_durable_execution.execution.logger", mock_logger):
         with pytest.raises(BotoClientError):
-            await run_handler(test_handler, invocation_input, lambda_context)
+            await run_handler(
+                test_handler,
+                invocation_input,
+                lambda_context,
+                service_client=mock_client,
+            )
 
     mock_logger.exception.assert_called_once()
     call_args = mock_logger.exception.call_args
@@ -1885,11 +1873,10 @@ async def test_durable_execution_logs_checkpoint_error_extras_from_user_code():
 
     initial_state = InitialExecutionState(operations=[operation], next_marker="")
 
-    invocation_input = DurableExecutionInvocationInputWithClient(
+    invocation_input = DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=initial_state,
-        service_client=mock_client,
     )
 
     lambda_context = Mock()
@@ -1901,7 +1888,9 @@ async def test_durable_execution_logs_checkpoint_error_extras_from_user_code():
     lambda_context.tenant_id = None
 
     with patch("async_durable_execution.execution.logger", mock_logger):
-        response = await run_handler(test_handler, invocation_input, lambda_context)
+        response = await run_handler(
+            test_handler, invocation_input, lambda_context, service_client=mock_client
+        )
         assert response["Status"] == InvocationStatus.FAILED.value
         assert response["Error"]["ErrorType"] == "CheckpointError"
 
@@ -1958,6 +1947,47 @@ async def test_durable_execution_with_boto3_client_parameter():
     result = await run_handler(test_handler, event, lambda_context)
 
     # THEN the execution succeeds using the custom client
+    assert result["Status"] == InvocationStatus.SUCCEEDED.value
+    assert result["Result"] == '{"result": "success"}'
+
+
+async def test_durable_execution_with_service_client_parameter():
+    """Test durable_execution decorator accepts service_client parameter."""
+    mock_client = Mock(spec=DurableServiceClient)
+
+    @durable_execution(service_client=mock_client)
+    async def test_handler(event: Any) -> dict:
+        context = cast(DurableContext, get_current_context())
+        assert event == {"input": "test"}
+        assert context.execution_state._service_client is mock_client  # noqa: SLF001
+        return {"result": "success"}
+
+    event = {
+        "DurableExecutionArn": "arn:test:execution/exec1",
+        "CheckpointToken": "token123",
+        "InitialExecutionState": {
+            "Operations": [
+                {
+                    "Id": "exec1",
+                    "Type": "EXECUTION",
+                    "Status": "STARTED",
+                    "ExecutionDetails": {"InputPayload": '{"input": "test"}'},
+                }
+            ],
+            "NextMarker": "",
+        },
+    }
+
+    lambda_context = Mock()
+    lambda_context.aws_request_id = "test-request"
+    lambda_context.client_context = None
+    lambda_context.identity = None
+    lambda_context._epoch_deadline_time_in_ms = 1000000  # noqa: SLF001
+    lambda_context.invoked_function_arn = None
+    lambda_context.tenant_id = None
+
+    result = await run_handler(test_handler, event, lambda_context)
+
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
     assert result["Result"] == '{"result": "success"}'
 
@@ -2689,7 +2719,7 @@ async def test_from_dict_leaves_timestamps_as_integers():
 # =============================================================================
 
 
-def _make_invocation_input(mock_client, next_marker=""):
+def _make_invocation_input(next_marker=""):
     """Helper to create a standard test invocation input."""
     operation = Operation(
         operation_id="exec1",
@@ -2697,13 +2727,12 @@ def _make_invocation_input(mock_client, next_marker=""):
         status=OperationStatus.STARTED,
         execution_details=ExecutionDetails(input_payload="{}"),
     )
-    return DurableExecutionInvocationInputWithClient(
+    return DurableExecutionInvocationInput(
         durable_execution_arn="arn:test:execution/exec1",
         checkpoint_token="token123",  # noqa: S106
         initial_execution_state=InitialExecutionState(
             operations=[operation], next_marker=next_marker
         ),
-        service_client=mock_client,
     )
 
 
@@ -2732,7 +2761,7 @@ async def test_durable_execution_replays_when_paginated_state_has_prior_operatio
         next_marker=None,
     )
 
-    invocation_input = _make_invocation_input(mock_client, next_marker="page2")
+    invocation_input = _make_invocation_input(next_marker="page2")
 
     @durable_execution
     async def test_handler(event: Any) -> dict:
@@ -2740,7 +2769,12 @@ async def test_durable_execution_replays_when_paginated_state_has_prior_operatio
         context = cast(DurableContext, get_current_context())
         return {"is_replaying": context.execution_state.is_replaying()}
 
-    result = await run_handler(test_handler, invocation_input, _make_lambda_context())
+    result = await run_handler(
+        test_handler,
+        invocation_input,
+        _make_lambda_context(),
+        service_client=mock_client,
+    )
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
     assert json.loads(result["Result"]) == {"is_replaying": True}
@@ -2766,7 +2800,10 @@ async def test_durable_execution_non_retryable_invocation_error_returns_failed()
         raise non_retryable_error
 
     result = await run_handler(
-        test_handler, _make_invocation_input(mock_client), _make_lambda_context()
+        test_handler,
+        _make_invocation_input(),
+        _make_lambda_context(),
+        service_client=mock_client,
     )
     assert result["Status"] == InvocationStatus.FAILED.value
     assert result["Error"]["ErrorType"] == "GetExecutionStateError"
@@ -2787,7 +2824,10 @@ async def test_durable_execution_retryable_invocation_error_raises():
 
     with pytest.raises(GetExecutionStateError, match="Service error"):
         await run_handler(
-            test_handler, _make_invocation_input(mock_client), _make_lambda_context()
+            test_handler,
+            _make_invocation_input(),
+            _make_lambda_context(),
+            service_client=mock_client,
         )
 
 
@@ -2813,7 +2853,10 @@ async def test_durable_execution_non_retryable_background_thread_error_returns_f
         return {"result": "success"}
 
     result = await run_handler(
-        test_handler, _make_invocation_input(mock_client), _make_lambda_context()
+        test_handler,
+        _make_invocation_input(),
+        _make_lambda_context(),
+        service_client=mock_client,
     )
     assert result["Status"] == InvocationStatus.FAILED.value
     assert result["Error"]["ErrorType"] == "GetExecutionStateError"
@@ -2845,8 +2888,9 @@ async def test_durable_execution_non_retryable_initial_pagination_error_returns_
 
     result = await run_handler(
         test_handler,
-        _make_invocation_input(mock_client, next_marker="next-page-marker"),
+        _make_invocation_input(next_marker="next-page-marker"),
         _make_lambda_context(),
+        service_client=mock_client,
     )
     assert result["Status"] == InvocationStatus.FAILED.value
     assert result["Error"]["ErrorType"] == "GetExecutionStateError"
@@ -2869,8 +2913,9 @@ async def test_durable_execution_retryable_initial_pagination_error_raises():
     with pytest.raises(GetExecutionStateError, match="Service error"):
         await run_handler(
             test_handler,
-            _make_invocation_input(mock_client, next_marker="next-page-marker"),
+            _make_invocation_input(next_marker="next-page-marker"),
             _make_lambda_context(),
+            service_client=mock_client,
         )
 
 
@@ -2950,8 +2995,9 @@ async def test_durable_execution_with_plugins_success():
 
     result = await run_handler(
         test_handler,
-        _make_invocation_input(mock_client),
+        _make_invocation_input(),
         _make_lambda_context(),
+        service_client=mock_client,
     )
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
@@ -2978,8 +3024,9 @@ async def test_durable_execution_with_plugins_failure():
 
     result = await run_handler(
         test_handler,
-        _make_invocation_input(mock_client),
+        _make_invocation_input(),
         _make_lambda_context(),
+        service_client=mock_client,
     )
 
     assert result["Status"] == InvocationStatus.FAILED.value
@@ -3004,8 +3051,9 @@ async def test_durable_execution_with_plugins_pending():
 
     result = await run_handler(
         test_handler,
-        _make_invocation_input(mock_client),
+        _make_invocation_input(),
         _make_lambda_context(),
+        service_client=mock_client,
     )
 
     assert result["Status"] == InvocationStatus.PENDING.value
@@ -3032,8 +3080,9 @@ async def test_durable_execution_supports_async_handler():
 
     result = await run_handler(
         test_handler,
-        _make_invocation_input(mock_client),
+        _make_invocation_input(),
         _make_lambda_context(),
+        service_client=mock_client,
     )
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
@@ -3062,8 +3111,9 @@ async def test_durable_execution_handler_can_use_get_context_without_parameter()
 
     result = await run_handler(
         test_handler,
-        _make_invocation_input(mock_client),
+        _make_invocation_input(),
         _make_lambda_context(),
+        service_client=mock_client,
     )
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
@@ -3104,8 +3154,9 @@ async def test_durable_execution_supports_async_steps_inside_async_handler():
 
     result = await run_handler(
         test_handler,
-        _make_invocation_input(mock_client),
+        _make_invocation_input(),
         _make_lambda_context(),
+        service_client=mock_client,
     )
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
@@ -3126,8 +3177,9 @@ async def test_durable_execution_with_plugins_retryable_error():
     with pytest.raises(InvocationError):
         await run_handler(
             test_handler,
-            _make_invocation_input(mock_client),
+            _make_invocation_input(),
             _make_lambda_context(),
+            service_client=mock_client,
         )
 
     assert "invocation_start" in plugin.calls
@@ -3152,8 +3204,9 @@ async def test_durable_execution_with_multiple_plugins():
 
     result = await run_handler(
         test_handler,
-        _make_invocation_input(mock_client),
+        _make_invocation_input(),
         _make_lambda_context(),
+        service_client=mock_client,
     )
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
@@ -3181,8 +3234,9 @@ async def test_durable_execution_with_failing_plugin_does_not_break_execution():
 
     result = await run_handler(
         test_handler,
-        _make_invocation_input(mock_client),
+        _make_invocation_input(),
         _make_lambda_context(),
+        service_client=mock_client,
     )
 
     # Execution should still succeed despite the failing plugin
@@ -3207,8 +3261,9 @@ async def test_durable_execution_with_no_plugins():
 
     result = await run_handler(
         test_handler,
-        _make_invocation_input(mock_client),
+        _make_invocation_input(),
         _make_lambda_context(),
+        service_client=mock_client,
     )
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
@@ -3229,8 +3284,9 @@ async def test_durable_execution_with_empty_plugins_list():
 
     result = await run_handler(
         test_handler,
-        _make_invocation_input(mock_client),
+        _make_invocation_input(),
         _make_lambda_context(),
+        service_client=mock_client,
     )
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
@@ -3247,16 +3303,16 @@ async def test_durable_execution_decorator_with_plugins_and_boto3_client():
 
     plugin = _RecordingPlugin()
 
-    # When using DurableExecutionInvocationInputWithClient, boto3_client is ignored
-    # but we verify the decorator accepts both parameters
+    # Verify the decorator accepts both parameters while tests inject the durable service client via helper rebinding
     @durable_execution(boto3_client=None, plugins=[plugin])
     async def test_handler(event: Any) -> dict:
         return {"result": "success"}
 
     result = await run_handler(
         test_handler,
-        _make_invocation_input(mock_client),
+        _make_invocation_input(),
         _make_lambda_context(),
+        service_client=mock_client,
     )
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value

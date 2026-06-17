@@ -2,13 +2,15 @@
 
 import json
 from datetime import datetime, timezone
+from typing import Any, cast
 from unittest.mock import Mock, patch
 
 import pytest
 
+from async_durable_execution import DurableContext, durable_execution
+from async_durable_execution.context import get_current_context
 from async_durable_execution.execution import (
     DurableExecutionInvocationInput,
-    DurableExecutionInvocationInputWithClient,
     DurableExecutionInvocationOutput,
     InitialExecutionState,
     InvocationStatus,
@@ -74,11 +76,10 @@ def test_in_process_invoker_create_invocation_input():
 
     invocation_input = invoker.create_invocation_input(execution)
 
-    assert isinstance(invocation_input, DurableExecutionInvocationInputWithClient)
+    assert isinstance(invocation_input, DurableExecutionInvocationInput)
     assert invocation_input.durable_execution_arn == execution.durable_execution_arn
     assert invocation_input.checkpoint_token is not None
     assert isinstance(invocation_input.initial_execution_state, InitialExecutionState)
-    assert invocation_input.service_client is service_client
 
 
 async def test_in_process_invoker_invoke():
@@ -106,8 +107,41 @@ async def test_in_process_invoker_invoke():
     # Verify handler was called with correct arguments
     handler.assert_called_once()
     call_args = handler.call_args[0]
-    assert isinstance(call_args[0], DurableExecutionInvocationInputWithClient)
+    assert call_args[0] == input_data.to_json_dict()
     assert isinstance(call_args[1], LambdaContext)
+
+
+async def test_in_process_invoker_binds_service_client_to_decorated_handler():
+    """Test in-process invoker rebinds decorated handlers to the runner client."""
+    service_client = Mock()
+
+    @durable_execution
+    async def handler(event: Any) -> dict:
+        context = cast(DurableContext, get_current_context())
+        assert event == {"hello": "world"}
+        assert context.execution_state._service_client is service_client  # noqa: SLF001
+        return {"result": "test-result"}
+
+    invoker = InProcessInvoker(handler, service_client)
+
+    start_input = StartDurableExecutionInput(
+        account_id="123456789012",
+        function_name="test-function",
+        function_qualifier="$LATEST",
+        execution_name="test-execution",
+        execution_timeout_seconds=300,
+        execution_retention_period_days=7,
+        invocation_id="test-invocation",
+        input='{"hello": "world"}',
+    )
+    execution = Execution.new(start_input)
+    execution.start()
+    input_data = invoker.create_invocation_input(execution)
+
+    response = await invoker.invoke("test-function", input_data)
+
+    assert response.invocation_output.status == InvocationStatus.SUCCEEDED
+    assert response.invocation_output.result == '{"result": "test-result"}'
 
 
 def test_lambda_invoker_init():
