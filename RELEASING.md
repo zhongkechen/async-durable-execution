@@ -39,12 +39,12 @@ Update `__version__` in `VERSION.py`. Commit and merge to `main`.
 
 The tag should match the shared monorepo version exactly:
 
-- **All packages:** `v<version>` (for example, `v2.0.0a1`)
+- **All packages:** `v<version>` (for example, `v2.0.0a2`)
 
 Examples:
 
 ```text
-v2.0.0a1
+v2.0.0a2
 ```
 
 ## How Publishing Works
@@ -80,7 +80,7 @@ If PyPI returns `invalid-publisher`, compare the failing job's OIDC claims with 
 Release notes should document the monorepo version being released. Use the following structure:
 
 ```markdown
-## async-durable-execution v2.0.0a1
+## async-durable-execution v2.0.0a2
 
 ### Features
 - Added support for X
