@@ -96,7 +96,7 @@ class UserFunctionEndInfo(OperationInfo):
             is_replay_children=start_info.is_replay_children,
             attempt=start_info.attempt,
             outcome=UserFunctionOutcome.from_error(error),
-            end_time=datetime.datetime.now(datetime.UTC),
+            end_time=datetime.datetime.now(datetime.timezone.utc),
             error=error,
         )
 
@@ -132,7 +132,7 @@ class InvocationEndInfo(InvocationInfo):
             start_time=invocation_start_info.start_time,
             is_first_invocation=invocation_start_info.is_first_invocation,
             status=output.status,
-            end_time=datetime.datetime.now(datetime.UTC),
+            end_time=datetime.datetime.now(datetime.timezone.utc),
             error=output.error,
         )
 
@@ -256,7 +256,7 @@ class PluginExecutor:
     ) -> None:
         aws_request_id = lambda_context.aws_request_id if lambda_context else None
         invocation_start_time = (
-            datetime.datetime.now(datetime.UTC)
+            datetime.datetime.now(datetime.timezone.utc)
             if is_first_invocation
             else execution_start_time
         )
@@ -314,7 +314,7 @@ class PluginExecutor:
             sub_type=operation_identifier.sub_type,
             name=operation_identifier.name,
             parent_id=operation_identifier.parent_id,
-            start_time=datetime.datetime.now(datetime.UTC),
+            start_time=datetime.datetime.now(datetime.timezone.utc),
             is_replay_children=is_replay_children,
             attempt=attempt,
         )
@@ -352,7 +352,7 @@ class PluginExecutor:
                     sub_type=update.sub_type,
                     name=update.name,
                     parent_id=update.parent_id,
-                    start_time=datetime.datetime.now(datetime.UTC),
+                    start_time=datetime.datetime.now(datetime.timezone.utc),
                 ),
             )
 

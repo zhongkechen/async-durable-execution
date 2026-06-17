@@ -1,6 +1,6 @@
 """Tests for create_callback_serdes."""
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from async_durable_execution import InvocationStatus
 from async_durable_execution_examples.callback import callback_serdes
@@ -29,7 +29,7 @@ async def test_handle_callback_operations_with_custom_serdes(durable_runner):
         test_data = CustomData(
             id=42,
             message="Hello World",
-            timestamp=datetime(2025, 1, 1, 0, 0, 0, tzinfo=UTC),
+            timestamp=datetime(2025, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
         )
 
         # Serialize the data using custom serdes for sending

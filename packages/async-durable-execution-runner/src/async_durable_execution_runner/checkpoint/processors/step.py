@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 from async_durable_execution.models import (
@@ -49,7 +49,9 @@ class StepProcessor(OperationProcessor):
                     if update.step_options
                     else 0
                 )
-                next_attempt_time = datetime.now(UTC) + timedelta(seconds=delay)
+                next_attempt_time = datetime.now(timezone.utc) + timedelta(
+                    seconds=delay
+                )
 
                 # Build new step_details with incremented attempt
                 current_attempt = (
@@ -80,7 +82,9 @@ class StepProcessor(OperationProcessor):
                     parent_id=update.parent_id,
                     name=update.name,
                     start_timestamp=(
-                        current_op.start_timestamp if current_op else datetime.now(UTC)
+                        current_op.start_timestamp
+                        if current_op
+                        else datetime.now(timezone.utc)
                     ),
                     end_timestamp=None,
                     sub_type=update.sub_type,

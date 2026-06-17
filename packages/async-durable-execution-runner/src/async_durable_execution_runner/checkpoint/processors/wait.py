@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 from async_durable_execution.models import (
@@ -46,7 +46,7 @@ class WaitProcessor(OperationProcessor):
                 logging.info("Using DURABLE_EXECUTION_TIME_SCALE: %f", time_scale)
                 scaled_wait_seconds = wait_seconds * time_scale
 
-                scheduled_end_timestamp = datetime.now(UTC) + timedelta(
+                scheduled_end_timestamp = datetime.now(timezone.utc) + timedelta(
                     seconds=scaled_wait_seconds
                 )
 
@@ -62,7 +62,7 @@ class WaitProcessor(OperationProcessor):
                     status=OperationStatus.STARTED,
                     parent_id=update.parent_id,
                     name=update.name,
-                    start_timestamp=datetime.now(UTC),
+                    start_timestamp=datetime.now(timezone.utc),
                     end_timestamp=None,
                     sub_type=update.sub_type,
                     execution_details=None,

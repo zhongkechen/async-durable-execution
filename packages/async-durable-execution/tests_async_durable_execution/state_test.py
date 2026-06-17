@@ -1461,7 +1461,7 @@ async def test_checkpointed_result_is_replay_children_no_operation():
 async def test_checkpointed_result_get_next_attempt_timestamp():
     """Test CheckpointedResult.get_next_attempt_timestamp with timestamp."""
 
-    timestamp = datetime.datetime(2024, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
+    timestamp = datetime.datetime(2024, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc)
     step_details = StepDetails(next_attempt_timestamp=timestamp)
     operation = Operation(
         operation_id="op1",
@@ -1947,6 +1947,61 @@ async def test_collect_checkpoint_batch_time_window_expires():
         batch = await state._collect_checkpoint_batch()
 
     # Should have collected only the first operation (time window expired before second get)
+    assert len(batch) == 1
+    assert batch[0].operation_update.operation_id == "first_op"
+
+
+async def test_collect_checkpoint_batch_handles_legacy_asyncio_timeout_error(
+    monkeypatch,
+):
+    """Timeouts from asyncio.wait_for must not strand sync checkpoint waiters."""
+
+    class LegacyAsyncioTimeoutError(Exception):
+        pass
+
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
+    config = CheckpointBatcherConfig(
+        max_batch_size_bytes=1000000,
+        max_batch_time_seconds=1.0,
+        max_batch_operations=100,
+    )
+    state = ExecutionState(
+        durable_execution_arn="test_arn",
+        initial_checkpoint_token="token123",  # noqa: S106
+        operations={},
+        service_client=mock_lambda_client,
+        plugin_executor=PluginExecutor(plugins=None),
+        batcher_config=config,
+    )
+    first_op = OperationUpdate(
+        operation_id="first_op",
+        operation_type=OperationType.STEP,
+        action=OperationAction.START,
+    )
+    state._checkpoint_queue.put(QueuedOperation(first_op, None))
+
+    call_count = 0
+
+    async def fake_wait_for(awaitable, timeout):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return await awaitable
+
+        awaitable.close()
+        raise LegacyAsyncioTimeoutError
+
+    monkeypatch.setattr(
+        "async_durable_execution.state.asyncio.TimeoutError",
+        LegacyAsyncioTimeoutError,
+    )
+    monkeypatch.setattr(
+        "async_durable_execution.state.asyncio.wait_for",
+        fake_wait_for,
+    )
+
+    batch = await state._collect_checkpoint_batch()
+
     assert len(batch) == 1
     assert batch[0].operation_update.operation_id == "first_op"
 

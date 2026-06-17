@@ -29,7 +29,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
-from enum import StrEnum
+from enum import Enum
 from typing import Any, Generic, Protocol, TypeVar
 
 from .exceptions import (
@@ -48,7 +48,7 @@ TYPE_TOKEN: str = "t"
 VALUE_TOKEN: str = "v"
 
 
-class TypeTag(StrEnum):
+class TypeTag(str, Enum):
     """Type tags for envelope format."""
 
     NONE = "n"

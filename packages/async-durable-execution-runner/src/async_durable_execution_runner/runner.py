@@ -9,7 +9,6 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Protocol,
-    Self,
     TypeVar,
     cast,
 )
@@ -633,7 +632,7 @@ class DurableFunctionLocalTestRunner:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    async def __aenter__(self) -> Self:
+    async def __aenter__(self) -> DurableFunctionLocalTestRunner:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -804,11 +803,11 @@ class WebRunner:
         self._invoker: LambdaInvoker | None = None
         self._executor: Executor | None = None
 
-    def __enter__(self) -> Self:
+    def __enter__(self) -> WebRunner:
         """Context manager entry point.
 
         Returns:
-            WebRunner: Self for use in with statement
+            WebRunner for use in with statement
         """
         self.start()
         return self
@@ -975,7 +974,7 @@ class DurableFunctionCloudTestRunner:
             config=client_config,
         )
 
-    def __enter__(self) -> Self:
+    def __enter__(self) -> DurableFunctionCloudTestRunner:
         """Return self for context manager compatibility with local runner."""
         return self
 
@@ -983,7 +982,7 @@ class DurableFunctionCloudTestRunner:
         """Close underlying resources when leaving a context manager block."""
         self.close()
 
-    async def __aenter__(self) -> Self:
+    async def __aenter__(self) -> DurableFunctionCloudTestRunner:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:

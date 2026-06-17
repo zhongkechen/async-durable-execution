@@ -1,7 +1,7 @@
 """Additional concurrent tests for wait and retry operations."""
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from async_durable_execution.models import (
     Operation,
@@ -32,7 +32,7 @@ def test_concurrent_wait_and_retry_completion():
         operation_id="wait-1",
         parent_id=None,
         name="test-wait",
-        start_timestamp=datetime.now(UTC),
+        start_timestamp=datetime.now(timezone.utc),
         operation_type=OperationType.WAIT,
         status=OperationStatus.STARTED,
     )
@@ -41,7 +41,7 @@ def test_concurrent_wait_and_retry_completion():
         operation_id="step-1",
         parent_id=None,
         name="test-step",
-        start_timestamp=datetime.now(UTC),
+        start_timestamp=datetime.now(timezone.utc),
         operation_type=OperationType.STEP,
         status=OperationStatus.PENDING,
         step_details=StepDetails(),

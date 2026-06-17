@@ -1,7 +1,7 @@
 [project]
 name = "async-durable-execution-monorepo"
 dynamic = ["version"]
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 
 [tool.hatch.version]
 path = "VERSION.py"
@@ -126,7 +126,7 @@ clean = "rm -rf packages/async-durable-execution-examples/build packages/async-d
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py310"
 exclude = [".github/scripts/*.sh", ".github/workflows"]
 
 [tool.ruff.lint]

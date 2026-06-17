@@ -1,6 +1,6 @@
 """Tests for InMemoryExecutionStore."""
 
-from datetime import UTC
+from datetime import timezone
 from unittest.mock import Mock
 
 import pytest
@@ -431,10 +431,10 @@ def test_time_filtering_logic():
 
     # Use real datetime objects for timestamps
     op1 = Mock()
-    op1.start_timestamp = datetime(2023, 1, 1, 12, 0, 0, tzinfo=UTC)
+    op1.start_timestamp = datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
     op2 = Mock()
-    op2.start_timestamp = datetime(2023, 1, 2, 12, 0, 0, tzinfo=UTC)
+    op2.start_timestamp = datetime(2023, 1, 2, 12, 0, 0, tzinfo=timezone.utc)
 
     op3 = Mock()
     op3.start_timestamp = datetime(2023, 1, 3, 12, 0, 0)  # noqa: DTZ001

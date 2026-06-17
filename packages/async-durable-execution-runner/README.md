@@ -21,6 +21,8 @@ from async_durable_execution.operation import child
 
 ## Installation
 
+Requires Python 3.10 or newer.
+
 ```console
 pip install async-durable-execution-runner
 ```

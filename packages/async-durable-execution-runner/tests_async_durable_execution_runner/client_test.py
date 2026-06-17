@@ -88,11 +88,11 @@ async def test_stop():
     processor = Mock()
     client = InMemoryServiceClient(processor)
 
-    before = datetime.datetime.now(tz=datetime.UTC)
+    before = datetime.datetime.now(tz=datetime.timezone.utc)
     result = client.stop(
         "arn:aws:states:us-east-1:123456789012:execution:test", b"payload"
     )
-    after = datetime.datetime.now(tz=datetime.UTC)
+    after = datetime.datetime.now(tz=datetime.timezone.utc)
 
     assert isinstance(result, datetime.datetime)
     assert before <= result <= after

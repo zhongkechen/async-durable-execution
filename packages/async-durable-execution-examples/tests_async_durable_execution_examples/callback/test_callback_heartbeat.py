@@ -11,8 +11,7 @@ async def test_handle_callback_operations_with_failure_uncaught(durable_runner):
     """Test handling callback operations with failure."""
     test_payload = {"shouldCatchError": False}
 
-    heartbeat_interval = 0.1
-    total_duration = 0.4
+    heartbeat_interval = 0.25
     num_heartbeats = 4
 
     with durable_runner(

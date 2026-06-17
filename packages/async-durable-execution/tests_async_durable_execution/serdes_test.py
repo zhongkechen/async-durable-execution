@@ -2,7 +2,7 @@ import base64
 import json
 import math
 import uuid
-from datetime import UTC, date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -281,11 +281,11 @@ def test_envelope_str_roundtrip():
 
 def test_envelope_datetime_roundtrip():
     values = [
-        datetime(2024, 1, 1, tzinfo=UTC),
-        datetime(2024, 12, 31, 23, 59, 59, 999999, tzinfo=UTC),
-        datetime(1970, 1, 1, tzinfo=UTC),
-        datetime.now(UTC),
-        datetime.now(UTC),
+        datetime(2024, 1, 1, tzinfo=timezone.utc),
+        datetime(2024, 12, 31, 23, 59, 59, 999999, tzinfo=timezone.utc),
+        datetime(1970, 1, 1, tzinfo=timezone.utc),
+        datetime.now(timezone.utc),
+        datetime.now(timezone.utc),
     ]
     for val in values:
         assert _roundtrip_envelope(val) == val
@@ -392,7 +392,7 @@ def test_envelope_deeply_nested_structure():
     complex_data = {
         "user": {
             "id": uuid.uuid4(),
-            "created": datetime.now(UTC),
+            "created": datetime.now(timezone.utc),
             "balance": Decimal("1234.56"),
             "metadata": b"binary_data",
             "coordinates": (40.7128, -74.0060),
@@ -407,7 +407,7 @@ def test_envelope_deeply_nested_structure():
             },
         },
         "session": {
-            "started": datetime.now(UTC),
+            "started": datetime.now(timezone.utc),
             "expires": date.today(),  # noqa: DTZ011
             "token": uuid.uuid4(),
         },
@@ -422,7 +422,7 @@ def test_envelope_mixed_type_collections():
         42,
         math.pi,
         "string",
-        datetime.now(UTC),
+        datetime.now(timezone.utc),
         Decimal("99.99"),
         uuid.uuid4(),
         b"bytes",
@@ -440,7 +440,7 @@ def test_envelope_tuple_with_all_types():
         42,
         math.pi,
         "string",
-        datetime(2024, 1, 1, tzinfo=UTC),
+        datetime(2024, 1, 1, tzinfo=timezone.utc),
         date(2024, 1, 1),
         Decimal("123.45"),
         uuid.uuid4(),
@@ -499,7 +499,7 @@ def test_envelope_with_main_api():
 
     test_data = {
         "id": uuid.uuid4(),
-        "timestamp": datetime.now(UTC),
+        "timestamp": datetime.now(timezone.utc),
         "amount": Decimal("123.45"),
         "data": b"binary_data",
         "coordinates": (40.7128, -74.0060),
@@ -744,7 +744,7 @@ def test_envelope_type_preservation_after_roundtrip():
         "int": 42,
         "float": math.pi,
         "str": "text",
-        "datetime": datetime.now(UTC),
+        "datetime": datetime.now(timezone.utc),
         "date": date.today(),  # noqa: DTZ011
         "decimal": Decimal("123.45"),
         "uuid": uuid.uuid4(),

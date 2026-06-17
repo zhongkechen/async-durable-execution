@@ -234,7 +234,7 @@ class Scheduler:
 
         try:
             return future.result()
-        except TimeoutError:
+        except asyncio.TimeoutError:
             return False
 
     def set_event(self, event: asyncio.Event):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from enum import Enum
 from threading import Lock
 from typing import Any
@@ -169,7 +169,7 @@ class Execution:
                     operation_id=self.start_input.invocation_id,
                     parent_id=None,
                     name=self.start_input.execution_name,
-                    start_timestamp=datetime.now(UTC),
+                    start_timestamp=datetime.now(timezone.utc),
                     operation_type=OperationType.EXECUTION,
                     status=OperationStatus.STARTED,
                     execution_details=ExecutionDetails(
@@ -316,7 +316,7 @@ class Execution:
             self.operations[index] = replace(
                 operation,
                 status=OperationStatus.SUCCEEDED,
-                end_timestamp=datetime.now(UTC),
+                end_timestamp=datetime.now(timezone.utc),
             )
             return self.operations[index]
 
@@ -373,7 +373,7 @@ class Execution:
             self.operations[index] = replace(
                 operation,
                 status=OperationStatus.SUCCEEDED,
-                end_timestamp=datetime.now(UTC),
+                end_timestamp=datetime.now(timezone.utc),
                 callback_details=updated_callback_details,
             )
             return self.operations[index]
@@ -398,7 +398,7 @@ class Execution:
             self.operations[index] = replace(
                 operation,
                 status=OperationStatus.FAILED,
-                end_timestamp=datetime.now(UTC),
+                end_timestamp=datetime.now(timezone.utc),
                 callback_details=updated_callback_details,
             )
             return self.operations[index]
@@ -424,7 +424,7 @@ class Execution:
             self.operations[index] = replace(
                 operation,
                 status=OperationStatus.TIMED_OUT,
-                end_timestamp=datetime.now(UTC),
+                end_timestamp=datetime.now(timezone.utc),
                 callback_details=updated_callback_details,
             )
             return self.operations[index]
@@ -437,5 +437,5 @@ class Execution:
                 self.operations[0] = replace(
                     execution_op,
                     status=status,
-                    end_timestamp=datetime.now(UTC),
+                    end_timestamp=datetime.now(timezone.utc),
                 )

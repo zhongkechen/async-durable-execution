@@ -36,6 +36,7 @@ This fork is specifically focused on making async Python work naturally with dur
 ## 🚀 Quick Start
 
 This fork now requires async callables for all user-provided durable code.
+Requires Python 3.10 or newer.
 
 Install the execution SDK:
 

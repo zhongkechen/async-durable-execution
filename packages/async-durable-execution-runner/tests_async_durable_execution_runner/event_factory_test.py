@@ -3,7 +3,7 @@
 This module tests all the event creation factory methods in the Event class.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from unittest.mock import Mock
 
 import pytest
@@ -36,6 +36,11 @@ from async_durable_execution_runner.model import (
 )
 
 
+def parse_utc_datetime(timestamp: str) -> datetime:
+    """Parse RFC 3339-style UTC timestamps on Python versions before 3.11."""
+    return datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+
+
 # Helper function to create mock operations
 def create_mock_operation(
     operation_id: str = "op-1",
@@ -63,7 +68,7 @@ def test_create_execution_started():
     operation.name = "test_execution"
     operation.parent_id = None
     operation.status = OperationStatus.STARTED
-    operation.start_timestamp = datetime.now(UTC)
+    operation.start_timestamp = datetime.now(timezone.utc)
     operation.operation_type = OperationType.EXECUTION
     operation.sub_type = None
     operation.execution_details = ExecutionDetails(input_payload='{"test": "data"}')
@@ -98,7 +103,7 @@ def test_create_execution_succeeded():
     )
 
     operation = create_mock_operation("op-1", status=OperationStatus.SUCCEEDED)
-    operation.end_timestamp = datetime.now(UTC)
+    operation.end_timestamp = datetime.now(timezone.utc)
 
     result = DurableExecutionInvocationOutput(
         status=InvocationStatus.SUCCEEDED, result='{"result": "success"}'
@@ -131,7 +136,7 @@ def test_create_execution_failed():
     )
 
     operation = create_mock_operation("op-1", status=OperationStatus.FAILED)
-    operation.end_timestamp = datetime.now(UTC)
+    operation.end_timestamp = datetime.now(timezone.utc)
 
     error_result = DurableExecutionInvocationOutput(
         status=InvocationStatus.FAILED,
@@ -165,7 +170,7 @@ def test_create_execution_timed_out():
     )
 
     operation = create_mock_operation("op-1", status=OperationStatus.TIMED_OUT)
-    operation.end_timestamp = datetime.now(UTC)
+    operation.end_timestamp = datetime.now(timezone.utc)
 
     error_result = DurableExecutionInvocationOutput(
         status=InvocationStatus.FAILED,
@@ -201,7 +206,7 @@ def test_create_execution_stopped():
     )
 
     operation = create_mock_operation("op-1", status=OperationStatus.STOPPED)
-    operation.end_timestamp = datetime.now(UTC)
+    operation.end_timestamp = datetime.now(timezone.utc)
 
     error_result = DurableExecutionInvocationOutput(
         status=InvocationStatus.FAILED,
@@ -349,11 +354,11 @@ def test_create_context_invalid_status():
 
 def test_create_wait_started():
     operation = create_mock_operation("wait-1", status=OperationStatus.STARTED)
-    operation.start_timestamp = datetime.fromisoformat("2024-01-01T12:00:00Z")
+    operation.start_timestamp = parse_utc_datetime("2024-01-01T12:00:00Z")
     operation.wait_details = type(
         "MockDetails",
         (),
-        {"scheduled_end_timestamp": datetime.fromisoformat("2024-01-01T12:05:00Z")},
+        {"scheduled_end_timestamp": parse_utc_datetime("2024-01-01T12:05:00Z")},
     )()
     context = EventCreationContext.create(
         operation=operation,
@@ -372,18 +377,18 @@ def test_create_wait_started():
 
     assert event.event_type == "WaitStarted"
     assert event.wait_started_details.duration == 300
-    assert event.wait_started_details.scheduled_end_timestamp == datetime.fromisoformat(
+    assert event.wait_started_details.scheduled_end_timestamp == parse_utc_datetime(
         "2024-01-01T12:05:00Z"
     )
 
 
 def test_create_wait_succeeded():
     operation = create_mock_operation("wait-1", status=OperationStatus.SUCCEEDED)
-    operation.start_timestamp = datetime.fromisoformat("2024-01-01T12:00:00Z")
+    operation.start_timestamp = parse_utc_datetime("2024-01-01T12:00:00Z")
     operation.wait_details = type(
         "MockDetails",
         (),
-        {"scheduled_end_timestamp": datetime.fromisoformat("2024-01-01T12:05:00Z")},
+        {"scheduled_end_timestamp": parse_utc_datetime("2024-01-01T12:05:00Z")},
     )()
     context = EventCreationContext.create(
         operation=operation,
@@ -433,7 +438,7 @@ def test_create_wait_cancelled():
 def test_create_wait_invalid_status():
     operation = create_mock_operation("wait-1", status=OperationStatus.FAILED)
     operation.wait_details.scheduled_end_timestamp = operation.start_timestamp = (
-        datetime.fromisoformat("2024-01-01T12:00:00Z")
+        parse_utc_datetime("2024-01-01T12:00:00Z")
     )
     context = EventCreationContext.create(
         operation=operation,
@@ -926,7 +931,7 @@ def test_event_error_from_details():
 def test_event_from_dict_with_all_details():
     data = {
         "EventType": "ExecutionStarted",
-        "EventTimestamp": datetime.fromisoformat("2024-01-01T12:00:00Z"),
+        "EventTimestamp": parse_utc_datetime("2024-01-01T12:00:00Z"),
         "EventId": 1,
         "Id": "op-1",
         "Name": "test",
@@ -945,7 +950,7 @@ def test_event_from_dict_with_all_details():
 def test_event_to_dict_with_all_details():
     event = Event(
         event_type="ExecutionStarted",
-        event_timestamp=datetime.fromisoformat("2024-01-01T12:00:00Z"),
+        event_timestamp=parse_utc_datetime("2024-01-01T12:00:00Z"),
         event_id=1,
         operation_id="op-1",
         name="test",
@@ -1009,7 +1014,7 @@ class TestFromOperationStarted:
         operation.name = "test_execution"
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.EXECUTION
-        operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
         execution_details = Mock()
         execution_details.input_payload = '{"test": "data"}'
@@ -1045,7 +1050,7 @@ class TestFromOperationStarted:
         operation.name = "test_execution"
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.EXECUTION
-        operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
         execution_details = Mock()
         execution_details.input_payload = '{"test": "data"}'
@@ -1078,7 +1083,7 @@ class TestFromOperationStarted:
         operation.name = "test_step"
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.STEP
-        operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
         context = EventCreationContext.create(
             operation=operation,
@@ -1108,11 +1113,11 @@ class TestFromOperationStarted:
         operation.name = "test_wait"
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.WAIT
-        operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
         wait_details = Mock()
         wait_details.scheduled_end_timestamp = datetime(
-            2024, 1, 1, 12, 5, 0, tzinfo=UTC
+            2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc
         )
         operation.wait_details = wait_details
 
@@ -1148,7 +1153,7 @@ class TestFromOperationStarted:
         operation.name = "test_callback"
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.CALLBACK
-        operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
         callback_details = Mock()
         callback_details.callback_id = "cb-456"
@@ -1182,7 +1187,7 @@ class TestFromOperationStarted:
         operation.name = "test_invoke"
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.CHAINED_INVOKE
-        operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
         context = EventCreationContext.create(
             operation=operation,
@@ -1212,7 +1217,7 @@ class TestFromOperationStarted:
         operation.name = "test_context"
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.CONTEXT
-        operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
         context = EventCreationContext.create(
             operation=operation,
@@ -1263,7 +1268,7 @@ class TestFromOperationStarted:
         """Test error with unknown operation type."""
         operation = Mock()
         operation.operation_type = "UNKNOWN_TYPE"
-        operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
         context = EventCreationContext.create(
             operation=operation,
@@ -1295,7 +1300,7 @@ class TestFromOperationFinished:
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.EXECUTION
         operation.status = OperationStatus.SUCCEEDED
-        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=UTC)
+        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
 
         context = EventCreationContext.create(
             operation=operation,
@@ -1325,7 +1330,7 @@ class TestFromOperationFinished:
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.EXECUTION
         operation.status = OperationStatus.FAILED
-        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=UTC)
+        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
 
         context = EventCreationContext.create(
             operation=operation,
@@ -1353,7 +1358,7 @@ class TestFromOperationFinished:
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.STEP
         operation.status = OperationStatus.SUCCEEDED
-        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=UTC)
+        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
 
         step_details = Mock()
         step_details.result = '{"result": "success"}'
@@ -1388,7 +1393,7 @@ class TestFromOperationFinished:
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.STEP
         operation.status = OperationStatus.FAILED
-        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=UTC)
+        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
 
         step_details = Mock()
         step_details.result = None
@@ -1421,12 +1426,12 @@ class TestFromOperationFinished:
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.WAIT
         operation.status = OperationStatus.SUCCEEDED
-        operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
-        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=UTC)
+        operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
 
         wait_details = Mock()
         wait_details.scheduled_end_timestamp = datetime(
-            2024, 1, 1, 12, 5, 0, tzinfo=UTC
+            2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc
         )
         operation.wait_details = wait_details
 
@@ -1456,7 +1461,7 @@ class TestFromOperationFinished:
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.WAIT
         operation.status = OperationStatus.CANCELLED
-        operation.end_timestamp = datetime(2024, 1, 1, 12, 3, 0, tzinfo=UTC)
+        operation.end_timestamp = datetime(2024, 1, 1, 12, 3, 0, tzinfo=timezone.utc)
         operation.wait_details = None
 
         context = EventCreationContext.create(
@@ -1485,7 +1490,7 @@ class TestFromOperationFinished:
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.CALLBACK
         operation.status = OperationStatus.SUCCEEDED
-        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=UTC)
+        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
 
         callback_details = Mock()
         callback_details.result = '{"callback": "result"}'
@@ -1521,7 +1526,7 @@ class TestFromOperationFinished:
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.CALLBACK
         operation.status = OperationStatus.TIMED_OUT
-        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=UTC)
+        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
 
         callback_details = Mock()
         callback_details.result = None
@@ -1557,7 +1562,7 @@ class TestFromOperationFinished:
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.CHAINED_INVOKE
         operation.status = OperationStatus.SUCCEEDED
-        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=UTC)
+        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
 
         chained_invoke_details = Mock()
         chained_invoke_details.result = '{"invoke": "result"}'
@@ -1594,7 +1599,7 @@ class TestFromOperationFinished:
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.CHAINED_INVOKE
         operation.status = OperationStatus.STOPPED
-        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=UTC)
+        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
 
         chained_invoke_details = Mock()
         chained_invoke_details.result = None
@@ -1630,7 +1635,7 @@ class TestFromOperationFinished:
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.CONTEXT
         operation.status = OperationStatus.SUCCEEDED
-        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=UTC)
+        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
 
         context_details = Mock()
         context_details.result = '{"context": "result"}'
@@ -1666,7 +1671,7 @@ class TestFromOperationFinished:
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.CONTEXT
         operation.status = OperationStatus.FAILED
-        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=UTC)
+        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
 
         context_details = Mock()
         context_details.result = None
@@ -1721,7 +1726,7 @@ class TestFromOperationFinished:
         """Test error with invalid operation status."""
         operation = Mock()
         operation.status = OperationStatus.STARTED
-        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=UTC)
+        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
 
         context = EventCreationContext.create(
             operation=operation,
@@ -1747,7 +1752,7 @@ class TestFromOperationFinished:
         operation = Mock()
         operation.operation_type = "UNKNOWN_TYPE"
         operation.status = OperationStatus.SUCCEEDED
-        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=UTC)
+        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
 
         context = EventCreationContext.create(
             operation=operation,
@@ -1775,7 +1780,7 @@ class TestFromOperationFinished:
         operation.parent_id = "parent-123"
         operation.operation_type = OperationType.STEP
         operation.status = OperationStatus.SUCCEEDED
-        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=UTC)
+        operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
         operation.step_details = None
 
         context = EventCreationContext.create(
@@ -1801,7 +1806,7 @@ def test_chained_invoke_pending_details_from_dict():
     """Test ChainedInvokePendingDetails parsing in Event.from_dict."""
     data = {
         "EventType": "ChainedInvokeStarted",
-        "EventTimestamp": datetime.now(UTC),
+        "EventTimestamp": datetime.now(timezone.utc),
         "ChainedInvokePendingDetails": {
             "Input": {"Payload": "test-input", "Truncated": False},
             "FunctionName": "test-function",
@@ -1934,7 +1939,7 @@ def test_create_chained_invoke_event_pending():
     operation.name = "test_invoke"
     operation.parent_id = None
     operation.status = OperationStatus.PENDING
-    operation.start_timestamp = datetime.now(UTC)
+    operation.start_timestamp = datetime.now(timezone.utc)
     operation.sub_type = None
 
     context = EventCreationContext.create(

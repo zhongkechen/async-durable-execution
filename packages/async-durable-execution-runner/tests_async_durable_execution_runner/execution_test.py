@@ -1,6 +1,6 @@
 """Unit tests for execution module."""
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
 import pytest
@@ -77,7 +77,7 @@ def test_execution_new(mock_uuid4):
 @patch("async_durable_execution_runner.execution.datetime")
 def test_execution_start(mock_datetime):
     """Test Execution.start method."""
-    mock_now = datetime(2023, 1, 1, 12, 0, 0, tzinfo=UTC)
+    mock_now = datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     mock_datetime.now.return_value = mock_now
 
     start_input = StartDurableExecutionInput(
@@ -180,7 +180,7 @@ def test_get_navigable_operations():
             operation_id="op1",
             parent_id=None,
             name="test",
-            start_timestamp=datetime.now(UTC),
+            start_timestamp=datetime.now(timezone.utc),
             operation_type=OperationType.EXECUTION,
             status=OperationStatus.STARTED,
         )
@@ -207,7 +207,7 @@ def test_get_assertable_operations():
         operation_id="exec-op",
         parent_id=None,
         name="execution",
-        start_timestamp=datetime.now(UTC),
+        start_timestamp=datetime.now(timezone.utc),
         operation_type=OperationType.EXECUTION,
         status=OperationStatus.STARTED,
     )
@@ -215,7 +215,7 @@ def test_get_assertable_operations():
         operation_id="step-op",
         parent_id=None,
         name="step",
-        start_timestamp=datetime.now(UTC),
+        start_timestamp=datetime.now(timezone.utc),
         operation_type=OperationType.STEP,
         status=OperationStatus.STARTED,
     )
@@ -244,7 +244,7 @@ def test_has_pending_operations_with_pending_step():
             operation_id="op1",
             parent_id=None,
             name="test",
-            start_timestamp=datetime.now(UTC),
+            start_timestamp=datetime.now(timezone.utc),
             operation_type=OperationType.STEP,
             status=OperationStatus.PENDING,
         )
@@ -272,7 +272,7 @@ def test_has_pending_operations_with_started_wait():
             operation_id="op1",
             parent_id=None,
             name="test",
-            start_timestamp=datetime.now(UTC),
+            start_timestamp=datetime.now(timezone.utc),
             operation_type=OperationType.WAIT,
             status=OperationStatus.STARTED,
         )
@@ -300,7 +300,7 @@ def test_has_pending_operations_with_started_callback():
             operation_id="op1",
             parent_id=None,
             name="test",
-            start_timestamp=datetime.now(UTC),
+            start_timestamp=datetime.now(timezone.utc),
             operation_type=OperationType.CALLBACK,
             status=OperationStatus.STARTED,
         )
@@ -328,7 +328,7 @@ def test_has_pending_operations_with_started_invoke():
             operation_id="op1",
             parent_id=None,
             name="test",
-            start_timestamp=datetime.now(UTC),
+            start_timestamp=datetime.now(timezone.utc),
             operation_type=OperationType.CHAINED_INVOKE,
             status=OperationStatus.STARTED,
         )
@@ -356,7 +356,7 @@ def test_has_pending_operations_no_pending():
             operation_id="op1",
             parent_id=None,
             name="test",
-            start_timestamp=datetime.now(UTC),
+            start_timestamp=datetime.now(timezone.utc),
             operation_type=OperationType.STEP,
             status=OperationStatus.SUCCEEDED,
         )
@@ -444,7 +444,7 @@ def test_find_operation_exists():
         operation_id="test-op-id",
         parent_id=None,
         name="test",
-        start_timestamp=datetime.now(UTC),
+        start_timestamp=datetime.now(timezone.utc),
         operation_type=OperationType.STEP,
         status=OperationStatus.STARTED,
     )
@@ -478,7 +478,7 @@ def test_find_operation_not_exists():
 @patch("async_durable_execution_runner.execution.datetime")
 def test_complete_wait_success(mock_datetime):
     """Test complete_wait method successful completion."""
-    mock_now = datetime(2023, 1, 1, 12, 0, 0, tzinfo=UTC)
+    mock_now = datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     mock_datetime.now.return_value = mock_now
 
     start_input = StartDurableExecutionInput(
@@ -494,7 +494,7 @@ def test_complete_wait_success(mock_datetime):
         operation_id="wait-op-id",
         parent_id=None,
         name="test-wait",
-        start_timestamp=datetime.now(UTC),
+        start_timestamp=datetime.now(timezone.utc),
         operation_type=OperationType.WAIT,
         status=OperationStatus.STARTED,
     )
@@ -523,7 +523,7 @@ def test_complete_wait_wrong_status():
         operation_id="wait-op-id",
         parent_id=None,
         name="test-wait",
-        start_timestamp=datetime.now(UTC),
+        start_timestamp=datetime.now(timezone.utc),
         operation_type=OperationType.WAIT,
         status=OperationStatus.SUCCEEDED,
     )
@@ -550,7 +550,7 @@ def test_complete_wait_wrong_type():
         operation_id="step-op-id",
         parent_id=None,
         name="test-step",
-        start_timestamp=datetime.now(UTC),
+        start_timestamp=datetime.now(timezone.utc),
         operation_type=OperationType.STEP,
         status=OperationStatus.STARTED,
     )
@@ -572,14 +572,14 @@ def test_complete_retry_success():
         invocation_id="test-invocation-id",
     )
     step_details = StepDetails(
-        next_attempt_timestamp=str(datetime.now(UTC)),
+        next_attempt_timestamp=str(datetime.now(timezone.utc)),
         attempt=1,
     )
     operation = Operation(
         operation_id="step-op-id",
         parent_id=None,
         name="test-step",
-        start_timestamp=datetime.now(UTC),
+        start_timestamp=datetime.now(timezone.utc),
         operation_type=OperationType.STEP,
         status=OperationStatus.PENDING,
         step_details=step_details,
@@ -609,7 +609,7 @@ def test_complete_retry_no_step_details():
         operation_id="step-op-id",
         parent_id=None,
         name="test-step",
-        start_timestamp=datetime.now(UTC),
+        start_timestamp=datetime.now(timezone.utc),
         operation_type=OperationType.STEP,
         status=OperationStatus.PENDING,
     )
@@ -637,7 +637,7 @@ def test_complete_retry_wrong_status():
         operation_id="step-op-id",
         parent_id=None,
         name="test-step",
-        start_timestamp=datetime.now(UTC),
+        start_timestamp=datetime.now(timezone.utc),
         operation_type=OperationType.STEP,
         status=OperationStatus.STARTED,
     )
@@ -664,7 +664,7 @@ def test_complete_retry_wrong_type():
         operation_id="wait-op-id",
         parent_id=None,
         name="test-wait",
-        start_timestamp=datetime.now(UTC),
+        start_timestamp=datetime.now(timezone.utc),
         operation_type=OperationType.WAIT,
         status=OperationStatus.PENDING,
     )
@@ -788,7 +788,9 @@ def test_status_no_result():
 
 def test_complete_retry_with_step_details():
     """Test complete_retry with operation that has step_details."""
-    step_details = StepDetails(attempt=1, next_attempt_timestamp=datetime.now(UTC))
+    step_details = StepDetails(
+        attempt=1, next_attempt_timestamp=datetime.now(timezone.utc)
+    )
     step_op = Operation(
         operation_id="op-1",
         operation_type=OperationType.STEP,

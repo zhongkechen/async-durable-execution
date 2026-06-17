@@ -86,7 +86,7 @@ class MockProcessor(OperationProcessor):
 
 def test_get_end_time_with_existing_end_timestamp():
     processor = MockProcessor()
-    end_time = datetime.datetime.now(tz=datetime.UTC)
+    end_time = datetime.datetime.now(tz=datetime.timezone.utc)
     current_op = Mock()
     current_op.end_timestamp = end_time
 
@@ -336,7 +336,7 @@ def test_create_invoke_details_no_options():
 
 def test_create_wait_details_with_current_operation():
     processor = MockProcessor()
-    scheduled_end_timestamp = datetime.datetime.now(tz=datetime.UTC)
+    scheduled_end_timestamp = datetime.datetime.now(tz=datetime.timezone.utc)
     current_op = Mock()
     current_op.wait_details = WaitDetails(
         scheduled_end_timestamp=scheduled_end_timestamp
@@ -369,7 +369,9 @@ def test_create_wait_details_without_current_operation():
     result = processor.create_wait_details(update, None)
 
     assert isinstance(result, WaitDetails)
-    assert result.scheduled_end_timestamp > datetime.datetime.now(tz=datetime.UTC)
+    assert result.scheduled_end_timestamp > datetime.datetime.now(
+        tz=datetime.timezone.utc
+    )
 
 
 def test_create_wait_details_non_wait_type():
@@ -387,7 +389,7 @@ def test_create_wait_details_non_wait_type():
 
 def test_translate_update_to_operation_with_current_operation():
     processor = MockProcessor()
-    start_time = datetime.datetime.now(tz=datetime.UTC) - timedelta(minutes=5)
+    start_time = datetime.datetime.now(tz=datetime.timezone.utc) - timedelta(minutes=5)
     current_op = Mock()
     current_op.start_timestamp = start_time
 

@@ -321,7 +321,7 @@ class Execution:
             function_arn=f"arn:aws:lambda:us-east-1:123456789012:function:{execution.start_input.function_name}",
             status=status,
             start_timestamp=execution_op.start_timestamp
-            or datetime.datetime.now(datetime.UTC),
+            or datetime.datetime.now(datetime.timezone.utc),
             end_timestamp=execution_op.end_timestamp or None,
         )
 
@@ -1319,7 +1319,7 @@ class EventCreationContext:
         return (
             self.operation.start_timestamp
             if self.operation.start_timestamp is not None
-            else datetime.datetime.now(datetime.UTC)
+            else datetime.datetime.now(datetime.timezone.utc)
         )
 
     @property
@@ -1327,7 +1327,7 @@ class EventCreationContext:
         return (
             self.operation.end_timestamp
             if self.operation.end_timestamp is not None
-            else datetime.datetime.now(datetime.UTC)
+            else datetime.datetime.now(datetime.timezone.utc)
         )
 
 
@@ -2622,7 +2622,7 @@ def events_to_operations(events: list[Event]) -> list[Operation]:
             name=event.name,
             parent_id=event.parent_id,
             sub_type=sub_type,
-            start_timestamp=datetime.datetime.now(tz=datetime.UTC),
+            start_timestamp=datetime.datetime.now(tz=datetime.timezone.utc),
         )
 
         # Merge with previous operation if it exists

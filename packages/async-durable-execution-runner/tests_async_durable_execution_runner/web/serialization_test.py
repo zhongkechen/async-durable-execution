@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import math
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
 import pytest
@@ -389,7 +389,7 @@ def test_serialize_simple_dict():
 def test_serialize_datetime():
     """Test serialization of datetime objects."""
     serializer = JSONSerializer()
-    now = datetime(2025, 11, 5, 16, 30, 9, 895000, tzinfo=UTC)
+    now = datetime(2025, 11, 5, 16, 30, 9, 895000, tzinfo=timezone.utc)
     data = {"timestamp": now}
 
     result = serializer.to_bytes(data)
@@ -405,7 +405,7 @@ def test_serialize_datetime():
 def test_serialize_nested_datetime():
     """Test serialization of nested structures with datetime."""
     serializer = JSONSerializer()
-    now = datetime(2025, 11, 5, 16, 30, 9, tzinfo=UTC)
+    now = datetime(2025, 11, 5, 16, 30, 9, tzinfo=timezone.utc)
     data = {
         "event": "user_login",
         "timestamp": now,
@@ -430,7 +430,7 @@ def test_serialize_nested_datetime():
 def test_serialize_list_with_datetime():
     """Test serialization of list containing datetime."""
     serializer = JSONSerializer()
-    now = datetime(2025, 11, 5, 16, 30, 9, tzinfo=UTC)
+    now = datetime(2025, 11, 5, 16, 30, 9, tzinfo=timezone.utc)
     data = {
         "events": [{"time": now, "action": "login"}, {"time": now, "action": "logout"}]
     }
@@ -453,7 +453,7 @@ def test_serialize_list_with_datetime():
 def test_serialize_mixed_types():
     """Test serialization of mixed data types."""
     serializer = JSONSerializer()
-    now = datetime(2025, 11, 5, 16, 30, 9, tzinfo=UTC)
+    now = datetime(2025, 11, 5, 16, 30, 9, tzinfo=timezone.utc)
     data = {
         "string": "test",
         "number": 42,
@@ -531,7 +531,7 @@ def test_serialize_circular_reference_raises_exception():
 def test_serialize_datetime_with_microseconds():
     """Test serialization of datetime with microseconds."""
     serializer = JSONSerializer()
-    now = datetime(2025, 11, 5, 16, 30, 9, 123456, tzinfo=UTC)
+    now = datetime(2025, 11, 5, 16, 30, 9, 123456, tzinfo=timezone.utc)
     data = {"timestamp": now}
 
     result = serializer.to_bytes(data)
@@ -543,7 +543,7 @@ def test_serialize_datetime_with_microseconds():
 def test_serialize_datetime_without_microseconds():
     """Test serialization of datetime without microseconds."""
     serializer = JSONSerializer()
-    now = datetime(2025, 11, 5, 16, 30, 9, tzinfo=UTC)
+    now = datetime(2025, 11, 5, 16, 30, 9, tzinfo=timezone.utc)
     data = {"timestamp": now}
 
     result = serializer.to_bytes(data)
@@ -555,8 +555,8 @@ def test_serialize_datetime_without_microseconds():
 def test_serialize_multiple_datetimes():
     """Test multiple datetime objects."""
     serializer = JSONSerializer()
-    dt1 = datetime(2025, 1, 1, 0, 0, 0, tzinfo=UTC)
-    dt2 = datetime(2025, 12, 31, 23, 59, 59, tzinfo=UTC)
+    dt1 = datetime(2025, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    dt2 = datetime(2025, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
 
     data = {"start": dt1, "end": dt2}
     result = serializer.to_bytes(data)

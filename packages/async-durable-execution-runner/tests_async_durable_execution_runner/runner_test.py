@@ -56,8 +56,8 @@ async def test_operation_creation():
         parent_id="parent-id",
         name="test-name",
         sub_type="test-subtype",
-        start_timestamp=datetime.datetime.now(tz=datetime.UTC),
-        end_timestamp=datetime.datetime.now(tz=datetime.UTC),
+        start_timestamp=datetime.datetime.now(tz=datetime.timezone.utc),
+        end_timestamp=datetime.datetime.now(tz=datetime.timezone.utc),
     )
 
     assert op.operation_id == "test-id"
@@ -342,7 +342,7 @@ async def test_step_operation_wrong_type():
 
 async def test_wait_operation_from_svc_operation():
     """Test WaitOperation creation from service operation."""
-    scheduled_time = datetime.datetime.now(tz=datetime.UTC)
+    scheduled_time = datetime.datetime.now(tz=datetime.timezone.utc)
     wait_details = WaitDetails(scheduled_end_timestamp=scheduled_time)
     svc_op = SvcOperation(
         operation_id="wait-id",
@@ -1088,8 +1088,12 @@ async def test_durable_function_test_result_from_execution_history():
         durable_execution_name="test-execution",
         function_arn="arn:aws:lambda:us-east-1:123456789012:function:test",
         status="SUCCEEDED",
-        start_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
-        end_timestamp=datetime.datetime(2023, 1, 1, 0, 1, 0, tzinfo=datetime.UTC),
+        start_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
+        end_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 1, 0, tzinfo=datetime.timezone.utc
+        ),
         result="test-result",
         error=None,
     )
@@ -1099,14 +1103,14 @@ async def test_durable_function_test_result_from_execution_history():
             Event(
                 event_type="ExecutionStarted",
                 event_timestamp=datetime.datetime(
-                    2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC
+                    2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
                 ),
                 operation_id="exec-1",
             ),
             Event(
                 event_type="StepStarted",
                 event_timestamp=datetime.datetime(
-                    2023, 1, 1, 0, 0, 10, tzinfo=datetime.UTC
+                    2023, 1, 1, 0, 0, 10, tzinfo=datetime.timezone.utc
                 ),
                 operation_id="step-1",
                 name="test-step",
@@ -1114,7 +1118,7 @@ async def test_durable_function_test_result_from_execution_history():
             Event(
                 event_type="StepSucceeded",
                 event_timestamp=datetime.datetime(
-                    2023, 1, 1, 0, 0, 20, tzinfo=datetime.UTC
+                    2023, 1, 1, 0, 0, 20, tzinfo=datetime.timezone.utc
                 ),
                 operation_id="step-1",
                 step_succeeded_details=StepSucceededDetails(
@@ -1280,7 +1284,9 @@ async def test_durable_function_test_result_from_execution_history_with_exceptio
         durable_execution_name="test-execution",
         function_arn="arn:aws:lambda:us-east-1:123456789012:function:test",
         status="SUCCEEDED",
-        start_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
+        start_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
     )
 
     history_response = GetDurableExecutionHistoryResponse(
@@ -1288,7 +1294,7 @@ async def test_durable_function_test_result_from_execution_history_with_exceptio
             Event(
                 event_type="StepStarted",
                 event_timestamp=datetime.datetime(
-                    2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC
+                    2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
                 ),
                 operation_id=None,
             )
@@ -1471,7 +1477,9 @@ async def test_durable_function_test_result_from_execution_history_filters_execu
         durable_execution_name="test-execution",
         function_arn="arn:aws:lambda:us-east-1:123456789012:function:test",
         status="SUCCEEDED",
-        start_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
+        start_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
     )
 
     history_response = GetDurableExecutionHistoryResponse(
@@ -1479,7 +1487,7 @@ async def test_durable_function_test_result_from_execution_history_filters_execu
             Event(
                 event_type="ExecutionStarted",
                 event_timestamp=datetime.datetime(
-                    2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC
+                    2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
                 ),
                 operation_id="exec-1",
             ),
@@ -1511,7 +1519,9 @@ async def test_durable_function_test_result_from_execution_history_unknown_statu
         durable_execution_name="test-execution",
         function_arn="arn:aws:lambda:us-east-1:123456789012:function:test",
         status="UNKNOWN_STATUS",
-        start_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
+        start_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
     )
 
     history_response = GetDurableExecutionHistoryResponse(events=[])
@@ -1541,7 +1551,9 @@ async def test_durable_function_test_result_from_execution_history_with_parent_o
         durable_execution_name="test-execution",
         function_arn="arn:aws:lambda:us-east-1:123456789012:function:test",
         status="SUCCEEDED",
-        start_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
+        start_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
     )
 
     history_response = GetDurableExecutionHistoryResponse(
@@ -1549,7 +1561,7 @@ async def test_durable_function_test_result_from_execution_history_with_parent_o
             Event(
                 event_type="StepStarted",
                 event_timestamp=datetime.datetime(
-                    2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC
+                    2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
                 ),
                 operation_id="step-1",
                 name="parent-step",
@@ -1557,7 +1569,7 @@ async def test_durable_function_test_result_from_execution_history_with_parent_o
             Event(
                 event_type="StepStarted",
                 event_timestamp=datetime.datetime(
-                    2023, 1, 1, 0, 0, 10, tzinfo=datetime.UTC
+                    2023, 1, 1, 0, 0, 10, tzinfo=datetime.timezone.utc
                 ),
                 operation_id="step-2",
                 name="child-step",
@@ -1593,8 +1605,12 @@ async def test_durable_function_test_result_from_execution_history_failed():
         durable_execution_name="test-execution",
         function_arn="arn:aws:lambda:us-east-1:123456789012:function:test",
         status="FAILED",
-        start_timestamp=datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
-        end_timestamp=datetime.datetime(2023, 1, 1, 0, 1, 0, tzinfo=datetime.UTC),
+        start_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
+        end_timestamp=datetime.datetime(
+            2023, 1, 1, 0, 1, 0, tzinfo=datetime.timezone.utc
+        ),
         error=ErrorObject(
             message="execution failed", type=None, data=None, stack_trace=None
         ),

@@ -1,6 +1,6 @@
 # """Test for pending operation handling in get_execution_history."""
 #
-# from datetime import UTC, datetime
+# from datetime import datetime, timezone
 # from unittest.mock import Mock
 #
 # from async_durable_execution.models import (
@@ -41,7 +41,7 @@
 #     pending_op.operation_id = "invoke-1"
 #     pending_op.operation_type = OperationType.CHAINED_INVOKE
 #     pending_op.status = OperationStatus.PENDING
-#     pending_op.start_timestamp = datetime.now(UTC)
+#     pending_op.start_timestamp = datetime.now(timezone.utc)
 #     pending_op.end_timestamp = None
 #
 #     # Create a non-CHAINED_INVOKE pending operation (should be skipped)
@@ -49,7 +49,7 @@
 #     pending_step.operation_id = "step-1"
 #     pending_step.operation_type = OperationType.STEP
 #     pending_step.status = OperationStatus.PENDING
-#     pending_step.start_timestamp = datetime.now(UTC)
+#     pending_step.start_timestamp = datetime.now(timezone.utc)
 #     pending_step.end_timestamp = None
 #
 #     # Create a CHAINED_INVOKE pending operation without start_timestamp (should be skipped)
@@ -110,7 +110,7 @@
 #     pending_step.operation_id = "step-1"
 #     pending_step.operation_type = OperationType.STEP
 #     pending_step.status = OperationStatus.PENDING
-#     pending_step.start_timestamp = datetime.now(UTC)
+#     pending_step.start_timestamp = datetime.now(timezone.utc)
 #
 #     # 2. CHAINED_INVOKE pending operation without start_timestamp
 #     pending_invoke_no_timestamp = Mock()

@@ -27,7 +27,8 @@ def test_suspend_optional_timestamp_with_past():
     with pytest.raises(SuspendExecution, match="Invalid timestamp"):
         suspend_with_optional_resume_timestamp(
             "test",
-            datetime.datetime.now(tz=datetime.UTC) - datetime.timedelta(seconds=1),
+            datetime.datetime.now(tz=datetime.timezone.utc)
+            - datetime.timedelta(seconds=1),
         )
 
 
@@ -35,7 +36,8 @@ def test_suspend_optional_timestamp_with_future():
     with pytest.raises(TimedSuspendExecution, match="test"):
         suspend_with_optional_resume_timestamp(
             "test",
-            datetime.datetime.now(tz=datetime.UTC) + datetime.timedelta(seconds=1),
+            datetime.datetime.now(tz=datetime.timezone.utc)
+            + datetime.timedelta(seconds=1),
         )
 
 

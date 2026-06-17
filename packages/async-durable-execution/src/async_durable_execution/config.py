@@ -7,7 +7,7 @@ import random
 import re
 from dataclasses import dataclass, field
 from datetime import timedelta
-from enum import Enum, StrEnum
+from enum import Enum
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from .exceptions import ValidationError
@@ -564,7 +564,7 @@ class StepFuture(Generic[T]):
         return self.future.result(timeout=timeout_seconds)
 
 
-class JitterStrategy(StrEnum):
+class JitterStrategy(str, Enum):
     """
     Jitter strategies are used to introduce noise when attempting to retry
     an invoke. We introduce noise to prevent a thundering-herd effect where

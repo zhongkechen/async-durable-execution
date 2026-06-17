@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from threading import Lock
 from typing import TYPE_CHECKING
 
@@ -193,7 +193,7 @@ class Executor(ExecutionObserver):
             durable_execution_name=execution.start_input.execution_name,
             function_arn=f"arn:aws:lambda:us-east-1:123456789012:function:{execution.start_input.function_name}",
             status=status,
-            start_timestamp=execution_op.start_timestamp or datetime.now(UTC),
+            start_timestamp=execution_op.start_timestamp or datetime.now(timezone.utc),
             input_payload=execution_op.execution_details.input_payload
             if execution_op.execution_details
             else None,
@@ -326,7 +326,7 @@ class Executor(ExecutionObserver):
         if execution.is_complete:
             # Idempotent: return the existing stop timestamp
             execution_op = execution.get_operation_execution_started()
-            stop_timestamp = execution_op.end_timestamp or datetime.now(UTC)
+            stop_timestamp = execution_op.end_timestamp or datetime.now(timezone.utc)
             return StopDurableExecutionResponse(stop_timestamp=stop_timestamp)
 
         # Use provided error or create a default one
@@ -340,7 +340,7 @@ class Executor(ExecutionObserver):
         self._store.update(execution)
         self._complete_events(execution_arn=execution_arn)
 
-        return StopDurableExecutionResponse(stop_timestamp=datetime.now(UTC))
+        return StopDurableExecutionResponse(stop_timestamp=datetime.now(timezone.utc))
 
     def get_execution_state(
         self,
@@ -795,13 +795,13 @@ class Executor(ExecutionObserver):
 
                 self._store.save(execution)
 
-                invocation_start = datetime.now(UTC)
+                invocation_start = datetime.now(timezone.utc)
                 invoke_response = await self._invoker.invoke(
                     execution.start_input.function_name,
                     invocation_input,
                     execution.start_input.lambda_endpoint,
                 )
-                invocation_end = datetime.now(UTC)
+                invocation_end = datetime.now(timezone.utc)
 
                 # Reload execution after invocation in case it was completed via checkpoint
                 execution = self._store.load(execution_arn)

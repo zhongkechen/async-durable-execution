@@ -25,8 +25,8 @@ from async_durable_execution.plugin import (
 )
 
 ERROR = ErrorObject(message="boom", type="Error", data=None, stack_trace=None)
-START_TS = datetime.datetime(2025, 1, 1, tzinfo=datetime.UTC)
-END_TS = datetime.datetime(2025, 1, 2, tzinfo=datetime.UTC)
+START_TS = datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc)
+END_TS = datetime.datetime(2025, 1, 2, tzinfo=datetime.timezone.utc)
 LAMBDA_CTX = MagicMock()
 LAMBDA_CTX.aws_request_id = "req-1"
 
@@ -343,7 +343,7 @@ class TestPluginExecutorOnInvocationStart(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.plugin = _TrackingPlugin()
         self.executor = PluginExecutor(plugins=[self.plugin])
-        self.ts = datetime.datetime(2025, 1, 1, tzinfo=datetime.UTC)
+        self.ts = datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc)
 
     def _make_operation(self, start_time=None):
         op = MagicMock()
@@ -415,7 +415,7 @@ class TestPluginExecutorOnInvocationEnd(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.plugin = _TrackingPlugin()
         self.executor = PluginExecutor(plugins=[self.plugin])
-        self.ts = datetime.datetime(2025, 1, 1, tzinfo=datetime.UTC)
+        self.ts = datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc)
 
     def _make_operation(self, start_ts=None, end_ts=None):
         op = MagicMock()

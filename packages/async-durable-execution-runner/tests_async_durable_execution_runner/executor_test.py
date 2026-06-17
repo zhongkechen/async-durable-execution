@@ -1,7 +1,7 @@
 """Unit tests for executor module."""
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -1823,8 +1823,8 @@ async def test_get_execution_details(executor, mock_store):
         operation_id="op-1",
         parent_id=None,
         name="test-execution",
-        start_timestamp=datetime.now(UTC),
-        end_timestamp=datetime.now(UTC),
+        start_timestamp=datetime.now(timezone.utc),
+        end_timestamp=datetime.now(timezone.utc),
         operation_type=OperationType.EXECUTION,
         status=OperationStatus.SUCCEEDED,
         execution_details=ExecutionDetails(input_payload='{"test": "data"}'),
@@ -1875,7 +1875,7 @@ async def test_get_execution_details_failed_execution(executor, mock_store):
         operation_id="op-1",
         parent_id=None,
         name="test-execution",
-        start_timestamp=datetime.now(UTC),
+        start_timestamp=datetime.now(timezone.utc),
         operation_type=OperationType.EXECUTION,
         status=OperationStatus.FAILED,
         execution_details=ExecutionDetails(input_payload='{"test": "data"}'),
@@ -1925,7 +1925,7 @@ async def test_list_executions_with_filtering(executor, mock_store):
         operation_id="op-1",
         parent_id=None,
         name="exec1",
-        start_timestamp=datetime.now(UTC),
+        start_timestamp=datetime.now(timezone.utc),
         operation_type=OperationType.EXECUTION,
         status=OperationStatus.STARTED,
         execution_details=ExecutionDetails(input_payload="{}"),
@@ -1960,7 +1960,7 @@ async def test_list_executions_with_pagination(executor, mock_store):
             operation_id=f"op-{i}",
             parent_id=None,
             name=f"exec{i}",
-            start_timestamp=datetime.now(UTC),
+            start_timestamp=datetime.now(timezone.utc),
             operation_type=OperationType.EXECUTION,
             status=OperationStatus.STARTED,
             execution_details=ExecutionDetails(input_payload="{}"),
@@ -1982,7 +1982,7 @@ async def test_list_executions_with_pagination(executor, mock_store):
             operation_id=f"op-{i}",
             parent_id=None,
             name=f"exec{i}",
-            start_timestamp=datetime.now(UTC),
+            start_timestamp=datetime.now(timezone.utc),
             operation_type=OperationType.EXECUTION,
             status=OperationStatus.STARTED,
             execution_details=ExecutionDetails(input_payload="{}"),
@@ -2068,7 +2068,7 @@ async def test_stop_execution_already_complete(executor, mock_store):
 
     # Mock the execution operation with end_timestamp
     mock_execution_op = Mock()
-    mock_execution_op.end_timestamp = datetime(2023, 1, 1, 0, 1, 0, tzinfo=UTC)
+    mock_execution_op.end_timestamp = datetime(2023, 1, 1, 0, 1, 0, tzinfo=timezone.utc)
     mock_execution.get_operation_execution_started.return_value = mock_execution_op
 
     mock_store.load.return_value = mock_execution
@@ -2076,7 +2076,7 @@ async def test_stop_execution_already_complete(executor, mock_store):
     result = executor.stop_execution("test-arn")
 
     assert isinstance(result, StopDurableExecutionResponse)
-    assert result.stop_timestamp == datetime(2023, 1, 1, 0, 1, 0, tzinfo=UTC)
+    assert result.stop_timestamp == datetime(2023, 1, 1, 0, 1, 0, tzinfo=timezone.utc)
 
 
 async def test_stop_execution_with_custom_error(executor, mock_store):
@@ -2124,7 +2124,7 @@ async def test_get_execution_state(executor, mock_store):
             operation_id="op-1",
             parent_id=None,
             name="step1",
-            start_timestamp=datetime.now(UTC),
+            start_timestamp=datetime.now(timezone.utc),
             operation_type=OperationType.STEP,
             status=OperationStatus.SUCCEEDED,
         ),
@@ -2132,7 +2132,7 @@ async def test_get_execution_state(executor, mock_store):
             operation_id="op-2",
             parent_id=None,
             name="step2",
-            start_timestamp=datetime.now(UTC),
+            start_timestamp=datetime.now(timezone.utc),
             operation_type=OperationType.STEP,
             status=OperationStatus.STARTED,
         ),
@@ -2188,8 +2188,8 @@ async def test_get_execution_history_with_events(executor, mock_store):
         operation_id="op-1",
         operation_type=OperationType.STEP,
         status=OperationStatus.SUCCEEDED,
-        start_timestamp=datetime.now(UTC),
-        end_timestamp=datetime.now(UTC),
+        start_timestamp=datetime.now(timezone.utc),
+        end_timestamp=datetime.now(timezone.utc),
         step_details=StepDetails(result="test_result"),
     )
     mock_execution = Mock()
@@ -2214,8 +2214,8 @@ async def test_get_execution_history_reverse_order(executor, mock_store):
         operation_id="op-1",
         operation_type=OperationType.STEP,
         status=OperationStatus.SUCCEEDED,
-        start_timestamp=datetime.now(UTC),
-        end_timestamp=datetime.now(UTC),
+        start_timestamp=datetime.now(timezone.utc),
+        end_timestamp=datetime.now(timezone.utc),
     )
 
     mock_execution = Mock()
@@ -2244,8 +2244,8 @@ async def test_get_execution_history_pagination(executor, mock_store):
             operation_id=f"op-{i}",
             operation_type=OperationType.STEP,
             status=OperationStatus.SUCCEEDED,
-            start_timestamp=datetime.now(UTC),
-            end_timestamp=datetime.now(UTC),
+            start_timestamp=datetime.now(timezone.utc),
+            end_timestamp=datetime.now(timezone.utc),
         )
         operations.append(op)
 
@@ -2273,8 +2273,8 @@ async def test_get_execution_history_pagination_with_marker(executor, mock_store
             operation_id=f"op-{i}",
             operation_type=OperationType.STEP,
             status=OperationStatus.SUCCEEDED,
-            start_timestamp=datetime.now(UTC),
-            end_timestamp=datetime.now(UTC),
+            start_timestamp=datetime.now(timezone.utc),
+            end_timestamp=datetime.now(timezone.utc),
         )
         operations.append(op)
 

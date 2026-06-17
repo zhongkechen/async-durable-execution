@@ -38,6 +38,21 @@ from .web.server import WebServiceConfig
 
 logger = logging.getLogger(__name__)
 
+LOG_LEVELS_BY_NAME: dict[str, int] = {
+    "CRITICAL": logging.CRITICAL,
+    "FATAL": logging.FATAL,
+    "ERROR": logging.ERROR,
+    "WARNING": logging.WARNING,
+    "WARN": logging.WARNING,
+    "INFO": logging.INFO,
+    "DEBUG": logging.DEBUG,
+    "NOTSET": logging.NOTSET,
+}
+
+
+def _get_log_level(level_name: str) -> int:
+    return LOG_LEVELS_BY_NAME.get(level_name.upper(), logging.INFO)
+
 
 @dataclass(frozen=True)
 class CliConfig:
@@ -61,7 +76,7 @@ class CliConfig:
         """Create configuration from environment variables with defaults."""
         # Convert log level string to integer if provided
         log_level_str = os.getenv("AWS_DEX_LOG_LEVEL", "INFO")
-        log_level = logging.getLevelNamesMapping().get(log_level_str, logging.INFO)
+        log_level = _get_log_level(log_level_str)
 
         return cls(
             host=os.getenv("AWS_DEX_HOST", "0.0.0.0"),  # noqa:S104
@@ -104,9 +119,7 @@ class CliApp:
             if hasattr(parsed_args, "log_level") and isinstance(
                 parsed_args.log_level, str
             ):
-                level = logging.getLevelNamesMapping().get(
-                    parsed_args.log_level, logging.INFO
-                )
+                level = _get_log_level(parsed_args.log_level)
             else:
                 # config.log_level is always an integer
                 level = self.config.log_level
@@ -171,7 +184,7 @@ class CliApp:
         start_server_parser.add_argument(
             "--log-level",
             type=str,
-            choices=list(logging.getLevelNamesMapping().keys()),
+            choices=list(LOG_LEVELS_BY_NAME),
             default=logging.getLevelName(self.config.log_level),
             help=f"Logging level (default: {logging.getLevelName(self.config.log_level)}, env: AWS_DEX_LOG_LEVEL)",
         )

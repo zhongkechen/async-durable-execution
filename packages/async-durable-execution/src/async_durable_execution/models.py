@@ -1084,7 +1084,7 @@ class OperationUpdate(SerializableModel):
     def create_execution_succeed(cls, payload: str) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: EXECUTION, action: SUCCEED."""
         return cls(
-            operation_id=f"execution-result-{int(datetime.datetime.now(tz=datetime.UTC).timestamp() * 1000)}",
+            operation_id=f"execution-result-{int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp() * 1000)}",
             operation_type=OperationType.EXECUTION,
             action=OperationAction.SUCCEED,
             payload=payload,
@@ -1094,7 +1094,7 @@ class OperationUpdate(SerializableModel):
     def create_execution_fail(cls, error: ErrorObject) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: EXECUTION, action: FAIL."""
         return cls(
-            operation_id=f"execution-result-{int(datetime.datetime.now(tz=datetime.UTC).timestamp() * 1000)}",
+            operation_id=f"execution-result-{int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp() * 1000)}",
             operation_type=OperationType.EXECUTION,
             action=OperationAction.FAIL,
             error=error,
@@ -1275,7 +1275,7 @@ class TimestampConverter:
     def from_unix_millis(ms: int | None) -> datetime.datetime | None:
         """Convert Unix timestamp in milliseconds to datetime."""
         return (
-            datetime.datetime.fromtimestamp(ms / 1000, tz=datetime.UTC)
+            datetime.datetime.fromtimestamp(ms / 1000, tz=datetime.timezone.utc)
             if ms is not None
             else None
         )
