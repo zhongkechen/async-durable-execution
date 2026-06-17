@@ -1,3 +1,5 @@
+from async_durable_execution.operation import child
+
 # Async Durable Execution Runner for Python
 
 [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution-runner.svg)](https://pypi.org/project/async-durable-execution-runner)
@@ -44,7 +46,7 @@ from typing import Any
 
 from async_durable_execution import (
     durable_execution,
-    get_context,
+    get_current_context,
 )
 
 
@@ -64,7 +66,7 @@ async def two_2(a: int, b: int) -> str:
 
 
 async def two(a: int, b: int) -> str:
-    ctx = get_context()
+    ctx = get_current_context()
     two_1_result: str = ctx.step(two_1(a, b))
     two_2_result: str = ctx.step(two_2(a, b))
     return f"{two_1_result} {two_2_result}"
@@ -77,7 +79,7 @@ async def three(a: int, b: int) -> str:
 
 @durable_execution
 async def function_under_test(event: Any) -> list[str]:
-    context = get_context()
+    context = get_current_context()
     results: list[str] = []
 
     result_one: str = context.step(one(1, 2))
@@ -85,7 +87,7 @@ async def function_under_test(event: Any) -> list[str]:
 
     context.wait(duration=timedelta(seconds=1))
 
-    result_two: str = context.run_in_child_context(partial(two, 3, 4), name="two")
+    result_two: str = child.run_in_child_context(partial(two, 3, 4), name="two")
     results.append(result_two)
 
     result_three: str = context.step(three(5, 6))

@@ -6,14 +6,15 @@ import logging
 from collections.abc import Mapping
 from unittest.mock import Mock
 
-from async_durable_execution.context import DurableContext
+from async_durable_execution.context import (
+    set_current_context,
+    reset_current_context,
+)
 from async_durable_execution.logger import (
     DurableContextFilter,
     LogInfo,
     build_context_log_extra,
     configure_durable_logger,
-    reset_current_context,
-    set_current_context,
 )
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
@@ -24,7 +25,8 @@ from async_durable_execution.models import (
 )
 from async_durable_execution.plugin import PluginExecutor
 from async_durable_execution.state import ExecutionState, ReplayStatus
-from async_durable_execution.types import LoggerInterface, StepContext
+from async_durable_execution.types import LoggerInterface
+from async_durable_execution import StepContext, DurableContext
 
 
 class PowertoolsLoggerStub:
@@ -110,8 +112,20 @@ EXECUTION_STATE = ExecutionState(
 )
 
 
-def create_durable_context(parent_id: str | None = None) -> DurableContext:
-    return DurableContext(state=EXECUTION_STATE, parent_id=parent_id)
+def create_durable_context(
+    parent_id: str | None = None,
+    operation_id: str | None = None,
+    operation_name: str | None = None,
+) -> DurableContext:
+    return DurableContext(
+        execution_state=EXECUTION_STATE,
+        operation_identifier=OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=OperationSubType.EXECUTION,
+            parent_id=parent_id,
+            name=operation_name,
+        ),
+    )
 
 
 def test_powertools_logger_compatibility():
@@ -151,9 +165,11 @@ def test_log_info_creation_and_helpers():
 
 
 def test_build_context_log_extra_for_durable_context():
-    context = create_durable_context(parent_id="parent-1")
-    context.operation_id = "context-op"
-    context.operation_name = "child-context"
+    context = create_durable_context(
+        parent_id="parent-1",
+        operation_id="context-op",
+        operation_name="child-context",
+    )
 
     assert build_context_log_extra(context) == {
         "executionArn": "arn:aws:test",
@@ -167,10 +183,12 @@ def test_build_context_log_extra_for_step_context():
     step_context = StepContext(
         attempt=2,
         execution_state=EXECUTION_STATE,
-        execution_arn="arn:aws:test",
-        parent_id="parent-1",
-        operation_id="step-1",
-        operation_name="process",
+        operation_identifier=OperationIdentifier(
+            operation_id="step-1",
+            sub_type=OperationSubType.STEP,
+            parent_id="parent-1",
+            name="process",
+        ),
     )
 
     assert build_context_log_extra(step_context) == {
@@ -192,8 +210,7 @@ def test_filter_adds_fields_from_active_context():
         args=(),
         exc_info=None,
     )
-    context = create_durable_context(parent_id="parent-1")
-    context.operation_id = "context-op"
+    context = create_durable_context(parent_id="parent-1", operation_id="context-op")
 
     token = set_current_context(context)
     try:
@@ -222,10 +239,12 @@ def test_filter_preserves_existing_extra_fields():
     step_context = StepContext(
         attempt=4,
         execution_state=EXECUTION_STATE,
-        execution_arn="arn:aws:test",
-        parent_id="parent-1",
-        operation_id="step-1",
-        operation_name="process",
+        operation_identifier=OperationIdentifier(
+            operation_id="step-1",
+            sub_type=OperationSubType.STEP,
+            parent_id="parent-1",
+            name="process",
+        ),
     )
 
     token = set_current_context(step_context)
@@ -258,8 +277,10 @@ def test_filter_suppresses_logs_during_replay():
     step_context = StepContext(
         attempt=1,
         execution_state=replay_state,
-        execution_arn="arn:aws:test",
-        operation_id="op1",
+        operation_identifier=OperationIdentifier(
+            operation_id="op1",
+            sub_type=OperationSubType.STEP,
+        ),
     )
 
     record = logging.LogRecord(

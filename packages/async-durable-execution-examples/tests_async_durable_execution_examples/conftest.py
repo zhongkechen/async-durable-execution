@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from async_durable_execution_runner import create_runner
 
 
@@ -64,7 +63,9 @@ class AsyncRunnerAdapter:
         self, execution_arn: str, name: str | None = None, timeout: int = 60
     ):
         return await self._runner.wait_for_callback(
-            execution_arn, name=name, timeout=timeout
+            execution_arn,
+            name=name,
+            timeout=timeout,
         )
 
     async def send_callback_success(

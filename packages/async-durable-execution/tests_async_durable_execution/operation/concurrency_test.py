@@ -32,9 +32,7 @@ from async_durable_execution.config import (
     MapConfig,
     NestingType,
 )
-from async_durable_execution.context import (
-    DurableContext,
-)
+from async_durable_execution import DurableContext
 from async_durable_execution.exceptions import (
     CallableRuntimeError,
     InvalidStateError,
@@ -43,6 +41,8 @@ from async_durable_execution.exceptions import (
 )
 from async_durable_execution.models import (
     ErrorObject,
+    OperationIdentifier,
+    OperationSubType,
 )
 from async_durable_execution.operation.map import MapExecutor
 
@@ -90,10 +90,22 @@ def create_execution_state():
 def create_executor_context(state, step_id="1", parent_id="parent"):
     context = Mock()
     context._parent_id = parent_id  # noqa: SLF001
-    context._step_counter._create_step_id_for_logical_step = (  # noqa: SLF001
-        lambda *args: step_id
-    )
-    context.create_child_context = lambda *args, **kwargs: Mock(state=state)
+    context.parent_id = parent_id
+    context.step_counter = Mock()
+
+    def create_step_id(logical_step):
+        return str(logical_step) if step_id == "1" else f"{step_id}_{logical_step}"
+
+    context._step_counter._create_step_id_for_logical_step = create_step_id  # noqa: SLF001
+    context.step_counter._create_step_id_for_logical_step = create_step_id  # noqa: SLF001
+
+    def build_child_context(*args, **kwargs):
+        child_context = Mock()
+        child_context.state = state
+        child_context.execution_state = state
+        return child_context
+
+    context.create_child_context = build_child_context
     return context
 
 
@@ -2502,17 +2514,19 @@ async def test_operation_id_determinism_across_shuffles():
         # Create executor context mock
         executor_context = Mock()
         executor_context._parent_id = "parent_123"  # noqa SLF001
+        executor_context.parent_id = "parent_123"
+        executor_context.step_counter = Mock()
 
         def create_step_id(index):
             return f"step_{index}"
 
-        executor_context._step_counter._create_step_id_for_logical_step = (  # noqa: SLF001
-            create_step_id
-        )
+        executor_context._step_counter._create_step_id_for_logical_step = create_step_id  # noqa: SLF001
+        executor_context.step_counter._create_step_id_for_logical_step = create_step_id  # noqa: SLF001
 
         def create_child_context(operation_id, *, is_virtual=False):
             child_ctx = Mock()
             child_ctx.state = execution_state
+            child_ctx.execution_state = execution_state
             return child_ctx
 
         executor_context.create_child_context = create_child_context
@@ -2539,7 +2553,7 @@ async def test_operation_id_determinism_across_shuffles():
 async def test_concurrent_executor_replay_with_succeeded_operations():
     """Test ConcurrentExecutor replay method with succeeded operations."""
 
-    def func1(ctx, item, idx, items):
+    def func1(item, idx, items):
         return f"result_{item}"
 
     items = ["a", "b"]
@@ -2556,6 +2570,8 @@ async def test_concurrent_executor_replay_with_succeeded_operations():
     mock_execution_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
+    mock_execution_state.wrap_user_function = _wrap_user_function_for_test
+    mock_execution_state._create_checkpoint_async = AsyncMock()
 
     def mock_get_checkpoint_result(operation_id):
         mock_result = Mock()
@@ -2574,13 +2590,19 @@ async def test_concurrent_executor_replay_with_succeeded_operations():
 
     # Mock executor context
     mock_executor_context = Mock()
+    mock_executor_context.parent_id = "parent_id"
+    mock_executor_context.step_counter = Mock()
     mock_executor_context._step_counter._create_step_id_for_logical_step = (  # noqa: SLF001
+        mock_create_step_id_for_logical_step
+    )
+    mock_executor_context.step_counter._create_step_id_for_logical_step = (
         mock_create_step_id_for_logical_step
     )
 
     # Mock child context that has the same execution state
     mock_child_context = Mock()
     mock_child_context.state = mock_execution_state
+    mock_child_context.execution_state = mock_execution_state
     mock_executor_context.create_child_context = Mock(return_value=mock_child_context)
     mock_executor_context._parent_id = "parent_id"  # noqa
 
@@ -2599,7 +2621,7 @@ async def test_concurrent_executor_replay_with_succeeded_operations():
 async def test_concurrent_executor_replay_with_failed_operations():
     """Test ConcurrentExecutor replay method with failed operations."""
 
-    def func1(ctx, item, idx, items):
+    def func1(item, idx, items):
         return f"result_{item}"
 
     items = ["a"]
@@ -2642,7 +2664,7 @@ async def test_concurrent_executor_replay_with_failed_operations():
 async def test_concurrent_executor_replay_with_replay_children():
     """Test ConcurrentExecutor replay method when children need re-execution."""
 
-    def func1(ctx, item, idx, items):
+    def func1(item, idx, items):
         return f"result_{item}"
 
     items = ["a"]
@@ -2809,7 +2831,7 @@ async def test_executor_terminates_quickly_when_impossible_to_succeed():
     """Test that executor terminates when min_successful becomes impossible."""
     executed_count = {"value": 0}
 
-    async def task_func(ctx, item, idx, items):
+    async def task_func(item, idx, items):
         executed_count["value"] += 1
         if idx < 2:
             raise Exception(f"fail_{idx}")  # noqa EM102 TRY002
@@ -3307,8 +3329,12 @@ async def test_flat_mode_stamps_grandparent_as_inner_op_parent_id():
     # Build a real DurableContext that represents the map/parallel op.
     map_op_id = "map-op-id"
     executor_context = DurableContext(
-        state=execution_state,
-        parent_id=map_op_id,  # This context *is* the map/parallel op.
+        execution_state=execution_state,
+        operation_identifier=OperationIdentifier(
+            operation_id=None,
+            sub_type=OperationSubType.EXECUTION,
+            parent_id=map_op_id,
+        ),
     )
 
     executables = [Executable(index=0, func=lambda ctx: "ok")]
@@ -3332,9 +3358,9 @@ async def test_flat_mode_stamps_grandparent_as_inner_op_parent_id():
     # self._parent_id will therefore report to the map/parallel op.
     branch_ctx = executor.last_child_context
     assert branch_ctx.is_virtual is True
-    assert branch_ctx._parent_id == map_op_id  # noqa: SLF001
+    assert branch_ctx.parent_id == map_op_id  # noqa: SLF001
     # The step-id prefix is the branch's own operation id (stable replay id).
-    assert branch_ctx._step_id_prefix != map_op_id  # noqa: SLF001
+    assert branch_ctx.step_id_prefix != map_op_id  # noqa: SLF001
 
 
 async def test_nested_mode_stamps_branch_op_as_inner_op_parent_id():
@@ -3356,8 +3382,12 @@ async def test_nested_mode_stamps_branch_op_as_inner_op_parent_id():
 
     map_op_id = "map-op-id"
     executor_context = DurableContext(
-        state=execution_state,
-        parent_id=map_op_id,
+        execution_state=execution_state,
+        operation_identifier=OperationIdentifier(
+            operation_id=None,
+            sub_type=OperationSubType.EXECUTION,
+            parent_id=map_op_id,
+        ),
     )
 
     executables = [Executable(index=0, func=lambda ctx: "ok")]
@@ -3380,8 +3410,8 @@ async def test_nested_mode_stamps_branch_op_as_inner_op_parent_id():
     # its own operation id, not the grandparent.
     branch_ctx = executor.last_child_context
     assert branch_ctx.is_virtual is False
-    assert branch_ctx._parent_id == branch_ctx._step_id_prefix  # noqa: SLF001
-    assert branch_ctx._parent_id != map_op_id  # noqa: SLF001
+    assert branch_ctx.parent_id == branch_ctx.step_id_prefix  # noqa: SLF001
+    assert branch_ctx.parent_id != map_op_id  # noqa: SLF001
 
 
 async def test_flat_mode_produces_deterministic_step_ids_across_runs():
@@ -3405,8 +3435,8 @@ async def test_flat_mode_produces_deterministic_step_ids_across_runs():
         async def execute_item(self, child_context, executable):
             self.captured.append(
                 (
-                    child_context._step_id_prefix,  # noqa: SLF001
-                    child_context._parent_id,  # noqa: SLF001
+                    child_context.step_id_prefix,  # noqa: SLF001
+                    child_context.parent_id,  # noqa: SLF001
                 )
             )
             return executable.func(child_context)
@@ -3422,8 +3452,12 @@ async def test_flat_mode_produces_deterministic_step_ids_across_runs():
         execution_state.get_checkpoint_result.return_value = mock_checkpoint
 
         executor_context = DurableContext(
-            state=execution_state,
-            parent_id="map-op-id",
+            execution_state=execution_state,
+            operation_identifier=OperationIdentifier(
+                operation_id=None,
+                sub_type=OperationSubType.EXECUTION,
+                parent_id="map-op-id",
+            ),
         )
 
         executables = [

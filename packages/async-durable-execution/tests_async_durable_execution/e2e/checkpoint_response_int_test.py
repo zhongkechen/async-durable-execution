@@ -13,7 +13,17 @@ from unittest.mock import Mock, patch
 import pytest
 
 from async_durable_execution.config import ChildConfig
-from async_durable_execution.context import DurableContext, get_context
+from async_durable_execution.context import (
+    get_current_context,
+)
+from async_durable_execution import (
+    create_callback,
+    invoke,
+    run_in_child_context,
+    step,
+    wait,
+    DurableContext,
+)
 from async_durable_execution.exceptions import InvocationError
 from async_durable_execution.execution import (
     InvocationStatus,
@@ -88,15 +98,15 @@ async def test_end_to_end_step_operation_with_double_check():
         return "step_result"
 
     @durable_execution
-    async def my_handler(event, context: DurableContext) -> str:
-        result: str = await context.step(my_step)
+    async def my_handler(event) -> str:
+        result: str = await step(my_step)
         return result
 
     with patch(
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
     ) as mock_client_class:
         mock_client = Mock()
-        mock_client_class.initialize_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
         mock_client.checkpoint = mock_checkpoint
@@ -150,14 +160,14 @@ async def test_end_to_end_multiple_operations_execute_sequentially():
         return "result2"
 
     @durable_execution
-    async def my_handler(event, context: DurableContext) -> list[str]:
-        return [await context.step(step1), await context.step(step2)]
+    async def my_handler(event) -> list[str]:
+        return [await step(step1), await step(step2)]
 
     with patch(
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
     ) as mock_client_class:
         mock_client = Mock()
-        mock_client_class.initialize_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
         mock_client.checkpoint = mock_checkpoint
@@ -205,15 +215,15 @@ async def test_end_to_end_wait_operation_with_double_check():
     """
 
     @durable_execution
-    async def my_handler(event, context: DurableContext) -> str:
-        await context.wait(timedelta(seconds=5))
+    async def my_handler(event) -> str:
+        await wait(timedelta(seconds=5))
         return "completed"
 
     with patch(
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
     ) as mock_client_class:
         mock_client = Mock()
-        mock_client_class.initialize_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
         mock_client.checkpoint = mock_checkpoint
@@ -264,14 +274,14 @@ async def test_end_to_end_checkpoint_synchronization_with_operations_list():
         return "result"
 
     @durable_execution
-    async def my_handler(event, context: DurableContext) -> str:
-        return await context.step(my_step)
+    async def my_handler(event) -> str:
+        return await step(my_step)
 
     with patch(
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
     ) as mock_client_class:
         mock_client = Mock()
-        mock_client_class.initialize_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
         mock_client.checkpoint = mock_checkpoint
@@ -321,13 +331,13 @@ async def test_callback_deferred_error_handling_to_result():
         return "code_executed_after_callback"
 
     @durable_execution
-    async def my_handler(event, context: DurableContext) -> str:
+    async def my_handler(event) -> str:
         # Create callback
-        callback = await context.create_callback("test_callback")
+        callback = await create_callback("test_callback")
 
         # This code executes even if callback will eventually fail
         # This is the deferred error handling pattern
-        result = await context.step(step_after_callback)
+        result = await step(step_after_callback)
 
         return f"{callback.callback_id}:{result}"
 
@@ -335,7 +345,7 @@ async def test_callback_deferred_error_handling_to_result():
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
     ) as mock_client_class:
         mock_client = Mock()
-        mock_client_class.initialize_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         checkpoint_calls = []
         operations = [
@@ -424,14 +434,14 @@ async def test_end_to_end_invoke_operation_with_double_check():
     """
 
     @durable_execution
-    async def my_handler(event, context: DurableContext):
-        await context.invoke("my-function", {"data": "test"})
+    async def my_handler(event):
+        await invoke("my-function", {"data": "test"})
 
     with patch(
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
     ) as mock_client_class:
         mock_client = Mock()
-        mock_client_class.initialize_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
         mock_client.checkpoint = mock_checkpoint
@@ -479,19 +489,19 @@ async def test_end_to_end_child_context_with_async_checkpoint():
     """
 
     async def child_function() -> str:
-        _ = cast(DurableContext, get_context())
+        _ = cast(DurableContext, get_current_context())
         return "child_result"
 
     @durable_execution
-    async def my_handler(event, context: DurableContext) -> str:
-        result: str = await context.run_in_child_context(child_function)
+    async def my_handler(event) -> str:
+        result: str = await run_in_child_context(child_function)
         return result
 
     with patch(
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
     ) as mock_client_class:
         mock_client = Mock()
-        mock_client_class.initialize_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
         mock_client.checkpoint = mock_checkpoint
@@ -540,7 +550,7 @@ async def test_end_to_end_child_context_replay_children_mode():
     execution_count = {"count": 0}
 
     async def child_function_with_large_result() -> str:
-        _ = cast(DurableContext, get_context())
+        _ = cast(DurableContext, get_current_context())
         execution_count["count"] += 1
         return "large" * 256 * 1024
 
@@ -548,8 +558,8 @@ async def test_end_to_end_child_context_replay_children_mode():
         return f"summary_of_{len(result)}_bytes"
 
     @durable_execution
-    async def my_handler(event, context: DurableContext) -> str:
-        await context.run_in_child_context(
+    async def my_handler(event) -> str:
+        await run_in_child_context(
             child_function_with_large_result,
             config=ChildConfig(summary_generator=summary_generator),
         )
@@ -559,7 +569,7 @@ async def test_end_to_end_child_context_replay_children_mode():
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
     ) as mock_client_class:
         mock_client = Mock()
-        mock_client_class.initialize_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         checkpoint_calls = []
         operations = [
@@ -646,20 +656,20 @@ async def test_end_to_end_child_context_error_handling():
     """
 
     async def child_function_that_fails() -> str:
-        _ = cast(DurableContext, get_context())
+        _ = cast(DurableContext, get_current_context())
         msg = "Child function error"
         raise ValueError(msg)
 
     @durable_execution
-    async def my_handler(event, context: DurableContext) -> str:
-        result: str = await context.run_in_child_context(child_function_that_fails)
+    async def my_handler(event) -> str:
+        result: str = await run_in_child_context(child_function_that_fails)
         return result
 
     with patch(
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
     ) as mock_client_class:
         mock_client = Mock()
-        mock_client_class.initialize_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
         mock_client.checkpoint = mock_checkpoint
@@ -712,22 +722,20 @@ async def test_end_to_end_child_context_invocation_error_reraised():
     """
 
     async def child_function_with_invocation_error() -> str:
-        _ = cast(DurableContext, get_context())
+        _ = cast(DurableContext, get_current_context())
         msg = "Invocation failed in child"
         raise InvocationError(msg)
 
     @durable_execution
-    async def my_handler(event, context: DurableContext) -> str:
-        result: str = await context.run_in_child_context(
-            child_function_with_invocation_error
-        )
+    async def my_handler(event) -> str:
+        result: str = await run_in_child_context(child_function_with_invocation_error)
         return result
 
     with patch(
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
     ) as mock_client_class:
         mock_client = Mock()
-        mock_client_class.initialize_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
         mock_client.checkpoint = mock_checkpoint

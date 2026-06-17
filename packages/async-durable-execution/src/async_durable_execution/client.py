@@ -19,43 +19,25 @@ from .types import DurableServiceClient, LambdaApiClient
 logger = logging.getLogger(__name__)
 
 
+def create_default_client():
+    user_agent = f"async-durable-execution/{__version__}-async"
+    return boto3.client(
+        "lambda",
+        config=Config(
+            connect_timeout=5,
+            read_timeout=50,
+            user_agent_extra=user_agent,
+        ),
+    )
+
+
 class ThreadedSyncLambdaClient(DurableServiceClient):
     """Adapt the sync boto3 Lambda client to the async service interface."""
 
     _cached_boto_client: LambdaApiClient | None = None
 
-    def __init__(self, client: LambdaApiClient) -> None:
-        self.client = client
-
-    @classmethod
-    def initialize_client(cls) -> ThreadedSyncLambdaClient:
-        """Initialize or return cached Lambda client.
-
-        Implements lazy initialization with class-level caching to optimize
-        Lambda warm starts. The boto3 client is created once and reused across
-        invocations, avoiding repeated credential resolution and connection
-        pool setup.
-
-        Returns:
-            ThreadedSyncLambdaClient: A new client wrapping the cached boto3 client.
-        """
-
-        user_agent = f"async-durable-execution/{__version__}-async"
-
-        def create_client():
-            return boto3.client(
-                "lambda",
-                config=Config(
-                    connect_timeout=5,
-                    read_timeout=50,
-                    user_agent_extra=user_agent,
-                ),
-            )
-
-        if cls._cached_boto_client is None:
-            cls._cached_boto_client = create_client()
-
-        return cls(client=cls._cached_boto_client)
+    def __init__(self, client: LambdaApiClient | None) -> None:
+        self.client = client or create_default_client()
 
     async def checkpoint(
         self,

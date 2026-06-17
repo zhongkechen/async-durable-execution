@@ -310,6 +310,7 @@ class OperationSubType(Enum):
     WAIT_FOR_CALLBACK = "WaitForCallback"
     WAIT_FOR_CONDITION = "WaitForCondition"
     CHAINED_INVOKE = "ChainedInvoke"
+    EXECUTION = "Execution"
 
 
 class OperationType(Enum):
@@ -331,6 +332,8 @@ class OperationType(Enum):
                 return OperationType.CHAINED_INVOKE
             case OperationSubType.CALLBACK:
                 return OperationType.CALLBACK
+            case OperationSubType.EXECUTION:
+                return OperationType.EXECUTION
             case (
                 OperationSubType.WAIT_FOR_CALLBACK
                 | OperationSubType.RUN_IN_CHILD_CONTEXT
@@ -348,7 +351,7 @@ class OperationType(Enum):
 class OperationIdentifier:
     """Container for operation id, parent id, and name."""
 
-    operation_id: str
+    operation_id: str | None
     sub_type: OperationSubType
     parent_id: str | None = None
     name: str | None = None
@@ -356,6 +359,17 @@ class OperationIdentifier:
     @property
     def type(self) -> OperationType:
         return OperationType.from_sub_type(self.sub_type)
+
+    def require_operation_id(self) -> str:
+        """Return the operation id for non-root operations."""
+        if self.operation_id is None:
+            msg = "operation_id is required for non-execution operations"
+            raise ValueError(msg)
+        return self.operation_id
+
+    @classmethod
+    def create_execution_op(cls):
+        return cls(None, OperationSubType.EXECUTION, None, None)
 
 
 class InvocationStatus(Enum):
@@ -1005,7 +1019,7 @@ class OperationUpdate(SerializableModel):
     ) -> OperationUpdate:
         """Create an instance of OperationUpdate for type:CALLBACK, action:START"""
         return cls(
-            operation_id=identifier.operation_id,
+            operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.CALLBACK,
             sub_type=OperationSubType.CALLBACK,
@@ -1020,7 +1034,7 @@ class OperationUpdate(SerializableModel):
     ) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: CONTEXT, action: START."""
         return cls(
-            operation_id=identifier.operation_id,
+            operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.CONTEXT,
             sub_type=sub_type,
@@ -1038,7 +1052,7 @@ class OperationUpdate(SerializableModel):
     ) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: CONTEXT, action: SUCCEED."""
         return cls(
-            operation_id=identifier.operation_id,
+            operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.CONTEXT,
             sub_type=sub_type,
@@ -1057,7 +1071,7 @@ class OperationUpdate(SerializableModel):
     ) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: CONTEXT, action: FAIL."""
         return cls(
-            operation_id=identifier.operation_id,
+            operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.CONTEXT,
             sub_type=sub_type,
@@ -1092,7 +1106,7 @@ class OperationUpdate(SerializableModel):
     ) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: STEP, action: SUCCEED."""
         return cls(
-            operation_id=identifier.operation_id,
+            operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.STEP,
             sub_type=OperationSubType.STEP,
@@ -1107,7 +1121,7 @@ class OperationUpdate(SerializableModel):
     ) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: STEP, action: FAIL."""
         return cls(
-            operation_id=identifier.operation_id,
+            operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.STEP,
             sub_type=OperationSubType.STEP,
@@ -1120,7 +1134,7 @@ class OperationUpdate(SerializableModel):
     def create_step_start(cls, identifier: OperationIdentifier) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: STEP, action: START."""
         return cls(
-            operation_id=identifier.operation_id,
+            operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.STEP,
             sub_type=OperationSubType.STEP,
@@ -1137,7 +1151,7 @@ class OperationUpdate(SerializableModel):
     ) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: STEP, action: RETRY."""
         return cls(
-            operation_id=identifier.operation_id,
+            operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.STEP,
             sub_type=OperationSubType.STEP,
@@ -1158,7 +1172,7 @@ class OperationUpdate(SerializableModel):
     ) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: INVOKE, action: START."""
         return cls(
-            operation_id=identifier.operation_id,
+            operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.CHAINED_INVOKE,
             sub_type=OperationSubType.CHAINED_INVOKE,
@@ -1174,7 +1188,7 @@ class OperationUpdate(SerializableModel):
     ) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: STEP, action: START."""
         return cls(
-            operation_id=identifier.operation_id,
+            operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.STEP,
             sub_type=OperationSubType.WAIT_FOR_CONDITION,
@@ -1188,7 +1202,7 @@ class OperationUpdate(SerializableModel):
     ) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: STEP, action: SUCCEED."""
         return cls(
-            operation_id=identifier.operation_id,
+            operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.STEP,
             sub_type=OperationSubType.WAIT_FOR_CONDITION,
@@ -1206,7 +1220,7 @@ class OperationUpdate(SerializableModel):
     ) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: STEP, action: RETRY."""
         return cls(
-            operation_id=identifier.operation_id,
+            operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.STEP,
             sub_type=OperationSubType.WAIT_FOR_CONDITION,
@@ -1224,7 +1238,7 @@ class OperationUpdate(SerializableModel):
     ) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: STEP, action: FAIL."""
         return cls(
-            operation_id=identifier.operation_id,
+            operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.STEP,
             sub_type=OperationSubType.WAIT_FOR_CONDITION,
@@ -1239,7 +1253,7 @@ class OperationUpdate(SerializableModel):
     ) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: WAIT, action: START."""
         return cls(
-            operation_id=identifier.operation_id,
+            operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.WAIT,
             sub_type=OperationSubType.WAIT,
@@ -1460,4 +1474,5 @@ __all__ = [
     "TimestampConverter",
     "WaitDetails",
     "WaitOptions",
+    "OperationIdentifier",
 ]

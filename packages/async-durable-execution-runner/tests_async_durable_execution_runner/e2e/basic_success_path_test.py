@@ -8,8 +8,9 @@ from typing import Any
 from async_durable_execution import (
     InvocationStatus,
     durable_execution,
+    run_in_child_context,
 )
-from async_durable_execution import run_in_child_context, step, wait
+from async_durable_execution import step, wait
 from async_durable_execution_runner import (
     ContextOperation,
     DurableFunctionLocalTestRunner,

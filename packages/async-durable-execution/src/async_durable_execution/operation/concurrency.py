@@ -8,7 +8,7 @@ import time
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
-from async_durable_execution.models import (
+from ..models import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
@@ -18,25 +18,25 @@ from async_durable_execution.models import (
     ExecutionCounters,
     SuspendResult,
 )
-from async_durable_execution.config import ChildConfig, NestingType
-from async_durable_execution.exceptions import (
+from ..config import ChildConfig, NestingType
+from ..exceptions import (
     OrphanedChildException,
     SuspendExecution,
     TimedSuspendExecution,
 )
-from async_durable_execution.models import ErrorObject, OperationIdentifier
-from async_durable_execution.operation.child import child_handler
+from ..models import ErrorObject, OperationIdentifier
+from .child import child_handler
 
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from async_durable_execution.config import CompletionConfig
-    from async_durable_execution.context import DurableContext
-    from async_durable_execution.models import OperationSubType
-    from async_durable_execution.serdes import SerDes
-    from async_durable_execution.state import ExecutionState
-    from async_durable_execution.types import SummaryGenerator
+    from ..config import CompletionConfig
+    from .child import DurableContext
+    from ..models import OperationSubType
+    from ..serdes import SerDes
+    from ..state import ExecutionState
+    from ..types import SummaryGenerator
 
 
 logger = logging.getLogger(__name__)
@@ -316,7 +316,7 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
         executable: Executable[CallableType],
     ) -> ResultType:
         operation_id: str = (
-            executor_context._step_counter._create_step_id_for_logical_step(  # noqa: SLF001
+            executor_context.step_counter._create_step_id_for_logical_step(  # noqa: SLF001
                 executable.index
             )
         )
@@ -329,7 +329,7 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
         operation_identifier = OperationIdentifier(
             operation_id=operation_id,
             sub_type=self.sub_type_iteration,
-            parent_id=executor_context._parent_id,  # noqa: SLF001
+            parent_id=executor_context.parent_id,  # noqa: SLF001
             name=name,
         )
 
@@ -338,7 +338,7 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
 
         result = await child_handler(
             run_in_child_handler,
-            child_context.state,
+            child_context.execution_state,
             operation_identifier=operation_identifier,
             config=ChildConfig(
                 serdes=self.item_serdes or self.serdes,
@@ -347,7 +347,7 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
                 is_virtual=is_virtual,
             ),
         )
-        child_context.state.track_replay(operation_id=operation_id)
+        child_context.execution_state.track_replay(operation_id=operation_id)
         return result
 
     async def replay(
@@ -356,7 +356,7 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
         items: list[BatchItem[ResultType]] = []
         for executable in self.executables:
             operation_id = (
-                executor_context._step_counter._create_step_id_for_logical_step(  # noqa: SLF001
+                executor_context.step_counter._create_step_id_for_logical_step(  # noqa: SLF001
                     executable.index
                 )
             )

@@ -1,3 +1,5 @@
+from async_durable_execution.operation import childfrom async_durable_execution.operation import stepfrom async_durable_execution.operation import stepfrom async_durable_execution.operation import stepfrom async_durable_execution.operation import step
+
 # AWS Lambda Durable Functions SDK - Agent Guide
 
 > Build resilient, long-running AWS Lambda functions with automatic state persistence, retry logic, and workflow orchestration.
@@ -30,11 +32,11 @@ ALL code outside steps MUST be deterministic.
 
 ```python
 # ❌ WRONG: Non-deterministic code outside steps
-id = str(uuid.uuid4())           # Different on each replay!
-timestamp = time.time()          # Different on each replay!
+id = str(uuid.uuid4())  # Different on each replay!
+timestamp = time.time()  # Different on each replay!
 
 # ✅ CORRECT: Non-deterministic code inside steps
-id = context.step(lambda: str(uuid.uuid4()), name="generate-id")
+id = step.step(lambda: str(uuid.uuid4()), name="generate-id")
 timestamp = context.step(lambda: time.time(), name="get-time")
 ```
 
@@ -49,12 +51,14 @@ You CANNOT call durable operations inside a step function.
 async def process():
     context.wait(duration=timedelta(seconds=1))  # ERROR!
 
+
 # ✅ CORRECT: Use run_in_child_context for grouping
 async def process(child_ctx: DurableContext):
     child_ctx.wait(duration=timedelta(seconds=1))
     child_ctx.step(some_step)
 
-context.run_in_child_context(process, name="process")
+
+child.run_in_child_context(process, name="process")
 ```
 
 ### Rule 3: Closure Mutations Are Lost on Replay

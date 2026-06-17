@@ -2,8 +2,9 @@
 
 from unittest.mock import Mock
 
-from async_durable_execution.context import DurableContext
+from async_durable_execution import DurableContext
 from async_durable_execution.execution import ExecutionState
+from async_durable_execution.models import OperationIdentifier, OperationSubType
 
 
 def operation_id_sequence(parent_id: str | None = None):
@@ -11,7 +12,14 @@ def operation_id_sequence(parent_id: str | None = None):
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test-arn"
 
-    context = DurableContext(state=mock_state, parent_id=parent_id)
+    context = DurableContext(
+        execution_state=mock_state,
+        operation_identifier=OperationIdentifier(
+            operation_id=None,
+            sub_type=OperationSubType.EXECUTION,
+            parent_id=parent_id,
+        ),
+    )
 
     while True:
-        yield context._step_counter.create_step_id()  # noqa: SLF001
+        yield context.step_counter.create_step_id()  # noqa: SLF001

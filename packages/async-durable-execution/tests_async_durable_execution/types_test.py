@@ -1,193 +1,204 @@
 """Tests for the types module."""
 
-import asyncio
-from unittest.mock import AsyncMock, Mock
+from datetime import timedelta
+from unittest.mock import ANY, AsyncMock, Mock, patch
 
 from async_durable_execution.config import (
-    BatchedInput,
     CallbackConfig,
     ChildConfig,
     MapConfig,
     ParallelConfig,
     StepConfig,
+    WaitForCallbackConfig,
 )
+from async_durable_execution import (
+    create_callback,
+    step,
+    wait,
+    parallel,
+    run_in_child_context,
+    wait_for_callback,
+    map as map_operation,
+    DurableContext as RuntimeDurableContext,
+)
+from async_durable_execution.context import reset_current_context, set_current_context
+from async_durable_execution.models import OperationIdentifier, OperationSubType
+from async_durable_execution.operation import child
 from async_durable_execution.types import Callback, DurableContext
 
 
 async def test_callback_protocol():
     """Test Callback protocol implementation."""
-    # Create a mock that implements the Callback protocol
     mock_callback = Mock(spec=Callback)
     mock_callback.callback_id = "test-callback-123"
     mock_callback.result = AsyncMock(return_value="test_result")
 
-    # Test protocol methods
     assert mock_callback.callback_id == "test-callback-123"
-    result = await mock_callback.result()
-    assert result == "test_result"
+    assert await mock_callback.result() == "test_result"
 
 
-async def test_durable_context_protocol():
-    """Test DurableContext protocol implementation."""
-    # Create a mock that implements the DurableContext protocol
+async def test_durable_context_protocol_fields():
+    """Test DurableContext protocol exposes execution state fields."""
     mock_context = Mock(spec=DurableContext)
+    mock_context.execution_state = Mock()
+    mock_context.durable_execution_arn = "arn:aws:lambda:region:acct:function:name:1"
+    mock_context.parent_id = "parent-op"
+    mock_context.operation_id = "operation-op"
+    mock_context.operation_name = "operation-name"
 
-    # Test step method
-    async def test_callable():
-        return "step_result"
-
-    mock_context.step = AsyncMock(return_value="step_result")
-    result = await mock_context.step(
-        test_callable, name="test_step", config=StepConfig()
-    )
-    assert result == "step_result"
-    mock_context.step.assert_called_once_with(
-        test_callable, name="test_step", config=StepConfig()
-    )
-
-    # Test run_in_child_context method
-    def child_callable(ctx):
-        return "child_result"
-
-    mock_context.run_in_child_context = AsyncMock(return_value="child_result")
-    result = await mock_context.run_in_child_context(
-        child_callable, name="test_child", config=ChildConfig()
-    )
-    assert result == "child_result"
-    mock_context.run_in_child_context.assert_called_once_with(
-        child_callable, name="test_child", config=ChildConfig()
-    )
-
-    # Test map method
-    def map_function(ctx, item, index, items):
-        return f"mapped_{item}"
-
-    inputs = ["a", "b", "c"]
-    mock_context.map = AsyncMock(return_value=["mapped_a", "mapped_b", "mapped_c"])
-    result = await mock_context.map(
-        inputs, map_function, name="test_map", config=MapConfig()
-    )
-    assert result == ["mapped_a", "mapped_b", "mapped_c"]
-    mock_context.map.assert_called_once_with(
-        inputs, map_function, name="test_map", config=MapConfig()
-    )
-
-    # Test parallel method
-    def callable1():
-        return "result1"
-
-    def callable2():
-        return "result2"
-
-    callables = [callable1, callable2]
-    mock_context.parallel = AsyncMock(return_value=["result1", "result2"])
-    result = await mock_context.parallel(
-        callables, name="test_parallel", config=ParallelConfig()
-    )
-    assert result == ["result1", "result2"]
-    mock_context.parallel.assert_called_once_with(
-        callables, name="test_parallel", config=ParallelConfig()
-    )
-
-    # Test wait method
-    mock_context.wait = AsyncMock()
-    await mock_context.wait(10, name="test_wait")
-    mock_context.wait.assert_called_once_with(10, name="test_wait")
-
-    # Test create_callback method
-    mock_callback = Mock(spec=Callback)
-    mock_context.create_callback = AsyncMock(return_value=mock_callback)
-    result = await mock_context.create_callback(
-        name="test_callback", config=CallbackConfig()
-    )
-    assert result == mock_callback
-    mock_context.create_callback.assert_called_once_with(
-        name="test_callback", config=CallbackConfig()
-    )
+    assert mock_context.execution_state is not None
+    assert mock_context.durable_execution_arn.endswith(":1")
+    assert mock_context.parent_id == "parent-op"
+    assert mock_context.operation_id == "operation-op"
+    assert mock_context.operation_name == "operation-name"
 
 
-async def test_callback_protocol_with_none_values():
-    """Test Callback protocol with None values."""
-    mock_callback = Mock(spec=Callback)
-    mock_callback.callback_id = "test-callback-456"
-    mock_callback.result = AsyncMock(return_value=None)
-
-    # Test with None result
-    result = await mock_callback.result()
-    assert result is None
-
-
-async def test_durable_context_protocol_with_none_values():
-    """Test DurableContext protocol with None values."""
+async def test_durable_context_protocol_optional_fields_can_be_none():
+    """Optional DurableContext protocol fields may be unset."""
     mock_context = Mock(spec=DurableContext)
+    mock_context.execution_state = None
+    mock_context.durable_execution_arn = None
+    mock_context.parent_id = None
+    mock_context.operation_id = None
+    mock_context.operation_name = None
+
+    assert mock_context.execution_state is None
+    assert mock_context.durable_execution_arn is None
+    assert mock_context.parent_id is None
+    assert mock_context.operation_id is None
+    assert mock_context.operation_name is None
+
+
+async def test_module_level_operations_delegate_to_mock_context_methods():
+    """Module-level operations use durable-context helper paths."""
+    mock_state = Mock()
+    mock_state.durable_execution_arn = (
+        "arn:aws:durable:us-east-1:123456789012:execution/test"
+    )
+    context = child.DurableContext(
+        execution_state=mock_state,
+        operation_identifier=OperationIdentifier(
+            operation_id=None,
+            sub_type=OperationSubType.EXECUTION,
+        ),
+    )
 
     async def test_callable():
         return "result"
 
-    # Test methods with None names and configs
-    mock_context.step = AsyncMock(return_value="result")
-    await mock_context.step(test_callable, name=None, config=None)
-    mock_context.step.assert_called_once_with(test_callable, name=None, config=None)
+    async def submitter(_callback_id: str):
+        return "submitted"
 
-    mock_context.run_in_child_context = AsyncMock(return_value="child_result")
-    await mock_context.run_in_child_context(test_callable, name=None, config=None)
-    mock_context.run_in_child_context.assert_called_once_with(
-        test_callable, name=None, config=None
+    mock_wait = AsyncMock(return_value=None)
+    mock_child = AsyncMock(side_effect=["child_result", "callback_result"])
+    mock_child_handler = AsyncMock(side_effect=[["mapped"], ["parallel"]])
+
+    step_executor = AsyncMock()
+    step_executor.process.return_value = "step_result"
+    callback_executor = AsyncMock()
+    callback_executor.process.return_value = "callback-id"
+
+    token = set_current_context(context)
+    try:
+        with (
+            patch(
+                "async_durable_execution.operation.step.StepOperationExecutor"
+            ) as mock_step_executor,
+            patch(
+                "async_durable_execution.operation.callback.CallbackOperationExecutor"
+            ) as mock_callback_executor,
+            patch("async_durable_execution.operation.wait._wait_in_context", mock_wait),
+            patch(
+                "async_durable_execution.operation.child._run_in_child_context_in_context",
+                mock_child,
+            ),
+            patch(
+                "async_durable_execution.operation.callback._run_in_child_context_in_context",
+                mock_child,
+            ),
+            patch(
+                "async_durable_execution.operation.map.child_handler",
+                mock_child_handler,
+            ),
+            patch(
+                "async_durable_execution.operation.parallel.child_handler",
+                mock_child_handler,
+            ),
+        ):
+            mock_step_executor.return_value = step_executor
+            mock_callback_executor.return_value = callback_executor
+
+            assert (
+                await step(test_callable, name="test_step", config=StepConfig())
+                == "step_result"
+            )
+            assert (
+                await run_in_child_context(
+                    test_callable,
+                    name="test_child",
+                    config=ChildConfig(),
+                )
+                == "child_result"
+            )
+            assert await map_operation(
+                ["a"],
+                test_callable,
+                name="test_map",
+                config=MapConfig(),
+            ) == ["mapped"]
+            assert await parallel(
+                [test_callable],
+                name="test_parallel",
+                config=ParallelConfig(),
+            ) == ["parallel"]
+            await wait(timedelta(seconds=5), name="test_wait")
+            callback_result = await create_callback(
+                name="test_callback",
+                config=CallbackConfig(),
+            )
+            assert callback_result.callback_id == "callback-id"
+            assert (
+                await wait_for_callback(
+                    submitter,
+                    name="test_wait_for_callback",
+                    config=WaitForCallbackConfig(),
+                )
+                == "callback_result"
+            )
+    finally:
+        reset_current_context(token)
+
+    mock_step_executor.assert_called_once()
+    step_executor.process.assert_awaited_once()
+    mock_wait.assert_awaited_once_with(
+        context,
+        duration=timedelta(seconds=5),
+        name="test_wait",
     )
-
-    mock_context.map = AsyncMock(return_value=[])
-    await mock_context.map([], test_callable, name=None, config=None)
-    mock_context.map.assert_called_once_with([], test_callable, name=None, config=None)
-
-    mock_context.parallel = AsyncMock(return_value=[])
-    await mock_context.parallel([], name=None, config=None)
-    mock_context.parallel.assert_called_once_with([], name=None, config=None)
-
-    mock_context.wait = AsyncMock()
-    await mock_context.wait(5, name=None)
-    mock_context.wait.assert_called_once_with(5, name=None)
-
-    mock_callback = Mock(spec=Callback)
-    mock_context.create_callback = AsyncMock(return_value=mock_callback)
-    await mock_context.create_callback(name=None, config=None)
-    mock_context.create_callback.assert_called_once_with(name=None, config=None)
+    mock_callback_executor.assert_called_once_with(
+        state=mock_state,
+        operation_identifier=ANY,
+        config=ANY,
+    )
+    callback_executor.process.assert_awaited_once()
+    assert mock_child.await_count == 2
+    assert mock_child.await_args_list[0].kwargs["func"] is test_callable
+    assert mock_child.await_args_list[0].kwargs["name"] == "test_child"
+    assert mock_child.await_args_list[1].kwargs["name"] == "test_wait_for_callback"
+    assert mock_child_handler.await_count == 2
 
 
-async def test_map_with_batched_input():
-    """Test map method with BatchedInput type."""
-    mock_context = Mock(spec=DurableContext)
-
-    def map_function(ctx, item, index, items):
-        # item can be U or BatchedInput[Any, U]
-        if isinstance(item, BatchedInput):
-            return f"batched_{len(item.items)}"
-        return f"single_{item}"
-
-    # Test with regular inputs
-    inputs = ["x", "y"]
-    mock_context.map = AsyncMock(return_value=["single_x", "single_y"])
-    result = await mock_context.map(inputs, map_function)
-    assert result == ["single_x", "single_y"]
-
-    # Test with BatchedInput (correct constructor)
-    batched_input = BatchedInput(batch_input="batch_data", items=["a", "b", "c"])
-    inputs_with_batch = [batched_input]
-    mock_context.map = AsyncMock(return_value=["batched_3"])
-    result = await mock_context.map(inputs_with_batch, map_function)
-    assert result == ["batched_3"]
-
-
-async def test_protocol_abstract_methods():
-    """Test that protocol methods are abstract and contain ellipsis."""
-    # Test that the protocols have the expected abstract methods
+async def test_protocol_members_reflect_current_surface():
+    """Test that protocols retain the current public surface."""
     assert hasattr(Callback, "result")
 
-    assert hasattr(DurableContext, "step")
-    assert hasattr(DurableContext, "run_in_child_context")
-    assert hasattr(DurableContext, "map")
-    assert hasattr(DurableContext, "parallel")
-    assert hasattr(DurableContext, "wait")
-    assert hasattr(DurableContext, "create_callback")
+    assert DurableContext.__annotations__ == {
+        "execution_state": "ExecutionState | None",
+        "durable_execution_arn": "str | None",
+        "parent_id": "str | None",
+        "operation_id": "str | None",
+        "operation_name": "str | None",
+    }
 
 
 async def test_concrete_callback_implementation():
@@ -201,7 +212,6 @@ async def test_concrete_callback_implementation():
         async def result(self):
             return self._result
 
-    # Test the concrete implementation
     callback = ConcreteCallback("test-123")
     assert callback.callback_id == "test-123"
     assert await callback.result() is None

@@ -9,11 +9,17 @@ from typing import Any, cast
 from unittest.mock import Mock, patch
 
 import pytest
-from async_durable_execution import durable_step, step
-from async_durable_execution.context import (
-    DurableContext,
+from async_durable_execution import (
+    durable_step,
+    run_in_child_context,
+    step,
+    wait,
+    wait_for_callback,
     durable_wait_for_callback,
-    get_context,
+    DurableContext,
+)
+from async_durable_execution.context import (
+    get_current_context,
 )
 from async_durable_execution.execution import (
     InvocationStatus,
@@ -89,20 +95,21 @@ async def test_step_different_ways_to_pass_args():
         return f"from step {a} {b}"
 
     @durable_execution
-    async def my_handler(event, context: DurableContext) -> list[str]:
+    async def my_handler(event) -> list[str]:
+        del event
         results: list[str] = []
-        result: str = await context.step(partial(step_with_args, a=123, b="str"))
+        result: str = await step(partial(step_with_args, a=123, b="str"))
         assert result == "from step 123 str"
         results.append(result)
 
-        result = await context.step(step_no_args)
+        result = await step(step_no_args)
         assert result == "from step no args"
         results.append(result)
 
         # note this won't work:
-        # result: str = context.step(step_no_args)
+        # result: str = step(step_no_args)
 
-        result = await context.step(step_plain)
+        result = await step(step_plain)
         assert result == "from step plain"
         results.append(result)
 
@@ -112,7 +119,7 @@ async def test_step_different_ways_to_pass_args():
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
     ) as mock_client_class:
         mock_client = Mock()
-        mock_client_class.initialize_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         # Mock the checkpoint method to track calls
         checkpoint_calls = []
@@ -183,20 +190,20 @@ async def test_step_different_ways_to_pass_args():
 async def test_durable_step_decorator_creates_step_operation():
     @durable_step
     async def decorated_step(status_code: int) -> str:
-        assert get_context() is not None
+        assert get_current_context() is not None
         logging.getLogger(__name__).info("status=%s", status_code)
         return f"status:{status_code}"
 
     @durable_execution
-    async def my_handler(event, context: DurableContext) -> str:
-        del event, context
+    async def my_handler(event) -> str:
+        del event
         return await step(decorated_step(200))
 
     with patch(
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
     ) as mock_client_class:
         mock_client = Mock()
-        mock_client_class.initialize_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         checkpoint_calls = []
 
@@ -253,13 +260,14 @@ async def test_durable_step_decorator_creates_step_operation():
 
 async def test_step_with_logger():
     async def mystep(a: int, b: str) -> str:
-        assert get_context() is not None
+        assert get_current_context() is not None
         logging.getLogger(__name__).info("from step %s %s", a, b)
         return "result"
 
     @durable_execution
-    async def my_handler(event, context: DurableContext):
-        result: str = await context.step(partial(mystep, a=123, b="str"))
+    async def my_handler(event):
+        del event
+        result: str = await step(partial(mystep, a=123, b="str"))
         assert result == "result"
 
     with (
@@ -269,7 +277,7 @@ async def test_step_with_logger():
         patch.object(logging.getLogger(__name__), "info") as mock_info,
     ):
         mock_client = Mock()
-        mock_client_class.initialize_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         # Mock the checkpoint method to track calls
         checkpoint_calls = []
@@ -345,20 +353,21 @@ async def test_wait_inside_run_in_childcontext():
     mock_inside_child = Mock()
 
     async def func(a: int, b: int):
-        child_context = cast(DurableContext, get_context())
+        child_context = cast(DurableContext, get_current_context())
         mock_inside_child(a, b)
-        await child_context.wait(timedelta(seconds=1))
+        await wait(timedelta(seconds=1))
 
     @durable_execution
-    async def my_handler(event, context):
-        await context.run_in_child_context(partial(func, 10, 20), name="func")
+    async def my_handler(event):
+        del event
+        await run_in_child_context(partial(func, 10, 20), name="func")
 
     # Mock the lambda client
     with patch(
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
     ) as mock_client_class:
         mock_client = Mock()
-        mock_client_class.initialize_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         # Use helper to create mock that properly tracks operations
         mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
@@ -440,16 +449,17 @@ async def test_step_checkpoint_failure_propagates_error():
         return "this should checkpoint but fail"
 
     @durable_execution
-    async def my_handler(event, context: DurableContext):
+    async def my_handler(event):
+        del event
         # This step will trigger a checkpoint that fails
-        result: str = await context.step(failing_step)
+        result: str = await step(failing_step)
         return result
 
     with patch(
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
     ) as mock_client_class:
         mock_client = Mock()
-        mock_client_class.initialize_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         # Mock the checkpoint method to raise an error (using RuntimeError as a generic exception)
         async def mock_checkpoint_failure(
@@ -502,9 +512,10 @@ async def test_wait_not_caught_by_exception():
     """Do not catch Suspend exceptions."""
 
     @durable_execution
-    async def my_handler(event: Any, context: DurableContext):
+    async def my_handler(event: Any):
+        del event
         try:
-            await context.wait(timedelta(seconds=1))
+            await wait(timedelta(seconds=1))
         except Exception as err:
             msg = "This should not be caught"
             raise CustomError(msg) from err
@@ -513,7 +524,7 @@ async def test_wait_not_caught_by_exception():
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
     ) as mock_client_class:
         mock_client = Mock()
-        mock_client_class.initialize_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         # Use helper to create mock that properly tracks operations
         mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
@@ -571,7 +582,7 @@ async def test_durable_wait_for_callback_decorator():
 
     @durable_wait_for_callback
     async def submit_to_external_system(callback_id, task_name, priority):
-        callback_context = get_context()
+        callback_context = get_current_context()
         assert callback_context.callback_id == callback_id
         mock_submitter(callback_id, task_name, priority)
         logging.getLogger(__name__).info(
@@ -579,16 +590,15 @@ async def test_durable_wait_for_callback_decorator():
         )
 
     @durable_execution
-    async def my_handler(event, context):
-        await context.wait_for_callback(
-            submit_to_external_system("my_task", priority=5)
-        )
+    async def my_handler(event):
+        del event
+        await wait_for_callback(submit_to_external_system("my_task", priority=5))
 
     with patch(
         "async_durable_execution.execution.ThreadedSyncLambdaClient"
     ) as mock_client_class:
         mock_client = Mock()
-        mock_client_class.initialize_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         checkpoint_calls = []
 

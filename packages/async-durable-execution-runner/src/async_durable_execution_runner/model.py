@@ -9,8 +9,6 @@ from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any
 
-from dateutil.tz import UTC
-
 from async_durable_execution.execution import DurableExecutionInvocationOutput
 
 # Import existing types from the main SDK - REUSE EVERYTHING POSSIBLE
@@ -1321,7 +1319,7 @@ class EventCreationContext:
         return (
             self.operation.start_timestamp
             if self.operation.start_timestamp is not None
-            else datetime.datetime.now(UTC)
+            else datetime.datetime.now(datetime.UTC)
         )
 
     @property
@@ -1329,7 +1327,7 @@ class EventCreationContext:
         return (
             self.operation.end_timestamp
             if self.operation.end_timestamp is not None
-            else datetime.datetime.now(UTC)
+            else datetime.datetime.now(datetime.UTC)
         )
 
 

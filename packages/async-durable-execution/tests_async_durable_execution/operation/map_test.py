@@ -23,7 +23,13 @@ from async_durable_execution.config import (
     MapConfig,
     NestingType,
 )
-from async_durable_execution.context import DurableContext, StepCounter
+from async_durable_execution.context import (
+    OperationIdGenerator,
+    get_current_context,
+    reset_current_context,
+    set_current_context,
+)
+from async_durable_execution import map as map_operation, DurableContext
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import OperationSubType
 from async_durable_execution.operation import child  # PLC0415
@@ -54,7 +60,41 @@ def create_test_context(
             "arn:aws:durable:us-east-1:123456789012:execution/test"
         )
 
-    return DurableContext(state=state, parent_id=parent_id)
+    return child.DurableContext(
+        execution_state=state,
+        operation_identifier=OperationIdentifier(
+            operation_id=None,
+            sub_type=OperationSubType.EXECUTION,
+            parent_id=parent_id,
+        ),
+    )
+
+
+def create_mock_execution_state():
+    state = Mock(spec=ExecutionState)
+    state.durable_execution_arn = (
+        "arn:aws:durable:us-east-1:123456789012:execution/test"
+    )
+    state._create_checkpoint_async = AsyncMock()
+    state.wrap_user_function = lambda func, *args, **kwargs: (
+        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+    )
+    return state
+
+
+def create_mock_child_context(state):
+    child_context = Mock()
+    child_context.state = state
+    child_context.execution_state = state
+    return child_context
+
+
+async def run_with_context(context: DurableContext, awaitable):
+    token = set_current_context(context)
+    try:
+        return await awaitable
+    finally:
+        reset_current_context(token)
 
 
 async def test_map_executor_init():
@@ -83,7 +123,7 @@ async def test_map_executor_from_items():
     """Test MapExecutor.from_items class method."""
     items = ["a", "b", "c"]
 
-    async def callable_func(ctx, item, idx, items):
+    async def callable_func(item, idx, items):
         return item.upper()
 
     config = MapConfig(max_concurrency=3, nesting_type=NestingType.FLAT)
@@ -101,7 +141,7 @@ async def test_map_executor_from_items_default_config():
     """Test MapExecutor.from_items with default config."""
     items = ["x"]
 
-    async def callable_func(ctx, item, idx, items):
+    async def callable_func(item, idx, items):
         return item
 
     executor = MapExecutor.from_items(
@@ -120,7 +160,7 @@ async def test_map_executor_execute_item(mock_logger):
     """Test MapExecutor.execute_item method with logging."""
     items = ["hello", "world"]
 
-    async def callable_func(ctx, item, idx, items):
+    async def callable_func(item, idx, items):
         return f"{item}_{idx}"
 
     executor = MapExecutor.from_items(
@@ -142,7 +182,7 @@ async def test_map_executor_execute_item_with_context():
     """Test MapExecutor.execute_item with context usage."""
     items = [1, 2, 3]
 
-    async def callable_func(ctx, item, idx, items):
+    async def callable_func(item, idx, items):
         return item * 2 + idx
 
     executor = MapExecutor.from_items(
@@ -160,8 +200,9 @@ async def test_map_executor_execute_item_with_context():
 async def test_map_executor_execute_item_with_async_callable():
     items = ["hello"]
 
-    async def callable_func(ctx, item, idx, items):
+    async def callable_func(item, idx, items):
         await asyncio.sleep(0)
+        ctx = get_current_context()
         return f"{ctx}-{item}-{idx}-{len(items)}"
 
     executor = MapExecutor.from_items(
@@ -180,7 +221,7 @@ async def test_map_handler():
     """Test map_handler function."""
     items = ["a", "b"]
 
-    async def callable_func(ctx, item, idx, items):
+    async def callable_func(item, idx, items):
         return item.upper()
 
     async def mock_run_in_child_context(func, name, config):
@@ -215,7 +256,7 @@ async def test_map_handler_with_none_config():
     """Test map_handler with None config creates default MapConfig."""
     items = ["test"]
 
-    async def callable_func(ctx, item, idx, items):
+    async def callable_func(item, idx, items):
         return item
 
     async def mock_run_in_child_context(func, name, config):
@@ -251,8 +292,9 @@ async def test_map_executor_execute_item_accesses_all_parameters():
     """Test that execute_item passes all parameters correctly."""
     items = ["first", "second", "third"]
 
-    async def callable_func(ctx, item, idx, items_list):
+    async def callable_func(item, idx, items_list):
         # Verify all parameters are passed correctly
+        ctx = get_current_context()
         assert ctx == "test_context"
         assert item in items_list
         assert idx < len(items_list)
@@ -275,7 +317,7 @@ async def test_map_executor_from_items_empty_list():
     """Test MapExecutor.from_items with empty items list."""
     items = []
 
-    async def callable_func(ctx, item, idx, items):
+    async def callable_func(item, idx, items):
         return item
 
     executor = MapExecutor.from_items(
@@ -292,7 +334,7 @@ async def test_map_executor_from_items_single_item():
     """Test MapExecutor.from_items with single item."""
     items = ["only"]
 
-    async def callable_func(ctx, item, idx, items):
+    async def callable_func(item, idx, items):
         return f"processed_{item}"
 
     executor = MapExecutor.from_items(
@@ -310,7 +352,7 @@ async def test_map_executor_inheritance():
     """Test that MapExecutor properly inherits from ConcurrentExecutor."""
     items = ["test"]
 
-    async def callable_func(ctx, item, idx, items):
+    async def callable_func(item, idx, items):
         return item
 
     executor = MapExecutor.from_items(
@@ -329,7 +371,7 @@ async def test_map_handler_calls_executor_execute():
     """Test that map_handler calls executor.execute method."""
     items = ["test_item"]
 
-    async def callable_func(ctx, item, idx, items):
+    async def callable_func(item, idx, items):
         return f"result_{item}"
 
     mock_batch_result = BatchResult(
@@ -379,7 +421,7 @@ async def test_map_handler_with_none_config_creates_default():
     """Test that map_handler creates default MapConfig when config is None."""
     items = ["test"]
 
-    async def callable_func(ctx, item, idx, items):
+    async def callable_func(item, idx, items):
         return item
 
     # Mock MapExecutor.from_items to verify it's called with default config
@@ -439,26 +481,26 @@ async def test_map_handler_with_serdes():
     """Test that map_handler with serdes"""
     items = ["test_item"]
 
-    async def callable_func(ctx, item, idx, items):
+    async def callable_func(item, idx, items):
         return f"RESULT_{item.upper()}"
 
     executor_context = Mock()
+    executor_context.step_counter = Mock()
     executor_context._step_counter._create_step_id_for_logical_step = (  # noqa: SLF001
         lambda *args: "1"
     )
-    child_context = Mock()
-    child_context.state.wrap_user_function = lambda func, *args, **kwargs: (
-        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+    executor_context.step_counter._create_step_id_for_logical_step = (  # noqa: SLF001
+        lambda *args: "1"
     )
+    execution_state = create_mock_execution_state()
+    execution_state.get_checkpoint_result.return_value = Mock(
+        is_succeeded=Mock(return_value=False),
+        is_failed=Mock(return_value=False),
+        is_existent=Mock(return_value=False),
+        is_replay_children=Mock(return_value=False),
+    )
+    child_context = create_mock_child_context(execution_state)
     executor_context.create_child_context = lambda *args, **kwargs: child_context
-
-    class MockExecutionState:
-        def get_checkpoint_result(self, operation_id):
-            mock_result = Mock()
-            mock_result.is_succeeded.return_value = False
-            return mock_result
-
-    execution_state = MockExecutionState()
     config = MapConfig(serdes=CustomStrSerDes())
     operation_identifier = OperationIdentifier(
         "test_op", OperationSubType.MAP, "parent", "test_map"
@@ -481,7 +523,7 @@ async def test_map_handler_with_summary_generator():
     """Test that map_handler calls executor_context methods correctly."""
     items = ["item1", "item2"]
 
-    async def callable_func(ctx, item, idx, items):
+    async def callable_func(item, idx, items):
         return f"large_result_{item}" * 1000  # Create a large result
 
     def mock_summary_generator(result):
@@ -490,18 +532,23 @@ async def test_map_handler_with_summary_generator():
     config = MapConfig(summary_generator=mock_summary_generator)
 
     executor_context = Mock()
+    executor_context.step_counter = Mock()
     executor_context._step_counter._create_step_id_for_logical_step = Mock(  # noqa: SLF001
         side_effect=["1", "2"]
     )
-    executor_context.create_child_context = Mock(return_value=Mock())
-
-    class MockExecutionState:
-        def get_checkpoint_result(self, operation_id):
-            mock_result = Mock()
-            mock_result.is_succeeded.return_value = False
-            return mock_result
-
-    execution_state = MockExecutionState()
+    executor_context.step_counter._create_step_id_for_logical_step = Mock(
+        side_effect=["1", "2"]
+    )
+    execution_state = create_mock_execution_state()
+    execution_state.get_checkpoint_result.return_value = Mock(
+        is_succeeded=Mock(return_value=False),
+        is_failed=Mock(return_value=False),
+        is_existent=Mock(return_value=False),
+        is_replay_children=Mock(return_value=False),
+    )
+    executor_context.create_child_context = Mock(
+        return_value=create_mock_child_context(execution_state)
+    )
     operation_identifier = OperationIdentifier(
         "test_op", OperationSubType.MAP, "parent", "test_map"
     )
@@ -521,11 +568,11 @@ async def test_map_handler_with_summary_generator():
 
     # Verify that _create_step_id_for_logical_step was called twice with unique values
     assert (
-        executor_context._step_counter._create_step_id_for_logical_step.call_count == 2
-    )  # noqa: SLF001
+        executor_context.step_counter._create_step_id_for_logical_step.call_count == 2
+    )
     calls = (
-        executor_context._step_counter._create_step_id_for_logical_step.call_args_list
-    )  # noqa: SLF001
+        executor_context.step_counter._create_step_id_for_logical_step.call_args_list
+    )
     # Verify unique values were passed
     assert calls[0] != calls[1]
 
@@ -534,7 +581,7 @@ async def test_map_executor_from_items_with_summary_generator():
     """Test MapExecutor.from_items preserves summary_generator."""
     items = ["item1"]
 
-    async def callable_func(ctx, item, idx, items):
+    async def callable_func(item, idx, items):
         return f"result_{item}"
 
     def mock_summary_generator(result):
@@ -552,22 +599,27 @@ async def test_map_handler_default_summary_generator():
     """Test that map_handler calls executor_context methods correctly with default config."""
     items = ["item1"]
 
-    async def callable_func(ctx, item, idx, items):
+    async def callable_func(item, idx, items):
         return f"result_{item}"
 
     executor_context = Mock()
+    executor_context.step_counter = Mock()
     executor_context._step_counter._create_step_id_for_logical_step = Mock(  # noqa: SLF001
         return_value="1"
     )
-    executor_context.create_child_context = Mock(return_value=Mock())  # SLF001
-
-    class MockExecutionState:
-        def get_checkpoint_result(self, operation_id):
-            mock_result = Mock()
-            mock_result.is_succeeded.return_value = False
-            return mock_result
-
-    execution_state = MockExecutionState()
+    executor_context.step_counter._create_step_id_for_logical_step = Mock(
+        return_value="1"
+    )
+    execution_state = create_mock_execution_state()
+    execution_state.get_checkpoint_result.return_value = Mock(
+        is_succeeded=Mock(return_value=False),
+        is_failed=Mock(return_value=False),
+        is_existent=Mock(return_value=False),
+        is_replay_children=Mock(return_value=False),
+    )
+    executor_context.create_child_context = Mock(
+        return_value=create_mock_child_context(execution_state)
+    )  # SLF001
     operation_identifier = OperationIdentifier(
         "test_op", OperationSubType.MAP, "parent", "test_map"
     )
@@ -587,8 +639,8 @@ async def test_map_handler_default_summary_generator():
 
     # Verify that _create_step_id_for_logical_step was called once
     assert (
-        executor_context._step_counter._create_step_id_for_logical_step.call_count == 1
-    )  # noqa: SLF001
+        executor_context.step_counter._create_step_id_for_logical_step.call_count == 1
+    )
 
 
 async def test_map_executor_init_with_summary_generator():
@@ -619,7 +671,7 @@ async def test_map_executor_init_with_summary_generator():
 async def test_map_handler_with_explicit_none_summary_generator():
     """Test that map_handler calls executor_context methods correctly with explicit None summary_generator."""
 
-    async def func(ctx, item, index, array):
+    async def func(item, index, array):
         return f"processed_{item}"
 
     items = ["item1", "item2", "item3"]
@@ -638,11 +690,23 @@ async def test_map_handler_with_explicit_none_summary_generator():
     )
 
     executor_context = Mock()
+    executor_context.step_counter = Mock()
     executor_context._step_counter._create_step_id_for_logical_step = Mock(  # noqa: SLF001
         side_effect=["1", "2", "3"]
     )
-    executor_context.create_child_context = Mock(return_value=Mock())
-
+    executor_context.step_counter._create_step_id_for_logical_step = Mock(
+        side_effect=["1", "2", "3"]
+    )
+    execution_state = create_mock_execution_state()
+    execution_state.get_checkpoint_result.return_value = Mock(
+        is_succeeded=Mock(return_value=False),
+        is_failed=Mock(return_value=False),
+        is_existent=Mock(return_value=False),
+        is_replay_children=Mock(return_value=False),
+    )
+    executor_context.create_child_context = Mock(
+        return_value=create_mock_child_context(execution_state)
+    )
     # Call map_handler
     await map_handler(
         items=items,
@@ -661,7 +725,7 @@ async def test_map_handler_replay_mechanism():
     """Test that map_handler uses replay when operation has already succeeded."""
     items = ["item1", "item2"]
 
-    async def callable_func(ctx, item, idx, items):
+    async def callable_func(item, idx, items):
         return f"result_{item}"
 
     # Mock execution state that indicates operation already succeeded
@@ -725,7 +789,7 @@ async def test_map_handler_replay_with_replay_children():
     """Test map_handler replay when children need to be re-executed."""
     items = ["item1"]
 
-    async def callable_func(ctx, item, idx, items):
+    async def callable_func(item, idx, items):
         return f"result_{item}"
 
     # Mock execution state that indicates operation succeeded but children need replay
@@ -814,7 +878,7 @@ async def test_map_config_default_summary_generator_behavior():
 async def test_map_handler_first_execution_then_replay_integration():
     """Test map_handler called twice - first calls execute, second calls replay."""
 
-    async def test_func(ctx, item, idx, items):
+    async def test_func(item, idx, items):
         return f"processed_{item}"
 
     items = ["a", "b"]
@@ -934,16 +998,21 @@ async def test_map_item_serialize(mock_serialize, item_serdes, batch_serdes):
             else f"child-{i}"
         )
 
-    with patch.object(StepCounter, "_create_step_id_for_logical_step", create_id):
+    with patch.object(
+        OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+    ):
         context = create_test_context(state=mock_state)
 
-        async def map_item(ctx, item, idx, items):
+        async def map_item(item, idx, items):
             return item
 
-        await context.map(
-            ["a", "b"],
-            map_item,
-            config=MapConfig(serdes=batch_serdes, item_serdes=item_serdes),
+        await run_with_context(
+            context,
+            map_operation(
+                ["a", "b"],
+                map_item,
+                config=MapConfig(serdes=batch_serdes, item_serdes=item_serdes),
+            ),
         )
 
     expected = item_serdes or batch_serdes
@@ -1002,16 +1071,21 @@ async def test_map_item_deserialize(mock_deserialize, item_serdes, batch_serdes)
             else f"child-{i}"
         )
 
-    with patch.object(StepCounter, "_create_step_id_for_logical_step", create_id):
+    with patch.object(
+        OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+    ):
         context = create_test_context(state=mock_state)
 
-        async def map_item(ctx, item, idx, items):
+        async def map_item(item, idx, items):
             return item
 
-        await context.map(
-            ["a", "b"],
-            map_item,
-            config=MapConfig(serdes=batch_serdes, item_serdes=item_serdes),
+        await run_with_context(
+            context,
+            map_operation(
+                ["a", "b"],
+                map_item,
+                config=MapConfig(serdes=batch_serdes, item_serdes=item_serdes),
+            ),
         )
 
     expected = item_serdes or batch_serdes
@@ -1026,26 +1100,26 @@ async def test_map_result_serialization_roundtrip():
 
     items = ["a", "b", "c"]
 
-    async def func(ctx, item, idx, items):
+    async def func(item, idx, items):
         return {"item": item.upper(), "index": idx}
 
-    class MockExecutionState:
-        durable_execution_arn = "arn:test"
-
-        def get_checkpoint_result(self, operation_id):
-            mock_result = Mock()
-            mock_result.is_succeeded.return_value = False
-            return mock_result
-
-    execution_state = MockExecutionState()
+    execution_state = create_mock_execution_state()
+    execution_state.durable_execution_arn = "arn:test"
+    execution_state.get_checkpoint_result.return_value = Mock(
+        is_succeeded=Mock(return_value=False),
+        is_failed=Mock(return_value=False),
+        is_existent=Mock(return_value=False),
+        is_replay_children=Mock(return_value=False),
+    )
     map_context = Mock()
+    map_context.step_counter = Mock()
     map_context._step_counter._create_step_id_for_logical_step = Mock(  # noqa: SLF001
         side_effect=["1", "2", "3"]
     )
-    child_context = Mock()
-    child_context.state.wrap_user_function = lambda func, *args, **kwargs: (
-        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+    map_context.step_counter._create_step_id_for_logical_step = Mock(
+        side_effect=["1", "2", "3"]
     )
+    child_context = create_mock_child_context(execution_state)
     map_context.create_child_context = Mock(return_value=child_context)
     operation_identifier = OperationIdentifier(
         "test_op", OperationSubType.MAP, "parent", "test_map"
@@ -1119,14 +1193,16 @@ async def test_map_handler_serializes_batch_result():
                 )
 
             with patch.object(
-                StepCounter, "_create_step_id_for_logical_step", create_id
+                OperationIdGenerator, "_create_step_id_for_logical_step", create_id
             ):
                 context = create_test_context(state=mock_state)
 
-                async def map_item(ctx, item, idx, items):
+                async def map_item(item, idx, items):
                     return item
 
-                result = await context.map(["a", "b"], map_item)
+                result = await run_with_context(
+                    context, map_operation(["a", "b"], map_item)
+                )
 
             assert len(mock_serdes_serialize.call_args_list) == 3
             parent_call = mock_serdes_serialize.call_args_list[2]
@@ -1184,14 +1260,16 @@ async def test_map_default_serdes_serializes_batch_result():
                 )
 
             with patch.object(
-                StepCounter, "_create_step_id_for_logical_step", create_id
+                OperationIdGenerator, "_create_step_id_for_logical_step", create_id
             ):
                 context = create_test_context(state=mock_state)
 
-                async def map_item(ctx, item, idx, items):
+                async def map_item(item, idx, items):
                     return item
 
-                result = await context.map(["a", "b"], map_item)
+                result = await run_with_context(
+                    context, map_operation(["a", "b"], map_item)
+                )
 
             assert isinstance(result, BatchResult)
             assert len(mock_serialize.call_args_list) == 3
@@ -1254,17 +1332,20 @@ async def test_map_custom_serdes_serializes_batch_result():
                 )
 
             with patch.object(
-                StepCounter, "_create_step_id_for_logical_step", create_id
+                OperationIdGenerator, "_create_step_id_for_logical_step", create_id
             ):
                 context = create_test_context(state=mock_state)
 
-                async def map_item(ctx, item, idx, items):
+                async def map_item(item, idx, items):
                     return item
 
-                result = await context.map(
-                    ["a", "b"],
-                    map_item,
-                    config=MapConfig(serdes=custom_serdes),
+                result = await run_with_context(
+                    context,
+                    map_operation(
+                        ["a", "b"],
+                        map_item,
+                        config=MapConfig(serdes=custom_serdes),
+                    ),
                 )
 
             assert isinstance(result, BatchResult)
@@ -1281,7 +1362,7 @@ async def test_map_with_empty_list_should_exit_early():
     """Test that map with empty list completes without crashing."""
     items = []
 
-    async def map_func(ctx, item, idx, items):
+    async def map_func(item, idx, items):
         return f"processed_{item}"
 
     mock_state = Mock()
@@ -1301,10 +1382,13 @@ async def test_map_with_empty_list_should_exit_early():
     context = create_test_context(state=mock_state)
 
     # This should complete immediately without crashing
-    result = await context.map(
-        items,
-        map_func,
-        name="EmptyMap",
+    result = await run_with_context(
+        context,
+        map_operation(
+            items,
+            map_func,
+            name="EmptyMap",
+        ),
     )
 
     # Should return empty BatchResult
@@ -1322,7 +1406,7 @@ async def test_map_executor_get_iteration_name_default():
 
     executor = MapExecutor.from_items(
         items=items,
-        func=lambda ctx, item, idx, items: item,
+        func=lambda item, idx, items: item,
         config=config,
     )
 
@@ -1341,7 +1425,7 @@ async def test_map_executor_get_iteration_name_with_item_namer():
 
     executor = MapExecutor.from_items(
         items=items,
-        func=lambda ctx, item, idx, items: item,
+        func=lambda item, idx, items: item,
         config=config,
     )
 
@@ -1363,7 +1447,7 @@ async def test_map_executor_item_namer_receives_item_and_index():
 
     executor = MapExecutor.from_items(
         items=items,
-        func=lambda ctx, item, idx, items: item,
+        func=lambda item, idx, items: item,
         config=config,
     )
 
@@ -1380,7 +1464,7 @@ async def test_map_executor_item_namer_uses_index():
 
     executor = MapExecutor.from_items(
         items=items,
-        func=lambda ctx, item, idx, items: item,
+        func=lambda item, idx, items: item,
         config=config,
     )
 
@@ -1396,7 +1480,7 @@ async def test_map_executor_item_namer_none_falls_back_to_default():
 
     executor = MapExecutor.from_items(
         items=items,
-        func=lambda ctx, item, idx, items: item,
+        func=lambda item, idx, items: item,
         config=config,
     )
 
@@ -1411,7 +1495,7 @@ async def test_map_executor_from_items_passes_item_namer():
 
     executor = MapExecutor.from_items(
         items=["a"],
-        func=lambda ctx, item, idx, items: item,
+        func=lambda item, idx, items: item,
         config=config,
     )
 

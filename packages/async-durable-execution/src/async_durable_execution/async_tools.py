@@ -3,10 +3,13 @@ from __future__ import annotations
 import functools
 import inspect
 from collections.abc import Awaitable, Callable
-from typing import TypeVar, cast
+from typing import TYPE_CHECKING, TypeVar, cast
 
+from .context import reset_current_context, set_current_context
 from .exceptions import ValidationError
 
+if TYPE_CHECKING:
+    from . import DurableContext
 
 T = TypeVar("T")
 _CONTEXT_PARAM_NAMES = {
@@ -72,80 +75,21 @@ def assert_async_callable(
 
 async def invoke_callable(func: Callable[..., Awaitable[T]], *args, **kwargs) -> T:
     assert_async_callable(func)
-    return await cast("Awaitable[T]", func(*args, **kwargs))
+    return await func(*args, **kwargs)
 
 
-def _looks_like_context_parameter(parameter: inspect.Parameter) -> bool:
-    annotation = parameter.annotation
-    if annotation is not inspect.Signature.empty:
-        annotation_name = getattr(annotation, "__name__", str(annotation))
-        if "DurableContext" in annotation_name:
-            return True
-    return parameter.name in _CONTEXT_PARAM_NAMES
-
-
-def _should_inject_context(
-    func: Callable[..., object],
-    provided_positional_count: int,
-    *,
-    context_position: str,
-) -> bool:
-    try:
-        signature = inspect.signature(func)
-    except (TypeError, ValueError):
-        return False
-
-    if any(
-        parameter.kind is inspect.Parameter.KEYWORD_ONLY
-        and parameter.default is inspect.Signature.empty
-        for parameter in signature.parameters.values()
-    ):
-        return False
-
-    positional_parameters = [
-        parameter
-        for parameter in signature.parameters.values()
-        if parameter.kind
-        in {
-            inspect.Parameter.POSITIONAL_ONLY,
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        }
-    ]
-    required_positional_parameters = [
-        parameter
-        for parameter in positional_parameters
-        if parameter.default is inspect.Signature.empty
-    ]
-
-    if len(required_positional_parameters) != provided_positional_count + 1:
-        return False
-
-    candidate_index = 0 if context_position == "prepend" else provided_positional_count
-    if candidate_index >= len(positional_parameters):
-        return False
-
-    return _looks_like_context_parameter(positional_parameters[candidate_index])
-
-
-async def invoke_callable_with_optional_context(
+async def invoke_user_callable(
+    context: DurableContext,
     func: Callable[..., Awaitable[T]],
-    context: object,
     *args,
-    context_position: str = "prepend",
     **kwargs,
 ) -> T:
-    assert_async_callable(func)
-    if context_position not in {"prepend", "append"}:
-        msg = "context_position must be either 'prepend' or 'append'"
-        raise ValueError(msg)
-
-    if _should_inject_context(
-        func,
-        len(args),
-        context_position=context_position,
-    ):
-        if context_position == "prepend":
-            return await cast("Awaitable[T]", func(context, *args, **kwargs))
-        return await cast("Awaitable[T]", func(*args, context, **kwargs))
-
-    return await cast("Awaitable[T]", func(*args, **kwargs))
+    token = set_current_context(context)
+    try:
+        return await invoke_callable(
+            func,
+            *args,
+            **kwargs,
+        )
+    finally:
+        reset_current_context(token)

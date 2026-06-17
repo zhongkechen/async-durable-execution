@@ -23,7 +23,12 @@ from async_durable_execution.config import (
     NestingType,
     ParallelConfig,
 )
-from async_durable_execution.context import DurableContext, StepCounter
+from async_durable_execution.context import (
+    OperationIdGenerator,
+    reset_current_context,
+    set_current_context,
+)
+from async_durable_execution import parallel, DurableContext
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import OperationSubType
 from async_durable_execution.operation import child
@@ -51,7 +56,41 @@ def create_test_context(
             "arn:aws:durable:us-east-1:123456789012:execution/test"
         )
 
-    return DurableContext(state=state, parent_id=parent_id)
+    return child.DurableContext(
+        execution_state=state,
+        operation_identifier=OperationIdentifier(
+            operation_id=None,
+            sub_type=OperationSubType.EXECUTION,
+            parent_id=parent_id,
+        ),
+    )
+
+
+def create_mock_execution_state():
+    state = Mock(spec=ExecutionState)
+    state.durable_execution_arn = (
+        "arn:aws:durable:us-east-1:123456789012:execution/test"
+    )
+    state._create_checkpoint_async = AsyncMock()
+    state.wrap_user_function = lambda func, *args, **kwargs: (
+        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+    )
+    return state
+
+
+def create_mock_child_context(state):
+    child_context = Mock()
+    child_context.state = state
+    child_context.execution_state = state
+    return child_context
+
+
+async def run_with_context(context: DurableContext, awaitable):
+    token = set_current_context(context)
+    try:
+        return await awaitable
+    finally:
+        reset_current_context(token)
 
 
 def _mock_call_kwargs_by_operation_id(mock: Mock) -> dict[str, Mapping[str, Any]]:
@@ -427,30 +466,29 @@ async def test_parallel_executor_execute_item_return_type():
 async def test_parallel_handler_with_serdes():
     """Test that parallel_handler with serdes"""
 
-    async def func1(ctx):
+    async def func1():
         return "RESULT1"
 
     callables = [func1]
 
-    class MockExecutionState:
-        def get_checkpoint_result(self, operation_id):
-            mock_result = Mock()
-            mock_result.is_succeeded.return_value = False
-            return mock_result
-
-    execution_state = MockExecutionState()
+    execution_state = create_mock_execution_state()
+    execution_state.get_checkpoint_result.return_value = Mock(
+        is_succeeded=Mock(return_value=False),
+        is_failed=Mock(return_value=False),
+        is_existent=Mock(return_value=False),
+        is_replay_children=Mock(return_value=False),
+    )
     operation_identifier = OperationIdentifier(
         "test_op", OperationSubType.PARALLEL, "parent", "test_parallel"
     )
 
     executor_context = Mock()
+    executor_context.step_counter = Mock()
     executor_context._step_counter._create_step_id_for_logical_step = (  # noqa: SLF001
         lambda *args: "1"
     )
-    child_context = Mock()
-    child_context.state.wrap_user_function = lambda func, *args, **kwargs: (
-        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
-    )
+    executor_context.step_counter._create_step_id_for_logical_step = lambda *args: "1"
+    child_context = create_mock_child_context(execution_state)
     executor_context.create_child_context = lambda *args, **kwargs: child_context
 
     result = await parallel_handler(
@@ -467,7 +505,7 @@ async def test_parallel_handler_with_serdes():
 async def test_parallel_handler_with_summary_generator():
     """Test that parallel_handler calls executor_context methods correctly."""
 
-    async def func1(ctx):
+    async def func1():
         return "large_result" * 1000  # Create a large result
 
     def mock_summary_generator(result):
@@ -476,22 +514,28 @@ async def test_parallel_handler_with_summary_generator():
     callables = [func1]
     config = ParallelConfig(summary_generator=mock_summary_generator)
 
-    class MockExecutionState:
-        def get_checkpoint_result(self, operation_id):
-            mock_result = Mock()
-            mock_result.is_succeeded.return_value = False
-            return mock_result
-
-    execution_state = MockExecutionState()
+    execution_state = create_mock_execution_state()
+    execution_state.get_checkpoint_result.return_value = Mock(
+        is_succeeded=Mock(return_value=False),
+        is_failed=Mock(return_value=False),
+        is_existent=Mock(return_value=False),
+        is_replay_children=Mock(return_value=False),
+    )
     operation_identifier = OperationIdentifier(
         "test_op", OperationSubType.PARALLEL, "parent", "test_parallel"
     )
 
     executor_context = Mock()
+    executor_context.step_counter = Mock()
     executor_context._step_counter._create_step_id_for_logical_step = Mock(  # noqa: SLF001
         return_value="1"
     )
-    executor_context.create_child_context = Mock(return_value=Mock())
+    executor_context.step_counter._create_step_id_for_logical_step = Mock(
+        return_value="1"
+    )
+    executor_context.create_child_context = Mock(
+        return_value=create_mock_child_context(execution_state)
+    )
 
     # Call parallel_handler
     await parallel_handler(
@@ -503,8 +547,8 @@ async def test_parallel_handler_with_summary_generator():
 
     # Verify that _create_step_id_for_logical_step was called once with unique value
     assert (
-        executor_context._step_counter._create_step_id_for_logical_step.call_count == 1
-    )  # noqa: SLF001
+        executor_context.step_counter._create_step_id_for_logical_step.call_count == 1
+    )
 
 
 async def test_parallel_executor_from_callables_with_summary_generator():
@@ -528,30 +572,36 @@ async def test_parallel_executor_from_callables_with_summary_generator():
 async def test_parallel_handler_default_summary_generator():
     """Test that parallel_handler calls executor_context methods correctly with default config."""
 
-    async def func1(ctx):
+    async def func1():
         return "result1"
 
-    async def func2(ctx):
+    async def func2():
         return "result2"
 
     callables = [func1, func2]
 
-    class MockExecutionState:
-        def get_checkpoint_result(self, operation_id):
-            mock_result = Mock()
-            mock_result.is_succeeded.return_value = False
-            return mock_result
-
-    execution_state = MockExecutionState()
+    execution_state = create_mock_execution_state()
+    execution_state.get_checkpoint_result.return_value = Mock(
+        is_succeeded=Mock(return_value=False),
+        is_failed=Mock(return_value=False),
+        is_existent=Mock(return_value=False),
+        is_replay_children=Mock(return_value=False),
+    )
     operation_identifier = OperationIdentifier(
         "test_op", OperationSubType.PARALLEL, "parent", "test_parallel"
     )
 
     executor_context = Mock()
+    executor_context.step_counter = Mock()
     executor_context._step_counter._create_step_id_for_logical_step = Mock(  # noqa: SLF001
         side_effect=["1", "2"]
     )
-    executor_context.create_child_context = Mock(return_value=Mock())
+    executor_context.step_counter._create_step_id_for_logical_step = Mock(
+        side_effect=["1", "2"]
+    )
+    executor_context.create_child_context = Mock(
+        return_value=create_mock_child_context(execution_state)
+    )
 
     # Call parallel_handler with None config (should use default)
     await parallel_handler(
@@ -563,11 +613,11 @@ async def test_parallel_handler_default_summary_generator():
 
     # Verify that _create_step_id_for_logical_step was called twice with unique values
     assert (
-        executor_context._step_counter._create_step_id_for_logical_step.call_count == 2
-    )  # noqa: SLF001
+        executor_context.step_counter._create_step_id_for_logical_step.call_count == 2
+    )
     calls = (
-        executor_context._step_counter._create_step_id_for_logical_step.call_args_list
-    )  # noqa: SLF001
+        executor_context.step_counter._create_step_id_for_logical_step.call_args_list
+    )
     # Verify unique values were passed
     assert calls[0] != calls[1]
 
@@ -575,35 +625,41 @@ async def test_parallel_handler_default_summary_generator():
 async def test_parallel_handler_with_explicit_none_summary_generator():
     """Test that parallel_handler calls executor_context methods correctly with explicit None summary_generator."""
 
-    async def func1(ctx):
+    async def func1():
         return "result1"
 
-    async def func2(ctx):
+    async def func2():
         return "result2"
 
-    async def func3(ctx):
+    async def func3():
         return "result3"
 
     callables = [func1, func2, func3]
     # Explicitly set summary_generator to None
     config = ParallelConfig(summary_generator=None)
 
-    class MockExecutionState:
-        def get_checkpoint_result(self, operation_id):
-            mock_result = Mock()
-            mock_result.is_succeeded.return_value = False
-            return mock_result
-
-    execution_state = MockExecutionState()
+    execution_state = create_mock_execution_state()
+    execution_state.get_checkpoint_result.return_value = Mock(
+        is_succeeded=Mock(return_value=False),
+        is_failed=Mock(return_value=False),
+        is_existent=Mock(return_value=False),
+        is_replay_children=Mock(return_value=False),
+    )
     operation_identifier = OperationIdentifier(
         "test_op", OperationSubType.PARALLEL, "parent", "test_parallel"
     )
 
     executor_context = Mock()
+    executor_context.step_counter = Mock()
     executor_context._step_counter._create_step_id_for_logical_step = Mock(  # noqa: SLF001
         side_effect=["1", "2", "3"]
     )
-    executor_context.create_child_context = Mock(return_value=Mock())
+    executor_context.step_counter._create_step_id_for_logical_step = Mock(
+        side_effect=["1", "2", "3"]
+    )
+    executor_context.create_child_context = Mock(
+        return_value=create_mock_child_context(execution_state)
+    )
 
     # Call parallel_handler
     await parallel_handler(
@@ -892,18 +948,23 @@ async def test_parallel_item_serialize(mock_serialize, item_serdes, batch_serdes
             else f"child-{i}"
         )
 
-    with patch.object(StepCounter, "_create_step_id_for_logical_step", create_id):
+    with patch.object(
+        OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+    ):
         context = create_test_context(state=mock_state)
 
-        async def branch_a(ctx):
+        async def branch_a():
             return "a"
 
-        async def branch_b(ctx):
+        async def branch_b():
             return "b"
 
-        await context.parallel(
-            [branch_a, branch_b],
-            config=ParallelConfig(serdes=batch_serdes, item_serdes=item_serdes),
+        await run_with_context(
+            context,
+            parallel(
+                [branch_a, branch_b],
+                config=ParallelConfig(serdes=batch_serdes, item_serdes=item_serdes),
+            ),
         )
 
     expected = item_serdes or batch_serdes
@@ -963,18 +1024,23 @@ async def test_parallel_item_deserialize(mock_deserialize, item_serdes, batch_se
             else f"child-{i}"
         )
 
-    with patch.object(StepCounter, "_create_step_id_for_logical_step", create_id):
+    with patch.object(
+        OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+    ):
         context = create_test_context(state=mock_state)
 
-        async def branch_a(ctx):
+        async def branch_a():
             return "a"
 
-        async def branch_b(ctx):
+        async def branch_b():
             return "b"
 
-        await context.parallel(
-            [branch_a, branch_b],
-            config=ParallelConfig(serdes=batch_serdes, item_serdes=item_serdes),
+        await run_with_context(
+            context,
+            parallel(
+                [branch_a, branch_b],
+                config=ParallelConfig(serdes=batch_serdes, item_serdes=item_serdes),
+            ),
         )
 
     expected = item_serdes or batch_serdes
@@ -988,34 +1054,34 @@ async def test_parallel_item_deserialize(mock_deserialize, item_serdes, batch_se
 async def test_parallel_result_serialization_roundtrip():
     """Test that parallel operation BatchResult can be serialized and deserialized."""
 
-    async def func1(ctx):
+    async def func1():
         return [1, 2, 3]
 
-    async def func2(ctx):
+    async def func2():
         return {"status": "complete", "count": 42}
 
-    async def func3(ctx):
+    async def func3():
         return "simple string"
 
     callables = [func1, func2, func3]
 
-    class MockExecutionState:
-        durable_execution_arn = "arn:test"
-
-        def get_checkpoint_result(self, operation_id):
-            mock_result = Mock()
-            mock_result.is_succeeded.return_value = False
-            return mock_result
-
-    execution_state = MockExecutionState()
+    execution_state = create_mock_execution_state()
+    execution_state.durable_execution_arn = "arn:test"
+    execution_state.get_checkpoint_result.return_value = Mock(
+        is_succeeded=Mock(return_value=False),
+        is_failed=Mock(return_value=False),
+        is_existent=Mock(return_value=False),
+        is_replay_children=Mock(return_value=False),
+    )
     parallel_context = Mock()
+    parallel_context.step_counter = Mock()
     parallel_context._step_counter._create_step_id_for_logical_step = Mock(  # noqa: SLF001
         side_effect=["1", "2", "3"]
     )
-    child_context = Mock()
-    child_context.state.wrap_user_function = lambda func, *args, **kwargs: (
-        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
+    parallel_context.step_counter._create_step_id_for_logical_step = Mock(
+        side_effect=["1", "2", "3"]
     )
+    child_context = create_mock_child_context(execution_state)
     parallel_context.create_child_context = Mock(return_value=child_context)
     operation_identifier = OperationIdentifier(
         "test_op", OperationSubType.PARALLEL, "parent", "test_parallel"
@@ -1093,17 +1159,17 @@ async def test_parallel_handler_serializes_batch_result():
                 )
 
             with patch.object(
-                StepCounter, "_create_step_id_for_logical_step", create_id
+                OperationIdGenerator, "_create_step_id_for_logical_step", create_id
             ):
                 context = create_test_context(state=mock_state)
 
-                async def branch_a(ctx):
+                async def branch_a():
                     return "a"
 
-                async def branch_b(ctx):
+                async def branch_b():
                     return "b"
 
-                result = await context.parallel([branch_a, branch_b])
+                result = await run_with_context(context, parallel([branch_a, branch_b]))
 
             assert len(mock_serdes_serialize.call_args_list) == 3
             parent_call = mock_serdes_serialize.call_args_list[2]
@@ -1161,17 +1227,17 @@ async def test_parallel_default_serdes_serializes_batch_result():
                 )
 
             with patch.object(
-                StepCounter, "_create_step_id_for_logical_step", create_id
+                OperationIdGenerator, "_create_step_id_for_logical_step", create_id
             ):
                 context = create_test_context(state=mock_state)
 
-                async def branch_a(ctx):
+                async def branch_a():
                     return "a"
 
-                async def branch_b(ctx):
+                async def branch_b():
                     return "b"
 
-                result = await context.parallel([branch_a, branch_b])
+                result = await run_with_context(context, parallel([branch_a, branch_b]))
 
             assert isinstance(result, BatchResult)
             assert len(mock_serialize.call_args_list) == 3
@@ -1234,19 +1300,22 @@ async def test_parallel_custom_serdes_serializes_batch_result():
                 )
 
             with patch.object(
-                StepCounter, "_create_step_id_for_logical_step", create_id
+                OperationIdGenerator, "_create_step_id_for_logical_step", create_id
             ):
                 context = create_test_context(state=mock_state)
 
-                async def branch_a(ctx):
+                async def branch_a():
                     return "a"
 
-                async def branch_b(ctx):
+                async def branch_b():
                     return "b"
 
-                result = await context.parallel(
-                    [branch_a, branch_b],
-                    config=ParallelConfig(serdes=custom_serdes),
+                result = await run_with_context(
+                    context,
+                    parallel(
+                        [branch_a, branch_b],
+                        config=ParallelConfig(serdes=custom_serdes),
+                    ),
                 )
 
             assert isinstance(result, BatchResult)

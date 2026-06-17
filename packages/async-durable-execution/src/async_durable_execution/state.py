@@ -21,16 +21,14 @@ from .exceptions import (
     OrphanedChildException,
     SuspendExecution,
 )
-from .models import OperationIdentifier
 from .models import (
-    CheckpointOutput,
     ErrorObject,
     Operation,
+    OperationIdentifier,
     OperationAction,
     OperationStatus,
     OperationType,
     OperationUpdate,
-    StateOutput,
 )
 from .types import DurableServiceClient
 from .plugin import PluginExecutor

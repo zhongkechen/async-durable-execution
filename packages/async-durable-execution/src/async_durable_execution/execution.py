@@ -8,10 +8,12 @@ import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .models import OperationSubType
 from .async_tools import (
+    invoke_user_callable,
     assert_async_callable,
 )
-from .context import DurableContext
+from . import DurableContext
 from .exceptions import (
     BotoClientError,
     CheckpointError,
@@ -25,6 +27,7 @@ from .models import (
     InvocationStatus,
     Operation,
     OperationUpdate,
+    OperationIdentifier,
 )
 from .client import (
     ThreadedSyncLambdaClient,
@@ -241,11 +244,7 @@ def durable_execution(
                 raise ExecutionError(msg) from e
 
             # Use custom client if provided, otherwise initialize from environment
-            service_client = (
-                ThreadedSyncLambdaClient(client=boto3_client)
-                if boto3_client is not None
-                else ThreadedSyncLambdaClient.initialize_client()
-            )
+            service_client = ThreadedSyncLambdaClient(client=boto3_client)
 
         execution_state: ExecutionState = ExecutionState(
             durable_execution_arn=invocation_input.durable_execution_arn,
@@ -295,7 +294,9 @@ def durable_execution(
                 raise
 
         durable_context: DurableContext = DurableContext(
-            state=execution_state, lambda_context=context
+            execution_state=execution_state,
+            operation_identifier=OperationIdentifier.create_execution_op(),
+            lambda_context=context,
         )
         if not _default_logger_configured:
             configure_durable_logger(logging.getLogger())
@@ -325,10 +326,10 @@ def durable_execution(
             )
 
             try:
-                result = await durable_context._invoke_user_callable(
+                result = await invoke_user_callable(
+                    durable_context,
                     func,
                     input_event,
-                    context_position="append",
                 )
 
                 # done with userland

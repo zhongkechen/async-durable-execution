@@ -7,12 +7,38 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from ..exceptions import InvalidStateError
+from ..models import OperationIdentifier
 
 
 if TYPE_CHECKING:
-    from ..state import CheckpointedResult
+    from ..state import CheckpointedResult, ExecutionState
 
 T = TypeVar("T")
+
+
+@dataclass(frozen=True)
+class OperationContext:
+    """Protocol defining the interface for durable execution contexts."""
+
+    execution_state: ExecutionState
+    operation_identifier: OperationIdentifier
+
+    @property
+    def durable_execution_arn(self) -> str:
+        """Get the ARN of the Durable Execution."""
+        return self.execution_state.durable_execution_arn
+
+    @property
+    def parent_id(self) -> str | None:
+        return self.operation_identifier.parent_id
+
+    @property
+    def operation_id(self) -> str | None:
+        return self.operation_identifier.operation_id
+
+    @property
+    def operation_name(self) -> str | None:
+        return self.operation_identifier.name
 
 
 @dataclass(frozen=True)

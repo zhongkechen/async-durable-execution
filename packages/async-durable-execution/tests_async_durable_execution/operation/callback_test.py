@@ -1,5 +1,6 @@
 """Unit tests for callback handler."""
 
+from contextlib import contextmanager
 import math
 from datetime import timedelta
 from unittest.mock import ANY, AsyncMock, Mock, patch
@@ -11,10 +12,9 @@ from async_durable_execution.config import (
     WaitForCallbackConfig,
 )
 from async_durable_execution.context import (
-    Callback,
-    _reset_context,
-    _set_context,
-    get_context,
+    reset_current_context,
+    set_current_context,
+    get_current_context,
 )
 from async_durable_execution.exceptions import CallbackError, ValidationError
 from async_durable_execution.models import OperationIdentifier
@@ -30,18 +30,19 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
+from async_durable_execution.operation import callback
 from async_durable_execution.operation.callback import (
     CallbackOperationExecutor,
     wait_for_callback_handler,
+    Callback,
 )
 from async_durable_execution.models import RetryDecision
 from async_durable_execution.serdes import SerDes
 from async_durable_execution.state import CheckpointedResult, ExecutionState
 from async_durable_execution.types import (
     DurableContext,
-    StepContext,
-    WaitForCallbackContext,
 )
+from async_durable_execution import WaitForCallbackContext, StepContext
 
 
 # Test helper - maintains old handler signature for backward compatibility in tests
@@ -57,11 +58,31 @@ async def create_callback_handler(state, operation_identifier, config=None):
 
 async def execute_step_with_mock_context(func):
     step_context = Mock(spec=StepContext)
-    token = _set_context(step_context)
+    step_context.execution_state = Mock()
+    step_context.operation_identifier = OperationIdentifier(
+        "submitter-step",
+        OperationSubType.STEP,
+        None,
+    )
+    token = set_current_context(step_context)
     try:
         return await func()
     finally:
-        _reset_context(token)
+        reset_current_context(token)
+
+
+@contextmanager
+def patch_wait_for_callback_ops(mock_callback, *, step_side_effect=None):
+    create_callback_mock = AsyncMock(return_value=mock_callback)
+    step_mock = AsyncMock()
+    if step_side_effect is not None:
+        step_mock.side_effect = step_side_effect
+
+    with (
+        patch.object(callback, "create_callback", create_callback_mock),
+        patch("async_durable_execution.operation.step.step", step_mock),
+    ):
+        yield create_callback_mock, step_mock
 
 
 async def test_create_callback_handler_new_operation_with_config():
@@ -303,13 +324,13 @@ async def test_wait_for_callback_handler_basic():
     mock_callback = Mock()
     mock_callback.callback_id = "callback789"
     mock_callback.result = AsyncMock(return_value="callback_result")
-    mock_context.create_callback.return_value = mock_callback
     mock_submitter = AsyncMock(return_value=None)
 
-    result = await wait_for_callback_handler(mock_context, mock_submitter)
+    with patch_wait_for_callback_ops(mock_callback) as (_, step_mock):
+        result = await wait_for_callback_handler(mock_context, mock_submitter)
 
     assert result == "callback_result"
-    mock_context.step.assert_called_once()
+    step_mock.assert_called_once()
     mock_callback.result.assert_called_once()
 
 
@@ -319,19 +340,22 @@ async def test_wait_for_callback_handler_with_name_and_config():
     mock_callback = Mock()
     mock_callback.callback_id = "callback999"
     mock_callback.result = AsyncMock(return_value="named_callback_result")
-    mock_context.create_callback.return_value = mock_callback
     mock_submitter = AsyncMock(return_value=None)
     config = WaitForCallbackConfig()
 
-    result = await wait_for_callback_handler(
-        mock_context, mock_submitter, "test_callback", config
-    )
+    with patch_wait_for_callback_ops(mock_callback) as (
+        create_callback_mock,
+        step_mock,
+    ):
+        result = await wait_for_callback_handler(
+            mock_context, mock_submitter, "test_callback", config
+        )
 
     assert result == "named_callback_result"
-    mock_context.create_callback.assert_called_once_with(
+    create_callback_mock.assert_called_once_with(
         name="test_callback create callback id", config=config
     )
-    mock_context.step.assert_called_once()
+    step_mock.assert_called_once()
 
 
 async def test_wait_for_callback_handler_submitter_called_with_callback_id():
@@ -340,7 +364,6 @@ async def test_wait_for_callback_handler_submitter_called_with_callback_id():
     mock_callback = Mock()
     mock_callback.callback_id = "callback_test_id"
     mock_callback.result = AsyncMock(return_value="test_result")
-    mock_context.create_callback.return_value = mock_callback
 
     mock_submitter = AsyncMock(return_value=None)
 
@@ -348,9 +371,11 @@ async def test_wait_for_callback_handler_submitter_called_with_callback_id():
         # Execute the step callable to verify submitter is called correctly
         await execute_step_with_mock_context(func)
 
-    mock_context.step.side_effect = capture_step_call
-
-    await wait_for_callback_handler(mock_context, mock_submitter, "test")
+    with patch_wait_for_callback_ops(
+        mock_callback,
+        step_side_effect=capture_step_call,
+    ):
+        await wait_for_callback_handler(mock_context, mock_submitter, "test")
 
     # Verify submitter was called with only the callback_id.
     assert mock_submitter.call_count == 1
@@ -394,16 +419,17 @@ async def test_wait_for_callback_handler_with_none_callback_id():
     mock_callback = Mock()
     mock_callback.callback_id = None
     mock_callback.result = AsyncMock(return_value="result_with_none_id")
-    mock_context.create_callback.return_value = mock_callback
 
     mock_submitter = AsyncMock(return_value=None)
 
     async def execute_step(func, name, config=None):
         return await execute_step_with_mock_context(func)
 
-    mock_context.step.side_effect = execute_step
-
-    result = await wait_for_callback_handler(mock_context, mock_submitter, "test")
+    with patch_wait_for_callback_ops(
+        mock_callback,
+        step_side_effect=execute_step,
+    ):
+        result = await wait_for_callback_handler(mock_context, mock_submitter, "test")
 
     assert result == "result_with_none_id"
     # Verify submitter was called with only the callback_id.
@@ -419,16 +445,17 @@ async def test_wait_for_callback_handler_with_empty_string_callback_id():
     mock_callback = Mock()
     mock_callback.callback_id = ""
     mock_callback.result = AsyncMock(return_value="result_with_empty_id")
-    mock_context.create_callback.return_value = mock_callback
 
     mock_submitter = AsyncMock(return_value=None)
 
     async def execute_step(func, name, config=None):
         return await execute_step_with_mock_context(func)
 
-    mock_context.step.side_effect = execute_step
-
-    result = await wait_for_callback_handler(mock_context, mock_submitter, "test")
+    with patch_wait_for_callback_ops(
+        mock_callback,
+        step_side_effect=execute_step,
+    ):
+        result = await wait_for_callback_handler(mock_context, mock_submitter, "test")
 
     assert result == "result_with_empty_id"
     # Verify submitter was called with only the callback_id.
@@ -449,12 +476,12 @@ async def test_wait_for_callback_handler_with_large_data():
         "metadata": {"size": 1000, "type": "large_dataset"},
     }
     mock_callback.result = AsyncMock(return_value=large_result)
-    mock_context.create_callback.return_value = mock_callback
     mock_submitter = AsyncMock(return_value=None)
 
-    result = await wait_for_callback_handler(
-        mock_context, mock_submitter, "large_data_test"
-    )
+    with patch_wait_for_callback_ops(mock_callback):
+        result = await wait_for_callback_handler(
+            mock_context, mock_submitter, "large_data_test"
+        )
 
     assert result == large_result
     assert len(result["data"]) == 1000
@@ -469,17 +496,14 @@ async def test_wait_for_callback_handler_with_unicode_names():
         mock_callback = Mock()
         mock_callback.callback_id = f"unicode_cb_{hash(name) % 1000}"
         mock_callback.result = AsyncMock(return_value=f"result_for_{name}")
-        mock_context.create_callback.return_value = mock_callback
         mock_submitter = AsyncMock(return_value=None)
 
-        result = await wait_for_callback_handler(mock_context, mock_submitter, name)
+        with patch_wait_for_callback_ops(mock_callback) as (_, step_mock):
+            result = await wait_for_callback_handler(mock_context, mock_submitter, name)
 
         assert result == f"result_for_{name}"
         expected_name = f"{name} submitter"
-        mock_context.step.assert_called_once_with(
-            func=ANY, name=expected_name, config=None
-        )
-        mock_context.reset_mock()
+        step_mock.assert_called_once_with(func=ANY, name=expected_name, config=None)
 
 
 async def test_create_callback_handler_existing_succeeded_operation():
@@ -648,7 +672,6 @@ async def test_wait_for_callback_handler_submitter_exception_handling():
     mock_callback = Mock()
     mock_callback.callback_id = "callback_exception"
     mock_callback.result = AsyncMock(return_value="exception_result")
-    mock_context.create_callback.return_value = mock_callback
 
     async def failing_submitter(callback_id):
         msg = "Submitter failed"
@@ -657,10 +680,12 @@ async def test_wait_for_callback_handler_submitter_exception_handling():
     async def step_side_effect(func, name, config=None):
         await execute_step_with_mock_context(func)
 
-    mock_context.step.side_effect = step_side_effect
-
-    with pytest.raises(ValueError, match="Submitter failed"):
-        await wait_for_callback_handler(mock_context, failing_submitter, "test")
+    with patch_wait_for_callback_ops(
+        mock_callback,
+        step_side_effect=step_side_effect,
+    ):
+        with pytest.raises(ValueError, match="Submitter failed"):
+            await wait_for_callback_handler(mock_context, failing_submitter, "test")
 
 
 async def test_wait_for_callback_handler_callback_result_exception():
@@ -669,11 +694,11 @@ async def test_wait_for_callback_handler_callback_result_exception():
     mock_callback = Mock()
     mock_callback.callback_id = "callback_result_exception"
     mock_callback.result = AsyncMock(side_effect=RuntimeError("Callback result failed"))
-    mock_context.create_callback.return_value = mock_callback
     mock_submitter = AsyncMock(return_value=None)
 
-    with pytest.raises(RuntimeError, match="Callback result failed"):
-        await wait_for_callback_handler(mock_context, mock_submitter, "test")
+    with patch_wait_for_callback_ops(mock_callback):
+        with pytest.raises(RuntimeError, match="Callback result failed"):
+            await wait_for_callback_handler(mock_context, mock_submitter, "test")
 
 
 async def test_wait_for_callback_handler_empty_name_handling():
@@ -682,13 +707,13 @@ async def test_wait_for_callback_handler_empty_name_handling():
     mock_callback = Mock()
     mock_callback.callback_id = "callback_empty_name"
     mock_callback.result = AsyncMock(return_value="empty_name_result")
-    mock_context.create_callback.return_value = mock_callback
     mock_submitter = AsyncMock(return_value=None)
 
-    result = await wait_for_callback_handler(mock_context, mock_submitter, "", None)
+    with patch_wait_for_callback_ops(mock_callback) as (_, step_mock):
+        result = await wait_for_callback_handler(mock_context, mock_submitter, "", None)
 
     assert result == "empty_name_result"
-    mock_context.step.assert_called_once()
+    step_mock.assert_called_once()
 
 
 async def test_wait_for_callback_handler_complex_callback_result():
@@ -702,12 +727,12 @@ async def test_wait_for_callback_handler_complex_callback_result():
         "metadata": {"timestamp": 123456},
     }
     mock_callback.result = AsyncMock(return_value=complex_result)
-    mock_context.create_callback.return_value = mock_callback
     mock_submitter = AsyncMock(return_value=None)
 
-    result = await wait_for_callback_handler(
-        mock_context, mock_submitter, "complex_test"
-    )
+    with patch_wait_for_callback_ops(mock_callback):
+        result = await wait_for_callback_handler(
+            mock_context, mock_submitter, "complex_test"
+        )
 
     assert result == complex_result
     mock_callback.result.assert_called_once()
@@ -719,12 +744,14 @@ async def test_wait_for_callback_handler_step_name_formatting():
     mock_callback = Mock()
     mock_callback.callback_id = "callback_name_format"
     mock_callback.result = AsyncMock(return_value="formatted_result")
-    mock_context.create_callback.return_value = mock_callback
     mock_submitter = AsyncMock(return_value=None)
 
-    await wait_for_callback_handler(mock_context, mock_submitter, "test with spaces")
+    with patch_wait_for_callback_ops(mock_callback) as (_, step_mock):
+        await wait_for_callback_handler(
+            mock_context, mock_submitter, "test with spaces"
+        )
 
-    step_calls = mock_context.step.call_args_list
+    step_calls = step_mock.call_args_list
     assert len(step_calls) == 1
     _, kwargs = step_calls[0]
     assert kwargs["name"] == "test with spaces submitter"
@@ -736,19 +763,19 @@ async def test_wait_for_callback_handler_config_propagation():
     mock_callback = Mock()
     mock_callback.callback_id = "callback_config_prop"
     mock_callback.result = AsyncMock(return_value="config_result")
-    mock_context.create_callback.return_value = mock_callback
     mock_submitter = AsyncMock(return_value=None)
 
     config = WaitForCallbackConfig(
         timeout=timedelta(minutes=2), heartbeat_timeout=timedelta(seconds=30)
     )
 
-    result = await wait_for_callback_handler(
-        mock_context, mock_submitter, "config_test", config
-    )
+    with patch_wait_for_callback_ops(mock_callback) as (create_callback_mock, _):
+        result = await wait_for_callback_handler(
+            mock_context, mock_submitter, "config_test", config
+        )
 
     assert result == "config_result"
-    mock_context.create_callback.assert_called_once_with(
+    create_callback_mock.assert_called_once_with(
         name="config_test create callback id", config=config
     )
 
@@ -760,7 +787,6 @@ async def test_wait_for_callback_handler_step_config_propagation():
     mock_callback = Mock()
     mock_callback.callback_id = "step_config_test"
     mock_callback.result = AsyncMock(return_value="step_config_result")
-    mock_context.create_callback.return_value = mock_callback
     mock_submitter = AsyncMock(return_value=None)
 
     def test_retry_strategy(exception, attempt):
@@ -772,15 +798,16 @@ async def test_wait_for_callback_handler_step_config_propagation():
         retry_strategy=test_retry_strategy, serdes=mock_serdes
     )
 
-    result = await wait_for_callback_handler(
-        mock_context, mock_submitter, "step_config_test", config
-    )
+    with patch_wait_for_callback_ops(mock_callback) as (_, step_mock):
+        result = await wait_for_callback_handler(
+            mock_context, mock_submitter, "step_config_test", config
+        )
 
     assert result == "step_config_result"
 
     # Verify step was called with correct StepConfig
-    mock_context.step.assert_called_once()
-    call_args = mock_context.step.call_args
+    step_mock.assert_called_once()
+    call_args = step_mock.call_args
     step_config = call_args.kwargs["config"]
 
     assert isinstance(step_config, StepConfig)
@@ -797,16 +824,15 @@ async def test_wait_for_callback_handler_with_various_result_types():
         mock_callback = Mock()
         mock_callback.callback_id = f"type_test_cb_{i}"
         mock_callback.result = AsyncMock(return_value=expected_result)
-        mock_context.create_callback.return_value = mock_callback
         mock_submitter = AsyncMock(return_value=None)
 
-        result = await wait_for_callback_handler(
-            mock_context, mock_submitter, f"type_test_{i}"
-        )
+        with patch_wait_for_callback_ops(mock_callback):
+            result = await wait_for_callback_handler(
+                mock_context, mock_submitter, f"type_test_{i}"
+            )
 
         assert result == expected_result
         assert type(result) is type(expected_result)
-        mock_context.reset_mock()
 
 
 async def test_callback_lifecycle_complete_flow():
@@ -830,7 +856,6 @@ async def test_callback_lifecycle_complete_flow():
     mock_callback.result = AsyncMock(
         return_value={"status": "completed", "data": "test_data"}
     )
-    mock_context.create_callback.return_value = mock_callback
 
     config = WaitForCallbackConfig(
         timeout=timedelta(minutes=5), heartbeat_timeout=timedelta(minutes=1)
@@ -847,7 +872,7 @@ async def test_callback_lifecycle_complete_flow():
 
     async def mock_submitter(cb_id):
         assert cb_id == "lifecycle_cb123"
-        callback_context = get_context()
+        callback_context = get_current_context()
         assert isinstance(callback_context, WaitForCallbackContext)
         assert callback_context.callback_id == "lifecycle_cb123"
         return "submitted"
@@ -855,11 +880,13 @@ async def test_callback_lifecycle_complete_flow():
     async def execute_step(func, name, config=None):
         return await execute_step_with_mock_context(func)
 
-    mock_context.step.side_effect = execute_step
-
-    result = await wait_for_callback_handler(
-        mock_context, mock_submitter, "lifecycle_test", config
-    )
+    with patch_wait_for_callback_ops(
+        mock_callback,
+        step_side_effect=execute_step,
+    ):
+        result = await wait_for_callback_handler(
+            mock_context, mock_submitter, "lifecycle_test", config
+        )
 
     assert result == {"status": "completed", "data": "test_data"}
 
@@ -957,12 +984,16 @@ async def test_callback_error_propagation():
     assert callback_id == "failed_cb"
 
     mock_context = AsyncMock(spec=DurableContext)
-    mock_context.create_callback.side_effect = ValueError("Context creation failed")
 
-    with pytest.raises(ValueError, match="Context creation failed"):
-        await wait_for_callback_handler(
-            mock_context, AsyncMock(return_value=None), "error_test"
-        )
+    with patch.object(
+        callback,
+        "create_callback",
+        AsyncMock(side_effect=ValueError("Context creation failed")),
+    ):
+        with pytest.raises(ValueError, match="Context creation failed"):
+            await wait_for_callback_handler(
+                mock_context, AsyncMock(return_value=None), "error_test"
+            )
 
 
 async def test_callback_with_complex_submitter():
@@ -971,7 +1002,6 @@ async def test_callback_with_complex_submitter():
     mock_callback = Mock()
     mock_callback.callback_id = "complex_cb789"
     mock_callback.result = AsyncMock(return_value="complex_result")
-    mock_context.create_callback.return_value = mock_callback
 
     submission_log = []
 
@@ -988,11 +1018,13 @@ async def test_callback_with_complex_submitter():
     async def execute_step(func, name, config):
         return await execute_step_with_mock_context(func)
 
-    mock_context.step.side_effect = execute_step
-
-    result = await wait_for_callback_handler(
-        mock_context, complex_submitter, "complex_test"
-    )
+    with patch_wait_for_callback_ops(
+        mock_callback,
+        step_side_effect=execute_step,
+    ):
+        result = await wait_for_callback_handler(
+            mock_context, complex_submitter, "complex_test"
+        )
 
     assert result == "complex_result"
     assert submission_log == ["received_id: complex_cb789", "api_call_success"]
@@ -1063,17 +1095,14 @@ async def test_callback_name_variations():
         mock_callback = Mock()
         mock_callback.callback_id = f"name_test_{hash(str(name)) % 1000}"
         mock_callback.result = AsyncMock(return_value=f"result_for_{name}")
-        mock_context.create_callback.return_value = mock_callback
         mock_submitter = AsyncMock(return_value=None)
 
-        result = await wait_for_callback_handler(mock_context, mock_submitter, name)
+        with patch_wait_for_callback_ops(mock_callback) as (_, step_mock):
+            result = await wait_for_callback_handler(mock_context, mock_submitter, name)
 
         assert result == f"result_for_{name}"
         expected_name = f"{name} submitter" if name else "submitter"
-        mock_context.step.assert_called_once_with(
-            func=ANY, name=expected_name, config=None
-        )
-        mock_context.reset_mock()
+        step_mock.assert_called_once_with(func=ANY, name=expected_name, config=None)
 
 
 @patch("async_durable_execution.operation.callback.OperationUpdate")

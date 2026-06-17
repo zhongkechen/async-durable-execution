@@ -53,7 +53,7 @@ from datetime import timedelta
 from async_durable_execution import (
     durable_step,
     durable_execution,
-    get_context,
+    get_current_context,
 )
 
 logger = logging.getLogger(__name__)
@@ -68,7 +68,7 @@ async def validate_order(order_id: str) -> dict:
 
 @durable_execution
 async def handler(event: dict) -> dict:
-    context = get_context()
+    context = get_current_context()
     order_id = event["order_id"]
     logger.info("Starting workflow", extra={"order_id": order_id})
 
@@ -91,7 +91,7 @@ import logging
 from async_durable_execution import (
     durable_step,
     durable_execution,
-    get_context,
+    get_current_context,
 )
 
 logger = logging.getLogger(__name__)
@@ -106,7 +106,7 @@ async def fetch_order(order_id: str) -> dict:
 
 @durable_execution
 async def handler(event: dict) -> dict:
-    context = get_context()
+    context = get_current_context()
     order = await context.step(fetch_order(event["order_id"]), name="fetch_order")
     return {"order": order}
 ```

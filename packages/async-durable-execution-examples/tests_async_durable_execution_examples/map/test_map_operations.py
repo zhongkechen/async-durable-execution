@@ -8,7 +8,7 @@ from async_durable_execution_examples.map import map_operations
 
 
 async def test_map_operations(durable_runner):
-    """Test map_operations example using context.map()."""
+    """Test map_operations example using map()."""
     with durable_runner(
         handler=map_operations.handler, input="test", timeout=10
     ) as runner:

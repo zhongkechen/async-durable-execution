@@ -259,7 +259,7 @@ class LambdaInvoker(Invoker):
 
         try:
             # Invoke AWS Lambda function using standard invoke method
-            response = await asyncio.to_thread(
+            response: dict[str, Any] = await asyncio.to_thread(
                 client.invoke,
                 FunctionName=function_name,
                 InvocationType="RequestResponse",  # Synchronous invocation
