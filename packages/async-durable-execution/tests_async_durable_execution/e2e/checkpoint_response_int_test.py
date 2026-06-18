@@ -1,7 +1,7 @@
 """Integration tests for immediate checkpoint response handling.
 
 Tests end-to-end operation execution with the immediate response handling
-that's implemented via the OperationExecutor base class pattern.
+that's implemented by each concrete operation executor.
 """
 
 from __future__ import annotations
@@ -89,9 +89,8 @@ def create_mock_checkpoint_with_operations():
 async def test_end_to_end_step_operation_with_double_check():
     """Test end-to-end step operation execution with double-check pattern.
 
-    Verifies that the OperationExecutor.process() method properly calls
-    check_result_status() twice when a checkpoint is created, enabling
-    immediate response handling.
+    Verifies that the step executor re-checks state after creating a synchronous
+    START checkpoint, enabling immediate response handling.
     """
 
     async def my_step() -> str:

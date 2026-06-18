@@ -29,7 +29,6 @@ from ..models import (
 from ..context import reset_current_context, set_current_context
 from .child import _get_durable_context
 from .base import (
-    CheckResult,
     OperationExecutor,
     OperationContext,
 )
@@ -53,11 +52,7 @@ Params = ParamSpec("Params")
 
 
 class StepOperationExecutor(OperationExecutor[T]):
-    """Executor for step operations.
-
-    Checks operation status after creating START checkpoints to handle operations
-    that complete synchronously, avoiding unnecessary execution or suspension.
-    """
+    """Executor for step operations."""
 
     def __init__(
         self,
@@ -77,22 +72,9 @@ class StepOperationExecutor(OperationExecutor[T]):
         super().__init__(state=state, operation_identifier=operation_identifier)
         self.func = func
         self.config = config
-        self._checkpoint_created = False  # Track if we created the checkpoint
 
-    async def check_result_status(self) -> CheckResult[T]:
-        """Check operation status and create START checkpoint if needed.
-
-        Called twice by process() when creating synchronous checkpoints: once before
-        and once after, to detect if the operation completed immediately.
-
-        Returns:
-            CheckResult indicating the next action to take
-
-        Raises:
-            CallableRuntimeError: For FAILED operations
-            StepInterruptedError: For interrupted AT_MOST_ONCE operations
-            SuspendExecution: For PENDING operations waiting for retry
-        """
+    async def process(self) -> T:
+        """Process step checkpoint state and execute when appropriate."""
         checkpointed_result: CheckpointedResult = self.get_checkpointed_result()
 
         # Terminal success - deserialize and return
@@ -103,13 +85,13 @@ class StepOperationExecutor(OperationExecutor[T]):
                 self.operation_name,
             )
             if checkpointed_result.result is None:
-                return CheckResult.create_completed(None)  # type: ignore
+                return None  # type: ignore[return-value]
 
             result: T = self.deserialize_value(
                 data=checkpointed_result.result,
                 serdes=self.config.serdes,
             )
-            return CheckResult.create_completed(result)
+            return result
 
         # Terminal failure
         if checkpointed_result.is_failed():
@@ -134,7 +116,7 @@ class StepOperationExecutor(OperationExecutor[T]):
         # This check is skipped on fresh executions because:
         #   - First call (fresh): checkpoint doesn't exist → is_started() returns False → skip this check
         #   - After creating sync checkpoint and refreshing: if status is STARTED, we return
-        #     ready_to_execute directly, so process() never calls check_result_status() again
+        #     directly into execute() without re-running process() from the top
         if (
             checkpointed_result.is_started()
             and self.config.step_semantics is StepSemantics.AT_MOST_ONCE_PER_RETRY
@@ -149,7 +131,7 @@ class StepOperationExecutor(OperationExecutor[T]):
             checkpointed_result.is_started()
             and self.config.step_semantics is StepSemantics.AT_LEAST_ONCE_PER_RETRY
         ):
-            return CheckResult.create_is_ready_to_execute(checkpointed_result)
+            return await self.execute(checkpointed_result)
 
         # Create START checkpoint if nonexistent or READY
         if not checkpointed_result.is_existent() or checkpointed_result.is_ready():
@@ -179,10 +161,9 @@ class StepOperationExecutor(OperationExecutor[T]):
                     raise InvalidStateError(error_msg)
 
                 # If we reach here, status must be STARTED - ready to execute
-                return CheckResult.create_is_ready_to_execute(refreshed_result)
+                checkpointed_result = refreshed_result
 
-        # Ready to execute
-        return CheckResult.create_is_ready_to_execute(checkpointed_result)
+        return await self.execute(checkpointed_result)
 
     async def execute(self, checkpointed_result: CheckpointedResult) -> T:
         """Execute step function with error handling and retry logic.

@@ -765,7 +765,7 @@ async def test_step_immediate_response_create_checkpoint_async_at_least_once():
 async def test_step_immediate_response_immediate_success():
     """Test immediate success: checkpoint returns SUCCEEDED on second check, operation returns without suspend.
 
-    Note: The current implementation calls get_checkpoint_result twice within check_result_status()
+    Note: The current implementation calls get_checkpoint_result twice inside process()
     for sync checkpoints, so we need to handle that in the mock setup.
     """
     mock_state = Mock(spec=ExecutionState)

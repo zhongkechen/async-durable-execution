@@ -10,10 +10,7 @@ from ..exceptions import ValidationError
 from ..config import duration_to_seconds
 from .child import _get_durable_context, DurableContext
 from ..models import OperationIdentifier, OperationUpdate, WaitOptions, OperationSubType
-from .base import (
-    CheckResult,
-    OperationExecutor,
-)
+from .base import OperationExecutor
 from ..suspend import suspend_with_optional_resume_delay
 
 
@@ -27,11 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class WaitOperationExecutor(OperationExecutor[None]):
-    """Executor for wait operations.
-
-    Checks operation status after creating START checkpoints to handle operations
-    that complete synchronously, avoiding unnecessary execution or suspension.
-    """
+    """Executor for wait operations."""
 
     def __init__(
         self,
@@ -49,18 +42,8 @@ class WaitOperationExecutor(OperationExecutor[None]):
         super().__init__(state=state, operation_identifier=operation_identifier)
         self.seconds = seconds
 
-    async def check_result_status(self) -> CheckResult[None]:
-        """Check operation status and create START checkpoint if needed.
-
-        Called twice by process() when creating synchronous checkpoints: once before
-        and once after, to detect if the operation completed immediately.
-
-        Returns:
-            CheckResult indicating the next action to take
-
-        Raises:
-            SuspendExecution: When wait timer has not completed
-        """
+    async def process(self) -> None:
+        """Process wait checkpoint state and suspend until completion."""
         checkpointed_result: CheckpointedResult = self.get_checkpointed_result()
 
         # Terminal success - wait completed
@@ -70,7 +53,7 @@ class WaitOperationExecutor(OperationExecutor[None]):
                 self.operation_identifier.operation_id,
                 self.operation_identifier.name,
             )
-            return CheckResult.create_completed(None)
+            return None
 
         # Create START checkpoint if not exists
         if not checkpointed_result.is_existent():
@@ -89,12 +72,12 @@ class WaitOperationExecutor(OperationExecutor[None]):
                 self.operation_identifier.name,
             )
 
-            # Signal to process() that checkpoint was created - which will re-run this check_result_status
-            # check from the top
-            return CheckResult.create_started()
+            checkpointed_result = self.get_checkpointed_result()
+            if checkpointed_result.is_succeeded():
+                return None
 
-        # Ready to suspend (checkpoint exists)
-        return CheckResult.create_is_ready_to_execute(checkpointed_result)
+        await self.execute(checkpointed_result)
+        return None
 
     async def execute(self, _checkpointed_result: CheckpointedResult) -> None:
         """Execute wait by suspending.
