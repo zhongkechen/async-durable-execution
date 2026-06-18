@@ -305,10 +305,6 @@ class ChildConfig(Generic[T]):
             - item_serdes: Used for individual item results in child contexts
             - serdes: Used for the entire BatchResult at handler level
 
-        sub_type: Operation subtype identifier used for tracking and debugging.
-            Examples: OperationSubType.MAP_ITERATION, OperationSubType.PARALLEL_BRANCH.
-            Used internally by the execution engine for operation classification.
-
         summary_generator: Function to generate compact summaries for large results (>256KB).
             When the serialized result exceeds CHECKPOINT_SIZE_LIMIT, this generator
             creates a JSON summary instead of checkpointing the full result. The operation
@@ -330,7 +326,6 @@ class ChildConfig(Generic[T]):
 
     serdes: SerDes | None = None
     item_serdes: SerDes | None = None
-    sub_type: OperationSubType | None = None
     summary_generator: SummaryGenerator | None = None
     is_virtual: bool = False
 

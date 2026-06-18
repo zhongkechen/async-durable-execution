@@ -114,7 +114,9 @@ def test_child_config_defaults():
     """Test ChildConfig default values."""
     config = ChildConfig()
     assert config.serdes is None
-    assert config.sub_type is None
+    assert config.item_serdes is None
+    assert config.summary_generator is None
+    assert config.is_virtual is False
 
 
 def test_child_config_with_serdes():
@@ -122,15 +124,19 @@ def test_child_config_with_serdes():
     serdes = Mock()
     config = ChildConfig(serdes=serdes)
     assert config.serdes is serdes
-    assert config.sub_type is None
+    assert config.item_serdes is None
+    assert config.summary_generator is None
+    assert config.is_virtual is False
 
 
-def test_child_config_with_sub_type():
-    """Test ChildConfig with sub_type."""
-    sub_type = Mock()
-    config = ChildConfig(sub_type=sub_type)
+def test_child_config_with_item_serdes():
+    """Test ChildConfig with item_serdes."""
+    item_serdes = Mock()
+    config = ChildConfig(item_serdes=item_serdes)
     assert config.serdes is None
-    assert config.sub_type is sub_type
+    assert config.item_serdes is item_serdes
+    assert config.summary_generator is None
+    assert config.is_virtual is False
 
 
 def test_child_config_with_summary_generator():
@@ -141,12 +147,22 @@ def test_child_config_with_summary_generator():
 
     config = ChildConfig(summary_generator=mock_summary_generator)
     assert config.serdes is None
-    assert config.sub_type is None
+    assert config.item_serdes is None
     assert config.summary_generator is mock_summary_generator
+    assert config.is_virtual is False
 
     # Test that the summary generator works
     result = config.summary_generator("test_data")
     assert result == "Summary of test_data"
+
+
+def test_child_config_with_is_virtual():
+    """Test ChildConfig with is_virtual enabled."""
+    config = ChildConfig(is_virtual=True)
+    assert config.serdes is None
+    assert config.item_serdes is None
+    assert config.summary_generator is None
+    assert config.is_virtual is True
 
 
 def test_items_per_batch_unit_enum():

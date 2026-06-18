@@ -72,7 +72,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
         self.func = func
         self.config = config
         self.is_virtual: bool = config.is_virtual
-        self.sub_type = config.sub_type or OperationSubType.RUN_IN_CHILD_CONTEXT
+        self.sub_type = operation_identifier.sub_type
 
     async def start(self) -> T:
         """Start a new child context operation."""
@@ -333,11 +333,6 @@ async def _run_in_child_context_in_context(
     assert_async_callable(func)
     step_name: str | None = name or get_callable_name(func)
     operation_id = context.step_counter.create_step_id()
-    sub_type = (
-        config.sub_type
-        if config and config.sub_type
-        else OperationSubType.RUN_IN_CHILD_CONTEXT
-    )
 
     is_virtual: bool = config.is_virtual if config else False
     child_context = context.create_child_context(
@@ -356,7 +351,7 @@ async def _run_in_child_context_in_context(
         state=context.execution_state,
         operation_identifier=OperationIdentifier(
             operation_id=operation_id,
-            sub_type=sub_type,
+            sub_type=OperationSubType.RUN_IN_CHILD_CONTEXT,
             parent_id=context.parent_id,
             name=step_name,
         ),
