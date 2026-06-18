@@ -83,7 +83,7 @@ def create_execution_state():
     state._create_checkpoint_async = AsyncMock()
     state.wrap_user_function = _wrap_user_function_for_test
     state.track_replay = Mock()
-    state.get_checkpoint_result.return_value = create_checkpoint_result()
+    state.operations.get.return_value = create_checkpoint_result()
     return state
 
 
@@ -2583,7 +2583,8 @@ async def test_concurrent_executor_replay_with_succeeded_operations():
         mock_result.result = f'"cached_result_{operation_id}"'  # JSON string
         return mock_result
 
-    mock_execution_state.get_checkpoint_result = mock_get_checkpoint_result
+    mock_execution_state.operations = Mock()
+    mock_execution_state.operations.get = Mock(side_effect=mock_get_checkpoint_result)
 
     def mock_create_step_id_for_logical_step(step):
         return f"op_{step}"
@@ -2643,7 +2644,8 @@ async def test_concurrent_executor_replay_with_failed_operations():
         mock_result.error = Exception("Test error")
         return mock_result
 
-    mock_execution_state.get_checkpoint_result = mock_get_checkpoint_result
+    mock_execution_state.operations = Mock()
+    mock_execution_state.operations.get = Mock(side_effect=mock_get_checkpoint_result)
 
     # Mock executor context
     mock_executor_context = Mock()
@@ -2686,7 +2688,8 @@ async def test_concurrent_executor_replay_with_replay_children():
         mock_result.is_replay_children.return_value = True
         return mock_result
 
-    mock_execution_state.get_checkpoint_result = mock_get_checkpoint_result
+    mock_execution_state.operations = Mock()
+    mock_execution_state.operations.get = Mock(side_effect=mock_get_checkpoint_result)
 
     # Mock executor context
     mock_executor_context = Mock()
@@ -3324,7 +3327,7 @@ async def test_flat_mode_stamps_grandparent_as_inner_op_parent_id():
     mock_checkpoint.is_failed.return_value = False
     mock_checkpoint.is_existent.return_value = False
     mock_checkpoint.is_replay_children.return_value = False
-    execution_state.get_checkpoint_result.return_value = mock_checkpoint
+    execution_state.operations.get.return_value = mock_checkpoint
 
     # Build a real DurableContext that represents the map/parallel op.
     map_op_id = "map-op-id"
@@ -3378,7 +3381,7 @@ async def test_nested_mode_stamps_branch_op_as_inner_op_parent_id():
     mock_checkpoint.is_failed.return_value = False
     mock_checkpoint.is_existent.return_value = False
     mock_checkpoint.is_replay_children.return_value = False
-    execution_state.get_checkpoint_result.return_value = mock_checkpoint
+    execution_state.operations.get.return_value = mock_checkpoint
 
     map_op_id = "map-op-id"
     executor_context = DurableContext(
@@ -3449,7 +3452,7 @@ async def test_flat_mode_produces_deterministic_step_ids_across_runs():
         mock_checkpoint.is_failed.return_value = False
         mock_checkpoint.is_existent.return_value = False
         mock_checkpoint.is_replay_children.return_value = False
-        execution_state.get_checkpoint_result.return_value = mock_checkpoint
+        execution_state.operations.get.return_value = mock_checkpoint
 
         executor_context = DurableContext(
             execution_state=execution_state,

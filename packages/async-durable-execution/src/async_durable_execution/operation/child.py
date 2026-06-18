@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypeVar, cast, ParamSpec
 
 from .base import (
+    CHECKPOINT_NOT_FOUND,
+    CheckpointedResult,
     OperationExecutor,
     OperationContext,
 )
@@ -23,7 +25,9 @@ from ..exceptions import (
 from ..models import (
     ContextOptions,
     ErrorObject,
+    Operation,
     OperationIdentifier,
+    OperationStatus,
     OperationSubType,
     OperationUpdate,
 )
@@ -33,10 +37,7 @@ from ..types import LambdaContext
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from ..state import (
-        CheckpointedResult,
-        ExecutionState,
-    )
+    from ..state import ExecutionState
 
 logger = logging.getLogger(__name__)
 
@@ -71,13 +72,22 @@ class ChildOperationExecutor(OperationExecutor[T]):
         self.is_virtual: bool = config.is_virtual
         self.sub_type = config.sub_type or OperationSubType.RUN_IN_CHILD_CONTEXT
 
-    async def process(self) -> T:
-        """Process child context checkpoint state and execute when needed."""
-        checkpointed_result: CheckpointedResult = self.get_checkpointed_result()
+    async def start(self) -> T:
+        """Start a new child context operation."""
+        if not self.is_virtual:
+            start_operation: OperationUpdate = OperationUpdate.create_context_start(
+                identifier=self.operation_identifier,
+                sub_type=self.sub_type,
+            )
+            await self.create_checkpoint(start_operation, is_sync=False)
 
-        # Terminal success without replay_children - deserialize and return
+        return await self.execute(CHECKPOINT_NOT_FOUND)
+
+    async def replay(self, operation: Operation) -> T:
+        """Replay an existing child context operation from its checkpoint."""
+        checkpointed_result = CheckpointedResult.create_from_operation(operation)
         if (
-            checkpointed_result.is_succeeded()
+            operation.status is OperationStatus.SUCCEEDED
             and not checkpointed_result.is_replay_children()
         ):
             logger.debug(
@@ -96,28 +106,14 @@ class ChildOperationExecutor(OperationExecutor[T]):
             )
             return result
 
-        # Terminal success with replay_children - re-execute
         if (
-            checkpointed_result.is_succeeded()
+            operation.status is OperationStatus.SUCCEEDED
             and checkpointed_result.is_replay_children()
         ):
             return await self.execute(checkpointed_result)
 
-        # Terminal failure
-        if checkpointed_result.is_failed():
+        if operation.status is OperationStatus.FAILED:
             checkpointed_result.raise_callable_error()
-
-        # Create START checkpoint if not exists
-        if not checkpointed_result.is_existent() and not self.is_virtual:
-            start_operation: OperationUpdate = OperationUpdate.create_context_start(
-                identifier=self.operation_identifier,
-                sub_type=self.sub_type,
-            )
-            # Checkpoint child context START with non-blocking (is_sync=False).
-            # This is a fire-and-forget operation for performance - we don't need to wait for
-            # persistence before executing the child context. The START checkpoint is purely
-            # for observability and tracking the operation hierarchy.
-            await self.create_checkpoint(start_operation, is_sync=False)
 
         return await self.execute(checkpointed_result)
 

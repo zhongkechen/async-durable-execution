@@ -25,7 +25,9 @@ from ..exceptions import (
     TimedSuspendExecution,
 )
 from ..models import ErrorObject, OperationIdentifier
+from .base import get_checkpoint_result
 from .child import child_handler
+from ..serdes import deserialize
 
 
 if TYPE_CHECKING:
@@ -360,16 +362,24 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
                     executable.index
                 )
             )
-            checkpoint = execution_state.get_checkpoint_result(operation_id)
+            checkpoint = get_checkpoint_result(execution_state, operation_id)
 
             result: ResultType | None = None
             error = None
             status: BatchItemStatus
             if checkpoint.is_succeeded():
                 status = BatchItemStatus.SUCCEEDED
-                result = await self._execute_item_in_child_context(
-                    executor_context, executable
-                )
+                if checkpoint.is_replay_children():
+                    result = await self._execute_item_in_child_context(
+                        executor_context, executable
+                    )
+                elif checkpoint.result is not None:
+                    result = deserialize(
+                        serdes=self.item_serdes or self.serdes,
+                        data=checkpoint.result,
+                        operation_id=operation_id,
+                        durable_execution_arn=execution_state.durable_execution_arn,
+                    )
             elif checkpoint.is_failed():
                 error = checkpoint.error
                 status = BatchItemStatus.FAILED

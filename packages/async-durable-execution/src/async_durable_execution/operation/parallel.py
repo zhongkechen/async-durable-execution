@@ -5,6 +5,7 @@ import json
 import logging
 from typing import TYPE_CHECKING, TypeVar, Sequence, Callable, Awaitable, ParamSpec
 
+from .base import get_checkpoint_result
 from .child import child_handler, _get_durable_context
 
 from ..async_tools import (
@@ -141,8 +142,9 @@ async def parallel_handler(
         config or ParallelConfig(summary_generator=ParallelSummaryGenerator()),
     )
 
-    checkpoint = execution_state.get_checkpoint_result(
-        operation_identifier.require_operation_id()
+    checkpoint = get_checkpoint_result(
+        execution_state,
+        operation_identifier.require_operation_id(),
     )
     if checkpoint.is_succeeded():
         return await executor.replay(execution_state, parallel_context)

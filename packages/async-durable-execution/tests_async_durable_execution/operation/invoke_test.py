@@ -24,8 +24,9 @@ from async_durable_execution.models import (
     OperationType,
 )
 from async_durable_execution.operation.invoke import InvokeOperationExecutor
-from async_durable_execution.state import CheckpointedResult, ExecutionState
+from async_durable_execution.state import ExecutionState
 from async_durable_execution.suspend import suspend_with_optional_resume_delay
+from async_durable_execution.operation.base import CheckpointedResult
 
 from ..serdes_test import CustomDictSerDes
 
@@ -57,7 +58,7 @@ async def test_invoke_handler_already_succeeded():
         chained_invoke_details=ChainedInvokeDetails(result=json.dumps("test_result")),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     result = await invoke_handler(
         function_name="test_function",
@@ -85,7 +86,7 @@ async def test_invoke_handler_already_succeeded_none_result():
         chained_invoke_details=ChainedInvokeDetails(result=None),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     result = await invoke_handler(
         function_name="test_function",
@@ -112,7 +113,7 @@ async def test_invoke_handler_already_succeeded_no_chained_invoke_details():
         chained_invoke_details=None,
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     result = await invoke_handler(
         function_name="test_function",
@@ -145,7 +146,7 @@ async def test_invoke_handler_already_terminated(kind: OperationStatus):
         chained_invoke_details=ChainedInvokeDetails(error=error),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     with pytest.raises(CallableRuntimeError):
         await invoke_handler(
@@ -174,7 +175,7 @@ async def test_invoke_handler_already_timed_out():
         chained_invoke_details=ChainedInvokeDetails(error=error),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     with pytest.raises(CallableRuntimeError):
         await invoke_handler(
@@ -201,7 +202,7 @@ async def test_invoke_handler_already_started(status):
         chained_invoke_details=ChainedInvokeDetails(),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     with pytest.raises(
         SuspendExecution, match="Invoke invoke6 started, suspending for completion"
@@ -230,7 +231,7 @@ async def test_invoke_handler_already_started_with_timeout(status):
         chained_invoke_details=ChainedInvokeDetails(),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     config = InvokeConfig[str, str]()
 
@@ -259,7 +260,7 @@ async def test_invoke_handler_new_operation():
         status=OperationStatus.STARTED,
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     config = InvokeConfig[str, str]()
 
@@ -302,7 +303,7 @@ async def test_invoke_handler_new_operation_with_config():
         status=OperationStatus.STARTED,
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     config = InvokeConfig[str, str]()
 
@@ -330,7 +331,7 @@ async def test_invoke_handler_new_operation_default_config():
         status=OperationStatus.STARTED,
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     config = InvokeConfig[str, str]()
 
@@ -358,7 +359,7 @@ async def test_invoke_handler_no_config():
         status=OperationStatus.STARTED,
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     with pytest.raises(SuspendExecution):
         await invoke_handler(
@@ -395,7 +396,7 @@ async def test_invoke_handler_custom_serdes():
         ),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     config = InvokeConfig[dict, dict](
         serdes_payload=CustomDictSerDes(), serdes_result=CustomDictSerDes()
@@ -427,7 +428,7 @@ async def test_invoke_handler_custom_serdes_new_operation():
         status=OperationStatus.STARTED,
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     config = InvokeConfig[dict, dict](
         serdes_payload=CustomDictSerDes(), serdes_result=CustomDictSerDes()
@@ -498,7 +499,7 @@ async def test_invoke_handler_with_operation_name(status: OperationStatus):
         chained_invoke_details=ChainedInvokeDetails(),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     with pytest.raises(SuspendExecution):
         await invoke_handler(
@@ -525,7 +526,7 @@ async def test_invoke_handler_without_operation_name(status: OperationStatus):
         chained_invoke_details=ChainedInvokeDetails(),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     with pytest.raises(SuspendExecution):
         await invoke_handler(
@@ -551,7 +552,7 @@ async def test_invoke_handler_with_none_payload():
         status=OperationStatus.STARTED,
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     with pytest.raises(SuspendExecution):
         await invoke_handler(
@@ -584,7 +585,7 @@ async def test_invoke_handler_already_succeeded_with_none_payload():
         chained_invoke_details=ChainedInvokeDetails(result=json.dumps("test_result")),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     result = await invoke_handler(
         function_name="test_function",
@@ -614,7 +615,7 @@ async def test_invoke_handler_suspend_does_not_raise(mock_suspend):
         status=OperationStatus.STARTED,
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     # Mock suspend_with_optional_resume_delay to not raise an exception (which it should always do)
     mock_suspend.return_value = None
@@ -648,7 +649,7 @@ async def test_invoke_handler_with_tenant_id():
         status=OperationStatus.STARTED,
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     config = InvokeConfig(tenant_id="test-tenant-123")
 
@@ -685,7 +686,7 @@ async def test_invoke_handler_without_tenant_id():
         status=OperationStatus.STARTED,
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     config = InvokeConfig(tenant_id=None)
 
@@ -722,7 +723,7 @@ async def test_invoke_handler_default_config_no_tenant_id():
         status=OperationStatus.STARTED,
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     with pytest.raises(SuspendExecution):
         await invoke_handler(
@@ -757,7 +758,7 @@ async def test_invoke_handler_defaults_to_json_serdes():
         status=OperationStatus.STARTED,
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     config = InvokeConfig[dict, dict](serdes_payload=None, serdes_result=None)
     payload = {"key": "value", "number": 42}
@@ -793,7 +794,7 @@ async def test_invoke_handler_result_defaults_to_json_serdes():
         chained_invoke_details=ChainedInvokeDetails(result=json.dumps(result_data)),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     config = InvokeConfig[dict, dict](serdes_payload=None, serdes_result=None)
 
@@ -829,7 +830,7 @@ async def test_invoke_immediate_response_get_checkpoint_result_called_twice():
         status=OperationStatus.STARTED,
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     with pytest.raises(SuspendExecution):
         await invoke_handler(
@@ -846,7 +847,7 @@ async def test_invoke_immediate_response_get_checkpoint_result_called_twice():
         )
 
     # Verify get_checkpoint_result was called twice
-    assert mock_state.get_checkpoint_result.call_count == 2
+    assert mock_state.operations.get.call_count == 2
 
 
 async def test_invoke_immediate_response_create_checkpoint_with_is_sync_true():
@@ -862,7 +863,7 @@ async def test_invoke_immediate_response_create_checkpoint_with_is_sync_true():
         status=OperationStatus.STARTED,
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     with pytest.raises(SuspendExecution):
         await invoke_handler(
@@ -904,7 +905,7 @@ async def test_invoke_immediate_response_immediate_success():
         ),
     )
     succeeded = CheckpointedResult.create_from_operation(succeeded_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, succeeded]
+    mock_state.operations.get.side_effect = [not_found, succeeded]
 
     result = await invoke_handler(
         function_name="test_function",
@@ -921,7 +922,7 @@ async def test_invoke_immediate_response_immediate_success():
     # Verify checkpoint was created
     mock_state._create_checkpoint_async.assert_called_once()
     # Verify get_checkpoint_result was called twice
-    assert mock_state.get_checkpoint_result.call_count == 2
+    assert mock_state.operations.get.call_count == 2
 
 
 async def test_invoke_immediate_response_immediate_success_with_none_result():
@@ -938,7 +939,7 @@ async def test_invoke_immediate_response_immediate_success_with_none_result():
         chained_invoke_details=ChainedInvokeDetails(result=None),
     )
     succeeded = CheckpointedResult.create_from_operation(succeeded_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, succeeded]
+    mock_state.operations.get.side_effect = [not_found, succeeded]
 
     result = await invoke_handler(
         function_name="test_function",
@@ -952,7 +953,7 @@ async def test_invoke_immediate_response_immediate_success_with_none_result():
 
     # Verify None result was returned without suspend
     assert result is None
-    assert mock_state.get_checkpoint_result.call_count == 2
+    assert mock_state.operations.get.call_count == 2
 
 
 @pytest.mark.parametrize(
@@ -980,7 +981,7 @@ async def test_invoke_immediate_response_immediate_failure(status: OperationStat
         chained_invoke_details=ChainedInvokeDetails(error=error),
     )
     failed = CheckpointedResult.create_from_operation(failed_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, failed]
+    mock_state.operations.get.side_effect = [not_found, failed]
 
     # Verify error is raised without suspend
     with pytest.raises(CallableRuntimeError):
@@ -1000,7 +1001,7 @@ async def test_invoke_immediate_response_immediate_failure(status: OperationStat
     # Verify checkpoint was created
     mock_state._create_checkpoint_async.assert_called_once()
     # Verify get_checkpoint_result was called twice
-    assert mock_state.get_checkpoint_result.call_count == 2
+    assert mock_state.operations.get.call_count == 2
 
 
 async def test_invoke_immediate_response_no_immediate_response():
@@ -1019,7 +1020,7 @@ async def test_invoke_immediate_response_no_immediate_response():
         status=OperationStatus.STARTED,
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     # Verify operation suspends
     with pytest.raises(SuspendExecution):
@@ -1039,7 +1040,7 @@ async def test_invoke_immediate_response_no_immediate_response():
     # Verify checkpoint was created
     mock_state._create_checkpoint_async.assert_called_once()
     # Verify get_checkpoint_result was called twice
-    assert mock_state.get_checkpoint_result.call_count == 2
+    assert mock_state.operations.get.call_count == 2
 
 
 async def test_invoke_immediate_response_already_completed():
@@ -1061,7 +1062,7 @@ async def test_invoke_immediate_response_already_completed():
         ),
     )
     succeeded = CheckpointedResult.create_from_operation(succeeded_op)
-    mock_state.get_checkpoint_result.return_value = succeeded
+    mock_state.operations.get.return_value = succeeded
 
     result = await invoke_handler(
         function_name="test_function",
@@ -1078,7 +1079,7 @@ async def test_invoke_immediate_response_already_completed():
     # Verify no checkpoint was created
     mock_state._create_checkpoint_async.assert_not_called()
     # Verify get_checkpoint_result was called only once
-    assert mock_state.get_checkpoint_result.call_count == 1
+    assert mock_state.operations.get.call_count == 1
 
 
 async def test_invoke_immediate_response_with_config_immediate_success():
@@ -1097,7 +1098,7 @@ async def test_invoke_immediate_response_with_config_immediate_success():
         ),
     )
     succeeded = CheckpointedResult.create_from_operation(succeeded_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, succeeded]
+    mock_state.operations.get.side_effect = [not_found, succeeded]
 
     config = InvokeConfig[str, str]()
 
@@ -1113,7 +1114,7 @@ async def test_invoke_immediate_response_with_config_immediate_success():
 
     # Verify result was returned without suspend
     assert result == "timeout_result"
-    assert mock_state.get_checkpoint_result.call_count == 2
+    assert mock_state.operations.get.call_count == 2
 
 
 async def test_invoke_immediate_response_with_config_no_immediate_response():
@@ -1132,7 +1133,7 @@ async def test_invoke_immediate_response_with_config_no_immediate_response():
         status=OperationStatus.STARTED,
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     config = InvokeConfig[str, str]()
 
@@ -1151,7 +1152,7 @@ async def test_invoke_immediate_response_with_config_no_immediate_response():
             config=config,
         )
 
-    assert mock_state.get_checkpoint_result.call_count == 2
+    assert mock_state.operations.get.call_count == 2
 
 
 async def test_invoke_immediate_response_with_custom_serdes():
@@ -1170,7 +1171,7 @@ async def test_invoke_immediate_response_with_custom_serdes():
         ),
     )
     succeeded = CheckpointedResult.create_from_operation(succeeded_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, succeeded]
+    mock_state.operations.get.side_effect = [not_found, succeeded]
 
     config = InvokeConfig[dict, dict](
         serdes_payload=CustomDictSerDes(), serdes_result=CustomDictSerDes()
@@ -1188,7 +1189,7 @@ async def test_invoke_immediate_response_with_custom_serdes():
 
     # Verify custom deserialization was used
     assert result == {"key": "value", "number": 42, "list": [1, 2, 3]}
-    assert mock_state.get_checkpoint_result.call_count == 2
+    assert mock_state.operations.get.call_count == 2
 
 
 async def test_invoke_suspends_when_second_check_returns_started():
@@ -1202,7 +1203,7 @@ async def test_invoke_suspends_when_second_check_returns_started():
 
     # First call: checkpoint doesn't exist
     # Second call: checkpoint returns STARTED (no immediate response)
-    mock_state.get_checkpoint_result.side_effect = [
+    mock_state.operations.get.side_effect = [
         CheckpointedResult.create_not_found(),
         CheckpointedResult.create_from_operation(
             Operation(
@@ -1227,7 +1228,7 @@ async def test_invoke_suspends_when_second_check_returns_started():
         await executor.process()
 
     # Assert - behaves like "old way"
-    assert mock_state.get_checkpoint_result.call_count == 2  # Double-check happened
+    assert mock_state.operations.get.call_count == 2  # Double-check happened
     mock_state._create_checkpoint_async.assert_called_once()  # START checkpoint created
 
 
@@ -1247,7 +1248,7 @@ async def test_invoke_suspends_when_second_check_returns_started_duplicate():
         status=OperationStatus.STARTED,
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     executor = InvokeOperationExecutor(
         function_name="my-function",
@@ -1263,5 +1264,5 @@ async def test_invoke_suspends_when_second_check_returns_started_duplicate():
         await executor.process()
 
     # Assert - behaves like "old way"
-    assert mock_state.get_checkpoint_result.call_count == 2  # Double-check happened
+    assert mock_state.operations.get.call_count == 2  # Double-check happened
     mock_state._create_checkpoint_async.assert_called_once()  # START checkpoint created
