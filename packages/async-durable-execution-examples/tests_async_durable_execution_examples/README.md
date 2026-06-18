@@ -46,11 +46,11 @@ sam deploy \
   --no-confirm-changeset \
   --parameter-overrides \
     FunctionName=HelloWorld-Test \
-    LambdaEndpoint=https://lambda.us-west-2.amazonaws.com
+    LambdaEndpoint=https://lambda.eu-south-1.amazonaws.com
 
 # Set environment variables for cloud testing
-export AWS_REGION=us-west-2
-export LAMBDA_ENDPOINT=https://lambda.us-west-2.amazonaws.com
+export AWS_REGION=eu-south-1
+export LAMBDA_ENDPOINT=https://lambda.eu-south-1.amazonaws.com
 export QUALIFIED_FUNCTION_NAME="HelloWorld-Test:$LATEST"
 
 # Run tests (from repo root)
@@ -99,7 +99,7 @@ def test_my_example(durable_runner):
 ## Configuration
 
 ### Environment Variables (Cloud Mode)
-- `AWS_REGION` - AWS region for Lambda invocation (default: us-west-2)
+- `AWS_REGION` - AWS region for Lambda invocation (default: eu-south-1)
 - `LAMBDA_ENDPOINT` - Optional Lambda endpoint URL for testing
 - `PYTEST_FUNCTION_NAME_PREFIX` - Prefix used to derive deployed qualified function names for all examples
 - `QUALIFIED_FUNCTION_NAME` - Optional fallback for single-function cloud runs
