@@ -21,7 +21,9 @@ from ..exceptions import (
 )
 from ..models import (
     ErrorObject,
+    Operation,
     OperationIdentifier,
+    OperationStatus,
     OperationUpdate,
     RetryDecision,
     OperationSubType,
@@ -29,6 +31,8 @@ from ..models import (
 from ..context import reset_current_context, set_current_context
 from .child import _get_durable_context
 from .base import (
+    CHECKPOINT_NOT_FOUND,
+    CheckpointedResult,
     OperationExecutor,
     OperationContext,
 )
@@ -40,10 +44,7 @@ from ..suspend import (
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from ..state import (
-        CheckpointedResult,
-        ExecutionState,
-    )
+    from ..state import ExecutionState
 
 logger = logging.getLogger(__name__)
 
@@ -73,12 +74,30 @@ class StepOperationExecutor(OperationExecutor[T]):
         self.func = func
         self.config = config
 
-    async def process(self) -> T:
-        """Process step checkpoint state and execute when appropriate."""
-        checkpointed_result: CheckpointedResult = self.get_checkpointed_result()
+    async def start(self) -> T:
+        """Start a new step operation."""
+        start_operation: OperationUpdate = OperationUpdate.create_step_start(
+            identifier=self.operation_identifier,
+        )
+        is_sync: bool = (
+            self.config.step_semantics is StepSemantics.AT_MOST_ONCE_PER_RETRY
+        )
+        await self.create_checkpoint(start_operation, is_sync=is_sync)
 
-        # Terminal success - deserialize and return
-        if checkpointed_result.is_succeeded():
+        checkpointed_result = CHECKPOINT_NOT_FOUND
+        if is_sync:
+            refreshed_result: CheckpointedResult = self.get_checkpointed_result()
+            if not refreshed_result.is_started():
+                error_msg: str = f"Unexpected status after START checkpoint: {refreshed_result.status}"
+                raise InvalidStateError(error_msg)
+            checkpointed_result = refreshed_result
+
+        return await self.execute(checkpointed_result)
+
+    async def replay(self, operation: Operation) -> T:
+        """Replay an existing step operation from its checkpoint."""
+        if operation.status is OperationStatus.SUCCEEDED:
+            checkpointed_result = CheckpointedResult.create_from_operation(operation)
             logger.debug(
                 "Step already completed, skipping execution for id: %s, name: %s",
                 self.operation_identifier.operation_id,
@@ -93,77 +112,54 @@ class StepOperationExecutor(OperationExecutor[T]):
             )
             return result
 
-        # Terminal failure
-        if checkpointed_result.is_failed():
-            # Have to throw the exact same error on replay as the checkpointed failure
-            checkpointed_result.raise_callable_error()
+        if operation.status is OperationStatus.FAILED:
+            CheckpointedResult.create_from_operation(operation).raise_callable_error()
 
-        # Pending retry
-        if checkpointed_result.is_pending():
+        if operation.status is OperationStatus.PENDING:
+            checkpointed_result = CheckpointedResult.create_from_operation(operation)
             scheduled_timestamp = checkpointed_result.get_next_attempt_timestamp()
-            # Normally, we'd ensure that a suspension here would be for > 0 seconds;
-            # however, this is coming from a checkpoint, and we can trust that it is a correct target timestamp.
             suspend_with_optional_resume_timestamp(
                 msg=f"Retry scheduled for {self.operation_name or self.operation_identifier.operation_id} will retry at timestamp {scheduled_timestamp}",
                 datetime_timestamp=scheduled_timestamp,
             )
 
-        # Handle interrupted AT_MOST_ONCE (replay scenario only)
-        # This check only applies on REPLAY when a new Lambda invocation starts after interruption.
-        # A STARTED checkpoint with AT_MOST_ONCE on entry means the previous invocation
-        # was interrupted and it should NOT re-execute.
-        #
-        # This check is skipped on fresh executions because:
-        #   - First call (fresh): checkpoint doesn't exist → is_started() returns False → skip this check
-        #   - After creating sync checkpoint and refreshing: if status is STARTED, we return
-        #     directly into execute() without re-running process() from the top
         if (
-            checkpointed_result.is_started()
+            operation.status is OperationStatus.STARTED
             and self.config.step_semantics is StepSemantics.AT_MOST_ONCE_PER_RETRY
         ):
-            # Step was previously interrupted in a prior invocation - handle retry
+            checkpointed_result = CheckpointedResult.create_from_operation(operation)
             msg: str = f"Step operation_id={self.operation_identifier.operation_id} name={self.operation_identifier.name} was previously interrupted"
             await self.retry_handler(StepInterruptedError(msg), checkpointed_result)
             checkpointed_result.raise_callable_error()
 
-        # Ready to execute if STARTED + AT_LEAST_ONCE
         if (
-            checkpointed_result.is_started()
+            operation.status is OperationStatus.STARTED
             and self.config.step_semantics is StepSemantics.AT_LEAST_ONCE_PER_RETRY
         ):
-            return await self.execute(checkpointed_result)
+            return await self.execute(
+                CheckpointedResult.create_from_operation(operation)
+            )
 
-        # Create START checkpoint if nonexistent or READY
-        if not checkpointed_result.is_existent() or checkpointed_result.is_ready():
+        if operation.status is OperationStatus.READY:
             start_operation: OperationUpdate = OperationUpdate.create_step_start(
                 identifier=self.operation_identifier,
             )
-            # Checkpoint START operation with appropriate synchronization:
-            # - AtMostOncePerRetry: Use blocking checkpoint (is_sync=True) to prevent duplicate execution.
-            #   The step must not execute until the START checkpoint is persisted, ensuring exactly-once semantics.
-            # - AtLeastOncePerRetry: Use non-blocking checkpoint (is_sync=False) for performance optimization.
-            #   The step can execute immediately without waiting for checkpoint persistence, allowing at-least-once semantics.
             is_sync: bool = (
                 self.config.step_semantics is StepSemantics.AT_MOST_ONCE_PER_RETRY
             )
             await self.create_checkpoint(start_operation, is_sync=is_sync)
 
-            # After creating sync checkpoint, check the status
+            checkpointed_result = CheckpointedResult.create_from_operation(operation)
             if is_sync:
-                # Refresh checkpoint result to check for immediate response
                 refreshed_result: CheckpointedResult = self.get_checkpointed_result()
-
-                # START checkpoint only returns STARTED status
-                # Any errors would be thrown as runtime exceptions during checkpoint creation
                 if not refreshed_result.is_started():
-                    # This should never happen - defensive check
                     error_msg: str = f"Unexpected status after START checkpoint: {refreshed_result.status}"
                     raise InvalidStateError(error_msg)
-
-                # If we reach here, status must be STARTED - ready to execute
                 checkpointed_result = refreshed_result
 
-        return await self.execute(checkpointed_result)
+            return await self.execute(checkpointed_result)
+
+        return await self.execute(CheckpointedResult.create_from_operation(operation))
 
     async def execute(self, checkpointed_result: CheckpointedResult) -> T:
         """Execute step function with error handling and retry logic.

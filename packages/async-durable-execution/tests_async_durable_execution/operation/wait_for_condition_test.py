@@ -29,10 +29,11 @@ import logging
 from async_durable_execution.operation.wait_for_condition import (
     WaitForConditionOperationExecutor,
 )
-from async_durable_execution.state import CheckpointedResult, ExecutionState
+from async_durable_execution.state import ExecutionState
 from async_durable_execution import WaitForConditionCheckContext
 from async_durable_execution.config import WaitForConditionConfig
 from async_durable_execution.models import WaitForConditionDecision
+from async_durable_execution.operation.base import CheckpointedResult
 
 from ..serdes_test import CustomDictSerDes
 
@@ -73,9 +74,7 @@ async def test_wait_for_condition_first_execution_condition_met():
     """Test wait_for_condition on first execution when condition is met."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
-    mock_state.get_checkpoint_result.return_value = (
-        CheckpointedResult.create_not_found()
-    )
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -108,9 +107,7 @@ async def test_wait_for_condition_first_execution_condition_not_met():
     """Test wait_for_condition on first execution when condition is not met."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
-    mock_state.get_checkpoint_result.return_value = (
-        CheckpointedResult.create_not_found()
-    )
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -150,7 +147,7 @@ async def test_wait_for_condition_already_succeeded():
         step_details=StepDetails(result=json.dumps(42)),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_logger = Mock(spec=logging.Logger)
     op_id = OperationIdentifier(
@@ -189,7 +186,7 @@ async def test_wait_for_condition_already_succeeded_none_result():
         step_details=StepDetails(result=None),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_logger = Mock(spec=logging.Logger)
     op_id = OperationIdentifier(
@@ -229,7 +226,7 @@ async def test_wait_for_condition_already_failed():
         ),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_logger = Mock(spec=logging.Logger)
     op_id = OperationIdentifier(
@@ -266,7 +263,7 @@ async def test_wait_for_condition_retry_with_state():
         step_details=StepDetails(result=json.dumps(10), attempt=2),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -306,7 +303,7 @@ async def test_wait_for_condition_retry_without_state():
         step_details=StepDetails(result=None, attempt=2),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -345,7 +342,7 @@ async def test_wait_for_condition_retry_invalid_json_state():
         step_details=StepDetails(result="invalid json", attempt=2),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -377,9 +374,7 @@ async def test_wait_for_condition_check_function_exception():
     """Test wait_for_condition when check function raises exception."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
-    mock_state.get_checkpoint_result.return_value = (
-        CheckpointedResult.create_not_found()
-    )
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -413,9 +408,7 @@ async def test_wait_for_condition_check_context():
     """Test that check context is available via contextvars."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
-    mock_state.get_checkpoint_result.return_value = (
-        CheckpointedResult.create_not_found()
-    )
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
@@ -450,9 +443,7 @@ async def test_wait_for_condition_delay_seconds_none():
     """Test wait_for_condition with None delay_seconds."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
-    mock_state.get_checkpoint_result.return_value = (
-        CheckpointedResult.create_not_found()
-    )
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -494,7 +485,7 @@ async def test_wait_for_condition_no_operation_in_checkpoint():
     mock_result.result = json.dumps(10)
     mock_result.operation = None
 
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -512,14 +503,13 @@ async def test_wait_for_condition_no_operation_in_checkpoint():
         wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
     )
 
-    result = await wait_for_condition_handler(
-        state=mock_state,
-        operation_identifier=op_id,
-        check=check_func,
-        config=config,
-    )
-
-    assert result == 11  # Uses attempt=1 by default
+    with pytest.raises(CallableRuntimeError, match="Missing checkpoint operation"):
+        await wait_for_condition_handler(
+            state=mock_state,
+            operation_identifier=op_id,
+            check=check_func,
+            config=config,
+        )
 
 
 async def test_wait_for_condition_operation_no_step_details():
@@ -535,17 +525,8 @@ async def test_wait_for_condition_operation_no_step_details():
         step_details=None,
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    # Mock the result property since CheckpointedResult is frozen
-    mock_result = Mock()
-    mock_result.is_succeeded.return_value = False
-    mock_result.is_failed.return_value = False
-    mock_result.is_pending.return_value = False
-    mock_result.is_started_or_ready.return_value = True
-    mock_result.is_existent.return_value = True
-    mock_result.result = json.dumps(10)
-    mock_result.operation = operation
 
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -570,16 +551,14 @@ async def test_wait_for_condition_operation_no_step_details():
         config=config,
     )
 
-    assert result == 11  # Uses attempt=1 by default
+    assert result == 6  # Falls back to initial_state and uses attempt=1
 
 
 async def test_wait_for_condition_custom_delay_seconds():
     """Test wait_for_condition with custom delay_seconds."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
-    mock_state.get_checkpoint_result.return_value = (
-        CheckpointedResult.create_not_found()
-    )
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -619,7 +598,7 @@ async def test_wait_for_condition_attempt_number_passed_to_strategy():
         step_details=StepDetails(result=json.dumps(10), attempt=3),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -685,9 +664,7 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
     config = WaitForConditionConfig(initial_state=5, wait_strategy=wait_strategy)
 
     # Test 1: First execution (no checkpoint exists)
-    mock_state.get_checkpoint_result.return_value = (
-        CheckpointedResult.create_not_found()
-    )
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     await wait_for_condition_handler(
         state=mock_state,
@@ -706,7 +683,7 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
         step_details=StepDetails(result=json.dumps(10), attempt=1),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     await wait_for_condition_handler(
         state=mock_state,
@@ -727,7 +704,7 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
         step_details=StepDetails(result=json.dumps(10), attempt=2),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     await wait_for_condition_handler(
         state=mock_state,
@@ -748,7 +725,7 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
         step_details=StepDetails(result=json.dumps(10), attempt=3),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     await wait_for_condition_handler(
         state=mock_state,
@@ -774,9 +751,7 @@ async def test_wait_for_condition_state_passed_to_strategy():
     """Test that new state is correctly passed to wait strategy."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
-    mock_state.get_checkpoint_result.return_value = (
-        CheckpointedResult.create_not_found()
-    )
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -812,9 +787,7 @@ async def test_wait_for_condition_logger_with_log_info():
     """Test that the active context carries durable log metadata."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test:execution:123"
-    mock_state.get_checkpoint_result.return_value = (
-        CheckpointedResult.create_not_found()
-    )
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -857,9 +830,7 @@ async def test_wait_for_condition_zero_delay_seconds():
     """Test wait_for_condition with zero delay_seconds."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
-    mock_state.get_checkpoint_result.return_value = (
-        CheckpointedResult.create_not_found()
-    )
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -891,9 +862,7 @@ async def test_wait_for_condition_zero_delay_seconds():
 async def test_wait_for_condition_custom_serdes_first_execution_condition_met():
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
-    mock_state.get_checkpoint_result.return_value = (
-        CheckpointedResult.create_not_found()
-    )
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -941,7 +910,7 @@ async def test_wait_for_condition_custom_serdes_already_succeeded():
         ),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_logger = Mock(spec=logging.Logger)
     op_id = OperationIdentifier(
@@ -982,7 +951,7 @@ async def test_wait_for_condition_pending():
         ),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -1023,7 +992,7 @@ async def test_wait_for_condition_pending_without_next_attempt():
         ),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -1060,9 +1029,7 @@ async def test_wait_for_condition_checkpoint_called_once_with_is_sync_false():
     """Test that get_checkpoint_result is called once when checkpoint is created (is_sync=False)."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
-    mock_state.get_checkpoint_result.return_value = (
-        CheckpointedResult.create_not_found()
-    )
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -1088,7 +1055,7 @@ async def test_wait_for_condition_checkpoint_called_once_with_is_sync_false():
     )
 
     # Verify get_checkpoint_result called only once (no second check for async checkpoint)
-    assert mock_state.get_checkpoint_result.call_count == 1
+    assert mock_state.operations.get.call_count == 1
 
     # Verify create_checkpoint called with is_sync=False
     assert mock_state._create_checkpoint_async.call_count == 2  # START and SUCCESS
@@ -1107,7 +1074,7 @@ async def test_wait_for_condition_immediate_success_without_executing_check():
         step_details=StepDetails(result=json.dumps(42)),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_logger = Mock(spec=logging.Logger)
     op_id = OperationIdentifier(
@@ -1150,7 +1117,7 @@ async def test_wait_for_condition_immediate_failure_without_executing_check():
         ),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_logger = Mock(spec=logging.Logger)
     op_id = OperationIdentifier(
@@ -1196,7 +1163,7 @@ async def test_wait_for_condition_pending_suspends_without_executing_check():
         ),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -1233,9 +1200,7 @@ async def test_wait_for_condition_no_checkpoint_executes_check_function():
     """Test no immediate response: when checkpoint doesn't exist, operation executes check function."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
-    mock_state.get_checkpoint_result.return_value = (
-        CheckpointedResult.create_not_found()
-    )
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     mock_logger = Mock(spec=logging.Logger)
 
@@ -1283,7 +1248,7 @@ async def test_wait_for_condition_already_completed_no_checkpoint_created():
         step_details=StepDetails(result=json.dumps(42)),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_logger = Mock(spec=logging.Logger)
     op_id = OperationIdentifier(
@@ -1323,9 +1288,7 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal():
     mock_state.durable_execution_arn = "test_arn"
 
     # Single call: checkpoint doesn't exist (async checkpoint, no second check)
-    mock_state.get_checkpoint_result.return_value = (
-        CheckpointedResult.create_not_found()
-    )
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     mock_check_function = Mock(return_value="final_state")
     mock_logger = Mock(spec=logging.Logger)
@@ -1352,7 +1315,7 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal():
     # Assert - behaves like "old way"
     mock_check_function.assert_called_once()  # Check function executed
     assert result == "final_state"
-    assert mock_state.get_checkpoint_result.call_count == 1  # Single check (async)
+    assert mock_state.operations.get.call_count == 1  # Single check (async)
     assert (
         mock_state._create_checkpoint_async.call_count == 2
     )  # START + SUCCESS checkpoints
@@ -1369,9 +1332,7 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal_du
     mock_state.durable_execution_arn = "test_arn"
 
     # Single call: checkpoint doesn't exist (async checkpoint, no second check)
-    mock_state.get_checkpoint_result.return_value = (
-        CheckpointedResult.create_not_found()
-    )
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     mock_check_function = Mock(return_value="final_state")
     mock_state.wrap_user_function.return_value = _asyncify(mock_check_function)
@@ -1396,7 +1357,7 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal_du
     # Assert - behaves like "old way"
     mock_check_function.assert_called_once()  # Check function executed
     assert result == "final_state"
-    assert mock_state.get_checkpoint_result.call_count == 1  # Single check (async)
+    assert mock_state.operations.get.call_count == 1  # Single check (async)
     assert (
         mock_state._create_checkpoint_async.call_count == 2
     )  # START + SUCCESS checkpoints

@@ -11,13 +11,15 @@ from ..config import InvokeConfig
 from ..exceptions import ExecutionError
 from ..models import (
     ChainedInvokeOptions,
+    Operation,
     OperationIdentifier,
+    OperationStatus,
     OperationUpdate,
     OperationSubType,
 )
 
 # Import base classes for operation executor pattern
-from .base import OperationExecutor
+from .base import CheckpointedResult, OperationExecutor
 from ..serdes import (
     DEFAULT_JSON_SERDES,
 )
@@ -25,10 +27,7 @@ from ..suspend import suspend_with_optional_resume_delay
 
 
 if TYPE_CHECKING:
-    from ..state import (
-        CheckpointedResult,
-        ExecutionState,
-    )
+    from ..state import ExecutionState
 
 P = TypeVar("P")  # Payload type
 R = TypeVar("R")  # Result type
@@ -61,12 +60,37 @@ class InvokeOperationExecutor(OperationExecutor[R]):
         self.payload = payload
         self.config = config
 
-    async def process(self) -> R:
-        """Process invoke checkpoint state and suspend until completion."""
-        checkpointed_result: CheckpointedResult = self.get_checkpointed_result()
+    async def start(self) -> R:
+        """Start a new invoke operation."""
+        serialized_payload: str = self.serialize_value(
+            value=self.payload,
+            serdes=self.config.serdes_payload or DEFAULT_JSON_SERDES,
+        )
+        start_operation: OperationUpdate = OperationUpdate.create_invoke_start(
+            identifier=self.operation_identifier,
+            payload=serialized_payload,
+            chained_invoke_options=ChainedInvokeOptions(
+                function_name=self.function_name,
+                tenant_id=self.config.tenant_id,
+            ),
+        )
+        await self.create_checkpoint(start_operation, is_sync=True)
 
-        # Terminal success - deserialize and return
-        if checkpointed_result.is_succeeded():
+        logger.debug(
+            "🚀 Invoke %s started, will check for immediate response",
+            self.operation_name or self.function_name,
+        )
+
+        checkpointed_result = self.get_checkpointed_result()
+        if not checkpointed_result.operation:
+            error_msg = "Missing invoke operation after START checkpoint."
+            raise ExecutionError(error_msg)
+        return await self.replay(checkpointed_result.operation)
+
+    async def replay(self, operation: Operation) -> R:
+        """Replay an existing invoke operation from its checkpoint."""
+        if operation.status is OperationStatus.SUCCEEDED:
+            checkpointed_result = CheckpointedResult.create_from_operation(operation)
             if checkpointed_result.result is None:
                 return None  # type: ignore[return-value]
 
@@ -78,57 +102,19 @@ class InvokeOperationExecutor(OperationExecutor[R]):
 
         # Terminal failures
         if (
-            checkpointed_result.is_failed()
-            or checkpointed_result.is_timed_out()
-            or checkpointed_result.is_stopped()
+            operation.status is OperationStatus.FAILED
+            or operation.status is OperationStatus.TIMED_OUT
+            or operation.status is OperationStatus.STOPPED
         ):
-            checkpointed_result.raise_callable_error()
+            CheckpointedResult.create_from_operation(operation).raise_callable_error()
 
-        # Still running - ready to suspend
-        if checkpointed_result.is_started():
+        checkpointed_result = CheckpointedResult.create_from_operation(operation)
+        if operation.status is OperationStatus.STARTED:
             logger.debug(
                 "⏳ Invoke %s still in progress, will suspend",
                 self.operation_name or self.function_name,
             )
             return await self.execute(checkpointed_result)
-
-        # Create START checkpoint if not exists
-        if not checkpointed_result.is_existent():
-            serialized_payload: str = self.serialize_value(
-                value=self.payload,
-                serdes=self.config.serdes_payload or DEFAULT_JSON_SERDES,
-            )
-            start_operation: OperationUpdate = OperationUpdate.create_invoke_start(
-                identifier=self.operation_identifier,
-                payload=serialized_payload,
-                chained_invoke_options=ChainedInvokeOptions(
-                    function_name=self.function_name,
-                    tenant_id=self.config.tenant_id,
-                ),
-            )
-            # Checkpoint invoke START with blocking (is_sync=True).
-            # Must ensure the chained invocation is recorded before suspending execution.
-            await self.create_checkpoint(start_operation, is_sync=True)
-
-            logger.debug(
-                "🚀 Invoke %s started, will check for immediate response",
-                self.operation_name or self.function_name,
-            )
-
-            checkpointed_result = self.get_checkpointed_result()
-            if checkpointed_result.is_succeeded():
-                if checkpointed_result.result is None:
-                    return None  # type: ignore[return-value]
-                return self.deserialize_value(
-                    data=checkpointed_result.result,
-                    serdes=self.config.serdes_result or DEFAULT_JSON_SERDES,
-                )
-            if (
-                checkpointed_result.is_failed()
-                or checkpointed_result.is_timed_out()
-                or checkpointed_result.is_stopped()
-            ):
-                checkpointed_result.raise_callable_error()
 
         return await self.execute(checkpointed_result)
 

@@ -6,11 +6,11 @@ import logging
 from typing import TYPE_CHECKING, Generic, TypeVar, Sequence, Callable, Any, Awaitable
 
 from ..async_tools import get_callable_name
+from .base import CheckpointedResult, get_checkpoint_result
 from .child import child_handler, _get_durable_context
 
 from ..async_tools import (
     invoke_user_callable,
-    invoke_callable,
     assert_async_callable,
 )
 from async_durable_execution.operation.concurrency import ConcurrentExecutor
@@ -20,10 +20,7 @@ from ..models import BatchResult, Executable, OperationIdentifier, OperationSubT
 
 if TYPE_CHECKING:
     from ..serdes import SerDes
-    from ..state import (
-        CheckpointedResult,
-        ExecutionState,
-    )
+    from ..state import ExecutionState
     from ..types import SummaryGenerator
     from .child import DurableContext
 
@@ -135,8 +132,9 @@ async def map_handler(
         config=config or MapConfig(summary_generator=MapSummaryGenerator()),
     )
 
-    checkpoint: CheckpointedResult = execution_state.get_checkpoint_result(
-        operation_identifier.require_operation_id()
+    checkpoint: CheckpointedResult = get_checkpoint_result(
+        execution_state,
+        operation_identifier.require_operation_id(),
     )
     if checkpoint.is_succeeded():
         # if we've reached this point, then not only is the step succeeded, but it is also `replay_children`.

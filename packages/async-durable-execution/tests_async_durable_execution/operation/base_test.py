@@ -15,9 +15,9 @@ from async_durable_execution.models import (
 )
 from async_durable_execution.operation.base import (
     OperationExecutor,
+    CheckpointedResult,
 )
 from async_durable_execution.serdes import DEFAULT_JSON_SERDES
-from async_durable_execution.state import CheckpointedResult
 
 
 # Test fixtures and helpers
@@ -37,33 +37,40 @@ class ConcreteOperationExecutor(OperationExecutor[str]):
         super().__init__(state=state, operation_identifier=operation_identifier)
         self.execute_called = 0
         self.execute_result_to_return = "executed_result"
+        self.start_called = 0
+        self.replay_called = 0
 
     async def execute(self, checkpointed_result: CheckpointedResult) -> str:
         """Mock implementation that returns configured result."""
         self.execute_called += 1
         return self.execute_result_to_return
 
-    async def process(self) -> str:
-        """Mock implementation that delegates to execute()."""
-        return await self.execute(create_mock_checkpoint(OperationStatus.STARTED))
+    async def start(self) -> str:
+        """Mock implementation for a new operation."""
+        self.start_called += 1
+        return "started_result"
+
+    async def replay(self, operation: Operation) -> str:
+        """Mock implementation for a replayed operation."""
+        self.replay_called += 1
+        return await self.execute(CheckpointedResult.create_from_operation(operation))
 
 
-def create_mock_checkpoint(status: OperationStatus) -> CheckpointedResult:
-    """Create a mock CheckpointedResult with the given status."""
-    operation = Operation(
+def create_mock_operation(status: OperationStatus) -> Operation:
+    """Create a mock operation with the given status."""
+    return Operation(
         operation_id="test_op",
         operation_type=OperationType.STEP,
         status=status,
     )
-    return CheckpointedResult.create_from_operation(operation)
 
 
 async def test_operation_executor_common_properties_and_helpers():
     """Test OperationExecutor exposes shared fields and helpers."""
     state = Mock()
     state.durable_execution_arn = "arn:aws:lambda:us-west-2:123:function:test"
-    checkpoint = create_mock_checkpoint(OperationStatus.STARTED)
-    state.get_checkpoint_result.return_value = checkpoint
+    operation = create_mock_operation(OperationStatus.STARTED)
+    state.operations.get.return_value = operation
     operation_identifier = OperationIdentifier(
         "shared-op", OperationSubType.STEP, "parent-1", "shared-name"
     )
@@ -74,8 +81,9 @@ async def test_operation_executor_common_properties_and_helpers():
     assert executor.operation_id == "shared-op"
     assert executor.operation_name == "shared-name"
     assert executor.durable_execution_arn == state.durable_execution_arn
-    assert executor.get_checkpointed_result() is checkpoint
-    state.get_checkpoint_result.assert_called_once_with("shared-op")
+    checkpoint = executor.get_checkpointed_result()
+    assert checkpoint.operation is operation
+    state.operations.get.assert_called_once_with("shared-op")
 
 
 async def test_operation_executor_common_serialization_helpers():
@@ -120,8 +128,38 @@ async def test_operation_executor_create_checkpoint_passes_is_sync_override():
     )
 
 
-def test_operation_executor_requires_subclass_process_and_execute():
-    """Test OperationExecutor remains abstract for process and execute."""
+async def test_operation_executor_process_dispatches_to_start_for_new_operations():
+    """Test base process dispatches to start when no checkpoint exists."""
+    state = Mock()
+    state.durable_execution_arn = "test-arn"
+    state.operations.get.return_value = CheckpointedResult.create_not_found()
+    executor = ConcreteOperationExecutor(state=state)
+
+    result = await executor.process()
+
+    assert result == "started_result"
+    assert executor.start_called == 1
+    assert executor.replay_called == 0
+    assert executor.execute_called == 0
+
+
+async def test_operation_executor_process_dispatches_to_replay_for_existing_operations():
+    """Test base process dispatches to replay when a checkpoint exists."""
+    state = Mock()
+    state.durable_execution_arn = "test-arn"
+    state.operations.get.return_value = create_mock_operation(OperationStatus.STARTED)
+    executor = ConcreteOperationExecutor(state=state)
+
+    result = await executor.process()
+
+    assert result == "executed_result"
+    assert executor.start_called == 0
+    assert executor.replay_called == 1
+    assert executor.execute_called == 1
+
+
+def test_operation_executor_requires_subclass_start_replay_and_execute():
+    """Test OperationExecutor remains abstract for start, replay, and execute."""
 
     class IncompleteOperationExecutor(OperationExecutor[str], ABC):
         pass

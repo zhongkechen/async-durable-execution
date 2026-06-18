@@ -21,11 +21,13 @@ from ..exceptions import (
 )
 from ..models import (
     ErrorObject,
+    Operation,
     OperationIdentifier,
+    OperationStatus,
     OperationUpdate,
     OperationSubType,
 )
-from .base import OperationExecutor
+from .base import CHECKPOINT_NOT_FOUND, CheckpointedResult, OperationExecutor
 from ..suspend import (
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
@@ -34,10 +36,7 @@ from ..suspend import (
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from ..state import (
-        CheckpointedResult,
-        ExecutionState,
-    )
+    from ..state import ExecutionState
     from ..models import WaitForConditionDecision
 
 
@@ -68,12 +67,18 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         self.check = check
         self.config = config
 
-    async def process(self) -> T:
-        """Process wait_for_condition checkpoint state and execute the checker."""
-        checkpointed_result = self.get_checkpointed_result()
+    async def start(self) -> T:
+        """Start a new wait_for_condition operation."""
+        start_operation = OperationUpdate.create_wait_for_condition_start(
+            identifier=self.operation_identifier,
+        )
+        await self.create_checkpoint(start_operation, is_sync=False)
+        return await self.execute(CHECKPOINT_NOT_FOUND)
 
-        # Check if already completed
-        if checkpointed_result.is_succeeded():
+    async def replay(self, operation: Operation) -> T:
+        """Replay an existing wait_for_condition operation from its checkpoint."""
+        if operation.status is OperationStatus.SUCCEEDED:
+            checkpointed_result = CheckpointedResult.create_from_operation(operation)
             logger.debug(
                 "wait_for_condition already completed for id: %s, name: %s",
                 self.operation_identifier.operation_id,
@@ -87,29 +92,23 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             )
             return result
 
-        # Terminal failure
-        if checkpointed_result.is_failed():
-            checkpointed_result.raise_callable_error()
+        if operation.status is OperationStatus.FAILED:
+            CheckpointedResult.create_from_operation(operation).raise_callable_error()
 
-        # Pending retry
-        if checkpointed_result.is_pending():
+        if operation.status is OperationStatus.PENDING:
+            checkpointed_result = CheckpointedResult.create_from_operation(operation)
             scheduled_timestamp = checkpointed_result.get_next_attempt_timestamp()
             suspend_with_optional_resume_timestamp(
                 msg=f"wait_for_condition {self.operation_name or self.operation_identifier.operation_id} will retry at timestamp {scheduled_timestamp}",
                 datetime_timestamp=scheduled_timestamp,
             )
 
-        # Create START checkpoint if not started
-        if not checkpointed_result.is_started():
+        checkpointed_result = CheckpointedResult.create_from_operation(operation)
+        if operation.status is not OperationStatus.STARTED:
             start_operation = OperationUpdate.create_wait_for_condition_start(
                 identifier=self.operation_identifier,
             )
-            # Checkpoint wait_for_condition START with non-blocking (is_sync=False).
-            # This is purely for observability - we don't need to wait for persistence before
-            # executing the check function. The START checkpoint just records that polling began.
             await self.create_checkpoint(start_operation, is_sync=False)
-            # For async checkpoint, no immediate response possible
-            # Proceed directly to execute with current checkpoint data
 
         return await self.execute(checkpointed_result)
 

@@ -5,8 +5,9 @@ import functools
 import json
 import logging
 import warnings
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from .async_tools import (
     invoke_user_callable,
@@ -41,7 +42,7 @@ from .state import ExecutionState, ReplayStatus
 
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, MutableMapping
+    from collections.abc import MutableMapping
 
     from .types import (
         LambdaContext,
@@ -123,7 +124,15 @@ def durable_execution(
             service_client=service_client,
             plugins=plugins,
         )
+    return _durable_execution(func, boto3_client, service_client, plugins)
 
+
+def _durable_execution(
+    func: Callable[..., Awaitable[Any]],
+    boto3_client: LambdaApiClient | None,
+    service_client: DurableServiceClient | None,
+    plugins: list[DurableInstrumentationPlugin] | None,
+) -> Callable[[Any, LambdaContext], Any]:
     logger.debug("Starting durable execution handler...")
     assert_async_callable(func, label="func")
 

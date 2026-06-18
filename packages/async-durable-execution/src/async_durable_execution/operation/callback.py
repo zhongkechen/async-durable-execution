@@ -21,20 +21,23 @@ from ..context import (
 from ..exceptions import CallbackError, SuspendExecution
 from ..models import (
     CallbackOptions,
+    Operation,
     OperationIdentifier,
     OperationUpdate,
     OperationSubType,
 )
-from .base import OperationExecutor, OperationContext
+from .base import (
+    CheckpointedResult,
+    OperationExecutor,
+    OperationContext,
+    get_checkpoint_result,
+)
 from ..serdes import deserialize, SerDes, PassThroughSerDes
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from ..state import (
-        CheckpointedResult,
-        ExecutionState,
-    )
+    from ..state import ExecutionState
     from .child import DurableContext
 
 T = TypeVar("T")  # Result type
@@ -64,24 +67,8 @@ class CallbackOperationExecutor(OperationExecutor[str]):
         super().__init__(state=state, operation_identifier=operation_identifier)
         self.config = config
 
-    async def process(self) -> str:
-        """Process callback checkpoint state and return the callback id."""
-        checkpointed_result: CheckpointedResult = self.get_checkpointed_result()
-
-        # CRITICAL: Do NOT raise on FAILED - defer error to Callback.result()
-        # If checkpoint exists (any status including FAILED), return ready to execute
-        # The execute() method will extract the callback_id
-        if checkpointed_result.is_existent():
-            if (
-                not checkpointed_result.operation
-                or not checkpointed_result.operation.callback_details
-            ):
-                msg = f"Missing callback details for operation: {self.operation_identifier.operation_id}"
-                raise CallbackError(msg)
-
-            return await self.execute(checkpointed_result)
-
-        # Create START checkpoint
+    async def start(self) -> str:
+        """Start a new callback operation."""
         callback_options: CallbackOptions = (
             CallbackOptions(
                 timeout_seconds=self.config.timeout_seconds,
@@ -96,12 +83,24 @@ class CallbackOperationExecutor(OperationExecutor[str]):
             callback_options=callback_options,
         )
 
-        # Checkpoint callback START with blocking (is_sync=True, default).
-        # Must wait for the API to generate and return the callback ID before proceeding.
-        # The callback ID is needed immediately by the caller to pass to external systems.
         await self.create_checkpoint(create_callback_operation)
 
-        return await self.execute(self.get_checkpointed_result())
+        checkpointed_result = self.get_checkpointed_result()
+        if not checkpointed_result.operation:
+            msg = f"Missing callback details for operation: {self.operation_identifier.operation_id}"
+            raise CallbackError(msg)
+        return await self.replay(checkpointed_result.operation)
+
+    async def replay(self, operation: Operation) -> str:
+        """Replay an existing callback operation from its checkpoint."""
+        if not operation.callback_details:
+            msg = (
+                f"Missing callback details for operation: "
+                f"{self.operation_identifier.operation_id}"
+            )
+            raise CallbackError(msg)
+
+        return await self.execute(CheckpointedResult.create_from_operation(operation))
 
     async def execute(self, checkpointed_result: CheckpointedResult) -> str:
         """Execute callback operation by extracting the callback_id.
@@ -278,8 +277,9 @@ class Callback(Generic[T]):  # noqa: PYI059
         heartbeats: SendDurableExecutionCallbackSuccess, SendDurableExecutionCallbackFailure
         and SendDurableExecutionCallbackHeartbeat.
         """
-        checkpointed_result: CheckpointedResult = self.state.get_checkpoint_result(
-            self.operation_id
+        checkpointed_result: CheckpointedResult = get_checkpoint_result(
+            self.state,
+            self.operation_id,
         )
 
         if not checkpointed_result.is_existent():

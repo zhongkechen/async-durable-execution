@@ -32,8 +32,9 @@ import logging
 from async_durable_execution.context import get_current_context
 from async_durable_execution.operation.step import StepOperationExecutor
 from async_durable_execution.models import RetryDecision
-from async_durable_execution.state import CheckpointedResult, ExecutionState
+from async_durable_execution.state import ExecutionState
 from async_durable_execution import StepContext
+from async_durable_execution.operation.base import CheckpointedResult
 
 from ..serdes_test import CustomDictSerDes
 
@@ -83,7 +84,7 @@ async def test_step_handler_already_succeeded():
         step_details=StepDetails(result=json.dumps("test_result")),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_callable = Mock(return_value="should_not_call")
     mock_logger = Mock(spec=logging.Logger)
@@ -111,7 +112,7 @@ async def test_step_handler_already_succeeded_none_result():
         step_details=StepDetails(result=None),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_callable = Mock()
     mock_logger = Mock(spec=logging.Logger)
@@ -141,7 +142,7 @@ async def test_step_handler_already_failed():
         step_details=StepDetails(error=error),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_callable = Mock()
     mock_logger = Mock(spec=logging.Logger)
@@ -168,7 +169,7 @@ async def test_step_handler_started_at_most_once():
         step_details=StepDetails(attempt=0),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
     mock_callable = Mock()
@@ -197,7 +198,7 @@ async def test_step_handler_started_at_least_once():
         step_details=StepDetails(error=error),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     config = StepConfig(step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="success_result")
@@ -216,7 +217,7 @@ async def test_step_handler_success_at_least_once():
     """Test step_handler successful execution with AT_LEAST_ONCE semantics."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = CheckpointedResult.create_not_found()
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
     config = StepConfig(step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY)
@@ -257,7 +258,7 @@ async def test_step_handler_passes_attempt_to_step_context():
     """Test step execution exposes the current attempt on StepContext."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = CheckpointedResult.create_not_found()
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
     mock_state.wrap_user_function.side_effect = lambda func, *args, **kwargs: _asyncify(
         func
@@ -284,7 +285,7 @@ async def test_step_handler_get_context_returns_step_context():
     """get_context() should expose StepContext while a step is executing."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = CheckpointedResult.create_not_found()
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
     mock_state.wrap_user_function.side_effect = lambda func, *args, **kwargs: _asyncify(
         func
@@ -327,7 +328,7 @@ async def test_step_handler_success_at_most_once():
         step_details=StepDetails(attempt=0),
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="success_result")
@@ -367,7 +368,7 @@ async def test_step_handler_non_retriable_execution_error():
     """Test step_handler with ExecutionError exception."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = CheckpointedResult.create_not_found()
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
     mock_callable = Mock(side_effect=ExecutionError("Do Not Retry"))
@@ -387,7 +388,7 @@ async def test_step_handler_retry_success():
     """Test step_handler with retry that succeeds."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = CheckpointedResult.create_not_found()
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
     mock_retry_strategy = Mock(
@@ -429,7 +430,7 @@ async def test_step_handler_retry_exhausted():
     """Test step_handler with retry exhausted."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = CheckpointedResult.create_not_found()
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
     mock_retry_strategy = Mock(
@@ -471,7 +472,7 @@ async def test_step_handler_retry_interrupted_error():
     """Test step_handler with StepInterruptedError in retry."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = CheckpointedResult.create_not_found()
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
     mock_retry_strategy = Mock(
@@ -509,7 +510,7 @@ async def test_step_handler_retry_with_existing_attempts():
         ),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
     mock_retry_strategy = Mock(
@@ -543,7 +544,7 @@ async def test_step_handler_pending_without_existing_attempts():
         step_details=StepDetails(attempt=2),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
     mock_retry_strategy = Mock(
@@ -580,7 +581,7 @@ async def test_step_handler_retry_handler_no_exception(mock_retry_handler):
         step_details=StepDetails(attempt=0),
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     # Mock retry_handler to not raise an exception (which it should always do)
     mock_retry_handler.return_value = None
@@ -606,7 +607,7 @@ async def test_step_handler_retry_handler_no_exception(mock_retry_handler):
 async def test_step_handler_custom_serdes_success():
     mock_state = Mock(spec=ExecutionState)
     mock_result = CheckpointedResult.create_not_found()
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
     config = StepConfig(
@@ -645,7 +646,7 @@ async def test_step_handler_custom_serdes_already_succeeded():
         ),
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.get_checkpoint_result.return_value = mock_result
+    mock_state.operations.get.return_value = mock_result
 
     mock_callable = Mock(return_value="should_not_call")
     mock_logger = Mock(spec=logging.Logger)
@@ -678,7 +679,7 @@ async def test_step_immediate_response_get_checkpoint_called_twice():
         step_details=StepDetails(attempt=0),
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="success_result")
@@ -695,7 +696,7 @@ async def test_step_immediate_response_get_checkpoint_called_twice():
     )
 
     # Verify get_checkpoint_result was called twice (before and after checkpoint creation)
-    assert mock_state.get_checkpoint_result.call_count == 2
+    assert mock_state.operations.get.call_count == 2
     assert result == "success_result"
 
 
@@ -713,7 +714,7 @@ async def test_step_immediate_response_create_checkpoint_sync_at_most_once():
         step_details=StepDetails(attempt=0),
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="success_result")
@@ -741,7 +742,7 @@ async def test_step_immediate_response_create_checkpoint_async_at_least_once():
 
     # For AT_LEAST_ONCE, only one call to get_checkpoint_result (no second check)
     not_found = CheckpointedResult.create_not_found()
-    mock_state.get_checkpoint_result.return_value = not_found
+    mock_state.operations.get.return_value = not_found
 
     config = StepConfig(step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="success_result")
@@ -781,7 +782,7 @@ async def test_step_immediate_response_immediate_success():
         step_details=StepDetails(attempt=0),
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="immediate_success_result")
@@ -819,7 +820,7 @@ async def test_step_immediate_response_immediate_failure():
         step_details=StepDetails(attempt=0),
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
     # Make the step function raise an error
@@ -867,7 +868,7 @@ async def test_step_immediate_response_no_immediate_response():
         step_details=StepDetails(attempt=0),
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="normal_execution_result")
@@ -903,7 +904,7 @@ async def test_step_immediate_response_already_completed():
         step_details=StepDetails(result=json.dumps("already_completed_result")),
     )
     succeeded = CheckpointedResult.create_from_operation(succeeded_op)
-    mock_state.get_checkpoint_result.return_value = succeeded
+    mock_state.operations.get.return_value = succeeded
 
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="should_not_call")
@@ -923,7 +924,7 @@ async def test_step_immediate_response_already_completed():
     mock_callable.assert_not_called()
     mock_state._create_checkpoint_async.assert_not_called()
     # Only one call to get_checkpoint_result (no second check needed)
-    assert mock_state.get_checkpoint_result.call_count == 1
+    assert mock_state.operations.get.call_count == 1
 
 
 async def test_step_executes_function_when_second_check_returns_started():
@@ -943,7 +944,7 @@ async def test_step_executes_function_when_second_check_returns_started():
         step_details=StepDetails(attempt=1),
     )
     started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [not_found, started]
+    mock_state.operations.get.side_effect = [not_found, started]
 
     mock_step_function = Mock(return_value="result")
     mock_state.wrap_user_function.return_value = _asyncify(mock_step_function)
@@ -962,9 +963,7 @@ async def test_step_executes_function_when_second_check_returns_started():
     # Assert - behaves like "old way"
     mock_step_function.assert_called_once()  # Function executed (not skipped)
     assert result == "result"
-    assert (
-        mock_state.get_checkpoint_result.call_count == 1
-    )  # Only one check for AT_LEAST_ONCE
+    assert mock_state.operations.get.call_count == 1  # Only one check for AT_LEAST_ONCE
     assert (
         mock_state._create_checkpoint_async.call_count == 2
     )  # START + SUCCEED checkpoints
@@ -992,7 +991,7 @@ async def test_step_creates_start_checkpoint_when_status_is_ready():
         step_details=StepDetails(attempt=0),
     )
     started_result = CheckpointedResult.create_from_operation(started_op)
-    mock_state.get_checkpoint_result.side_effect = [ready_result, started_result]
+    mock_state.operations.get.side_effect = [ready_result, started_result]
 
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
     mock_callable = Mock(return_value="ready_step_result")

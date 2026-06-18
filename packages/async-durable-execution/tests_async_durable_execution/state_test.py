@@ -35,13 +35,16 @@ from async_durable_execution.models import (
     StepDetails,
 )
 from async_durable_execution.client import ThreadedSyncLambdaClient
+from async_durable_execution.operation.base import (
+    get_checkpoint_result,
+    CheckpointedResult,
+)
 from async_durable_execution.plugin import (
     DurableInstrumentationPlugin,
     PluginExecutor,
 )
 from async_durable_execution.state import (
     CheckpointBatcherConfig,
-    CheckpointedResult,
     ExecutionState,
     QueuedOperation,
     ReplayStatus,
@@ -440,7 +443,7 @@ async def test_get_checkpoint_result_success_with_result():
         plugin_executor=PluginExecutor(plugins=None),
     )
 
-    result = state.get_checkpoint_result("op1")
+    result = get_checkpoint_result(state, "op1")
     assert result.is_succeeded() is True
     assert result.result == "test_result"
     assert result.operation == operation
@@ -462,7 +465,7 @@ async def test_get_checkpoint_result_success_without_step_details():
         plugin_executor=PluginExecutor(plugins=None),
     )
 
-    result = state.get_checkpoint_result("op1")
+    result = get_checkpoint_result(state, "op1")
     assert result.is_succeeded() is True
     assert result.result is None
     assert result.operation == operation
@@ -484,7 +487,7 @@ async def test_get_checkpoint_result_operation_not_succeeded():
         plugin_executor=PluginExecutor(plugins=None),
     )
 
-    result = state.get_checkpoint_result("op1")
+    result = get_checkpoint_result(state, "op1")
     assert result.is_failed() is True
     assert result.result is None
     assert result.operation == operation
@@ -503,7 +506,7 @@ async def test_get_checkpoint_result_operation_not_found():
     state.start_checkpointing = Mock()
     state.start_checkpointing = Mock()
 
-    result = state.get_checkpoint_result("nonexistent")
+    result = get_checkpoint_result(state, "nonexistent")
     assert result.is_succeeded() is False
     assert result.result is None
     assert result.operation is None
@@ -611,7 +614,7 @@ async def test_get_checkpoint_result_started():
         plugin_executor=PluginExecutor(plugins=None),
     )
 
-    result = state.get_checkpoint_result("op1")
+    result = get_checkpoint_result(state, "op1")
     assert result.is_started() is True
     assert result.is_succeeded() is False
     assert result.is_failed() is False
@@ -1385,7 +1388,7 @@ async def test_operations_dictionary_access():
         status=OperationStatus.SUCCEEDED,
     )
 
-    result = state.get_checkpoint_result("op1")
+    result = get_checkpoint_result(state, "op1")
 
     assert result.is_succeeded()
 
