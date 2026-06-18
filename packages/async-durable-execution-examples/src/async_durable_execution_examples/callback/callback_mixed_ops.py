@@ -4,7 +4,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     CallbackConfig,
     durable_execution,
@@ -17,7 +17,7 @@ from async_durable_execution import (
 async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating createCallback mixed with other operations."""
 
-    @durable_step
+    @durable_callable
     async def fetch_data() -> dict[str, Any]:
         return {"userId": 123, "name": "John Doe"}
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import functools
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypeVar, cast, ParamSpec
+from typing import TYPE_CHECKING, TypeVar, cast
 
 from .base import (
     CHECKPOINT_NOT_FOUND,
@@ -13,8 +13,11 @@ from .base import (
     OperationExecutor,
     OperationContext,
 )
-from ..async_tools import assert_async_callable, invoke_user_callable
-from ..async_tools import get_callable_name
+from ..async_tools import (
+    assert_async_callable,
+    get_callable_name,
+    invoke_user_callable,
+)
 from ..config import ChildConfig
 from ..context import OperationIdGenerator
 from ..context import get_current_context
@@ -42,7 +45,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
-Params = ParamSpec("Params")
 
 # Checkpoint size limit in bytes (256KB)
 CHECKPOINT_SIZE_LIMIT = 256 * 1024
@@ -277,24 +279,6 @@ async def child_handler(
         config or ChildConfig(),
     )
     return await executor.process()
-
-
-def durable_child_context(
-    func: Callable[Params, Awaitable[T]],
-) -> Callable[Params, Callable[[], Awaitable[T]]]:
-    """Wrap an async function so calling it returns a zero-argument child context callable.
-
-    The returned callable is suitable for passing to `run_in_child_context()`.
-    """
-    assert_async_callable(func)
-
-    @functools.wraps(func)
-    def wrapper(
-        *args: Params.args, **kwargs: Params.kwargs
-    ) -> Callable[[], Awaitable[T]]:
-        return functools.partial(func, *args, **kwargs)
-
-    return wrapper
 
 
 @dataclass(frozen=True)

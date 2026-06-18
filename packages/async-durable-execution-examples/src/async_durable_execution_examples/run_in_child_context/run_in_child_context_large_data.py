@@ -4,12 +4,12 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     durable_execution,
     run_in_child_context,
     wait,
-    durable_child_context,
+    durable_callable,
 )
 
 
@@ -18,12 +18,12 @@ async def generate_large_string(size_in_kb: int) -> str:
     return "A" * 1024 * size_in_kb
 
 
-@durable_step
+@durable_callable
 async def build_chunk(size_in_kb: int = 50) -> str:
     return await generate_large_string(size_in_kb)
 
 
-@durable_child_context
+@durable_callable
 async def large_data_processor() -> dict[str, Any]:
     """Process large data in child context."""
     # Generate data using a loop - each step returns ~50KB of data (under the step limit)

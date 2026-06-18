@@ -34,6 +34,7 @@ from .config import (
 from .context import (
     get_current_context,
 )
+from .async_tools import durable_callable
 from .operation.with_retry import with_retry
 from .operation.map import map
 from .operation.wait_for_condition import (
@@ -49,8 +50,8 @@ from .operation.callback import (
     WaitForCallbackContext,
     Callback,
 )
-from .operation.child import durable_child_context, run_in_child_context, DurableContext
-from .operation.step import step, durable_step, StepContext, get_attempt
+from .operation.child import run_in_child_context, DurableContext
+from .operation.step import step, StepContext, get_attempt
 from .models import (
     ErrorObject,
     OperationIdentifier,
@@ -110,9 +111,9 @@ __all__ = [
     "WithRetryConfig",
     "__version__",
     "create_callback",
+    "durable_callable",
     "durable_execution",
     "durable_parallel_branch",
-    "durable_step",
     "durable_wait_for_callback",
     "get_attempt",
     "get_current_context",
@@ -128,5 +129,4 @@ __all__ = [
     "InvocationStatus",
     "OperationType",
     "OperationStatus",
-    "durable_child_context",
 ]

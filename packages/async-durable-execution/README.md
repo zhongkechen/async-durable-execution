@@ -53,7 +53,7 @@ import logging
 from datetime import timedelta
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     durable_execution,
     step,
     wait,
@@ -62,7 +62,7 @@ from async_durable_execution import (
 logger = logging.getLogger(__name__)
 
 
-@durable_step
+@durable_callable
 async def validate_order(order_id: str) -> dict:
     await asyncio.sleep(0)
     logger.info("Validating order", extra={"order_id": order_id})
@@ -91,7 +91,7 @@ import asyncio
 import logging
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     durable_execution,
     step,
 )
@@ -99,7 +99,7 @@ from async_durable_execution import (
 logger = logging.getLogger(__name__)
 
 
-@durable_step
+@durable_callable
 async def fetch_order(order_id: str) -> dict:
     await asyncio.sleep(0)
     logger.info("Fetched order", extra={"order_id": order_id})

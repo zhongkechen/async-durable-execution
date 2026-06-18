@@ -2,11 +2,11 @@ import asyncio
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     durable_execution,
     run_in_child_context,
-    durable_child_context,
+    durable_callable,
 )
 
 
@@ -14,11 +14,11 @@ async def multiply_by_two(value: int) -> int:
     return value * 2
 
 
-@durable_child_context
+@durable_callable
 async def child_operation(value: int) -> int:
     await asyncio.sleep(0)
 
-    @durable_step
+    @durable_callable
     async def multiply() -> int:
         return await multiply_by_two(value)
 

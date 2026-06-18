@@ -4,7 +4,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     durable_execution,
     wait,
@@ -28,7 +28,7 @@ async def handler(_event: Any) -> dict[str, Any]:
         name="first-callback",
     )
 
-    @durable_step
+    @durable_callable
     async def process_callback_data() -> dict[str, Any]:
         return {"processed": True, "step": 1}
 

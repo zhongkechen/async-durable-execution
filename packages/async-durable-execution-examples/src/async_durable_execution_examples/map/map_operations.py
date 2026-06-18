@@ -4,7 +4,7 @@ import asyncio
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     MapConfig,
     durable_execution,
@@ -20,7 +20,7 @@ async def handler(_event: Any) -> list[int]:
     async def process_item(item: int, index: int, _) -> int:
         await asyncio.sleep(0)
 
-        @durable_step
+        @durable_callable
         async def double() -> int:
             return item * 2
 

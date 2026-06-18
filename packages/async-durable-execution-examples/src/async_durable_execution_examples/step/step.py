@@ -2,13 +2,13 @@ import asyncio
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     durable_execution,
 )
 
 
-@durable_step
+@durable_callable
 async def add_numbers(a: int, b: int) -> int:
     await asyncio.sleep(0)
     return a + b

@@ -4,7 +4,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     durable_execution,
     map,
@@ -18,33 +18,33 @@ async def handler(event: dict[str, Any]) -> dict[str, Any]:
     """Comprehensive example demonstrating all major durable operations."""
     print(f"Starting comprehensive operations example with event: {event}")
 
-    @durable_step
+    @durable_callable
     async def run_step_one() -> str:
         return "Step 1 completed successfully"
 
     async def map_item(item: int, index: int, _) -> int:
-        @durable_step
+        @durable_callable
         async def get_item() -> int:
             return item
 
         return await step(get_item(), name=f"map-step-{index}")
 
     async def fruit_step_1() -> str:
-        @durable_step
+        @durable_callable
         async def get_fruit() -> str:
             return "apple"
 
         return await step(get_fruit(), name="fruit-step-1")
 
     async def fruit_step_2() -> str:
-        @durable_step
+        @durable_callable
         async def get_fruit() -> str:
             return "banana"
 
         return await step(get_fruit(), name="fruit-step-2")
 
     async def fruit_step_3() -> str:
-        @durable_step
+        @durable_callable
         async def get_fruit() -> str:
             return "orange"
 

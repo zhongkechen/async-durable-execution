@@ -4,7 +4,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     NestingType,
     ParallelConfig,
@@ -19,14 +19,14 @@ async def handler(_event: Any) -> list[str]:
     """Execute multiple operations in parallel using parallel()."""
 
     async def task1() -> str:
-        @durable_step
+        @durable_callable
         async def run() -> str:
             return "task 1 completed"
 
         return await step(run(), name="task1")
 
     async def task2() -> str:
-        @durable_step
+        @durable_callable
         async def run() -> str:
             return "task 2 completed"
 

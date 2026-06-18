@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     run_in_child_context,
     step,
     wait,
@@ -187,8 +187,8 @@ async def test_step_different_ways_to_pass_args():
         assert last_checkpoint.payload == '"from step plain"'
 
 
-async def test_durable_step_decorator_creates_step_operation():
-    @durable_step
+async def test_durable_callable_decorator_creates_step_operation():
+    @durable_callable
     async def decorated_step(status_code: int) -> str:
         assert get_current_context() is not None
         logging.getLogger(__name__).info("status=%s", status_code)

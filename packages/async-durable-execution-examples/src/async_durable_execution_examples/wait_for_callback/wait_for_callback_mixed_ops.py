@@ -5,7 +5,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     durable_execution,
     wait,
@@ -19,7 +19,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     # Mix waitForCallback with other operation types
     await wait(timedelta(seconds=1), name="initial-wait")
 
-    @durable_step
+    @durable_callable
     async def fetch_user_data() -> dict[str, Any]:
         return {"userId": 123, "name": "John Doe"}
 
@@ -39,7 +39,7 @@ async def handler(_event: Any) -> dict[str, Any]:
 
     await wait(timedelta(seconds=1), name="final-wait")
 
-    @durable_step
+    @durable_callable
     async def finalize_processing() -> dict[str, Any]:
         return {
             "status": "completed",

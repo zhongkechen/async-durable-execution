@@ -29,7 +29,7 @@ from async_durable_execution.context import (
 )
 from async_durable_execution.operation.callback import Callback
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     create_callback,
     step,
     wait,
@@ -278,8 +278,8 @@ async def test_module_level_context_functions_delegate_to_durable_context():
     wait_for_condition_executor.process.assert_awaited_once()
 
 
-async def test_durable_step_can_be_passed_to_step():
-    @durable_step
+async def test_durable_callable_can_be_passed_to_step():
+    @durable_callable
     async def greet(name: str) -> str:
         return f"hello {name}"
 
@@ -315,10 +315,10 @@ async def test_durable_step_can_be_passed_to_step():
     )
 
 
-async def test_durable_step_returns_bound_callable_inside_step_context():
+async def test_durable_callable_returns_bound_callable_inside_step_context():
     calls: list[str] = []
 
-    @durable_step
+    @durable_callable
     async def record(value: str) -> str:
         calls.append(value)
         return value.upper()
@@ -327,10 +327,10 @@ async def test_durable_step_returns_bound_callable_inside_step_context():
     assert calls == ["inside-step"]
 
 
-async def test_durable_step_returns_bound_callable_without_context():
+async def test_durable_callable_returns_bound_callable_without_context():
     calls: list[int] = []
 
-    @durable_step
+    @durable_callable
     async def increment(value: int) -> int:
         calls.append(value)
         return value + 1
@@ -338,6 +338,38 @@ async def test_durable_step_returns_bound_callable_without_context():
     bound_increment = increment(2)
     assert await bound_increment() == 3
     assert calls == [2]
+
+
+async def test_durable_callable_can_be_passed_to_run_in_child_context():
+    @durable_callable
+    async def greet(name: str) -> str:
+        return f"hello {name}"
+
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = (
+        "arn:aws:durable:us-east-1:123456789012:execution/test"
+    )
+    context = create_test_context(state=mock_state)
+
+    with patch(
+        "async_durable_execution.operation.child._run_in_child_context_in_context",
+        new=AsyncMock(return_value="child:hello Ada"),
+    ) as mock_run_in_child_context:
+        assert (
+            await run_with_context(
+                context,
+                run_in_child_context(greet("Ada"), name="greet-child"),
+            )
+            == "child:hello Ada"
+        )
+
+    mock_run_in_child_context.assert_awaited_once_with(
+        context,
+        func=ANY,
+        name="greet-child",
+        config=None,
+    )
+    assert await mock_run_in_child_context.await_args.kwargs["func"]() == "hello Ada"
 
 
 async def test_module_level_context_functions_raise_in_step_context():

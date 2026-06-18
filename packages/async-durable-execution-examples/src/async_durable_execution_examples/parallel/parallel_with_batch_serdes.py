@@ -4,7 +4,7 @@ import json
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     BatchItem,
     BatchItemStatus,
@@ -84,21 +84,21 @@ async def handler(_event: Any) -> dict[str, Any]:
     config = ParallelConfig(serdes=CustomBatchSerDes(), item_serdes=JsonSerDes())
 
     async def branch1() -> int:
-        @durable_step
+        @durable_callable
         async def run() -> int:
             return 100
 
         return await step(run(), name="branch1")
 
     async def branch2() -> int:
-        @durable_step
+        @durable_callable
         async def run() -> int:
             return 200
 
         return await step(run(), name="branch2")
 
     async def branch3() -> int:
-        @durable_step
+        @durable_callable
         async def run() -> int:
             return 300
 

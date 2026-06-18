@@ -4,7 +4,7 @@ import asyncio
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     MapConfig,
     durable_execution,
@@ -24,7 +24,7 @@ async def handler(_event: Any) -> list[str]:
     async def process_order(order: dict[str, Any], index: int, _) -> str:
         await asyncio.sleep(0)
 
-        @durable_step
+        @durable_callable
         async def build_result() -> str:
             return f"processed-{order['id']}-${order['amount']}"
 

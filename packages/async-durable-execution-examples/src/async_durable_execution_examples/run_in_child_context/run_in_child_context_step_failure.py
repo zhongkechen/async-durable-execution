@@ -4,24 +4,24 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     StepConfig,
     durable_execution,
     RetryStrategyBuilder,
     run_in_child_context,
     wait,
-    durable_child_context,
+    durable_callable,
 )
 
 
-@durable_step
+@durable_callable
 async def failing_step() -> None:
     """Step that always fails."""
     raise Exception("Step failed in child context")
 
 
-@durable_child_context
+@durable_callable
 async def child_with_failure() -> None:
     """Child context with a failing step."""
 

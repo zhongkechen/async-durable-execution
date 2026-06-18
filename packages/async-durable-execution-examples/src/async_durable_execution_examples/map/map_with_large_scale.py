@@ -4,7 +4,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     MapConfig,
     durable_execution,
@@ -28,7 +28,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     data = await generate_large_string(100)
 
     async def process_item(item: int, index: int, _) -> dict[str, Any]:
-        @durable_step
+        @durable_callable
         async def build_result() -> dict[str, Any]:
             return {
                 "itemId": item,

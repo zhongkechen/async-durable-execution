@@ -4,7 +4,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     wait,
     StepConfig,
@@ -52,7 +52,7 @@ async def handler(event: Any) -> dict[str, Any]:
         while poll_count < max_polls:
             poll_count += 1
 
-            @durable_step
+            @durable_callable
             async def get_item(item_name: str = name):
                 return await simulated_get_item(item_name, poll_count)
 

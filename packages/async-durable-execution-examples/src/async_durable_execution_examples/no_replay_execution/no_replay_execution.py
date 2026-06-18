@@ -3,7 +3,7 @@
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     durable_execution,
 )
@@ -13,11 +13,11 @@ from async_durable_execution import (
 async def handler(_event: Any) -> dict[str, bool]:
     """Handler demonstrating step execution without replay."""
 
-    @durable_step
+    @durable_callable
     async def fetch_user_1() -> str:
         return "user-1"
 
-    @durable_step
+    @durable_callable
     async def fetch_user_2() -> str:
         return "user-2"
 

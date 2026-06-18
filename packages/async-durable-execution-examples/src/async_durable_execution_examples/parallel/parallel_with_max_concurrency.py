@@ -3,7 +3,7 @@
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     ParallelConfig,
     durable_execution,
@@ -16,35 +16,35 @@ async def handler(_event: Any) -> list[str]:
     """Execute 5 tasks with concurrency limit of 2."""
 
     async def task1() -> str:
-        @durable_step
+        @durable_callable
         async def run() -> str:
             return "task 1"
 
         return await step(run(), name="task1")
 
     async def task2() -> str:
-        @durable_step
+        @durable_callable
         async def run() -> str:
             return "task 2"
 
         return await step(run(), name="task2")
 
     async def task3() -> str:
-        @durable_step
+        @durable_callable
         async def run() -> str:
             return "task 3"
 
         return await step(run(), name="task3")
 
     async def task4() -> str:
-        @durable_step
+        @durable_callable
         async def run() -> str:
             return "task 4"
 
         return await step(run(), name="task4")
 
     async def task5() -> str:
-        @durable_step
+        @durable_callable
         async def run() -> str:
             return "task 5"
 
