@@ -46,9 +46,8 @@ class WaitOperationExecutor(OperationExecutor[None]):
             state: The execution state
             operation_identifier: The operation identifier
         """
+        super().__init__(state=state, operation_identifier=operation_identifier)
         self.seconds = seconds
-        self.state = state
-        self.operation_identifier = operation_identifier
 
     async def check_result_status(self) -> CheckResult[None]:
         """Check operation status and create START checkpoint if needed.
@@ -62,9 +61,7 @@ class WaitOperationExecutor(OperationExecutor[None]):
         Raises:
             SuspendExecution: When wait timer has not completed
         """
-        checkpointed_result: CheckpointedResult = self.state.get_checkpoint_result(
-            self.operation_identifier.require_operation_id()
-        )
+        checkpointed_result: CheckpointedResult = self.get_checkpointed_result()
 
         # Terminal success - wait completed
         if checkpointed_result.is_succeeded():
@@ -84,9 +81,7 @@ class WaitOperationExecutor(OperationExecutor[None]):
             # Checkpoint wait START with blocking (is_sync=True, default).
             # Must ensure the wait operation and scheduled timestamp are persisted before suspending.
             # This guarantees the wait will resume at the correct time on the next invocation.
-            await self.state._create_checkpoint_async(
-                operation_update=operation, is_sync=True
-            )
+            await self.create_checkpoint(operation, is_sync=True)
 
             logger.debug(
                 "Wait checkpoint created for id: %s, name: %s, will check for immediate response",

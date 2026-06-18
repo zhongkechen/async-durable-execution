@@ -75,8 +75,7 @@ class CallbackOperationExecutor(OperationExecutor[str]):
             operation_identifier: The operation identifier
             config: The callback configuration (optional)
         """
-        self.state = state
-        self.operation_identifier = operation_identifier
+        super().__init__(state=state, operation_identifier=operation_identifier)
         self.config = config
 
     async def check_result_status(self) -> CheckResult[str]:
@@ -96,9 +95,7 @@ class CallbackOperationExecutor(OperationExecutor[str]):
         Raises:
             CallbackError: If callback_details are missing from checkpoint
         """
-        checkpointed_result: CheckpointedResult = self.state.get_checkpoint_result(
-            self.operation_identifier.require_operation_id()
-        )
+        checkpointed_result: CheckpointedResult = self.get_checkpointed_result()
 
         # CRITICAL: Do NOT raise on FAILED - defer error to Callback.result()
         # If checkpoint exists (any status including FAILED), return ready to execute
@@ -131,9 +128,7 @@ class CallbackOperationExecutor(OperationExecutor[str]):
         # Checkpoint callback START with blocking (is_sync=True, default).
         # Must wait for the API to generate and return the callback ID before proceeding.
         # The callback ID is needed immediately by the caller to pass to external systems.
-        await self.state._create_checkpoint_async(
-            operation_update=create_callback_operation
-        )
+        await self.create_checkpoint(create_callback_operation)
 
         # Signal to process() to check status again for immediate response
         return CheckResult.create_started()

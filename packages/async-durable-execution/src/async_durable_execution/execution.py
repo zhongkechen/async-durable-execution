@@ -5,7 +5,7 @@ import functools
 import json
 import logging
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from .async_tools import (
@@ -27,6 +27,7 @@ from .models import (
     Operation,
     OperationUpdate,
     OperationIdentifier,
+    SerializableModel,
 )
 from .client import (
     ThreadedSyncLambdaClient,
@@ -56,86 +57,22 @@ LAMBDA_RESPONSE_SIZE_LIMIT = 6 * 1024 * 1024 - 50
 
 
 @dataclass(frozen=True)
-class InitialExecutionState:
-    operations: list[Operation]
-    next_marker: str
-
-    @staticmethod
-    def from_dict(input_dict: MutableMapping[str, Any]) -> InitialExecutionState:
-        operations = []
-        if input_operations := input_dict.get("Operations"):
-            operations = [Operation.from_dict(op) for op in input_operations]
-        return InitialExecutionState(
-            operations=operations,
-            next_marker=input_dict.get("NextMarker", ""),
-        )
-
-    @staticmethod
-    def from_json_dict(input_dict: MutableMapping[str, Any]) -> InitialExecutionState:
-        operations = []
-        if input_operations := input_dict.get("Operations"):
-            operations = [Operation.from_json_dict(op) for op in input_operations]
-        return InitialExecutionState(
-            operations=operations,
-            next_marker=input_dict.get("NextMarker", ""),
-        )
-
-    def to_dict(self) -> MutableMapping[str, Any]:
-        return {
-            "Operations": [op.to_dict() for op in self.operations],
-            "NextMarker": self.next_marker,
-        }
-
-    def to_json_dict(self) -> MutableMapping[str, Any]:
-        return {
-            "Operations": [op.to_json_dict() for op in self.operations],
-            "NextMarker": self.next_marker,
-        }
+class InitialExecutionState(SerializableModel):
+    operations: list[Operation] = field(
+        default_factory=list,
+        metadata={"alias": "Operations"},
+    )
+    next_marker: str = field(default="", metadata={"alias": "NextMarker"})
 
 
 @dataclass(frozen=True)
-class DurableExecutionInvocationInput:
-    durable_execution_arn: str
-    checkpoint_token: str
-    initial_execution_state: InitialExecutionState
-
-    @staticmethod
-    def from_dict(
-        input_dict: MutableMapping[str, Any],
-    ) -> DurableExecutionInvocationInput:
-        return DurableExecutionInvocationInput(
-            durable_execution_arn=input_dict["DurableExecutionArn"],
-            checkpoint_token=input_dict["CheckpointToken"],
-            initial_execution_state=InitialExecutionState.from_dict(
-                input_dict.get("InitialExecutionState", {})
-            ),
-        )
-
-    @staticmethod
-    def from_json_dict(
-        input_dict: MutableMapping[str, Any],
-    ) -> DurableExecutionInvocationInput:
-        return DurableExecutionInvocationInput(
-            durable_execution_arn=input_dict["DurableExecutionArn"],
-            checkpoint_token=input_dict["CheckpointToken"],
-            initial_execution_state=InitialExecutionState.from_json_dict(
-                input_dict.get("InitialExecutionState", {})
-            ),
-        )
-
-    def to_dict(self) -> MutableMapping[str, Any]:
-        return {
-            "DurableExecutionArn": self.durable_execution_arn,
-            "CheckpointToken": self.checkpoint_token,
-            "InitialExecutionState": self.initial_execution_state.to_dict(),
-        }
-
-    def to_json_dict(self) -> MutableMapping[str, Any]:
-        return {
-            "DurableExecutionArn": self.durable_execution_arn,
-            "CheckpointToken": self.checkpoint_token,
-            "InitialExecutionState": self.initial_execution_state.to_json_dict(),
-        }
+class DurableExecutionInvocationInput(SerializableModel):
+    durable_execution_arn: str = field(metadata={"alias": "DurableExecutionArn"})
+    checkpoint_token: str = field(metadata={"alias": "CheckpointToken"})
+    initial_execution_state: InitialExecutionState = field(
+        default_factory=InitialExecutionState,
+        metadata={"alias": "InitialExecutionState"},
+    )
 
 
 def _bind_service_client_to_handler(

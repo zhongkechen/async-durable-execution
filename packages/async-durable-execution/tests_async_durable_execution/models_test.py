@@ -274,6 +274,18 @@ async def test_step_details_minimal():
     assert details.error is None
 
 
+async def test_step_details_json_roundtrip():
+    """Test StepDetails JSON serialization uses timestamp metadata."""
+    timestamp = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc)
+    details = StepDetails(attempt=2, next_attempt_timestamp=timestamp)
+
+    json_data = details.to_json_dict()
+    restored = StepDetails.from_json_dict(json_data)
+
+    assert json_data["NextAttemptTimestamp"] == int(timestamp.timestamp() * 1000)
+    assert restored == details
+
+
 async def test_wait_details_from_dict():
     """Test WaitDetails.from_dict method."""
     timestamp = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc)
@@ -287,6 +299,18 @@ async def test_wait_details_from_dict_empty():
     data = {}
     details = WaitDetails.from_dict(data)
     assert details.scheduled_end_timestamp is None
+
+
+async def test_wait_details_json_roundtrip():
+    """Test WaitDetails JSON serialization uses timestamp metadata."""
+    timestamp = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc)
+    details = WaitDetails(scheduled_end_timestamp=timestamp)
+
+    json_data = details.to_json_dict()
+    restored = WaitDetails.from_json_dict(json_data)
+
+    assert json_data["ScheduledEndTimestamp"] == int(timestamp.timestamp() * 1000)
+    assert restored == details
 
 
 async def test_callback_details_from_dict():

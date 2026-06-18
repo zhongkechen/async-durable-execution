@@ -29,7 +29,6 @@ from .base import (
     CheckResult,
     OperationExecutor,
 )
-from ..serdes import deserialize, serialize
 from ..suspend import (
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
@@ -72,10 +71,9 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             state: The execution state
             operation_identifier: The operation identifier
         """
+        super().__init__(state=state, operation_identifier=operation_identifier)
         self.check = check
         self.config = config
-        self.state = state
-        self.operation_identifier = operation_identifier
 
     async def check_result_status(self) -> CheckResult[T]:
         """Check operation status and create START checkpoint if needed.
@@ -90,23 +88,20 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             CallableRuntimeError: For FAILED operations
             SuspendExecution: For PENDING operations waiting for retry
         """
-        operation_id = self.operation_identifier.require_operation_id()
-        checkpointed_result = self.state.get_checkpoint_result(operation_id)
+        checkpointed_result = self.get_checkpointed_result()
 
         # Check if already completed
         if checkpointed_result.is_succeeded():
             logger.debug(
                 "wait_for_condition already completed for id: %s, name: %s",
                 self.operation_identifier.operation_id,
-                self.operation_identifier.name,
+                self.operation_name,
             )
             if checkpointed_result.result is None:
                 return CheckResult.create_completed(None)  # type: ignore
-            result = deserialize(
-                serdes=self.config.serdes,
+            result = self.deserialize_value(
                 data=checkpointed_result.result,
-                operation_id=operation_id,
-                durable_execution_arn=self.state.durable_execution_arn,
+                serdes=self.config.serdes,
             )
             return CheckResult.create_completed(result)
 
@@ -118,7 +113,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         if checkpointed_result.is_pending():
             scheduled_timestamp = checkpointed_result.get_next_attempt_timestamp()
             suspend_with_optional_resume_timestamp(
-                msg=f"wait_for_condition {self.operation_identifier.name or self.operation_identifier.operation_id} will retry at timestamp {scheduled_timestamp}",
+                msg=f"wait_for_condition {self.operation_name or self.operation_identifier.operation_id} will retry at timestamp {scheduled_timestamp}",
                 datetime_timestamp=scheduled_timestamp,
             )
 
@@ -130,9 +125,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             # Checkpoint wait_for_condition START with non-blocking (is_sync=False).
             # This is purely for observability - we don't need to wait for persistence before
             # executing the check function. The START checkpoint just records that polling began.
-            await self.state._create_checkpoint_async(
-                operation_update=start_operation, is_sync=False
-            )
+            await self.create_checkpoint(start_operation, is_sync=False)
             # For async checkpoint, no immediate response possible
             # Proceed directly to execute with current checkpoint data
 
@@ -153,21 +146,18 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             Raises error if check function fails
         """
         # Determine current state from checkpoint
-        operation_id = self.operation_identifier.require_operation_id()
         if checkpointed_result.is_started_or_ready() and checkpointed_result.result:
             try:
-                current_state = deserialize(
-                    serdes=self.config.serdes,
+                current_state = self.deserialize_value(
                     data=checkpointed_result.result,
-                    operation_id=operation_id,
-                    durable_execution_arn=self.state.durable_execution_arn,
+                    serdes=self.config.serdes,
                 )
             except Exception:
                 # Default to initial state if there's an error getting checkpointed state
                 logger.exception(
                     "⚠️ wait_for_condition failed to deserialize state for id: %s, name: %s. Using initial state.",
                     self.operation_identifier.operation_id,
-                    self.operation_identifier.name,
+                    self.operation_name,
                 )
                 current_state = self.config.initial_state
         else:
@@ -208,17 +198,15 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 new_state, attempt
             )
 
-            serialized_state = serialize(
-                serdes=self.config.serdes,
+            serialized_state = self.serialize_value(
                 value=new_state,
-                operation_id=operation_id,
-                durable_execution_arn=self.state.durable_execution_arn,
+                serdes=self.config.serdes,
             )
 
             logger.debug(
                 "wait_for_condition check completed: %s, name: %s, attempt: %s",
                 self.operation_identifier.operation_id,
-                self.operation_identifier.name,
+                self.operation_name,
                 attempt,
             )
 
@@ -231,14 +219,12 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 # Checkpoint SUCCEED operation with blocking (is_sync=True, default).
                 # Must ensure the final state is persisted before returning to the caller.
                 # This guarantees the condition result is durable and won't be re-evaluated on replay.
-                await self.state._create_checkpoint_async(
-                    operation_update=success_operation
-                )
+                await self.create_checkpoint(success_operation)
 
                 logger.debug(
                     "✅ wait_for_condition completed for id: %s, name: %s",
                     self.operation_identifier.operation_id,
-                    self.operation_identifier.name,
+                    self.operation_name,
                 )
                 return new_state
 
@@ -266,7 +252,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             # Checkpoint RETRY operation with blocking (is_sync=True, default).
             # Must ensure the current state and next attempt timestamp are persisted before suspending.
             # This guarantees the polling state is durable and will resume correctly on the next invocation.
-            await self.state._create_checkpoint_async(operation_update=retry_operation)
+            await self.create_checkpoint(retry_operation)
 
             suspend_with_optional_resume_delay(
                 msg=f"wait_for_condition {self.operation_identifier.name or self.operation_identifier.operation_id} will retry in {decision.delay_seconds} seconds",
@@ -289,7 +275,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             # Checkpoint FAIL operation with blocking (is_sync=True, default).
             # Must ensure the failure state is persisted before raising the exception.
             # This guarantees the error is durable and the condition won't be re-evaluated on replay.
-            await self.state._create_checkpoint_async(operation_update=fail_operation)
+            await self.create_checkpoint(fail_operation)
             raise
 
         msg: str = (

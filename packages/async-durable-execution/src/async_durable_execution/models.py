@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import copy
 import datetime
 import logging
 import time
@@ -129,6 +128,7 @@ def _metadata(
     deserializer: Any = None,
     omit_if_none: bool = True,
     omit_if_falsey: bool = False,
+    is_timestamp: bool = False,
 ) -> dict[str, Any]:
     return {
         "alias": alias,
@@ -136,6 +136,7 @@ def _metadata(
         "deserializer": deserializer,
         "omit_if_none": omit_if_none,
         "omit_if_falsey": omit_if_falsey,
+        "is_timestamp": is_timestamp,
     }
 
 
@@ -173,7 +174,13 @@ def _model_type(annotation: Any) -> type[SerializableModel] | None:
     return None
 
 
-def _deserialize_value(value: Any, annotation: Any, metadata: Mapping[str, Any]) -> Any:
+def _deserialize_value(
+    value: Any,
+    annotation: Any,
+    metadata: Mapping[str, Any],
+    *,
+    json_mode: bool = False,
+) -> Any:
     if value is None:
         return None
 
@@ -181,8 +188,13 @@ def _deserialize_value(value: Any, annotation: Any, metadata: Mapping[str, Any])
     if custom_deserializer is not None:
         return custom_deserializer(value)
 
+    if json_mode and metadata.get("is_timestamp", False):
+        return TimestampConverter.from_unix_millis(value)
+
     model_cls = _model_type(annotation)
     if model_cls is not None and isinstance(value, Mapping):
+        if json_mode:
+            return model_cls.from_json_dict(value)
         return model_cls.from_dict(value)
 
     enum_cls = _enum_type(annotation)
@@ -193,12 +205,25 @@ def _deserialize_value(value: Any, annotation: Any, metadata: Mapping[str, Any])
     if origin is list:
         args = get_args(annotation)
         item_annotation = args[0] if args else Any
-        return [_deserialize_value(item, item_annotation, {}) for item in value]
+        return [
+            _deserialize_value(
+                item,
+                item_annotation,
+                {},
+                json_mode=json_mode,
+            )
+            for item in value
+        ]
 
     return value
 
 
-def _serialize_value(value: Any, metadata: Mapping[str, Any]) -> Any:
+def _serialize_value(
+    value: Any,
+    metadata: Mapping[str, Any],
+    *,
+    json_mode: bool = False,
+) -> Any:
     if value is None:
         return None
 
@@ -206,14 +231,19 @@ def _serialize_value(value: Any, metadata: Mapping[str, Any]) -> Any:
     if custom_serializer is not None:
         return custom_serializer(value)
 
+    if json_mode and metadata.get("is_timestamp", False):
+        return TimestampConverter.to_unix_millis(value)
+
     if isinstance(value, Enum):
         return value.value
 
     if isinstance(value, SerializableModel):
+        if json_mode:
+            return value.to_json_dict()
         return value.to_dict()
 
     if isinstance(value, list):
-        return [_serialize_value(item, {}) for item in value]
+        return [_serialize_value(item, {}, json_mode=json_mode) for item in value]
 
     return value
 
@@ -222,6 +252,14 @@ def _serialize_value(value: Any, metadata: Mapping[str, Any]) -> Any:
 class SerializableModel:
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]):
+        return cls._from_mapping(data)
+
+    @classmethod
+    def from_json_dict(cls, data: Mapping[str, Any]):
+        return cls._from_mapping(data, json_mode=True)
+
+    @classmethod
+    def _from_mapping(cls, data: Mapping[str, Any], *, json_mode: bool = False):
         kwargs: dict[str, Any] = {}
         type_hints = get_type_hints(cls)
 
@@ -231,7 +269,10 @@ class SerializableModel:
 
             if alias in data:
                 kwargs[model_field.name] = _deserialize_value(
-                    data[alias], annotation, model_field.metadata
+                    data[alias],
+                    annotation,
+                    model_field.metadata,
+                    json_mode=json_mode,
                 )
                 continue
 
@@ -246,6 +287,12 @@ class SerializableModel:
         return cls(**kwargs)
 
     def to_dict(self) -> MutableMapping[str, Any]:
+        return self._to_mapping()
+
+    def to_json_dict(self) -> MutableMapping[str, Any]:
+        return self._to_mapping(json_mode=True)
+
+    def _to_mapping(self, *, json_mode: bool = False) -> MutableMapping[str, Any]:
         result: MutableMapping[str, Any] = {}
 
         for model_field in fields(self):
@@ -257,7 +304,11 @@ class SerializableModel:
             if not value and model_field.metadata.get("omit_if_falsey", False):
                 continue
 
-            result[alias] = _serialize_value(value, model_field.metadata)
+            result[alias] = _serialize_value(
+                value,
+                model_field.metadata,
+                json_mode=json_mode,
+            )
 
         return result
 
@@ -866,7 +917,7 @@ class StepDetails(SerializableModel):
     attempt: int = field(default=0, metadata=_metadata(alias="Attempt"))
     next_attempt_timestamp: datetime.datetime | None = field(
         default=None,
-        metadata=_metadata(alias="NextAttemptTimestamp"),
+        metadata=_metadata(alias="NextAttemptTimestamp", is_timestamp=True),
     )
     result: OperationPayload | None = field(
         default=None,
@@ -882,7 +933,7 @@ class StepDetails(SerializableModel):
 class WaitDetails(SerializableModel):
     scheduled_end_timestamp: datetime.datetime | None = field(
         default=None,
-        metadata=_metadata(alias="ScheduledEndTimestamp"),
+        metadata=_metadata(alias="ScheduledEndTimestamp", is_timestamp=True),
     )
 
 
@@ -1298,11 +1349,11 @@ class Operation(SerializableModel):
     )
     start_timestamp: datetime.datetime | None = field(
         default=None,
-        metadata=_metadata(alias="StartTimestamp"),
+        metadata=_metadata(alias="StartTimestamp", is_timestamp=True),
     )
     end_timestamp: datetime.datetime | None = field(
         default=None,
-        metadata=_metadata(alias="EndTimestamp"),
+        metadata=_metadata(alias="EndTimestamp", is_timestamp=True),
     )
     sub_type: OperationSubType | None = field(
         default=None,
@@ -1332,74 +1383,6 @@ class Operation(SerializableModel):
         default=None,
         metadata=_metadata(alias="ChainedInvokeDetails"),
     )
-
-    def to_json_dict(self) -> MutableMapping[str, Any]:
-        """Convert the Operation to a JSON-serializable dictionary.
-
-        Converts datetime objects to millisecond timestamps for JSON compatibility.
-
-        Returns:
-            A dictionary with JSON-serializable values
-        """
-        result = self.to_dict()
-
-        if ts := result.get("StartTimestamp"):
-            result["StartTimestamp"] = TimestampConverter.to_unix_millis(ts)
-
-        if ts := result.get("EndTimestamp"):
-            result["EndTimestamp"] = TimestampConverter.to_unix_millis(ts)
-
-        if (step_details := result.get("StepDetails")) and (
-            ts := step_details.get("NextAttemptTimestamp")
-        ):
-            result["StepDetails"]["NextAttemptTimestamp"] = (
-                TimestampConverter.to_unix_millis(ts)
-            )
-
-        if (wait_details := result.get("WaitDetails")) and (
-            ts := wait_details.get("ScheduledEndTimestamp")
-        ):
-            result["WaitDetails"]["ScheduledEndTimestamp"] = (
-                TimestampConverter.to_unix_millis(ts)
-            )
-
-        return result
-
-    @classmethod
-    def from_json_dict(cls, data: MutableMapping[str, Any]) -> Operation:
-        """Create an Operation from a JSON-serializable dictionary.
-
-        Converts millisecond timestamps back to datetime objects.
-
-        Args:
-            data: Dictionary with JSON-serializable values (millisecond timestamps)
-
-        Returns:
-            An Operation instance with datetime objects
-        """
-        data_copy = copy.deepcopy(data)
-
-        if ms := data_copy.get("StartTimestamp"):
-            data_copy["StartTimestamp"] = TimestampConverter.from_unix_millis(ms)
-
-        if ms := data_copy.get("EndTimestamp"):
-            data_copy["EndTimestamp"] = TimestampConverter.from_unix_millis(ms)
-
-        if (step_details := data_copy.get("StepDetails")) and (
-            ms := step_details.get("NextAttemptTimestamp")
-        ):
-            step_details["NextAttemptTimestamp"] = TimestampConverter.from_unix_millis(
-                ms
-            )
-
-        if (wait_details := data_copy.get("WaitDetails")) and (
-            ms := wait_details.get("ScheduledEndTimestamp")
-        ):
-            wait_details["ScheduledEndTimestamp"] = TimestampConverter.from_unix_millis(
-                ms
-            )
-
-        return cls.from_dict(data_copy)
 
 
 @dataclass(frozen=True)

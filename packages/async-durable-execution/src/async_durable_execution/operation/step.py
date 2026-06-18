@@ -33,7 +33,6 @@ from .base import (
     OperationExecutor,
     OperationContext,
 )
-from ..serdes import deserialize, serialize
 from ..suspend import (
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
@@ -75,10 +74,9 @@ class StepOperationExecutor(OperationExecutor[T]):
             state: The execution state
             operation_identifier: The operation identifier
         """
+        super().__init__(state=state, operation_identifier=operation_identifier)
         self.func = func
         self.config = config
-        self.state = state
-        self.operation_identifier = operation_identifier
         self._checkpoint_created = False  # Track if we created the checkpoint
 
     async def check_result_status(self) -> CheckResult[T]:
@@ -95,26 +93,21 @@ class StepOperationExecutor(OperationExecutor[T]):
             StepInterruptedError: For interrupted AT_MOST_ONCE operations
             SuspendExecution: For PENDING operations waiting for retry
         """
-        operation_id = self.operation_identifier.require_operation_id()
-        checkpointed_result: CheckpointedResult = self.state.get_checkpoint_result(
-            operation_id
-        )
+        checkpointed_result: CheckpointedResult = self.get_checkpointed_result()
 
         # Terminal success - deserialize and return
         if checkpointed_result.is_succeeded():
             logger.debug(
                 "Step already completed, skipping execution for id: %s, name: %s",
                 self.operation_identifier.operation_id,
-                self.operation_identifier.name,
+                self.operation_name,
             )
             if checkpointed_result.result is None:
                 return CheckResult.create_completed(None)  # type: ignore
 
-            result: T = deserialize(
-                serdes=self.config.serdes,
+            result: T = self.deserialize_value(
                 data=checkpointed_result.result,
-                operation_id=operation_id,
-                durable_execution_arn=self.state.durable_execution_arn,
+                serdes=self.config.serdes,
             )
             return CheckResult.create_completed(result)
 
@@ -129,7 +122,7 @@ class StepOperationExecutor(OperationExecutor[T]):
             # Normally, we'd ensure that a suspension here would be for > 0 seconds;
             # however, this is coming from a checkpoint, and we can trust that it is a correct target timestamp.
             suspend_with_optional_resume_timestamp(
-                msg=f"Retry scheduled for {self.operation_identifier.name or self.operation_identifier.operation_id} will retry at timestamp {scheduled_timestamp}",
+                msg=f"Retry scheduled for {self.operation_name or self.operation_identifier.operation_id} will retry at timestamp {scheduled_timestamp}",
                 datetime_timestamp=scheduled_timestamp,
             )
 
@@ -171,16 +164,12 @@ class StepOperationExecutor(OperationExecutor[T]):
             is_sync: bool = (
                 self.config.step_semantics is StepSemantics.AT_MOST_ONCE_PER_RETRY
             )
-            await self.state._create_checkpoint_async(
-                operation_update=start_operation, is_sync=is_sync
-            )
+            await self.create_checkpoint(start_operation, is_sync=is_sync)
 
             # After creating sync checkpoint, check the status
             if is_sync:
                 # Refresh checkpoint result to check for immediate response
-                refreshed_result: CheckpointedResult = self.state.get_checkpoint_result(
-                    operation_id
-                )
+                refreshed_result: CheckpointedResult = self.get_checkpointed_result()
 
                 # START checkpoint only returns STARTED status
                 # Any errors would be thrown as runtime exceptions during checkpoint creation
@@ -208,7 +197,6 @@ class StepOperationExecutor(OperationExecutor[T]):
             ExecutionError: For fatal errors that should not be retried
             May raise other exceptions that will be handled by retry_handler
         """
-        operation_id = self.operation_identifier.require_operation_id()
         # Get current attempt - checkpointed attempts + 1
         attempt: int = 1
         if checkpointed_result.operation and checkpointed_result.operation.step_details:
@@ -234,11 +222,9 @@ class StepOperationExecutor(OperationExecutor[T]):
             finally:
                 reset_current_context(token)
 
-            serialized_result: str = serialize(
-                serdes=self.config.serdes,
+            serialized_result: str = self.serialize_value(
                 value=raw_result,
-                operation_id=operation_id,
-                durable_execution_arn=self.state.durable_execution_arn,
+                serdes=self.config.serdes,
             )
 
             success_operation: OperationUpdate = OperationUpdate.create_step_succeed(
@@ -249,9 +235,7 @@ class StepOperationExecutor(OperationExecutor[T]):
             # Checkpoint SUCCEED operation with blocking (is_sync=True, default).
             # Must ensure the success state is persisted before returning the result to the caller.
             # This guarantees the step result is durable and won't be lost if Lambda terminates.
-            await self.state._create_checkpoint_async(
-                operation_update=success_operation
-            )
+            await self.create_checkpoint(success_operation)
 
             logger.debug(
                 "✅ Successfully completed step for id: %s, name: %s",
@@ -349,7 +333,7 @@ class StepOperationExecutor(OperationExecutor[T]):
             # Checkpoint RETRY operation with blocking (is_sync=True, default).
             # Must ensure retry state is persisted before suspending execution.
             # This guarantees the retry attempt count and next attempt timestamp are durable.
-            await self.state._create_checkpoint_async(operation_update=retry_operation)
+            await self.create_checkpoint(retry_operation)
 
             suspend_with_optional_resume_delay(
                 msg=(
@@ -367,7 +351,7 @@ class StepOperationExecutor(OperationExecutor[T]):
         # Checkpoint FAIL operation with blocking (is_sync=True, default).
         # Must ensure the failure state is persisted before raising the exception.
         # This guarantees the error is durable and the step won't be retried on replay.
-        await self.state._create_checkpoint_async(operation_update=fail_operation)
+        await self.create_checkpoint(fail_operation)
 
         if isinstance(error, StepInterruptedError):
             raise error
