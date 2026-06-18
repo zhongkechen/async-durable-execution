@@ -5,9 +5,9 @@ from typing import Any
 
 from async_durable_execution import (
     DurableInstrumentationPlugin,
-    durable_child_context,
+    durable_callable,
     durable_execution,
-    durable_step,
+    durable_callable,
     run_in_child_context,
     step,
 )
@@ -35,12 +35,12 @@ class MyPlugin(DurableInstrumentationPlugin):
         self.logger.info("User function ended: %s", info)
 
 
-@durable_step
+@durable_callable
 async def add_numbers(a: int, b: int) -> int:
     return a + b
 
 
-@durable_child_context
+@durable_callable
 async def add_numbers_in_child(a: int, b: int):
     result: int = await step(
         add_numbers(a, b),

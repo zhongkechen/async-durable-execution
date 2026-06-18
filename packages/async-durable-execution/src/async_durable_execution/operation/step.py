@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import functools
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypeVar, ParamSpec
+from typing import TYPE_CHECKING, TypeVar
 
 from .. import get_current_context
 from ..async_tools import assert_async_callable, get_callable_name
@@ -49,7 +48,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
-Params = ParamSpec("Params")
 
 
 class StepOperationExecutor(OperationExecutor[T]):
@@ -363,26 +361,6 @@ async def step(
     result: T = await executor.process()
     context.execution_state.track_replay(operation_id=operation_id)
     return result
-
-
-def durable_step(
-    func: Callable[Params, Awaitable[T]],
-) -> Callable[Params, Callable[[], Awaitable[T]]]:
-    """Wrap an async function so calling it returns a zero-argument step callable.
-
-    The returned callable is suitable for passing to `step()`,
-    which keeps durable step creation explicit while avoiding manual `partial(...)`
-    wrapping at the callsite.
-    """
-    assert_async_callable(func)
-
-    @functools.wraps(func)
-    def wrapper(
-        *args: Params.args, **kwargs: Params.kwargs
-    ) -> Callable[[], Awaitable[T]]:
-        return functools.partial(func, *args, **kwargs)
-
-    return wrapper
 
 
 @dataclass(frozen=True)

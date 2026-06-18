@@ -3,7 +3,7 @@
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     CompletionConfig,
     ParallelConfig,
@@ -29,35 +29,35 @@ async def handler(_event: Any) -> dict[str, Any]:
     )
 
     async def task1() -> str:
-        @durable_step
+        @durable_callable
         async def run() -> str:
             return "success 1"
 
         return await step(run(), name="task1", config=step_config)
 
     async def task2() -> str:
-        @durable_step
+        @durable_callable
         async def run() -> str:
             return await _failing_task(2)
 
         return await step(run(), name="task2", config=step_config)
 
     async def task3() -> str:
-        @durable_step
+        @durable_callable
         async def run() -> str:
             return "success 3"
 
         return await step(run(), name="task3", config=step_config)
 
     async def task4() -> str:
-        @durable_step
+        @durable_callable
         async def run() -> str:
             return await _failing_task(4)
 
         return await step(run(), name="task4", config=step_config)
 
     async def task5() -> str:
-        @durable_step
+        @durable_callable
         async def run() -> str:
             return "success 5"
 

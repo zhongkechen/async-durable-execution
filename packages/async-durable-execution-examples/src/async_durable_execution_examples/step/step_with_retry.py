@@ -2,7 +2,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     StepConfig,
     durable_execution,
@@ -11,7 +11,7 @@ from async_durable_execution import (
 )
 
 
-@durable_step
+@durable_callable
 async def unreliable_operation() -> str:
     # Retry behavior is derived from the current step attempt so it remains
     # deterministic for each durable execution and safe across warm Lambdas.

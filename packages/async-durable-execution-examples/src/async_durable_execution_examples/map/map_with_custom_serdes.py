@@ -5,7 +5,7 @@ import json
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     MapConfig,
     durable_execution,
@@ -51,7 +51,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     async def process_item(item: dict[str, Any], index: int, _) -> dict[str, Any]:
         await asyncio.sleep(0)
 
-        @durable_step
+        @durable_callable
         async def build_result() -> dict[str, Any]:
             return {
                 "processed": item["name"],

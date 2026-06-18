@@ -5,7 +5,7 @@ from typing import Any
 
 from async_durable_execution import (
     DurableContext,
-    durable_step,
+    durable_callable,
     step,
     ParallelBranch,
     ParallelConfig,
@@ -19,7 +19,7 @@ from async_durable_execution import (
 async def fetch_orders(_ctx: DurableContext) -> str:
     await asyncio.sleep(0)
 
-    @durable_step
+    @durable_callable
     async def load_orders() -> str:
         return "orders-loaded"
 
@@ -30,7 +30,7 @@ async def fetch_orders(_ctx: DurableContext) -> str:
 async def fetch_preferences(_ctx: DurableContext) -> str:
     await asyncio.sleep(0)
 
-    @durable_step
+    @durable_callable
     async def load_prefs() -> str:
         return "prefs-loaded"
 
@@ -42,21 +42,21 @@ async def handler(_event: Any) -> list[str]:
     """Execute parallel branches using all supported patterns."""
 
     async def fetch_user_data() -> str:
-        @durable_step
+        @durable_callable
         async def load_user() -> str:
             return "user-data-loaded"
 
         return await step(load_user(), name="load_user")
 
     async def fetch_metrics() -> str:
-        @durable_step
+        @durable_callable
         async def load_metrics() -> str:
             return "metrics-loaded"
 
         return await step(load_metrics(), name="load_metrics")
 
     async def load_config() -> str:
-        @durable_step
+        @durable_callable
         async def load_value() -> str:
             return "config-loaded"
 

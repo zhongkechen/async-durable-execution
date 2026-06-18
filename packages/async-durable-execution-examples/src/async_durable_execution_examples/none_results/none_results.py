@@ -4,16 +4,16 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    durable_child_context,
+    durable_callable,
     durable_execution,
-    durable_step,
+    durable_callable,
     run_in_child_context,
     step,
     wait,
 )
 
 
-@durable_child_context
+@durable_callable
 async def parent_context() -> None:
     """Parent context that returns None."""
     return None
@@ -23,7 +23,7 @@ async def parent_context() -> None:
 async def handler(_event: Any) -> str:
     """Handler demonstrating operations with undefined/None results."""
 
-    @durable_step
+    @durable_callable
     async def fetch_user() -> None:
         return None
 

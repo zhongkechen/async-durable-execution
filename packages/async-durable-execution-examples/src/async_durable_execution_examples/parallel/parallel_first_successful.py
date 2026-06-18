@@ -1,7 +1,7 @@
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     CompletionConfig,
     ParallelConfig,
@@ -16,21 +16,21 @@ async def handler(_event: Any) -> str:
     config = ParallelConfig(completion_config=CompletionConfig.first_successful())
 
     async def task1() -> str:
-        @durable_step
+        @durable_callable
         async def run() -> str:
             return "Task 1"
 
         return await step(run(), name="task1")
 
     async def task2() -> str:
-        @durable_step
+        @durable_callable
         async def run() -> str:
             return "Task 2"
 
         return await step(run(), name="task2")
 
     async def task3() -> str:
-        @durable_step
+        @durable_callable
         async def run() -> str:
             return "Task 3"
 

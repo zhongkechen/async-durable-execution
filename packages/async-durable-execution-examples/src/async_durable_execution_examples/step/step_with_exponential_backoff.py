@@ -2,7 +2,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     StepConfig,
     durable_execution,
@@ -22,7 +22,7 @@ async def handler(_event: Any) -> str:
 
     step_config = StepConfig(retry_strategy=retry_config.build())
 
-    @durable_step
+    @durable_callable
     async def retry_step() -> str:
         return "Step with exponential backoff"
 

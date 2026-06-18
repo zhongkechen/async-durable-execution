@@ -4,7 +4,7 @@ import asyncio
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     CompletionConfig,
     MapConfig,
@@ -27,7 +27,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     async def process_item(item: int, index: int, _) -> int:
         await asyncio.sleep(0)
 
-        @durable_step
+        @durable_callable
         async def run() -> int:
             return await _process_item(item)
 

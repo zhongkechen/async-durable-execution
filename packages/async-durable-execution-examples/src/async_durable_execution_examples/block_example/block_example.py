@@ -4,16 +4,16 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    durable_child_context,
+    durable_callable,
     durable_execution,
-    durable_step,
+    durable_callable,
     run_in_child_context,
     step,
     wait,
 )
 
 
-@durable_child_context
+@durable_callable
 async def nested_block() -> str:
     """Nested block with its own child context."""
     # Wait in the nested block
@@ -21,11 +21,11 @@ async def nested_block() -> str:
     return "nested block result"
 
 
-@durable_child_context
+@durable_callable
 async def parent_block() -> dict[str, str]:
     """Parent block with nested operations."""
 
-    @durable_step
+    @durable_callable
     async def build_nested_result() -> str:
         return "nested step result"
 

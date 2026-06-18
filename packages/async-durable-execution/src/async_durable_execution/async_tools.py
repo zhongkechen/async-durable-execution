@@ -3,7 +3,7 @@ from __future__ import annotations
 import functools
 import inspect
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, TypeVar, cast
+from typing import TYPE_CHECKING, ParamSpec, TypeVar, cast
 
 from .context import reset_current_context, set_current_context
 from .exceptions import ValidationError
@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from . import DurableContext
 
 T = TypeVar("T")
+Params = ParamSpec("Params")
 _CONTEXT_PARAM_NAMES = {
     "context",
     "ctx",
@@ -71,6 +72,26 @@ def assert_async_callable(
         f"Non-async callables are no longer supported: {name}."
     )
     raise ValidationError(msg)
+
+
+def durable_callable(
+    func: Callable[Params, Awaitable[T]],
+) -> Callable[Params, Callable[[], Awaitable[T]]]:
+    """Wrap an async function so calling it returns a zero-argument durable callable.
+
+    The returned callable can be passed to durable operations such as `step()`
+    and `run_in_child_context()`, keeping durable operation creation explicit
+    while avoiding manual `functools.partial(...)` wrapping at the callsite.
+    """
+    assert_async_callable(func)
+
+    @functools.wraps(func)
+    def wrapper(
+        *args: Params.args, **kwargs: Params.kwargs
+    ) -> Callable[[], Awaitable[T]]:
+        return functools.partial(func, *args, **kwargs)
+
+    return wrapper
 
 
 async def invoke_callable(func: Callable[..., Awaitable[T]], *args, **kwargs) -> T:

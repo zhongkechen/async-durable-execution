@@ -4,8 +4,8 @@ import logging
 from typing import Any
 
 from async_durable_execution import (
-    durable_child_context,
-    durable_step,
+    durable_callable,
+    durable_callable,
     durable_execution,
     run_in_child_context,
     step,
@@ -14,13 +14,13 @@ from async_durable_execution import (
 logger = logging.getLogger(__name__)
 
 
-@durable_child_context
+@durable_callable
 async def child_workflow() -> str:
     """Child workflow with its own logging context."""
     logger.info("Running in child context")
 
     # Step in child context has nested step ID
-    @durable_step
+    @durable_callable
     async def child_step() -> str:
         return "child-processed"
 
@@ -31,7 +31,7 @@ async def child_workflow() -> str:
     return child_result
 
 
-@durable_step
+@durable_callable
 async def my_step(my_arg: int) -> str:
     logger.info("Hello from my_step")
     logger.warning("Warning from my_step", extra={"my_arg": my_arg})
@@ -45,7 +45,7 @@ async def handler(event: Any) -> str:
     logger.info("Starting workflow", extra={"eventId": event.get("id")})
 
     # Logger in steps - gets enriched with step ID and attempt number
-    @durable_step
+    @durable_callable
     async def process_data() -> str:
         return "processed"
 

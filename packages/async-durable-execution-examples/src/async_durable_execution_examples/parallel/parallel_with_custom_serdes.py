@@ -4,7 +4,7 @@ import json
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     ParallelConfig,
     durable_execution,
@@ -43,21 +43,21 @@ async def handler(_event: Any) -> dict[str, Any]:
     config = ParallelConfig(item_serdes=CustomItemSerDes())
 
     async def task1() -> dict[str, Any]:
-        @durable_step
+        @durable_callable
         async def run() -> dict[str, Any]:
             return {"task": "task1", "value": 100}
 
         return await step(run(), name="task1")
 
     async def task2() -> dict[str, Any]:
-        @durable_step
+        @durable_callable
         async def run() -> dict[str, Any]:
             return {"task": "task2", "value": 200}
 
         return await step(run(), name="task2")
 
     async def task3() -> dict[str, Any]:
-        @durable_step
+        @durable_callable
         async def run() -> dict[str, Any]:
             return {"task": "task3", "value": 300}
 

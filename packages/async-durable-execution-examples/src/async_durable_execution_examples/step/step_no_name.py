@@ -1,7 +1,7 @@
 from typing import Any
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     step,
     durable_execution,
 )
@@ -10,7 +10,7 @@ from async_durable_execution import (
 @durable_execution
 async def handler(_event: Any) -> str:
     # Step without explicit name - should use function name
-    @durable_step
+    @durable_callable
     async def unnamed_step() -> str:
         return "Step without name"
 
