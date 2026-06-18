@@ -13,9 +13,9 @@ from botocore.config import Config  # type: ignore
 
 from async_durable_execution.execution import (
     DurableExecutionInvocationInput,
-    DurableExecutionInvocationInputWithClient,
     DurableExecutionInvocationOutput,
     InitialExecutionState,
+    _bind_service_client_to_handler,
 )
 from .exceptions import (
     DurableFunctionsTestError,
@@ -108,13 +108,13 @@ class Invoker(Protocol):
 
 class InProcessInvoker(Invoker):
     def __init__(self, handler: Callable, service_client: InMemoryServiceClient):
-        self.handler = handler
+        self.handler = _bind_service_client_to_handler(handler, service_client)
         self.service_client = service_client
 
     def create_invocation_input(
         self, execution: Execution
     ) -> DurableExecutionInvocationInput:
-        return DurableExecutionInvocationInputWithClient(
+        return DurableExecutionInvocationInput(
             durable_execution_arn=execution.durable_execution_arn,
             # TODO: this needs better logic - use existing if not used yet, vs create new
             checkpoint_token=execution.get_new_checkpoint_token(),
@@ -122,7 +122,6 @@ class InProcessInvoker(Invoker):
                 operations=execution.operations,
                 next_marker="",
             ),
-            service_client=self.service_client,
         )
 
     async def invoke(
@@ -131,16 +130,13 @@ class InProcessInvoker(Invoker):
         input: DurableExecutionInvocationInput,
         endpoint_url: str | None = None,  # noqa: ARG002
     ) -> InvokeResponse:
-        # TODO: reasses if function_name will be used in future
-        input_with_client = DurableExecutionInvocationInputWithClient.from_durable_execution_invocation_input(
-            input, self.service_client
-        )
         context = create_test_lambda_context()
+        payload = input.to_json_dict()
         async_handler = getattr(self.handler, "_async_handler", None)
         handler_result = (
-            async_handler(input_with_client, context)
+            async_handler(payload, context)
             if inspect.iscoroutinefunction(async_handler)
-            else self.handler(input_with_client, context)
+            else self.handler(payload, context)
         )
         if inspect.isawaitable(handler_result):
             handler_result = await handler_result

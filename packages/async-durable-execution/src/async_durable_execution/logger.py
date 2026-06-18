@@ -12,7 +12,6 @@ from .context import _current_context
 from .types import (
     LoggerInterface,
 )
-from . import WaitForCallbackContext
 
 if TYPE_CHECKING:
     from .state import ExecutionState

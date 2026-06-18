@@ -8,7 +8,6 @@ import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from .models import OperationSubType
 from .async_tools import (
     invoke_user_callable,
     assert_async_callable,
@@ -139,32 +138,32 @@ class DurableExecutionInvocationInput:
         }
 
 
-@dataclass(frozen=True)
-class DurableExecutionInvocationInputWithClient(DurableExecutionInvocationInput):
-    """Invocation input with Lambda boto client injected.
+def _bind_service_client_to_handler(
+    handler: Callable[[Any, LambdaContext], Any],
+    service_client: DurableServiceClient,
+) -> Callable[[Any, LambdaContext], Any]:
+    """Recreate a durable handler with a specific service client bound."""
 
-    This is useful for testing scenarios where you want to inject a mock client.
-    """
+    handler_attrs = getattr(handler, "__dict__", {})
+    original_handler = handler_attrs.get("_durable_execution_original")
+    if original_handler is None:
+        return handler
 
-    service_client: DurableServiceClient
-
-    @staticmethod
-    def from_durable_execution_invocation_input(
-        invocation_input: DurableExecutionInvocationInput,
-        service_client: DurableServiceClient,
-    ):
-        return DurableExecutionInvocationInputWithClient(
-            durable_execution_arn=invocation_input.durable_execution_arn,
-            checkpoint_token=invocation_input.checkpoint_token,
-            initial_execution_state=invocation_input.initial_execution_state,
-            service_client=service_client,
-        )
+    plugins = handler_attrs.get("_durable_execution_plugins")
+    boto3_client = handler_attrs.get("_durable_execution_boto3_client")
+    return durable_execution(
+        original_handler,
+        boto3_client=boto3_client,
+        service_client=service_client,
+        plugins=plugins,
+    )
 
 
 def durable_execution(
     func: Callable[..., Awaitable[Any]] | None = None,
     *,
     boto3_client: LambdaApiClient | None = None,
+    service_client: DurableServiceClient | None = None,
     plugins: list[DurableInstrumentationPlugin] | None = None,
 ) -> Callable[[Any, LambdaContext], Any]:
     """
@@ -173,6 +172,8 @@ def durable_execution(
     Args:
         func: The user function to decorate
         boto3_client: Optional boto3 Lambda client to use
+        service_client: Optional durable service client to use. Intended for
+            testing and local execution tooling.
         plugins: Optional list of plugins to use (EXPERIMENTAL: This
             feature has known issues and this parameter may change or be removed.)
     """
@@ -180,7 +181,10 @@ def durable_execution(
     if func is None:
         logger.debug("Decorator called with parameters")
         return functools.partial(
-            durable_execution, boto3_client=boto3_client, plugins=plugins
+            durable_execution,
+            boto3_client=boto3_client,
+            service_client=service_client,
+            plugins=plugins,
         )
 
     logger.debug("Starting durable execution handler...")
@@ -213,44 +217,43 @@ def durable_execution(
                 )
                 raise
 
+    @functools.wraps(func)
     def wrapper(event: Any, context: LambdaContext) -> MutableMapping[str, Any]:
         return asyncio.run(_wrapper_with_plugins(event, context))
 
     wrapper._async_handler = _wrapper_with_plugins  # type: ignore[attr-defined]  # noqa: SLF001
+    wrapper._durable_execution_original = func  # type: ignore[attr-defined]  # noqa: SLF001
+    wrapper._durable_execution_boto3_client = boto3_client  # type: ignore[attr-defined]  # noqa: SLF001
+    wrapper._durable_execution_plugins = plugins  # type: ignore[attr-defined]  # noqa: SLF001
 
     async def _wrapper_async(
         event: Any, context: LambdaContext
     ) -> MutableMapping[str, Any]:
         global _default_logger_configured
         invocation_input: DurableExecutionInvocationInput
-        service_client: DurableServiceClient
+        active_service_client: DurableServiceClient
 
-        # event likely only to be DurableExecutionInvocationInputWithClient when directly injected by test framework
-        if isinstance(event, DurableExecutionInvocationInputWithClient):
-            logger.debug("durableExecutionArn: %s", event.durable_execution_arn)
-            invocation_input = event
-            service_client = invocation_input.service_client
-        else:
-            try:
-                logger.debug(
-                    "durableExecutionArn: %s", event.get("DurableExecutionArn")
-                )
-                invocation_input = DurableExecutionInvocationInput.from_json_dict(event)
-            except (KeyError, TypeError, AttributeError) as e:
-                msg = (
-                    "Unexpected payload provided to start the durable execution. "
-                    "Check your resource configurations to confirm the durability is set."
-                )
-                raise ExecutionError(msg) from e
+        try:
+            logger.debug("durableExecutionArn: %s", event.get("DurableExecutionArn"))
+            invocation_input = DurableExecutionInvocationInput.from_json_dict(event)
+        except (KeyError, TypeError, AttributeError) as e:
+            msg = (
+                "Unexpected payload provided to start the durable execution. "
+                "Check your resource configurations to confirm the durability is set."
+            )
+            raise ExecutionError(msg) from e
 
-            # Use custom client if provided, otherwise initialize from environment
-            service_client = ThreadedSyncLambdaClient(client=boto3_client)
+        # Use the explicitly provided durable client when present. Otherwise,
+        # initialize from the configured boto3 client or environment.
+        active_service_client = service_client or ThreadedSyncLambdaClient(
+            client=boto3_client
+        )
 
         execution_state: ExecutionState = ExecutionState(
             durable_execution_arn=invocation_input.durable_execution_arn,
             initial_checkpoint_token=invocation_input.checkpoint_token,
             operations={},
-            service_client=service_client,
+            service_client=active_service_client,
             replay_status=ReplayStatus.NEW,
             plugin_executor=plugin_executor,
         )

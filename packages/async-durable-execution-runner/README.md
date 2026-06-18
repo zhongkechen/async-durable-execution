@@ -156,7 +156,7 @@ def test_my_durable_functions():
 - **Execution** - Represents the state and operations of a single durable execution
 
 ### Service Client Integration
-- **InMemoryServiceClient** - Replaces AWS Lambda service client for local testing. Injected into SDK via `DurableExecutionInvocationInputWithClient`
+- **InMemoryServiceClient** - Replaces AWS Lambda service client for local testing. Bound to the durable handler via the `durable_execution(..., service_client=...)` path
 
 ### Checkpoint Processing Pipeline
 - **CheckpointProcessor** - Orchestrates operation transformations and validation
@@ -177,7 +177,7 @@ def test_my_durable_functions():
 
 ### 2. Service Client Injection
 - **DurableTestRunner** creates **InMemoryServiceClient** with **CheckpointProcessor**
-- **InProcessInvoker** injects the service client into SDK via `DurableExecutionInvocationInputWithClient`
+- **InProcessInvoker** rebinds the durable handler with the runner's service client
 - When durable functions call checkpoint operations, they're intercepted by **InMemoryServiceClient**
 - **InMemoryServiceClient** delegates to **CheckpointProcessor** for local processing
 
