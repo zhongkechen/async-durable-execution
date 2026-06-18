@@ -25,10 +25,7 @@ from ..models import (
     OperationUpdate,
     OperationSubType,
 )
-from .base import (
-    CheckResult,
-    OperationExecutor,
-)
+from .base import OperationExecutor
 from ..suspend import (
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
@@ -50,11 +47,7 @@ logger = logging.getLogger(__name__)
 
 
 class WaitForConditionOperationExecutor(OperationExecutor[T]):
-    """Executor for wait_for_condition operations.
-
-    Checks operation status after creating START checkpoints to handle operations
-    that complete synchronously, avoiding unnecessary execution or suspension.
-    """
+    """Executor for wait_for_condition operations."""
 
     def __init__(
         self,
@@ -75,19 +68,8 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         self.check = check
         self.config = config
 
-    async def check_result_status(self) -> CheckResult[T]:
-        """Check operation status and create START checkpoint if needed.
-
-        Called twice by process() when creating synchronous checkpoints: once before
-        and once after, to detect if the operation completed immediately.
-
-        Returns:
-            CheckResult indicating the next action to take
-
-        Raises:
-            CallableRuntimeError: For FAILED operations
-            SuspendExecution: For PENDING operations waiting for retry
-        """
+    async def process(self) -> T:
+        """Process wait_for_condition checkpoint state and execute the checker."""
         checkpointed_result = self.get_checkpointed_result()
 
         # Check if already completed
@@ -98,12 +80,12 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 self.operation_name,
             )
             if checkpointed_result.result is None:
-                return CheckResult.create_completed(None)  # type: ignore
+                return None  # type: ignore[return-value]
             result = self.deserialize_value(
                 data=checkpointed_result.result,
                 serdes=self.config.serdes,
             )
-            return CheckResult.create_completed(result)
+            return result
 
         # Terminal failure
         if checkpointed_result.is_failed():
@@ -129,8 +111,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             # For async checkpoint, no immediate response possible
             # Proceed directly to execute with current checkpoint data
 
-        # Ready to execute check function
-        return CheckResult.create_is_ready_to_execute(checkpointed_result)
+        return await self.execute(checkpointed_result)
 
     async def execute(self, checkpointed_result: CheckpointedResult) -> T:
         """Execute check function and handle decision.

@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypeVar, cast, ParamSpec
 
 from .base import (
-    CheckResult,
     OperationExecutor,
     OperationContext,
 )
@@ -49,13 +48,7 @@ CHECKPOINT_SIZE_LIMIT = 256 * 1024
 
 
 class ChildOperationExecutor(OperationExecutor[T]):
-    """Executor for child context operations.
-
-    Checks operation status after creating START checkpoints to handle operations
-    that complete synchronously, avoiding unnecessary execution or suspension.
-
-    Handles large payload scenarios with ReplayChildren mode.
-    """
+    """Executor for child context operations."""
 
     def __init__(
         self,
@@ -78,18 +71,8 @@ class ChildOperationExecutor(OperationExecutor[T]):
         self.is_virtual: bool = config.is_virtual
         self.sub_type = config.sub_type or OperationSubType.RUN_IN_CHILD_CONTEXT
 
-    async def check_result_status(self) -> CheckResult[T]:
-        """Check operation status and create START checkpoint if needed.
-
-        Called twice by process() when creating synchronous checkpoints: once before
-        and once after, to detect if the operation completed immediately.
-
-        Returns:
-            CheckResult indicating the next action to take
-
-        Raises:
-            CallableRuntimeError: For FAILED operations
-        """
+    async def process(self) -> T:
+        """Process child context checkpoint state and execute when needed."""
         checkpointed_result: CheckpointedResult = self.get_checkpointed_result()
 
         # Terminal success without replay_children - deserialize and return
@@ -103,7 +86,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 self.operation_name,
             )
             if checkpointed_result.result is None:
-                return CheckResult.create_completed(None)  # type: ignore
+                return None  # type: ignore[return-value]
 
             result: T = deserialize(
                 serdes=self.config.serdes,
@@ -111,14 +94,14 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 operation_id=self.operation_id,
                 durable_execution_arn=self.durable_execution_arn,
             )
-            return CheckResult.create_completed(result)
+            return result
 
         # Terminal success with replay_children - re-execute
         if (
             checkpointed_result.is_succeeded()
             and checkpointed_result.is_replay_children()
         ):
-            return CheckResult.create_is_ready_to_execute(checkpointed_result)
+            return await self.execute(checkpointed_result)
 
         # Terminal failure
         if checkpointed_result.is_failed():
@@ -136,8 +119,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
             # for observability and tracking the operation hierarchy.
             await self.create_checkpoint(start_operation, is_sync=False)
 
-        # Ready to execute (checkpoint exists or was just created)
-        return CheckResult.create_is_ready_to_execute(checkpointed_result)
+        return await self.execute(checkpointed_result)
 
     async def execute(self, checkpointed_result: CheckpointedResult) -> T:
         """Execute child context function with error handling and large payload support.

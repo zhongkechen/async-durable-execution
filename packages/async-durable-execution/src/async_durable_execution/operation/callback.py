@@ -25,11 +25,7 @@ from ..models import (
     OperationUpdate,
     OperationSubType,
 )
-from .base import (
-    CheckResult,
-    OperationExecutor,
-    OperationContext,
-)
+from .base import OperationExecutor, OperationContext
 from ..serdes import deserialize, SerDes, PassThroughSerDes
 
 if TYPE_CHECKING:
@@ -50,17 +46,7 @@ PASS_THROUGH_SERDES: SerDes[Any] = PassThroughSerDes()
 
 
 class CallbackOperationExecutor(OperationExecutor[str]):
-    """Executor for callback operations.
-
-    Checks operation status after creating START checkpoints to handle operations
-    that complete synchronously, avoiding unnecessary execution or suspension.
-
-    Unlike other operations, callbacks NEVER execute logic - they only create
-    checkpoints and return callback IDs.
-
-    CRITICAL: Errors are deferred to Callback.result() for deterministic replay.
-    create_callback() always returns the callback_id, even for FAILED callbacks.
-    """
+    """Executor for callback operations."""
 
     def __init__(
         self,
@@ -78,23 +64,8 @@ class CallbackOperationExecutor(OperationExecutor[str]):
         super().__init__(state=state, operation_identifier=operation_identifier)
         self.config = config
 
-    async def check_result_status(self) -> CheckResult[str]:
-        """Check operation status and create START checkpoint if needed.
-
-        Called twice by process() when creating synchronous checkpoints: once before
-        and once after, to detect if the operation completed immediately.
-
-        CRITICAL: This method does NOT raise on FAILED status. Errors are deferred
-        to Callback.result() to ensure deterministic replay. Code between
-        create_callback() and callback.result() must always execute.
-
-        Returns:
-            CheckResult.create_is_ready_to_execute() for any existing status (including FAILED)
-            or CheckResult.create_started() after creating checkpoint
-
-        Raises:
-            CallbackError: If callback_details are missing from checkpoint
-        """
+    async def process(self) -> str:
+        """Process callback checkpoint state and return the callback id."""
         checkpointed_result: CheckpointedResult = self.get_checkpointed_result()
 
         # CRITICAL: Do NOT raise on FAILED - defer error to Callback.result()
@@ -108,7 +79,7 @@ class CallbackOperationExecutor(OperationExecutor[str]):
                 msg = f"Missing callback details for operation: {self.operation_identifier.operation_id}"
                 raise CallbackError(msg)
 
-            return CheckResult.create_is_ready_to_execute(checkpointed_result)
+            return await self.execute(checkpointed_result)
 
         # Create START checkpoint
         callback_options: CallbackOptions = (
@@ -130,8 +101,7 @@ class CallbackOperationExecutor(OperationExecutor[str]):
         # The callback ID is needed immediately by the caller to pass to external systems.
         await self.create_checkpoint(create_callback_operation)
 
-        # Signal to process() to check status again for immediate response
-        return CheckResult.create_started()
+        return await self.execute(self.get_checkpointed_result())
 
     async def execute(self, checkpointed_result: CheckpointedResult) -> str:
         """Execute callback operation by extracting the callback_id.

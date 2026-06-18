@@ -17,10 +17,7 @@ from ..models import (
 )
 
 # Import base classes for operation executor pattern
-from .base import (
-    CheckResult,
-    OperationExecutor,
-)
+from .base import OperationExecutor
 from ..serdes import (
     DEFAULT_JSON_SERDES,
 )
@@ -40,14 +37,7 @@ logger = logging.getLogger(__name__)
 
 
 class InvokeOperationExecutor(OperationExecutor[R]):
-    """Executor for invoke operations.
-
-    Checks operation status after creating START checkpoints to handle operations
-    that complete synchronously, avoiding unnecessary execution or suspension.
-
-    The invoke operation never actually "executes" in the traditional sense -
-    it always suspends to wait for the async invocation to complete.
-    """
+    """Executor for invoke operations."""
 
     def __init__(
         self,
@@ -71,31 +61,20 @@ class InvokeOperationExecutor(OperationExecutor[R]):
         self.payload = payload
         self.config = config
 
-    async def check_result_status(self) -> CheckResult[R]:
-        """Check operation status and create START checkpoint if needed.
-
-        Called twice by process() when creating synchronous checkpoints: once before
-        and once after, to detect if the operation completed immediately.
-
-        Returns:
-            CheckResult indicating the next action to take
-
-        Raises:
-            CallableRuntimeError: For FAILED, TIMED_OUT, or STOPPED operations
-            SuspendExecution: For STARTED operations waiting for completion
-        """
+    async def process(self) -> R:
+        """Process invoke checkpoint state and suspend until completion."""
         checkpointed_result: CheckpointedResult = self.get_checkpointed_result()
 
         # Terminal success - deserialize and return
         if checkpointed_result.is_succeeded():
             if checkpointed_result.result is None:
-                return CheckResult.create_completed(None)  # type: ignore
+                return None  # type: ignore[return-value]
 
             result: R = self.deserialize_value(
                 data=checkpointed_result.result,
                 serdes=self.config.serdes_result or DEFAULT_JSON_SERDES,
             )
-            return CheckResult.create_completed(result)
+            return result
 
         # Terminal failures
         if (
@@ -111,7 +90,7 @@ class InvokeOperationExecutor(OperationExecutor[R]):
                 "⏳ Invoke %s still in progress, will suspend",
                 self.operation_name or self.function_name,
             )
-            return CheckResult.create_is_ready_to_execute(checkpointed_result)
+            return await self.execute(checkpointed_result)
 
         # Create START checkpoint if not exists
         if not checkpointed_result.is_existent():
@@ -136,12 +115,22 @@ class InvokeOperationExecutor(OperationExecutor[R]):
                 self.operation_name or self.function_name,
             )
 
-            # Signal to process() that checkpoint was created - to recheck status for permissions errs etc.
-            # before proceeding.
-            return CheckResult.create_started()
+            checkpointed_result = self.get_checkpointed_result()
+            if checkpointed_result.is_succeeded():
+                if checkpointed_result.result is None:
+                    return None  # type: ignore[return-value]
+                return self.deserialize_value(
+                    data=checkpointed_result.result,
+                    serdes=self.config.serdes_result or DEFAULT_JSON_SERDES,
+                )
+            if (
+                checkpointed_result.is_failed()
+                or checkpointed_result.is_timed_out()
+                or checkpointed_result.is_stopped()
+            ):
+                checkpointed_result.raise_callable_error()
 
-        # Ready to suspend (checkpoint exists but not in a terminal or started state)
-        return CheckResult.create_is_ready_to_execute(checkpointed_result)
+        return await self.execute(checkpointed_result)
 
     async def execute(self, _checkpointed_result: CheckpointedResult) -> R:
         """Execute invoke operation by suspending to wait for async completion.
