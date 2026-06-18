@@ -25,7 +25,7 @@ classifiers = [
 ]
 dependencies = [
   "boto3>=1.42.1",
-  "async-durable-execution>=1.0.0",
+  "async-durable-execution>=2.0.0a2",
 ]
 
 [project.urls]
@@ -71,7 +71,7 @@ dependencies = [
   "pytest-asyncio",
   "pytest-cov",
   "ruff",
-  "async-durable-execution>=1.0.0",
+  "async-durable-execution>=2.0.0a2",
 ]
 
 [tool.hatch.envs.test.scripts]
