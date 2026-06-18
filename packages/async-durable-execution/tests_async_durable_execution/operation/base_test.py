@@ -7,17 +7,21 @@ from collections.abc import Coroutine
 
 import pytest
 from typing import Any, cast
+from unittest.mock import Mock
 
 from async_durable_execution.exceptions import InvalidStateError
 from async_durable_execution.models import (
     Operation,
     OperationStatus,
+    OperationSubType,
     OperationType,
+    OperationIdentifier,
 )
 from async_durable_execution.operation.base import (
     CheckResult,
     OperationExecutor,
 )
+from async_durable_execution.serdes import DEFAULT_JSON_SERDES
 from async_durable_execution.state import CheckpointedResult
 
 
@@ -27,7 +31,15 @@ from async_durable_execution.state import CheckpointedResult
 class ConcreteOperationExecutor(OperationExecutor[str]):
     """Concrete implementation for testing the abstract base class."""
 
-    def __init__(self):
+    def __init__(self, state=None, operation_identifier=None):
+        if state is None:
+            state = Mock()
+            state.durable_execution_arn = "test-arn"
+        if operation_identifier is None:
+            operation_identifier = OperationIdentifier(
+                "test_op", OperationSubType.STEP, None, "test-name"
+            )
+        super().__init__(state=state, operation_identifier=operation_identifier)
         self.check_result_status_called = 0
         self.execute_called = 0
         self.check_result_to_return = None
@@ -106,6 +118,37 @@ async def test_check_result_create_completed_with_none():
     assert result.has_checkpointed_result is True
     assert result.checkpointed_result is None
     assert result.deserialized_result is None
+
+
+async def test_operation_executor_common_properties_and_helpers():
+    """Test OperationExecutor exposes shared fields and helpers."""
+    state = Mock()
+    state.durable_execution_arn = "arn:aws:lambda:us-west-2:123:function:test"
+    checkpoint = create_mock_checkpoint(OperationStatus.STARTED)
+    state.get_checkpoint_result.return_value = checkpoint
+    operation_identifier = OperationIdentifier(
+        "shared-op", OperationSubType.STEP, "parent-1", "shared-name"
+    )
+    executor = ConcreteOperationExecutor(
+        state=state, operation_identifier=operation_identifier
+    )
+
+    assert executor.operation_id == "shared-op"
+    assert executor.operation_name == "shared-name"
+    assert executor.durable_execution_arn == state.durable_execution_arn
+    assert executor.get_checkpointed_result() is checkpoint
+    state.get_checkpoint_result.assert_called_once_with("shared-op")
+
+
+async def test_operation_executor_common_serialization_helpers():
+    """Test OperationExecutor serializes and deserializes with shared metadata."""
+    executor = ConcreteOperationExecutor()
+
+    serialized = executor.serialize_value({"hello": "world"}, DEFAULT_JSON_SERDES)
+    deserialized = executor.deserialize_value(serialized, DEFAULT_JSON_SERDES)
+
+    assert serialized == '{"hello": "world"}'
+    assert deserialized == {"hello": "world"}
 
 
 # Tests for OperationExecutor.process() method

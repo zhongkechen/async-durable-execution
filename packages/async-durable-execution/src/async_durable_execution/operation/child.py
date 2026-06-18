@@ -72,9 +72,8 @@ class ChildOperationExecutor(OperationExecutor[T]):
             operation_identifier: The operation identifier
             config: The child configuration
         """
+        super().__init__(state=state, operation_identifier=operation_identifier)
         self.func = func
-        self.state = state
-        self.operation_identifier = operation_identifier
         self.config = config
         self.is_virtual: bool = config.is_virtual
         self.sub_type = config.sub_type or OperationSubType.RUN_IN_CHILD_CONTEXT
@@ -91,10 +90,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
         Raises:
             CallableRuntimeError: For FAILED operations
         """
-        operation_id = self.operation_identifier.require_operation_id()
-        checkpointed_result: CheckpointedResult = self.state.get_checkpoint_result(
-            operation_id
-        )
+        checkpointed_result: CheckpointedResult = self.get_checkpointed_result()
 
         # Terminal success without replay_children - deserialize and return
         if (
@@ -104,7 +100,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
             logger.debug(
                 "Child context already completed, skipping execution for id: %s, name: %s",
                 self.operation_identifier.operation_id,
-                self.operation_identifier.name,
+                self.operation_name,
             )
             if checkpointed_result.result is None:
                 return CheckResult.create_completed(None)  # type: ignore
@@ -112,8 +108,8 @@ class ChildOperationExecutor(OperationExecutor[T]):
             result: T = deserialize(
                 serdes=self.config.serdes,
                 data=checkpointed_result.result,
-                operation_id=operation_id,
-                durable_execution_arn=self.state.durable_execution_arn,
+                operation_id=self.operation_id,
+                durable_execution_arn=self.durable_execution_arn,
             )
             return CheckResult.create_completed(result)
 
@@ -138,9 +134,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
             # This is a fire-and-forget operation for performance - we don't need to wait for
             # persistence before executing the child context. The START checkpoint is purely
             # for observability and tracking the operation hierarchy.
-            await self.state._create_checkpoint_async(
-                operation_update=start_operation, is_sync=False
-            )
+            await self.create_checkpoint(start_operation, is_sync=False)
 
         # Ready to execute (checkpoint exists or was just created)
         return CheckResult.create_is_ready_to_execute(checkpointed_result)
@@ -165,7 +159,6 @@ class ChildOperationExecutor(OperationExecutor[T]):
             self.operation_identifier.name,
         )
         try:
-            operation_id = self.operation_identifier.require_operation_id()
             # TODO: fix attempt (checkpointed_result.is_existent is always True)
             wrapped_user_func = self.state.wrap_user_function(
                 self.func,
@@ -196,8 +189,8 @@ class ChildOperationExecutor(OperationExecutor[T]):
             serialized_result: str = serialize(
                 serdes=self.config.serdes,
                 value=raw_result,
-                operation_id=operation_id,
-                durable_execution_arn=self.state.durable_execution_arn,
+                operation_id=self.operation_id,
+                durable_execution_arn=self.durable_execution_arn,
             )
 
             # Check payload size and use ReplayChildren mode if needed
@@ -240,9 +233,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
             # Must ensure the child context result is persisted before returning to the parent.
             # This guarantees the result is durable and child operations won't be re-executed on replay
             # (unless replay_children=True for large payloads).
-            await self.state._create_checkpoint_async(
-                operation_update=success_operation
-            )
+            await self.create_checkpoint(success_operation)
 
             logger.debug(
                 "✅ Successfully completed child context for id: %s, name: %s",
@@ -265,9 +256,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 # Checkpoint child context FAIL with blocking (is_sync=True, default).
                 # Must ensure the failure state is persisted before raising the exception.
                 # This guarantees the error is durable and child operations won't be re-executed on replay.
-                await self.state._create_checkpoint_async(
-                    operation_update=fail_operation
-                )
+                await self.create_checkpoint(fail_operation)
 
             # InvocationError and its derivatives can be retried.
             # When we encounter an invocation error (in all of its forms), we
