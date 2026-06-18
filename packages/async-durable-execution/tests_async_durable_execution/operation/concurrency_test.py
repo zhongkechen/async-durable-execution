@@ -2480,7 +2480,7 @@ async def test_operation_id_determinism_across_shuffles():
     ):
         """Patched child handler that captures operation_id -> result mapping."""
         assert config.is_virtual
-        assert config.sub_type == "TEST_ITER"
+        assert operation_identifier.sub_type == "TEST_ITER"
         result = await invoke_callable(func)
         captured_associations.append((operation_identifier.operation_id, result))
         return result

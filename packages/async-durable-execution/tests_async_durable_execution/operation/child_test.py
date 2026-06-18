@@ -60,18 +60,10 @@ async def child_handler(*args, **kwargs):
 
 
 @pytest.mark.parametrize(
-    ("config", "expected_sub_type"),
-    [
-        (
-            ChildConfig(sub_type=OperationSubType.RUN_IN_CHILD_CONTEXT),
-            OperationSubType.RUN_IN_CHILD_CONTEXT,
-        ),
-        (ChildConfig(sub_type=OperationSubType.STEP), OperationSubType.STEP),
-        (None, OperationSubType.RUN_IN_CHILD_CONTEXT),
-    ],
+    "expected_sub_type", [OperationSubType.RUN_IN_CHILD_CONTEXT, OperationSubType.STEP]
 )
 async def test_child_handler_not_started(
-    config: ChildConfig | None, expected_sub_type: OperationSubType
+    expected_sub_type: OperationSubType,
 ):
     """Test child_handler when operation not started.
 
@@ -95,10 +87,8 @@ async def test_child_handler_not_started(
     result = await child_handler(
         mock_callable,
         mock_state,
-        OperationIdentifier(
-            "op1", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
-        ),
-        config,
+        OperationIdentifier("op1", expected_sub_type, None, "test_name"),
+        None,
     )
 
     assert result == "fresh_result"
@@ -241,18 +231,10 @@ async def test_child_handler_already_failed():
 
 
 @pytest.mark.parametrize(
-    ("config", "expected_sub_type"),
-    [
-        (
-            ChildConfig(sub_type=OperationSubType.RUN_IN_CHILD_CONTEXT),
-            OperationSubType.RUN_IN_CHILD_CONTEXT,
-        ),
-        (ChildConfig(sub_type=OperationSubType.STEP), OperationSubType.STEP),
-        (None, OperationSubType.RUN_IN_CHILD_CONTEXT),
-    ],
+    "expected_sub_type", [OperationSubType.RUN_IN_CHILD_CONTEXT, OperationSubType.STEP]
 )
 async def test_child_handler_already_started(
-    config: ChildConfig | None, expected_sub_type: OperationSubType
+    expected_sub_type: OperationSubType,
 ):
     """Test child_handler when operation already started.
 
@@ -276,10 +258,8 @@ async def test_child_handler_already_started(
     result = await child_handler(
         mock_callable,
         mock_state,
-        OperationIdentifier(
-            "op5", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
-        ),
-        config,
+        OperationIdentifier("op5", expected_sub_type, None, "test_name"),
+        None,
     )
 
     assert result == "started_result"
@@ -302,18 +282,10 @@ async def test_child_handler_already_started(
 
 
 @pytest.mark.parametrize(
-    ("config", "expected_sub_type"),
-    [
-        (
-            ChildConfig(sub_type=OperationSubType.RUN_IN_CHILD_CONTEXT),
-            OperationSubType.RUN_IN_CHILD_CONTEXT,
-        ),
-        (ChildConfig(sub_type=OperationSubType.STEP), OperationSubType.STEP),
-        (None, OperationSubType.RUN_IN_CHILD_CONTEXT),
-    ],
+    "expected_sub_type", [OperationSubType.RUN_IN_CHILD_CONTEXT, OperationSubType.STEP]
 )
 async def test_child_handler_callable_exception(
-    config: ChildConfig | None, expected_sub_type: OperationSubType
+    expected_sub_type: OperationSubType,
 ):
     """Test child_handler when callable raises exception.
 
@@ -337,10 +309,8 @@ async def test_child_handler_callable_exception(
         await child_handler(
             mock_callable,
             mock_state,
-            OperationIdentifier(
-                "op6", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
-            ),
-            config,
+            OperationIdentifier("op6", expected_sub_type, None, "test_name"),
+            None,
         )
 
     # Verify get_checkpoint_result called once

@@ -199,7 +199,6 @@ async def parallel(
         state=context.execution_state,
         operation_identifier=operation_identifier,
         config=ChildConfig(
-            sub_type=OperationSubType.PARALLEL,
             serdes=getattr(config, "serdes", None),
             item_serdes=None,
         ),

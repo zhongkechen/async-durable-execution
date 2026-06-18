@@ -344,7 +344,6 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
             operation_identifier=operation_identifier,
             config=ChildConfig(
                 serdes=self.item_serdes or self.serdes,
-                sub_type=self.sub_type_iteration,
                 summary_generator=self.summary_generator,
                 is_virtual=is_virtual,
             ),

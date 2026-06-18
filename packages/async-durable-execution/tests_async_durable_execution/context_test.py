@@ -1612,7 +1612,7 @@ async def test_map_basic(mock_handler):
 
     # Verify the child handler was called with correct parameters
     call_args = mock_handler.call_args
-    assert call_args[1]["config"].sub_type.value == "Map"
+    assert call_args[1]["operation_identifier"].sub_type is OperationSubType.MAP
 
 
 @patch("async_durable_execution.operation.map.child_handler")
@@ -1725,7 +1725,7 @@ async def test_parallel_basic(mock_handler):
 
     # Verify the child handler was called with correct parameters
     call_args = mock_handler.call_args
-    assert call_args[1]["config"].sub_type.value == "Parallel"
+    assert call_args[1]["operation_identifier"].sub_type is OperationSubType.PARALLEL
 
 
 @patch("async_durable_execution.operation.parallel.child_handler")

@@ -190,7 +190,6 @@ async def map(
         state=context.execution_state,
         operation_identifier=operation_identifier,
         config=ChildConfig(
-            sub_type=OperationSubType.MAP,
             serdes=getattr(config, "serdes", None),
             item_serdes=None,
         ),
