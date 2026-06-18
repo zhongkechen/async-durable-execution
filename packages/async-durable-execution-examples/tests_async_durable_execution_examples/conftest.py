@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 
 from function_naming import to_function_name_suffix
 
+DEFAULT_CLOUD_REGION = "eu-south-1"
+
 
 class RunnerMode(str, Enum):
     """Runner mode for local or cloud execution."""
@@ -99,7 +101,7 @@ def durable_runner(request):
 
     Configuration for cloud mode:
         Environment variables (required):
-            AWS_REGION: AWS region for Lambda invocation (default: us-west-2)
+            AWS_REGION: AWS region for Lambda invocation (default: eu-south-1)
             LAMBDA_ENDPOINT: Optional Lambda endpoint URL
             PYTEST_FUNCTION_NAME_PREFIX: Prefix used when examples are deployed
                 with generated function names
@@ -108,8 +110,8 @@ def durable_runner(request):
             --runner-mode=cloud (or local, default: local)
         
         Example:
-            AWS_REGION=us-west-2 \
-            LAMBDA_ENDPOINT=https://lambda.us-west-2.amazonaws.com \
+            AWS_REGION=eu-south-1 \
+            LAMBDA_ENDPOINT=https://lambda.eu-south-1.amazonaws.com \
             PYTEST_FUNCTION_NAME_PREFIX="py313-" \
             pytest --runner-mode=cloud -k test_hello_world
 
@@ -139,7 +141,7 @@ def durable_runner(request):
 
         if runner_mode == RunnerMode.CLOUD:
             deployed_name = _get_deployed_function_name(handler_identifier)
-            region = os.environ.get("AWS_REGION", "us-west-2")
+            region = os.environ.get("AWS_REGION", DEFAULT_CLOUD_REGION)
             lambda_endpoint = os.environ.get("LAMBDA_ENDPOINT")
 
             logger.info("Using AWS region: %s", region)

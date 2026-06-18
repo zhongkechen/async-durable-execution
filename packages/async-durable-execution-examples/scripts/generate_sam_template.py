@@ -11,6 +11,9 @@ from test_handlers import load_test_handlers
 
 PACKAGE_NAME = "DurableExecutionsPythonExamples-1.0"
 PACKAGE_PREFIX = "async_durable_execution_examples"
+DEFAULT_AWS_REGION = "eu-south-1"
+DEFAULT_LAMBDA_ENDPOINT = f"https://lambda.{DEFAULT_AWS_REGION}.amazonaws.com"
+DEFAULT_RUNTIME = "python3.13"
 DEFAULT_DURABLE_CONFIG = {
     "RetentionPeriodInDays": 7,
     "ExecutionTimeout": 300,
@@ -130,13 +133,16 @@ def load_catalog() -> dict[str, Any]:
 
 
 def build_template(
-    examples: list[dict[str, Any]], *, include_function_name_parameter: bool
+    examples: list[dict[str, Any]],
+    *,
+    include_function_name_parameter: bool,
+    runtime: str = DEFAULT_RUNTIME,
 ) -> dict[str, Any]:
     """Build a SAM template for one or more examples."""
     parameters: dict[str, Any] = {
         "LambdaEndpoint": {
             "Type": "String",
-            "Default": "https://lambda.us-west-2.amazonaws.com",
+            "Default": DEFAULT_LAMBDA_ENDPOINT,
         }
     }
     if include_function_name_parameter:
@@ -152,7 +158,7 @@ def build_template(
         "Transform": "AWS::Serverless-2016-10-31",
         "Globals": {
             "Function": {
-                "Runtime": "python3.13",
+                "Runtime": runtime,
                 "Timeout": 60,
                 "MemorySize": 128,
                 "Environment": {
@@ -249,7 +255,10 @@ def validate_catalog_test_coverage(catalog: dict[str, Any]) -> None:
 
 
 def generate_sam_template(
-    *, example_name: str | None = None, output_path: Path | None = None
+    *,
+    example_name: str | None = None,
+    output_path: Path | None = None,
+    runtime: str = DEFAULT_RUNTIME,
 ) -> Path:
     """Generate a SAM template for either the full catalog or one example."""
     catalog = load_catalog()
@@ -270,6 +279,7 @@ def generate_sam_template(
     template = build_template(
         selected_examples,
         include_function_name_parameter=example_name is not None,
+        runtime=runtime,
     )
 
     template_path = output_path or (
@@ -294,11 +304,17 @@ def main() -> int:
         type=Path,
         help="Write the generated template to this path",
     )
+    parser.add_argument(
+        "--runtime",
+        default=DEFAULT_RUNTIME,
+        help=f"SAM Lambda runtime to use for generated functions (default: {DEFAULT_RUNTIME})",
+    )
     args = parser.parse_args()
 
     template_path = generate_sam_template(
         example_name=args.example_name,
         output_path=args.output,
+        runtime=args.runtime,
     )
     print(f"Generated SAM template at {template_path}")
     return 0
