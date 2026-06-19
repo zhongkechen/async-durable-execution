@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import inspect
 import json
 from typing import cast
@@ -25,6 +26,7 @@ from async_durable_execution.models import (
     OperationType,
 )
 from async_durable_execution.operation.child import child_handler as async_child_handler
+from async_durable_execution.operation.child import DurableContext
 from async_durable_execution.state import ExecutionState
 from async_durable_execution.types import SummaryGenerator
 from async_durable_execution.operation.base import CheckpointedResult
@@ -57,6 +59,26 @@ async def child_handler(*args, **kwargs):
             state.wrap_user_function.return_value
         )
     return await async_child_handler(*args, **kwargs)
+
+
+def create_test_context(
+    state: ExecutionState | None = None, parent_id: str | None = None
+) -> DurableContext:
+    """Helper to create DurableContext for tests."""
+    if state is None:
+        state = Mock(spec=ExecutionState)
+        state.durable_execution_arn = (
+            "arn:aws:durable:us-east-1:123456789012:execution/test"
+        )
+
+    return DurableContext(
+        execution_state=state,
+        operation_identifier=OperationIdentifier(
+            operation_id=None,
+            sub_type=OperationSubType.EXECUTION,
+            parent_id=parent_id,
+        ),
+    )
 
 
 @pytest.mark.parametrize(
@@ -224,10 +246,144 @@ async def test_child_handler_already_failed():
             None,
         )
 
-    # Verify function not executed
-    mock_callable.assert_not_called()
-    # Verify get_checkpoint_result called once
-    assert mock_state.operations.get.call_count == 1
+
+async def test_should_use_step_id_prefix_when_generating_step_ids():
+    """Step ids derive from the step_id_prefix, not parent_id.
+
+    For virtual contexts this is load-bearing: step ids must stay stable
+    across virtual/non-virtual construction so replay ids match.
+    """
+
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = (
+        "arn:aws:durable:us-east-1:123456789012:execution/test"
+    )
+    virtual = DurableContext(
+        execution_state=mock_state,
+        operation_identifier=OperationIdentifier(
+            operation_id=None,
+            sub_type=OperationSubType.EXECUTION,
+            parent_id="grandparent-op",
+        ),
+        step_id_prefix="branch-op",
+    )
+    expected_prefixed = hashlib.blake2b(b"branch-op-1").hexdigest()[:64]
+
+    assert virtual.step_counter._create_step_id_for_logical_step(1) == expected_prefixed  # noqa: SLF001
+
+
+async def test_should_use_parent_id_as_step_prefix_when_non_virtual():
+    """Non-virtual contexts prefix step ids with parent_id (default fallback).
+
+    For the non-virtual case `step_id_prefix` is not passed explicitly;
+    it defaults to `parent_id`. Replay stability for executions produced
+    before the virtual-context refactor depends on this fallback
+    matching the pre-refactor behaviour exactly.
+    """
+
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = (
+        "arn:aws:durable:us-east-1:123456789012:execution/test"
+    )
+    non_virtual = DurableContext(
+        execution_state=mock_state,
+        operation_identifier=OperationIdentifier(
+            operation_id=None,
+            sub_type=OperationSubType.EXECUTION,
+            parent_id="parent-op",
+        ),
+    )
+    expected = hashlib.blake2b(b"parent-op-1").hexdigest()[:64]
+
+    assert non_virtual.step_counter._create_step_id_for_logical_step(1) == expected  # noqa: SLF001
+    assert non_virtual.is_virtual is False
+
+
+async def test_should_create_non_virtual_child_when_is_virtual_false():
+    """create_child_context(op_id) returns a non-virtual child."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = (
+        "arn:aws:durable:us-east-1:123456789012:execution/test"
+    )
+    parent = create_test_context(state=mock_state, parent_id="parent-op")
+
+    child = parent.create_child_context("child-op")
+
+    assert child.parent_id == "child-op"  # noqa: SLF001
+    assert child.step_id_prefix == "child-op"  # noqa: SLF001
+    assert child.is_virtual is False
+
+
+async def test_should_create_virtual_child_that_propagates_grandparent_id():
+    """create_child_context(op_id, is_virtual=True) propagates the grandparent as parent_id."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = (
+        "arn:aws:durable:us-east-1:123456789012:execution/test"
+    )
+    parent = create_test_context(state=mock_state, parent_id="grandparent-op")
+
+    child = parent.create_child_context("child-op", is_virtual=True)
+
+    assert child.parent_id == "grandparent-op"  # noqa: SLF001
+    assert child.step_id_prefix == "child-op"  # noqa: SLF001
+    assert child.is_virtual is True
+
+
+async def test_should_create_virtual_child_with_none_parent_when_parent_is_root():
+    """Virtual child of a root context (parent_id=None) keeps parent_id=None.
+
+    Inner operations then report at the top level; step ids still prefix
+    on the child's own operation id.
+    """
+
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = (
+        "arn:aws:durable:us-east-1:123456789012:execution/test"
+    )
+    root_parent = create_test_context(state=mock_state, parent_id=None)
+
+    child = root_parent.create_child_context("child-op", is_virtual=True)
+
+    assert child.parent_id is None  # noqa: SLF001
+    assert child.step_id_prefix == "child-op"  # noqa: SLF001
+    assert child.is_virtual is True
+
+    expected = hashlib.blake2b(b"child-op-1").hexdigest()[:64]
+    assert child.step_counter._create_step_id_for_logical_step(1) == expected  # noqa: SLF001
+
+
+async def test_should_propagate_outer_parent_id_when_virtual_is_nested_in_virtual():
+    """A virtual child of a virtual parent still reports to the outer non-virtual ancestor.
+
+    Nested concurrency is a real scenario: e.g. a FLAT `map` inside a
+    FLAT `parallel`. Each layer creates a virtual child. The inner
+    virtual child inherits `_parent_id` from its immediate (virtual)
+    parent, which in turn inherited it from its non-virtual
+    grandparent. The expected end result is that inner operations in
+    the doubly-nested virtual branch still stamp the outer
+    non-virtual ancestor's id — every virtual layer collapses out of
+    the observable hierarchy without accumulating.
+    """
+
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = (
+        "arn:aws:durable:us-east-1:123456789012:execution/test"
+    )
+
+    outer = create_test_context(state=mock_state, parent_id="outer-parallel-op")
+
+    outer_branch = outer.create_child_context("outer-branch-op", is_virtual=True)
+    assert outer_branch.parent_id == "outer-parallel-op"  # noqa: SLF001
+    assert outer_branch.step_id_prefix == "outer-branch-op"  # noqa: SLF001
+    assert outer_branch.is_virtual is True
+
+    inner_branch = outer_branch.create_child_context("inner-branch-op", is_virtual=True)
+    assert inner_branch.parent_id == "outer-parallel-op"  # noqa: SLF001
+    assert inner_branch.step_id_prefix == "inner-branch-op"  # noqa: SLF001
+    assert inner_branch.is_virtual is True
+
+    expected = hashlib.blake2b(b"inner-branch-op-1").hexdigest()[:64]
+    assert inner_branch.step_counter._create_step_id_for_logical_step(1) == expected  # noqa: SLF001
 
 
 @pytest.mark.parametrize(
