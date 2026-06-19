@@ -52,15 +52,16 @@ import logging
 from datetime import timedelta
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     durable_execution,
-    get_current_context,
+    step,
+    wait,
 )
 
 logger = logging.getLogger(__name__)
 
 
-@durable_step
+@durable_callable
 async def validate_order(order_id: str) -> dict:
     await asyncio.sleep(0)
     logger.info("Validating order", extra={"order_id": order_id})
@@ -69,16 +70,15 @@ async def validate_order(order_id: str) -> dict:
 
 @durable_execution
 async def handler(event: dict) -> dict:
-    context = get_current_context()
     order_id = event["order_id"]
     logger.info("Starting workflow", extra={"order_id": order_id})
 
-    validation = await context.step(validate_order(order_id), name="validate_order")
+    validation = await step(validate_order(order_id), name="validate_order")
     if not validation["valid"]:
         return {"status": "rejected", "order_id": order_id}
 
     # simulate approval (real world: use wait_for_callback)
-    await context.wait(duration=timedelta(seconds=5), name="await_confirmation")
+    await wait(duration=timedelta(seconds=5), name="await_confirmation")
 
     return {"status": "approved", "order_id": order_id}
 ```
@@ -90,15 +90,15 @@ import asyncio
 import logging
 
 from async_durable_execution import (
-    durable_step,
+    durable_callable,
     durable_execution,
-    get_current_context,
+    step,
 )
 
 logger = logging.getLogger(__name__)
 
 
-@durable_step
+@durable_callable
 async def fetch_order(order_id: str) -> dict:
     await asyncio.sleep(0)
     logger.info("Fetched order", extra={"order_id": order_id})
@@ -107,8 +107,7 @@ async def fetch_order(order_id: str) -> dict:
 
 @durable_execution
 async def handler(event: dict) -> dict:
-    context = get_current_context()
-    order = await context.step(fetch_order(event["order_id"]), name="fetch_order")
+    order = await step(fetch_order(event["order_id"]), name="fetch_order")
     return {"order": order}
 ```
 
@@ -116,7 +115,7 @@ async def handler(event: dict) -> dict:
 
 The complete documentation for the AWS Durable Execution SDK for Python lives on the AWS Documentation site:
 
-- **[AWS Durable Execution Documentation](https://docs.aws.amazon.com/durable-execution/)** - Concepts, getting started, core operations, advanced topics, and API reference
+- **[Generated API Reference](https://zhongkechen.github.io/async-durable-execution/)** - Auto-generated from Python docstrings and published with GitHub Pages
 - **[AWS Lambda Durable Functions Guide](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html)** - How durable functions work on Lambda
 
 ## 💬 Feedback & Support
