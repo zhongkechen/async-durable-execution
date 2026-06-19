@@ -283,6 +283,8 @@ async def child_handler(
 
 @dataclass(frozen=True)
 class DurableContext(OperationContext):
+    """Runtime context available to a durable handler or child context."""
+
     lambda_context: LambdaContext | None = None
     step_id_prefix: str | None = None
 
@@ -366,6 +368,7 @@ async def run_in_child_context(
     name: str | None = None,
     config: ChildConfig | None = None,
 ) -> T:
+    """Execute a durable sub-workflow inside its own child context."""
     context = _get_durable_context("run_in_child_context")
     return await _run_in_child_context_in_context(
         context,

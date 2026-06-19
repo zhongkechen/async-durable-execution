@@ -23,6 +23,8 @@ C_contra = TypeVar("C_contra", contravariant=True)
 
 
 class LoggerInterface(Protocol):
+    """Protocol describing the logging methods used by the SDK."""
+
     def debug(
         self, msg: object, *args: object, extra: Mapping[str, object] | None = None
     ) -> None: ...  # pragma: no cover
@@ -66,6 +68,8 @@ class BatchResult(Protocol, Generic[T]):
 
 
 class LambdaContext(Protocol):  # pragma: no cover
+    """Minimal AWS Lambda context surface used by the SDK."""
+
     aws_request_id: str
     log_group_name: str | None = None
     log_stream_name: str | None = None
@@ -93,11 +97,15 @@ the child context to be re-executed during replay to reconstruct the full result
 
 
 class SummaryGenerator(Protocol[C_contra]):
+    """Create a compact JSON summary for oversized checkpoint payloads."""
+
     def __call__(self, result: C_contra) -> str: ...  # pragma: no cover
 
 
 @runtime_checkable
 class DurableContext(Protocol):
+    """Protocol for the runtime context passed through durable operations."""
+
     execution_state: ExecutionState | None
     durable_execution_arn: str | None
     parent_id: str | None

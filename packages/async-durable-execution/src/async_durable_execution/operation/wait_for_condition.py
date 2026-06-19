@@ -269,6 +269,11 @@ async def wait_for_condition(
     config: WaitForConditionConfig[T],
     name: str | None = None,
 ) -> T:
+    """Poll durable state until the configured strategy decides to stop waiting.
+
+    The `check` function receives the current state and returns the next state.
+    The `wait_strategy` inside `config` decides whether to suspend and retry.
+    """
     context = _get_durable_context("wait_for_condition")
     if check is None:
         msg = "`check` is required for wait_for_condition"

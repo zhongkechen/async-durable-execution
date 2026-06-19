@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 def create_default_client():
+    """Create the default boto3 Lambda client used for durable API calls."""
     user_agent = f"async-durable-execution/{__version__}-async"
     return boto3.client(
         "lambda",

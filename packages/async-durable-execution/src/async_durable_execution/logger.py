@@ -23,6 +23,8 @@ _configured_handler_ids: set[int] = set()
 
 @dataclass(frozen=True)
 class LogInfo:
+    """Structured durable-execution metadata that can be attached to logs."""
+
     execution_state: ExecutionState
     parent_id: str | None = None
     operation_id: str | None = None

@@ -59,6 +59,8 @@ LAMBDA_RESPONSE_SIZE_LIMIT = 6 * 1024 * 1024 - 50
 
 @dataclass(frozen=True)
 class InitialExecutionState(SerializableModel):
+    """Initial page of operation history included with an invocation event."""
+
     operations: list[Operation] = field(
         default_factory=list,
         metadata={"alias": "Operations"},
@@ -68,6 +70,8 @@ class InitialExecutionState(SerializableModel):
 
 @dataclass(frozen=True)
 class DurableExecutionInvocationInput(SerializableModel):
+    """Event payload delivered to a durable Lambda invocation."""
+
     durable_execution_arn: str = field(metadata={"alias": "DurableExecutionArn"})
     checkpoint_token: str = field(metadata={"alias": "CheckpointToken"})
     initial_execution_state: InitialExecutionState = field(
@@ -398,6 +402,7 @@ def _durable_execution(
 
 
 def handle_checkpoint_error(error: CheckpointError) -> DurableExecutionInvocationOutput:
+    """Convert checkpoint failures into a final result or retry trigger."""
     if error.is_retryable():
         raise error from None  # Terminate Lambda immediately and have it be retried
     return DurableExecutionInvocationOutput(

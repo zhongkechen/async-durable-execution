@@ -177,6 +177,7 @@ async def wait_for_callback_handler(
 async def create_callback(
     name: str | None = None, config: CallbackConfig | None = None
 ) -> Callback:
+    """Create a durable callback handle that external systems can complete later."""
     context = _get_durable_context("create_callback")
     if not config:
         config = CallbackConfig()
@@ -317,6 +318,7 @@ async def wait_for_callback(
     name: str | None = None,
     config: WaitForCallbackConfig | None = None,
 ) -> Any:
+    """Create a callback, run a submitter, then suspend until the callback resolves."""
     context = _get_durable_context("wait_for_callback")
     assert_async_callable(submitter, label="submitter")
     step_name: str | None = name or get_callable_name(submitter)

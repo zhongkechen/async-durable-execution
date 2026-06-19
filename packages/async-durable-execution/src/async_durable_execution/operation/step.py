@@ -339,6 +339,11 @@ async def step(
     name: str | None = None,
     config: StepConfig | None = None,
 ) -> T:
+    """Run user code as a checkpointed durable step.
+
+    Durable steps are the main way to isolate non-deterministic work such as API
+    calls, clock reads, UUID generation, and database access from replayed code.
+    """
     context = _get_durable_context()
     assert_async_callable(func)
     step_name = name or get_callable_name(func, include_original_name=False)
@@ -365,10 +370,13 @@ async def step(
 
 @dataclass(frozen=True)
 class StepContext(OperationContext):
+    """Context exposed while a step function is executing."""
+
     attempt: int | None = None
 
 
 def get_attempt() -> int | None:
+    """Return the current step attempt number inside a step/check callback."""
     current_context = get_step_context(
         "get_attempt() can only be used while a step function is executing.",
     )
@@ -378,6 +386,7 @@ def get_attempt() -> int | None:
 def get_step_context(
     message: str,
 ):
+    """Return the active `StepContext` or raise a caller-provided error message."""
     current_context = get_current_context()
     if current_context is None or not isinstance(current_context, StepContext):
         raise RuntimeError(message)

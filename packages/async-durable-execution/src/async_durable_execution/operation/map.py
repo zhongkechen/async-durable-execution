@@ -34,6 +34,8 @@ U = TypeVar("U")
 
 
 class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI059
+    """Concurrent executor used by the public `map()` helper."""
+
     def __init__(
         self,
         executables: list[Executable[Callable]],
@@ -144,6 +146,8 @@ async def map_handler(
 
 
 class MapSummaryGenerator:
+    """Default summary generator for oversized `BatchResult` map payloads."""
+
     def __call__(self, result: BatchResult) -> str:
         fields = {
             "totalCount": result.total_count,
@@ -162,6 +166,7 @@ async def map(
     name: str | None = None,
     config: MapConfig | None = None,
 ):
+    """Process a collection durably with optional concurrency and batching controls."""
     context = _get_durable_context("map")
     assert_async_callable(func)
     map_name: str | None = name or get_callable_name(func)

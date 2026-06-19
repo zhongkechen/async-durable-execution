@@ -36,11 +36,15 @@ if TYPE_CHECKING:
 
 
 class AwsErrorObj(TypedDict):
+    """Subset of a boto-style AWS error payload."""
+
     Code: str | None
     Message: str | None
 
 
 class AwsErrorMetadata(TypedDict):
+    """Subset of boto response metadata used for retry classification."""
+
     RequestId: str | None
     HostId: str | None
     HTTPStatusCode: int | None
@@ -112,6 +116,8 @@ class CallbackError(ExecutionError):
 
 
 class DurableApiErrorCategory(Enum):
+    """Whether a durable API failure should retry the Lambda or fail execution."""
+
     INVOCATION = "INVOCATION"
     EXECUTION = "EXECUTION"
 

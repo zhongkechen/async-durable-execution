@@ -147,6 +147,7 @@ async def invoke(
     name: str | None = None,
     config: InvokeConfig[P, R] | None = None,
 ) -> R:
+    """Invoke another durable Lambda function and wait for its durable result."""
     context = _get_durable_context("invoke")
     if not config:
         config = InvokeConfig[P, R]()

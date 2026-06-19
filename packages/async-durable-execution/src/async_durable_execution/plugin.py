@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class OperationInfo:
+    """Common metadata emitted for operation-level plugin callbacks."""
+
     operation_id: str | None
     operation_type: OperationType
     sub_type: OperationSubType | None
@@ -38,17 +40,21 @@ class OperationInfo:
 
 @dataclass(frozen=True)
 class OperationStartInfo(OperationInfo):
-    pass
+    """Plugin payload emitted when an operation checkpoints its start."""
 
 
 @dataclass(frozen=True)
 class OperationEndInfo(OperationInfo):
+    """Plugin payload emitted when an operation reaches a terminal status."""
+
     status: OperationStatus
     end_time: datetime.datetime | None
     error: ErrorObject | None
 
 
 class UserFunctionOutcome(Enum):
+    """Outcome classification for user-authored async callables."""
+
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
     PENDING = "PENDING"
@@ -64,6 +70,8 @@ class UserFunctionOutcome(Enum):
 
 @dataclass(frozen=True)
 class UserFunctionStartInfo(OperationInfo):
+    """Plugin payload emitted before user code runs for an operation."""
+
     is_replay_children: bool = (
         False  # True if user function is called to replay children (MAP/PARALLEL)
     )
@@ -74,6 +82,8 @@ class UserFunctionStartInfo(OperationInfo):
 
 @dataclass(frozen=True)
 class UserFunctionEndInfo(OperationInfo):
+    """Plugin payload emitted after user code finishes for an operation."""
+
     is_replay_children: (
         bool  # True if user function is called to replay children (MAP/PARALLEL)
     )
@@ -103,6 +113,8 @@ class UserFunctionEndInfo(OperationInfo):
 
 @dataclass(frozen=True)
 class InvocationInfo:
+    """Common metadata emitted for invocation-level plugin callbacks."""
+
     request_id: str | None
     execution_arn: str | None
     start_time: datetime.datetime | None
@@ -111,11 +123,13 @@ class InvocationInfo:
 
 @dataclass(frozen=True)
 class InvocationStartInfo(InvocationInfo):
-    pass
+    """Plugin payload emitted when a Lambda invocation starts."""
 
 
 @dataclass(frozen=True)
 class InvocationEndInfo(InvocationInfo):
+    """Plugin payload emitted when a Lambda invocation completes."""
+
     status: InvocationStatus
     end_time: datetime.datetime | None
     error: ErrorObject | None
@@ -190,6 +204,8 @@ class DurableInstrumentationPlugin:
 
 
 class PluginExecutor:
+    """Dispatch plugin hooks while isolating plugin failures from user code."""
+
     def __init__(self, plugins: list[DurableInstrumentationPlugin] | None):
         self._plugins = plugins or []
         self._invocation_status: InvocationStartInfo | None = None

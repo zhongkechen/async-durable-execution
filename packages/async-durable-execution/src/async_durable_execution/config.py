@@ -46,11 +46,20 @@ def duration_to_seconds(duration: timedelta, field_name: str = "duration") -> in
 
 @dataclass(frozen=True)
 class BatchedInput(Generic[T, U]):
+    """Wrapper passed to batched map handlers.
+
+    Attributes:
+        batch_input: Shared metadata configured on the `ItemBatcher`.
+        items: The items grouped into the current batch.
+    """
+
     batch_input: T
     items: list[U]
 
 
 class TerminationMode(Enum):
+    """How a branch or operation should terminate when coordination ends early."""
+
     TERMINATE = "TERMINATE"
     CANCEL = "CANCEL"
     WAIT = "WAIT"
@@ -268,13 +277,15 @@ class ParallelBranch(Generic[T]):
 
 
 class StepSemantics(Enum):
+    """Checkpoint timing guarantees for a durable step attempt."""
+
     AT_MOST_ONCE_PER_RETRY = "AT_MOST_ONCE_PER_RETRY"
     AT_LEAST_ONCE_PER_RETRY = "AT_LEAST_ONCE_PER_RETRY"
 
 
 @dataclass(frozen=True)
 class StepConfig:
-    """Configuration for a step."""
+    """Configuration for a durable `step()` call."""
 
     retry_strategy: Callable[[Exception, int], RetryDecision] | None = None
     step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY
@@ -359,6 +370,8 @@ class WithRetryConfig(Generic[T]):
 
 
 class ItemsPerBatchUnit(Enum):
+    """Units used when deciding how to size batches."""
+
     COUNT = ("COUNT",)
     BYTES = "BYTES"
 
@@ -601,6 +614,12 @@ class JitterStrategy(str, Enum):
 
 @dataclass
 class WaitStrategyBuilder(Generic[T]):
+    """Build polling strategies for `wait_for_condition()`.
+
+    The generated callable decides whether polling should continue and, when it
+    should, how long to wait before the next replay.
+    """
+
     should_continue_polling: Callable[[T], bool]
     max_attempts: int = 60
     initial_delay: timedelta = field(default_factory=lambda: timedelta(seconds=5))
@@ -658,6 +677,8 @@ class WaitStrategyBuilder(Generic[T]):
 
 @dataclass
 class RetryStrategyBuilder:
+    """Build exponential-backoff retry strategies for durable operations."""
+
     max_attempts: int = 3
     initial_delay: timedelta = field(default_factory=lambda: timedelta(seconds=5))
     max_delay: timedelta = field(
