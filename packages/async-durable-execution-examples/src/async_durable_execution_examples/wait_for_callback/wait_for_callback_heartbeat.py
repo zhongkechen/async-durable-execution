@@ -21,7 +21,7 @@ async def handler(event: dict[str, Any]) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with heartbeat timeout."""
 
     config = WaitForCallbackConfig(
-        timeout=timedelta(seconds=3), heartbeat_timeout=timedelta(seconds=10)
+        timeout=timedelta(seconds=30), heartbeat_timeout=timedelta(seconds=5)
     )
 
     result: str = await wait_for_callback(submitter, config=config)
