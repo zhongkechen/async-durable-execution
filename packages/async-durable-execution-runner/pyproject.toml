@@ -33,9 +33,6 @@ Documentation = "https://github.com/zhongkechen/async-durable-execution#readme"
 Issues = "https://github.com/zhongkechen/async-durable-execution/issues"
 Source = "https://github.com/zhongkechen/async-durable-execution"
 
-[project.scripts]
-dex-local-runner = "async_durable_execution_runner.cli:main"
-
 [tool.hatch.build.targets.sdist]
 packages = ["src/async_durable_execution_runner"]
 

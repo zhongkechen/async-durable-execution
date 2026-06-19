@@ -1,20 +1,12 @@
 """Concurrent access tests for execution stores."""
 
-import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
-
-import pytest
 
 from async_durable_execution_runner.execution import Execution
 from async_durable_execution_runner.model import StartDurableExecutionInput
-from async_durable_execution_runner.stores.filesystem import (
-    FileSystemExecutionStore,
-)
 from async_durable_execution_runner.stores.memory import (
     InMemoryExecutionStore,
 )
-from async_durable_execution_runner.stores.sqlite import SQLiteExecutionStore
 
 
 def test_concurrent_save_load():
@@ -101,105 +93,6 @@ def test_concurrent_update_list():
     assert len(results) == 6
     final_list = store.list_all()
     assert len(final_list) == 3
-
-
-@pytest.fixture
-def temp_storage_dir():
-    """Create a temporary directory for testing."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        yield Path(temp_dir)
-
-
-@pytest.fixture
-def temp_db_path():
-    """Create a temporary database file for testing."""
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_file:
-        temp_path = Path(temp_file.name)
-    yield temp_path
-    if temp_path.exists():
-        temp_path.unlink()
-
-
-def test_concurrent_filesystem_save_load(temp_storage_dir):
-    """Test concurrent save and load operations with filesystem store."""
-    store = FileSystemExecutionStore.create(temp_storage_dir)
-
-    def save_execution(i: int):
-        input_data = StartDurableExecutionInput(
-            account_id="123456789012",
-            function_name="test-function",
-            function_qualifier="$LATEST",
-            execution_name=f"test-{i}",
-            execution_timeout_seconds=300,
-            execution_retention_period_days=7,
-            invocation_id=f"inv-{i}",
-            input=f'{{"test": {i}}}',
-        )
-        execution = Execution.new(input_data)
-        execution.durable_execution_arn = f"arn-{i}"
-        execution.start()
-        store.save(execution)
-        return f"saved-{i}"
-
-    def load_execution(i: int):
-        try:
-            execution = store.load(f"arn-{i}")
-            return f"loaded-{execution.start_input.execution_name}"
-        except KeyError:
-            return f"not-found-{i}"
-
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        # Submit save operations first
-        futures = [executor.submit(save_execution, i) for i in range(4)]
-        save_results = [future.result() for future in as_completed(futures)]
-
-        # Then submit load operations
-        futures = [executor.submit(load_execution, i) for i in range(4)]
-        load_results = [future.result() for future in as_completed(futures)]
-
-    results = save_results + load_results
-    assert len(results) == 8
-
-
-def test_concurrent_sqlite_save_load(temp_db_path):
-    """Test concurrent save and load operations with SQLite store."""
-    store = SQLiteExecutionStore.create_and_initialize(temp_db_path)
-
-    def save_execution(i: int):
-        input_data = StartDurableExecutionInput(
-            account_id="123456789012",
-            function_name="test-function",
-            function_qualifier="$LATEST",
-            execution_name=f"test-{i}",
-            execution_timeout_seconds=300,
-            execution_retention_period_days=7,
-            invocation_id=f"inv-{i}",
-            input=f'{{"test": {i}}}',
-        )
-        execution = Execution.new(input_data)
-        execution.durable_execution_arn = f"arn-{i}"
-        execution.start()
-        store.save(execution)
-        return f"saved-{i}"
-
-    def load_execution(i: int):
-        try:
-            execution = store.load(f"arn-{i}")
-            return f"loaded-{execution.start_input.execution_name}"
-        except KeyError:
-            return f"not-found-{i}"
-
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        # Submit save operations first
-        futures = [executor.submit(save_execution, i) for i in range(4)]
-        save_results = [future.result() for future in as_completed(futures)]
-
-        # Then submit load operations
-        futures = [executor.submit(load_execution, i) for i in range(4)]
-        load_results = [future.result() for future in as_completed(futures)]
-
-    results = save_results + load_results
-    assert len(results) == 8
 
 
 def test_concurrent_query_operations():

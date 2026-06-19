@@ -28,7 +28,6 @@ from async_durable_execution.config import (
     NestingType,
 )
 from async_durable_execution.context import (
-    OperationIdGenerator,
     get_current_context,
     reset_current_context,
     set_current_context,
@@ -1031,7 +1030,7 @@ async def test_map_item_serialize(mock_serialize, item_serdes, batch_serdes):
         )
 
     with patch.object(
-        OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+        child.OperationIdGenerator, "_create_step_id_for_logical_step", create_id
     ):
         context = create_test_context(state=mock_state)
 
@@ -1115,7 +1114,7 @@ async def test_map_item_deserialize(mock_deserialize, item_serdes, batch_serdes)
         )
 
     with patch.object(
-        OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+        child.OperationIdGenerator, "_create_step_id_for_logical_step", create_id
     ):
         context = create_test_context(state=mock_state)
 
@@ -1237,7 +1236,9 @@ async def test_map_handler_serializes_batch_result():
                 )
 
             with patch.object(
-                OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+                child.OperationIdGenerator,
+                "_create_step_id_for_logical_step",
+                create_id,
             ):
                 context = create_test_context(state=mock_state)
 
@@ -1305,7 +1306,9 @@ async def test_map_default_serdes_serializes_batch_result():
                 )
 
             with patch.object(
-                OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+                child.OperationIdGenerator,
+                "_create_step_id_for_logical_step",
+                create_id,
             ):
                 context = create_test_context(state=mock_state)
 
@@ -1378,7 +1381,9 @@ async def test_map_custom_serdes_serializes_batch_result():
                 )
 
             with patch.object(
-                OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+                child.OperationIdGenerator,
+                "_create_step_id_for_logical_step",
+                create_id,
             ):
                 context = create_test_context(state=mock_state)
 

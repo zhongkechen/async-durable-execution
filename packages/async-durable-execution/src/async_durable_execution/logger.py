@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from async_durable_execution import ValidationError
+from .exceptions import ValidationError
 from .operation.base import OperationContext
 from .context import _current_context
 from .types import (
