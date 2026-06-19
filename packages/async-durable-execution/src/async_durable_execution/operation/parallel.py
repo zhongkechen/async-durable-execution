@@ -40,6 +40,8 @@ Params = ParamSpec("Params")
 
 
 class ParallelExecutor(ConcurrentExecutor[Callable, R]):
+    """Concurrent executor used by the public `parallel()` helper."""
+
     def __init__(
         self,
         executables: list[Executable[Callable]],
@@ -152,6 +154,8 @@ async def parallel_handler(
 
 
 class ParallelSummaryGenerator:
+    """Default summary generator for oversized parallel `BatchResult` payloads."""
+
     def __call__(self, result: BatchResult) -> str:
         fields = {
             "totalCount": result.total_count,
@@ -171,6 +175,7 @@ async def parallel(
     name: str | None = None,
     config: ParallelConfig | None = None,
 ):
+    """Run multiple durable branches concurrently and return a `BatchResult`."""
     context = _get_durable_context("parallel")
     for index, function in enumerate(functions):
         target = function.func if isinstance(function, ParallelBranch) else function

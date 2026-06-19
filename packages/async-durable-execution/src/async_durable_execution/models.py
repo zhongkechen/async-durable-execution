@@ -250,6 +250,8 @@ def _serialize_value(
 
 @dataclass(frozen=True)
 class SerializableModel:
+    """Dataclass mixin for the SDK's wire-format serialization helpers."""
+
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]):
         return cls._from_mapping(data)
@@ -314,6 +316,8 @@ class SerializableModel:
 
 
 class OperationAction(Enum):
+    """State transition requested when checkpointing an operation."""
+
     START = "START"
     SUCCEED = "SUCCEED"
     FAIL = "FAIL"
@@ -322,6 +326,8 @@ class OperationAction(Enum):
 
 
 class OperationStatus(Enum):
+    """Persisted lifecycle status of an operation in execution history."""
+
     STARTED = "STARTED"
     PENDING = "PENDING"
     READY = "READY"
@@ -333,23 +339,33 @@ class OperationStatus(Enum):
 
 
 class CallbackTimeoutType(Enum):
+    """Timeout categories surfaced for callback failures."""
+
     TIMEOUT = "Callback.Timeout"
     HEARTBEAT = "Callback.Heartbeat"
 
 
 class ChainedInvokeFailedToStartType(Enum):
+    """Error type used when a durable invoke never starts remotely."""
+
     FAILED_TO_START = "ChainedInvoke.FailedToStart"
 
 
 class ChainedInvokeTimeoutType(Enum):
+    """Error type used when a durable invoke times out."""
+
     TIMEOUT = "ChainedInvoke.Timeout"
 
 
 class ChainedInvokeStopType(Enum):
+    """Error type used when a durable invoke is stopped externally."""
+
     STOPPED = "ChainedInvoke.Stopped"
 
 
 class OperationSubType(Enum):
+    """Fine-grained operation kind used in execution history."""
+
     STEP = "Step"
     WAIT = "Wait"
     CALLBACK = "Callback"
@@ -365,6 +381,8 @@ class OperationSubType(Enum):
 
 
 class OperationType(Enum):
+    """Top-level operation categories persisted by the durable backend."""
+
     EXECUTION = "EXECUTION"
     CONTEXT = "CONTEXT"
     STEP = "STEP"
@@ -424,6 +442,8 @@ class OperationIdentifier:
 
 
 class InvocationStatus(Enum):
+    """Overall result of a single durable Lambda invocation."""
+
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
     PENDING = "PENDING"
@@ -434,6 +454,8 @@ class InvocationStatus(Enum):
 
 @dataclass(frozen=True)
 class ErrorObject(SerializableModel):
+    """Serializable representation of an exception captured by the SDK."""
+
     message: str | None = field(default=None, metadata=_metadata(alias="ErrorMessage"))
     type: str | None = field(default=None, metadata=_metadata(alias="ErrorType"))
     data: str | None = field(default=None, metadata=_metadata(alias="ErrorData"))
@@ -475,12 +497,16 @@ ResultType = TypeVar("ResultType")
 
 
 class BatchItemStatus(Enum):
+    """Status of one item or branch inside a batch-style operation."""
+
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
     STARTED = "STARTED"
 
 
 class CompletionReason(Enum):
+    """Why a map or parallel operation stopped collecting results."""
+
     ALL_COMPLETED = "ALL_COMPLETED"
     MIN_SUCCESSFUL_REACHED = "MIN_SUCCESSFUL_REACHED"
     FAILURE_TOLERANCE_EXCEEDED = "FAILURE_TOLERANCE_EXCEEDED"
@@ -488,6 +514,8 @@ class CompletionReason(Enum):
 
 @dataclass(frozen=True)
 class SuspendResult:
+    """Internal helper describing whether an executor should suspend."""
+
     should_suspend: bool
     exception: SuspendExecution | None = None
 
@@ -502,6 +530,8 @@ class SuspendResult:
 
 @dataclass(frozen=True)
 class BatchItem(SerializableModel, Generic[R]):
+    """Result record for one branch or iteration in `BatchResult`."""
+
     index: int
     status: BatchItemStatus
     result: R | None = field(
@@ -515,6 +545,8 @@ class BatchItem(SerializableModel, Generic[R]):
 
 @dataclass(frozen=True)
 class BatchResult(SerializableModel, Generic[R]):  # noqa: PYI059
+    """Aggregated outcome of a `map()` or `parallel()` operation."""
+
     all: list[BatchItem[R]]
     completion_reason: CompletionReason = field(
         metadata=_metadata(alias="completionReason")
@@ -684,11 +716,15 @@ class BatchResult(SerializableModel, Generic[R]):  # noqa: PYI059
 
 @dataclass(frozen=True)
 class Executable(Generic[CallableType]):
+    """Index plus callable payload used by the concurrent executors."""
+
     index: int
     func: CallableType
 
 
 class BranchStatus(Enum):
+    """In-memory lifecycle state for a concurrently scheduled branch."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -895,6 +931,8 @@ class DurableExecutionInvocationOutput(SerializableModel):
 
 @dataclass(frozen=True)
 class ExecutionDetails(SerializableModel):
+    """Extra fields stored on the root execution operation."""
+
     input_payload: str | None = field(
         default=None,
         metadata=_metadata(alias="InputPayload", omit_if_none=False),
@@ -903,6 +941,8 @@ class ExecutionDetails(SerializableModel):
 
 @dataclass(frozen=True)
 class ContextDetails(SerializableModel):
+    """Checkpoint payload stored for child-context style operations."""
+
     replay_children: ReplayChildren = field(
         default=False, metadata=_metadata(alias="ReplayChildren")
     )
@@ -914,6 +954,8 @@ class ContextDetails(SerializableModel):
 
 @dataclass(frozen=True)
 class StepDetails(SerializableModel):
+    """Checkpoint payload stored for durable steps and polling checks."""
+
     attempt: int = field(default=0, metadata=_metadata(alias="Attempt"))
     next_attempt_timestamp: datetime.datetime | None = field(
         default=None,
@@ -931,6 +973,8 @@ class StepDetails(SerializableModel):
 
 @dataclass(frozen=True)
 class WaitDetails(SerializableModel):
+    """Checkpoint payload stored for durable waits."""
+
     scheduled_end_timestamp: datetime.datetime | None = field(
         default=None,
         metadata=_metadata(alias="ScheduledEndTimestamp", is_timestamp=True),
@@ -939,6 +983,8 @@ class WaitDetails(SerializableModel):
 
 @dataclass(frozen=True)
 class CallbackDetails(SerializableModel):
+    """Checkpoint payload stored for callbacks and callback results."""
+
     callback_id: str = field(metadata=_metadata(alias="CallbackId"))
     result: str | None = field(default=None, metadata=_metadata(alias="Result"))
     error: ErrorObject | None = field(default=None, metadata=_metadata(alias="Error"))
@@ -946,12 +992,16 @@ class CallbackDetails(SerializableModel):
 
 @dataclass(frozen=True)
 class ChainedInvokeDetails(SerializableModel):
+    """Checkpoint payload stored for durable invokes."""
+
     result: str | None = field(default=None, metadata=_metadata(alias="Result"))
     error: ErrorObject | None = field(default=None, metadata=_metadata(alias="Error"))
 
 
 @dataclass(frozen=True)
 class StepOptions(SerializableModel):
+    """Additional options recorded on step retries."""
+
     next_attempt_delay_seconds: int = field(
         default=0,
         metadata=_metadata(alias="NextAttemptDelaySeconds"),
@@ -1010,6 +1060,8 @@ class ChainedInvokeOptions(SerializableModel):
 
 @dataclass(frozen=True)
 class ContextOptions(SerializableModel):
+    """Extra flags recorded for child-context operations."""
+
     replay_children: ReplayChildren = field(
         default=False,
         metadata=_metadata(alias="ReplayChildren"),

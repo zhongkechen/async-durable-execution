@@ -347,12 +347,16 @@ class SerDesContext:
 
 
 class SerDes(ABC, Generic[T]):
+    """Abstract serializer interface for durable operation payloads and results."""
+
     @abstractmethod
     def serialize(self, value: T, serdes_context: SerDesContext) -> str:
+        """Convert a Python value into the wire format stored by the SDK."""
         pass
 
     @abstractmethod
     def deserialize(self, data: str, serdes_context: SerDesContext) -> T:
+        """Reconstruct a Python value from the durable wire format."""
         pass
 
     @staticmethod
@@ -366,6 +370,8 @@ class SerDes(ABC, Generic[T]):
 
 
 class PassThroughSerDes(SerDes[T]):
+    """Serializer that leaves already-serialized string payloads unchanged."""
+
     def serialize(self, value: T, _: SerDesContext) -> str:  # noqa: PLR6301
         return value  # type: ignore
 
@@ -374,6 +380,8 @@ class PassThroughSerDes(SerDes[T]):
 
 
 class JsonSerDes(SerDes[T]):
+    """Serializer that uses the standard library `json` module."""
+
     def serialize(self, value: T, _: SerDesContext) -> str:  # noqa: PLR6301
         return json.dumps(value)
 

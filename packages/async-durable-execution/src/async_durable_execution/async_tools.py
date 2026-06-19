@@ -24,6 +24,7 @@ _CONTEXT_PARAM_NAMES = {
 
 
 def is_async_callable(func: Callable[..., object]) -> bool:
+    """Return whether `func` can be awaited by durable operations."""
     if inspect.iscoroutinefunction(func):
         return True
     if isinstance(func, functools.partial):
@@ -38,6 +39,7 @@ def get_callable_name(
     *,
     include_original_name: bool = True,
 ) -> str | None:
+    """Best-effort name lookup used for default operation names."""
     if isinstance(func, functools.partial):
         return get_callable_name(
             func.func,
@@ -60,6 +62,7 @@ def assert_async_callable(
     *,
     label: str = "func",
 ) -> None:
+    """Validate that a durable-operation callback is asynchronous."""
     if is_async_callable(func):
         return
 
@@ -95,6 +98,7 @@ def durable_callable(
 
 
 async def invoke_callable(func: Callable[..., Awaitable[T]], *args, **kwargs) -> T:
+    """Call an async function after validating it is awaitable."""
     assert_async_callable(func)
     return await func(*args, **kwargs)
 
@@ -105,6 +109,7 @@ async def invoke_user_callable(
     *args,
     **kwargs,
 ) -> T:
+    """Invoke user code while temporarily binding the supplied durable context."""
     token = set_current_context(context)
     try:
         return await invoke_callable(
