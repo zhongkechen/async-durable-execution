@@ -19,6 +19,7 @@ __pycache__/
 
 /doc/_apidoc/
 /build
+/site/
 
 .venv
 .venv*/

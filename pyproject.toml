@@ -124,6 +124,14 @@ generate-sam-template = "python packages/async-durable-execution-examples/script
 build = "python packages/async-durable-execution-examples/scripts/build_examples.py"
 clean = "rm -rf packages/async-durable-execution-examples/build packages/async-durable-execution-examples/.aws-sam packages/async-durable-execution-examples/*.zip packages/async-durable-execution-examples/template.generated.json"
 
+[tool.hatch.envs.docs]
+workspace.members = ["packages/async-durable-execution"]
+dependencies = ["pdoc>=15,<16"]
+
+[tool.hatch.envs.docs.scripts]
+build = "pdoc async_durable_execution -o site/api"
+clean = "rm -rf site/api"
+
 [tool.ruff]
 line-length = 88
 target-version = "py310"
