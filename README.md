@@ -1,6 +1,7 @@
 # Async Durable Execution for Python
 
 [![Build](https://github.com/zhongkechen/async-durable-execution/actions/workflows/build.yml/badge.svg)](https://github.com/zhongkechen/async-durable-execution/actions/workflows/build.yml)
+[![API Docs](https://img.shields.io/badge/API%20Docs-GitHub%20Pages-0A7BBB)](https://zhongkechen.github.io/async-durable-execution/)
 [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -15,15 +16,13 @@ This fork is specifically focused on making async Python work naturally with dur
 
 ## ✨ Key Features
 
-- **Async-only user callables** - Durable handlers and user-provided durable callbacks must use `async def`
-- **Automatic checkpointing** - Resume execution after Lambda pauses or restarts
-- **Durable steps** - Run work with retry strategies and deterministic replay
-- **Waits and callbacks** - Pause for time or external signals without blocking Lambda
-- **Parallel and map operations** - Fan out work with configurable completion criteria
-- **Child contexts** - Structure complex workflows into isolated subflows
-- **Replay-safe logging** - Use standard `logging` loggers enriched by the durable context filter
-- **Local and cloud testing** - Validate workflows with the testing SDK
-- **Async Python support** - Use `async def` for handlers, steps, child contexts, callback submitters, and wait-for-condition checks
+- **Community-maintained fork of the official AWS SDK** - This repository builds on `aws/aws-durable-execution-sdk-python` and preserves the upstream Apache-2.0 notices while evolving the Python experience independently
+- **Async-first user programming model** - Unlike the official library, this fork requires user-provided durable code to use `async def` for handlers, steps, child contexts, callback submitters, and wait-for-condition checks
+- **Ergonomic async call-site helpers** - Use `@durable_callable` together with top-level awaitable operations like `step(...)`, `wait(...)`, and `run_in_child_context(...)` to keep durable workflow code explicit and natural in async Python
+- **Same durable primitives, adapted for async Python** - Checkpointed steps, waits, callbacks, parallel branches, maps, retries, and child contexts are all preserved, but tuned for an async execution style
+- **Replay-safe logging with stdlib logging** - Use standard `logging` loggers enriched by the durable context filter instead of relying on ad hoc logging patterns
+- **Monorepo with SDK, runner, and examples together** - This fork ships the execution SDK, local/cloud runner, and example workflows in one repository so development and verification stay aligned
+- **Stronger local and cloud validation workflow** - The repo includes a dedicated runner package, integration examples, and GitHub Actions automation for build, test, and generated API docs
 
 ## 📦 Packages
 
