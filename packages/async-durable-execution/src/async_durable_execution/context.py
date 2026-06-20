@@ -29,14 +29,9 @@ def get_current_context():
     current_context = _current_context.get()
     if current_context is None:
         msg = (
-            "get_context() can only be used while a durable function, step "
-            "function, wait_for_callback submitter, or wait_for_condition check "
-            "is executing."
+            "get_current_context() can only be used while a durable function, "
+            "step function, wait_for_callback submitter, or "
+            "wait_for_condition check is executing."
         )
         raise RuntimeError(msg)
     return current_context
-
-
-def get_context():
-    """Backward-compatible alias for get_current_context()."""
-    return get_current_context()
