@@ -4,6 +4,7 @@ import asyncio
 import datetime
 import json
 import logging
+import os
 import time
 from typing import Any, cast
 from unittest.mock import Mock, patch
@@ -55,6 +56,7 @@ from async_durable_execution.plugin import DurableInstrumentationPlugin
 
 
 LARGE_RESULT = "large_success" * 1024 * 1024
+os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
 
 
 async def run_handler(handler, event, lambda_context, service_client=None):
@@ -62,7 +64,7 @@ async def run_handler(handler, event, lambda_context, service_client=None):
         handler = _bind_service_client_to_handler(handler, service_client)
     if isinstance(event, DurableExecutionInvocationInput):
         event = event.to_json_dict()
-    return await handler._async_handler(event, lambda_context)
+    return await asyncio.to_thread(handler, event, lambda_context)
 
 
 async def test_durable_execution_invocation_input_from_dict():
@@ -829,7 +831,7 @@ async def test_durable_handler_whitespace_input_payload():
 
 
 async def test_durable_handler_invalid_json_input_payload():
-    """Test durable_handler raises JSONDecodeError for invalid JSON input payload."""
+    """Test invalid JSON input payloads fail the invocation with a decode error."""
     mock_client = Mock(spec=DurableServiceClient)
 
     @durable_execution
@@ -860,10 +862,12 @@ async def test_durable_handler_invalid_json_input_payload():
     lambda_context.invoked_function_arn = None
     lambda_context.tenant_id = None
 
-    with pytest.raises(json.JSONDecodeError):
-        await run_handler(
-            test_handler, invocation_input, lambda_context, service_client=mock_client
-        )
+    result = await run_handler(
+        test_handler, invocation_input, lambda_context, service_client=mock_client
+    )
+
+    assert result["Status"] == InvocationStatus.FAILED.value
+    assert result["Error"]["ErrorType"] == "JSONDecodeError"
 
 
 async def test_durable_handler_background_thread_failure():

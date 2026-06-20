@@ -4,7 +4,6 @@ import asyncio
 import functools
 import json
 import logging
-import warnings
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -15,7 +14,6 @@ from .async_tools import (
 )
 from . import DurableContext
 from .exceptions import (
-    BotoClientError,
     CheckpointError,
     ExecutionError,
     InvocationError,
@@ -38,7 +36,7 @@ from .plugin import (
     DurableInstrumentationPlugin,
     PluginExecutor,
 )
-from .state import ExecutionState, ReplayStatus
+from .state import ExecutionState
 
 
 if TYPE_CHECKING:
@@ -50,8 +48,8 @@ if TYPE_CHECKING:
         LambdaApiClient,
     )
 
+configure_durable_logger(logging.getLogger())
 logger = logging.getLogger(__name__)
-_default_logger_configured = False
 
 # 6MB in bytes, minus 50 bytes for envelope
 LAMBDA_RESPONSE_SIZE_LIMIT = 6 * 1024 * 1024 - 50
@@ -101,12 +99,17 @@ def _bind_service_client_to_handler(
     )
 
 
+@dataclass(frozen=True)
+class DurableConfig:
+    boto3_client: LambdaApiClient | None = None
+    service_client: DurableServiceClient | None = None
+    plugins: list[DurableInstrumentationPlugin] | None = None
+
+
 def durable_execution(
     func: Callable[..., Awaitable[Any]] | None = None,
-    *,
-    boto3_client: LambdaApiClient | None = None,
-    service_client: DurableServiceClient | None = None,
-    plugins: list[DurableInstrumentationPlugin] | None = None,
+    /,
+    **kwargs,
 ) -> Callable[[Any, LambdaContext], Any]:
     """
     Decorator to create a durable execution handler.
@@ -124,286 +127,218 @@ def durable_execution(
         logger.debug("Decorator called with parameters")
         return functools.partial(
             durable_execution,
-            boto3_client=boto3_client,
-            service_client=service_client,
-            plugins=plugins,
+            **kwargs,
         )
-    return _durable_execution(func, boto3_client, service_client, plugins)
-
-
-def _durable_execution(
-    func: Callable[..., Awaitable[Any]],
-    boto3_client: LambdaApiClient | None,
-    service_client: DurableServiceClient | None,
-    plugins: list[DurableInstrumentationPlugin] | None,
-) -> Callable[[Any, LambdaContext], Any]:
+    config = DurableConfig(**kwargs)
     logger.debug("Starting durable execution handler...")
     assert_async_callable(func, label="func")
+    plugin_executor = PluginExecutor(config.plugins)
 
-    if plugins:
-        warnings.warn(
-            "The 'plugins' parameter is provisional and may be altered or removed.",
-            category=FutureWarning,
-            stacklevel=2,  # point the warning to the caller of durable_execution
-        )
-
-    plugin_executor = PluginExecutor(plugins)
-
-    async def _wrapper_with_plugins(
-        event: Any, context: LambdaContext
-    ) -> MutableMapping[str, Any]:
-        with plugin_executor.run():
-            try:
-                output = await _wrapper_async(event, context)
-                await plugin_executor.on_invocation_end(
-                    output=DurableExecutionInvocationOutput.from_dict(output),
-                )
-                return output
-            except Exception as e:
-                await plugin_executor.on_invocation_end(
-                    output=DurableExecutionInvocationOutput.create_retry(
-                        ErrorObject.from_exception(e)
-                    ),
-                )
-                raise
+    # Use the explicitly provided durable client when present. Otherwise,
+    # initialize from the configured boto3 client or environment.
+    active_service_client = config.service_client or ThreadedSyncLambdaClient(
+        client=config.boto3_client
+    )
 
     @functools.wraps(func)
     def wrapper(event: Any, context: LambdaContext) -> MutableMapping[str, Any]:
-        return asyncio.run(_wrapper_with_plugins(event, context))
+        return asyncio.run(
+            _wrapper_with_plugins(
+                func, event, context, plugin_executor, active_service_client
+            )
+        ).to_dict()
 
     wrapper._async_handler = _wrapper_with_plugins  # type: ignore[attr-defined]  # noqa: SLF001
     wrapper._durable_execution_original = func  # type: ignore[attr-defined]  # noqa: SLF001
     wrapper._durable_execution_boto3_client = boto3_client  # type: ignore[attr-defined]  # noqa: SLF001
     wrapper._durable_execution_plugins = plugins  # type: ignore[attr-defined]  # noqa: SLF001
 
-    async def _wrapper_async(
-        event: Any, context: LambdaContext
-    ) -> MutableMapping[str, Any]:
-        global _default_logger_configured
-        invocation_input: DurableExecutionInvocationInput
-        active_service_client: DurableServiceClient
+    return wrapper
 
+
+async def _wrapper_with_plugins(
+    user_func: Callable[[Any, LambdaContext], Any],
+    event: Any,
+    context: LambdaContext,
+    plugin_executor: PluginExecutor,
+    service_client: DurableServiceClient,
+) -> DurableExecutionInvocationOutput:
+    with plugin_executor.run():
         try:
-            logger.debug("durableExecutionArn: %s", event.get("DurableExecutionArn"))
-            invocation_input = DurableExecutionInvocationInput.from_json_dict(event)
-        except (KeyError, TypeError, AttributeError) as e:
-            msg = (
-                "Unexpected payload provided to start the durable execution. "
-                "Check your resource configurations to confirm the durability is set."
+            output = await _wrapper_async(
+                user_func, event, context, plugin_executor, service_client
             )
-            raise ExecutionError(msg) from e
-
-        # Use the explicitly provided durable client when present. Otherwise,
-        # initialize from the configured boto3 client or environment.
-        active_service_client = service_client or ThreadedSyncLambdaClient(
-            client=boto3_client
-        )
-
-        execution_state: ExecutionState = ExecutionState(
-            durable_execution_arn=invocation_input.durable_execution_arn,
-            initial_checkpoint_token=invocation_input.checkpoint_token,
-            operations={},
-            service_client=active_service_client,
-            replay_status=ReplayStatus.NEW,
-            plugin_executor=plugin_executor,
-        )
-
-        try:
-            await execution_state._fetch_paginated_operations_async(
-                invocation_input.initial_execution_state.operations,
-                invocation_input.checkpoint_token,
-                invocation_input.initial_execution_state.next_marker,
+            await plugin_executor.on_invocation_end(
+                output=output,
             )
-        except BotoClientError as e:
-            # Non-retryable Durable API errors (e.g., customer configuration issues,
-            # 4xx client errors) will never succeed on retry — fail the execution immediately.
-            if not e.is_retryable():
-                logger.exception(
-                    "Non-retryable Durable API error during initial state fetch. Must fail execution "
-                    "without retry.",
-                    extra=e.build_logger_extras(),
-                )
-                return DurableExecutionInvocationOutput(
-                    status=InvocationStatus.FAILED,
-                    error=ErrorObject.from_exception(e),
-                ).to_dict()
+            return output
+        except Exception as e:
+            await plugin_executor.on_invocation_end(
+                output=DurableExecutionInvocationOutput.create_retry(
+                    ErrorObject.from_exception(e)
+                ),
+            )
             raise
 
-        execution_state.mark_replaying_if_prior_operations_exist()
 
-        raw_input_payload: str | None = execution_state.get_input_payload()
+def deserialize_input(event: Any) -> DurableExecutionInvocationInput:
+    try:
+        logger.debug("durableExecutionArn: %s", event.get("DurableExecutionArn"))
+        return DurableExecutionInvocationInput.from_json_dict(event)
+    except (KeyError, TypeError, AttributeError) as e:
+        msg = (
+            "Unexpected payload provided to start the durable execution. "
+            "Check your resource configurations to confirm the durability is set."
+        )
+        raise ExecutionError(msg) from e
 
-        # Python RIC LambdaMarshaller just uses standard json deserialization for event
-        # https://github.com/aws/aws-lambda-python-runtime-interface-client/blob/main/awslambdaric/lambda_runtime_marshaller.py#L46
-        input_event: MutableMapping[str, Any] = {}
-        if raw_input_payload and raw_input_payload.strip():
-            try:
-                input_event = json.loads(raw_input_payload)
-            except json.JSONDecodeError:
-                logger.exception(
-                    "Failed to parse input payload as JSON: payload: %r",
-                    raw_input_payload,
-                )
-                raise
 
-        durable_context: DurableContext = DurableContext(
+async def _wrapper_async(
+    user_func: Callable[[Any, LambdaContext], Any],
+    event: Any,
+    context: LambdaContext,
+    plugin_executor: PluginExecutor,
+    service_client: DurableServiceClient,
+) -> DurableExecutionInvocationOutput:
+    invocation_input = deserialize_input(event)
+    execution_state: ExecutionState = ExecutionState(
+        durable_execution_arn=invocation_input.durable_execution_arn,
+        initial_checkpoint_token=invocation_input.checkpoint_token,
+        service_client=service_client,
+        plugin_executor=plugin_executor,
+    )
+
+    try:
+        await execution_state.initialize(invocation_input)
+
+        input_event = execution_state.get_input_event()
+
+        root_context = DurableContext(
             execution_state=execution_state,
             operation_identifier=OperationIdentifier.create_execution_op(),
             lambda_context=context,
         )
-        if not _default_logger_configured:
-            configure_durable_logger(logging.getLogger())
-            _default_logger_configured = True
 
+        execution_operation = execution_state.get_execution_operation()
+        if execution_operation is None:
+            msg = "Execution state is missing the root execution operation."
+            raise RuntimeError(msg)
+        # execute the plugins
+        await plugin_executor.on_invocation_start(
+            execution_arn=invocation_input.durable_execution_arn,
+            lambda_context=context,
+            execution_start_time=execution_operation.start_timestamp,
+            is_first_invocation=not execution_state.is_replaying(),
+        )
+        execution_state.start_checkpointing()
+
+        logger.debug("execution arn:", invocation_input.durable_execution_arn)
+
+        result = await invoke_user_callable(
+            root_context,
+            user_func,
+            input_event,
+            context,
+        )
+        return await handle_user_function_result(execution_state, result)
+
+    except SuspendExecution:
+        logger.debug("Suspending execution...")
+        return DurableExecutionInvocationOutput(status=InvocationStatus.PENDING)
+    except Exception as e:
+        return await handle_user_function_exception(execution_state, e)
+    finally:
+        await execution_state.aclose()
+
+
+async def handle_user_function_result(
+    execution_state, result
+) -> DurableExecutionInvocationOutput:
+    # done with userland
+    serialized_result = json.dumps(result)
+    # large response handling here. Remember if checkpointing to complete, NOT to include
+    # payload in response
+    if serialized_result and len(serialized_result) > LAMBDA_RESPONSE_SIZE_LIMIT:
+        logger.debug(
+            "Response size (%s bytes) exceeds Lambda limit (%s) bytes). Checkpointing result.",
+            len(serialized_result),
+            LAMBDA_RESPONSE_SIZE_LIMIT,
+        )
+        success_operation = OperationUpdate.create_execution_succeed(
+            payload=serialized_result
+        )
+        # Checkpoint large result with blocking (is_sync=True, default).
+        # Must ensure the result is persisted before returning to Lambda.
+        # Large results exceed Lambda response limits and must be stored durably
+        # before the execution completes.
+        await execution_state.create_checkpoint(success_operation, is_sync=True)
+
+        return DurableExecutionInvocationOutput.create_succeeded(result="")
+    return DurableExecutionInvocationOutput.create_succeeded(result=serialized_result)
+
+
+async def handle_user_function_exception(
+    execution_state, e: Exception
+) -> DurableExecutionInvocationOutput:
+    if isinstance(e, CheckpointError):
+        return handle_checkpoint_error(e)
+    if isinstance(e, InvocationError):
+        # Non-retryable Durable API errors (e.g., customer configuration issues,
+        # 4xx client errors) will never succeed on retry — fail the execution immediately.
+        if not e.is_retryable():
+            logger.exception(
+                "Non-retryable Durable API error. Must fail execution without retry.",
+                extra=e.build_logger_extras(),  # type: ignore[attr-defined]
+            )
+            return DurableExecutionInvocationOutput(
+                status=InvocationStatus.FAILED,
+                error=ErrorObject.from_exception(e),
+            )
+        logger.exception("Invocation error. Must terminate.")
+        # Throw the error to trigger Lambda retry
+        raise
+    if isinstance(e, ExecutionError):
+        logger.exception("Execution error. Must fail execution without retry.")
+        return DurableExecutionInvocationOutput(
+            status=InvocationStatus.FAILED,
+            error=ErrorObject.from_exception(e),
+        )
+
+    # all user-space errors go here
+    logger.exception("Execution failed")
+
+    result = DurableExecutionInvocationOutput(
+        status=InvocationStatus.FAILED, error=ErrorObject.from_exception(e)
+    )
+
+    serialized_result = json.dumps(result.to_dict())
+
+    if serialized_result and len(serialized_result) > LAMBDA_RESPONSE_SIZE_LIMIT:
+        logger.debug(
+            "Response size (%s bytes) exceeds Lambda limit (%s) bytes). Checkpointing result.",
+            len(serialized_result),
+            LAMBDA_RESPONSE_SIZE_LIMIT,
+        )
+        failed_operation = OperationUpdate.create_execution_fail(
+            error=ErrorObject.from_exception(e)
+        )
+
+        # Checkpoint large result with blocking (is_sync=True, default).
+        # Must ensure the result is persisted before returning to Lambda.
+        # Large results exceed Lambda response limits and must be stored durably
+        # before the execution completes.
         try:
-            execution_operation = execution_state.get_execution_operation()
-            if execution_operation is None:
-                msg = "Execution state is missing the root execution operation."
-                raise RuntimeError(msg)
-            # execute the plugins
-            await plugin_executor.on_invocation_start(
-                execution_arn=invocation_input.durable_execution_arn,
-                lambda_context=context,
-                execution_start_time=execution_operation.start_timestamp,
-                is_first_invocation=not execution_state.is_replaying(),
-            )
-            execution_state.start_checkpointing()
-
-            logger.debug(
-                "%s entering user-space...", invocation_input.durable_execution_arn
-            )
-
-            logger.debug(
-                "%s waiting for user code completion...",
-                invocation_input.durable_execution_arn,
-            )
-
-            try:
-                result = await invoke_user_callable(
-                    durable_context,
-                    func,
-                    input_event,
-                    context,
-                )
-
-                # done with userland
-                logger.debug(
-                    "%s exiting user-space...",
-                    invocation_input.durable_execution_arn,
-                )
-                serialized_result = json.dumps(result)
-                # large response handling here. Remember if checkpointing to complete, NOT to include
-                # payload in response
-                if (
-                    serialized_result
-                    and len(serialized_result) > LAMBDA_RESPONSE_SIZE_LIMIT
-                ):
-                    logger.debug(
-                        "Response size (%s bytes) exceeds Lambda limit (%s) bytes). Checkpointing result.",
-                        len(serialized_result),
-                        LAMBDA_RESPONSE_SIZE_LIMIT,
-                    )
-                    success_operation = OperationUpdate.create_execution_succeed(
-                        payload=serialized_result
-                    )
-                    # Checkpoint large result with blocking (is_sync=True, default).
-                    # Must ensure the result is persisted before returning to Lambda.
-                    # Large results exceed Lambda response limits and must be stored durably
-                    # before the execution completes.
-                    try:
-                        await execution_state.create_checkpoint(
-                            success_operation, is_sync=True
-                        )
-                    except CheckpointError as e:
-                        return handle_checkpoint_error(e).to_dict()
-                    return DurableExecutionInvocationOutput.create_succeeded(
-                        result=""
-                    ).to_dict()
-
-                return DurableExecutionInvocationOutput.create_succeeded(
-                    result=serialized_result
-                ).to_dict()
-
-            except SuspendExecution:
-                logger.debug("Suspending execution...")
-                return DurableExecutionInvocationOutput(
-                    status=InvocationStatus.PENDING
-                ).to_dict()
-
-            except CheckpointError as e:
-                # Checkpoint system is broken - stop background thread and exit immediately
-                logger.exception(
-                    "Checkpoint system failed",
-                    extra=e.build_logger_extras(),
-                )
-                return handle_checkpoint_error(e).to_dict()
-            except InvocationError as e:
-                # Non-retryable Durable API errors (e.g., customer configuration issues,
-                # 4xx client errors) will never succeed on retry — fail the execution immediately.
-                if not e.is_retryable():
-                    logger.exception(
-                        "Non-retryable Durable API error. Must fail execution without retry.",
-                        extra=e.build_logger_extras(),  # type: ignore[attr-defined]
-                    )
-                    return DurableExecutionInvocationOutput(
-                        status=InvocationStatus.FAILED,
-                        error=ErrorObject.from_exception(e),
-                    ).to_dict()
-                logger.exception("Invocation error. Must terminate.")
-                # Throw the error to trigger Lambda retry
-                raise
-            except ExecutionError as e:
-                logger.exception("Execution error. Must fail execution without retry.")
-                return DurableExecutionInvocationOutput(
-                    status=InvocationStatus.FAILED,
-                    error=ErrorObject.from_exception(e),
-                ).to_dict()
-            except Exception as e:
-                # all user-space errors go here
-                logger.exception("Execution failed")
-
-                result = DurableExecutionInvocationOutput(
-                    status=InvocationStatus.FAILED, error=ErrorObject.from_exception(e)
-                ).to_dict()
-
-                serialized_result = json.dumps(result)
-
-                if (
-                    serialized_result
-                    and len(serialized_result) > LAMBDA_RESPONSE_SIZE_LIMIT
-                ):
-                    logger.debug(
-                        "Response size (%s bytes) exceeds Lambda limit (%s) bytes). Checkpointing result.",
-                        len(serialized_result),
-                        LAMBDA_RESPONSE_SIZE_LIMIT,
-                    )
-                    failed_operation = OperationUpdate.create_execution_fail(
-                        error=ErrorObject.from_exception(e)
-                    )
-
-                    # Checkpoint large result with blocking (is_sync=True, default).
-                    # Must ensure the result is persisted before returning to Lambda.
-                    # Large results exceed Lambda response limits and must be stored durably
-                    # before the execution completes.
-                    try:
-                        await execution_state.create_checkpoint(
-                            failed_operation, is_sync=True
-                        )
-                    except CheckpointError as e:
-                        return handle_checkpoint_error(e).to_dict()
-                    return DurableExecutionInvocationOutput(
-                        status=InvocationStatus.FAILED
-                    ).to_dict()
-
-                return result
-        finally:
-            await execution_state.aclose()
-
-    return wrapper
+            await execution_state.create_checkpoint(failed_operation, is_sync=True)
+        except CheckpointError as e:
+            return handle_checkpoint_error(e)
+        return DurableExecutionInvocationOutput(status=InvocationStatus.FAILED)
+    return result
 
 
 def handle_checkpoint_error(error: CheckpointError) -> DurableExecutionInvocationOutput:
     """Convert checkpoint failures into a final result or retry trigger."""
+    # Checkpoint system is broken - stop background thread and exit immediately
+    logger.exception("Checkpoint system failed", extra=error.build_logger_extras())
     if error.is_retryable():
         raise error from None  # Terminate Lambda immediately and have it be retried
     return DurableExecutionInvocationOutput(

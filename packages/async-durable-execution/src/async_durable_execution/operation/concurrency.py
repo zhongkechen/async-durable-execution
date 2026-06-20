@@ -229,7 +229,7 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
         async def resubmitter(
             executable_with_state: ExecutableWithState[CallableType, ResultType],
         ) -> None:
-            await execution_state._create_checkpoint_async(is_sync=False)
+            await execution_state.create_checkpoint(is_sync=False)
             await submit_task(executable_with_state)
 
         async with TimerScheduler(resubmitter) as scheduler:

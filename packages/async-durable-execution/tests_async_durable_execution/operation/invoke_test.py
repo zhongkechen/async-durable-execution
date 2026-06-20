@@ -96,7 +96,7 @@ async def test_invoke_handler_already_succeeded():
     )
 
     assert result == "test_result"
-    mock_state._create_checkpoint_async.assert_not_called()
+    mock_state.create_checkpoint.assert_not_called()
 
 
 async def test_invoke_handler_already_succeeded_none_result():
@@ -303,10 +303,8 @@ async def test_invoke_handler_new_operation():
         )
 
     # Verify checkpoint was created
-    mock_state._create_checkpoint_async.assert_called_once()
-    operation_update = mock_state._create_checkpoint_async.call_args[1][
-        "operation_update"
-    ]
+    mock_state.create_checkpoint.assert_called_once()
+    operation_update = mock_state.create_checkpoint.call_args[1]["operation_update"]
 
     assert operation_update.operation_id == "invoke8"
     assert operation_update.operation_type == OperationType.CHAINED_INVOKE
@@ -398,9 +396,7 @@ async def test_invoke_handler_no_config():
         )
 
     # Verify default config was used
-    operation_update = mock_state._create_checkpoint_async.call_args[1][
-        "operation_update"
-    ]
+    operation_update = mock_state.create_checkpoint.call_args[1]["operation_update"]
     chained_invoke_options = operation_update.to_dict()["ChainedInvokeOptions"]
     assert chained_invoke_options["FunctionName"] == "test_function"
     # tenant_id should be None when not specified
@@ -472,9 +468,7 @@ async def test_invoke_handler_custom_serdes_new_operation():
         )
 
     # Verify custom serialization was used
-    operation_update = mock_state._create_checkpoint_async.call_args[1][
-        "operation_update"
-    ]
+    operation_update = mock_state.create_checkpoint.call_args[1]["operation_update"]
     expected_serialized = '{"key": "VALUE", "number": "84", "list": [1, 2, 3]}'
     assert operation_update.payload == expected_serialized
 
@@ -591,10 +585,8 @@ async def test_invoke_handler_with_none_payload():
         )
 
     # Verify checkpoint was created with None payload
-    mock_state._create_checkpoint_async.assert_called_once()
-    operation_update = mock_state._create_checkpoint_async.call_args[1][
-        "operation_update"
-    ]
+    mock_state.create_checkpoint.assert_called_once()
+    operation_update = mock_state.create_checkpoint.call_args[1]["operation_update"]
     assert operation_update.payload == "null"  # JSON serialization of None
 
 
@@ -623,7 +615,7 @@ async def test_invoke_handler_already_succeeded_with_none_payload():
     )
 
     assert result == "test_result"
-    mock_state._create_checkpoint_async.assert_not_called()
+    mock_state.create_checkpoint.assert_not_called()
 
 
 @patch("async_durable_execution.operation.invoke.suspend_with_optional_resume_delay")
@@ -690,10 +682,8 @@ async def test_invoke_handler_with_tenant_id():
         )
 
     # Verify checkpoint was called with tenant_id
-    mock_state._create_checkpoint_async.assert_called_once()
-    operation_update = mock_state._create_checkpoint_async.call_args[1][
-        "operation_update"
-    ]
+    mock_state.create_checkpoint.assert_called_once()
+    operation_update = mock_state.create_checkpoint.call_args[1]["operation_update"]
     chained_invoke_options = operation_update.to_dict()["ChainedInvokeOptions"]
     assert chained_invoke_options["FunctionName"] == "test_function"
     assert chained_invoke_options["TenantId"] == "test-tenant-123"
@@ -727,10 +717,8 @@ async def test_invoke_handler_without_tenant_id():
         )
 
     # Verify checkpoint was called without tenant_id
-    mock_state._create_checkpoint_async.assert_called_once()
-    operation_update = mock_state._create_checkpoint_async.call_args[1][
-        "operation_update"
-    ]
+    mock_state.create_checkpoint.assert_called_once()
+    operation_update = mock_state.create_checkpoint.call_args[1]["operation_update"]
     chained_invoke_options = operation_update.to_dict()["ChainedInvokeOptions"]
     assert chained_invoke_options["FunctionName"] == "test_function"
     assert "TenantId" not in chained_invoke_options
@@ -762,10 +750,8 @@ async def test_invoke_handler_default_config_no_tenant_id():
         )
 
     # Verify checkpoint was called without tenant_id
-    mock_state._create_checkpoint_async.assert_called_once()
-    operation_update = mock_state._create_checkpoint_async.call_args[1][
-        "operation_update"
-    ]
+    mock_state.create_checkpoint.assert_called_once()
+    operation_update = mock_state.create_checkpoint.call_args[1]["operation_update"]
     chained_invoke_options = operation_update.to_dict()["ChainedInvokeOptions"]
     assert chained_invoke_options["FunctionName"] == "test_function"
     assert "TenantId" not in chained_invoke_options
@@ -800,9 +786,7 @@ async def test_invoke_handler_defaults_to_json_serdes():
         )
 
     # Verify JSON serialization was used (not extended types)
-    operation_update = mock_state._create_checkpoint_async.call_args[1][
-        "operation_update"
-    ]
+    operation_update = mock_state.create_checkpoint.call_args[1]["operation_update"]
     assert operation_update.payload == json.dumps(payload)
 
 
@@ -905,8 +889,8 @@ async def test_invoke_immediate_response_create_checkpoint_with_is_sync_true():
         )
 
     # Verify create_checkpoint was called with is_sync=True
-    mock_state._create_checkpoint_async.assert_called_once()
-    call_kwargs = mock_state._create_checkpoint_async.call_args[1]
+    mock_state.create_checkpoint.assert_called_once()
+    call_kwargs = mock_state.create_checkpoint.call_args[1]
     assert call_kwargs["is_sync"] is True
 
 
@@ -945,7 +929,7 @@ async def test_invoke_immediate_response_immediate_success():
     # Verify result was returned without suspend
     assert result == "immediate_result"
     # Verify checkpoint was created
-    mock_state._create_checkpoint_async.assert_called_once()
+    mock_state.create_checkpoint.assert_called_once()
     # Verify get_checkpoint_result was called twice
     assert mock_state.operations.get.call_count == 2
 
@@ -1024,7 +1008,7 @@ async def test_invoke_immediate_response_immediate_failure(status: OperationStat
         )
 
     # Verify checkpoint was created
-    mock_state._create_checkpoint_async.assert_called_once()
+    mock_state.create_checkpoint.assert_called_once()
     # Verify get_checkpoint_result was called twice
     assert mock_state.operations.get.call_count == 2
 
@@ -1063,7 +1047,7 @@ async def test_invoke_immediate_response_no_immediate_response():
         )
 
     # Verify checkpoint was created
-    mock_state._create_checkpoint_async.assert_called_once()
+    mock_state.create_checkpoint.assert_called_once()
     # Verify get_checkpoint_result was called twice
     assert mock_state.operations.get.call_count == 2
 
@@ -1102,7 +1086,7 @@ async def test_invoke_immediate_response_already_completed():
     # Verify result was returned
     assert result == "existing_result"
     # Verify no checkpoint was created
-    mock_state._create_checkpoint_async.assert_not_called()
+    mock_state.create_checkpoint.assert_not_called()
     # Verify get_checkpoint_result was called only once
     assert mock_state.operations.get.call_count == 1
 
@@ -1254,7 +1238,7 @@ async def test_invoke_suspends_when_second_check_returns_started():
 
     # Assert - behaves like "old way"
     assert mock_state.operations.get.call_count == 2  # Double-check happened
-    mock_state._create_checkpoint_async.assert_called_once()  # START checkpoint created
+    mock_state.create_checkpoint.assert_called_once()  # START checkpoint created
 
 
 async def test_invoke_suspends_when_second_check_returns_started_duplicate():
@@ -1290,4 +1274,4 @@ async def test_invoke_suspends_when_second_check_returns_started_duplicate():
 
     # Assert - behaves like "old way"
     assert mock_state.operations.get.call_count == 2  # Double-check happened
-    mock_state._create_checkpoint_async.assert_called_once()  # START checkpoint created
+    mock_state.create_checkpoint.assert_called_once()  # START checkpoint created

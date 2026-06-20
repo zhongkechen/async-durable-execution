@@ -63,7 +63,6 @@ def _make_state(
     return ExecutionState(
         durable_execution_arn="test-arn",
         initial_checkpoint_token="token-0",  # noqa: S106
-        operations={},
         service_client=mock_client,
         batcher_config=config,
         plugin_executor=PluginExecutor([]),

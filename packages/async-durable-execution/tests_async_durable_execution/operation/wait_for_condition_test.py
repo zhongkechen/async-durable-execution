@@ -140,7 +140,7 @@ async def test_wait_for_condition_first_execution_condition_met():
     )
 
     assert result == 6
-    assert mock_state._create_checkpoint_async.call_count == 2  # START and SUCCESS
+    assert mock_state.create_checkpoint.call_count == 2  # START and SUCCESS
 
 
 async def test_wait_for_condition_first_execution_condition_not_met():
@@ -173,7 +173,7 @@ async def test_wait_for_condition_first_execution_condition_not_met():
             config=config,
         )
 
-    assert mock_state._create_checkpoint_async.call_count == 2  # START and RETRY
+    assert mock_state.create_checkpoint.call_count == 2  # START and RETRY
 
 
 async def test_wait_for_condition_already_succeeded():
@@ -212,7 +212,7 @@ async def test_wait_for_condition_already_succeeded():
     )
 
     assert result == 42
-    assert mock_state._create_checkpoint_async.call_count == 0  # No new checkpoints
+    assert mock_state.create_checkpoint.call_count == 0  # No new checkpoints
 
 
 async def test_wait_for_condition_already_succeeded_none_result():
@@ -329,7 +329,7 @@ async def test_wait_for_condition_retry_with_state():
     )
 
     assert result == 11  # 10 (from checkpoint) + 1
-    assert mock_state._create_checkpoint_async.call_count == 1  # Only SUCCESS
+    assert mock_state.create_checkpoint.call_count == 1  # Only SUCCESS
 
 
 async def test_wait_for_condition_retry_without_state():
@@ -441,7 +441,7 @@ async def test_wait_for_condition_check_function_exception():
             config=config,
         )
 
-    assert mock_state._create_checkpoint_async.call_count == 2  # START and FAIL
+    assert mock_state.create_checkpoint.call_count == 2  # START and FAIL
 
 
 async def test_wait_for_condition_check_context():
@@ -933,7 +933,7 @@ async def test_wait_for_condition_custom_serdes_first_execution_condition_met():
         '{"key": "VALUE", "number": "84", "list": [1, 2, 3]}'
     )
 
-    success_call = mock_state._create_checkpoint_async.call_args_list[1]
+    success_call = mock_state.create_checkpoint.call_args_list[1]
     success_operation = success_call[1]["operation_update"]
     assert success_operation.payload == expected_checkpoointed_result
 
@@ -1098,8 +1098,8 @@ async def test_wait_for_condition_checkpoint_called_once_with_is_sync_false():
     assert mock_state.operations.get.call_count == 1
 
     # Verify create_checkpoint called with is_sync=False
-    assert mock_state._create_checkpoint_async.call_count == 2  # START and SUCCESS
-    start_call = mock_state._create_checkpoint_async.call_args_list[0]
+    assert mock_state.create_checkpoint.call_count == 2  # START and SUCCESS
+    start_call = mock_state.create_checkpoint.call_args_list[0]
     assert start_call[1]["is_sync"] is False
 
 
@@ -1141,7 +1141,7 @@ async def test_wait_for_condition_immediate_success_without_executing_check():
     # Verify result returned without executing check function
     assert result == 42
     # Verify no new checkpoints created
-    assert mock_state._create_checkpoint_async.call_count == 0
+    assert mock_state.create_checkpoint.call_count == 0
 
 
 async def test_wait_for_condition_immediate_failure_without_executing_check():
@@ -1184,7 +1184,7 @@ async def test_wait_for_condition_immediate_failure_without_executing_check():
         )
 
     # Verify no new checkpoints created
-    assert mock_state._create_checkpoint_async.call_count == 0
+    assert mock_state.create_checkpoint.call_count == 0
 
 
 async def test_wait_for_condition_pending_suspends_without_executing_check():
@@ -1233,7 +1233,7 @@ async def test_wait_for_condition_pending_suspends_without_executing_check():
         )
 
     # Verify no new checkpoints created
-    assert mock_state._create_checkpoint_async.call_count == 0
+    assert mock_state.create_checkpoint.call_count == 0
 
 
 async def test_wait_for_condition_no_checkpoint_executes_check_function():
@@ -1274,7 +1274,7 @@ async def test_wait_for_condition_no_checkpoint_executes_check_function():
     assert result == 6
 
     # Verify checkpoints created (START and SUCCESS)
-    assert mock_state._create_checkpoint_async.call_count == 2
+    assert mock_state.create_checkpoint.call_count == 2
 
 
 async def test_wait_for_condition_already_completed_no_checkpoint_created():
@@ -1314,7 +1314,7 @@ async def test_wait_for_condition_already_completed_no_checkpoint_created():
     assert result == 42
 
     # Verify NO checkpoints created (already completed)
-    assert mock_state._create_checkpoint_async.call_count == 0
+    assert mock_state.create_checkpoint.call_count == 0
 
 
 async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal():
@@ -1356,9 +1356,7 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal():
     mock_check_function.assert_called_once()  # Check function executed
     assert result == "final_state"
     assert mock_state.operations.get.call_count == 1  # Single check (async)
-    assert (
-        mock_state._create_checkpoint_async.call_count == 2
-    )  # START + SUCCESS checkpoints
+    assert mock_state.create_checkpoint.call_count == 2  # START + SUCCESS checkpoints
 
 
 async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal_duplicate():
@@ -1398,9 +1396,7 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal_du
     mock_check_function.assert_called_once()  # Check function executed
     assert result == "final_state"
     assert mock_state.operations.get.call_count == 1  # Single check (async)
-    assert (
-        mock_state._create_checkpoint_async.call_count == 2
-    )  # START + SUCCESS checkpoints
+    assert mock_state.create_checkpoint.call_count == 2  # START + SUCCESS checkpoints
 
 
 def test_wait_strategy_builder_defaults():

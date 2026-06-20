@@ -77,7 +77,7 @@ def create_execution_state():
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
     state.create_checkpoint = AsyncMock()
-    state._create_checkpoint_async = AsyncMock()
+    state.create_checkpoint = AsyncMock()
     state.wrap_user_function = _wrap_user_function_for_test
     state.track_replay = Mock()
     state.operations.get.return_value = create_checkpoint_result()
@@ -2621,7 +2621,7 @@ async def test_concurrent_executor_replay_with_succeeded_operations():
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
     mock_execution_state.wrap_user_function = _wrap_user_function_for_test
-    mock_execution_state._create_checkpoint_async = AsyncMock()
+    mock_execution_state.create_checkpoint = AsyncMock()
 
     def mock_get_checkpoint_result(operation_id):
         mock_result = Mock()

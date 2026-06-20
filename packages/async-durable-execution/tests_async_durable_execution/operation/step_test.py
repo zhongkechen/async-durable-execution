@@ -140,7 +140,7 @@ async def test_step_handler_already_succeeded():
 
     assert result == "test_result"
     mock_callable.assert_not_called()
-    mock_state._create_checkpoint_async.assert_not_called()
+    mock_state.create_checkpoint.assert_not_called()
 
 
 async def test_step_handler_already_succeeded_none_result():
@@ -276,10 +276,10 @@ async def test_step_handler_success_at_least_once():
 
     assert result == "success_result"
 
-    assert mock_state._create_checkpoint_async.call_count == 2
+    assert mock_state.create_checkpoint.call_count == 2
 
     # Verify start checkpoint
-    start_call = mock_state._create_checkpoint_async.call_args_list[0]
+    start_call = mock_state.create_checkpoint.call_args_list[0]
     start_operation = start_call[1]["operation_update"]
     assert start_operation.operation_id == "step6"
     assert start_operation.operation_type is OperationType.STEP
@@ -287,7 +287,7 @@ async def test_step_handler_success_at_least_once():
     assert start_operation.action is OperationAction.START
 
     # Verify success checkpoint
-    success_call = mock_state._create_checkpoint_async.call_args_list[1]
+    success_call = mock_state.create_checkpoint.call_args_list[1]
     success_operation = success_call[1]["operation_update"]
     assert success_operation.operation_id == "step6"
     assert success_operation.payload == json.dumps("success_result")
@@ -386,10 +386,10 @@ async def test_step_handler_success_at_most_once():
 
     assert result == "success_result"
 
-    assert mock_state._create_checkpoint_async.call_count == 2
+    assert mock_state.create_checkpoint.call_count == 2
 
     # Verify start checkpoint
-    start_call = mock_state._create_checkpoint_async.call_args_list[0]
+    start_call = mock_state.create_checkpoint.call_args_list[0]
     start_operation = start_call[1]["operation_update"]
     assert start_operation.operation_id == "step7"
     assert start_operation.name == "test_step"
@@ -398,7 +398,7 @@ async def test_step_handler_success_at_most_once():
     assert start_operation.action is OperationAction.START
 
     # Verify success checkpoint
-    success_call = mock_state._create_checkpoint_async.call_args_list[1]
+    success_call = mock_state.create_checkpoint.call_args_list[1]
     success_operation = success_call[1]["operation_update"]
     assert success_operation.payload == json.dumps("success_result")
     assert success_operation.operation_type is OperationType.STEP
@@ -449,10 +449,10 @@ async def test_step_handler_retry_success():
             config,
         )
 
-    assert mock_state._create_checkpoint_async.call_count == 2
+    assert mock_state.create_checkpoint.call_count == 2
 
     # Verify start checkpoint
-    start_call = mock_state._create_checkpoint_async.call_args_list[0]
+    start_call = mock_state.create_checkpoint.call_args_list[0]
     start_operation = start_call[1]["operation_update"]
     assert start_operation.operation_id == "step9"
     assert start_operation.operation_type is OperationType.STEP
@@ -460,7 +460,7 @@ async def test_step_handler_retry_success():
     assert start_operation.action is OperationAction.START
 
     # Verify retry checkpoint
-    retry_call = mock_state._create_checkpoint_async.call_args_list[1]
+    retry_call = mock_state.create_checkpoint.call_args_list[1]
     retry_operation = retry_call[1]["operation_update"]
     assert retry_operation.operation_id == "step9"
     assert retry_operation.operation_type is OperationType.STEP
@@ -491,10 +491,10 @@ async def test_step_handler_retry_exhausted():
             config,
         )
 
-    assert mock_state._create_checkpoint_async.call_count == 2
+    assert mock_state.create_checkpoint.call_count == 2
 
     # Verify start checkpoint
-    start_call = mock_state._create_checkpoint_async.call_args_list[0]
+    start_call = mock_state.create_checkpoint.call_args_list[0]
     start_operation = start_call[1]["operation_update"]
     assert start_operation.operation_id == "step10"
     assert start_operation.operation_type is OperationType.STEP
@@ -502,7 +502,7 @@ async def test_step_handler_retry_exhausted():
     assert start_operation.action is OperationAction.START
 
     # Verify fail checkpoint
-    fail_call = mock_state._create_checkpoint_async.call_args_list[1]
+    fail_call = mock_state.create_checkpoint.call_args_list[1]
     fail_operation = fail_call[1]["operation_update"]
     assert fail_operation.operation_id == "step10"
     assert fail_operation.operation_type is OperationType.STEP
@@ -671,7 +671,7 @@ async def test_step_handler_custom_serdes_success():
         '{"key": "VALUE", "number": "84", "list": [1, 2, 3]}'
     )
 
-    success_call = mock_state._create_checkpoint_async.call_args_list[1]
+    success_call = mock_state.create_checkpoint.call_args_list[1]
     success_operation = success_call[1]["operation_update"]
     assert success_operation.payload == expected_checkpoointed_result
 
@@ -773,7 +773,7 @@ async def test_step_immediate_response_create_checkpoint_sync_at_most_once():
     )
 
     # Verify START checkpoint was created with is_sync=True
-    start_call = mock_state._create_checkpoint_async.call_args_list[0]
+    start_call = mock_state.create_checkpoint.call_args_list[0]
     assert start_call[1]["is_sync"] is True
 
 
@@ -801,7 +801,7 @@ async def test_step_immediate_response_create_checkpoint_async_at_least_once():
     )
 
     # Verify START checkpoint was created with is_sync=False
-    start_call = mock_state._create_checkpoint_async.call_args_list[0]
+    start_call = mock_state.create_checkpoint.call_args_list[0]
     assert start_call[1]["is_sync"] is False
 
 
@@ -844,7 +844,7 @@ async def test_step_immediate_response_immediate_success():
     assert result == "immediate_success_result"
     mock_callable.assert_called_once()
     # Both START and SUCCEED checkpoints should be created
-    assert mock_state._create_checkpoint_async.call_count == 2
+    assert mock_state.create_checkpoint.call_count == 2
 
 
 async def test_step_immediate_response_immediate_failure():
@@ -892,7 +892,7 @@ async def test_step_immediate_response_immediate_failure():
 
     mock_callable.assert_called_once()
     # Both START and FAIL checkpoints should be created
-    assert mock_state._create_checkpoint_async.call_count == 2
+    assert mock_state.create_checkpoint.call_count == 2
 
 
 async def test_step_immediate_response_no_immediate_response():
@@ -930,7 +930,7 @@ async def test_step_immediate_response_no_immediate_response():
     assert result == "normal_execution_result"
     mock_callable.assert_called_once()
     # Both START and SUCCEED checkpoints should be created
-    assert mock_state._create_checkpoint_async.call_count == 2
+    assert mock_state.create_checkpoint.call_count == 2
 
 
 async def test_step_immediate_response_already_completed():
@@ -964,7 +964,7 @@ async def test_step_immediate_response_already_completed():
     # Verify operation returned immediately without creating checkpoint
     assert result == "already_completed_result"
     mock_callable.assert_not_called()
-    mock_state._create_checkpoint_async.assert_not_called()
+    mock_state.create_checkpoint.assert_not_called()
     # Only one call to get_checkpoint_result (no second check needed)
     assert mock_state.operations.get.call_count == 1
 
@@ -1006,9 +1006,7 @@ async def test_step_executes_function_when_second_check_returns_started():
     mock_step_function.assert_called_once()  # Function executed (not skipped)
     assert result == "result"
     assert mock_state.operations.get.call_count == 1  # Only one check for AT_LEAST_ONCE
-    assert (
-        mock_state._create_checkpoint_async.call_count == 2
-    )  # START + SUCCEED checkpoints
+    assert mock_state.create_checkpoint.call_count == 2  # START + SUCCEED checkpoints
 
 
 async def test_step_creates_start_checkpoint_when_status_is_ready():
@@ -1051,7 +1049,7 @@ async def test_step_creates_start_checkpoint_when_status_is_ready():
     mock_callable.assert_called_once()
 
     # Verify START checkpoint was created
-    start_call = mock_state._create_checkpoint_async.call_args_list[0]
+    start_call = mock_state.create_checkpoint.call_args_list[0]
     start_operation = start_call[1]["operation_update"]
     assert start_operation.operation_id == "step_ready_1"
     assert start_operation.operation_type is OperationType.STEP
@@ -1059,7 +1057,7 @@ async def test_step_creates_start_checkpoint_when_status_is_ready():
     assert start_operation.action is OperationAction.START
 
     # Verify SUCCEED checkpoint was also created after execution
-    assert mock_state._create_checkpoint_async.call_count == 2
-    success_call = mock_state._create_checkpoint_async.call_args_list[1]
+    assert mock_state.create_checkpoint.call_count == 2
+    success_call = mock_state.create_checkpoint.call_args_list[1]
     success_operation = success_call[1]["operation_update"]
     assert success_operation.action is OperationAction.SUCCEED

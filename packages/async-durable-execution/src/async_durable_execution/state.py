@@ -11,7 +11,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .async_tools import invoke_callable
 from .exceptions import (
@@ -67,40 +67,6 @@ class QueuedOperation:
     completion_future: asyncio.Future[None] | None = None
 
 
-class _CompatDeque(deque[QueuedOperation]):
-    """Deque with queue-like helpers for legacy tests and call sites."""
-
-    def put(self, item: QueuedOperation) -> None:
-        self.append(item)
-
-    def put_nowait(self, item: QueuedOperation) -> None:
-        self.append(item)
-
-    def get_nowait(self) -> QueuedOperation:
-        return self.popleft()
-
-    def qsize(self) -> int:
-        return len(self)
-
-    def empty(self) -> bool:
-        return not self
-
-
-class _ImmediateAwaitable:
-    def __await__(self):
-        if False:  # pragma: no cover
-            yield
-        return None
-
-
-class _CompatAsyncQueue(asyncio.Queue[QueuedOperation | None]):
-    """Async queue whose ``put`` also works as a synchronous helper in tests."""
-
-    def put(self, item: QueuedOperation | None):  # type: ignore[override]
-        self.put_nowait(item)
-        return _ImmediateAwaitable()
-
-
 def _completion_done(completion) -> bool:
     return completion is None or completion.done()
 
@@ -127,34 +93,26 @@ class ReplayStatus(Enum):
 class ExecutionState:
     """Get, set and maintain execution state. This is mutable. Create and check checkpoints."""
 
-    # Placeholder so Mock(spec=ExecutionState) exposes an `operations` attribute
-    # while real instances replace it with the live operations mapping in __init__.
-    operations: MutableMapping[str, Operation] = {}
-
     def __init__(
         self,
         durable_execution_arn: str,
         initial_checkpoint_token: str,
-        operations: MutableMapping[str, Operation],
         service_client: DurableServiceClient,
         plugin_executor: PluginExecutor,
         batcher_config: CheckpointBatcherConfig | None = None,
-        replay_status: ReplayStatus = ReplayStatus.NEW,
     ):
+        self.operations: MutableMapping[str, Operation] = {}
         self.durable_execution_arn: str = durable_execution_arn
         self._current_checkpoint_token: str = initial_checkpoint_token
-        self.operations = operations
         self._service_client: DurableServiceClient = service_client
         self._plugin_executor: PluginExecutor = plugin_executor
 
         # Checkpoint batching configuration
-        self._batcher_config: CheckpointBatcherConfig = (
-            batcher_config or CheckpointBatcherConfig()
-        )
+        self._batcher_config = batcher_config or CheckpointBatcherConfig()
 
         # Checkpoint batching components
-        self._checkpoint_queue: _CompatAsyncQueue = _CompatAsyncQueue()
-        self._overflow_queue: _CompatDeque = _CompatDeque()
+        self._checkpoint_queue: asyncio.Queue[QueuedOperation | None] = asyncio.Queue()
+        self._overflow_queue: deque[QueuedOperation] = deque()
         self._checkpointing_stopped = asyncio.Event()
         self._checkpointing_failed = asyncio.Event()
         self._checkpointing_failure: Exception | None = None
@@ -166,22 +124,19 @@ class ExecutionState:
         # Operations whose parent has completed
         self._parent_done: set[str] = set()
 
-        self._replay_status: ReplayStatus = replay_status
+        self._replay_status: ReplayStatus = ReplayStatus.NEW
         self._visited_operations: set[str] = set()
 
-    async def fetch_paginated_operations(
-        self,
-        initial_operations: list[Operation],
-        checkpoint_token: str,
-        next_marker: str | None,
-    ):
-        return await self._fetch_paginated_operations_async(
-            initial_operations=initial_operations,
-            checkpoint_token=checkpoint_token,
-            next_marker=next_marker,
+    async def initialize(self, invocation_input):
+        await self.fetch_paginated_operations(
+            invocation_input.initial_execution_state.operations,
+            invocation_input.checkpoint_token,
+            invocation_input.initial_execution_state.next_marker,
         )
 
-    async def _fetch_paginated_operations_async(
+        self.mark_replaying_if_prior_operations_exist()
+
+    async def fetch_paginated_operations(
         self,
         initial_operations: list[Operation],
         checkpoint_token: str,
@@ -229,7 +184,7 @@ class ExecutionState:
                 self.operations.update({op.operation_id: op for op in all_operations})
         return all_operations
 
-    def get_input_payload(self) -> str | None:
+    def get_raw_input_payload(self) -> str | None:
         # It is possible that backend will not provide an execution operation
         # for the initial page of results.
         if not (operations := self.get_execution_operation()):
@@ -237,6 +192,22 @@ class ExecutionState:
         if not (execution_details := operations.execution_details):
             return None
         return execution_details.input_payload
+
+    def get_input_event(self):
+        # Python RIC LambdaMarshaller just uses standard json deserialization for event
+        # https://github.com/aws/aws-lambda-python-runtime-interface-client/blob/main/awslambdaric/lambda_runtime_marshaller.py#L46
+        raw_input_payload: str | None = self.get_raw_input_payload()
+        input_event: Any = {}
+        if raw_input_payload and raw_input_payload.strip():
+            try:
+                input_event = json.loads(raw_input_payload)
+            except json.JSONDecodeError:
+                logger.exception(
+                    "Failed to parse input payload as JSON: payload: %r",
+                    raw_input_payload,
+                )
+                raise
+        return input_event
 
     def get_execution_operation(self) -> Operation | None:
         # invocation id is id of execution operation
@@ -306,18 +277,10 @@ class ExecutionState:
 
         if has_prior_operations:
             self._replay_status = ReplayStatus.REPLAY
+        else:
+            self._replay_status = ReplayStatus.NEW
 
     async def create_checkpoint(
-        self,
-        operation_update: OperationUpdate | None = None,
-        is_sync: bool = True,  # noqa: FBT001, FBT002
-    ):
-        await self._create_checkpoint_async(
-            operation_update=operation_update,
-            is_sync=is_sync,
-        )
-
-    async def _create_checkpoint_async(
         self,
         operation_update: OperationUpdate | None = None,
         is_sync: bool = True,  # noqa: FBT001, FBT002
@@ -550,7 +513,7 @@ class ExecutionState:
                     current_checkpoint_token = output.checkpoint_token
 
                     # Fetch new operations from the API before unblocking sync waiters
-                    updated_operations = await self._fetch_paginated_operations_async(
+                    updated_operations = await self.fetch_paginated_operations(
                         output.new_execution_state.operations,
                         output.checkpoint_token,
                         output.new_execution_state.next_marker,
