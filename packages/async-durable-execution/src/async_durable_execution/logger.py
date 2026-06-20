@@ -9,9 +9,6 @@ from typing import TYPE_CHECKING
 from .exceptions import ValidationError
 from .operation.base import OperationContext
 from .context import _current_context
-from .types import (
-    LoggerInterface,
-)
 
 if TYPE_CHECKING:
     from .state import ExecutionState
@@ -98,7 +95,7 @@ def build_context_log_extra(context: OperationContext) -> dict[str, object]:
     return extra
 
 
-def configure_durable_logger(logger: LoggerInterface) -> LoggerInterface:
+def configure_durable_logger(logger):
     """Attach DurableContextFilter to a stdlib-compatible logger and handlers."""
     add_filter = getattr(logger, "addFilter", None)
     filters = getattr(logger, "filters", ())
@@ -133,7 +130,6 @@ def _is_replaying(context: OperationContext) -> bool:
 
 __all__ = [
     "DurableContextFilter",
-    "LoggerInterface",
     "LogInfo",
     "build_context_log_extra",
     "configure_durable_logger",

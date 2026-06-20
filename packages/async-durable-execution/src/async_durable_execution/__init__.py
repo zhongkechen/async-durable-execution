@@ -15,43 +15,38 @@ from .models import (
     OperationType,
     OperationStatus,
 )
-from .config import (
-    CallbackConfig,
-    CompletionConfig,
-    MapConfig,
-    NestingType,
-    ParallelBranch,
-    ParallelConfig,
-    RetryPresets,
-    RetryStrategyBuilder,
-    StepConfig,
-    StepSemantics,
-    WaitStrategyBuilder,
-    WaitForCallbackConfig,
-    WaitForConditionConfig,
-    WithRetryConfig,
-)
+from .config import RetryPresets, RetryStrategyBuilder
 from .context import (
     get_current_context,
 )
 from .async_tools import durable_callable
-from .operation.with_retry import with_retry
-from .operation.map import map
+from .operation.with_retry import WithRetryConfig, with_retry
+from .operation.map import MapConfig, map
+from .operation.concurrency import CompletionConfig, NestingType
 from .operation.wait_for_condition import (
+    WaitForConditionConfig,
+    WaitStrategyBuilder,
     wait_for_condition,
     WaitForConditionCheckContext,
 )
-from .operation.invoke import invoke
-from .operation.parallel import parallel, durable_parallel_branch
+from .operation.invoke import InvokeConfig, invoke
+from .operation.parallel import (
+    ParallelBranch,
+    ParallelConfig,
+    parallel,
+    durable_parallel_branch,
+)
 from .operation.callback import (
+    CallbackConfig,
     create_callback,
     durable_wait_for_callback,
     wait_for_callback,
     WaitForCallbackContext,
     Callback,
+    WaitForCallbackConfig,
 )
 from .operation.child import run_in_child_context, DurableContext
-from .operation.step import step, StepContext, get_attempt
+from .operation.step import StepConfig, StepContext, StepSemantics, get_attempt, step
 from .models import (
     ErrorObject,
     OperationIdentifier,
@@ -86,6 +81,7 @@ __all__ = [
     "DurableExecutionsError",
     "ErrorObject",
     "InvocationError",
+    "InvokeConfig",
     "JsonSerDes",
     "MapConfig",
     "NestingType",

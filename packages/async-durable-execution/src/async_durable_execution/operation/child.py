@@ -6,7 +6,7 @@ import functools
 import hashlib
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypeVar, cast
+from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
 from .base import (
     CHECKPOINT_NOT_FOUND,
@@ -19,7 +19,6 @@ from ..async_tools import (
     get_callable_name,
     invoke_user_callable,
 )
-from ..config import ChildConfig
 from ..context import get_current_context
 from ..exceptions import (
     InvocationError,
@@ -40,7 +39,9 @@ from ..types import LambdaContext
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from ..serdes import SerDes
     from ..state import ExecutionState
+    from ..types import SummaryGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,16 @@ T = TypeVar("T")
 
 # Checkpoint size limit in bytes (256KB)
 CHECKPOINT_SIZE_LIMIT = 256 * 1024
+
+
+@dataclass(frozen=True)
+class ChildConfig(Generic[T]):
+    """Configuration options for child context operations."""
+
+    serdes: SerDes | None = None
+    item_serdes: SerDes | None = None
+    summary_generator: SummaryGenerator | None = None
+    is_virtual: bool = False
 
 
 class OperationIdGenerator:

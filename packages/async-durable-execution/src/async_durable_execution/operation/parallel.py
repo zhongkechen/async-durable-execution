@@ -1,24 +1,32 @@
 """Implementation for Durable Parallel operation."""
 
 from __future__ import annotations
+
 import json
 import logging
-from typing import TYPE_CHECKING, TypeVar, Sequence, Callable, Awaitable, ParamSpec
+from dataclasses import dataclass, field
+from typing import (
+    TYPE_CHECKING,
+    Generic,
+    TypeVar,
+    Sequence,
+    Callable,
+    Awaitable,
+    ParamSpec,
+)
 
 from .base import get_checkpoint_result
-from .child import child_handler, _get_durable_context
+from .child import ChildConfig, child_handler, _get_durable_context
 
 from ..async_tools import (
     invoke_user_callable,
     invoke_callable,
     assert_async_callable,
 )
-from async_durable_execution.operation.concurrency import ConcurrentExecutor
-from ..config import (
+from async_durable_execution.operation.concurrency import (
+    CompletionConfig,
+    ConcurrentExecutor,
     NestingType,
-    ParallelBranch,
-    ParallelConfig,
-    ChildConfig,
 )
 from ..models import Executable, OperationIdentifier, OperationSubType
 
@@ -37,6 +45,32 @@ logger = logging.getLogger(__name__)
 R = TypeVar("R")
 T = TypeVar("T")
 Params = ParamSpec("Params")
+
+
+@dataclass(frozen=True)
+class ParallelBranch(Generic[T]):
+    """A named branch for parallel execution."""
+
+    func: Callable[..., Awaitable[T]]
+    name: str | None = None
+
+    async def __call__(self, *args, **kwargs) -> T:
+        """Delegate to the wrapped function, making ParallelBranch itself callable."""
+        return await self.func(*args, **kwargs)
+
+
+@dataclass(frozen=True)
+class ParallelConfig:
+    """Configuration options for parallel execution operations."""
+
+    max_concurrency: int | None = None
+    completion_config: CompletionConfig = field(
+        default_factory=CompletionConfig.all_successful
+    )
+    serdes: SerDes | None = None
+    item_serdes: SerDes | None = None
+    summary_generator: SummaryGenerator | None = None
+    nesting_type: NestingType = NestingType.NESTED
 
 
 class ParallelExecutor(ConcurrentExecutor[Callable, R]):

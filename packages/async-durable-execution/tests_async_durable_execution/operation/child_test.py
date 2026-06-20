@@ -10,7 +10,6 @@ from typing import cast
 from unittest.mock import Mock
 
 import pytest
-from async_durable_execution.config import ChildConfig
 from async_durable_execution.exceptions import (
     CallableRuntimeError,
     InvocationError,
@@ -25,8 +24,11 @@ from async_durable_execution.models import (
     OperationSubType,
     OperationType,
 )
-from async_durable_execution.operation.child import child_handler as async_child_handler
-from async_durable_execution.operation.child import DurableContext
+from async_durable_execution.operation.child import (
+    ChildConfig,
+    child_handler as async_child_handler,
+    DurableContext,
+)
 from async_durable_execution.state import ExecutionState
 from async_durable_execution.types import SummaryGenerator
 from async_durable_execution.operation.base import CheckpointedResult
@@ -79,6 +81,63 @@ def create_test_context(
             parent_id=parent_id,
         ),
     )
+
+
+def test_child_config_defaults():
+    """ChildConfig default values are defined in the child module."""
+    config = ChildConfig()
+
+    assert config.serdes is None
+    assert config.item_serdes is None
+    assert config.summary_generator is None
+    assert config.is_virtual is False
+
+
+def test_child_config_with_serdes():
+    """ChildConfig stores a custom batch serializer."""
+    serdes = Mock()
+    config = ChildConfig(serdes=serdes)
+
+    assert config.serdes is serdes
+    assert config.item_serdes is None
+    assert config.summary_generator is None
+    assert config.is_virtual is False
+
+
+def test_child_config_with_item_serdes():
+    """ChildConfig stores a custom item serializer."""
+    item_serdes = Mock()
+    config = ChildConfig(item_serdes=item_serdes)
+
+    assert config.serdes is None
+    assert config.item_serdes is item_serdes
+    assert config.summary_generator is None
+    assert config.is_virtual is False
+
+
+def test_child_config_with_summary_generator():
+    """ChildConfig stores and exposes a summary generator."""
+
+    def mock_summary_generator(result):
+        return f"Summary of {result}"
+
+    config = ChildConfig(summary_generator=mock_summary_generator)
+
+    assert config.serdes is None
+    assert config.item_serdes is None
+    assert config.summary_generator is mock_summary_generator
+    assert config.is_virtual is False
+    assert config.summary_generator("test_data") == "Summary of test_data"
+
+
+def test_child_config_with_is_virtual():
+    """ChildConfig can mark a child context as virtual."""
+    config = ChildConfig(is_virtual=True)
+
+    assert config.serdes is None
+    assert config.item_serdes is None
+    assert config.summary_generator is None
+    assert config.is_virtual is True
 
 
 @pytest.mark.parametrize(

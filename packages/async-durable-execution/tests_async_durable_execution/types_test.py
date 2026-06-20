@@ -3,14 +3,7 @@
 from datetime import timedelta
 from unittest.mock import ANY, AsyncMock, Mock, patch
 
-from async_durable_execution.config import (
-    CallbackConfig,
-    ChildConfig,
-    MapConfig,
-    ParallelConfig,
-    StepConfig,
-    WaitForCallbackConfig,
-)
+from async_durable_execution.operation.child import ChildConfig
 from async_durable_execution import (
     create_callback,
     step,
@@ -24,6 +17,13 @@ from async_durable_execution import (
 from async_durable_execution.context import reset_current_context, set_current_context
 from async_durable_execution.models import OperationIdentifier, OperationSubType
 from async_durable_execution.operation import child
+from async_durable_execution.operation.callback import (
+    CallbackConfig,
+    WaitForCallbackConfig,
+)
+from async_durable_execution.operation.map import MapConfig
+from async_durable_execution.operation.parallel import ParallelConfig
+from async_durable_execution.operation.step import StepConfig
 from async_durable_execution.types import Callback, DurableContext
 
 

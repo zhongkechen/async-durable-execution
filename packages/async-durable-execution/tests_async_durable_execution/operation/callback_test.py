@@ -6,11 +6,6 @@ from datetime import timedelta
 from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
-from async_durable_execution.config import (
-    CallbackConfig,
-    StepConfig,
-    WaitForCallbackConfig,
-)
 from async_durable_execution.context import (
     reset_current_context,
     set_current_context,
@@ -32,10 +27,13 @@ from async_durable_execution.models import (
 )
 from async_durable_execution.operation import callback
 from async_durable_execution.operation.callback import (
-    CallbackOperationExecutor,
-    wait_for_callback_handler,
     Callback,
+    CallbackConfig,
+    CallbackOperationExecutor,
+    WaitForCallbackConfig,
+    wait_for_callback_handler,
 )
+from async_durable_execution.operation.step import StepConfig
 from async_durable_execution.models import RetryDecision
 from async_durable_execution.serdes import SerDes
 from async_durable_execution.state import ExecutionState
@@ -84,6 +82,43 @@ def patch_wait_for_callback_ops(mock_callback, *, step_side_effect=None):
         patch("async_durable_execution.operation.step.step", step_mock),
     ):
         yield create_callback_mock, step_mock
+
+
+def test_callback_config_defaults():
+    """CallbackConfig keeps its expected defaults."""
+    config = CallbackConfig()
+
+    assert config.timeout_seconds == 0
+    assert config.heartbeat_timeout_seconds == 0
+    assert config.serdes is None
+
+
+def test_callback_config_with_values():
+    """CallbackConfig stores explicit values."""
+    serdes = Mock()
+    config = CallbackConfig(
+        timeout=timedelta(seconds=30),
+        heartbeat_timeout=timedelta(seconds=10),
+        serdes=serdes,
+    )
+
+    assert config.timeout_seconds == 30
+    assert config.heartbeat_timeout_seconds == 10
+    assert config.serdes is serdes
+
+
+def test_callback_config_importable_from_package_root():
+    """CallbackConfig remains re-exported from the package root."""
+    from async_durable_execution import CallbackConfig as ImportedConfig
+
+    assert ImportedConfig is CallbackConfig
+
+
+def test_wait_for_callback_config_importable_from_package_root():
+    """WaitForCallbackConfig remains re-exported from the package root."""
+    from async_durable_execution import WaitForCallbackConfig as ImportedConfig
+
+    assert ImportedConfig is WaitForCallbackConfig
 
 
 async def test_create_callback_handler_new_operation_with_config():

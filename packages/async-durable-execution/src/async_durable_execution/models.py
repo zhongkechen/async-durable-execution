@@ -22,7 +22,7 @@ from typing import (
 from .exceptions import CallableRuntimeError, InvalidStateError, SuspendExecution
 
 if TYPE_CHECKING:
-    from .config import CompletionConfig
+    from .operation.concurrency import CompletionConfig
 
 # Replace with `type` it when dropping support to Python 3.11
 ReplayChildren: TypeAlias = bool

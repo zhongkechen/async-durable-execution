@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from _contextvars import ContextVar
-from contextvars import Token
+from contextvars import ContextVar, Token
 
 
 _current_context: ContextVar = ContextVar(

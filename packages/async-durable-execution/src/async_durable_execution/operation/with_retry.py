@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from typing import Callable, Awaitable, TypeVar
+from dataclasses import dataclass
+from typing import Callable, Awaitable, TypeVar, Generic
 
-from ..config import WithRetryConfig, RetryStrategyBuilder
+from ..config import RetryStrategyBuilder
+from ..models import RetryDecision
+from .child import ChildConfig
 from ..async_tools import (
     assert_async_callable,
     invoke_user_callable,
@@ -15,6 +18,15 @@ from .child import (
 from .wait import _wait_in_context
 
 T = TypeVar("T")
+
+
+@dataclass(frozen=True)
+class WithRetryConfig(Generic[T]):
+    """Configuration for with_retry."""
+
+    retry_strategy: Callable[[Exception, int], RetryDecision] | None = None
+    wrap_with_run_in_child_context: bool = True
+    child_context_config: ChildConfig[T] | None = None
 
 
 async def with_retry(

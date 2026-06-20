@@ -4,19 +4,18 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, TypeVar
 
 from .. import get_current_context
 from ..async_tools import assert_async_callable, get_callable_name
-from ..config import (
-    RetryPresets,
-    StepConfig,
-    StepSemantics,
-)
+from ..config import RetryPresets
 from ..exceptions import (
     ExecutionError,
     InvalidStateError,
     StepInterruptedError,
+    suspend_with_optional_resume_delay,
+    suspend_with_optional_resume_timestamp,
 )
 from ..models import (
     ErrorObject,
@@ -35,19 +34,32 @@ from .base import (
     OperationExecutor,
     OperationContext,
 )
-from ..suspend import (
-    suspend_with_optional_resume_delay,
-    suspend_with_optional_resume_timestamp,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from ..serdes import SerDes
     from ..state import ExecutionState
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+
+class StepSemantics(Enum):
+    """Checkpoint timing guarantees for a durable step attempt."""
+
+    AT_MOST_ONCE_PER_RETRY = "AT_MOST_ONCE_PER_RETRY"
+    AT_LEAST_ONCE_PER_RETRY = "AT_LEAST_ONCE_PER_RETRY"
+
+
+@dataclass(frozen=True)
+class StepConfig:
+    """Configuration for a durable `step()` call."""
+
+    retry_strategy: Callable[[Exception, int], RetryDecision] | None = None
+    step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY
+    serdes: SerDes | None = None
 
 
 class StepOperationExecutor(OperationExecutor[T]):

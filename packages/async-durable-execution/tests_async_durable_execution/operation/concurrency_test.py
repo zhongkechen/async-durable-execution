@@ -13,7 +13,9 @@ import pytest
 
 from async_durable_execution.async_tools import invoke_callable
 from async_durable_execution.operation.concurrency import (
+    CompletionConfig,
     ConcurrentExecutor,
+    NestingType,
     TimerScheduler,
 )
 from async_durable_execution.models import (
@@ -25,12 +27,6 @@ from async_durable_execution.models import (
     Executable,
     ExecutableWithState,
     ExecutionCounters,
-)
-from async_durable_execution.config import (
-    ChildConfig,
-    CompletionConfig,
-    MapConfig,
-    NestingType,
 )
 from async_durable_execution import DurableContext
 from async_durable_execution.exceptions import (
@@ -44,7 +40,8 @@ from async_durable_execution.models import (
     OperationIdentifier,
     OperationSubType,
 )
-from async_durable_execution.operation.map import MapExecutor
+from async_durable_execution.operation.child import ChildConfig
+from async_durable_execution.operation.map import MapConfig, MapExecutor
 
 
 def _wrap_user_function_for_test(func, *args, **kwargs):
@@ -85,6 +82,59 @@ def create_execution_state():
     state.track_replay = Mock()
     state.operations.get.return_value = create_checkpoint_result()
     return state
+
+
+def test_completion_config_defaults():
+    """CompletionConfig keeps its expected defaults."""
+    config = CompletionConfig()
+
+    assert config.min_successful is None
+    assert config.tolerated_failure_count is None
+    assert config.tolerated_failure_percentage is None
+
+
+def test_completion_config_first_successful():
+    """CompletionConfig.first_successful sets a one-success threshold."""
+    config = CompletionConfig.first_successful()
+
+    assert config.min_successful == 1
+    assert config.tolerated_failure_count is None
+    assert config.tolerated_failure_percentage is None
+
+
+def test_completion_config_all_completed():
+    """CompletionConfig.all_completed leaves all thresholds open."""
+    config = CompletionConfig.all_completed()
+
+    assert config.min_successful is None
+    assert config.tolerated_failure_count is None
+    assert config.tolerated_failure_percentage is None
+
+
+def test_completion_config_all_successful():
+    """CompletionConfig.all_successful requires zero failures."""
+    config = CompletionConfig.all_successful()
+
+    assert config.min_successful is None
+    assert config.tolerated_failure_count == 0
+    assert config.tolerated_failure_percentage == 0
+
+
+def test_nesting_type_enum():
+    """NestingType enum values remain stable."""
+    assert NestingType.NESTED.value == "NESTED"
+    assert NestingType.FLAT.value == "FLAT"
+
+
+def test_concurrency_types_importable_from_package_root():
+    """Concurrency types remain re-exported from the package root."""
+    from async_durable_execution import (
+        CompletionConfig as ImportedCompletionConfig,
+        NestingType as ImportedNestingType,
+    )
+
+    assert ImportedCompletionConfig is CompletionConfig
+    assert ImportedNestingType is NestingType
 
 
 def create_executor_context(state, step_id="1", parent_id="parent"):

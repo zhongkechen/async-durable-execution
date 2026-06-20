@@ -22,30 +22,6 @@ C_co = TypeVar("C_co", covariant=True)
 C_contra = TypeVar("C_contra", contravariant=True)
 
 
-class LoggerInterface(Protocol):
-    """Protocol describing the logging methods used by the SDK."""
-
-    def debug(
-        self, msg: object, *args: object, extra: Mapping[str, object] | None = None
-    ) -> None: ...  # pragma: no cover
-
-    def info(
-        self, msg: object, *args: object, extra: Mapping[str, object] | None = None
-    ) -> None: ...  # pragma: no cover
-
-    def warning(
-        self, msg: object, *args: object, extra: Mapping[str, object] | None = None
-    ) -> None: ...  # pragma: no cover
-
-    def error(
-        self, msg: object, *args: object, extra: Mapping[str, object] | None = None
-    ) -> None: ...  # pragma: no cover
-
-    def exception(
-        self, msg: object, *args: object, extra: Mapping[str, object] | None = None
-    ) -> None: ...  # pragma: no cover
-
-
 @runtime_checkable
 class Callback(Protocol, Generic[C_co]):
     """Protocol for callback futures."""

@@ -21,12 +21,6 @@ from async_durable_execution.models import (
     OperationStatus,
     OperationType,
 )
-from async_durable_execution.config import (
-    CompletionConfig,
-    ItemBatcher,
-    MapConfig,
-    NestingType,
-)
 from async_durable_execution.context import (
     get_current_context,
     reset_current_context,
@@ -36,7 +30,14 @@ from async_durable_execution import map as map_operation, DurableContext
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import OperationSubType
 from async_durable_execution.operation import child  # PLC0415
-from async_durable_execution.operation.map import MapExecutor, map_handler
+from async_durable_execution.operation.concurrency import CompletionConfig, NestingType
+from async_durable_execution.operation.map import (
+    BatchedInput,
+    ItemBatcher,
+    MapConfig,
+    MapExecutor,
+    map_handler,
+)
 from async_durable_execution.serdes import serialize
 from async_durable_execution.state import ExecutionState
 
@@ -120,6 +121,53 @@ async def test_map_executor_init():
     assert executor.items == items
     assert executor.executables == executables
     assert executor.nesting_type is NestingType.FLAT
+
+
+def test_batched_input():
+    """BatchedInput is owned by the map module."""
+    batch_input = BatchedInput("batch", [1, 2, 3])
+
+    assert batch_input.batch_input == "batch"
+    assert batch_input.items == [1, 2, 3]
+
+
+def test_map_config_defaults():
+    """MapConfig keeps its expected defaults."""
+    config = MapConfig()
+
+    assert config.max_concurrency is None
+    assert isinstance(config.item_batcher, ItemBatcher)
+    assert isinstance(config.completion_config, CompletionConfig)
+    assert config.serdes is None
+
+
+def test_map_config_importable_from_package_root():
+    """MapConfig remains re-exported from the package root."""
+    from async_durable_execution import MapConfig as ImportedConfig
+
+    assert ImportedConfig is MapConfig
+
+
+def test_item_batcher_defaults():
+    """ItemBatcher default values are defined in the map module."""
+    batcher = ItemBatcher()
+
+    assert batcher.max_items_per_batch == 0
+    assert batcher.max_item_bytes_per_batch == 0
+    assert batcher.batch_input is None
+
+
+def test_item_batcher_with_values():
+    """ItemBatcher stores explicit batching values."""
+    batcher = ItemBatcher(
+        max_items_per_batch=100,
+        max_item_bytes_per_batch=1024,
+        batch_input="test_input",
+    )
+
+    assert batcher.max_items_per_batch == 100
+    assert batcher.max_item_bytes_per_batch == 1024
+    assert batcher.batch_input == "test_input"
 
 
 async def test_map_executor_from_items():
