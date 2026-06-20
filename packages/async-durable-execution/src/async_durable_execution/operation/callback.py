@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Concatenate, Generic, TypeVar, ParamSpec
 
 from ..async_tools import get_callable_name
@@ -11,8 +12,7 @@ from ..models import CallbackTimeoutType
 
 from .child import _run_in_child_context_in_context, _get_durable_context
 from ..async_tools import assert_async_callable
-from ..config import StepConfig
-from ..config import CallbackConfig, WaitForCallbackConfig
+from ..config import duration_to_seconds
 from ..context import (
     reset_current_context,
     set_current_context,
@@ -25,6 +25,7 @@ from ..models import (
     OperationIdentifier,
     OperationUpdate,
     OperationSubType,
+    RetryDecision,
 )
 from .base import (
     CheckpointedResult,
@@ -32,11 +33,13 @@ from .base import (
     OperationContext,
     get_checkpoint_result,
 )
+from .step import StepConfig
 from ..serdes import deserialize, SerDes, PassThroughSerDes
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from ..serdes import SerDes
     from ..state import ExecutionState
     from .child import DurableContext
 
@@ -46,6 +49,36 @@ Params = ParamSpec("Params")
 logger = logging.getLogger(__name__)
 
 PASS_THROUGH_SERDES: SerDes[Any] = PassThroughSerDes()
+
+
+@dataclass(frozen=True)
+class CallbackConfig:
+    """Configuration for callbacks."""
+
+    timeout: timedelta = field(default_factory=timedelta)
+    heartbeat_timeout: timedelta = field(default_factory=timedelta)
+    serdes: SerDes | None = None
+
+    def __post_init__(self):
+        duration_to_seconds(self.timeout, "timeout")
+        duration_to_seconds(self.heartbeat_timeout, "heartbeat_timeout")
+
+    @property
+    def timeout_seconds(self) -> int:
+        """Get timeout in seconds."""
+        return duration_to_seconds(self.timeout, "timeout")
+
+    @property
+    def heartbeat_timeout_seconds(self) -> int:
+        """Get heartbeat timeout in seconds."""
+        return duration_to_seconds(self.heartbeat_timeout, "heartbeat_timeout")
+
+
+@dataclass(frozen=True)
+class WaitForCallbackConfig(CallbackConfig):
+    """Configuration for wait for callback."""
+
+    retry_strategy: Callable[[Exception, int], RetryDecision] | None = None
 
 
 class CallbackOperationExecutor(OperationExecutor[str]):

@@ -6,6 +6,8 @@ import asyncio
 import logging
 import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from ..models import (
@@ -18,7 +20,6 @@ from ..models import (
     ExecutionCounters,
     SuspendResult,
 )
-from ..config import ChildConfig, NestingType
 from ..exceptions import (
     OrphanedChildException,
     SuspendExecution,
@@ -26,14 +27,13 @@ from ..exceptions import (
 )
 from ..models import ErrorObject, OperationIdentifier
 from .base import get_checkpoint_result
-from .child import child_handler
+from .child import ChildConfig, child_handler
 from ..serdes import deserialize
 
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from ..config import CompletionConfig
     from .child import DurableContext
     from ..models import OperationSubType
     from ..serdes import SerDes
@@ -45,6 +45,46 @@ logger = logging.getLogger(__name__)
 
 CallableType = TypeVar("CallableType")
 ResultType = TypeVar("ResultType")
+
+
+class NestingType(Enum):
+    """Control how child contexts are created for batch operations."""
+
+    NESTED = "NESTED"
+    FLAT = "FLAT"
+
+
+@dataclass(frozen=True)
+class CompletionConfig:
+    """Configuration for determining when parallel/map operations complete."""
+
+    min_successful: int | None = None
+    tolerated_failure_count: int | None = None
+    tolerated_failure_percentage: int | float | None = None
+
+    @staticmethod
+    def first_successful():
+        return CompletionConfig(
+            min_successful=1,
+            tolerated_failure_count=None,
+            tolerated_failure_percentage=None,
+        )
+
+    @staticmethod
+    def all_completed():
+        return CompletionConfig(
+            min_successful=None,
+            tolerated_failure_count=None,
+            tolerated_failure_percentage=None,
+        )
+
+    @staticmethod
+    def all_successful():
+        return CompletionConfig(
+            min_successful=None,
+            tolerated_failure_count=0,
+            tolerated_failure_percentage=0,
+        )
 
 
 class TimerScheduler:

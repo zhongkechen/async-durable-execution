@@ -22,17 +22,15 @@ from async_durable_execution.models import (
     OperationStatus,
     OperationType,
 )
-from async_durable_execution.config import (
-    CompletionConfig,
-    NestingType,
-    ParallelConfig,
-)
 from async_durable_execution.context import reset_current_context, set_current_context
 from async_durable_execution import parallel, DurableContext
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import OperationSubType
 from async_durable_execution.operation import child
+from async_durable_execution.operation.concurrency import CompletionConfig, NestingType
 from async_durable_execution.operation.parallel import (
+    ParallelBranch,
+    ParallelConfig,
     ParallelExecutor,
     parallel_handler,
 )
@@ -121,6 +119,21 @@ async def test_parallel_executor_init():
     assert executor.sub_type_iteration == OperationSubType.PARALLEL_BRANCH
     assert executor.name_prefix == "test-"
     assert executor.nesting_type is NestingType.FLAT
+
+
+def test_parallel_config_defaults():
+    """ParallelConfig keeps its expected defaults."""
+    config = ParallelConfig()
+
+    assert config.max_concurrency is None
+    assert isinstance(config.completion_config, CompletionConfig)
+
+
+def test_parallel_config_importable_from_package_root():
+    """ParallelConfig remains re-exported from the package root."""
+    from async_durable_execution import ParallelConfig as ImportedConfig
+
+    assert ImportedConfig is ParallelConfig
 
 
 async def test_parallel_executor_from_callables():
@@ -1377,15 +1390,12 @@ async def test_parallel_custom_serdes_serializes_batch_result():
 
 async def test_parallel_branch_is_callable():
     """ParallelBranch instances are callable."""
-    from async_durable_execution.config import ParallelBranch
-
     branch = ParallelBranch(func=lambda x: x * 2, name="double")
     assert callable(branch)
 
 
 async def test_parallel_branch_delegates_to_func():
     """Calling ParallelBranch delegates to the wrapped func."""
-    from async_durable_execution.config import ParallelBranch
 
     async def add(x, y):
         return x + y
@@ -1396,7 +1406,6 @@ async def test_parallel_branch_delegates_to_func():
 
 async def test_parallel_branch_passes_kwargs():
     """ParallelBranch passes keyword arguments to func."""
-    from async_durable_execution.config import ParallelBranch
 
     async def test_func(ctx, flag=False):
         return flag
@@ -1407,7 +1416,6 @@ async def test_parallel_branch_passes_kwargs():
 
 async def test_parallel_branch_frozen():
     """ParallelBranch is immutable (frozen dataclass)."""
-    from async_durable_execution.config import ParallelBranch
 
     async def no_op():
         return None
@@ -1441,7 +1449,6 @@ async def test_parallel_executor_get_iteration_name_default():
 
 async def test_parallel_executor_get_iteration_name_with_named_branches():
     """ParallelBranch with name uses the custom name."""
-    from async_durable_execution.config import ParallelBranch
 
     async def fetch_user(ctx):
         return "user"
@@ -1463,7 +1470,6 @@ async def test_parallel_executor_get_iteration_name_with_named_branches():
 
 async def test_parallel_executor_get_iteration_name_mixed():
     """Mix of ParallelBranch (with/without name) and plain callables."""
-    from async_durable_execution.config import ParallelBranch
 
     async def named_branch(ctx):
         return "a"
@@ -1490,7 +1496,6 @@ async def test_parallel_executor_get_iteration_name_mixed():
 
 async def test_parallel_executor_get_iteration_name_none_name():
     """ParallelBranch with name=None falls back to default naming."""
-    from async_durable_execution.config import ParallelBranch
 
     async def branch_func(ctx):
         return "x"
@@ -1505,7 +1510,6 @@ async def test_parallel_executor_get_iteration_name_none_name():
 
 async def test_parallel_branch_execute_item():
     """ParallelBranch works correctly in execute_item."""
-    from async_durable_execution.config import ParallelBranch
 
     async def branch_func(ctx):
         return f"result-{ctx}"

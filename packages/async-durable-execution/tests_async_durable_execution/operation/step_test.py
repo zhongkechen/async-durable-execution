@@ -8,10 +8,6 @@ from datetime import timedelta
 from unittest.mock import Mock, patch
 
 import pytest
-from async_durable_execution.config import (
-    StepConfig,
-    StepSemantics,
-)
 from async_durable_execution.exceptions import (
     CallableRuntimeError,
     ExecutionError,
@@ -30,7 +26,11 @@ from async_durable_execution.models import (
 )
 import logging
 from async_durable_execution.context import get_current_context
-from async_durable_execution.operation.step import StepOperationExecutor
+from async_durable_execution.operation.step import (
+    StepConfig,
+    StepOperationExecutor,
+    StepSemantics,
+)
 from async_durable_execution.models import RetryDecision
 from async_durable_execution.state import ExecutionState
 from async_durable_execution import StepContext
@@ -71,6 +71,48 @@ async def step_handler(func, state, operation_identifier, config):
         operation_identifier=operation_identifier,
     )
     return await _invoke_maybe_async(executor.process())
+
+
+def test_step_semantics_enum():
+    """StepSemantics enum values remain stable."""
+    assert StepSemantics.AT_MOST_ONCE_PER_RETRY.value == "AT_MOST_ONCE_PER_RETRY"
+    assert StepSemantics.AT_LEAST_ONCE_PER_RETRY.value == "AT_LEAST_ONCE_PER_RETRY"
+
+
+def test_step_config_defaults():
+    """StepConfig keeps its expected defaults."""
+    config = StepConfig()
+
+    assert config.retry_strategy is None
+    assert config.step_semantics == StepSemantics.AT_LEAST_ONCE_PER_RETRY
+    assert config.serdes is None
+
+
+def test_step_config_with_values():
+    """StepConfig stores explicit values."""
+    retry_strategy = Mock()
+    serdes = Mock()
+
+    config = StepConfig(
+        retry_strategy=retry_strategy,
+        step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY,
+        serdes=serdes,
+    )
+
+    assert config.retry_strategy is retry_strategy
+    assert config.step_semantics == StepSemantics.AT_MOST_ONCE_PER_RETRY
+    assert config.serdes is serdes
+
+
+def test_step_types_importable_from_package_root():
+    """Step types remain re-exported from the package root."""
+    from async_durable_execution import (
+        StepConfig as ImportedStepConfig,
+        StepSemantics as ImportedStepSemantics,
+    )
+
+    assert ImportedStepConfig is StepConfig
+    assert ImportedStepSemantics is StepSemantics
 
 
 async def test_step_handler_already_succeeded():

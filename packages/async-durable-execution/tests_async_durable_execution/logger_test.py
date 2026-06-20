@@ -25,7 +25,6 @@ from async_durable_execution.models import (
 )
 from async_durable_execution.plugin import PluginExecutor
 from async_durable_execution.state import ExecutionState, ReplayStatus
-from async_durable_execution.types import LoggerInterface
 from async_durable_execution import StepContext, DurableContext
 
 
@@ -132,7 +131,7 @@ def test_powertools_logger_compatibility():
     """The public logger protocol should still accept Powertools-style loggers."""
     powertools_logger = PowertoolsLoggerStub()
 
-    def accepts_logger_interface(logger: LoggerInterface) -> None:
+    def accepts_logger_interface(logger) -> None:
         logger.debug("test")
         logger.info("test")
         logger.warning("test")

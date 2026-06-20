@@ -5,8 +5,6 @@ import pytest
 from async_durable_execution.exceptions import (
     SuspendExecution,
     TimedSuspendExecution,
-)
-from async_durable_execution.suspend import (
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
 )

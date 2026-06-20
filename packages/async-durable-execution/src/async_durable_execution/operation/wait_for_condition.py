@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import math
 import logging
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypeVar
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import timedelta
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 from .step import StepContext
 from ..async_tools import assert_async_callable
-
-from ..config import WaitForConditionConfig
+from ..config import JitterStrategy, duration_to_seconds
 from ..context import (
     reset_current_context,
     set_current_context,
@@ -18,6 +20,8 @@ from .child import _get_durable_context
 from ..exceptions import (
     ExecutionError,
     ValidationError,
+    suspend_with_optional_resume_delay,
+    suspend_with_optional_resume_timestamp,
 )
 from ..models import (
     ErrorObject,
@@ -26,23 +30,87 @@ from ..models import (
     OperationStatus,
     OperationUpdate,
     OperationSubType,
+    WaitDecision,
 )
 from .base import CHECKPOINT_NOT_FOUND, CheckpointedResult, OperationExecutor
-from ..suspend import (
-    suspend_with_optional_resume_delay,
-    suspend_with_optional_resume_timestamp,
-)
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable
 
-    from ..state import ExecutionState
     from ..models import WaitForConditionDecision
+    from ..serdes import SerDes
+    from ..state import ExecutionState
 
 
 T = TypeVar("T")
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class WaitForConditionConfig(Generic[T]):
+    """Configuration for wait_for_condition."""
+
+    wait_strategy: Callable[[T, int], WaitForConditionDecision]
+    initial_state: T
+    serdes: SerDes | None = None
+
+
+@dataclass
+class WaitStrategyBuilder(Generic[T]):
+    """Build polling strategies for `wait_for_condition()`."""
+
+    should_continue_polling: Callable[[T], bool]
+    max_attempts: int = 60
+    initial_delay: timedelta = field(default_factory=lambda: timedelta(seconds=5))
+    max_delay: timedelta = field(default_factory=lambda: timedelta(minutes=5))
+    backoff_rate: int | float = 1.5
+    jitter_strategy: JitterStrategy = field(default=JitterStrategy.FULL)
+    timeout: timedelta | None = None
+
+    def __post_init__(self):
+        duration_to_seconds(self.initial_delay, "initial_delay")
+        duration_to_seconds(self.max_delay, "max_delay")
+        if self.timeout is not None:
+            duration_to_seconds(self.timeout, "timeout")
+
+    @property
+    def initial_delay_seconds(self) -> int:
+        """Get initial delay in seconds."""
+        return duration_to_seconds(self.initial_delay, "initial_delay")
+
+    @property
+    def max_delay_seconds(self) -> int:
+        """Get max delay in seconds."""
+        return duration_to_seconds(self.max_delay, "max_delay")
+
+    @property
+    def timeout_seconds(self) -> int | None:
+        """Get timeout in seconds."""
+        if self.timeout is None:
+            return None
+        return duration_to_seconds(self.timeout, "timeout")
+
+    def build(self) -> Callable[[T, int], WaitDecision]:
+        """Build a wait strategy callable from this builder."""
+
+        def wait_strategy(result: T, attempts_made: int) -> WaitDecision:
+            if not self.should_continue_polling(result):
+                return WaitDecision.no_wait()
+
+            if attempts_made >= self.max_attempts:
+                return WaitDecision.no_wait()
+
+            base_delay: float = min(
+                self.initial_delay_seconds * (self.backoff_rate ** (attempts_made - 1)),
+                self.max_delay_seconds,
+            )
+            delay_with_jitter: float = self.jitter_strategy.apply_jitter(base_delay)
+            final_delay: int = max(1, math.ceil(delay_with_jitter))
+
+            return WaitDecision.wait(timedelta(seconds=final_delay))
+
+        return wait_strategy
 
 
 class WaitForConditionOperationExecutor(OperationExecutor[T]):

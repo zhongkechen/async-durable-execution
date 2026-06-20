@@ -5,10 +5,11 @@ Avoid any non-stdlib references in this module, it is at the bottom of the depen
 
 from __future__ import annotations
 
+import datetime
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, TypedDict
+from typing import NoReturn, TypedDict
 
 
 BAD_REQUEST_ERROR: int = 400
@@ -30,9 +31,6 @@ _NON_RETRYABLE_CUSTOMER_ERROR_CODES: frozenset[str] = frozenset(
         "KMSNotFoundException",
     }
 )
-
-if TYPE_CHECKING:
-    import datetime
 
 
 class AwsErrorObj(TypedDict):
@@ -379,6 +377,40 @@ class TimedSuspendExecution(SuspendExecution):
             TimedSuspendExecution: Instance with calculated resume time
         """
         return cls(message, scheduled_timestamp=datetime_timestamp.timestamp())
+
+
+def suspend_with_optional_resume_timestamp(
+    msg: str, datetime_timestamp: datetime.datetime | None = None
+) -> NoReturn:
+    """Suspend execution with an optional target resume timestamp."""
+
+    if datetime_timestamp is None:
+        msg = f"No timestamp provided. Suspending without retry timestamp. Original operation: [{msg}]"
+        raise SuspendExecution(msg)
+
+    if datetime_timestamp < datetime.datetime.now(tz=datetime.timezone.utc):
+        msg = f"Invalid timestamp {datetime_timestamp}, suspending with immediate retry, original operation: [{msg}]"
+        raise TimedSuspendExecution.from_datetime(
+            msg, datetime.datetime.now(tz=datetime.timezone.utc)
+        )
+
+    raise TimedSuspendExecution.from_datetime(msg, datetime_timestamp)
+
+
+def suspend_with_optional_resume_delay(
+    msg: str, delay_seconds: int | None = None
+) -> NoReturn:
+    """Suspend execution with an optional delay before resuming."""
+
+    if delay_seconds is None:
+        msg = f"No delay_seconds provided, suspending without retry timestamp, original operation: [{msg}]"
+        raise SuspendExecution(msg)
+
+    if delay_seconds < 0:
+        msg = f"Invalid delay_seconds {delay_seconds}, suspending with delay 0, original operation: [{msg}]"
+        raise TimedSuspendExecution.from_delay(msg, 0)
+
+    raise TimedSuspendExecution.from_delay(msg, delay_seconds)
 
 
 @dataclass(frozen=True)

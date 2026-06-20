@@ -6,12 +6,12 @@ import json
 from unittest.mock import Mock, patch
 
 import pytest
-from async_durable_execution.config import InvokeConfig
 from async_durable_execution.exceptions import (
     CallableRuntimeError,
     ExecutionError,
     SuspendExecution,
     TimedSuspendExecution,
+    suspend_with_optional_resume_delay,
 )
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
@@ -23,9 +23,11 @@ from async_durable_execution.models import (
     OperationSubType,
     OperationType,
 )
-from async_durable_execution.operation.invoke import InvokeOperationExecutor
+from async_durable_execution.operation.invoke import (
+    InvokeConfig,
+    InvokeOperationExecutor,
+)
 from async_durable_execution.state import ExecutionState
-from async_durable_execution.suspend import suspend_with_optional_resume_delay
 from async_durable_execution.operation.base import CheckpointedResult
 
 from ..serdes_test import CustomDictSerDes
@@ -44,6 +46,29 @@ async def invoke_handler(function_name, payload, state, operation_identifier, co
         config=config,
     )
     return await executor.process()
+
+
+def test_invoke_config_defaults():
+    """InvokeConfig keeps its expected defaults."""
+    config = InvokeConfig()
+
+    assert config.serdes_payload is None
+    assert config.serdes_result is None
+    assert config.tenant_id is None
+
+
+def test_invoke_config_with_tenant_id():
+    """InvokeConfig stores explicit tenant ids."""
+    config = InvokeConfig(tenant_id="test-tenant")
+
+    assert config.tenant_id == "test-tenant"
+
+
+def test_invoke_config_importable_from_package_root():
+    """InvokeConfig remains re-exported from the package root."""
+    from async_durable_execution import InvokeConfig as ImportedConfig
+
+    assert ImportedConfig is InvokeConfig
 
 
 async def test_invoke_handler_already_succeeded():

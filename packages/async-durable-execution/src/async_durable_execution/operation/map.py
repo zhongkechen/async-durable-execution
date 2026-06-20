@@ -1,20 +1,25 @@
 """Implementation for Durable Map operation."""
 
 from __future__ import annotations
+
 import json
 import logging
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Generic, TypeVar, Sequence, Callable, Any, Awaitable
 
 from ..async_tools import get_callable_name
 from .base import CheckpointedResult, get_checkpoint_result
-from .child import child_handler, _get_durable_context
+from .child import ChildConfig, child_handler, _get_durable_context
 
 from ..async_tools import (
     invoke_user_callable,
     assert_async_callable,
 )
-from async_durable_execution.operation.concurrency import ConcurrentExecutor
-from ..config import MapConfig, NestingType, BatchedInput, ChildConfig
+from async_durable_execution.operation.concurrency import (
+    CompletionConfig,
+    ConcurrentExecutor,
+    NestingType,
+)
 from ..models import BatchResult, Executable, OperationIdentifier, OperationSubType
 
 
@@ -31,6 +36,37 @@ T = TypeVar("T")
 # Result type
 R = TypeVar("R")
 U = TypeVar("U")
+
+
+@dataclass(frozen=True)
+class BatchedInput(Generic[T, U]):
+    """Wrapper passed to batched map handlers."""
+
+    batch_input: T
+    items: list[U]
+
+
+@dataclass(frozen=True)
+class ItemBatcher(Generic[T]):
+    """Configuration for batching items in map operations."""
+
+    max_items_per_batch: int = 0
+    max_item_bytes_per_batch: int | float = 0
+    batch_input: T | None = None
+
+
+@dataclass(frozen=True)
+class MapConfig(Generic[T]):
+    """Configuration options for map operations over collections."""
+
+    max_concurrency: int | None = None
+    item_batcher: ItemBatcher = field(default_factory=ItemBatcher)
+    completion_config: CompletionConfig = field(default_factory=CompletionConfig)
+    serdes: SerDes | None = None
+    item_serdes: SerDes | None = None
+    summary_generator: SummaryGenerator | None = None
+    nesting_type: NestingType = NestingType.NESTED
+    item_namer: Callable[[T, int], str] | None = None
 
 
 class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI059

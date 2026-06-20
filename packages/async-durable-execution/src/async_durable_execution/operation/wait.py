@@ -6,7 +6,7 @@ import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from ..exceptions import ValidationError
+from ..exceptions import ValidationError, suspend_with_optional_resume_delay
 from ..config import duration_to_seconds
 from .child import _get_durable_context, DurableContext
 from ..models import (
@@ -18,8 +18,6 @@ from ..models import (
     WaitOptions,
 )
 from .base import CheckpointedResult, OperationExecutor
-from ..suspend import suspend_with_optional_resume_delay
-
 
 if TYPE_CHECKING:
     from ..state import ExecutionState

@@ -11,22 +11,22 @@ from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 import pytest
 
 from async_durable_execution.async_tools import get_callable_name
-from async_durable_execution.config import (
-    CallbackConfig,
-    ChildConfig,
-    InvokeConfig,
-    MapConfig,
-    ParallelBranch,
-    ParallelConfig,
-    StepConfig,
-    WaitForCallbackConfig,
-)
+from async_durable_execution.operation.child import ChildConfig
 from async_durable_execution.context import (
     reset_current_context,
     set_current_context,
     get_current_context,
 )
-from async_durable_execution.operation.callback import Callback
+from async_durable_execution.operation.callback import (
+    Callback,
+    CallbackConfig,
+    WaitForCallbackConfig,
+)
+from async_durable_execution.operation.invoke import InvokeConfig
+from async_durable_execution.operation.map import MapConfig
+from async_durable_execution.operation.parallel import ParallelBranch, ParallelConfig
+from async_durable_execution.operation.step import StepConfig
+from async_durable_execution.operation.wait_for_condition import WaitForConditionConfig
 from async_durable_execution import (
     durable_callable,
     create_callback,
@@ -57,7 +57,6 @@ from async_durable_execution.models import (
     OperationType,
 )
 from async_durable_execution.state import ExecutionState
-from async_durable_execution.config import WaitForConditionConfig
 from async_durable_execution.models import WaitForConditionDecision
 from async_durable_execution.operation.base import CheckpointedResult
 
@@ -1377,9 +1376,11 @@ async def test_run_in_child_context_creates_child_context(mock_executor_class):
     expected_parent_id = next(seq)
 
     async def capture_child_context():
+        from async_durable_execution.operation import child as child_module
+
         child_context = get_current_context()
         # Verify child context properties
-        assert isinstance(child_context, DurableContext)
+        assert isinstance(child_context, child_module.DurableContext)
         assert child_context.execution_state is mock_state
         assert child_context.parent_id == expected_parent_id  # noqa: SLF001
         return "child_executed"

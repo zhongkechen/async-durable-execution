@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from async_durable_execution.config import ChildConfig
+from async_durable_execution.operation.child import ChildConfig
 from async_durable_execution.context import (
     get_current_context,
 )

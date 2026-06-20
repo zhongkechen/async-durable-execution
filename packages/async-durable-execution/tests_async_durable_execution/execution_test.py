@@ -10,7 +10,6 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from async_durable_execution.config import StepConfig, StepSemantics
 from async_durable_execution.context import get_current_context
 from async_durable_execution import DurableContext, step
 from async_durable_execution.exceptions import (
@@ -31,6 +30,7 @@ from async_durable_execution.execution import (
     _bind_service_client_to_handler,
     durable_execution,
 )
+from async_durable_execution.operation.step import StepConfig, StepSemantics
 
 # LambdaContext no longer needed - using duck typing
 from async_durable_execution.models import (

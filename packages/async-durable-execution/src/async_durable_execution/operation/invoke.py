@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import logging
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 from .child import _get_durable_context
 
-from ..config import InvokeConfig
-from ..exceptions import ExecutionError
+from ..exceptions import ExecutionError, suspend_with_optional_resume_delay
 from ..models import (
     ChainedInvokeOptions,
     Operation,
@@ -23,16 +23,24 @@ from .base import CheckpointedResult, OperationExecutor
 from ..serdes import (
     DEFAULT_JSON_SERDES,
 )
-from ..suspend import suspend_with_optional_resume_delay
-
 
 if TYPE_CHECKING:
+    from ..serdes import SerDes
     from ..state import ExecutionState
 
 P = TypeVar("P")  # Payload type
 R = TypeVar("R")  # Result type
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class InvokeConfig(Generic[P, R]):
+    """Configuration for invoke operations."""
+
+    serdes_payload: SerDes[P] | None = None
+    serdes_result: SerDes[R] | None = None
+    tenant_id: str | None = None
 
 
 class InvokeOperationExecutor(OperationExecutor[R]):
