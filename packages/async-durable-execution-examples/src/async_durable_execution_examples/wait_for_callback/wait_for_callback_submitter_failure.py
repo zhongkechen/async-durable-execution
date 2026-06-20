@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     WaitForCallbackConfig,
     durable_execution,
     RetryStrategyBuilder,
@@ -12,7 +13,7 @@ from async_durable_execution import (
 
 
 @durable_execution
-async def handler(event: dict[str, Any]) -> dict[str, Any]:
+async def handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with submitter retry and exponential backoff."""
 
     async def submitter(callback_id: str) -> None:

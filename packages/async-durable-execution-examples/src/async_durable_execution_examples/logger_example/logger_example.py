@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     durable_callable,
     durable_callable,
     durable_execution,
@@ -40,7 +41,7 @@ async def my_step(my_arg: int) -> str:
 
 
 @durable_execution
-async def handler(event: Any) -> str:
+async def handler(event: Any, context: LambdaContext) -> str:
     """Handler demonstrating logger usage."""
     logger.info("Starting workflow", extra={"eventId": event.get("id")})
 

@@ -17,6 +17,7 @@ from async_durable_execution.context import (
     get_current_context,
 )
 from async_durable_execution import (
+    LambdaContext,
     create_callback,
     invoke,
     run_in_child_context,
@@ -97,7 +98,7 @@ async def test_end_to_end_step_operation_with_double_check():
         return "step_result"
 
     @durable_execution
-    async def my_handler(event) -> str:
+    async def my_handler(event, context: LambdaContext) -> str:
         result: str = await step(my_step)
         return result
 
@@ -159,7 +160,7 @@ async def test_end_to_end_multiple_operations_execute_sequentially():
         return "result2"
 
     @durable_execution
-    async def my_handler(event) -> list[str]:
+    async def my_handler(event, context: LambdaContext) -> list[str]:
         return [await step(step1), await step(step2)]
 
     with patch(
@@ -214,7 +215,7 @@ async def test_end_to_end_wait_operation_with_double_check():
     """
 
     @durable_execution
-    async def my_handler(event) -> str:
+    async def my_handler(event, context: LambdaContext) -> str:
         await wait(timedelta(seconds=5))
         return "completed"
 
@@ -273,7 +274,7 @@ async def test_end_to_end_checkpoint_synchronization_with_operations_list():
         return "result"
 
     @durable_execution
-    async def my_handler(event) -> str:
+    async def my_handler(event, context: LambdaContext) -> str:
         return await step(my_step)
 
     with patch(
@@ -330,7 +331,7 @@ async def test_callback_deferred_error_handling_to_result():
         return "code_executed_after_callback"
 
     @durable_execution
-    async def my_handler(event) -> str:
+    async def my_handler(event, context: LambdaContext) -> str:
         # Create callback
         callback = await create_callback("test_callback")
 
@@ -433,7 +434,7 @@ async def test_end_to_end_invoke_operation_with_double_check():
     """
 
     @durable_execution
-    async def my_handler(event):
+    async def my_handler(event, context: LambdaContext):
         await invoke("my-function", {"data": "test"})
 
     with patch(
@@ -492,7 +493,7 @@ async def test_end_to_end_child_context_with_async_checkpoint():
         return "child_result"
 
     @durable_execution
-    async def my_handler(event) -> str:
+    async def my_handler(event, context: LambdaContext) -> str:
         result: str = await run_in_child_context(child_function)
         return result
 
@@ -557,7 +558,7 @@ async def test_end_to_end_child_context_replay_children_mode():
         return f"summary_of_{len(result)}_bytes"
 
     @durable_execution
-    async def my_handler(event) -> str:
+    async def my_handler(event, context: LambdaContext) -> str:
         await run_in_child_context(
             child_function_with_large_result,
             config=ChildConfig(summary_generator=summary_generator),
@@ -660,7 +661,7 @@ async def test_end_to_end_child_context_error_handling():
         raise ValueError(msg)
 
     @durable_execution
-    async def my_handler(event) -> str:
+    async def my_handler(event, context: LambdaContext) -> str:
         result: str = await run_in_child_context(child_function_that_fails)
         return result
 
@@ -726,7 +727,7 @@ async def test_end_to_end_child_context_invocation_error_reraised():
         raise InvocationError(msg)
 
     @durable_execution
-    async def my_handler(event) -> str:
+    async def my_handler(event, context: LambdaContext) -> str:
         result: str = await run_in_child_context(child_function_with_invocation_error)
         return result
 

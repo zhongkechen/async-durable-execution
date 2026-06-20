@@ -4,6 +4,7 @@ import asyncio
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     DurableContext,
     durable_callable,
     step,
@@ -38,7 +39,7 @@ async def fetch_preferences(_ctx: DurableContext) -> str:
 
 
 @durable_execution
-async def handler(_event: Any) -> list[str]:
+async def handler(_event: Any, context: LambdaContext) -> list[str]:
     """Execute parallel branches using all supported patterns."""
 
     async def fetch_user_data() -> str:

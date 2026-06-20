@@ -3,6 +3,7 @@
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     durable_callable,
     step,
     ParallelConfig,
@@ -12,7 +13,7 @@ from async_durable_execution import (
 
 
 @durable_execution
-async def handler(_event: Any) -> list[str]:
+async def handler(_event: Any, context: LambdaContext) -> list[str]:
     """Execute 5 tasks with concurrency limit of 2."""
 
     async def task1() -> str:

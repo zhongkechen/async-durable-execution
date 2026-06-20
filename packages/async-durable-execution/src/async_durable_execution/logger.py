@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from .exceptions import ValidationError
@@ -12,45 +11,9 @@ from .context import _current_context
 
 if TYPE_CHECKING:
     from .state import ExecutionState
-    from .models import OperationIdentifier
 
 _configured_logger_ids: set[int] = set()
 _configured_handler_ids: set[int] = set()
-
-
-@dataclass(frozen=True)
-class LogInfo:
-    """Structured durable-execution metadata that can be attached to logs."""
-
-    execution_state: ExecutionState
-    parent_id: str | None = None
-    operation_id: str | None = None
-    name: str | None = None
-    attempt: int | None = None
-
-    @classmethod
-    def from_operation_identifier(
-        cls,
-        execution_state: ExecutionState,
-        op_id: OperationIdentifier,
-        attempt: int | None = None,
-    ) -> LogInfo:
-        return cls(
-            execution_state=execution_state,
-            parent_id=op_id.parent_id,
-            operation_id=op_id.operation_id,
-            name=op_id.name,
-            attempt=attempt,
-        )
-
-    def with_parent_id(self, parent_id: str) -> LogInfo:
-        return LogInfo(
-            execution_state=self.execution_state,
-            parent_id=parent_id,
-            operation_id=self.operation_id,
-            name=self.name,
-            attempt=self.attempt,
-        )
 
 
 class DurableContextFilter(logging.Filter):
@@ -130,7 +93,6 @@ def _is_replaying(context: OperationContext) -> bool:
 
 __all__ = [
     "DurableContextFilter",
-    "LogInfo",
     "build_context_log_extra",
     "configure_durable_logger",
 ]

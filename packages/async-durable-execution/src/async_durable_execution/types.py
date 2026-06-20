@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 from .models import (
     OperationUpdate,
@@ -14,33 +13,11 @@ from .models import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from .state import ExecutionState
 
 T = TypeVar("T")
 U = TypeVar("U")
 C_co = TypeVar("C_co", covariant=True)
 C_contra = TypeVar("C_contra", contravariant=True)
-
-
-@runtime_checkable
-class Callback(Protocol, Generic[C_co]):
-    """Protocol for callback futures."""
-
-    callback_id: str
-
-    @abstractmethod
-    async def result(self) -> C_co | None:
-        """Return the result of the future."""
-        ...  # pragma: no cover
-
-
-class BatchResult(Protocol, Generic[T]):
-    """Protocol for batch operation results."""
-
-    @abstractmethod
-    def get_results(self) -> list[T]:
-        """Get all successful results."""
-        ...  # pragma: no cover
 
 
 class LambdaContext(Protocol):  # pragma: no cover
@@ -61,32 +38,10 @@ class LambdaContext(Protocol):  # pragma: no cover
     def log(self, msg) -> None: ...
 
 
-"""Summary generators for concurrent operations.
-
-Summary generators create compact JSON representations of large BatchResult objects
-when the serialized result exceeds the 256KB checkpoint size limit. This prevents
-large payloads from being stored in checkpoints while maintaining operation metadata.
-
-When a summary is used, the operation is marked with ReplayChildren=true, causing
-the child context to be re-executed during replay to reconstruct the full result.
-"""
-
-
 class SummaryGenerator(Protocol[C_contra]):
     """Create a compact JSON summary for oversized checkpoint payloads."""
 
     def __call__(self, result: C_contra) -> str: ...  # pragma: no cover
-
-
-@runtime_checkable
-class DurableContext(Protocol):
-    """Protocol for the runtime context passed through durable operations."""
-
-    execution_state: ExecutionState | None
-    durable_execution_arn: str | None
-    parent_id: str | None
-    operation_id: str | None
-    operation_name: str | None
 
 
 class DurableServiceClient(Protocol):

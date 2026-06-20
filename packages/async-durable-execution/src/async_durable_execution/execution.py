@@ -283,6 +283,7 @@ def _durable_execution(
                     durable_context,
                     func,
                     input_event,
+                    context,
                 )
 
                 # done with userland

@@ -12,7 +12,6 @@ from async_durable_execution.context import (
 )
 from async_durable_execution.logger import (
     DurableContextFilter,
-    LogInfo,
     build_context_log_extra,
     configure_durable_logger,
 )
@@ -143,24 +142,6 @@ def test_powertools_logger_compatibility():
     assert any(
         isinstance(item, DurableContextFilter) for item in powertools_logger.filters
     )
-
-
-def test_log_info_creation_and_helpers():
-    log_info = LogInfo(EXECUTION_STATE, "parent123", "operation123", "test_name", 5)
-    assert log_info.execution_state.durable_execution_arn == "arn:aws:test"
-    assert log_info.parent_id == "parent123"
-    assert log_info.operation_id == "operation123"
-    assert log_info.name == "test_name"
-    assert log_info.attempt == 5
-
-    op_id = OperationIdentifier("op123", OperationSubType.STEP, "parent456", "op_name")
-    from_operation = LogInfo.from_operation_identifier(EXECUTION_STATE, op_id, 3)
-    assert from_operation.parent_id == "parent456"
-    assert from_operation.operation_id == "op123"
-    assert from_operation.name == "op_name"
-    assert from_operation.attempt == 3
-
-    assert log_info.with_parent_id("new_parent").parent_id == "new_parent"
 
 
 def test_build_context_log_extra_for_durable_context():

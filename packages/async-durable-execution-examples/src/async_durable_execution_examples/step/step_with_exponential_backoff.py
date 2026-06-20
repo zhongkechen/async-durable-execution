@@ -2,6 +2,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     durable_callable,
     step,
     StepConfig,
@@ -11,7 +12,7 @@ from async_durable_execution import (
 
 
 @durable_execution
-async def handler(_event: Any) -> str:
+async def handler(_event: Any, context: LambdaContext) -> str:
     # Step with exponential backoff retry strategy
     retry_config = RetryStrategyBuilder(
         max_attempts=3,

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any, TypedDict
 
 from async_durable_execution import (
+    LambdaContext,
     WaitForCallbackConfig,
     durable_execution,
     SerDes,
@@ -71,7 +72,7 @@ async def noop_submitter(_callback_id: str) -> None:
 
 
 @durable_execution
-async def handler(_event: Any) -> dict[str, Any]:
+async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with custom serdes."""
 
     config = WaitForCallbackConfig(

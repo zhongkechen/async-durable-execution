@@ -67,6 +67,7 @@ from .execution import durable_execution
 from .operation.wait import wait
 from .plugin import DurableInstrumentationPlugin
 from .serdes import JsonSerDes, SerDes, SerDesContext
+from .types import LambdaContext
 
 __all__ = [
     "BatchItem",
@@ -83,6 +84,7 @@ __all__ = [
     "InvocationError",
     "InvokeConfig",
     "JsonSerDes",
+    "LambdaContext",
     "MapConfig",
     "NestingType",
     "OperationIdentifier",

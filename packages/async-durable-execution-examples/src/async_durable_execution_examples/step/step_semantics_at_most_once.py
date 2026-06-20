@@ -1,6 +1,7 @@
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     durable_callable,
     step,
     StepConfig,
@@ -10,7 +11,7 @@ from async_durable_execution import (
 
 
 @durable_execution
-async def handler(_event: Any) -> str:
+async def handler(_event: Any, context: LambdaContext) -> str:
     # Step with AT_MOST_ONCE_PER_RETRY semantics
     config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
 

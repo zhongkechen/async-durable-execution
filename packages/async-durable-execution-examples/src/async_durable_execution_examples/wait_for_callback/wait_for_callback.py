@@ -3,6 +3,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     WaitForCallbackContext,
     WaitForCallbackConfig,
     durable_execution,
@@ -20,7 +21,7 @@ async def external_system_call(_callback_id: str) -> None:
 
 
 @durable_execution
-async def handler(_event: Any) -> str:
+async def handler(_event: Any, context: LambdaContext) -> str:
     config = WaitForCallbackConfig(
         timeout=timedelta(seconds=120), heartbeat_timeout=timedelta(seconds=60)
     )

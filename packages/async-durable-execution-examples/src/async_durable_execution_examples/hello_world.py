@@ -14,6 +14,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     durable_callable,
     step,
     durable_execution,
@@ -37,12 +38,12 @@ async def step_2(status_code: int) -> str:
 
 
 @durable_execution
-async def handler(event: Any) -> dict[str, Any]:
+async def handler(event: Any, context: LambdaContext) -> dict[str, Any]:
     """Durable Lambda handler with steps, waits, and logging.
 
     Args:
         event: Lambda event input
-        context: Durable execution context
+        context: Lambda runtime context
 
     Returns:
         Response dictionary with statusCode and body

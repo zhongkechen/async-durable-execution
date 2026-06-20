@@ -5,6 +5,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     durable_execution,
     get_current_context,
     WaitForConditionCheckContext,
@@ -15,7 +16,7 @@ from async_durable_execution import (
 
 
 @durable_execution
-async def handler(_event: Any) -> int:
+async def handler(_event: Any, context: LambdaContext) -> int:
     """Handler demonstrating wait-for-condition pattern."""
 
     async def condition_function(state: int) -> int:

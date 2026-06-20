@@ -12,7 +12,6 @@ from async_durable_execution import (
     run_in_child_context,
     wait_for_callback,
     map as map_operation,
-    DurableContext as RuntimeDurableContext,
 )
 from async_durable_execution.context import reset_current_context, set_current_context
 from async_durable_execution.models import OperationIdentifier, OperationSubType
@@ -24,49 +23,6 @@ from async_durable_execution.operation.callback import (
 from async_durable_execution.operation.map import MapConfig
 from async_durable_execution.operation.parallel import ParallelConfig
 from async_durable_execution.operation.step import StepConfig
-from async_durable_execution.types import Callback, DurableContext
-
-
-async def test_callback_protocol():
-    """Test Callback protocol implementation."""
-    mock_callback = Mock(spec=Callback)
-    mock_callback.callback_id = "test-callback-123"
-    mock_callback.result = AsyncMock(return_value="test_result")
-
-    assert mock_callback.callback_id == "test-callback-123"
-    assert await mock_callback.result() == "test_result"
-
-
-async def test_durable_context_protocol_fields():
-    """Test DurableContext protocol exposes execution state fields."""
-    mock_context = Mock(spec=DurableContext)
-    mock_context.execution_state = Mock()
-    mock_context.durable_execution_arn = "arn:aws:lambda:region:acct:function:name:1"
-    mock_context.parent_id = "parent-op"
-    mock_context.operation_id = "operation-op"
-    mock_context.operation_name = "operation-name"
-
-    assert mock_context.execution_state is not None
-    assert mock_context.durable_execution_arn.endswith(":1")
-    assert mock_context.parent_id == "parent-op"
-    assert mock_context.operation_id == "operation-op"
-    assert mock_context.operation_name == "operation-name"
-
-
-async def test_durable_context_protocol_optional_fields_can_be_none():
-    """Optional DurableContext protocol fields may be unset."""
-    mock_context = Mock(spec=DurableContext)
-    mock_context.execution_state = None
-    mock_context.durable_execution_arn = None
-    mock_context.parent_id = None
-    mock_context.operation_id = None
-    mock_context.operation_name = None
-
-    assert mock_context.execution_state is None
-    assert mock_context.durable_execution_arn is None
-    assert mock_context.parent_id is None
-    assert mock_context.operation_id is None
-    assert mock_context.operation_name is None
 
 
 async def test_module_level_operations_delegate_to_mock_context_methods():
@@ -186,19 +142,6 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
     assert mock_child.await_args_list[0].kwargs["name"] == "test_child"
     assert mock_child.await_args_list[1].kwargs["name"] == "test_wait_for_callback"
     assert mock_child_handler.await_count == 2
-
-
-async def test_protocol_members_reflect_current_surface():
-    """Test that protocols retain the current public surface."""
-    assert hasattr(Callback, "result")
-
-    assert DurableContext.__annotations__ == {
-        "execution_state": "ExecutionState | None",
-        "durable_execution_arn": "str | None",
-        "parent_id": "str | None",
-        "operation_id": "str | None",
-        "operation_name": "str | None",
-    }
 
 
 async def test_concrete_callback_implementation():

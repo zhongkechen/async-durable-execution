@@ -22,8 +22,8 @@ from async_durable_execution.operation.with_retry import WithRetryConfig
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from async_durable_execution import DurableContext
     from async_durable_execution.operation.child import ChildConfig
-    from async_durable_execution.types import DurableContext
 
 _T = TypeVar("_T")
 

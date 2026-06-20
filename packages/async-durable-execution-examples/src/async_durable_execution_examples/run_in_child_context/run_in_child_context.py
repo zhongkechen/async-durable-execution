@@ -2,6 +2,7 @@ import asyncio
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     durable_callable,
     step,
     durable_execution,
@@ -26,7 +27,7 @@ async def child_operation(value: int) -> int:
 
 
 @durable_execution
-async def handler(_event: Any) -> str:
+async def handler(_event: Any, context: LambdaContext) -> str:
     result = await run_in_child_context(
         child_operation(5),
         name="child_operation",
