@@ -265,7 +265,7 @@ def durable_parallel_branch(
     Example:
         @durable_parallel_branch(name="fetch-user-data")
         async def fetch_user(user_id: str) -> dict:
-            ctx = get_context()
+            ctx = get_current_context()
 
             async def load_user() -> dict:
                 return {"id": user_id, "name": "Jane"}
@@ -274,7 +274,7 @@ def durable_parallel_branch(
 
         @durable_parallel_branch(name="fetch-orders")
         async def fetch_orders(user_id: str) -> list:
-            ctx = get_context()
+            ctx = get_current_context()
 
             async def load_orders() -> list:
                 return ["order1", "order2"]

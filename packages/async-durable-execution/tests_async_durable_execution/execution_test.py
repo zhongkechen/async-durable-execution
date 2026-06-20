@@ -3089,7 +3089,7 @@ async def test_durable_execution_supports_async_handler():
     assert json.loads(result["Result"]) == {"result": "async-success"}
 
 
-async def test_durable_execution_handler_can_use_get_context_without_parameter():
+async def test_durable_execution_handler_can_use_get_current_context_without_parameter():
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106

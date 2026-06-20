@@ -323,8 +323,8 @@ async def test_step_handler_passes_attempt_to_step_context():
     assert result == 1
 
 
-async def test_step_handler_get_context_returns_step_context():
-    """get_context() should expose StepContext while a step is executing."""
+async def test_step_handler_get_current_context_returns_step_context():
+    """get_current_context() should expose StepContext while a step is executing."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = CheckpointedResult.create_not_found()
     mock_state.operations.get.return_value = mock_result
@@ -348,10 +348,10 @@ async def test_step_handler_get_context_returns_step_context():
     assert result == 1
 
 
-def test_get_context_raises_outside_execution():
+def test_get_current_context_raises_outside_execution():
     with pytest.raises(
         RuntimeError,
-        match="get_context\\(\\) can only be used while a durable function, step function, wait_for_callback submitter, or wait_for_condition check is executing\\.",
+        match="get_current_context\\(\\) can only be used while a durable function, step function, wait_for_callback submitter, or wait_for_condition check is executing\\.",
     ):
         get_current_context()
 
