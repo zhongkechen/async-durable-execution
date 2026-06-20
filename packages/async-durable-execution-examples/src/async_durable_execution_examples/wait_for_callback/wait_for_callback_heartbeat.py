@@ -5,6 +5,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     WaitForCallbackConfig,
     durable_execution,
     wait_for_callback,
@@ -17,7 +18,7 @@ async def submitter(_callback_id: str) -> None:
 
 
 @durable_execution
-async def handler(event: dict[str, Any]) -> dict[str, Any]:
+async def handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with heartbeat timeout."""
 
     config = WaitForCallbackConfig(

@@ -7,6 +7,7 @@ from typing import Any
 
 from async_durable_execution import (
     InvocationStatus,
+    LambdaContext,
     durable_execution,
     run_in_child_context,
 )
@@ -44,7 +45,7 @@ async def test_basic_durable_function() -> None:
         return f"{a} {b}"
 
     @durable_execution
-    async def function_under_test(event: Any) -> list[str]:
+    async def function_under_test(event: Any, context: LambdaContext) -> list[str]:
         results: list[str] = []
 
         result_one: str = await step(partial(one, 1, 2))

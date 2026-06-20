@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     durable_callable,
     durable_execution,
     run_in_child_context,
@@ -32,7 +33,7 @@ async def child_context_with_callback() -> dict[str, Any]:
 
 
 @durable_execution
-async def handler(_event: Any) -> dict[str, Any]:
+async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
     """Handler demonstrating waitForCallback within child contexts."""
     parent_result: str = await wait_for_callback(
         noop_submitter, name="parent-callback-op"

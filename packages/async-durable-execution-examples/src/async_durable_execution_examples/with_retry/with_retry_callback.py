@@ -9,6 +9,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     RetryStrategyBuilder,
     WaitForCallbackConfig,
     durable_execution,
@@ -19,7 +20,7 @@ from async_durable_execution import WithRetryConfig
 
 
 @durable_execution
-async def handler(_event: Any) -> dict[str, Any]:
+async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
     """Handler demonstrating with_retry around a wait_for_callback.
 
     The external system may fail to process the callback multiple times.

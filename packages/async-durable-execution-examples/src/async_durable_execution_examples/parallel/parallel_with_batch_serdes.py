@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     durable_callable,
     step,
     BatchItem,
@@ -78,7 +79,7 @@ class CustomBatchSerDes(SerDes[BatchResult]):
 
 
 @durable_execution
-async def handler(_event: Any) -> dict[str, Any]:
+async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
     """Execute parallel tasks with custom batch-level serialization."""
     # Use custom serdes for the entire BatchResult, default JSON for individual functions
     config = ParallelConfig(serdes=CustomBatchSerDes(), item_serdes=JsonSerDes())

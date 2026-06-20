@@ -13,14 +13,6 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 Params = ParamSpec("Params")
-_CONTEXT_PARAM_NAMES = {
-    "context",
-    "ctx",
-    "child_context",
-    "child_ctx",
-    "durable_context",
-    "durable_ctx",
-}
 
 
 def is_async_callable(func: Callable[..., object]) -> bool:

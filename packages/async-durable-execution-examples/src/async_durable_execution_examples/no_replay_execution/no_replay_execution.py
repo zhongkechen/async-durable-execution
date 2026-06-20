@@ -3,6 +3,7 @@
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     durable_callable,
     step,
     durable_execution,
@@ -10,7 +11,7 @@ from async_durable_execution import (
 
 
 @durable_execution
-async def handler(_event: Any) -> dict[str, bool]:
+async def handler(_event: Any, context: LambdaContext) -> dict[str, bool]:
     """Handler demonstrating step execution without replay."""
 
     @durable_callable

@@ -7,7 +7,11 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from async_durable_execution import DurableContext, durable_execution
+from async_durable_execution import (
+    DurableContext,
+    LambdaContext as DurableLambdaContext,
+    durable_execution,
+)
 from async_durable_execution.context import get_current_context
 from async_durable_execution.execution import (
     DurableExecutionInvocationInput,
@@ -116,10 +120,10 @@ async def test_in_process_invoker_binds_service_client_to_decorated_handler():
     service_client = Mock()
 
     @durable_execution
-    async def handler(event: Any) -> dict:
-        context = cast(DurableContext, get_current_context())
+    async def handler(event: Any, context: DurableLambdaContext) -> dict:
+        durable_context = cast(DurableContext, get_current_context())
         assert event == {"hello": "world"}
-        assert context.execution_state._service_client is service_client  # noqa: SLF001
+        assert durable_context.execution_state._service_client is service_client  # noqa: SLF001
         return {"result": "test-result"}
 
     invoker = InProcessInvoker(handler, service_client)

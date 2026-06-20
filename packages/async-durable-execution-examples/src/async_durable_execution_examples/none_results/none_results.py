@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     durable_callable,
     durable_execution,
     durable_callable,
@@ -20,7 +21,7 @@ async def parent_context() -> None:
 
 
 @durable_execution
-async def handler(_event: Any) -> str:
+async def handler(_event: Any, context: LambdaContext) -> str:
     """Handler demonstrating operations with undefined/None results."""
 
     @durable_callable

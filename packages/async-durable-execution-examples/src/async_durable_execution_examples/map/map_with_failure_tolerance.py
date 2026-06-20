@@ -4,6 +4,7 @@ import asyncio
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     CompletionConfig,
     MapConfig,
     RetryStrategyBuilder,
@@ -16,7 +17,7 @@ from async_durable_execution import (
 
 
 @durable_execution
-async def handler(_event: Any) -> dict[str, Any]:
+async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
     """Process items with failure tolerance."""
     items = list(range(1, 11))  # [1, 2, 3, ..., 10]
 

@@ -37,10 +37,7 @@ from async_durable_execution.operation.step import StepConfig
 from async_durable_execution.models import RetryDecision
 from async_durable_execution.serdes import SerDes
 from async_durable_execution.state import ExecutionState
-from async_durable_execution.types import (
-    DurableContext,
-)
-from async_durable_execution import WaitForCallbackContext, StepContext
+from async_durable_execution import DurableContext, WaitForCallbackContext, StepContext
 from async_durable_execution.operation.base import CheckpointedResult
 
 

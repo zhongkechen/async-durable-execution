@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     CallbackConfig,
     durable_execution,
     create_callback,
@@ -12,7 +13,7 @@ from async_durable_execution import (
 
 
 @durable_execution
-async def handler(_event: Any) -> dict[str, Any]:
+async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
     """Handler demonstrating multiple concurrent callback operations."""
     callback_config = CallbackConfig(timeout=timedelta(seconds=30))
 

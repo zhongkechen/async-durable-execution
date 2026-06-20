@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     durable_callable,
     step,
     MapConfig,
@@ -19,7 +20,7 @@ async def generate_large_string(size_in_kb: int) -> str:
 
 
 @durable_execution
-async def handler(_event: Any) -> dict[str, Any]:
+async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
     """Handler demonstrating large scale map with substantial data."""
     # Create array of 50 items (more manageable for testing)
     items = list(range(1, 51))  # 1 to 50

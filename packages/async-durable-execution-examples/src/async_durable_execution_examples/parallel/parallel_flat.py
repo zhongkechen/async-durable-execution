@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
+    LambdaContext,
     durable_callable,
     step,
     NestingType,
@@ -15,7 +16,7 @@ from async_durable_execution import (
 
 
 @durable_execution
-async def handler(_event: Any) -> list[str]:
+async def handler(_event: Any, context: LambdaContext) -> list[str]:
     """Execute multiple operations in parallel using parallel()."""
 
     async def task1() -> str:
