@@ -32,17 +32,12 @@ from .checkpoint.processor import (
 )
 from .client import InMemoryServiceClient
 from .exceptions import (
-    DurableFunctionsLocalRunnerError,
     DurableFunctionsTestError,
     InvalidParameterValueException,
     ResourceNotFoundException,
 )
 from .executor import Executor
-from .invoker import (
-    InProcessInvoker,
-    LambdaInvoker,
-    create_lambda_client,
-)
+from .invoker import InProcessInvoker
 from .model import (
     GetDurableExecutionHistoryResponse,
     GetDurableExecutionResponse,
@@ -51,18 +46,7 @@ from .model import (
     events_to_operations,
 )
 from .scheduler import Scheduler
-from .stores.base import (
-    ExecutionStore,
-    StoreType,
-)
-from .stores.filesystem import (
-    FileSystemExecutionStore,
-)
-from .stores.memory import (
-    InMemoryExecutionStore,
-)
-from .stores.sqlite import SQLiteExecutionStore
-from .web.server import WebServer
+from .stores.memory import InMemoryExecutionStore
 
 
 if TYPE_CHECKING:
@@ -71,7 +55,6 @@ if TYPE_CHECKING:
 
     from .execution import Execution
     from .model import Event
-    from .web.server import WebServiceConfig
 
 
 logger = logging.getLogger(__name__)
@@ -92,29 +75,6 @@ def _deserialize_operation_payload(
         return serdes.deserialize(payload)
     except Exception:
         return json.loads(payload)
-
-
-@dataclass(frozen=True)
-class WebRunnerConfig:
-    """Configuration for the WebRunner using composition pattern.
-
-    This configuration class encapsulates all settings needed to run the web server
-    for durable functions testing, including HTTP server configuration and Lambda
-    service configuration.
-    """
-
-    # HTTP server configuration (existing WebServiceConfig)
-    web_service: WebServiceConfig
-
-    # Lambda service configuration (web runner specific)
-    lambda_endpoint: str = "http://127.0.0.1:3001"
-    local_runner_endpoint: str = "http://0.0.0.0:5000"
-    local_runner_region: str = "us-west-2"
-    local_runner_mode: str = "local"
-
-    # Store configuration
-    store_type: StoreType = StoreType.MEMORY
-    store_path: str | None = None  # Path for filesystem store
 
 
 @dataclass(frozen=True)
@@ -785,151 +745,6 @@ def create_runner(
         raise InvalidParameterValueException(msg)
 
     return runner
-
-
-class WebRunner:
-    """Web server runner for durable functions testing with HTTP API endpoints."""
-
-    def __init__(self, config: WebRunnerConfig) -> None:
-        """Initialize WebRunner with configuration.
-
-        Args:
-            config: WebRunnerConfig containing server and Lambda service settings
-        """
-        self._config = config
-        self._server: WebServer | None = None
-        self._scheduler: Scheduler | None = None
-        self._store: ExecutionStore | None = None
-        self._invoker: LambdaInvoker | None = None
-        self._executor: Executor | None = None
-
-    def __enter__(self) -> WebRunner:
-        """Context manager entry point.
-
-        Returns:
-            WebRunner for use in with statement
-        """
-        self.start()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Context manager exit point with cleanup.
-
-        Args:
-            exc_type: Exception type if an exception occurred
-            exc_val: Exception value if an exception occurred
-            exc_tb: Exception traceback if an exception occurred
-        """
-        self.stop()
-
-    def start(self) -> None:
-        """Start the server and initialize all dependencies.
-
-        Creates and configures all required components including scheduler,
-        store, invoker, executor, and web server. It does not however start
-        serving web requests, for that you need serve_forever.
-
-        Raises:
-            DurableFunctionsLocalRunnerError: If server is already started
-        """
-        if self._server is not None:
-            msg = "Server is already running"
-            raise DurableFunctionsLocalRunnerError(msg)
-
-        # Create dependencies and server
-        if self._config.store_type == StoreType.SQLITE:
-            store_path = self._config.store_path
-            self._store = SQLiteExecutionStore.create_and_initialize(store_path)
-        elif self._config.store_type == StoreType.FILESYSTEM:
-            store_path = self._config.store_path or ".durable_executions"
-            self._store = FileSystemExecutionStore.create(store_path)
-        else:
-            self._store = InMemoryExecutionStore()
-        self._scheduler = Scheduler()
-        self._invoker = LambdaInvoker(self._create_boto3_client())
-
-        # Create shared CheckpointProcessor
-        checkpoint_processor = CheckpointProcessor(self._store, self._scheduler)
-
-        # Create executor with all dependencies including checkpoint processor
-        self._executor = Executor(
-            store=self._store,
-            scheduler=self._scheduler,
-            invoker=self._invoker,
-            checkpoint_processor=checkpoint_processor,
-        )
-
-        # Add executor as observer to the checkpoint processor
-        checkpoint_processor.add_execution_observer(self._executor)
-
-        # Start the scheduler
-        self._scheduler.start()
-
-        # Create web server with configuration and executor
-        self._server = WebServer(
-            config=self._config.web_service, executor=self._executor
-        )
-
-    def serve_forever(self) -> None:
-        """Start serving HTTP requests indefinitely.
-
-        Delegates to the underlying WebServer.serve_forever() method.
-        This method blocks until the server is stopped.
-
-        Raises:
-            DurableFunctionsLocalRunnerError: If server has not been started
-        """
-        if self._server is None:
-            msg = "Server not started"
-            raise DurableFunctionsLocalRunnerError(msg)
-
-        # This blocks until KeyboardInterrupt - let caller handle the exception
-        self._server.serve_forever()
-
-    def stop(self) -> None:
-        """Stop the web server and cleanup resources.
-
-        Gracefully shuts down the server, scheduler, and cleans up
-        all allocated resources. Safe to call multiple times.
-        Handles cleanup exceptions gracefully to ensure all resources
-        are cleaned up even if some fail.
-        """
-        if self._server is not None:
-            try:
-                self._server.server_close()
-            except Exception:
-                # Log the exception but continue cleanup
-                logger.exception("error closing web server")
-
-            self._server = None
-
-        if self._scheduler is not None:
-            try:
-                self._scheduler.stop()
-            except Exception:
-                logger.exception("error stopping scheduler")
-            self._scheduler = None
-
-        self._store = None
-        self._invoker = None
-        self._executor = None
-
-    def _create_boto3_client(self) -> Any:
-        """Create boto3 client for Lambda service.
-
-        Creates a boto3 client with the local runner endpoint and region from configuration.
-
-        Returns:
-            Configured boto3 client for Lambda service
-
-        Raises:
-            Exception: If client creation fails - exceptions propagate naturally
-                      for CLI to handle as general Exception
-        """
-        return create_lambda_client(
-            endpoint_url=self._config.lambda_endpoint,
-            region_name=self._config.local_runner_region,
-        )
 
 
 class DurableFunctionCloudTestRunner:

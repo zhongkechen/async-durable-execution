@@ -27,11 +27,7 @@ from async_durable_execution.config import (
     NestingType,
     ParallelConfig,
 )
-from async_durable_execution.context import (
-    OperationIdGenerator,
-    reset_current_context,
-    set_current_context,
-)
+from async_durable_execution.context import reset_current_context, set_current_context
 from async_durable_execution import parallel, DurableContext
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import OperationSubType
@@ -980,7 +976,7 @@ async def test_parallel_item_serialize(mock_serialize, item_serdes, batch_serdes
         )
 
     with patch.object(
-        OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+        child.OperationIdGenerator, "_create_step_id_for_logical_step", create_id
     ):
         context = create_test_context(state=mock_state)
 
@@ -1067,7 +1063,7 @@ async def test_parallel_item_deserialize(mock_deserialize, item_serdes, batch_se
         )
 
     with patch.object(
-        OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+        child.OperationIdGenerator, "_create_step_id_for_logical_step", create_id
     ):
         context = create_test_context(state=mock_state)
 
@@ -1202,7 +1198,9 @@ async def test_parallel_handler_serializes_batch_result():
                 )
 
             with patch.object(
-                OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+                child.OperationIdGenerator,
+                "_create_step_id_for_logical_step",
+                create_id,
             ):
                 context = create_test_context(state=mock_state)
 
@@ -1271,7 +1269,9 @@ async def test_parallel_default_serdes_serializes_batch_result():
                 )
 
             with patch.object(
-                OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+                child.OperationIdGenerator,
+                "_create_step_id_for_logical_step",
+                create_id,
             ):
                 context = create_test_context(state=mock_state)
 
@@ -1345,7 +1345,9 @@ async def test_parallel_custom_serdes_serializes_batch_result():
                 )
 
             with patch.object(
-                OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+                child.OperationIdGenerator,
+                "_create_step_id_for_logical_step",
+                create_id,
             ):
                 context = create_test_context(state=mock_state)
 

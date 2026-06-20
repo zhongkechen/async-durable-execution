@@ -3,21 +3,12 @@
 from __future__ import annotations
 
 from datetime import timezone
-from enum import Enum
 from typing import TYPE_CHECKING, Protocol
 
 
 if TYPE_CHECKING:
     from async_durable_execution.models import Operation
     from ..execution import Execution
-
-
-class StoreType(Enum):
-    """Supported execution store types."""
-
-    MEMORY = "memory"
-    FILESYSTEM = "filesystem"
-    SQLITE = "sqlite"
 
 
 class ExecutionStore(Protocol):

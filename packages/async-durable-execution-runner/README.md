@@ -29,12 +29,11 @@ pip install async-durable-execution-runner
 
 ## Overview
 
-Use Async Durable Execution Runner for Python to test your Python durable functions locally and in cloud environments.
+Use Async Durable Execution Runner for Python to test your durable functions with Python-native local and cloud runners.
 
 This package is distributed from a community-maintained fork of the original Apache-2.0 licensed AWS project and continues under Apache License 2.0 with upstream notices preserved.
 
-The test framework contains a local runner, so you can run and test your durable function locally
-before you deploy it.
+The package keeps a local in-process runner for fast testing before deployment, plus a cloud runner for exercising deployed functions.
 
 ## Quick Start
 
@@ -195,20 +194,6 @@ The observer pattern enables loose coupling between checkpoint processing and ex
 4. **Executor** (as ExecutionObserver) receives notifications and updates **Execution** state
 5. **Execution** complete_* methods finalize the execution state
 
-
-## Documentation
-
-### Error Handling
-
-The testing framework implements AWS-compliant error responses that match the exact format expected by boto3 and AWS services. For detailed information about error response formats, exception types, and troubleshooting, see:
-
-- [Error Response Documentation](docs/error-responses.md)
-
-Key features:
-- **AWS-compliant JSON format**: Matches boto3 expectations exactly
-- **Smithy model compliance**: Field names follow AWS Smithy definitions  
-- **HTTP status code mapping**: Standard AWS service status codes
-- **Boto3 compatibility**: Seamless integration with boto3 error handling
 
 ## Developers
 Please see [CONTRIBUTING.md](../../CONTRIBUTING.md). It contains the testing guide, sample commands and instructions
