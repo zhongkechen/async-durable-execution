@@ -93,6 +93,14 @@ class ReplayStatus(Enum):
 class ExecutionState:
     """Get, set and maintain execution state. This is mutable. Create and check checkpoints."""
 
+    @property
+    def operations(self) -> MutableMapping[str, Operation]:
+        return self._operations
+
+    @operations.setter
+    def operations(self, value: MutableMapping[str, Operation]) -> None:
+        self._operations = value
+
     def __init__(
         self,
         durable_execution_arn: str,
