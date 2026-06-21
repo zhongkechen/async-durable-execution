@@ -134,21 +134,31 @@ def durable_execution(
     assert_async_callable(func, label="func")
     plugin_executor = PluginExecutor(config.plugins)
 
-    # Use the explicitly provided durable client when present. Otherwise,
-    # initialize from the configured boto3 client or environment.
-    active_service_client = config.service_client or ThreadedSyncLambdaClient(
-        client=config.boto3_client
-    )
+    # Use the explicitly provided durable client when present. Otherwise, delay
+    # boto3 client construction until invocation so importing decorated handlers
+    # does not require AWS environment configuration.
+    active_service_client = config.service_client
 
-    @functools.wraps(func)
-    def wrapper(event: Any, context: LambdaContext) -> MutableMapping[str, Any]:
-        return asyncio.run(
-            _wrapper_with_plugins(
-                func, event, context, plugin_executor, active_service_client
+    def get_active_service_client() -> DurableServiceClient:
+        nonlocal active_service_client
+        if active_service_client is None:
+            active_service_client = ThreadedSyncLambdaClient(client=config.boto3_client)
+        return active_service_client
+
+    async def async_wrapper(
+        event: Any, context: LambdaContext
+    ) -> MutableMapping[str, Any]:
+        return (
+            await _wrapper_with_plugins(
+                func, event, context, plugin_executor, get_active_service_client()
             )
         ).to_dict()
 
-    wrapper._async_handler = _wrapper_with_plugins  # type: ignore[attr-defined]  # noqa: SLF001
+    @functools.wraps(func)
+    def wrapper(event: Any, context: LambdaContext) -> MutableMapping[str, Any]:
+        return asyncio.run(async_wrapper(event, context))
+
+    wrapper._async_handler = async_wrapper  # type: ignore[attr-defined]  # noqa: SLF001
     wrapper._durable_execution_original = func  # type: ignore[attr-defined]  # noqa: SLF001
     wrapper._durable_execution_boto3_client = config.boto3_client  # type: ignore[attr-defined]  # noqa: SLF001
     wrapper._durable_execution_plugins = config.plugins  # type: ignore[attr-defined]  # noqa: SLF001
@@ -232,7 +242,7 @@ async def _wrapper_async(
         )
         execution_state.start_checkpointing()
 
-        logger.debug("execution arn:", invocation_input.durable_execution_arn)
+        logger.debug("execution arn: %s", invocation_input.durable_execution_arn)
 
         result = await invoke_user_callable(
             root_context,

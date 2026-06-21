@@ -358,6 +358,20 @@ async def test_durable_execution_client_selection_env_normal_result():
         mock_client.checkpoint.assert_not_called()
 
 
+async def test_durable_execution_defers_default_client_until_invocation():
+    """Decorating a handler must not require AWS environment configuration."""
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_lambda_client:
+
+        @durable_execution
+        async def test_handler(event: Any, context: LambdaContext) -> dict:
+            return {"result": "success"}
+
+        assert callable(test_handler)
+        mock_lambda_client.assert_not_called()
+
+
 async def test_durable_execution_client_selection_env_large_result():
     """Test durable_execution selects correct client from environment."""
     with patch(

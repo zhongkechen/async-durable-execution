@@ -638,9 +638,7 @@ class DurableFunctionLocalTestRunner:
             input=self._default_input,
         )
 
-        output: StartDurableExecutionOutput = await asyncio.to_thread(
-            self._executor.start_execution, start_input
-        )
+        output: StartDurableExecutionOutput = self._executor.start_execution(start_input)
 
         if output.execution_arn is None:
             msg_arn: str = "Execution ARN must exist to run test."
@@ -650,16 +648,14 @@ class DurableFunctionLocalTestRunner:
     async def wait_for_result(
         self, execution_arn: str, timeout: int = 60
     ) -> DurableFunctionTestResult:
-        completed = await asyncio.to_thread(
-            self._executor.wait_until_complete, execution_arn, timeout
-        )
+        completed = self._executor.wait_until_complete(execution_arn, timeout)
 
         if not completed:
             msg_timeout: str = "Execution did not complete within timeout"
 
             raise TimeoutError(msg_timeout)
 
-        execution: Execution = await asyncio.to_thread(self._store.load, execution_arn)
+        execution: Execution = self._store.load(execution_arn)
         return DurableFunctionTestResult.create(execution=execution)
 
     async def wait_for_callback(
@@ -669,9 +665,7 @@ class DurableFunctionLocalTestRunner:
 
         while time.time() - start_time < timeout:
             try:
-                history_response = await asyncio.to_thread(
-                    self._executor.get_execution_history, execution_arn
-                )
+                history_response = self._executor.get_execution_history(execution_arn)
                 callback_id = _get_callback_id_from_events(
                     events=history_response.events, name=name
                 )
