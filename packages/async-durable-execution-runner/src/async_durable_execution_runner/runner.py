@@ -638,7 +638,9 @@ class DurableFunctionLocalTestRunner:
             input=self._default_input,
         )
 
-        output: StartDurableExecutionOutput = self._executor.start_execution(start_input)
+        output: StartDurableExecutionOutput = self._executor.start_execution(
+            start_input
+        )
 
         if output.execution_arn is None:
             msg_arn: str = "Execution ARN must exist to run test."
