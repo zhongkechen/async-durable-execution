@@ -76,6 +76,44 @@ async def run_with_context(context: DurableContext, awaitable):
         reset_current_context(token)
 
 
+async def test_current_context_is_isolated_between_asyncio_tasks():
+    """Concurrent tasks should keep independent current-context bindings."""
+    parent_context = create_test_context(parent_id="parent")
+    task_a_context = create_test_context(parent_id="task-a")
+    task_b_context = create_test_context(parent_id="task-b")
+    task_a_bound = asyncio.Event()
+    task_b_bound = asyncio.Event()
+
+    async def worker(
+        context: DurableContext,
+        bound: asyncio.Event,
+        other_bound: asyncio.Event,
+    ) -> DurableContext:
+        token = set_current_context(context)
+        try:
+            assert get_current_context() is context
+            bound.set()
+            await asyncio.wait_for(other_bound.wait(), timeout=1)
+            await asyncio.sleep(0)
+            assert get_current_context() is context
+            return get_current_context()
+        finally:
+            reset_current_context(token)
+
+    parent_token = set_current_context(parent_context)
+    try:
+        task_a = asyncio.create_task(worker(task_a_context, task_a_bound, task_b_bound))
+        task_b = asyncio.create_task(worker(task_b_context, task_b_bound, task_a_bound))
+
+        result_a, result_b = await asyncio.gather(task_a, task_b)
+
+        assert result_a is task_a_context
+        assert result_b is task_b_context
+        assert get_current_context() is parent_context
+    finally:
+        reset_current_context(parent_token)
+
+
 def make_async_executor(result):
     mock_executor = MagicMock()
     mock_executor.process = AsyncMock(return_value=result)
