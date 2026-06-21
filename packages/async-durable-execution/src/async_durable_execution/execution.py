@@ -150,8 +150,8 @@ def durable_execution(
 
     wrapper._async_handler = _wrapper_with_plugins  # type: ignore[attr-defined]  # noqa: SLF001
     wrapper._durable_execution_original = func  # type: ignore[attr-defined]  # noqa: SLF001
-    wrapper._durable_execution_boto3_client = boto3_client  # type: ignore[attr-defined]  # noqa: SLF001
-    wrapper._durable_execution_plugins = plugins  # type: ignore[attr-defined]  # noqa: SLF001
+    wrapper._durable_execution_boto3_client = config.boto3_client  # type: ignore[attr-defined]  # noqa: SLF001
+    wrapper._durable_execution_plugins = config.plugins  # type: ignore[attr-defined]  # noqa: SLF001
 
     return wrapper
 

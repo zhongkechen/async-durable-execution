@@ -100,7 +100,7 @@ ExecutionState._calculate_operation_size = staticmethod(  # type: ignore[attr-de
 )
 
 
-async def stop_checkpointing_task(state: ExecutionState) -> None:
+async def stop_checkpointing_task(state: _ExecutionState) -> None:
     state.stop_checkpointing()
     if state._checkpointing_task is not None:
         await asyncio.wait_for(state._checkpointing_task, timeout=1.0)
