@@ -45,7 +45,7 @@ from async_durable_execution.plugin import (
 )
 from async_durable_execution.state import (
     CheckpointBatcherConfig,
-    ExecutionState,
+    ExecutionState as _ExecutionState,
     QueuedOperation,
     ReplayStatus,
 )
@@ -55,7 +55,52 @@ async def run_async(awaitable):
     return await awaitable
 
 
-async def stop_checkpointing_task(state: ExecutionState) -> None:
+class _ImmediateAwaitable:
+    def __await__(self):
+        if False:  # pragma: no cover
+            yield
+        return None
+
+
+class _CompatAsyncQueue(asyncio.Queue[QueuedOperation | None]):
+    """Compatibility queue so legacy direct test puts still work."""
+
+    def put(self, item: QueuedOperation | None):  # type: ignore[override]
+        self.put_nowait(item)
+        return _ImmediateAwaitable()
+
+
+def ExecutionState(
+    *,
+    durable_execution_arn: str,
+    initial_checkpoint_token: str,
+    service_client,
+    plugin_executor,
+    batcher_config: CheckpointBatcherConfig | None = None,
+    operations: dict[str, Operation] | None = None,
+    replay_status: ReplayStatus | None = None,
+):
+    state = _ExecutionState(
+        durable_execution_arn=durable_execution_arn,
+        initial_checkpoint_token=initial_checkpoint_token,
+        service_client=service_client,
+        plugin_executor=plugin_executor,
+        batcher_config=batcher_config,
+    )
+    state._checkpoint_queue = _CompatAsyncQueue()
+    if operations:
+        state.operations.update(operations)
+    if replay_status is not None:
+        state._replay_status = replay_status
+    return state
+
+
+ExecutionState._calculate_operation_size = staticmethod(  # type: ignore[attr-defined]
+    _ExecutionState._calculate_operation_size
+)
+
+
+async def stop_checkpointing_task(state: _ExecutionState) -> None:
     state.stop_checkpointing()
     if state._checkpointing_task is not None:
         await asyncio.wait_for(state._checkpointing_task, timeout=1.0)
@@ -703,7 +748,6 @@ async def test_fetch_paginated_operations_with_marker():
     state = ExecutionState(
         durable_execution_arn="test_arn",
         initial_checkpoint_token="token123",  # noqa: S106
-        operations={},
         service_client=mock_lambda_client,
         plugin_executor=PluginExecutor(plugins=None),
     )
@@ -1076,8 +1120,8 @@ async def test_collect_checkpoint_batch_uses_overflow_queue():
         ),
         None,
     )
-    state._overflow_queue.put(overflow_op1)
-    state._overflow_queue.put(overflow_op2)
+    state._overflow_queue.append(overflow_op1)
+    state._overflow_queue.append(overflow_op2)
 
     # Put operation in main queue
     main_op = QueuedOperation(
@@ -1745,7 +1789,7 @@ async def test_collect_checkpoint_batch_overflow_put_back():
     assert batch1[0].operation_update.operation_id == "op_1" * 10
 
     # Verify second operation was put in overflow queue
-    assert state._overflow_queue.qsize() == 1
+    assert len(state._overflow_queue) == 1
 
     # Collect second batch (should get overflow operation first)
     batch2 = await state._collect_checkpoint_batch()
@@ -1852,7 +1896,7 @@ async def test_collect_checkpoint_batch_size_limit_during_time_window():
     assert len(batch) >= 1
     # If large op exceeded size limit, it should be in overflow queue
     if len(batch) == 1:
-        assert state._overflow_queue.qsize() == 1
+        assert len(state._overflow_queue) == 1
 
 
 async def test_collect_checkpoint_batch_respects_max_operations_limit():
@@ -2022,7 +2066,7 @@ async def test_collect_checkpoint_batch_empty_overflow_queue_path():
     )
 
     # Ensure overflow queue is empty (it should be by default)
-    assert state._overflow_queue.qsize() == 0
+    assert len(state._overflow_queue) == 0
 
     # Enqueue operation in main queue
     operation_update = OperationUpdate(
@@ -2067,7 +2111,7 @@ async def test_collect_checkpoint_batch_overflow_queue_hits_operation_limit():
             operation_type=OperationType.STEP,
             action=OperationAction.START,
         )
-        state._overflow_queue.put(QueuedOperation(operation_update, None))
+        state._overflow_queue.append(QueuedOperation(operation_update, None))
 
     # Collect batch - should stop after 2 operations due to max_batch_operations
     batch = await state._collect_checkpoint_batch()
@@ -2078,7 +2122,7 @@ async def test_collect_checkpoint_batch_overflow_queue_hits_operation_limit():
     assert batch[1].operation_update.operation_id == "overflow_op_1"
 
     # Third operation should still be in overflow queue
-    assert state._overflow_queue.qsize() == 1
+    assert len(state._overflow_queue) == 1
 
 
 async def test_collect_checkpoint_batch_overflow_queue_size_limit():
@@ -2111,8 +2155,8 @@ async def test_collect_checkpoint_batch_overflow_queue_size_limit():
         operation_type=OperationType.STEP,
         action=OperationAction.START,
     )
-    state._overflow_queue.put(QueuedOperation(small_op, None))
-    state._overflow_queue.put(QueuedOperation(large_op, None))
+    state._overflow_queue.append(QueuedOperation(small_op, None))
+    state._overflow_queue.append(QueuedOperation(large_op, None))
 
     # Collect batch - should get small op, large op should be put back
     batch = await state._collect_checkpoint_batch()
@@ -2122,7 +2166,7 @@ async def test_collect_checkpoint_batch_overflow_queue_size_limit():
     assert batch[0].operation_update.operation_id == "small"
 
     # Large operation should be put back in overflow queue
-    assert state._overflow_queue.qsize() == 1
+    assert len(state._overflow_queue) == 1
 
 
 # ============================================================================
@@ -2648,8 +2692,8 @@ async def test_collect_checkpoint_batch_overflow_queue_size_limit_final():
         operation_type=OperationType.STEP,
         action=OperationAction.START,
     )
-    state._overflow_queue.put(QueuedOperation(small_op, None))
-    state._overflow_queue.put(QueuedOperation(large_op, None))
+    state._overflow_queue.append(QueuedOperation(small_op, None))
+    state._overflow_queue.append(QueuedOperation(large_op, None))
 
     # Collect batch - should get small op, put back large op
     batch = await state._collect_checkpoint_batch()
@@ -2659,8 +2703,8 @@ async def test_collect_checkpoint_batch_overflow_queue_size_limit_final():
     assert batch[0].operation_update.operation_id == "small"
 
     # Large operation should be back in overflow queue
-    assert state._overflow_queue.qsize() == 1
-    remaining_op = state._overflow_queue.get_nowait()
+    assert len(state._overflow_queue) == 1
+    remaining_op = state._overflow_queue.popleft()
     assert remaining_op.operation_update.operation_id == "large_operation_id" * 20
 
 
@@ -3233,14 +3277,14 @@ async def test_collect_checkpoint_batch_overflow_coalesces_empty_checkpoints():
 
     # Put 500 empty checkpoints directly into the overflow queue
     for _ in range(500):
-        state._overflow_queue.put(QueuedOperation(None, None))
+        state._overflow_queue.append(QueuedOperation(None, None))
 
     # All 500 should be collected in a single batch from overflow
     batch = await state._collect_checkpoint_batch()
 
     assert len(batch) == 500
     assert all(q.operation_update is None for q in batch)
-    assert state._overflow_queue.empty()
+    assert not state._overflow_queue
 
 
 async def test_checkpoint_batches_forever_single_api_call_for_many_empty_checkpoints():
@@ -3346,7 +3390,7 @@ async def test_collect_checkpoint_batch_first_empty_counts_toward_limit():
         len(empty_in_batch) == 1
     )  # Only the leading empty; trailing deferred to next batch
     # op_2 is preserved for the next batch, ahead of the trailing empties.
-    assert state._overflow_queue.qsize() == 1
+    assert len(state._overflow_queue) == 1
     assert state._overflow_queue[0].operation_update.operation_id == "op_2"
     assert state._checkpoint_queue.qsize() == 50
 
@@ -3407,8 +3451,8 @@ async def test_initial_execution_state_get_execution_operation_wrong_type():
         state.get_execution_operation()
 
 
-async def test_initial_execution_state_get_input_payload_none():
-    """Test get_input_payload returns None when execution_details is None."""
+async def test_initial_execution_state_get_raw_input_payload_none():
+    """Test get_raw_input_payload returns None when execution details are missing."""
     operation = Operation(
         operation_id="exec1",
         operation_type=OperationType.EXECUTION,
@@ -3437,7 +3481,7 @@ async def test_initial_execution_state_get_input_payload_none():
         batcher_config=config,
     )
 
-    result = state.get_input_payload()
+    result = state.get_raw_input_payload()
     assert result is None
 
 

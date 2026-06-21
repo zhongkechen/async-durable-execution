@@ -101,28 +101,26 @@ async def test_operation_executor_create_checkpoint_uses_default_signature():
     """Test create_checkpoint omits is_sync when using the default behavior."""
     state = Mock()
     state.durable_execution_arn = "test-arn"
-    state._create_checkpoint_async = AsyncMock()
+    state.create_checkpoint = AsyncMock()
     executor = ConcreteOperationExecutor(state=state)
     operation_update = Mock()
 
     await executor.create_checkpoint(operation_update)
 
-    state._create_checkpoint_async.assert_called_once_with(
-        operation_update=operation_update
-    )
+    state.create_checkpoint.assert_called_once_with(operation_update=operation_update)
 
 
 async def test_operation_executor_create_checkpoint_passes_is_sync_override():
     """Test create_checkpoint forwards explicit is_sync overrides."""
     state = Mock()
     state.durable_execution_arn = "test-arn"
-    state._create_checkpoint_async = AsyncMock()
+    state.create_checkpoint = AsyncMock()
     executor = ConcreteOperationExecutor(state=state)
     operation_update = Mock()
 
     await executor.create_checkpoint(operation_update, is_sync=False)
 
-    state._create_checkpoint_async.assert_called_once_with(
+    state.create_checkpoint.assert_called_once_with(
         operation_update=operation_update,
         is_sync=False,
     )

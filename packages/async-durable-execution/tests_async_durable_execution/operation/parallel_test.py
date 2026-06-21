@@ -69,7 +69,7 @@ def create_mock_execution_state():
     state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    state._create_checkpoint_async = AsyncMock()
+    state.create_checkpoint = AsyncMock()
     state.wrap_user_function = lambda func, *args, **kwargs: (
         lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
     )
@@ -970,7 +970,7 @@ async def test_parallel_item_serialize(mock_serialize, item_serdes, batch_serdes
     mock_state.durable_execution_arn = "arn:test"
     mock_state.operations = Mock()
     mock_state.operations.get = Mock(side_effect=get_checkpoint)
-    mock_state._create_checkpoint_async = AsyncMock()
+    mock_state.create_checkpoint = AsyncMock()
     mock_state.wrap_user_function = lambda func, *args, **kwargs: (
         lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
     )
@@ -1057,7 +1057,7 @@ async def test_parallel_item_deserialize(mock_deserialize, item_serdes, batch_se
     mock_state.durable_execution_arn = "arn:test"
     mock_state.operations = Mock()
     mock_state.operations.get = Mock(side_effect=get_checkpoint)
-    mock_state._create_checkpoint_async = AsyncMock()
+    mock_state.create_checkpoint = AsyncMock()
     mock_state.wrap_user_function = lambda func, *args, **kwargs: (
         lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
     )
@@ -1192,7 +1192,7 @@ async def test_parallel_handler_serializes_batch_result():
             mock_state.durable_execution_arn = "arn:test"
             mock_state.operations = Mock()
             mock_state.operations.get = Mock(side_effect=get_checkpoint)
-            mock_state._create_checkpoint_async = AsyncMock()
+            mock_state.create_checkpoint = AsyncMock()
             mock_state.wrap_user_function = lambda func, *args, **kwargs: (
                 lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
             )
@@ -1263,7 +1263,7 @@ async def test_parallel_default_serdes_serializes_batch_result():
             mock_state.durable_execution_arn = "arn:test"
             mock_state.operations = Mock()
             mock_state.operations.get = Mock(side_effect=get_checkpoint)
-            mock_state._create_checkpoint_async = AsyncMock()
+            mock_state.create_checkpoint = AsyncMock()
             mock_state.wrap_user_function = lambda func, *args, **kwargs: (
                 lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
             )
@@ -1339,7 +1339,7 @@ async def test_parallel_custom_serdes_serializes_batch_result():
             mock_state.durable_execution_arn = "arn:test"
             mock_state.operations = Mock()
             mock_state.operations.get = Mock(side_effect=get_checkpoint)
-            mock_state._create_checkpoint_async = AsyncMock()
+            mock_state.create_checkpoint = AsyncMock()
             mock_state.wrap_user_function = lambda func, *args, **kwargs: (
                 lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
             )

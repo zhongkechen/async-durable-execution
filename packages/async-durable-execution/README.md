@@ -114,6 +114,8 @@ async def handler(event: dict, context: LambdaContext) -> dict:
     return {"order": order}
 ```
 
+Handler input is deserialized from the durable execution payload before your code runs. Empty or whitespace payloads are normalized to `{}`, and malformed JSON fails the invocation before user code executes.
+
 ## 📚 Documentation
 
 The complete documentation for the AWS Durable Execution SDK for Python lives on the AWS Documentation site:

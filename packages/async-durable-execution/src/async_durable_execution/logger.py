@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 from .exceptions import ValidationError
 from .operation.base import OperationContext
 from .context import _current_context
 
-if TYPE_CHECKING:
-    from .state import ExecutionState
 
 _configured_logger_ids: set[int] = set()
 _configured_handler_ids: set[int] = set()

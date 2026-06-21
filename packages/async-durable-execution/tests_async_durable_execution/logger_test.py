@@ -104,7 +104,6 @@ class PowertoolsLoggerStub:
 EXECUTION_STATE = ExecutionState(
     durable_execution_arn="arn:aws:test",
     initial_checkpoint_token="test_token",  # noqa: S106
-    operations={},
     service_client=Mock(),
     plugin_executor=PluginExecutor(plugins=None),
 )

@@ -159,7 +159,7 @@ async def test_create_callback_handler_new_operation_with_config():
             timeout_seconds=300, heartbeat_timeout_seconds=60
         ),
     )
-    mock_state._create_checkpoint_async.assert_called_once_with(
+    mock_state.create_checkpoint.assert_called_once_with(
         operation_update=expected_operation
     )
     assert mock_state.operations.get.call_count == 2
@@ -199,7 +199,7 @@ async def test_create_callback_handler_new_operation_without_config():
         name=None,
         callback_options=CallbackOptions(),
     )
-    mock_state._create_checkpoint_async.assert_called_once_with(
+    mock_state.create_checkpoint.assert_called_once_with(
         operation_update=expected_operation
     )
 
@@ -227,7 +227,7 @@ async def test_create_callback_handler_existing_started_operation():
 
     assert result == "existing_cb123"
     # Should not create new checkpoint for existing operation
-    mock_state._create_checkpoint_async.assert_not_called()
+    mock_state.create_checkpoint.assert_not_called()
     mock_state.operations.get.assert_called_once_with("callback3")
 
 
@@ -255,7 +255,7 @@ async def test_create_callback_handler_existing_failed_operation():
     )
 
     assert callback_id == "failed_cb4"
-    mock_state._create_checkpoint_async.assert_not_called()
+    mock_state.create_checkpoint.assert_not_called()
 
 
 async def test_create_callback_handler_existing_started_missing_callback_details():
@@ -326,7 +326,7 @@ async def test_create_callback_handler_existing_timed_out_operation():
     )
 
     assert result == "timed_out_cb123"
-    mock_state._create_checkpoint_async.assert_not_called()
+    mock_state.create_checkpoint.assert_not_called()
 
 
 async def test_create_callback_handler_existing_timed_out_missing_callback_details():
@@ -563,7 +563,7 @@ async def test_create_callback_handler_existing_succeeded_operation():
     )
 
     assert result == "succeeded_cb123"
-    mock_state._create_checkpoint_async.assert_not_called()
+    mock_state.create_checkpoint.assert_not_called()
 
 
 async def test_create_callback_handler_existing_succeeded_missing_callback_details():
@@ -627,7 +627,7 @@ async def test_create_callback_handler_config_with_zero_timeouts():
             timeout_seconds=0, heartbeat_timeout_seconds=0
         ),
     )
-    mock_state._create_checkpoint_async.assert_called_once_with(
+    mock_state.create_checkpoint.assert_called_once_with(
         operation_update=expected_operation
     )
 
@@ -672,7 +672,7 @@ async def test_create_callback_handler_config_with_large_timeouts():
             timeout_seconds=86400, heartbeat_timeout_seconds=3600
         ),
     )
-    mock_state._create_checkpoint_async.assert_called_once_with(
+    mock_state.create_checkpoint.assert_called_once_with(
         operation_update=expected_operation
     )
 
@@ -957,7 +957,7 @@ async def test_callback_retry_scenario():
     )
 
     assert callback_id_1 == callback_id_2 == "retry_cb456"
-    mock_state._create_checkpoint_async.assert_not_called()
+    mock_state.create_checkpoint.assert_not_called()
 
 
 async def test_callback_timeout_configuration():
@@ -1234,7 +1234,7 @@ async def test_callback_immediate_response_create_checkpoint_with_is_sync_true()
     # Verify callback_id was returned
     assert result == "cb_immediate_2"
     # Verify create_checkpoint was called with is_sync=True (default)
-    mock_state._create_checkpoint_async.assert_called_once()
+    mock_state.create_checkpoint.assert_called_once()
     # is_sync=True is the default, so it won't be in kwargs if not explicitly passed
     # We just verify the checkpoint was created
 
@@ -1270,7 +1270,7 @@ async def test_callback_immediate_response_immediate_success():
     # Verify callback_id was returned without raising
     assert result == "cb_immediate_success"
     # Verify checkpoint was created
-    mock_state._create_checkpoint_async.assert_called_once()
+    mock_state.create_checkpoint.assert_called_once()
     # Verify get_checkpoint_result was called twice
     assert mock_state.operations.get.call_count == 2
 
@@ -1308,7 +1308,7 @@ async def test_callback_immediate_response_immediate_failure_deferred():
     # Verify callback_id was returned (error deferred)
     assert result == "cb_immediate_failed"
     # Verify checkpoint was created
-    mock_state._create_checkpoint_async.assert_called_once()
+    mock_state.create_checkpoint.assert_called_once()
     # Verify get_checkpoint_result was called twice
     assert mock_state.operations.get.call_count == 2
 
@@ -1490,7 +1490,7 @@ async def test_callback_immediate_response_no_immediate_response():
     # Verify callback_id was returned
     assert result == "cb_immediate_started"
     # Verify checkpoint was created
-    mock_state._create_checkpoint_async.assert_called_once()
+    mock_state.create_checkpoint.assert_called_once()
     # Verify get_checkpoint_result was called twice
     assert mock_state.operations.get.call_count == 2
 
@@ -1525,7 +1525,7 @@ async def test_callback_immediate_response_already_completed():
     # Verify callback_id was returned
     assert result == "cb_already_completed"
     # Verify no checkpoint was created (already exists)
-    mock_state._create_checkpoint_async.assert_not_called()
+    mock_state.create_checkpoint.assert_not_called()
     # Verify get_checkpoint_result was called only once
     assert mock_state.operations.get.call_count == 1
 
@@ -1561,7 +1561,7 @@ async def test_callback_immediate_response_already_failed():
     # Verify callback_id was returned (error deferred)
     assert result == "cb_already_failed"
     # Verify no checkpoint was created (already exists)
-    mock_state._create_checkpoint_async.assert_not_called()
+    mock_state.create_checkpoint.assert_not_called()
     # Verify get_checkpoint_result was called only once
     assert mock_state.operations.get.call_count == 1
 
@@ -1656,8 +1656,8 @@ async def test_callback_immediate_response_with_config():
     # Verify callback_id was returned
     assert result == "cb_with_config"
     # Verify checkpoint was created with config
-    mock_state._create_checkpoint_async.assert_called_once()
-    call_args = mock_state._create_checkpoint_async.call_args[1]
+    mock_state.create_checkpoint.assert_called_once()
+    call_args = mock_state.create_checkpoint.call_args[1]
     operation_update = call_args["operation_update"]
     assert operation_update.callback_options.timeout_seconds == 300
     assert operation_update.callback_options.heartbeat_timeout_seconds == 60
@@ -1696,7 +1696,7 @@ async def test_callback_returns_id_when_second_check_returns_started():
     # Assert - behaves like "old way"
     assert callback_id == "cb-123"
     assert mock_state.operations.get.call_count == 2  # Double-check happened
-    mock_state._create_checkpoint_async.assert_called_once()  # START checkpoint created
+    mock_state.create_checkpoint.assert_called_once()  # START checkpoint created
 
 
 async def test_callback_returns_id_when_second_check_returns_started_duplicate():
@@ -1730,4 +1730,4 @@ async def test_callback_returns_id_when_second_check_returns_started_duplicate()
     # Assert - behaves like "old way"
     assert callback_id == "cb-123"
     assert mock_state.operations.get.call_count == 2  # Double-check happened
-    mock_state._create_checkpoint_async.assert_called_once()  # START checkpoint created
+    mock_state.create_checkpoint.assert_called_once()  # START checkpoint created

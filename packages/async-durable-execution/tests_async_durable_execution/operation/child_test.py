@@ -178,11 +178,11 @@ async def test_child_handler_not_started(
     assert mock_state.operations.get.call_count == 1
 
     # Verify create_checkpoint called twice (start and succeed)
-    mock_state._create_checkpoint_async.assert_called()
-    assert mock_state._create_checkpoint_async.call_count == 2
+    mock_state.create_checkpoint.assert_called()
+    assert mock_state.create_checkpoint.call_count == 2
 
     # Verify start checkpoint with is_sync=False
-    start_call = mock_state._create_checkpoint_async.call_args_list[0]
+    start_call = mock_state.create_checkpoint.call_args_list[0]
     start_operation = start_call[1]["operation_update"]
     assert start_operation.operation_id == "op1"
     assert start_operation.name == "test_name"
@@ -193,7 +193,7 @@ async def test_child_handler_not_started(
     assert start_call[1]["is_sync"] is False
 
     # Verify success checkpoint
-    success_call = mock_state._create_checkpoint_async.call_args_list[1]
+    success_call = mock_state.create_checkpoint.call_args_list[1]
     success_operation = success_call[1]["operation_update"]
     assert success_operation.operation_id == "op1"
     assert success_operation.name == "test_name"
@@ -238,7 +238,7 @@ async def test_child_handler_already_succeeded():
     # Verify function not executed
     mock_callable.assert_not_called()
     # Verify no checkpoint created
-    mock_state._create_checkpoint_async.assert_not_called()
+    mock_state.create_checkpoint.assert_not_called()
     # Verify get_checkpoint_result called once
     assert mock_state.operations.get.call_count == 1
 
@@ -483,8 +483,8 @@ async def test_child_handler_already_started(
     assert mock_state.operations.get.call_count == 1
 
     # Verify only success checkpoint (no START since already started)
-    assert mock_state._create_checkpoint_async.call_count == 1
-    success_call = mock_state._create_checkpoint_async.call_args_list[0]
+    assert mock_state.create_checkpoint.call_count == 1
+    success_call = mock_state.create_checkpoint.call_args_list[0]
     success_operation = success_call[1]["operation_update"]
     assert success_operation.operation_id == "op5"
     assert success_operation.name == "test_name"
@@ -532,11 +532,11 @@ async def test_child_handler_callable_exception(
     assert mock_state.operations.get.call_count == 1
 
     # Verify create_checkpoint called twice (start and fail)
-    mock_state._create_checkpoint_async.assert_called()
-    assert mock_state._create_checkpoint_async.call_count == 2
+    mock_state.create_checkpoint.assert_called()
+    assert mock_state.create_checkpoint.call_count == 2
 
     # Verify start checkpoint with is_sync=False
-    start_call = mock_state._create_checkpoint_async.call_args_list[0]
+    start_call = mock_state.create_checkpoint.call_args_list[0]
     start_operation = start_call[1]["operation_update"]
     assert start_operation.operation_id == "op6"
     assert start_operation.name == "test_name"
@@ -546,7 +546,7 @@ async def test_child_handler_callable_exception(
     assert start_call[1]["is_sync"] is False
 
     # Verify fail checkpoint
-    fail_call = mock_state._create_checkpoint_async.call_args_list[1]
+    fail_call = mock_state.create_checkpoint.call_args_list[1]
     fail_operation = fail_call[1]["operation_update"]
     assert fail_operation.operation_id == "op6"
     assert fail_operation.name == "test_name"
@@ -586,7 +586,7 @@ async def test_child_handler_error_wrapped():
         )
 
     # Verify FAIL checkpoint was created
-    assert mock_state._create_checkpoint_async.call_count == 2  # start and fail
+    assert mock_state.create_checkpoint.call_count == 2  # start and fail
 
 
 async def test_child_handler_invocation_error_reraised():
@@ -621,10 +621,10 @@ async def test_child_handler_invocation_error_reraised():
         )
 
     # Verify FAIL checkpoint was created
-    assert mock_state._create_checkpoint_async.call_count == 2  # start and fail
+    assert mock_state.create_checkpoint.call_count == 2  # start and fail
 
     # Verify fail checkpoint
-    fail_call = mock_state._create_checkpoint_async.call_args_list[1]
+    fail_call = mock_state.create_checkpoint.call_args_list[1]
     fail_operation = fail_call[1]["operation_update"]
     assert fail_operation.action is OperationAction.FAIL
 
@@ -688,7 +688,7 @@ async def test_child_handler_default_serialization():
     # Verify JSON serialization was used in checkpoint
     success_call = [
         call
-        for call in mock_state._create_checkpoint_async.call_args_list
+        for call in mock_state.create_checkpoint.call_args_list
         if "SUCCEED" in str(call)
     ]
     assert len(success_call) == 1
@@ -722,7 +722,7 @@ async def test_child_handler_custom_serdes_not_start() -> None:
         '{"key": "VALUE", "number": "84", "list": [1, 2, 3]}'
     )
 
-    success_call = mock_state._create_checkpoint_async.call_args_list[1]
+    success_call = mock_state.create_checkpoint.call_args_list[1]
     success_operation = success_call[1]["operation_update"]
     assert success_operation.payload == expected_checkpoointed_result
 
@@ -800,7 +800,7 @@ async def test_child_handler_large_payload_with_summary_generator() -> None:
     # Verify get_checkpoint_result called once
     assert mock_state.operations.get.call_count == 1
     # Verify replay_children mode with summary
-    success_call = mock_state._create_checkpoint_async.call_args_list[1]
+    success_call = mock_state.create_checkpoint.call_args_list[1]
     success_operation = success_call[1]["operation_update"]
     assert success_operation.context_options.replay_children
     expected_checkpoointed_result = "summary"
@@ -842,7 +842,7 @@ async def test_child_handler_large_payload_without_summary_generator() -> None:
     # Verify get_checkpoint_result called once
     assert mock_state.operations.get.call_count == 1
     # Verify replay_children mode with empty string
-    success_call = mock_state._create_checkpoint_async.call_args_list[1]
+    success_call = mock_state.create_checkpoint.call_args_list[1]
     success_operation = success_call[1]["operation_update"]
     assert success_operation.context_options.replay_children
     expected_checkpoointed_result = ""
@@ -884,7 +884,7 @@ async def test_child_handler_replay_children_mode() -> None:
     # Verify function was executed (replay_children mode)
     mock_callable.assert_called_once()
     # Verify no checkpoint created (returns without checkpointing in replay mode)
-    mock_state._create_checkpoint_async.assert_not_called()
+    mock_state.create_checkpoint.assert_not_called()
     # Verify get_checkpoint_result called once
     assert mock_state.operations.get.call_count == 1
 
@@ -928,7 +928,7 @@ async def test_small_payload_with_summary_generator():
     assert actual_result == small_result
     # Verify get_checkpoint_result called once
     assert mock_state.operations.get.call_count == 1
-    success_call = mock_state._create_checkpoint_async.call_args_list[1]
+    success_call = mock_state.create_checkpoint.call_args_list[1]
     success_operation = success_call[1]["operation_update"]
 
     # Small payload should NOT trigger replay_children, even with summary_generator
@@ -975,7 +975,7 @@ async def test_small_payload_without_summary_generator():
     assert actual_result == small_result
     assert mock_state.operations.get.call_count == 1
 
-    success_call = mock_state._create_checkpoint_async.call_args_list[1]
+    success_call = mock_state.create_checkpoint.call_args_list[1]
     success_operation = success_call[1]["operation_update"]
 
     # Small payload MUST NOT trigger replay_children.
@@ -1019,7 +1019,7 @@ async def test_child_handler_is_virtual_no_start():
     assert mock_state.operations.get.call_count == 1
 
     # Verify no checkpoints created (virtual context writes none)
-    assert mock_state._create_checkpoint_async.call_count == 0
+    assert mock_state.create_checkpoint.call_count == 0
 
     mock_callable.assert_called_once()
 
@@ -1057,7 +1057,7 @@ async def test_child_handler_is_virtual_no_succeed():
     assert result == "no_checkpoint_result"
 
     # Verify no checkpoints created
-    mock_state._create_checkpoint_async.assert_not_called()
+    mock_state.create_checkpoint.assert_not_called()
 
     mock_callable.assert_called_once()
 
@@ -1090,16 +1090,16 @@ async def test_child_handler_not_is_virtual_finish_mode():
     assert result == "checkpoint_result"
 
     # Verify both START and SUCCEED checkpoints created
-    assert mock_state._create_checkpoint_async.call_count == 2
+    assert mock_state.create_checkpoint.call_count == 2
 
     # Verify START checkpoint
-    start_call = mock_state._create_checkpoint_async.call_args_list[0]
+    start_call = mock_state.create_checkpoint.call_args_list[0]
     start_operation = start_call[1]["operation_update"]
     assert start_operation.action.value == "START"
     assert start_call[1]["is_sync"] is False
 
     # Verify SUCCEED checkpoint
-    success_call = mock_state._create_checkpoint_async.call_args_list[1]
+    success_call = mock_state.create_checkpoint.call_args_list[1]
     success_operation = success_call[1]["operation_update"]
     assert success_operation.action.value == "SUCCEED"
 
@@ -1141,7 +1141,7 @@ async def test_child_handler_is_virtual_with_exception():
         )
 
     # Verify NO FAIL checkpoint created (virtual contexts suppress all lifecycle checkpoints).
-    assert mock_state._create_checkpoint_async.call_count == 0
+    assert mock_state.create_checkpoint.call_count == 0
 
     mock_callable.assert_called_once()
 
@@ -1173,11 +1173,11 @@ async def test_child_handler_not_is_virtual_with_exception():
         )
 
     # Verify START + FAIL checkpoints created (non-virtual path).
-    assert mock_state._create_checkpoint_async.call_count == 2
-    start_call = mock_state._create_checkpoint_async.call_args_list[0]
+    assert mock_state.create_checkpoint.call_count == 2
+    start_call = mock_state.create_checkpoint.call_args_list[0]
     start_operation = start_call[1]["operation_update"]
     assert start_operation.action.value == "START"
-    fail_call = mock_state._create_checkpoint_async.call_args_list[1]
+    fail_call = mock_state.create_checkpoint.call_args_list[1]
     fail_operation = fail_call[1]["operation_update"]
     assert fail_operation.action.value == "FAIL"
 
@@ -1220,7 +1220,7 @@ async def test_child_handler_is_virtual_comparison():
     )
 
     assert result1 == "test_result"
-    assert mock_state1._create_checkpoint_async.call_count == 2  # START + SUCCEED
+    assert mock_state1.create_checkpoint.call_count == 2  # START + SUCCEED
 
     # is_virtual=True: 0 checkpoints
     mock_state2, mock_callable2 = setup_mocks()
@@ -1236,4 +1236,4 @@ async def test_child_handler_is_virtual_comparison():
     )
 
     assert result2 == "test_result"
-    assert mock_state2._create_checkpoint_async.call_count == 0  # No checkpoints
+    assert mock_state2.create_checkpoint.call_count == 0  # No checkpoints
