@@ -108,8 +108,10 @@ class ExecutionState:
         service_client: DurableServiceClient,
         plugin_executor: PluginExecutor,
         batcher_config: CheckpointBatcherConfig | None = None,
+        operations: MutableMapping[str, Operation] | None = None,
+        replay_status: ReplayStatus = ReplayStatus.NEW,
     ):
-        self.operations: MutableMapping[str, Operation] = {}
+        self.operations: MutableMapping[str, Operation] = dict(operations or {})
         self.durable_execution_arn: str = durable_execution_arn
         self._current_checkpoint_token: str = initial_checkpoint_token
         self._service_client: DurableServiceClient = service_client
@@ -132,7 +134,7 @@ class ExecutionState:
         # Operations whose parent has completed
         self._parent_done: set[str] = set()
 
-        self._replay_status: ReplayStatus = ReplayStatus.NEW
+        self._replay_status: ReplayStatus = replay_status
         self._visited_operations: set[str] = set()
 
     async def initialize(self, invocation_input):
