@@ -339,7 +339,9 @@ async def test_create_default_client_builds_lambda_client_with_expected_config(
     config = call_args[1]["config"]
     assert config.connect_timeout == 5
     assert config.read_timeout == 50
-    assert config.user_agent_extra == f"async-durable-execution/{__version__}-async"
+    assert (
+        config.user_agent_extra == f"durable-execution-sdk-python/{__version__}-async"
+    )
     assert client is mock_client
 
 
@@ -361,7 +363,9 @@ async def test_create_default_client_defers_endpoint_handling_to_boto3(
     config = call_args[1]["config"]
     assert config.connect_timeout == 5
     assert config.read_timeout == 50
-    assert config.user_agent_extra == f"async-durable-execution/{__version__}-async"
+    assert (
+        config.user_agent_extra == f"durable-execution-sdk-python/{__version__}-async"
+    )
     assert client is mock_client
 
 
