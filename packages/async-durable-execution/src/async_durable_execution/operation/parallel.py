@@ -171,14 +171,14 @@ class ParallelSummaryGenerator:
 
 
 async def parallel(
-    functions: Sequence[Callable[[], Awaitable[T]]],
+    branches: Sequence[Callable[[], Awaitable[T]]],
     name: str | None = None,
     config: ParallelConfig | None = None,
 ):
     """Run multiple bound durable callables concurrently and return a `BatchResult`."""
     context = _get_durable_context("parallel")
-    for index, function in enumerate(functions):
-        assert_async_callable(function, label=f"functions[{index}]")
+    for index, branch in enumerate(branches):
+        assert_async_callable(branch, label=f"branches[{index}]")
 
     operation_id = context.step_counter.create_step_id()
     parallel_context = context.create_child_context(operation_id=operation_id)
@@ -191,7 +191,7 @@ async def parallel(
 
     async def parallel_in_child_context() -> BatchResult[T]:
         return await parallel_handler(
-            callables=functions,
+            callables=branches,
             config=config,
             execution_state=context.execution_state,
             parallel_context=parallel_context,

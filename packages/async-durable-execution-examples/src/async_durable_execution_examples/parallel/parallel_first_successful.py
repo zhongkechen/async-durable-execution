@@ -37,9 +37,9 @@ async def handler(_event: Any, context: LambdaContext) -> str:
 
         return await step(run(), name="task3")
 
-    functions = [task1, task2, task3]
+    branches = [task1, task2, task3]
 
-    results = await parallel(functions, name="first_successful_parallel", config=config)
+    results = await parallel(branches, name="first_successful_parallel", config=config)
 
     # Extract the first successful result
     successful = results.get_results()

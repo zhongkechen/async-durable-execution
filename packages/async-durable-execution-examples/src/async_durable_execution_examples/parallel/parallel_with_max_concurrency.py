@@ -54,7 +54,7 @@ async def handler(_event: Any, context: LambdaContext) -> list[str]:
     # Extract results immediately to avoid BatchResult serialization
     return (
         await parallel(
-            functions=[task1, task2, task3, task4, task5],
+            branches=[task1, task2, task3, task4, task5],
             name="parallel_with_concurrency",
             config=ParallelConfig(max_concurrency=2),
         )

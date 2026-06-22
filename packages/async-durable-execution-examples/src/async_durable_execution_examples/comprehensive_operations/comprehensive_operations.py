@@ -74,7 +74,7 @@ async def handler(event: dict[str, Any], context: LambdaContext) -> dict[str, An
     # Step 4: parallel() - 3 branches, each returning a fruit name
 
     parallel_results = (
-        await parallel(functions=[fruit_step_1, fruit_step_2, fruit_step_3])
+        await parallel(branches=[fruit_step_1, fruit_step_2, fruit_step_3])
     ).to_dict()
 
     # Final result combining all operations

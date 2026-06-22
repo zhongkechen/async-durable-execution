@@ -66,7 +66,7 @@ async def handler(event: dict[str, Any], context: LambdaContext) -> list[str]:
 
     return (
         await parallel(
-            functions=[
+            branches=[
                 fetch_user_data(user_id),
                 fetch_orders(user_id),
                 fetch_preferences(user_id),

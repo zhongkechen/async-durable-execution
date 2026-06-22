@@ -358,7 +358,7 @@ async def task2(user_id: str):
 
 
 results = await parallel(
-    functions=[
+    branches=[
         task1(user_id),
         task2(user_id),
     ],

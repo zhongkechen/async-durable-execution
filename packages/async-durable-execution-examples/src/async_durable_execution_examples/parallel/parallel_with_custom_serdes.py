@@ -65,7 +65,7 @@ async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
         return await step(run(), name="task3")
 
     results = await parallel(
-        functions=[task1, task2, task3],
+        branches=[task1, task2, task3],
         name="parallel_with_custom_serdes",
         config=config,
     )
