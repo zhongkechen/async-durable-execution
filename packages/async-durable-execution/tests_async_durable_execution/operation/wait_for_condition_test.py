@@ -41,10 +41,20 @@ from ..serdes_test import CustomDictSerDes
 
 
 def test_wait_for_condition_config_defaults():
-    """WaitForConditionConfig stores required values and defaults serdes to None."""
+    """WaitForConditionConfig can be omitted or partially specified."""
+
+    config = WaitForConditionConfig()
+
+    assert config.wait_strategy is None
+    assert config.initial_state is None
+    assert config.serdes is None
+
+
+def test_wait_for_condition_config_stores_values():
+    """WaitForConditionConfig stores custom values."""
 
     def wait_strategy(state, attempt):
-        return WaitForConditionDecision.stop_polling()
+        return timedelta(seconds=1)
 
     config = WaitForConditionConfig(
         wait_strategy=wait_strategy, initial_state={"count": 0}
@@ -141,6 +151,64 @@ async def test_wait_for_condition_first_execution_condition_met():
 
     assert result == 6
     assert mock_state.create_checkpoint.call_count == 2  # START and SUCCESS
+
+
+async def test_wait_for_condition_new_condition_result_with_optional_config():
+    """Condition returns the next state and polling decision without config."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "arn:aws:test"
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
+
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+
+    def condition(state):
+        assert state is None
+        return {"status": "done"}, WaitForConditionDecision.stop_polling()
+
+    mock_state.wrap_user_function.return_value = condition
+
+    result = await wait_for_condition_handler(
+        state=mock_state,
+        operation_identifier=op_id,
+        check=condition,
+        config=WaitForConditionConfig(),
+    )
+
+    assert result == {"status": "done"}
+    assert mock_state.create_checkpoint.call_count == 2
+
+
+async def test_wait_for_condition_new_condition_uses_delay_only_strategy():
+    """Condition decides to continue and wait_strategy supplies only delay."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "arn:aws:test"
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
+
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+
+    def condition(state):
+        return state + 1, WaitForConditionDecision.continue_waiting()
+
+    mock_state.wrap_user_function.return_value = condition
+
+    config = WaitForConditionConfig(
+        initial_state=5,
+        wait_strategy=lambda state, attempt: timedelta(seconds=7),
+    )
+
+    with pytest.raises(SuspendExecution, match="will retry in 7 seconds"):
+        await wait_for_condition_handler(
+            state=mock_state,
+            operation_identifier=op_id,
+            check=condition,
+            config=config,
+        )
+
+    assert mock_state.create_checkpoint.call_count == 2
 
 
 async def test_wait_for_condition_first_execution_condition_not_met():

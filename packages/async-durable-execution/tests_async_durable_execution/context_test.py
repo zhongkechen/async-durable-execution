@@ -1981,18 +1981,23 @@ async def test_wait_for_condition_validation_errors():
 
     # Test None check function
     with pytest.raises(
-        ValidationError, match="`check` is required for wait_for_condition"
+        ValidationError, match="`condition` is required for wait_for_condition"
     ):
         await run_with_context(context, wait_for_condition(None, config))
 
-    # Test None config
+    # None config is valid; condition must return state and wait decision.
     async def dummy_check(state):
-        return state
+        return state, WaitForConditionDecision.stop_polling()
 
-    with pytest.raises(
-        ValidationError, match="`config` is required for wait_for_condition"
-    ):
-        await run_with_context(context, wait_for_condition(dummy_check, None))
+    with patch(
+        "async_durable_execution.operation.wait_for_condition.WaitForConditionOperationExecutor"
+    ) as mock_executor_class:
+        mock_executor = make_async_executor("test")
+        mock_executor_class.return_value = mock_executor
+
+        result = await run_with_context(context, wait_for_condition(dummy_check, None))
+
+    assert result == "test"
 
 
 async def test_context_map_handler_call():

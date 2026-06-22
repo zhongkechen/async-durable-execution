@@ -11,28 +11,35 @@ from async_durable_execution import (
     WaitForConditionCheckContext,
     WaitForConditionConfig,
     WaitForConditionDecision,
+    WaitStrategyBuilder,
     wait_for_condition,
 )
+from async_durable_execution.config import JitterStrategy
 
 
 @durable_execution
 async def handler(_event: Any, context: LambdaContext) -> int:
     """Handler demonstrating wait-for-condition pattern."""
 
-    async def condition_function(state: int) -> int:
+    async def condition_function(
+        state: int,
+    ) -> tuple[int, WaitForConditionDecision]:
         """Increment state by 1."""
         await asyncio.sleep(0)
         assert isinstance(get_current_context(), WaitForConditionCheckContext)
-        return state + 1
+        new_state = state + 1
+        if new_state >= 3:
+            return new_state, WaitForConditionDecision.stop_polling()
+        return new_state, WaitForConditionDecision.continue_waiting()
 
-    def wait_strategy(state: int, attempt: int) -> dict[str, Any]:
-        """Wait strategy that continues until state reaches 3."""
-        if state >= 3:
-            return WaitForConditionDecision.stop_polling()
-        return WaitForConditionDecision.continue_waiting(timedelta(seconds=1))
+    config = WaitForConditionConfig(
+        wait_strategy=WaitStrategyBuilder[int](
+            initial_delay=timedelta(seconds=1),
+            jitter_strategy=JitterStrategy.NONE,
+        ).build(),
+        initial_state=0,
+    )
 
-    config = WaitForConditionConfig(wait_strategy=wait_strategy, initial_state=0)
-
-    result = await wait_for_condition(check=condition_function, config=config)
+    result = await wait_for_condition(condition=condition_function, config=config)
 
     return result
