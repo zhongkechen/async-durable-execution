@@ -15,7 +15,7 @@ from ..async_tools import (
     invoke_user_callable,
     assert_async_callable,
 )
-from async_durable_execution.operation.concurrency import (
+from .concurrency import (
     CompletionConfig,
     ConcurrentExecutor,
     NestingType,
