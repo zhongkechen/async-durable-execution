@@ -24,7 +24,7 @@ from async_durable_execution.operation.callback import (
 )
 from async_durable_execution.operation.invoke import InvokeConfig
 from async_durable_execution.operation.map import MapConfig
-from async_durable_execution.operation.parallel import ParallelBranch, ParallelConfig
+from async_durable_execution.operation.parallel import ParallelConfig
 from async_durable_execution.operation.step import StepConfig
 from async_durable_execution.operation.wait_for_condition import WaitForConditionConfig
 from async_durable_execution import (
@@ -36,7 +36,6 @@ from async_durable_execution import (
     invoke,
     run_in_child_context,
     wait_for_condition,
-    durable_parallel_branch,
     wait_for_callback,
     map as map_operation,
     StepContext,
@@ -2310,123 +2309,19 @@ async def test_should_mark_context_virtual_when_parent_id_differs_from_step_pref
     assert ctx.is_virtual is True
 
 
-async def test_durable_parallel_branch_returns_parallel_branch_with_name():
-    """Test that the decorator produces a ParallelBranch with the given name."""
+async def test_durable_callable_branches_bind_parallel_parameters():
+    """Bound durable_callables can be passed directly to parallel()."""
 
-    @durable_parallel_branch(name="fetch-user-data")
-    async def fetch_user(ctx: DurableContext, user_id: str) -> dict:
-        return {"id": user_id}
-
-    result = fetch_user("user-123")
-
-    assert isinstance(result, ParallelBranch)
-    assert result.name == "fetch-user-data"
-
-
-async def test_durable_parallel_branch_with_no_name():
-    """Test that when name is None, ParallelBranch.name is None."""
-
-    @durable_parallel_branch()
-    async def fetch_orders(ctx: DurableContext) -> list:
-        return ["order1"]
-
-    result = fetch_orders()
-
-    assert isinstance(result, ParallelBranch)
-    assert result.name is None
-
-
-async def test_durable_parallel_branch_callable_delegates_to_func():
-    """Test that calling the ParallelBranch delegates to the wrapped function."""
-
-    @durable_parallel_branch(name="my-branch")
-    async def my_branch(ctx: DurableContext, value: int) -> int:
-        return value * 2
-
-    branch = my_branch(21)
-    mock_ctx = Mock(spec=DurableContext)
-
-    result = await branch(mock_ctx)
-
-    assert result == 42
-
-
-async def test_durable_parallel_branch_with_multiple_args_and_kwargs():
-    """Test that positional and keyword arguments are correctly bound."""
-
-    @durable_parallel_branch(name="compute")
-    async def compute(ctx: DurableContext, a: int, b: int, op: str = "add") -> str:
+    @durable_callable
+    async def compute(a: int, b: int, op: str = "add") -> str:
         if op == "add":
             return f"{a + b}"
         return f"{a * b}"
 
-    branch = compute(3, 4, op="mul")
-    mock_ctx = Mock(spec=DurableContext)
+    branch_a = compute(3, 4, op="mul")
+    branch_b = compute(5, 6)
 
-    result = await branch(mock_ctx)
-
-    assert result == "12"
-
-
-async def test_durable_parallel_branch_passes_context_as_first_arg():
-    """Test that the DurableContext is passed as the first argument to the function."""
-    received_ctx = None
-
-    @durable_parallel_branch(name="capture-ctx")
-    async def capture(ctx: DurableContext) -> str:
-        nonlocal received_ctx
-        received_ctx = ctx
-        return "done"
-
-    branch = capture()
-    mock_ctx = Mock(spec=DurableContext)
-    await branch(mock_ctx)
-
-    assert received_ctx is mock_ctx
-
-
-async def test_durable_parallel_branch_multiple_invocations_are_independent():
-    """Test that calling the wrapper multiple times produces independent branches."""
-
-    @durable_parallel_branch(name="greet")
-    async def greet(ctx: DurableContext, name: str) -> str:
-        return f"hello {name}"
-
-    branch_a = greet("Alice")
-    branch_b = greet("Bob")
-
-    mock_ctx = Mock(spec=DurableContext)
-
-    assert await branch_a(mock_ctx) == "hello Alice"
-    assert await branch_b(mock_ctx) == "hello Bob"
-
-
-async def test_durable_parallel_branch_is_compatible_with_parallel_functions_arg():
-    """Test that the result can be used in a functions list alongside plain callables."""
-
-    @durable_parallel_branch(name="named-branch")
-    async def named(ctx: DurableContext) -> str:
-        return "named"
-
-    async def plain(ctx) -> str:
-        return "plain"
-
-    functions = [named(), plain]
-
-    assert isinstance(functions[0], ParallelBranch)
-    assert callable(functions[0])
-    assert callable(functions[1])
-
-
-async def test_durable_parallel_branch_supports_async_branches():
-    @durable_parallel_branch(name="async-branch")
-    async def async_branch(ctx: DurableContext, value: int) -> int:
-        await asyncio.sleep(0)
-        return value * 3
-
-    branch = async_branch(7)
-    mock_ctx = Mock(spec=DurableContext)
-
-    result = await branch(mock_ctx)
-
-    assert result == 21
+    assert await branch_a() == "12"
+    assert await branch_b() == "11"
+    assert callable(branch_a)
+    assert callable(branch_b)

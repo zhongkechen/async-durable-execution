@@ -336,21 +336,31 @@ all_results = results.get_results()
 ### Parallel - Parallel Branches
 
 ```python
-from async_durable_execution import ParallelConfig
+from async_durable_execution import ParallelConfig, durable_callable
 
 
-async def task1():
-    return step(lambda: fetch_data1(), name="fetch1")
+@durable_callable
+async def task1(user_id: str):
+    @durable_callable
+    async def fetch():
+        return fetch_data1(user_id)
+
+    return await step(fetch(), name="fetch1")
 
 
-async def task2():
-    return step(lambda: fetch_data2(), name="fetch2")
+@durable_callable
+async def task2(user_id: str):
+    @durable_callable
+    async def fetch():
+        return fetch_data2(user_id)
+
+    return await step(fetch(), name="fetch2")
 
 
-results = parallel(
-    branches=[
-        {"name": "task1", "func": task1},
-        {"name": "task2", "func": task2},
+results = await parallel(
+    functions=[
+        task1(user_id),
+        task2(user_id),
     ],
     config=ParallelConfig(max_concurrency=2),
     name="parallel-ops"

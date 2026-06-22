@@ -23,13 +23,12 @@ from async_durable_execution.models import (
     OperationType,
 )
 from async_durable_execution.context import reset_current_context, set_current_context
-from async_durable_execution import parallel, DurableContext
+from async_durable_execution import durable_callable, parallel, DurableContext
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import OperationSubType
 from async_durable_execution.operation import child
 from async_durable_execution.operation.concurrency import CompletionConfig, NestingType
 from async_durable_execution.operation.parallel import (
-    ParallelBranch,
     ParallelConfig,
     ParallelExecutor,
     parallel_handler,
@@ -139,10 +138,10 @@ def test_parallel_config_importable_from_package_root():
 async def test_parallel_executor_from_callables():
     """Test ParallelExecutor.from_callables class method."""
 
-    async def func1(ctx):
+    async def func1():
         return "result1"
 
-    async def func2(ctx):
+    async def func2():
         return "result2"
 
     callables = [func1, func2]
@@ -165,7 +164,7 @@ async def test_parallel_executor_from_callables():
 async def test_parallel_executor_from_callables_default_config():
     """Test ParallelExecutor.from_callables with default config."""
 
-    async def func1(ctx):
+    async def func1():
         return "result1"
 
     callables = [func1]
@@ -182,8 +181,8 @@ async def test_parallel_executor_from_callables_default_config():
 async def test_parallel_executor_execute_item():
     """Test ParallelExecutor.execute_item method."""
 
-    async def test_func(ctx):
-        return f"processed-{ctx}"
+    async def test_func():
+        return "processed"
 
     executable = Executable(index=0, func=test_func)
     executor = ParallelExecutor(
@@ -199,13 +198,13 @@ async def test_parallel_executor_execute_item():
     child_context = "test-context"
     result = await executor.execute_item(child_context, executable)
 
-    assert result == "processed-test-context"
+    assert result == "processed"
 
 
 async def test_parallel_executor_execute_item_with_async_callable():
-    async def test_func(ctx):
+    async def test_func():
         await asyncio.sleep(0)
-        return f"processed-{ctx}"
+        return "processed"
 
     executable = Executable(index=0, func=test_func)
     executor = ParallelExecutor(
@@ -220,13 +219,13 @@ async def test_parallel_executor_execute_item_with_async_callable():
 
     result = await executor.execute_item("test-context", executable)
 
-    assert result == "processed-test-context"
+    assert result == "processed"
 
 
 async def test_parallel_executor_execute_item_with_exception():
     """Test ParallelExecutor.execute_item with callable that raises exception."""
 
-    async def failing_func(ctx):
+    async def failing_func():
         msg = "Test error"
         raise ValueError(msg)
 
@@ -250,10 +249,10 @@ async def test_parallel_executor_execute_item_with_exception():
 async def test_parallel_handler():
     """Test parallel_handler function."""
 
-    async def func1(ctx):
+    async def func1():
         return "result1"
 
-    async def func2(ctx):
+    async def func2():
         return "result2"
 
     callables = [func1, func2]
@@ -295,7 +294,7 @@ async def test_parallel_handler():
 async def test_parallel_handler_with_none_config():
     """Test parallel_handler function with None config."""
 
-    async def func1(ctx):
+    async def func1():
         return "result1"
 
     callables = [func1]
@@ -335,7 +334,7 @@ async def test_parallel_handler_with_none_config():
 async def test_parallel_handler_creates_executor_with_correct_config():
     """Test that parallel_handler creates ParallelExecutor with correct configuration."""
 
-    async def func1(ctx):
+    async def func1():
         return "result1"
 
     callables = [func1]
@@ -379,7 +378,7 @@ async def test_parallel_handler_creates_executor_with_correct_config():
 async def test_parallel_handler_creates_executor_with_default_config_when_none():
     """Test that parallel_handler creates ParallelExecutor with default config when None is passed."""
 
-    async def func1(ctx):
+    async def func1():
         return "result1"
 
     callables = [func1]
@@ -451,13 +450,13 @@ async def test_parallel_executor_from_callables_empty_list():
 async def test_parallel_executor_execute_item_return_type():
     """Test that ParallelExecutor.execute_item returns the correct type."""
 
-    async def int_func(ctx):
+    async def int_func():
         return 42
 
-    async def str_func(ctx):
+    async def str_func():
         return "hello"
 
-    async def dict_func(ctx):
+    async def dict_func():
         return {"key": "value"}
 
     executor = ParallelExecutor(
@@ -571,7 +570,7 @@ async def test_parallel_handler_with_summary_generator():
 async def test_parallel_executor_from_callables_with_summary_generator():
     """Test ParallelExecutor.from_callables preserves summary_generator."""
 
-    async def func1(ctx):
+    async def func1():
         return "result1"
 
     def mock_summary_generator(result):
@@ -694,10 +693,10 @@ async def test_parallel_handler_with_explicit_none_summary_generator():
 async def test_parallel_handler_replay_mechanism():
     """Test that parallel_handler uses replay when operation has already succeeded."""
 
-    async def func1(ctx):
+    async def func1():
         return "result1"
 
-    async def func2(ctx):
+    async def func2():
         return "result2"
 
     callables = [func1, func2]
@@ -762,7 +761,7 @@ async def test_parallel_handler_replay_mechanism():
 async def test_parallel_handler_replay_with_replay_children():
     """Test parallel_handler replay when children need to be re-executed."""
 
-    async def func1(ctx):
+    async def func1():
         return "result1"
 
     callables = [func1]
@@ -852,10 +851,10 @@ async def test_parallel_config_default_summary_generator_behavior():
 async def test_parallel_handler_first_execution_then_replay():
     """Test parallel_handler called twice - first calls execute, second calls replay."""
 
-    def task1(ctx):
+    async def task1():
         return "result1"
 
-    def task2(ctx):
+    async def task2():
         return "result2"
 
     callables = [task1, task2]
@@ -1388,53 +1387,16 @@ async def test_parallel_custom_serdes_serializes_batch_result():
         importlib.reload(child)
 
 
-async def test_parallel_branch_is_callable():
-    """ParallelBranch instances are callable."""
-    branch = ParallelBranch(func=lambda x: x * 2, name="double")
-    assert callable(branch)
-
-
-async def test_parallel_branch_delegates_to_func():
-    """Calling ParallelBranch delegates to the wrapped func."""
-
-    async def add(x, y):
-        return x + y
-
-    branch = ParallelBranch(func=add, name="add")
-    assert await branch(3, 4) == 7
-
-
-async def test_parallel_branch_passes_kwargs():
-    """ParallelBranch passes keyword arguments to func."""
-
-    async def test_func(ctx, flag=False):
-        return flag
-
-    branch = ParallelBranch(func=test_func, name="test")
-    assert await branch("ctx", flag=True) is True
-
-
-async def test_parallel_branch_frozen():
-    """ParallelBranch is immutable (frozen dataclass)."""
-
-    async def no_op():
-        return None
-
-    branch = ParallelBranch(func=no_op, name="test")
-    with pytest.raises(AttributeError):
-        branch.name = "changed"  # type: ignore[misc]
-
-
 async def test_parallel_executor_get_iteration_name_default():
-    """Plain callables use default 'parallel-branch-{index}' naming."""
+    """Branches use default 'parallel-branch-{index}' naming."""
 
-    async def branch_a(ctx):
+    async def branch_a():
         return "a"
 
-    async def branch_b(ctx):
+    async def branch_b():
         return "b"
 
-    async def branch_c(ctx):
+    async def branch_c():
         return "c"
 
     callables = [branch_a, branch_b, branch_c]
@@ -1447,75 +1409,14 @@ async def test_parallel_executor_get_iteration_name_default():
     assert executor.get_iteration_name(2) == "parallel-branch-2"
 
 
-async def test_parallel_executor_get_iteration_name_with_named_branches():
-    """ParallelBranch with name uses the custom name."""
+async def test_parallel_executor_execute_item_with_bound_durable_callable():
+    """Bound durable_callables work correctly in execute_item."""
 
-    async def fetch_user(ctx):
-        return "user"
+    @durable_callable
+    async def branch_func(value: str) -> str:
+        return f"result-{value}"
 
-    async def fetch_orders(ctx):
-        return "orders"
-
-    branches = [
-        ParallelBranch(func=fetch_user, name="fetch-user-data"),
-        ParallelBranch(func=fetch_orders, name="fetch-order-history"),
-    ]
-    config = ParallelConfig()
-
-    executor = ParallelExecutor.from_callables(branches, config)
-
-    assert executor.get_iteration_name(0) == "fetch-user-data"
-    assert executor.get_iteration_name(1) == "fetch-order-history"
-
-
-async def test_parallel_executor_get_iteration_name_mixed():
-    """Mix of ParallelBranch (with/without name) and plain callables."""
-
-    async def named_branch(ctx):
-        return "a"
-
-    async def plain_branch(ctx):
-        return "b"
-
-    async def unnamed_branch(ctx):
-        return "c"
-
-    branches = [
-        ParallelBranch(func=named_branch, name="named-branch"),
-        plain_branch,
-        ParallelBranch(func=unnamed_branch),
-    ]
-    config = ParallelConfig()
-
-    executor = ParallelExecutor.from_callables(branches, config)
-
-    assert executor.get_iteration_name(0) == "named-branch"
-    assert executor.get_iteration_name(1) == "parallel-branch-1"
-    assert executor.get_iteration_name(2) == "parallel-branch-2"
-
-
-async def test_parallel_executor_get_iteration_name_none_name():
-    """ParallelBranch with name=None falls back to default naming."""
-
-    async def branch_func(ctx):
-        return "x"
-
-    branches = [ParallelBranch(func=branch_func, name=None)]
-    config = ParallelConfig()
-
-    executor = ParallelExecutor.from_callables(branches, config)
-
-    assert executor.get_iteration_name(0) == "parallel-branch-0"
-
-
-async def test_parallel_branch_execute_item():
-    """ParallelBranch works correctly in execute_item."""
-
-    async def branch_func(ctx):
-        return f"result-{ctx}"
-
-    branch = ParallelBranch(func=branch_func, name="my-branch")
-    executable = Executable(index=0, func=branch)
+    executable = Executable(index=0, func=branch_func("bound"))
 
     executor = ParallelExecutor(
         executables=[executable],
@@ -1528,4 +1429,4 @@ async def test_parallel_branch_execute_item():
     )
 
     result = await executor.execute_item("test-ctx", executable)
-    assert result == "result-test-ctx"
+    assert result == "result-bound"

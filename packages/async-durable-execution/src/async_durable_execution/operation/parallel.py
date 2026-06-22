@@ -7,12 +7,10 @@ import logging
 from dataclasses import dataclass, field
 from typing import (
     TYPE_CHECKING,
-    Generic,
     TypeVar,
     Sequence,
     Callable,
     Awaitable,
-    ParamSpec,
 )
 
 from .base import get_checkpoint_result
@@ -32,7 +30,6 @@ from ..models import Executable, OperationIdentifier, OperationSubType
 
 
 if TYPE_CHECKING:
-    from ..context import get_current_context
     from ..models import BatchResult
     from ..serdes import SerDes
     from ..state import ExecutionState
@@ -44,19 +41,6 @@ logger = logging.getLogger(__name__)
 # Result type
 R = TypeVar("R")
 T = TypeVar("T")
-Params = ParamSpec("Params")
-
-
-@dataclass(frozen=True)
-class ParallelBranch(Generic[T]):
-    """A named branch for parallel execution."""
-
-    func: Callable[..., Awaitable[T]]
-    name: str | None = None
-
-    async def __call__(self, *args, **kwargs) -> T:
-        """Delegate to the wrapped function, making ParallelBranch itself callable."""
-        return await self.func(*args, **kwargs)
 
 
 @dataclass(frozen=True)
@@ -105,15 +89,10 @@ class ParallelExecutor(ConcurrentExecutor[Callable, R]):
     @classmethod
     def from_callables(
         cls,
-        callables: Sequence[Callable[[], Awaitable[R]] | ParallelBranch[R]],
+        callables: Sequence[Callable[[], Awaitable[R]]],
         config: ParallelConfig,
     ) -> ParallelExecutor:
-        """Create ParallelExecutor from a sequence of callables or ParallelBranch instances.
-
-        Since ParallelBranch is callable, it is stored directly as the func in
-        each Executable. The get_iteration_name method inspects the func to
-        extract the branch name when available.
-        """
+        """Create ParallelExecutor from a sequence of bound durable callables."""
         executables: list[Executable[Callable]] = [
             Executable(index=i, func=func) for i, func in enumerate(callables)
         ]
@@ -131,36 +110,23 @@ class ParallelExecutor(ConcurrentExecutor[Callable, R]):
             nesting_type=config.nesting_type,
         )
 
-    def get_iteration_name(self, index: int) -> str:
-        """Return custom branch name if the callable is a ParallelBranch with a name."""
-        func = self.executables[index].func
-        if isinstance(func, ParallelBranch) and func.name is not None:
-            return func.name
-        return super().get_iteration_name(index)
-
     async def execute_item(self, child_context, executable: Executable[Callable]):  # noqa: PLR6301
         logger.debug("🔀 Processing parallel branch: %s", executable.index)
-        target = (
-            executable.func.func
-            if isinstance(executable.func, ParallelBranch)
-            else executable.func
-        )
         if getattr(child_context, "execution_state", None) is not None:
             result: R = await invoke_user_callable(
                 child_context,
-                target,
+                executable.func,
             )
         else:
             result = await invoke_callable(
-                target,
-                child_context,
+                executable.func,
             )
         logger.debug("✅ Processed parallel branch: %s", executable.index)
         return result
 
 
 async def parallel_handler(
-    callables: Sequence[Callable[[], Awaitable[R]] | ParallelBranch[R]],
+    callables: Sequence[Callable[[], Awaitable[R]]],
     config: ParallelConfig | None,
     execution_state: ExecutionState,
     parallel_context: DurableContext,
@@ -205,15 +171,14 @@ class ParallelSummaryGenerator:
 
 
 async def parallel(
-    functions: Sequence[Callable[[], Awaitable[T]] | ParallelBranch[T]],
+    functions: Sequence[Callable[[], Awaitable[T]]],
     name: str | None = None,
     config: ParallelConfig | None = None,
 ):
-    """Run multiple durable branches concurrently and return a `BatchResult`."""
+    """Run multiple bound durable callables concurrently and return a `BatchResult`."""
     context = _get_durable_context("parallel")
     for index, function in enumerate(functions):
-        target = function.func if isinstance(function, ParallelBranch) else function
-        assert_async_callable(target, label=f"functions[{index}]")
+        assert_async_callable(function, label=f"functions[{index}]")
 
     operation_id = context.step_counter.create_step_id()
     parallel_context = context.create_child_context(operation_id=operation_id)
@@ -244,70 +209,3 @@ async def parallel(
     )
     context.execution_state.track_replay(operation_id=operation_id)
     return result
-
-
-def durable_parallel_branch(
-    name: str | None = None,
-) -> Callable[
-    [Callable[Params, Awaitable[T]]],
-    Callable[Params, ParallelBranch[T]],
-]:
-    """Wrap your callable into a named ParallelBranch for use with `parallel()`.
-
-    This is a decorator factory — call it with an optional name to produce
-    the actual decorator.
-
-    Args:
-        name: Optional custom name for this branch. When provided, replaces
-            the default "parallel-branch-{index}" naming in execution history.
-            If None, the function's __name__ is used.
-
-    Example:
-        @durable_parallel_branch(name="fetch-user-data")
-        async def fetch_user(user_id: str) -> dict:
-            async def load_user() -> dict:
-                return {"id": user_id, "name": "Jane"}
-
-            return await step(load_user, name="load_user")
-
-        @durable_parallel_branch(name="fetch-orders")
-        async def fetch_orders(user_id: str) -> list:
-            async def load_orders() -> list:
-                return ["order1", "order2"]
-
-            return await step(load_orders, name="load_orders")
-
-        # Usage in a durable handler:
-        results = await parallel(
-            functions=[fetch_user(user_id), fetch_orders(user_id)],
-            name="load-data",
-        )
-    """
-
-    def decorator(
-        func: Callable[Params, Awaitable[T]],
-    ) -> Callable[Params, ParallelBranch[T]]:
-        assert_async_callable(func)
-
-        def wrapper(*args, **kwargs) -> ParallelBranch[T]:
-            async def function_with_arguments(*runtime_args, **runtime_kwargs) -> T:
-                from ..context import get_current_context
-
-                current_context = (
-                    runtime_args[0] if runtime_args else get_current_context()
-                )
-                if runtime_kwargs:
-                    msg = "Parallel branches do not accept runtime keyword arguments."
-                    raise TypeError(msg)
-                return await invoke_callable(
-                    func,
-                    current_context,
-                    *args,
-                    **kwargs,
-                )
-
-            return ParallelBranch(func=function_with_arguments, name=name)
-
-        return wrapper
-
-    return decorator

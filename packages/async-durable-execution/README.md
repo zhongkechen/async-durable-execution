@@ -85,7 +85,7 @@ async def handler(event: dict, context: LambdaContext) -> dict:
     return {"status": "approved", "order_id": order_id}
 ```
 
-Async callables are required anywhere the SDK accepts user code, including `map()` item functions, `parallel()` branches, child contexts, callback submitters, and wait-for-condition checks. Durable context operations are awaitable and run on the same event loop as your handler:
+Async callables are required anywhere the SDK accepts user code, including `map()` item functions, bound `parallel()` branch callables, child contexts, callback submitters, and wait-for-condition checks. Durable context operations are awaitable and run on the same event loop as your handler:
 
 ```python
 import asyncio

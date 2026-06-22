@@ -31,10 +31,8 @@ from .operation.wait_for_condition import (
 )
 from .operation.invoke import InvokeConfig, invoke
 from .operation.parallel import (
-    ParallelBranch,
     ParallelConfig,
     parallel,
-    durable_parallel_branch,
 )
 from .operation.callback import (
     CallbackConfig,
@@ -89,7 +87,6 @@ __all__ = [
     "MapItemContext",
     "NestingType",
     "OperationIdentifier",
-    "ParallelBranch",
     "ParallelConfig",
     "RetryDecision",
     "RetryPresets",
@@ -112,7 +109,6 @@ __all__ = [
     "create_callback",
     "durable_callable",
     "durable_execution",
-    "durable_parallel_branch",
     "durable_wait_for_callback",
     "get_attempt",
     "get_current_context",
