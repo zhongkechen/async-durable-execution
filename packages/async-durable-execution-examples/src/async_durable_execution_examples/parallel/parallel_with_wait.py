@@ -27,7 +27,7 @@ async def handler(_event: Any, context: LambdaContext) -> str:
     # Call get_results() to extract data and avoid BatchResult serialization
     (
         await parallel(
-            functions=[wait_1_second, wait_2_seconds, wait_5_seconds],
+            branches=[wait_1_second, wait_2_seconds, wait_5_seconds],
             name="parallel_waits",
         )
     ).get_results()

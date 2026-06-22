@@ -81,7 +81,7 @@ class CustomBatchSerDes(SerDes[BatchResult]):
 @durable_execution
 async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
     """Execute parallel tasks with custom batch-level serialization."""
-    # Use custom serdes for the entire BatchResult, default JSON for individual functions
+    # Use custom serdes for the entire BatchResult, default JSON for individual branches
     config = ParallelConfig(serdes=CustomBatchSerDes(), item_serdes=JsonSerDes())
 
     async def branch1() -> int:
@@ -106,7 +106,7 @@ async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
         return await step(run(), name="branch3")
 
     results = await parallel(
-        functions=[branch1, branch2, branch3],
+        branches=[branch1, branch2, branch3],
         name="parallel_with_batch_serdes",
         config=config,
     )

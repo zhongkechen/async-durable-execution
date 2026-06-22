@@ -42,7 +42,7 @@ async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
         return await callback.result()
 
     parallel_results = await parallel(
-        functions=[callback_branch_1, callback_branch_2, callback_branch_3],
+        branches=[callback_branch_1, callback_branch_2, callback_branch_3],
         name="parallel_callbacks",
     )
 

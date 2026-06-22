@@ -36,10 +36,10 @@ async def handler(_event: Any, context: LambdaContext) -> list[str]:
         await wait(timedelta(seconds=1), name="wait_in_task3")
         return "task 3 completed after wait"
 
-    # Use parallel() to execute functions concurrently and extract results immediately
+    # Use parallel() to execute branches concurrently and extract results immediately
     return (
         await parallel(
-            functions=[task1, task2, task3],
+            branches=[task1, task2, task3],
             name="parallel_operation",
             config=ParallelConfig(max_concurrency=2),
         )
