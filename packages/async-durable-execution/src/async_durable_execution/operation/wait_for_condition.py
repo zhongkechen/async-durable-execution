@@ -7,7 +7,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import TYPE_CHECKING, Generic, TypeVar, overload
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast, overload
 
 from .step import StepContext
 from ..async_tools import assert_async_callable
@@ -31,20 +31,22 @@ from ..models import (
     OperationUpdate,
     OperationSubType,
     WaitDecision,
+    WaitForConditionDecision,
 )
 from .base import CHECKPOINT_NOT_FOUND, CheckpointedResult, OperationExecutor
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
-    from ..models import WaitForConditionDecision
     from ..serdes import SerDes
     from ..state import ExecutionState
 
 
 T = TypeVar("T")
-ConditionResult = tuple[T, "WaitForConditionDecision"]
-WaitDelayStrategy = Callable[[T, int], WaitDecision | timedelta]
+ConditionResult = tuple[T, WaitForConditionDecision]
+WaitDelayStrategy = Callable[
+    [T, int], WaitDecision | WaitForConditionDecision | timedelta
+]
 
 logger = logging.getLogger(__name__)
 
@@ -350,17 +352,15 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
 
     def _resolve_condition_result(
         self,
-        condition_result: T | ConditionResult[T],
+        condition_result: object,
         attempt: int,
-    ) -> tuple[T, "WaitForConditionDecision", "WaitForConditionDecision | None"]:
-        from ..models import WaitForConditionDecision
-
+    ) -> tuple[T, WaitForConditionDecision, WaitForConditionDecision | None]:
         if (
             isinstance(condition_result, tuple)
             and len(condition_result) == 2
             and isinstance(condition_result[1], WaitForConditionDecision)
         ):
-            return condition_result[0], condition_result[1], None
+            return cast(T, condition_result[0]), condition_result[1], None
 
         if self.config.wait_strategy is None:
             msg = (
@@ -369,9 +369,10 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             )
             raise ValidationError(msg)
 
-        wait_decision = self.config.wait_strategy(condition_result, attempt)
+        legacy_state = cast(T, condition_result)
+        wait_decision = self.config.wait_strategy(legacy_state, attempt)
         if isinstance(wait_decision, WaitForConditionDecision):
-            return condition_result, wait_decision, wait_decision
+            return legacy_state, wait_decision, wait_decision
 
         msg = (
             "legacy wait_for_condition checks must use a wait_strategy that returns "
@@ -380,8 +381,6 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         raise ValidationError(msg)
 
     def _resolve_delay_seconds(self, new_state: T, attempt: int) -> int:
-        from ..models import WaitForConditionDecision
-
         wait_strategy = self.config.wait_strategy or self.default_wait_strategy
         wait_decision = wait_strategy(new_state, attempt)
 
@@ -389,10 +388,8 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
 
     def _wait_decision_to_seconds(
         self,
-        wait_decision: "WaitForConditionDecision | WaitDecision | timedelta",
+        wait_decision: WaitForConditionDecision | WaitDecision | timedelta,
     ) -> int:
-        from ..models import WaitForConditionDecision
-
         if isinstance(wait_decision, WaitForConditionDecision):
             return wait_decision.delay_seconds
 
@@ -412,7 +409,7 @@ async def wait_for_condition(
     config: WaitForConditionConfig[T] | None = None,
     name: str | None = None,
     *,
-    check: Callable[[T | None], Awaitable[ConditionResult[T]]] | None = None,
+    check: None = None,
 ) -> T: ...
 
 
@@ -422,16 +419,26 @@ async def wait_for_condition(
     config: WaitForConditionConfig[T],
     name: str | None = None,
     *,
-    check: Callable[[T], Awaitable[T]] | None = None,
+    check: None = None,
+) -> T: ...
+
+
+@overload
+async def wait_for_condition(
+    condition: None = None,
+    config: WaitForConditionConfig[T] | None = None,
+    name: str | None = None,
+    *,
+    check: Callable[[T | None], Awaitable[ConditionResult[T]]],
 ) -> T: ...
 
 
 async def wait_for_condition(
-    condition: Callable[[T | None], Awaitable[T | ConditionResult[T]]] | None = None,
+    condition: Any = None,
     config: WaitForConditionConfig[T] | None = None,
     name: str | None = None,
     *,
-    check: Callable[[T | None], Awaitable[T | ConditionResult[T]]] | None = None,
+    check: Any = None,
 ) -> T:
     """Poll durable state until the configured strategy decides to stop waiting.
 
