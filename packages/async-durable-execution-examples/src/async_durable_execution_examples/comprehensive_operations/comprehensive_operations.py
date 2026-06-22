@@ -6,6 +6,7 @@ from typing import Any
 from async_durable_execution import (
     LambdaContext,
     durable_callable,
+    get_current_context,
     step,
     durable_execution,
     map,
@@ -23,12 +24,14 @@ async def handler(event: dict[str, Any], context: LambdaContext) -> dict[str, An
     async def run_step_one() -> str:
         return "Step 1 completed successfully"
 
-    async def map_item(item: int, index: int, _) -> int:
+    async def map_item(item: int) -> int:
+        map_context = get_current_context()
+
         @durable_callable
         async def get_item() -> int:
             return item
 
-        return await step(get_item(), name=f"map-step-{index}")
+        return await step(get_item(), name=f"map-step-{map_context.index}")
 
     async def fruit_step_1() -> str:
         @durable_callable

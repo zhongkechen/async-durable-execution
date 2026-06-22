@@ -21,7 +21,7 @@ from .context import (
 )
 from .async_tools import durable_callable
 from .operation.with_retry import WithRetryConfig, with_retry
-from .operation.map import MapConfig, map
+from .operation.map import MapConfig, MapItemContext, map
 from .operation.concurrency import CompletionConfig, NestingType
 from .operation.wait_for_condition import (
     WaitForConditionConfig,
@@ -86,6 +86,7 @@ __all__ = [
     "JsonSerDes",
     "LambdaContext",
     "MapConfig",
+    "MapItemContext",
     "NestingType",
     "OperationIdentifier",
     "ParallelBranch",

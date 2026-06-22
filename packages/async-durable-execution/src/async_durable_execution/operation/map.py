@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar, Sequence, Callable, Any, Awa
 
 from ..async_tools import get_callable_name
 from .base import CheckpointedResult, get_checkpoint_result
-from .child import ChildConfig, child_handler, _get_durable_context
+from .child import ChildConfig, DurableContext, child_handler, _get_durable_context
 
 from ..async_tools import (
     invoke_user_callable,
@@ -27,7 +27,6 @@ if TYPE_CHECKING:
     from ..serdes import SerDes
     from ..state import ExecutionState
     from ..types import SummaryGenerator
-    from .child import DurableContext
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +68,14 @@ class MapConfig(Generic[T]):
     item_namer: Callable[[T, int], str] | None = None
 
 
+@dataclass(frozen=True)
+class MapItemContext(DurableContext, Generic[T]):
+    """Context exposed while a map item function is executing."""
+
+    index: int = 0
+    items: Sequence[T] = field(default_factory=tuple)
+
+
 class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI059
     """Concurrent executor used by the public `map()` helper."""
 
@@ -106,7 +113,7 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
     def from_items(
         cls,
         items: Sequence[T],
-        func: Callable[[T, int, Sequence[T]], Awaitable[R]],
+        func: Callable[[T], Awaitable[R]],
         config: MapConfig[T],
     ) -> MapExecutor[T, R]:
         """Create MapExecutor from items and a callable."""
@@ -138,12 +145,18 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
     async def execute_item(self, child_context, executable: Executable[Callable]):
         logger.debug("🗺️ Processing map item: %s", executable.index)
         item = self.items[executable.index]
+        map_item_context = MapItemContext(
+            execution_state=child_context.execution_state,
+            operation_identifier=child_context.operation_identifier,
+            lambda_context=child_context.lambda_context,
+            step_id_prefix=child_context.step_id_prefix,
+            index=executable.index,
+            items=self.items,
+        )
         result: R = await invoke_user_callable(
-            child_context,
+            map_item_context,
             executable.func,
             item,
-            executable.index,
-            self.items,
         )
         logger.debug("✅ Processed map item: %s", executable.index)
         return result
@@ -151,7 +164,7 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
 
 async def map_handler(
     items: Sequence[T],
-    func: Callable[[T, int, Sequence[T]], Awaitable[R]],
+    func: Callable[[T], Awaitable[R]],
     config: MapConfig | None,
     execution_state: ExecutionState,
     map_context: DurableContext,
@@ -198,7 +211,7 @@ class MapSummaryGenerator:
 
 async def map(
     inputs: Sequence[U],
-    func: Callable[[U | BatchedInput[Any, U], int, Sequence[U]], Awaitable[T]],
+    func: Callable[[U | BatchedInput[Any, U]], Awaitable[T]],
     name: str | None = None,
     config: MapConfig | None = None,
 ):

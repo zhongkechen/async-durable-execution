@@ -131,8 +131,8 @@ async def test_module_level_context_functions_delegate_to_durable_context():
     async def child_func() -> str:
         return "child"
 
-    async def map_func(item: int, index: int, items: list[int]) -> int:
-        return item + index + len(items)
+    async def map_func(item: int) -> int:
+        return item
 
     async def parallel_func() -> str:
         return "parallel"
@@ -1598,7 +1598,7 @@ async def test_map_basic(mock_handler):
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
 
-    async def test_function(context, item, index, items):
+    async def test_function(item):
         return f"processed_{item}"
 
     inputs = [1, 2, 3]
@@ -1624,7 +1624,7 @@ async def test_map_with_name_and_config(mock_handler):
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
 
-    async def test_function(context, item, index, items):
+    async def test_function(item):
         return f"processed_{item}"
 
     test_function._original_name = "test_map_function"  # noqa: SLF001
@@ -1654,7 +1654,7 @@ async def test_map_calls_handler_correctly(mock_handler):
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
 
-    async def test_function(context, item, index, items):
+    async def test_function(item):
         return item.upper()
 
     inputs = ["hello", "world"]
@@ -1673,7 +1673,7 @@ async def test_map_with_empty_inputs(mock_handler):
     mock_handler.return_value = "empty_map_result"
     mock_state = create_async_child_state()
 
-    async def test_function(context, item, index, items):
+    async def test_function(item):
         return item
 
     inputs = []
@@ -1689,7 +1689,7 @@ async def test_map_with_different_input_types(mock_handler):
     mock_handler.return_value = "mixed_map_result"
     mock_state = create_async_child_state()
 
-    async def test_function(context, item, index, items):
+    async def test_function(item):
         return str(item)
 
     inputs = [1, "hello", {"key": "value"}, [1, 2, 3]]
@@ -1885,7 +1885,7 @@ async def test_map_calls_handler(mock_handler):
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
 
-    async def test_function(context, item, index, items):
+    async def test_function(item):
         return f"processed_{item}"
 
     inputs = ["a", "b", "c"]
@@ -1962,9 +1962,9 @@ async def test_context_map_handler_call():
     """Test that map method calls through to map_handler (line 283)."""
     execution_calls = []
 
-    async def test_function(context, item, index, items):
-        execution_calls.append(f"item_{index}")
-        return f"result_{index}"
+    async def test_function(item):
+        execution_calls.append(f"item_{item}")
+        return f"result_{item}"
 
     # Create mock state and context
     state = create_async_child_state()

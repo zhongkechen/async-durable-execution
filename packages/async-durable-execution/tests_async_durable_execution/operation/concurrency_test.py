@@ -28,7 +28,7 @@ from async_durable_execution.models import (
     ExecutableWithState,
     ExecutionCounters,
 )
-from async_durable_execution import DurableContext
+from async_durable_execution import DurableContext, get_current_context
 from async_durable_execution.exceptions import (
     CallableRuntimeError,
     InvalidStateError,
@@ -2884,7 +2884,8 @@ async def test_executor_terminates_quickly_when_impossible_to_succeed():
     """Test that executor terminates when min_successful becomes impossible."""
     executed_count = {"value": 0}
 
-    async def task_func(item, idx, items):
+    async def task_func(item):
+        idx = get_current_context().index
         executed_count["value"] += 1
         if idx < 2:
             raise Exception(f"fail_{idx}")  # noqa EM102 TRY002

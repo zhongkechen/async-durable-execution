@@ -6,6 +6,7 @@ from typing import Any
 from async_durable_execution import (
     LambdaContext,
     durable_callable,
+    get_current_context,
     step,
     MapConfig,
     durable_execution,
@@ -28,12 +29,14 @@ async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
     config = MapConfig(max_concurrency=10)  # Process 10 items concurrently
     data = await generate_large_string(100)
 
-    async def process_item(item: int, index: int, _) -> dict[str, Any]:
+    async def process_item(item: int) -> dict[str, Any]:
+        map_context = get_current_context()
+
         @durable_callable
         async def build_result() -> dict[str, Any]:
             return {
                 "itemId": item,
-                "index": index,
+                "index": map_context.index,
                 "dataSize": len(data),
                 "data": data,
                 "processed": True,

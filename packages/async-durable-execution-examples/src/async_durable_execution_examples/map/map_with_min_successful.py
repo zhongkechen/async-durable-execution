@@ -6,6 +6,7 @@ from typing import Any
 from async_durable_execution import (
     LambdaContext,
     durable_callable,
+    get_current_context,
     step,
     CompletionConfig,
     MapConfig,
@@ -25,14 +26,15 @@ async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
         completion_config=CompletionConfig(min_successful=6),
     )
 
-    async def process_item(item: int, index: int, _) -> int:
+    async def process_item(item: int) -> int:
         await asyncio.sleep(0)
+        map_context = get_current_context()
 
         @durable_callable
         async def run() -> int:
             return await _process_item(item)
 
-        return await step(run(), name=f"item_{index}")
+        return await step(run(), name=f"item_{map_context.index}")
 
     results = await map(
         inputs=items,
