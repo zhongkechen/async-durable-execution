@@ -2,4 +2,4 @@ blank_issues_enabled: false
 contact_links:
   - name: Ask a question
     url: https://github.com/zhongkechen/async-durable-execution/discussions/new
-    about: Ask a general question about Lambda Powertools
+    about: Ask a general question about async-durable-execution SDK
