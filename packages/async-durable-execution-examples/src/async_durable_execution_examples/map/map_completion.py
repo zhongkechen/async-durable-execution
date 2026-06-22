@@ -10,6 +10,7 @@ from async_durable_execution import (
     MapConfig,
     StepConfig,
     durable_callable,
+    get_current_context,
     step,
     durable_execution,
     RetryStrategyBuilder,
@@ -44,14 +45,11 @@ async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
         f"Items pattern: {', '.join(['FAIL' if i['shouldFail'] else 'SUCCESS' for i in items])}"
     )
 
-    async def process_item(
-        item: dict[str, Any],
-        index: int,
-        _items: list[dict[str, Any]],
-    ) -> dict[str, Any]:
+    async def process_item(item: dict[str, Any]) -> dict[str, Any]:
         """Process each item in the map."""
+        map_context = get_current_context()
         logger.info(
-            f"Processing item {item['id']} (index {index}), shouldFail: {item['shouldFail']}"
+            f"Processing item {item['id']} (index {map_context.index}), shouldFail: {item['shouldFail']}"
         )
 
         retry_config = RetryStrategyBuilder(
@@ -74,7 +72,7 @@ async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
 
         return await step(
             step_function(),
-            name=f"process-item-{index}",
+            name=f"process-item-{map_context.index}",
             config=step_config,
         )
 

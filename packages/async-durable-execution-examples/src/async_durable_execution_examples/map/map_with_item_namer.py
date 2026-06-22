@@ -22,7 +22,7 @@ async def handler(_event: Any, context: LambdaContext) -> list[str]:
         {"id": "order-103", "amount": 75},
     ]
 
-    async def process_order(order: dict[str, Any], index: int, _) -> str:
+    async def process_order(order: dict[str, Any]) -> str:
         await asyncio.sleep(0)
 
         @durable_callable

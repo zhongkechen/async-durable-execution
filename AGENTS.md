@@ -308,12 +308,12 @@ result = wait_for_condition(
 ### Map - Process Arrays
 
 ```python
-from collections.abc import Sequence
-from async_durable_execution import MapConfig, CompletionConfig
+from async_durable_execution import MapConfig, CompletionConfig, get_current_context
 
 
-async def process_item(item: dict, index: int, items: Sequence[dict]) -> dict:
-    return step(lambda: process(item), name=f"process-{index}")
+async def process_item(item: dict) -> dict:
+    map_context = get_current_context()
+    return step(lambda: process(item), name=f"process-{map_context.index}")
 
 
 results = map(

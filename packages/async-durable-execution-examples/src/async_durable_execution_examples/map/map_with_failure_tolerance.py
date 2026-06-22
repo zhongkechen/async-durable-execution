@@ -11,6 +11,7 @@ from async_durable_execution import (
     StepConfig,
     durable_execution,
     durable_callable,
+    get_current_context,
     map,
     step,
 )
@@ -32,8 +33,9 @@ async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
         retry_strategy=RetryStrategyBuilder(max_attempts=1).build()
     )
 
-    async def process_item(item: int, index: int, _) -> int:
+    async def process_item(item: int) -> int:
         await asyncio.sleep(0)
+        map_context = get_current_context()
 
         @durable_callable
         async def run() -> int:
@@ -41,7 +43,7 @@ async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
 
         return await step(
             run(),
-            name=f"item_{index}",
+            name=f"item_{map_context.index}",
             config=step_config,
         )
 

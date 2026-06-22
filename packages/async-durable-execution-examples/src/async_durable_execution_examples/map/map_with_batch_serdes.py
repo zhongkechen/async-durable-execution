@@ -7,6 +7,7 @@ from typing import Any
 from async_durable_execution import (
     LambdaContext,
     durable_callable,
+    get_current_context,
     step,
     BatchItem,
     BatchItemStatus,
@@ -86,14 +87,15 @@ async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
     # Use custom serdes for the entire BatchResult, default JSON for individual items
     config = MapConfig(serdes=CustomBatchSerDes(), item_serdes=JsonSerDes())
 
-    async def process_item(item: int, index: int, _) -> int:
+    async def process_item(item: int) -> int:
         await asyncio.sleep(0)
+        map_context = get_current_context()
 
         @durable_callable
         async def double() -> int:
             return item * 2
 
-        return await step(double(), name=f"double_{index}")
+        return await step(double(), name=f"double_{map_context.index}")
 
     results = await map(
         inputs=items,
