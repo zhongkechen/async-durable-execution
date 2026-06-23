@@ -6,7 +6,6 @@ from typing import Any
 from async_durable_execution import (
     durable_callable,
     step,
-    StepConfig,
     durable_execution,
     RetryStrategyBuilder,
     run_in_child_context,
@@ -31,12 +30,10 @@ async def child_with_failure() -> None:
         max_delay=timedelta(seconds=1),
         backoff_rate=2.0,
     )
-    step_config = StepConfig(retry_strategy=retry_config.build())
-
     await step(
         failing_step(),
         name="failing-step",
-        config=step_config,
+        retry_strategy=retry_config.build(),
     )
 
 

@@ -7,7 +7,6 @@ from async_durable_execution import (
     durable_callable,
     step,
     wait,
-    StepConfig,
     durable_execution,
     RetryStrategyBuilder,
     get_attempt,
@@ -42,7 +41,7 @@ async def handler(event: Any) -> dict[str, Any]:
         retryable_error_types=[RuntimeError],
     )
 
-    step_config = StepConfig(retry_config.build())
+    retry_strategy = retry_config.build()
 
     item = None
     poll_count = 0
@@ -60,7 +59,7 @@ async def handler(event: Any) -> dict[str, Any]:
             get_response = await step(
                 get_item(),
                 name=f"get_item_poll_{poll_count}",
-                config=step_config,
+                retry_strategy=retry_strategy,
             )
 
             # Did we find the item?

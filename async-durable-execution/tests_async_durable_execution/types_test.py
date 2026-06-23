@@ -22,7 +22,6 @@ from async_durable_execution.operation.callback import (
 )
 from async_durable_execution.operation.map import MapConfig
 from async_durable_execution.operation.parallel import ParallelConfig
-from async_durable_execution.operation.step import StepConfig
 
 
 async def test_module_level_operations_delegate_to_mock_context_methods():
@@ -84,10 +83,7 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
             mock_step_executor.return_value = step_executor
             mock_callback_executor.return_value = callback_executor
 
-            assert (
-                await step(test_callable, name="test_step", config=StepConfig())
-                == "step_result"
-            )
+            assert await step(test_callable, name="test_step") == "step_result"
             assert (
                 await run_in_child_context(
                     test_callable,

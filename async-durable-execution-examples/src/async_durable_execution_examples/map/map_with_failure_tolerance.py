@@ -7,7 +7,6 @@ from async_durable_execution import (
     CompletionConfig,
     MapConfig,
     RetryStrategyBuilder,
-    StepConfig,
     durable_execution,
     durable_callable,
     get_current_context,
@@ -28,9 +27,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     )
 
     # Disable retries so failures happen immediately
-    step_config = StepConfig(
-        retry_strategy=RetryStrategyBuilder(max_attempts=1).build()
-    )
+    retry_strategy = RetryStrategyBuilder(max_attempts=1).build()
 
     async def process_item(item: int) -> int:
         await asyncio.sleep(0)
@@ -43,7 +40,7 @@ async def handler(_event: Any) -> dict[str, Any]:
         return await step(
             run(),
             name=f"item_{map_context.index}",
-            config=step_config,
+            retry_strategy=retry_strategy,
         )
 
     results = await map(

@@ -352,8 +352,11 @@ class StepOperationExecutor(OperationExecutor[T]):
 
 async def step(
     func: Callable[[], Awaitable[T]],
+    *,
     name: str | None = None,
-    config: StepConfig | None = None,
+    retry_strategy: Callable[[Exception, int], RetryDecision] | None = None,
+    step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+    serdes: SerDes | None = None,
 ) -> T:
     """Run user code as a checkpointed durable step.
 
@@ -364,8 +367,11 @@ async def step(
     assert_async_callable(func)
     step_name = name or get_callable_name(func, include_original_name=False)
     logger.debug("Step name: %s", step_name)
-    if not config:
-        config = StepConfig()
+    config = StepConfig(
+        retry_strategy=retry_strategy,
+        step_semantics=step_semantics,
+        serdes=serdes,
+    )
     operation_id = context.step_counter.create_step_id()
 
     operation_identifier = OperationIdentifier(

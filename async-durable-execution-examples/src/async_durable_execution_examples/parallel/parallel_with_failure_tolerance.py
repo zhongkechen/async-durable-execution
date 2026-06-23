@@ -7,7 +7,6 @@ from async_durable_execution import (
     step,
     CompletionConfig,
     ParallelConfig,
-    StepConfig,
     durable_execution,
     RetryStrategyBuilder,
     parallel,
@@ -24,44 +23,42 @@ async def handler(_event: Any) -> dict[str, Any]:
     )
 
     # Disable retries so failures happen immediately
-    step_config = StepConfig(
-        retry_strategy=RetryStrategyBuilder(max_attempts=1).build()
-    )
+    retry_strategy = RetryStrategyBuilder(max_attempts=1).build()
 
     async def task1() -> str:
         @durable_callable
         async def run() -> str:
             return "success 1"
 
-        return await step(run(), name="task1", config=step_config)
+        return await step(run(), name="task1", retry_strategy=retry_strategy)
 
     async def task2() -> str:
         @durable_callable
         async def run() -> str:
             return await _failing_task(2)
 
-        return await step(run(), name="task2", config=step_config)
+        return await step(run(), name="task2", retry_strategy=retry_strategy)
 
     async def task3() -> str:
         @durable_callable
         async def run() -> str:
             return "success 3"
 
-        return await step(run(), name="task3", config=step_config)
+        return await step(run(), name="task3", retry_strategy=retry_strategy)
 
     async def task4() -> str:
         @durable_callable
         async def run() -> str:
             return await _failing_task(4)
 
-        return await step(run(), name="task4", config=step_config)
+        return await step(run(), name="task4", retry_strategy=retry_strategy)
 
     async def task5() -> str:
         @durable_callable
         async def run() -> str:
             return "success 5"
 
-        return await step(run(), name="task5", config=step_config)
+        return await step(run(), name="task5", retry_strategy=retry_strategy)
 
     results = await parallel(
         branches=[task1, task2, task3, task4, task5],

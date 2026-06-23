@@ -7,7 +7,6 @@ from typing import Any
 from async_durable_execution import (
     CompletionConfig,
     MapConfig,
-    StepConfig,
     durable_callable,
     get_current_context,
     step,
@@ -56,7 +55,6 @@ async def handler(_event: Any) -> dict[str, Any]:
             initial_delay=timedelta(seconds=1),
             max_delay=timedelta(seconds=1),
         )
-        step_config = StepConfig(retry_strategy=retry_config.build())
 
         @durable_callable
         async def step_function() -> dict[str, Any]:
@@ -72,7 +70,7 @@ async def handler(_event: Any) -> dict[str, Any]:
         return await step(
             step_function(),
             name=f"process-item-{map_context.index}",
-            config=step_config,
+            retry_strategy=retry_config.build(),
         )
 
     config = MapConfig(

@@ -30,6 +30,7 @@ from async_durable_execution.operation.step import (
     StepConfig,
     StepOperationExecutor,
     StepSemantics,
+    step,
 )
 from async_durable_execution.models import RetryDecision
 from async_durable_execution.state import ExecutionState
@@ -102,6 +103,27 @@ def test_step_config_with_values():
     assert config.retry_strategy is retry_strategy
     assert config.step_semantics == StepSemantics.AT_MOST_ONCE_PER_RETRY
     assert config.serdes is serdes
+
+
+def test_step_signature_accepts_config_fields_directly():
+    """The public step API exposes StepConfig fields instead of a config object."""
+    parameters = inspect.signature(step).parameters
+
+    assert "config" not in parameters
+    assert "retry_strategy" in parameters
+    assert "step_semantics" in parameters
+    assert "serdes" in parameters
+
+
+def test_step_signature_requires_keyword_only_options():
+    """Only the step callable is positional."""
+    parameters = inspect.signature(step).parameters
+
+    assert parameters["func"].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
+    assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameters["retry_strategy"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameters["step_semantics"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameters["serdes"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
 def test_step_types_importable_from_package_root():
