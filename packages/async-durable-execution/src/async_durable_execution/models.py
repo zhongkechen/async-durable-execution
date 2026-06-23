@@ -111,7 +111,10 @@ class WaitForConditionDecision:
         return int(self.delay.total_seconds())
 
     @classmethod
-    def continue_waiting(cls, delay: datetime.timedelta) -> "WaitForConditionDecision":
+    def continue_waiting(
+        cls,
+        delay: datetime.timedelta = datetime.timedelta(),
+    ) -> "WaitForConditionDecision":
         """Create a decision to continue waiting."""
         return cls(should_continue=True, delay=delay)
 

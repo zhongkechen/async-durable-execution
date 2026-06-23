@@ -41,17 +41,23 @@ from ..serdes_test import CustomDictSerDes
 
 
 def test_wait_for_condition_config_defaults():
-    """WaitForConditionConfig stores required values and defaults serdes to None."""
+    """WaitForConditionConfig can be omitted or partially specified."""
+
+    config = WaitForConditionConfig()
+
+    assert config.wait_strategy is None
+    assert config.serdes is None
+
+
+def test_wait_for_condition_config_stores_values():
+    """WaitForConditionConfig stores custom values."""
 
     def wait_strategy(state, attempt):
-        return WaitForConditionDecision.stop_polling()
+        return timedelta(seconds=1)
 
-    config = WaitForConditionConfig(
-        wait_strategy=wait_strategy, initial_state={"count": 0}
-    )
+    config = WaitForConditionConfig(wait_strategy=wait_strategy)
 
     assert config.wait_strategy is wait_strategy
-    assert config.initial_state == {"count": 0}
     assert config.serdes is None
 
 
@@ -60,11 +66,10 @@ def test_wait_for_condition_config_with_serdes():
     serdes = CustomDictSerDes()
 
     def wait_strategy(state, attempt):
-        return WaitForConditionDecision.stop_polling()
+        return timedelta(seconds=1)
 
     config = WaitForConditionConfig(
         wait_strategy=wait_strategy,
-        initial_state={"count": 0},
         serdes=serdes,
     )
 
@@ -92,9 +97,14 @@ def _asyncify(func):
     return wrapper
 
 
-# Test helper - maintains old handler signature for backward compatibility in tests
-async def wait_for_condition_handler(check, config, state, operation_identifier):
-    """Test helper that wraps WaitForConditionOperationExecutor with old handler signature."""
+async def wait_for_condition_handler(
+    check,
+    config,
+    state,
+    operation_identifier,
+    initial_state=5,
+):
+    """Test helper that wraps WaitForConditionOperationExecutor."""
     if hasattr(state, "wrap_user_function") and hasattr(
         state.wrap_user_function, "return_value"
     ):
@@ -104,6 +114,7 @@ async def wait_for_condition_handler(check, config, state, operation_identifier)
     executor = WaitForConditionOperationExecutor(
         check=_asyncify(check),
         config=config,
+        initial_state=initial_state,
         state=state,
         operation_identifier=operation_identifier,
     )
@@ -123,24 +134,77 @@ async def test_wait_for_condition_first_execution_condition_met():
     )
 
     def check_func(state):
-        return state + 1
+        return state + 1, WaitForConditionDecision.stop_polling()
 
     mock_state.wrap_user_function.return_value = check_func
-
-    def wait_strategy(state, attempt):
-        return WaitForConditionDecision.stop_polling()
-
-    config = WaitForConditionConfig(initial_state=5, wait_strategy=wait_strategy)
 
     result = await wait_for_condition_handler(
         state=mock_state,
         operation_identifier=op_id,
         check=check_func,
-        config=config,
+        config=WaitForConditionConfig(),
     )
 
     assert result == 6
     assert mock_state.create_checkpoint.call_count == 2  # START and SUCCESS
+
+
+async def test_wait_for_condition_new_condition_result_with_optional_config():
+    """Condition returns the next state and polling decision without config."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "arn:aws:test"
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
+
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+
+    def condition(state):
+        assert state is None
+        return {"status": "done"}, WaitForConditionDecision.stop_polling()
+
+    mock_state.wrap_user_function.return_value = condition
+
+    result = await wait_for_condition_handler(
+        state=mock_state,
+        operation_identifier=op_id,
+        check=condition,
+        config=WaitForConditionConfig(),
+        initial_state=None,
+    )
+
+    assert result == {"status": "done"}
+    assert mock_state.create_checkpoint.call_count == 2
+
+
+async def test_wait_for_condition_new_condition_uses_delay_only_strategy():
+    """Condition decides to continue and wait_strategy supplies only delay."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "arn:aws:test"
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
+
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+
+    def condition(state):
+        return state + 1, WaitForConditionDecision.continue_waiting()
+
+    mock_state.wrap_user_function.return_value = condition
+
+    config = WaitForConditionConfig(
+        wait_strategy=lambda state, attempt: timedelta(seconds=7),
+    )
+
+    with pytest.raises(SuspendExecution, match="will retry in 7 seconds"):
+        await wait_for_condition_handler(
+            state=mock_state,
+            operation_identifier=op_id,
+            check=condition,
+            config=config,
+        )
+
+    assert mock_state.create_checkpoint.call_count == 2
 
 
 async def test_wait_for_condition_first_execution_condition_not_met():
@@ -156,14 +220,14 @@ async def test_wait_for_condition_first_execution_condition_not_met():
     )
 
     def check_func(state):
-        return state + 1
+        return state + 1, WaitForConditionDecision.continue_waiting()
 
     mock_state.wrap_user_function.return_value = check_func
 
     def wait_strategy(state, attempt):
-        return WaitForConditionDecision.continue_waiting(timedelta(seconds=30))
+        return timedelta(seconds=30)
 
-    config = WaitForConditionConfig(initial_state=5, wait_strategy=wait_strategy)
+    config = WaitForConditionConfig(wait_strategy=wait_strategy)
 
     with pytest.raises(SuspendExecution, match="will retry in 30 seconds"):
         await wait_for_condition_handler(
@@ -195,13 +259,12 @@ async def test_wait_for_condition_already_succeeded():
     )
 
     def check_func(state):
-        return state + 1
+        return state + 1, WaitForConditionDecision.continue_waiting()
 
     mock_state.wrap_user_function.return_value = check_func
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
     )
 
     result = await wait_for_condition_handler(
@@ -234,13 +297,12 @@ async def test_wait_for_condition_already_succeeded_none_result():
     )
 
     def check_func(state):
-        return state + 1
+        return state + 1, WaitForConditionDecision.continue_waiting()
 
     mock_state.wrap_user_function.return_value = check_func
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
     )
 
     result = await wait_for_condition_handler(
@@ -274,13 +336,12 @@ async def test_wait_for_condition_already_failed():
     )
 
     def check_func(state):
-        return state + 1
+        return state + 1, WaitForConditionDecision.stop_polling()
 
     mock_state.wrap_user_function.return_value = check_func
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
     )
 
     with pytest.raises(CallableRuntimeError):
@@ -312,13 +373,12 @@ async def test_wait_for_condition_retry_with_state():
     )
 
     def check_func(state):
-        return state + 1
+        return state + 1, WaitForConditionDecision.stop_polling()
 
     mock_state.wrap_user_function.return_value = check_func
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
     )
 
     result = await wait_for_condition_handler(
@@ -352,13 +412,12 @@ async def test_wait_for_condition_retry_without_state():
     )
 
     def check_func(state):
-        return state + 1
+        return state + 1, WaitForConditionDecision.stop_polling()
 
     mock_state.wrap_user_function.return_value = check_func
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
     )
 
     result = await wait_for_condition_handler(
@@ -391,13 +450,12 @@ async def test_wait_for_condition_retry_invalid_json_state():
     )
 
     def check_func(state):
-        return state + 1
+        return state + 1, WaitForConditionDecision.stop_polling()
 
     mock_state.wrap_user_function.return_value = check_func
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
     )
 
     result = await wait_for_condition_handler(
@@ -429,8 +487,7 @@ async def test_wait_for_condition_check_function_exception():
     mock_state.wrap_user_function.return_value = check_func
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
     )
 
     with pytest.raises(ValueError, match="Test error"):
@@ -459,13 +516,12 @@ async def test_wait_for_condition_check_context():
     def check_func(state):
         nonlocal captured_context
         captured_context = get_current_context()
-        return state + 1
+        return state + 1, WaitForConditionDecision.stop_polling()
 
     mock_state.wrap_user_function.return_value = check_func
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
     )
 
     await wait_for_condition_handler(
@@ -492,14 +548,14 @@ async def test_wait_for_condition_delay_seconds_none():
     )
 
     def check_func(state):
-        return state + 1
+        return state + 1, WaitForConditionDecision.continue_waiting()
 
     mock_state.wrap_user_function.return_value = check_func
 
     def wait_strategy(state, attempt):
-        return WaitForConditionDecision(should_continue=True, delay=timedelta())
+        return timedelta()
 
-    config = WaitForConditionConfig(initial_state=5, wait_strategy=wait_strategy)
+    config = WaitForConditionConfig(wait_strategy=wait_strategy)
 
     with pytest.raises(SuspendExecution, match="will retry in 0 seconds"):
         await wait_for_condition_handler(
@@ -534,13 +590,12 @@ async def test_wait_for_condition_no_operation_in_checkpoint():
     )
 
     def check_func(state):
-        return state + 1
+        return state + 1, WaitForConditionDecision.continue_waiting()
 
     mock_state.wrap_user_function.return_value = check_func
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
     )
 
     with pytest.raises(CallableRuntimeError, match="Missing checkpoint operation"):
@@ -575,13 +630,12 @@ async def test_wait_for_condition_operation_no_step_details():
     )
 
     def check_func(state):
-        return state + 1
+        return state + 1, WaitForConditionDecision.stop_polling()
 
     mock_state.wrap_user_function.return_value = check_func
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
     )
 
     result = await wait_for_condition_handler(
@@ -607,16 +661,14 @@ async def test_wait_for_condition_custom_delay_seconds():
     )
 
     def check_func(state):
-        return state + 1
+        return state + 1, WaitForConditionDecision.continue_waiting()
 
     mock_state.wrap_user_function.return_value = check_func
 
     def wait_strategy(state, attempt):
-        return WaitForConditionDecision(
-            should_continue=True, delay=timedelta(minutes=1)
-        )
+        return timedelta(minutes=1)
 
-    config = WaitForConditionConfig(initial_state=5, wait_strategy=wait_strategy)
+    config = WaitForConditionConfig(wait_strategy=wait_strategy)
 
     with pytest.raises(SuspendExecution, match="will retry in 60 seconds"):
         await wait_for_condition_handler(
@@ -647,7 +699,7 @@ async def test_wait_for_condition_attempt_number_passed_to_strategy():
     )
 
     def check_func(state):
-        return state + 1
+        return state + 1, WaitForConditionDecision.continue_waiting()
 
     mock_state.wrap_user_function.return_value = check_func
 
@@ -656,16 +708,17 @@ async def test_wait_for_condition_attempt_number_passed_to_strategy():
     def wait_strategy(state, attempt):
         nonlocal captured_attempt
         captured_attempt = attempt
-        return WaitForConditionDecision.stop_polling()
+        return timedelta(seconds=1)
 
-    config = WaitForConditionConfig(initial_state=5, wait_strategy=wait_strategy)
+    config = WaitForConditionConfig(wait_strategy=wait_strategy)
 
-    await wait_for_condition_handler(
-        state=mock_state,
-        operation_identifier=op_id,
-        check=check_func,
-        config=config,
-    )
+    with pytest.raises(SuspendExecution):
+        await wait_for_condition_handler(
+            state=mock_state,
+            operation_identifier=op_id,
+            check=check_func,
+            config=config,
+        )
 
     assert captured_attempt == 4
 
@@ -691,7 +744,7 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
     )
 
     def check_func(state):
-        return state + 1
+        return state + 1, WaitForConditionDecision.continue_waiting()
 
     mock_state.wrap_user_function.return_value = check_func
 
@@ -699,19 +752,20 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
 
     def wait_strategy(state, attempt):
         captured_attempts.append(attempt)
-        return WaitForConditionDecision.stop_polling()
+        return timedelta(seconds=1)
 
-    config = WaitForConditionConfig(initial_state=5, wait_strategy=wait_strategy)
+    config = WaitForConditionConfig(wait_strategy=wait_strategy)
 
     # Test 1: First execution (no checkpoint exists)
     mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
-    await wait_for_condition_handler(
-        state=mock_state,
-        operation_identifier=op_id,
-        check=check_func,
-        config=config,
-    )
+    with pytest.raises(SuspendExecution):
+        await wait_for_condition_handler(
+            state=mock_state,
+            operation_identifier=op_id,
+            check=check_func,
+            config=config,
+        )
 
     assert captured_attempts[-1] == 1, "First execution should have attempt=1"
 
@@ -725,12 +779,13 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.operations.get.return_value = mock_result
 
-    await wait_for_condition_handler(
-        state=mock_state,
-        operation_identifier=op_id,
-        check=check_func,
-        config=config,
-    )
+    with pytest.raises(SuspendExecution):
+        await wait_for_condition_handler(
+            state=mock_state,
+            operation_identifier=op_id,
+            check=check_func,
+            config=config,
+        )
 
     assert captured_attempts[-1] == 2, (
         "After first retry (checkpoint.attempt=1), current attempt should be 2"
@@ -746,12 +801,13 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.operations.get.return_value = mock_result
 
-    await wait_for_condition_handler(
-        state=mock_state,
-        operation_identifier=op_id,
-        check=check_func,
-        config=config,
-    )
+    with pytest.raises(SuspendExecution):
+        await wait_for_condition_handler(
+            state=mock_state,
+            operation_identifier=op_id,
+            check=check_func,
+            config=config,
+        )
 
     assert captured_attempts[-1] == 3, (
         "After second retry (checkpoint.attempt=2), current attempt should be 3"
@@ -767,12 +823,13 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.operations.get.return_value = mock_result
 
-    await wait_for_condition_handler(
-        state=mock_state,
-        operation_identifier=op_id,
-        check=check_func,
-        config=config,
-    )
+    with pytest.raises(SuspendExecution):
+        await wait_for_condition_handler(
+            state=mock_state,
+            operation_identifier=op_id,
+            check=check_func,
+            config=config,
+        )
 
     assert captured_attempts[-1] == 4, (
         "After third retry (checkpoint.attempt=3), current attempt should be 4"
@@ -800,7 +857,7 @@ async def test_wait_for_condition_state_passed_to_strategy():
     )
 
     def check_func(state):
-        return state * 2
+        return state * 2, WaitForConditionDecision.continue_waiting()
 
     mock_state.wrap_user_function.return_value = check_func
 
@@ -809,16 +866,17 @@ async def test_wait_for_condition_state_passed_to_strategy():
     def wait_strategy(state, attempt):
         nonlocal captured_state
         captured_state = state
-        return WaitForConditionDecision.stop_polling()
+        return timedelta(seconds=1)
 
-    config = WaitForConditionConfig(initial_state=5, wait_strategy=wait_strategy)
+    config = WaitForConditionConfig(wait_strategy=wait_strategy)
 
-    await wait_for_condition_handler(
-        state=mock_state,
-        operation_identifier=op_id,
-        check=check_func,
-        config=config,
-    )
+    with pytest.raises(SuspendExecution):
+        await wait_for_condition_handler(
+            state=mock_state,
+            operation_identifier=op_id,
+            check=check_func,
+            config=config,
+        )
 
     assert captured_state == 10  # 5 * 2
 
@@ -842,13 +900,12 @@ async def test_wait_for_condition_logger_with_log_info():
         captured_context = get_current_context()
         assert isinstance(captured_context, WaitForConditionCheckContext)
         assert captured_context.attempt == 1
-        return state + 1
+        return state + 1, WaitForConditionDecision.stop_polling()
 
     mock_state.wrap_user_function.return_value = check_func
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
     )
 
     await wait_for_condition_handler(
@@ -879,16 +936,14 @@ async def test_wait_for_condition_zero_delay_seconds():
     )
 
     def check_func(state):
-        return state + 1
+        return state + 1, WaitForConditionDecision.continue_waiting()
 
     mock_state.wrap_user_function.return_value = check_func
 
     def wait_strategy(state, attempt):
-        return WaitForConditionDecision(
-            should_continue=True, delay=timedelta(seconds=0)
-        )
+        return timedelta(seconds=0)
 
-    config = WaitForConditionConfig(initial_state=5, wait_strategy=wait_strategy)
+    config = WaitForConditionConfig(wait_strategy=wait_strategy)
 
     with pytest.raises(SuspendExecution, match="will retry in 0 seconds"):
         await wait_for_condition_handler(
@@ -912,15 +967,15 @@ async def test_wait_for_condition_custom_serdes_first_execution_condition_met():
     complex_result = {"key": "value", "number": 42, "list": [1, 2, 3]}
 
     def check_func(state):
-        return complex_result
+        return complex_result, WaitForConditionDecision.stop_polling()
 
     mock_state.wrap_user_function.return_value = check_func
 
     def wait_strategy(state, attempt):
-        return WaitForConditionDecision.stop_polling()
+        return timedelta(seconds=1)
 
     config = WaitForConditionConfig(
-        initial_state=5, wait_strategy=wait_strategy, serdes=CustomDictSerDes()
+        wait_strategy=wait_strategy, serdes=CustomDictSerDes()
     )
 
     await wait_for_condition_handler(
@@ -958,11 +1013,10 @@ async def test_wait_for_condition_custom_serdes_already_succeeded():
     )
 
     def check_func(state):
-        return state + 1
+        return state + 1, WaitForConditionDecision.stop_polling()
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
         serdes=CustomDictSerDes(),
     )
 
@@ -1004,8 +1058,7 @@ async def test_wait_for_condition_pending():
         raise InvocationError(msg)
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
         serdes=CustomDictSerDes(),
     )
 
@@ -1045,8 +1098,7 @@ async def test_wait_for_condition_pending_without_next_attempt():
         raise InvocationError(msg)
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
         serdes=CustomDictSerDes(),
     )
 
@@ -1078,13 +1130,12 @@ async def test_wait_for_condition_checkpoint_called_once_with_is_sync_false():
     )
 
     def check_func(state):
-        return state + 1
+        return state + 1, WaitForConditionDecision.stop_polling()
 
     mock_state.wrap_user_function.return_value = check_func
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
     )
 
     await wait_for_condition_handler(
@@ -1127,8 +1178,7 @@ async def test_wait_for_condition_immediate_success_without_executing_check():
         raise AssertionError(msg)
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
     )
 
     result = await wait_for_condition_handler(
@@ -1170,8 +1220,7 @@ async def test_wait_for_condition_immediate_failure_without_executing_check():
         raise AssertionError(msg)
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
     )
 
     # Verify error raised without executing check function
@@ -1217,8 +1266,7 @@ async def test_wait_for_condition_pending_suspends_without_executing_check():
         raise AssertionError(msg)
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
     )
 
     # Verify suspend occurs without executing check function
@@ -1253,13 +1301,12 @@ async def test_wait_for_condition_no_checkpoint_executes_check_function():
     def check_func(state):
         nonlocal check_called
         check_called = True
-        return state + 1
+        return state + 1, WaitForConditionDecision.stop_polling()
 
     mock_state.wrap_user_function.return_value = check_func
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
     )
 
     result = await wait_for_condition_handler(
@@ -1296,11 +1343,10 @@ async def test_wait_for_condition_already_completed_no_checkpoint_created():
     )
 
     def check_func(state):
-        return state + 1
+        return state + 1, WaitForConditionDecision.stop_polling()
 
     config = WaitForConditionConfig(
-        initial_state=5,
-        wait_strategy=lambda s, a: WaitForConditionDecision.stop_polling(),
+        wait_strategy=lambda s, a: timedelta(seconds=1),
     )
 
     result = await wait_for_condition_handler(
@@ -1318,8 +1364,7 @@ async def test_wait_for_condition_already_completed_no_checkpoint_created():
 
 
 async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal():
-    """Test backward compatibility: when checkpoint is not terminal (STARTED),
-    the wait_for_condition operation executes the check function normally.
+    """When checkpoint is not terminal, wait_for_condition executes check normally.
 
     Note: wait_for_condition uses async checkpoints (is_sync=False), so there's
     only one check, not two.
@@ -1330,21 +1375,19 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal():
     # Single call: checkpoint doesn't exist (async checkpoint, no second check)
     mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
-    mock_check_function = Mock(return_value="final_state")
+    mock_check_function = Mock(
+        return_value=("final_state", WaitForConditionDecision.stop_polling())
+    )
     mock_logger = Mock(spec=logging.Logger)
     mock_state.wrap_user_function.return_value = _asyncify(mock_check_function)
 
     def mock_wait_strategy(state, attempt):
-        return WaitForConditionDecision(
-            should_continue=False, delay=timedelta(seconds=0)
-        )
+        return timedelta(seconds=0)
 
     executor = WaitForConditionOperationExecutor(
         check=mock_check_function,
-        config=WaitForConditionConfig(
-            initial_state="initial",
-            wait_strategy=mock_wait_strategy,
-        ),
+        config=WaitForConditionConfig(wait_strategy=mock_wait_strategy),
+        initial_state="initial",
         state=mock_state,
         operation_identifier=OperationIdentifier(
             "wfc-1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wfc"
@@ -1352,7 +1395,6 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal():
     )
     result = await executor.process()
 
-    # Assert - behaves like "old way"
     mock_check_function.assert_called_once()  # Check function executed
     assert result == "final_state"
     assert mock_state.operations.get.call_count == 1  # Single check (async)
@@ -1360,8 +1402,7 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal():
 
 
 async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal_duplicate():
-    """Test backward compatibility: when checkpoint is not terminal (STARTED),
-    the wait_for_condition operation executes the check function normally.
+    """When checkpoint is not terminal, wait_for_condition executes check normally.
 
     Note: wait_for_condition uses async checkpoints (is_sync=False), so there's
     only one check, not two.
@@ -1372,19 +1413,19 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal_du
     # Single call: checkpoint doesn't exist (async checkpoint, no second check)
     mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
-    mock_check_function = Mock(return_value="final_state")
+    mock_check_function = Mock(
+        return_value=("final_state", WaitForConditionDecision.stop_polling())
+    )
     mock_state.wrap_user_function.return_value = _asyncify(mock_check_function)
     mock_logger = Mock(spec=logging.Logger)
 
     def mock_wait_strategy(state, attempt):
-        return WaitForConditionDecision.stop_polling()
+        return timedelta(seconds=1)
 
     executor = WaitForConditionOperationExecutor(
         check=mock_check_function,
-        config=WaitForConditionConfig(
-            initial_state="initial",
-            wait_strategy=mock_wait_strategy,
-        ),
+        config=WaitForConditionConfig(wait_strategy=mock_wait_strategy),
+        initial_state="initial",
         state=mock_state,
         operation_identifier=OperationIdentifier(
             "wfc-1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wfc"
@@ -1392,7 +1433,6 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal_du
     )
     result = await executor.process()
 
-    # Assert - behaves like "old way"
     mock_check_function.assert_called_once()  # Check function executed
     assert result == "final_state"
     assert mock_state.operations.get.call_count == 1  # Single check (async)
