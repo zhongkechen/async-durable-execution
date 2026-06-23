@@ -10,7 +10,6 @@ from unittest.mock import Mock, patch
 
 import pytest
 from async_durable_execution import (
-    LambdaContext,
     durable_callable,
     run_in_child_context,
     step,
@@ -96,7 +95,7 @@ async def test_step_different_ways_to_pass_args():
         return f"from step {a} {b}"
 
     @durable_execution
-    async def my_handler(event, context: LambdaContext) -> list[str]:
+    async def my_handler(event) -> list[str]:
         del event
         results: list[str] = []
         result: str = await step(partial(step_with_args, a=123, b="str"))
@@ -196,7 +195,7 @@ async def test_durable_callable_decorator_creates_step_operation():
         return f"status:{status_code}"
 
     @durable_execution
-    async def my_handler(event, context: LambdaContext) -> str:
+    async def my_handler(event) -> str:
         del event
         return await step(decorated_step(200))
 
@@ -266,7 +265,7 @@ async def test_step_with_logger():
         return "result"
 
     @durable_execution
-    async def my_handler(event, context: LambdaContext):
+    async def my_handler(event):
         del event
         result: str = await step(partial(mystep, a=123, b="str"))
         assert result == "result"
@@ -359,7 +358,7 @@ async def test_wait_inside_run_in_childcontext():
         await wait(timedelta(seconds=1))
 
     @durable_execution
-    async def my_handler(event, context: LambdaContext):
+    async def my_handler(event):
         del event
         await run_in_child_context(partial(func, 10, 20), name="func")
 
@@ -450,7 +449,7 @@ async def test_step_checkpoint_failure_propagates_error():
         return "this should checkpoint but fail"
 
     @durable_execution
-    async def my_handler(event, context: LambdaContext):
+    async def my_handler(event):
         del event
         # This step will trigger a checkpoint that fails
         result: str = await step(failing_step)
@@ -513,7 +512,7 @@ async def test_wait_not_caught_by_exception():
     """Do not catch Suspend exceptions."""
 
     @durable_execution
-    async def my_handler(event: Any, context: LambdaContext):
+    async def my_handler(event: Any):
         del event
         try:
             await wait(timedelta(seconds=1))
@@ -591,7 +590,7 @@ async def test_durable_wait_for_callback_decorator():
         )
 
     @durable_execution
-    async def my_handler(event, context: LambdaContext):
+    async def my_handler(event):
         del event
         await wait_for_callback(submit_to_external_system("my_task", priority=5))
 

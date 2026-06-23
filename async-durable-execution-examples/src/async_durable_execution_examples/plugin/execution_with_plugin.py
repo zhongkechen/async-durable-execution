@@ -4,7 +4,6 @@ import logging
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     DurableInstrumentationPlugin,
     durable_callable,
     durable_execution,
@@ -51,7 +50,7 @@ async def add_numbers_in_child(a: int, b: int):
 
 
 @durable_execution(plugins=[MyPlugin()])
-async def handler(_event: Any, context: LambdaContext) -> int:
+async def handler(_event: Any) -> int:
     result: int = await run_in_child_context(
         add_numbers_in_child(6, 4),
         name="add-6-and-4",

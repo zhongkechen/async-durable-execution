@@ -1,7 +1,6 @@
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     durable_callable,
     step,
     durable_execution,
@@ -9,7 +8,7 @@ from async_durable_execution import (
 
 
 @durable_execution
-async def handler(_event: Any, context: LambdaContext) -> str:
+async def handler(_event: Any) -> str:
     # Step without explicit name - should use function name
     @durable_callable
     async def unnamed_step() -> str:

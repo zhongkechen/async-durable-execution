@@ -3,7 +3,6 @@
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     durable_callable,
     step,
     CompletionConfig,
@@ -16,7 +15,7 @@ from async_durable_execution import (
 
 
 @durable_execution
-async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Execute tasks with failure tolerance."""
 
     # Tolerate up to 2 failures

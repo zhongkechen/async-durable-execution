@@ -4,7 +4,6 @@ import asyncio
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     ParallelConfig,
     durable_callable,
     durable_execution,
@@ -36,7 +35,7 @@ async def fetch_preferences(user_id: str) -> str:
 
 
 @durable_execution
-async def handler(event: dict[str, Any], context: LambdaContext) -> list[str]:
+async def handler(event: dict[str, Any]) -> list[str]:
     """Execute parallel branches using bound durable callables."""
     user_id = event.get("user_id", "user-123")
 

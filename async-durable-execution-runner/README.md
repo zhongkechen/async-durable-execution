@@ -46,7 +46,6 @@ from functools import partial
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     durable_execution,
     get_current_context,
 )
@@ -81,7 +80,7 @@ async def three(a: int, b: int) -> str:
 
 @durable_execution
 async def function_under_test(
-    event: Any, context: LambdaContext
+    event: Any
 ) -> list[str]:
     context = get_current_context()
     results: list[str] = []

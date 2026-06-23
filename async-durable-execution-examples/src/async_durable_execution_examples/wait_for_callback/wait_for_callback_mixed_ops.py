@@ -5,7 +5,6 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     durable_callable,
     step,
     durable_execution,
@@ -15,7 +14,7 @@ from async_durable_execution import (
 
 
 @durable_execution
-async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating waitForCallback mixed with other operations."""
     # Mix waitForCallback with other operation types
     await wait(timedelta(seconds=1), name="initial-wait")

@@ -4,7 +4,6 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     durable_callable,
     step,
     durable_execution,
@@ -14,7 +13,7 @@ from async_durable_execution import (
 
 
 @durable_execution
-async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating multiple invocations with waitForCallback operations."""
     # First invocation - wait operation
     await wait(timedelta(seconds=1), name="wait-invocation-1")
