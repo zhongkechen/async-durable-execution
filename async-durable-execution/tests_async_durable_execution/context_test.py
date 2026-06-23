@@ -1005,21 +1005,20 @@ async def test_invoke_basic(mock_executor_class):
         ),
         function_name="test_function",
         payload="test_payload",
-        config=ANY,  # InvokeConfig() is created in context.invoke()
+        config=ANY,  # InvokeConfig() is created in invoke()
     )
     mock_executor.process.assert_called_once()
 
 
 @patch("async_durable_execution.operation.invoke.InvokeOperationExecutor")
-async def test_invoke_with_name_and_config(mock_executor_class):
-    """Test invoke with name and config."""
+async def test_invoke_with_name_and_fields(mock_executor_class):
+    """Test invoke with name and config fields."""
     mock_executor = make_async_executor("configured_result")
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    config = InvokeConfig[str, str]()
 
     context = create_test_context(state=mock_state)
     [
@@ -1028,7 +1027,7 @@ async def test_invoke_with_name_and_config(mock_executor_class):
 
     result = await run_with_context(
         context,
-        invoke("test_function", {"key": "value"}, name="named_invoke", config=config),
+        invoke("test_function", {"key": "value"}, name="named_invoke"),
     )
 
     # Get expected ID
@@ -1044,7 +1043,7 @@ async def test_invoke_with_name_and_config(mock_executor_class):
         ),
         function_name="test_function",
         payload={"key": "value"},
-        config=config,
+        config=InvokeConfig[str, str](),
     )
     mock_executor.process.assert_called_once()
 
@@ -1157,11 +1156,6 @@ async def test_invoke_with_custom_serdes(mock_executor_class):
 
     payload_serdes = CustomDictSerDes()
     result_serdes = CustomDictSerDes()
-    config = InvokeConfig[dict, dict](
-        serdes_payload=payload_serdes,
-        serdes_result=result_serdes,
-    )
-
     context = create_test_context(state=mock_state)
 
     result = await run_with_context(
@@ -1170,7 +1164,8 @@ async def test_invoke_with_custom_serdes(mock_executor_class):
             "test_function",
             {"original": "data"},
             name="custom_serdes_invoke",
-            config=config,
+            serdes_payload=payload_serdes,
+            serdes_result=result_serdes,
         ),
     )
 
@@ -1185,7 +1180,10 @@ async def test_invoke_with_custom_serdes(mock_executor_class):
         ),
         function_name="test_function",
         payload={"original": "data"},
-        config=config,
+        config=InvokeConfig[dict, dict](
+            serdes_payload=payload_serdes,
+            serdes_result=result_serdes,
+        ),
     )
     mock_executor.process.assert_called_once()
 
@@ -2193,7 +2191,7 @@ async def test_operation_id_generation_unique():
 
 @patch("async_durable_execution.operation.invoke.InvokeOperationExecutor")
 async def test_invoke_with_explicit_tenant_id(mock_executor_class):
-    """Test invoke with explicit tenant_id in config."""
+    """Test invoke with explicit tenant_id field."""
     mock_executor = make_async_executor("result")
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
@@ -2201,11 +2199,10 @@ async def test_invoke_with_explicit_tenant_id(mock_executor_class):
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
 
-    config = InvokeConfig(tenant_id="explicit-tenant")
     context = create_test_context(state=mock_state)
 
     result = await run_with_context(
-        context, invoke("test_function", "payload", config=config)
+        context, invoke("test_function", "payload", tenant_id="explicit-tenant")
     )
 
     assert result == "result"
@@ -2228,7 +2225,7 @@ async def test_invoke_without_tenant_id_defaults_to_none(mock_executor_class):
     result = await run_with_context(context, invoke("test_function", "payload"))
 
     assert result == "result"
-    # Config is created as InvokeConfig() when not provided
+    # Config is created as InvokeConfig() when fields are not provided
     call_args = mock_executor_class.call_args[1]
     assert isinstance(call_args["config"], InvokeConfig)
     assert call_args["config"].tenant_id is None

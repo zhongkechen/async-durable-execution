@@ -153,12 +153,27 @@ async def invoke(
     function_name: str,
     payload: P,
     name: str | None = None,
-    config: InvokeConfig[P, R] | None = None,
+    *,
+    serdes_payload: SerDes[P] | None = None,
+    serdes_result: SerDes[R] | None = None,
+    tenant_id: str | None = None,
 ) -> R:
-    """Invoke another durable Lambda function and wait for its durable result."""
+    """Invoke another durable Lambda function and wait for its durable result.
+
+    Args:
+        function_name: Qualified Lambda function name or ARN to invoke.
+        payload: Payload to send to the invoked function.
+        name: Optional durable operation name.
+        serdes_payload: Optional serializer for the invocation payload.
+        serdes_result: Optional deserializer for the invocation result.
+        tenant_id: Optional tenant identifier for the chained invocation.
+    """
     context = _get_durable_context("invoke")
-    if not config:
-        config = InvokeConfig[P, R]()
+    config = InvokeConfig[P, R](
+        serdes_payload=serdes_payload,
+        serdes_result=serdes_result,
+        tenant_id=tenant_id,
+    )
     operation_id = context.step_counter.create_step_id()
 
     executor: InvokeOperationExecutor[R] = InvokeOperationExecutor(
