@@ -409,10 +409,29 @@ async def _run_in_child_context_in_context(
 async def run_in_child_context(
     func: Callable[[], Awaitable[T]],
     name: str | None = None,
-    config: ChildConfig | None = None,
+    *,
+    serdes: SerDes | None = None,
+    item_serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    is_virtual: bool = False,
 ) -> T:
-    """Execute a durable sub-workflow inside its own child context."""
+    """Execute a durable sub-workflow inside its own child context.
+
+    Args:
+        func: The child context function to execute.
+        name: Optional durable operation name.
+        serdes: Optional serializer for the child context result.
+        item_serdes: Optional serializer for child items used by composed operations.
+        summary_generator: Optional summary generator for large child results.
+        is_virtual: Whether the child context should skip lifecycle checkpoints.
+    """
     context = _get_durable_context("run_in_child_context")
+    config = ChildConfig[T](
+        serdes=serdes,
+        item_serdes=item_serdes,
+        summary_generator=summary_generator,
+        is_virtual=is_virtual,
+    )
     return await _run_in_child_context_in_context(
         context,
         func=func,
