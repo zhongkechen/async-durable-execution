@@ -200,7 +200,7 @@ async def handler(event: dict) -> dict:
 from functools import partial
 from datetime import timedelta
 
-from async_durable_execution import StepConfig, step
+from async_durable_execution import step
 from async_durable_execution import RetryStrategyBuilder
 
 
@@ -222,7 +222,7 @@ retry_config = RetryStrategyBuilder(
 )
 result = step(
     partial(fetch_user, user_id),
-    config=StepConfig(retry_strategy=retry_config.build())
+    retry_strategy=retry_config.build(),
 )
 ```
 

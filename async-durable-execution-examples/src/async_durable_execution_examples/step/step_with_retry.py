@@ -4,7 +4,6 @@ from typing import Any
 from async_durable_execution import (
     durable_callable,
     step,
-    StepConfig,
     durable_execution,
     RetryStrategyBuilder,
     get_attempt,
@@ -32,7 +31,7 @@ async def handler(_event: Any) -> str:
 
     result: str = await step(
         unreliable_operation(),
-        config=StepConfig(retry_config.build()),
+        retry_strategy=retry_config.build(),
     )
 
     return result

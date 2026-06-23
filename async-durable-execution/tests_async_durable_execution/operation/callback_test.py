@@ -33,7 +33,6 @@ from async_durable_execution.operation.callback import (
     WaitForCallbackConfig,
     wait_for_callback_handler,
 )
-from async_durable_execution.operation.step import StepConfig
 from async_durable_execution.models import RetryDecision
 from async_durable_execution.serdes import SerDes
 from async_durable_execution.state import ExecutionState
@@ -400,7 +399,7 @@ async def test_wait_for_callback_handler_submitter_called_with_callback_id():
 
     mock_submitter = AsyncMock(return_value=None)
 
-    async def capture_step_call(func, name, config=None):
+    async def capture_step_call(func, name, **_kwargs):
         # Execute the step callable to verify submitter is called correctly
         await execute_step_with_mock_context(func)
 
@@ -457,7 +456,7 @@ async def test_wait_for_callback_handler_with_none_callback_id():
 
     mock_submitter = AsyncMock(return_value=None)
 
-    async def execute_step(func, name, config=None):
+    async def execute_step(func, name, **_kwargs):
         return await execute_step_with_mock_context(func)
 
     with patch_wait_for_callback_ops(
@@ -483,7 +482,7 @@ async def test_wait_for_callback_handler_with_empty_string_callback_id():
 
     mock_submitter = AsyncMock(return_value=None)
 
-    async def execute_step(func, name, config=None):
+    async def execute_step(func, name, **_kwargs):
         return await execute_step_with_mock_context(func)
 
     with patch_wait_for_callback_ops(
@@ -538,7 +537,12 @@ async def test_wait_for_callback_handler_with_unicode_names():
 
         assert result == f"result_for_{name}"
         expected_name = f"{name} submitter"
-        step_mock.assert_called_once_with(func=ANY, name=expected_name, config=None)
+        step_mock.assert_called_once_with(
+            func=ANY,
+            name=expected_name,
+            retry_strategy=None,
+            serdes=None,
+        )
 
 
 async def test_create_callback_handler_existing_succeeded_operation():
@@ -712,7 +716,7 @@ async def test_wait_for_callback_handler_submitter_exception_handling():
         msg = "Submitter failed"
         raise ValueError(msg)
 
-    async def step_side_effect(func, name, config=None):
+    async def step_side_effect(func, name, **_kwargs):
         await execute_step_with_mock_context(func)
 
     with patch_wait_for_callback_ops(
@@ -840,14 +844,12 @@ async def test_wait_for_callback_handler_step_config_propagation():
 
     assert result == "step_config_result"
 
-    # Verify step was called with correct StepConfig
+    # Verify step was called with config fields from WaitForCallbackConfig.
     step_mock.assert_called_once()
     call_args = step_mock.call_args
-    step_config = call_args.kwargs["config"]
 
-    assert isinstance(step_config, StepConfig)
-    assert step_config.retry_strategy == test_retry_strategy
-    assert step_config.serdes == mock_serdes
+    assert call_args.kwargs["retry_strategy"] == test_retry_strategy
+    assert call_args.kwargs["serdes"] == mock_serdes
 
 
 async def test_wait_for_callback_handler_with_various_result_types():
@@ -912,7 +914,7 @@ async def test_callback_lifecycle_complete_flow():
         assert callback_context.callback_id == "lifecycle_cb123"
         return "submitted"
 
-    async def execute_step(func, name, config=None):
+    async def execute_step(func, name, **_kwargs):
         return await execute_step_with_mock_context(func)
 
     with patch_wait_for_callback_ops(
@@ -1050,7 +1052,7 @@ async def test_callback_with_complex_submitter():
         msg = "Invalid callback ID"
         raise ValueError(msg)
 
-    async def execute_step(func, name, config):
+    async def execute_step(func, name, **_kwargs):
         return await execute_step_with_mock_context(func)
 
     with patch_wait_for_callback_ops(
@@ -1137,7 +1139,12 @@ async def test_callback_name_variations():
 
         assert result == f"result_for_{name}"
         expected_name = f"{name} submitter" if name else "submitter"
-        step_mock.assert_called_once_with(func=ANY, name=expected_name, config=None)
+        step_mock.assert_called_once_with(
+            func=ANY,
+            name=expected_name,
+            retry_strategy=None,
+            serdes=None,
+        )
 
 
 @patch("async_durable_execution.operation.callback.OperationUpdate")

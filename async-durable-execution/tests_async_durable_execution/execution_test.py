@@ -31,7 +31,7 @@ from async_durable_execution.execution import (
     _bind_service_client_to_handler,
     durable_execution,
 )
-from async_durable_execution.operation.step import StepConfig, StepSemantics
+from async_durable_execution.operation.step import StepSemantics
 
 from async_durable_execution.models import (
     CallbackDetails,
@@ -1529,8 +1529,10 @@ async def test_durable_handler_background_thread_failure_on_start_checkpoint():
 
         # First step with AT_MOST_ONCE_PER_RETRY (synchronous START checkpoint)
         # This should fail on START checkpoint and prevent execution
-        step_config = StepConfig(step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY)
-        await step(first_step_result, config=step_config)
+        await step(
+            first_step_result,
+            step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY,
+        )
 
         # Second step should never be reached if first step's START checkpoint fails
         await step(second_step_result)

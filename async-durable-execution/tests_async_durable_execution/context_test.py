@@ -25,7 +25,6 @@ from async_durable_execution.operation.callback import (
 from async_durable_execution.operation.invoke import InvokeConfig
 from async_durable_execution.operation.map import MapConfig
 from async_durable_execution.operation.parallel import ParallelConfig
-from async_durable_execution.operation.step import StepConfig
 from async_durable_execution.operation.wait_for_condition import WaitForConditionConfig
 from async_durable_execution import (
     durable_callable,
@@ -39,6 +38,7 @@ from async_durable_execution import (
     wait_for_callback,
     map as map_operation,
     StepContext,
+    StepSemantics,
     DurableContext,
 )
 from async_durable_execution.exceptions import (
@@ -822,15 +822,15 @@ async def test_step_basic(mock_executor_class):
         operation_identifier=OperationIdentifier(
             expected_operation_id, OperationSubType.STEP, None, "mock_callable"
         ),
-        config=ANY,  # StepConfig() is created in step()
+        config=ANY,  # StepConfig is created in step()
         func=mock_callable,
     )
     mock_executor.process.assert_called_once()
 
 
 @patch("async_durable_execution.operation.step.StepOperationExecutor")
-async def test_step_with_name_and_config(mock_executor_class):
-    """Test step with name and config."""
+async def test_step_with_name_and_config_fields(mock_executor_class):
+    """Test step with name and direct config fields."""
     mock_executor = make_async_executor("configured_result")
 
     mock_executor_class.return_value = mock_executor
@@ -842,14 +842,21 @@ async def test_step_with_name_and_config(mock_executor_class):
     async def mock_callable() -> None:
         return None
 
-    config = StepConfig()
+    retry_strategy = Mock()
 
     context = create_test_context(state=mock_state)
     [
         context.step_counter.create_step_id() for _ in range(5)
     ]  # Set counter to 5 # noqa: SLF001
 
-    result = await run_with_context(context, step(mock_callable, config=config))
+    result = await run_with_context(
+        context,
+        step(
+            mock_callable,
+            retry_strategy=retry_strategy,
+            step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY,
+        ),
+    )
 
     # Get expected ID
     seq = operation_id_sequence()
@@ -862,9 +869,12 @@ async def test_step_with_name_and_config(mock_executor_class):
         operation_identifier=OperationIdentifier(
             expected_id, OperationSubType.STEP, None, "mock_callable"
         ),
-        config=config,
+        config=ANY,
         func=mock_callable,
     )
+    created_config = mock_executor_class.call_args.kwargs["config"]
+    assert created_config.retry_strategy is retry_strategy
+    assert created_config.step_semantics is StepSemantics.AT_MOST_ONCE_PER_RETRY
     mock_executor.process.assert_called_once()
 
 

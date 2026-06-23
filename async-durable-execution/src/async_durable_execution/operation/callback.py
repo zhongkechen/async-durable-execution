@@ -33,7 +33,6 @@ from .base import (
     OperationContext,
     get_checkpoint_result,
 )
-from .step import StepConfig
 from ..serdes import deserialize, SerDes, PassThroughSerDes
 
 if TYPE_CHECKING:
@@ -191,18 +190,11 @@ async def wait_for_callback_handler(
         finally:
             reset_current_context(token)
 
-    step_config = (
-        StepConfig(
-            retry_strategy=config.retry_strategy,
-            serdes=config.serdes,
-        )
-        if config
-        else None
-    )
     await step_operation(
         func=submitter_step,
         name=f"{name_with_space}submitter",
-        config=step_config,
+        retry_strategy=config.retry_strategy if config else None,
+        serdes=config.serdes if config else None,
     )
 
     return await callback.result()

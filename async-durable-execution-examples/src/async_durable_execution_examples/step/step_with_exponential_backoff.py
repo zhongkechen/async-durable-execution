@@ -4,7 +4,6 @@ from typing import Any
 from async_durable_execution import (
     durable_callable,
     step,
-    StepConfig,
     durable_execution,
     RetryStrategyBuilder,
 )
@@ -20,11 +19,13 @@ async def handler(_event: Any) -> str:
         backoff_rate=2.0,
     )
 
-    step_config = StepConfig(retry_strategy=retry_config.build())
-
     @durable_callable
     async def retry_step() -> str:
         return "Step with exponential backoff"
 
-    result = await step(retry_step(), name="retry_step", config=step_config)
+    result = await step(
+        retry_step(),
+        name="retry_step",
+        retry_strategy=retry_config.build(),
+    )
     return f"Result: {result}"
