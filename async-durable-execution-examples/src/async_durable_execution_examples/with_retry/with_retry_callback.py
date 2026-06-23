@@ -10,7 +10,6 @@ from typing import Any
 
 from async_durable_execution import (
     RetryStrategyBuilder,
-    WaitForCallbackConfig,
     durable_execution,
     with_retry,
     wait_for_callback,
@@ -35,13 +34,11 @@ async def handler(_event: Any) -> dict[str, Any]:
             # In real usage, this would send the callback_id to an external
             # system (e.g., via API call, SQS message, etc.)
 
-        config = WaitForCallbackConfig(
+        return await wait_for_callback(
+            submitter,
+            name=f"external-call-attempt-{attempt}",
             timeout=timedelta(seconds=3),
             heartbeat_timeout=timedelta(seconds=3),
-        )
-
-        return await wait_for_callback(
-            submitter, name=f"external-call-attempt-{attempt}", config=config
         )
 
     retry_config = WithRetryConfig(

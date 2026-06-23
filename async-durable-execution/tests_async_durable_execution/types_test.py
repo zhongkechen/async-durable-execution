@@ -16,10 +16,6 @@ from async_durable_execution import (
 from async_durable_execution.context import reset_current_context, set_current_context
 from async_durable_execution.models import OperationIdentifier, OperationSubType
 from async_durable_execution.operation import child
-from async_durable_execution.operation.callback import (
-    CallbackConfig,
-    WaitForCallbackConfig,
-)
 from async_durable_execution.operation.map import MapConfig
 from async_durable_execution.operation.parallel import ParallelConfig
 
@@ -106,14 +102,12 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
             await wait(timedelta(seconds=5), name="test_wait")
             callback_result = await create_callback(
                 name="test_callback",
-                config=CallbackConfig(),
             )
             assert callback_result.callback_id == "callback-id"
             assert (
                 await wait_for_callback(
                     submitter,
                     name="test_wait_for_callback",
-                    config=WaitForCallbackConfig(),
                 )
                 == "callback_result"
             )

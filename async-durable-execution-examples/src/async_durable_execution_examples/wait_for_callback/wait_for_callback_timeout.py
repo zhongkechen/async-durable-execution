@@ -4,7 +4,6 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    WaitForCallbackConfig,
     durable_execution,
     wait_for_callback,
 )
@@ -14,10 +13,6 @@ from async_durable_execution import (
 async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating waitForCallback timeout."""
 
-    config = WaitForCallbackConfig(
-        timeout=timedelta(seconds=1), heartbeat_timeout=timedelta(seconds=2)
-    )
-
     async def submitter(_callback_id) -> None:
         """Submitter succeeds but callback never completes."""
         return None
@@ -25,7 +20,8 @@ async def handler(_event: Any) -> dict[str, Any]:
     try:
         result: str = await wait_for_callback(
             submitter,
-            config=config,
+            timeout=timedelta(seconds=1),
+            heartbeat_timeout=timedelta(seconds=2),
         )
         return {
             "callbackResult": result,

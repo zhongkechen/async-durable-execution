@@ -5,7 +5,6 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    WaitForCallbackConfig,
     durable_execution,
     RetryStrategyBuilder,
     wait_for_callback,
@@ -22,21 +21,17 @@ async def handler(_event: Any) -> dict[str, Any]:
         # Submitter fails
         raise Exception("Submitter failed")
 
-    config = WaitForCallbackConfig(
-        timeout=timedelta(seconds=3),
-        heartbeat_timeout=timedelta(seconds=3),
-        retry_strategy=RetryStrategyBuilder(
-            max_attempts=3,
-            initial_delay=timedelta(seconds=1),
-            max_delay=timedelta(seconds=1),
-        ).build(),
-    )
-
     try:
         result: str = await wait_for_callback(
             submitter,
             name="failing-submitter-callback",
-            config=config,
+            timeout=timedelta(seconds=3),
+            heartbeat_timeout=timedelta(seconds=3),
+            retry_strategy=RetryStrategyBuilder(
+                max_attempts=3,
+                initial_delay=timedelta(seconds=1),
+                max_delay=timedelta(seconds=1),
+            ).build(),
         )
 
         return {

@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from async_durable_execution import (
-    CallbackConfig,
     durable_execution,
     SerDes,
     SerDesContext,
@@ -59,14 +58,10 @@ class CustomDataSerDes(SerDes[CustomData]):
 @durable_execution
 async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating createCallback with custom serdes."""
-    callback_config = CallbackConfig(
-        timeout=timedelta(seconds=30),
-        serdes=CustomDataSerDes(),
-    )
-
     callback = await create_callback(
         name="custom-serdes-callback",
-        config=callback_config,
+        timeout=timedelta(seconds=30),
+        serdes=CustomDataSerDes(),
     )
 
     result: CustomData = await callback.result()

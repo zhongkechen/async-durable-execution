@@ -266,16 +266,13 @@ result = run_in_child_context(process_order, name="process-order")
 ### Wait for Callback - External Integration
 
 ```python
-from async_durable_execution import WaitForCallbackConfig
-
-
 async def submit_approval(callback_id: str):
     send_approval_email(callback_id)
 
 
 result = wait_for_callback(
     submitter=submit_approval,
-    config=WaitForCallbackConfig(timeout=timedelta(hours=24)),
+    timeout=timedelta(hours=24),
     name="wait-for-approval"
 )
 ```
@@ -455,7 +452,7 @@ async def handler(event: dict) -> dict:
 
     answer = wait_for_callback(
         submitter=submit_approval,
-        config=WaitForCallbackConfig(timeout=timedelta(hours=24)),
+        timeout=timedelta(hours=24),
         name="wait-for-approval"
     )
 

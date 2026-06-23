@@ -20,7 +20,6 @@ from async_durable_execution.context import (
 from async_durable_execution.operation.callback import (
     Callback,
     CallbackConfig,
-    WaitForCallbackConfig,
 )
 from async_durable_execution.operation.invoke import InvokeConfig
 from async_durable_execution.operation.map import MapConfig
@@ -700,7 +699,7 @@ async def test_create_callback_basic(mock_executor_class):
 
 @patch("async_durable_execution.operation.callback.CallbackOperationExecutor")
 async def test_create_callback_with_name_and_config(mock_executor_class):
-    """Test create_callback with name and config."""
+    """Test create_callback with name and configuration fields."""
     mock_executor = make_async_executor("callback456")
     mock_executor_class.return_value = mock_executor
 
@@ -708,7 +707,8 @@ async def test_create_callback_with_name_and_config(mock_executor_class):
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    config = CallbackConfig()
+    timeout = timedelta(seconds=30)
+    heartbeat_timeout = timedelta(seconds=10)
 
     context = create_test_context(state=mock_state)
     operation_ids = operation_id_sequence()
@@ -718,7 +718,13 @@ async def test_create_callback_with_name_and_config(mock_executor_class):
         context.step_counter.create_step_id() for _ in range(5)
     ]  # Set counter to 5 # noqa: SLF001
 
-    callback = await run_with_context(context, create_callback(config=config))
+    callback = await run_with_context(
+        context,
+        create_callback(
+            timeout=timeout,
+            heartbeat_timeout=heartbeat_timeout,
+        ),
+    )
 
     assert callback.callback_id == "callback456"
     assert callback.operation_id == expected_operation_id
@@ -728,7 +734,7 @@ async def test_create_callback_with_name_and_config(mock_executor_class):
         operation_identifier=OperationIdentifier(
             expected_operation_id, OperationSubType.CALLBACK, None, None
         ),
-        config=config,
+        config=CallbackConfig(timeout=timeout, heartbeat_timeout=heartbeat_timeout),
     )
     mock_executor.process.assert_called_once()
 
@@ -1588,7 +1594,7 @@ async def test_wait_for_callback_basic(mock_executor_class):
 
 @patch("async_durable_execution.operation.callback.wait_for_callback_handler")
 async def test_wait_for_callback_with_name_and_config(mock_executor_class):
-    """Test wait_for_callback with name and config."""
+    """Test wait_for_callback with name and configuration fields."""
     mock_executor = make_async_executor("configured_callback_result")
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
@@ -1597,7 +1603,8 @@ async def test_wait_for_callback_with_name_and_config(mock_executor_class):
     )
     mock_submitter = AsyncMock()
     mock_submitter._original_name = "submit_function"  # noqa: SLF001
-    config = WaitForCallbackConfig()
+    timeout = timedelta(seconds=30)
+    heartbeat_timeout = timedelta(seconds=10)
 
     with patch(
         "async_durable_execution.operation.callback._run_in_child_context_in_context"
@@ -1606,7 +1613,12 @@ async def test_wait_for_callback_with_name_and_config(mock_executor_class):
         context = create_test_context(state=mock_state)
 
         result = await run_with_context(
-            context, wait_for_callback(mock_submitter, config=config)
+            context,
+            wait_for_callback(
+                mock_submitter,
+                timeout=timeout,
+                heartbeat_timeout=heartbeat_timeout,
+            ),
         )
 
         assert result == "configured_callback_result"

@@ -173,7 +173,10 @@ async def wait_for_callback_handler(
 
     name_with_space: str = f"{name} " if name else ""
     callback: Callback = await create_callback(
-        name=f"{name_with_space}create callback id", config=config
+        name=f"{name_with_space}create callback id",
+        timeout=config.timeout if config else None,
+        heartbeat_timeout=config.heartbeat_timeout if config else None,
+        serdes=config.serdes if config else None,
     )
 
     async def submitter_step():
@@ -201,12 +204,28 @@ async def wait_for_callback_handler(
 
 
 async def create_callback(
-    name: str | None = None, config: CallbackConfig | None = None
+    name: str | None = None,
+    *,
+    timeout: timedelta | None = None,
+    heartbeat_timeout: timedelta | None = None,
+    serdes: SerDes | None = None,
 ) -> Callback:
-    """Create a durable callback handle that external systems can complete later."""
+    """Create a durable callback handle that external systems can complete later.
+
+    Args:
+        name: Optional durable operation name.
+        timeout: Optional maximum time to wait for callback completion.
+        heartbeat_timeout: Optional maximum time to wait between callback heartbeats.
+        serdes: Optional serializer for callback results.
+    """
     context = _get_durable_context("create_callback")
-    if not config:
-        config = CallbackConfig()
+    config = CallbackConfig(
+        timeout=timeout if timeout is not None else timedelta(),
+        heartbeat_timeout=heartbeat_timeout
+        if heartbeat_timeout is not None
+        else timedelta(),
+        serdes=serdes,
+    )
     operation_id: str = context.step_counter.create_step_id()
 
     executor: CallbackOperationExecutor = CallbackOperationExecutor(
@@ -342,13 +361,34 @@ class Callback(Generic[T]):  # noqa: PYI059
 async def wait_for_callback(
     submitter: Callable[[str], Awaitable[Any]],
     name: str | None = None,
-    config: WaitForCallbackConfig | None = None,
+    *,
+    timeout: timedelta | None = None,
+    heartbeat_timeout: timedelta | None = None,
+    serdes: SerDes | None = None,
+    retry_strategy: Callable[[Exception, int], RetryDecision] | None = None,
 ) -> Any:
-    """Create a callback, run a submitter, then suspend until the callback resolves."""
+    """Create a callback, run a submitter, then suspend until the callback resolves.
+
+    Args:
+        submitter: Async callable that receives the callback id.
+        name: Optional durable operation name.
+        timeout: Optional maximum time to wait for callback completion.
+        heartbeat_timeout: Optional maximum time to wait between callback heartbeats.
+        serdes: Optional serializer for callback results and submitter results.
+        retry_strategy: Optional retry strategy for submitter failures.
+    """
     context = _get_durable_context("wait_for_callback")
     assert_async_callable(submitter, label="submitter")
     step_name: str | None = name or get_callable_name(submitter)
     logger.debug("wait_for_callback name: %s", step_name)
+    config = WaitForCallbackConfig(
+        timeout=timeout if timeout is not None else timedelta(),
+        heartbeat_timeout=heartbeat_timeout
+        if heartbeat_timeout is not None
+        else timedelta(),
+        serdes=serdes,
+        retry_strategy=retry_strategy,
+    )
 
     async def wait_in_child_context():
         current_context = get_current_context()
