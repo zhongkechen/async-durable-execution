@@ -8,9 +8,9 @@ This monorepo contains the following packages:
 
 | Package | Path | Tag Prefix |
 |---------|------|------------|
-| `async-durable-execution` | `packages/async-durable-execution` | `v` |
-| `async-durable-execution-runner` | `packages/async-durable-execution-runner` | `v` |
-| `async-durable-execution-examples` | `packages/async-durable-execution-examples` | `v` |
+| `async-durable-execution` | `async-durable-execution` | `v` |
+| `async-durable-execution-runner` | `async-durable-execution-runner` | `v` |
+| `async-durable-execution-examples` | `async-durable-execution-examples` | `v` |
 
 ## Versioning
 

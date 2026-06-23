@@ -14,13 +14,12 @@ commands in this repository are run through Hatch from the repository root.
 
 ## Repository Structure
 
-This repository is a monorepo with three Python packages under `packages/`:
+This repository is a monorepo with three Python packages at the repository root:
 
 ```text
-packages/
-├── async-durable-execution/           # Core SDK
-├── async-durable-execution-runner/    # Local/cloud runner and pytest helpers
-└── async-durable-execution-examples/  # Example functions and tests
+async-durable-execution/           # Core SDK
+async-durable-execution-runner/    # Local/cloud runner and pytest helpers
+async-durable-execution-examples/  # Example functions and tests
 ```
 
 The root `pyproject.toml` defines shared Hatch environments for testing,
@@ -68,7 +67,7 @@ Ruff configuration is package-local, so run formatting checks from the package
 directory you are working in:
 
 ```bash
-cd packages/async-durable-execution
+cd async-durable-execution
 hatch fmt --check
 
 # Or apply formatting fixes
@@ -112,10 +111,10 @@ hatch run test:all
 hatch run dev-core:test
 
 # A single test file
-hatch run dev-core:test packages/async-durable-execution/tests_async_durable_execution/path_to_test_module.py
+hatch run dev-core:test async-durable-execution/tests_async_durable_execution/path_to_test_module.py
 
 # A single test
-hatch run dev-core:test packages/async-durable-execution/tests_async_durable_execution/path_to_test_module.py::test_name
+hatch run dev-core:test async-durable-execution/tests_async_durable_execution/path_to_test_module.py::test_name
 
 # Filter by pattern
 hatch run test:all -k pattern
@@ -144,9 +143,9 @@ Run example-related commands from the repository root:
 hatch run dev-examples:test
 
 # Refresh editable installs in the examples environment when needed
-hatch run -- examples:pip install -e packages/async-durable-execution
-hatch run -- examples:pip install -e packages/async-durable-execution-runner
-hatch run -- examples:pip install -e packages/async-durable-execution-examples
+hatch run -- examples:pip install -e async-durable-execution
+hatch run -- examples:pip install -e async-durable-execution-runner
+hatch run -- examples:pip install -e async-durable-execution-examples
 
 # Build the shared example bundle
 hatch run examples:build

@@ -4,7 +4,7 @@
 [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/zhongkechen/async-durable-execution/badge)](https://scorecard.dev/viewer/?uri=github.com/zhongkechen/async-durable-execution)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](../../LICENSE)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](../LICENSE)
 
 -----
 
@@ -132,4 +132,4 @@ The complete documentation for the AWS Durable Execution SDK for Python lives on
 
 ## 📄 License
 
-See the [LICENSE](../../LICENSE) file for our project's licensing.
+See the [LICENSE](../LICENSE) file for our project's licensing.

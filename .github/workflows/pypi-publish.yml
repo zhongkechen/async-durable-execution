@@ -25,10 +25,10 @@ jobs:
         package:
           - artifact_name: async-durable-execution
             publish_url: https://pypi.org/project/async-durable-execution/
-            path: packages/async-durable-execution
+            path: async-durable-execution
           - artifact_name: async-durable-execution-runner
             publish_url: https://pypi.org/project/async-durable-execution-runner/
-            path: packages/async-durable-execution-runner
+            path: async-durable-execution-runner
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
