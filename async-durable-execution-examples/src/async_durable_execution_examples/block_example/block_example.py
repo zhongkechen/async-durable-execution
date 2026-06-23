@@ -4,7 +4,6 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     durable_callable,
     durable_execution,
     durable_callable,
@@ -48,7 +47,7 @@ async def parent_block() -> dict[str, str]:
 
 
 @durable_execution
-async def handler(_event: Any, context: LambdaContext) -> dict[str, str]:
+async def handler(_event: Any) -> dict[str, str]:
     """Handler demonstrating nested child contexts."""
     # Run parent block which contains nested operations
     result: dict[str, str] = await run_in_child_context(

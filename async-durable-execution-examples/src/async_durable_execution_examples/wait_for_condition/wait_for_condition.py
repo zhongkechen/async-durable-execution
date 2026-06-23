@@ -5,7 +5,6 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     durable_execution,
     get_current_context,
     WaitForConditionCheckContext,
@@ -18,7 +17,7 @@ from async_durable_execution.config import JitterStrategy
 
 
 @durable_execution
-async def handler(_event: Any, context: LambdaContext) -> int:
+async def handler(_event: Any) -> int:
     """Handler demonstrating wait-for-condition pattern."""
 
     async def check_function(

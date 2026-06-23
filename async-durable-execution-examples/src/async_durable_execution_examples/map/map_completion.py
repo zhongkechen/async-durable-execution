@@ -5,7 +5,6 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     CompletionConfig,
     MapConfig,
     StepConfig,
@@ -21,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 @durable_execution
-async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating map with completion config issue."""
     # Test data: Items 2 and 4 will fail (40% failure rate)
     items = [

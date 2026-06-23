@@ -4,7 +4,6 @@ import json
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     durable_callable,
     step,
     ParallelConfig,
@@ -31,7 +30,7 @@ class CustomItemSerDes(SerDes[dict[str, Any]]):
 
 
 @durable_execution
-async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Execute parallel tasks with custom item serialization.
 
     This example demonstrates using item_serdes to customize serialization

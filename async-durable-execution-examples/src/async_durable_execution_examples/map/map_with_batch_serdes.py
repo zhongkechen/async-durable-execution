@@ -5,7 +5,6 @@ import json
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     durable_callable,
     get_current_context,
     step,
@@ -80,7 +79,7 @@ class CustomBatchSerDes(SerDes[BatchResult]):
 
 
 @durable_execution
-async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Process items with custom batch-level serialization."""
     items = [10, 20, 30, 40]
 

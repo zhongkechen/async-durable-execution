@@ -185,11 +185,11 @@ aws lambda invoke \
 ### Handler Wrapper
 
 ```python
-from async_durable_execution import DurableContext, durable_execution
+from async_durable_execution import durable_execution
 
 
 @durable_execution
-async def handler(event: dict, context: DurableContext) -> dict:
+async def handler(event: dict) -> dict:
     # Your durable workflow
     return result
 ```
@@ -411,7 +411,7 @@ def test_workflow(durable_runner):
 
 ```python
 @durable_execution
-async def handler(event: dict, context: DurableContext) -> dict:
+async def handler(event: dict) -> dict:
     validated = context.step(validate_input(event), name="validate")
     processed = context.step(process_data(validated), name="process")
     context.wait(duration=timedelta(seconds=30), name="cooldown")

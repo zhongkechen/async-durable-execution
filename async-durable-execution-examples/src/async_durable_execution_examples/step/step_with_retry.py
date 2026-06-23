@@ -2,7 +2,6 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     durable_callable,
     step,
     StepConfig,
@@ -24,7 +23,7 @@ async def unreliable_operation() -> str:
 
 
 @durable_execution
-async def handler(_event: Any, context: LambdaContext) -> str:
+async def handler(_event: Any) -> str:
     retry_config = RetryStrategyBuilder(
         max_attempts=3,
         initial_delay=timedelta(seconds=1),

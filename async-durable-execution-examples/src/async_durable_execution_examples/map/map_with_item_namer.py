@@ -4,7 +4,6 @@ import asyncio
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     durable_callable,
     step,
     MapConfig,
@@ -14,7 +13,7 @@ from async_durable_execution import (
 
 
 @durable_execution
-async def handler(_event: Any, context: LambdaContext) -> list[str]:
+async def handler(_event: Any) -> list[str]:
     """Process orders using map() with custom iteration names."""
     orders = [
         {"id": "order-101", "amount": 25},

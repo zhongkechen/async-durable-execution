@@ -2,7 +2,6 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from async_durable_execution import (
-    LambdaContext,
     CallbackConfig,
     durable_execution,
     create_callback,
@@ -13,7 +12,7 @@ if TYPE_CHECKING:
 
 
 @durable_execution
-async def handler(_event: Any, context: LambdaContext) -> str:
+async def handler(_event: Any) -> str:
     callback_config = CallbackConfig(
         timeout=timedelta(seconds=120), heartbeat_timeout=timedelta(seconds=60)
     )

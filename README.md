@@ -51,7 +51,6 @@ import logging
 from datetime import timedelta
 
 from async_durable_execution import (
-    LambdaContext,
     durable_callable,
     durable_execution,
     step,
@@ -69,7 +68,7 @@ async def validate_order(order_id: str) -> dict:
 
 
 @durable_execution
-async def handler(event: dict, context: LambdaContext) -> dict:
+async def handler(event: dict) -> dict:
     order_id = event["order_id"]
     logger.info("Starting workflow", extra={"order_id": order_id})
 
@@ -90,7 +89,6 @@ import asyncio
 import logging
 
 from async_durable_execution import (
-    LambdaContext,
     durable_callable,
     durable_execution,
     step,
@@ -107,7 +105,7 @@ async def fetch_order(order_id: str) -> dict:
 
 
 @durable_execution
-async def handler(event: dict, context: LambdaContext) -> dict:
+async def handler(event: dict) -> dict:
     order = await step(fetch_order(event["order_id"]), name="fetch_order")
     return {"order": order}
 ```

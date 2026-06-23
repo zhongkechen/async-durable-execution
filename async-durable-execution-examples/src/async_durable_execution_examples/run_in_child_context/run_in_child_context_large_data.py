@@ -4,7 +4,6 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     durable_callable,
     step,
     durable_execution,
@@ -49,7 +48,7 @@ async def large_data_processor() -> dict[str, Any]:
 
 
 @durable_execution
-async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating runInChildContext with large data."""
     # Use runInChildContext to handle large data that would exceed 256k step limit
     large_data_result: dict[str, Any] = await run_in_child_context(

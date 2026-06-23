@@ -167,7 +167,7 @@ def durable_execution(
 
 
 async def _wrapper_with_plugins(
-    user_func: Callable[[Any, LambdaContext], Any],
+    user_func: Callable[[Any], Any],
     event: Any,
     context: LambdaContext,
     plugin_executor: PluginExecutor,
@@ -204,7 +204,7 @@ def deserialize_input(event: Any) -> DurableExecutionInvocationInput:
 
 
 async def _wrapper_async(
-    user_func: Callable[[Any, LambdaContext], Any],
+    user_func: Callable[[Any], Any],
     event: Any,
     context: LambdaContext,
     plugin_executor: PluginExecutor,
@@ -248,7 +248,6 @@ async def _wrapper_async(
             root_context,
             user_func,
             input_event,
-            context,
         )
         return await handle_user_function_result(execution_state, result)
 

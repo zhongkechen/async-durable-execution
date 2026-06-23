@@ -4,7 +4,6 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     durable_callable,
     step,
     StepConfig,
@@ -42,7 +41,7 @@ async def child_with_failure() -> None:
 
 
 @durable_execution
-async def handler(_event: Any, context: LambdaContext) -> dict[str, bool]:
+async def handler(_event: Any) -> dict[str, bool]:
     """Handler demonstrating runInChildContext with failing step."""
     try:
         await run_in_child_context(

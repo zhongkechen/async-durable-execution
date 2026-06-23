@@ -4,7 +4,6 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     durable_callable,
     get_current_context,
     step,
@@ -16,7 +15,7 @@ from async_durable_execution import (
 
 
 @durable_execution
-async def handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
+async def handler(event: dict[str, Any]) -> dict[str, Any]:
     """Comprehensive example demonstrating all major durable operations."""
     print(f"Starting comprehensive operations example with event: {event}")
 

@@ -4,14 +4,13 @@ import asyncio
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     durable_execution,
     wait_for_callback,
 )
 
 
 @durable_execution
-async def handler(_event: Any, context: LambdaContext) -> dict[str, Any]:
+async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with anonymous submitter."""
 
     async def submitter(_callback_id) -> None:

@@ -4,7 +4,6 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     durable_callable,
     step,
     wait,
@@ -32,7 +31,7 @@ async def simulated_get_item(name: str, poll_count: int) -> dict[str, Any] | Non
 
 
 @durable_execution
-async def handler(event: Any, context: LambdaContext) -> dict[str, Any]:
+async def handler(event: Any) -> dict[str, Any]:
     """Handler demonstrating polling with retry logic."""
     name = event.get("name", "test-item")
 

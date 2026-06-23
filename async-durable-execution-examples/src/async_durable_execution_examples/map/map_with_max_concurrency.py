@@ -4,7 +4,6 @@ import asyncio
 from typing import Any
 
 from async_durable_execution import (
-    LambdaContext,
     durable_callable,
     get_current_context,
     step,
@@ -15,7 +14,7 @@ from async_durable_execution import (
 
 
 @durable_execution
-async def handler(_event: Any, context: LambdaContext) -> list[int]:
+async def handler(_event: Any) -> list[int]:
     """Process items with concurrency limit of 3."""
     items = list(range(1, 11))  # [1, 2, 3, ..., 10]
 
