@@ -41,6 +41,7 @@ def test_init_with_default_processors():
     assert OperationType.CONTEXT in transformer.processors
     assert OperationType.CALLBACK in transformer.processors
     assert OperationType.EXECUTION in transformer.processors
+    assert OperationType.CHAINED_INVOKE in transformer.processors
 
 
 def test_init_with_custom_processors():
