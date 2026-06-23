@@ -44,9 +44,7 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 ConditionResult = tuple[T, WaitForConditionDecision]
-WaitDelayStrategy = Callable[
-    [T, int], WaitDecision | WaitForConditionDecision | timedelta
-]
+WaitDelayStrategy = Callable[[T, int], WaitDecision | timedelta]
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +125,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
 
     def __init__(
         self,
-        check: Callable[[T | None], Awaitable[T | ConditionResult[T]]],
+        check: Callable[[T | None], Awaitable[ConditionResult[T]]],
         config: WaitForConditionConfig[T],
         initial_state: T | None,
         state: ExecutionState,
@@ -254,10 +252,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             finally:
                 reset_current_context(token)
 
-            new_state, decision, legacy_wait_decision = self._resolve_condition_result(
-                condition_result,
-                attempt,
-            )
+            new_state, decision = self._resolve_condition_result(condition_result)
 
             serialized_state = self.serialize_value(
                 value=new_state,
@@ -291,12 +286,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
 
             # Condition not met - schedule retry. The check decides whether
             # to keep polling; the wait strategy only supplies the retry delay.
-            if legacy_wait_decision is None:
-                suspend_delay_seconds = self._resolve_delay_seconds(new_state, attempt)
-            else:
-                suspend_delay_seconds = self._wait_decision_to_seconds(
-                    legacy_wait_decision
-                )
+            suspend_delay_seconds = self._resolve_delay_seconds(new_state, attempt)
             delay_seconds = suspend_delay_seconds
 
             # We enforce a minimum delay second of 1, to match model behaviour.
@@ -355,30 +345,15 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
     def _resolve_condition_result(
         self,
         condition_result: object,
-        attempt: int,
-    ) -> tuple[T, WaitForConditionDecision, WaitForConditionDecision | None]:
+    ) -> tuple[T, WaitForConditionDecision]:
         if (
             isinstance(condition_result, tuple)
             and len(condition_result) == 2
             and isinstance(condition_result[1], WaitForConditionDecision)
         ):
-            return cast(T, condition_result[0]), condition_result[1], None
+            return cast(T, condition_result[0]), condition_result[1]
 
-        if self.config.wait_strategy is None:
-            msg = (
-                "wait_for_condition check must return (state, WaitForConditionDecision)"
-            )
-            raise ValidationError(msg)
-
-        legacy_state = cast(T, condition_result)
-        wait_decision = self.config.wait_strategy(legacy_state, attempt)
-        if isinstance(wait_decision, WaitForConditionDecision):
-            return legacy_state, wait_decision, wait_decision
-
-        msg = (
-            "legacy wait_for_condition checks must use a wait_strategy that returns "
-            "WaitForConditionDecision"
-        )
+        msg = "wait_for_condition check must return (state, WaitForConditionDecision)"
         raise ValidationError(msg)
 
     def _resolve_delay_seconds(self, new_state: T, attempt: int) -> int:
@@ -389,11 +364,8 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
 
     def _wait_decision_to_seconds(
         self,
-        wait_decision: WaitForConditionDecision | WaitDecision | timedelta,
+        wait_decision: WaitDecision | timedelta,
     ) -> int:
-        if isinstance(wait_decision, WaitForConditionDecision):
-            return wait_decision.delay_seconds
-
         if isinstance(wait_decision, WaitDecision):
             return wait_decision.delay_seconds
 
@@ -405,7 +377,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
 
 
 async def wait_for_condition(
-    check: Callable[[T | None], Awaitable[T | ConditionResult[T]]] | None = None,
+    check: Callable[[T | None], Awaitable[ConditionResult[T]]] | None = None,
     config: WaitForConditionConfig[T] | None = None,
     initial_state: T | None = None,
     name: str | None = None,
