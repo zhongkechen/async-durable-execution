@@ -40,6 +40,7 @@ if TYPE_CHECKING:
 
     from ..serdes import SerDes
     from ..state import ExecutionState
+    from ..types import LambdaContext
 
 
 T = TypeVar("T")
@@ -130,6 +131,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         initial_state: T | None,
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
+        lambda_context: LambdaContext | None = None,
     ):
         """Initialize the wait_for_condition executor.
 
@@ -144,6 +146,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         self.check = check
         self.config = config
         self.initial_state = initial_state
+        self.lambda_context = lambda_context
         self.default_wait_strategy = WaitStrategyBuilder[T]().build()
 
     async def start(self) -> T:
@@ -233,6 +236,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 attempt=attempt,
                 execution_state=self.state,
                 operation_identifier=self.operation_identifier,
+                lambda_context=self.lambda_context,
             )
             wrapped_user_func = self.state.wrap_user_function(
                 self.check,
@@ -245,6 +249,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                     attempt=attempt,
                     execution_state=step_context.execution_state,
                     operation_identifier=self.operation_identifier,
+                    lambda_context=step_context.lambda_context,
                 )
             )
             try:
@@ -397,18 +402,31 @@ async def wait_for_condition(
     assert_async_callable(check, label="check")
 
     operation_id = context.step_counter.create_step_id()
-    executor: WaitForConditionOperationExecutor[T] = WaitForConditionOperationExecutor(
-        check=check,
-        config=config,
-        initial_state=initial_state,
-        state=context.execution_state,
-        operation_identifier=OperationIdentifier(
-            operation_id=operation_id,
-            sub_type=OperationSubType.WAIT_FOR_CONDITION,
-            parent_id=context.parent_id,
-            name=name,
-        ),
+    operation_identifier = OperationIdentifier(
+        operation_id=operation_id,
+        sub_type=OperationSubType.WAIT_FOR_CONDITION,
+        parent_id=context.parent_id,
+        name=name,
     )
+    if context.lambda_context is None:
+        executor: WaitForConditionOperationExecutor[T] = (
+            WaitForConditionOperationExecutor(
+                check=check,
+                config=config,
+                initial_state=initial_state,
+                state=context.execution_state,
+                operation_identifier=operation_identifier,
+            )
+        )
+    else:
+        executor = WaitForConditionOperationExecutor(
+            check=check,
+            config=config,
+            initial_state=initial_state,
+            state=context.execution_state,
+            operation_identifier=operation_identifier,
+            lambda_context=context.lambda_context,
+        )
     result: T = await executor.process()
     context.execution_state.track_replay(operation_id=operation_id)
     return result

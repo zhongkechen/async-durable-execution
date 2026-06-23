@@ -40,6 +40,7 @@ if TYPE_CHECKING:
 
     from ..serdes import SerDes
     from ..state import ExecutionState
+    from ..types import LambdaContext
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,7 @@ class StepOperationExecutor(OperationExecutor[T]):
         config: StepConfig,
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
+        lambda_context: LambdaContext | None = None,
     ):
         """Initialize the step operation executor.
 
@@ -83,6 +85,7 @@ class StepOperationExecutor(OperationExecutor[T]):
         super().__init__(state=state, operation_identifier=operation_identifier)
         self.func = func
         self.config = config
+        self.lambda_context = lambda_context
 
     async def start(self) -> T:
         """Start a new step operation."""
@@ -193,6 +196,7 @@ class StepOperationExecutor(OperationExecutor[T]):
             attempt=attempt,
             execution_state=self.state,
             operation_identifier=self.operation_identifier,
+            lambda_context=self.lambda_context,
         )
 
         try:
@@ -364,17 +368,27 @@ async def step(
         config = StepConfig()
     operation_id = context.step_counter.create_step_id()
 
-    executor: StepOperationExecutor[T] = StepOperationExecutor(
-        func=func,
-        config=config,
-        state=context.execution_state,
-        operation_identifier=OperationIdentifier(
-            operation_id=operation_id,
-            sub_type=OperationSubType.STEP,
-            parent_id=context.parent_id,
-            name=step_name,
-        ),
+    operation_identifier = OperationIdentifier(
+        operation_id=operation_id,
+        sub_type=OperationSubType.STEP,
+        parent_id=context.parent_id,
+        name=step_name,
     )
+    if context.lambda_context is None:
+        executor: StepOperationExecutor[T] = StepOperationExecutor(
+            func=func,
+            config=config,
+            state=context.execution_state,
+            operation_identifier=operation_identifier,
+        )
+    else:
+        executor = StepOperationExecutor(
+            func=func,
+            config=config,
+            state=context.execution_state,
+            operation_identifier=operation_identifier,
+            lambda_context=context.lambda_context,
+        )
     result: T = await executor.process()
     context.execution_state.track_replay(operation_id=operation_id)
     return result
