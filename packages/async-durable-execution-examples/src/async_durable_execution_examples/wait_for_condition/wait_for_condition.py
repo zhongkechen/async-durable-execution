@@ -21,7 +21,7 @@ from async_durable_execution.config import JitterStrategy
 async def handler(_event: Any, context: LambdaContext) -> int:
     """Handler demonstrating wait-for-condition pattern."""
 
-    async def condition_function(
+    async def check_function(
         state: int,
     ) -> tuple[int, WaitForConditionDecision]:
         """Increment state by 1."""
@@ -40,7 +40,7 @@ async def handler(_event: Any, context: LambdaContext) -> int:
     )
 
     result = await wait_for_condition(
-        condition=condition_function,
+        check=check_function,
         config=config,
         initial_state=0,
     )

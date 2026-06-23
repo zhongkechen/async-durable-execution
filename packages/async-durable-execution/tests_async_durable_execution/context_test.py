@@ -1985,11 +1985,11 @@ async def test_wait_for_condition_validation_errors():
 
     # Test None check function
     with pytest.raises(
-        ValidationError, match="`condition` is required for wait_for_condition"
+        ValidationError, match="`check` is required for wait_for_condition"
     ):
         await run_with_context(context, wait_for_condition(None, config))
 
-    # None config is valid; condition must return state and wait decision.
+    # None config is valid; check must return state and wait decision.
     async def dummy_check(state):
         return state, WaitForConditionDecision.stop_polling()
 

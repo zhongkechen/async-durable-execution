@@ -289,7 +289,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 )
                 return new_state
 
-            # Condition not met - schedule retry. The condition decides whether
+            # Condition not met - schedule retry. The check decides whether
             # to keep polling; the wait strategy only supplies the retry delay.
             if legacy_wait_decision is None:
                 suspend_delay_seconds = self._resolve_delay_seconds(new_state, attempt)
@@ -366,8 +366,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
 
         if self.config.wait_strategy is None:
             msg = (
-                "wait_for_condition condition must return "
-                "(state, WaitForConditionDecision)"
+                "wait_for_condition check must return (state, WaitForConditionDecision)"
             )
             raise ValidationError(msg)
 
@@ -406,35 +405,28 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
 
 
 async def wait_for_condition(
-    condition: Callable[[T | None], Awaitable[T | ConditionResult[T]]] | None = None,
+    check: Callable[[T | None], Awaitable[T | ConditionResult[T]]] | None = None,
     config: WaitForConditionConfig[T] | None = None,
     initial_state: T | None = None,
     name: str | None = None,
-    *,
-    check: Callable[[T | None], Awaitable[T | ConditionResult[T]]] | None = None,
 ) -> T:
     """Poll durable state until the configured strategy decides to stop waiting.
 
-    The condition receives the current state, beginning with `initial_state`,
+    The check receives the current state, beginning with `initial_state`,
     and returns the next state plus a decision to continue or stop. The optional
     wait strategy only decides how long to wait before the next poll.
     """
     context = _get_durable_context("wait_for_condition")
-    if condition is not None and check is not None:
-        msg = "Only one of `condition` or `check` can be provided"
-        raise ValidationError(msg)
-    if condition is None:
-        condition = check
-    if condition is None:
-        msg = "`condition` is required for wait_for_condition"
+    if check is None:
+        msg = "`check` is required for wait_for_condition"
         raise ValidationError(msg)
     if config is None:
         config = WaitForConditionConfig()
-    assert_async_callable(condition, label="condition")
+    assert_async_callable(check, label="check")
 
     operation_id = context.step_counter.create_step_id()
     executor: WaitForConditionOperationExecutor[T] = WaitForConditionOperationExecutor(
-        check=condition,
+        check=check,
         config=config,
         initial_state=initial_state,
         state=context.execution_state,
