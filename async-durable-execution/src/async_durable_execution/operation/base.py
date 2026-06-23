@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     import datetime
     from ..models import OperationUpdate
     from ..state import ExecutionState
+    from ..types import LambdaContext
 
 T = TypeVar("T")
 S = TypeVar("S")
@@ -32,6 +33,7 @@ class OperationContext:
 
     execution_state: ExecutionState
     operation_identifier: OperationIdentifier
+    lambda_context: LambdaContext | None = None
 
     @property
     def durable_execution_arn(self) -> str:

@@ -34,7 +34,6 @@ from ..models import (
     OperationUpdate,
 )
 from ..serdes import deserialize, serialize
-from ..types import LambdaContext
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -330,7 +329,6 @@ async def child_handler(
 class DurableContext(OperationContext):
     """Runtime context available to a durable handler or child context."""
 
-    lambda_context: LambdaContext | None = None
     step_id_prefix: str | None = None
 
     @functools.cached_property

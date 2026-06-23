@@ -323,6 +323,41 @@ async def test_step_handler_passes_attempt_to_step_context():
     assert result == 1
 
 
+async def test_step_handler_passes_lambda_context_to_step_context():
+    """Step execution exposes the Lambda context on StepContext."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_result = CheckpointedResult.create_not_found()
+    mock_state.operations.get.return_value = mock_result
+    mock_state.durable_execution_arn = "test_arn"
+    mock_state.wrap_user_function.side_effect = lambda func, *args, **kwargs: _asyncify(
+        func
+    )
+    lambda_context = Mock()
+    lambda_context.aws_request_id = "request-123"
+
+    async def step_callable():
+        current_context = get_current_context()
+        assert isinstance(current_context, StepContext)
+        return current_context.lambda_context.aws_request_id
+
+    executor = StepOperationExecutor(
+        func=step_callable,
+        config=StepConfig(step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY),
+        state=mock_state,
+        operation_identifier=OperationIdentifier(
+            "step_lambda_context",
+            OperationSubType.STEP,
+            None,
+            "test_step",
+        ),
+        lambda_context=lambda_context,
+    )
+
+    result = await executor.process()
+
+    assert result == "request-123"
+
+
 async def test_step_handler_get_current_context_returns_step_context():
     """get_current_context() should expose StepContext while a step is executing."""
     mock_state = Mock(spec=ExecutionState)
