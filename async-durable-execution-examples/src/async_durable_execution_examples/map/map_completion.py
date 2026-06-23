@@ -55,6 +55,7 @@ async def handler(_event: Any) -> dict[str, Any]:
             initial_delay=timedelta(seconds=1),
             max_delay=timedelta(seconds=1),
         )
+
         @durable_callable
         async def step_function() -> dict[str, Any]:
             """Step that processes or fails based on item."""
