@@ -7,10 +7,18 @@ requires-python = ">=3.10"
 path = "VERSION.py"
 
 [tool.hatch.envs.default]
-workspace.members = ["packages/*"]
+workspace.members = [
+  "async-durable-execution",
+  "async-durable-execution-examples",
+  "async-durable-execution-runner",
+]
 
 [tool.hatch.envs.test]
-workspace.members = ["packages/*"]
+workspace.members = [
+  "async-durable-execution",
+  "async-durable-execution-examples",
+  "async-durable-execution-runner",
+]
 dependencies = [
   "coverage[toml]",
   "pytest",
@@ -22,21 +30,25 @@ dependencies = [
 [tool.hatch.envs.test.scripts]
 all = "pytest {args}"
 cov = "pytest --cov-report=term-missing --cov {args}"
-examples-integration = "pytest --runner-mode=cloud packages/async-durable-execution-examples/tests_async_durable_execution_examples/ -v {args}"
+examples-integration = "pytest --runner-mode=cloud async-durable-execution-examples/tests_async_durable_execution_examples/ -v {args}"
 
 [tool.pytest.ini_options]
 # Declare custom markers to avoid warnings with --strict-markers
 addopts = "-v --strict-markers --import-mode=importlib"
 testpaths = [
-    "packages/async-durable-execution/tests_async_durable_execution",
-    "packages/async-durable-execution-runner/tests_async_durable_execution_runner",
-    "packages/async-durable-execution-examples/tests_async_durable_execution_examples",
+    "async-durable-execution/tests_async_durable_execution",
+    "async-durable-execution-runner/tests_async_durable_execution_runner",
+    "async-durable-execution-examples/tests_async_durable_execution_examples",
 ]
 markers = []
 asyncio_mode = "auto"
 
 [tool.hatch.envs.types]
-workspace.members = ["packages/*"]
+workspace.members = [
+  "async-durable-execution",
+  "async-durable-execution-examples",
+  "async-durable-execution-runner",
+]
 extra-dependencies = [
   "mypy>=1.0.0",
   "pytest",
@@ -44,12 +56,12 @@ extra-dependencies = [
 ]
 
 [tool.hatch.envs.types.scripts]
-check = "mypy --install-types --non-interactive {args:packages/async-durable-execution/src/async_durable_execution packages/async-durable-execution/tests_async_durable_execution packages/async-durable-execution-runner/src/async_durable_execution_runner packages/async-durable-execution-runner/tests_async_durable_execution_runner}"
+check = "mypy --install-types --non-interactive {args:async-durable-execution/src/async_durable_execution async-durable-execution/tests_async_durable_execution async-durable-execution-runner/src/async_durable_execution_runner async-durable-execution-runner/tests_async_durable_execution_runner}"
 
 [tool.hatch.envs.dev-core]
 workspace.members = [
-  "packages/async-durable-execution",
-  "packages/async-durable-execution-runner",
+  "async-durable-execution",
+  "async-durable-execution-runner",
 ]
 dependencies = [
   "pytest",
@@ -61,14 +73,14 @@ dependencies = [
 ]
 
 [tool.hatch.envs.dev-core.scripts]
-test = "pytest packages/async-durable-execution/tests_async_durable_execution {args}"
-cov = "pytest --cov-report=term-missing --cov-config=packages/async-durable-execution/pyproject.toml --cov=packages/async-durable-execution/src/async_durable_execution --cov-fail-under=98 packages/async-durable-execution/tests_async_durable_execution {args}"
-typecheck = "mypy --install-types --non-interactive packages/async-durable-execution/src/async_durable_execution packages/async-durable-execution/tests_async_durable_execution"
+test = "pytest async-durable-execution/tests_async_durable_execution {args}"
+cov = "pytest --cov-report=term-missing --cov-config=async-durable-execution/pyproject.toml --cov=async-durable-execution/src/async_durable_execution --cov-fail-under=98 async-durable-execution/tests_async_durable_execution {args}"
+typecheck = "mypy --install-types --non-interactive async-durable-execution/src/async_durable_execution async-durable-execution/tests_async_durable_execution"
 
 [tool.hatch.envs.dev-testing]
 workspace.members = [
-  "packages/async-durable-execution",
-  "packages/async-durable-execution-runner",
+  "async-durable-execution",
+  "async-durable-execution-runner",
 ]
 dependencies = [
   "pytest",
@@ -79,15 +91,15 @@ dependencies = [
 ]
 
 [tool.hatch.envs.dev-testing.scripts]
-test = "pytest packages/async-durable-execution-runner/tests_async_durable_execution_runner {args}"
-cov = "pytest --cov-report=term-missing --cov-config=packages/async-durable-execution-runner/pyproject.toml --cov=packages/async-durable-execution-runner/src/async_durable_execution_runner --cov-fail-under=95 packages/async-durable-execution-runner/tests_async_durable_execution_runner {args}"
-typecheck = "mypy --install-types --non-interactive packages/async-durable-execution-runner/src/async_durable_execution_runner packages/async-durable-execution-runner/tests_async_durable_execution_runner"
+test = "pytest async-durable-execution-runner/tests_async_durable_execution_runner {args}"
+cov = "pytest --cov-report=term-missing --cov-config=async-durable-execution-runner/pyproject.toml --cov=async-durable-execution-runner/src/async_durable_execution_runner --cov-fail-under=95 async-durable-execution-runner/tests_async_durable_execution_runner {args}"
+typecheck = "mypy --install-types --non-interactive async-durable-execution-runner/src/async_durable_execution_runner async-durable-execution-runner/tests_async_durable_execution_runner"
 
 [tool.hatch.envs.dev-examples]
 workspace.members = [
-  "packages/async-durable-execution",
-  "packages/async-durable-execution-examples",
-  "packages/async-durable-execution-runner",
+  "async-durable-execution",
+  "async-durable-execution-examples",
+  "async-durable-execution-runner",
 ]
 dependencies = [
   "pytest",
@@ -95,7 +107,7 @@ dependencies = [
 ]
 
 [tool.hatch.envs.dev-examples.scripts]
-test = "pytest packages/async-durable-execution-examples/tests_async_durable_execution_examples {args}"
+test = "pytest async-durable-execution-examples/tests_async_durable_execution_examples {args}"
 
 [tool.hatch.envs.test-pypi-examples]
 dependencies = [
@@ -104,28 +116,28 @@ dependencies = [
   "pytest-asyncio",
 ]
 pre-install-commands = [
-  "pip install -e packages/async-durable-execution-runner",
-  "pip install -e packages/async-durable-execution-examples",
+  "pip install -e async-durable-execution-runner",
+  "pip install -e async-durable-execution-examples",
 ]
 
 [tool.hatch.envs.test-pypi-examples.scripts]
-test = "pytest packages/async-durable-execution-examples/tests_async_durable_execution_examples {args}"
+test = "pytest async-durable-execution-examples/tests_async_durable_execution_examples {args}"
 
 [tool.hatch.envs.examples]
 workspace.members = [
-  "packages/async-durable-execution",
-  "packages/async-durable-execution-examples",
-  "packages/async-durable-execution-runner",
+  "async-durable-execution",
+  "async-durable-execution-examples",
+  "async-durable-execution-runner",
 ]
 
 [tool.hatch.envs.examples.scripts]
 pip = "python -m pip {args}"
-generate-sam-template = "python packages/async-durable-execution-examples/scripts/generate_sam_template.py {args}"
-build = "python packages/async-durable-execution-examples/scripts/build_examples.py"
-clean = "rm -rf packages/async-durable-execution-examples/build packages/async-durable-execution-examples/.aws-sam packages/async-durable-execution-examples/*.zip packages/async-durable-execution-examples/template.generated.json"
+generate-sam-template = "python async-durable-execution-examples/scripts/generate_sam_template.py {args}"
+build = "python async-durable-execution-examples/scripts/build_examples.py"
+clean = "rm -rf async-durable-execution-examples/build async-durable-execution-examples/.aws-sam async-durable-execution-examples/*.zip async-durable-execution-examples/template.generated.json"
 
 [tool.hatch.envs.docs]
-workspace.members = ["packages/async-durable-execution"]
+workspace.members = ["async-durable-execution"]
 dependencies = ["pdoc>=15,<16"]
 
 [tool.hatch.envs.docs.scripts]

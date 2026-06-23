@@ -34,7 +34,7 @@ dist/
 
 **/build/
 **/*.zip
-packages/async-durable-execution-examples/template.yaml
+async-durable-execution-examples/template.yaml
 **/template.generated.json
 
 .env

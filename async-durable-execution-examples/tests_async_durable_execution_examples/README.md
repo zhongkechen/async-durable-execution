@@ -16,10 +16,10 @@ Tests run against the in-memory `DurableFunctionLocalTestRunner`:
 hatch run dev-examples:test
 
 # Run with explicit mode flag
-pytest --runner-mode=local packages/async-durable-execution-examples/tests_async_durable_execution_examples/
+pytest --runner-mode=local async-durable-execution-examples/tests_async_durable_execution_examples/
 
 # Run specific test
-pytest --runner-mode=local -k test_hello_world packages/async-durable-execution-examples/tests_async_durable_execution_examples/
+pytest --runner-mode=local -k test_hello_world async-durable-execution-examples/tests_async_durable_execution_examples/
 ```
 
 ### Cloud Mode (Integration)
@@ -37,7 +37,7 @@ hatch run examples:build
 hatch run examples:generate-sam-template -- --example-name "Hello World"
 
 # Deploy the function with SAM
-sam build --template-file packages/async-durable-execution-examples/template.generated.json
+sam build --template-file async-durable-execution-examples/template.generated.json
 sam deploy \
   --template-file .aws-sam/build/template.yaml \
   --stack-name hello-world-test \
@@ -54,7 +54,7 @@ export LAMBDA_ENDPOINT=https://lambda.eu-south-1.amazonaws.com
 export QUALIFIED_FUNCTION_NAME="HelloWorld-Test:$LATEST"
 
 # Run tests (from repo root)
-pytest --runner-mode=cloud -k test_hello_world packages/async-durable-execution-examples/tests_async_durable_execution_examples/
+pytest --runner-mode=cloud -k test_hello_world async-durable-execution-examples/tests_async_durable_execution_examples/
 
 # Or using hatch (from repo root)
 hatch run test:examples-integration -k test_hello_world

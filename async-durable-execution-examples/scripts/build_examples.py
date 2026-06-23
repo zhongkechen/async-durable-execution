@@ -15,12 +15,12 @@ def build_examples() -> None:
     """Build examples with vendored package dependencies for SAM packaging."""
     examples_dir = Path(__file__).resolve().parent.parent
     build_dir = examples_dir / "build"
-    packages_dir = examples_dir.parent
+    repo_dir = examples_dir.parent
 
     runtime_packages = [
-        packages_dir / "async-durable-execution",
-        packages_dir / "async-durable-execution-runner",
-        packages_dir / "async-durable-execution-examples",
+        repo_dir / "async-durable-execution",
+        repo_dir / "async-durable-execution-runner",
+        repo_dir / "async-durable-execution-examples",
     ]
 
     if build_dir.exists():

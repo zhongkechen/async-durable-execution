@@ -4,13 +4,13 @@ on:
   push:
     branches: [main]
     paths:
-      - "packages/async-durable-execution/src/**"
+      - "async-durable-execution/src/**"
       - "pyproject.toml"
       - ".github/workflows/api-docs.yml"
   pull_request:
     branches: [main]
     paths:
-      - "packages/async-durable-execution/src/**"
+      - "async-durable-execution/src/**"
       - "pyproject.toml"
       - ".github/workflows/api-docs.yml"
   workflow_dispatch:
