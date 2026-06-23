@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from typing import Any, TypedDict
 
 from async_durable_execution import (
-    WaitForCallbackConfig,
     durable_execution,
     SerDes,
     wait_for_callback,
@@ -74,16 +73,12 @@ async def noop_submitter(_callback_id: str) -> None:
 async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with custom serdes."""
 
-    config = WaitForCallbackConfig(
-        timeout=timedelta(seconds=10),
-        heartbeat_timeout=timedelta(seconds=20),
-        serdes=CustomSerdes(),
-    )
-
     result: CustomData = await wait_for_callback(
         noop_submitter,
         name="custom-serdes-callback",
-        config=config,
+        timeout=timedelta(seconds=10),
+        heartbeat_timeout=timedelta(seconds=20),
+        serdes=CustomSerdes(),
     )
 
     isDateObject = isinstance(result["timestamp"], datetime)

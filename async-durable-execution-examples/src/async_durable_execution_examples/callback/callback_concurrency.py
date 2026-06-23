@@ -4,7 +4,6 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    CallbackConfig,
     durable_execution,
     create_callback,
     parallel,
@@ -14,13 +13,12 @@ from async_durable_execution import (
 @durable_execution
 async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating multiple concurrent callback operations."""
-    callback_config = CallbackConfig(timeout=timedelta(seconds=30))
 
     async def callback_branch_1() -> str:
         """First callback branch."""
         callback = await create_callback(
             name="api-call-1",
-            config=callback_config,
+            timeout=timedelta(seconds=30),
         )
         return await callback.result()
 
@@ -28,7 +26,7 @@ async def handler(_event: Any) -> dict[str, Any]:
         """Second callback branch."""
         callback = await create_callback(
             name="api-call-2",
-            config=callback_config,
+            timeout=timedelta(seconds=30),
         )
         return await callback.result()
 
@@ -36,7 +34,7 @@ async def handler(_event: Any) -> dict[str, Any]:
         """Third callback branch."""
         callback = await create_callback(
             name="api-call-3",
-            config=callback_config,
+            timeout=timedelta(seconds=30),
         )
         return await callback.result()
 

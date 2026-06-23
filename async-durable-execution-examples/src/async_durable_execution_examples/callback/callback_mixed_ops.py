@@ -6,7 +6,6 @@ from typing import Any
 from async_durable_execution import (
     durable_callable,
     step,
-    CallbackConfig,
     durable_execution,
     create_callback,
     wait,
@@ -26,10 +25,9 @@ async def handler(_event: Any) -> dict[str, Any]:
         name="fetch-data",
     )
 
-    callback_config = CallbackConfig(timeout=timedelta(minutes=1))
     callback = await create_callback(
         name="process-user",
-        config=callback_config,
+        timeout=timedelta(minutes=1),
     )
 
     # Mix callback with step and wait operations

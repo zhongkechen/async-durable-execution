@@ -385,7 +385,10 @@ async def test_wait_for_callback_handler_with_name_and_config():
 
     assert result == "named_callback_result"
     create_callback_mock.assert_called_once_with(
-        name="test_callback create callback id", config=config
+        name="test_callback create callback id",
+        timeout=config.timeout,
+        heartbeat_timeout=config.heartbeat_timeout,
+        serdes=config.serdes,
     )
     step_mock.assert_called_once()
 
@@ -815,7 +818,10 @@ async def test_wait_for_callback_handler_config_propagation():
 
     assert result == "config_result"
     create_callback_mock.assert_called_once_with(
-        name="config_test create callback id", config=config
+        name="config_test create callback id",
+        timeout=config.timeout,
+        heartbeat_timeout=config.heartbeat_timeout,
+        serdes=config.serdes,
     )
 
 

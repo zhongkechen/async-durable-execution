@@ -4,7 +4,6 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    WaitForCallbackConfig,
     durable_execution,
     RetryStrategyBuilder,
     wait_for_callback,
@@ -20,7 +19,9 @@ async def handler(event: dict[str, Any]) -> dict[str, Any]:
         print(f"Submitting callback to external system - callbackId: {callback_id}")
         raise Exception("Simulated submitter failure")
 
-    config = WaitForCallbackConfig(
+    result: str = await wait_for_callback(
+        submitter,
+        name="retry-submitter-callback",
         timeout=timedelta(seconds=3),
         heartbeat_timeout=timedelta(seconds=3),
         retry_strategy=RetryStrategyBuilder(
@@ -28,10 +29,4 @@ async def handler(event: dict[str, Any]) -> dict[str, Any]:
             initial_delay=timedelta(seconds=1),
             max_delay=timedelta(seconds=1),
         ).build(),
-    )
-
-    result: str = await wait_for_callback(
-        submitter,
-        name="retry-submitter-callback",
-        config=config,
     )
