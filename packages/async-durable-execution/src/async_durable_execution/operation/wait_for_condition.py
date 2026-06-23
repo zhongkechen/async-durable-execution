@@ -7,7 +7,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
 from .step import StepContext
 from ..async_tools import assert_async_callable
@@ -405,46 +405,13 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         raise ValidationError(msg)
 
 
-@overload
 async def wait_for_condition(
-    condition: Callable[[T | None], Awaitable[ConditionResult[T]]],
+    condition: Callable[[T | None], Awaitable[T | ConditionResult[T]]] | None = None,
     config: WaitForConditionConfig[T] | None = None,
     initial_state: T | None = None,
     name: str | None = None,
     *,
-    check: None = None,
-) -> T: ...
-
-
-@overload
-async def wait_for_condition(
-    condition: Callable[[T], Awaitable[T]],
-    config: WaitForConditionConfig[T],
-    initial_state: T | None = None,
-    name: str | None = None,
-    *,
-    check: None = None,
-) -> T: ...
-
-
-@overload
-async def wait_for_condition(
-    condition: None = None,
-    config: WaitForConditionConfig[T] | None = None,
-    initial_state: T | None = None,
-    name: str | None = None,
-    *,
-    check: Callable[[T | None], Awaitable[ConditionResult[T]]],
-) -> T: ...
-
-
-async def wait_for_condition(
-    condition: Any = None,
-    config: WaitForConditionConfig[T] | None = None,
-    initial_state: T | None = None,
-    name: str | None = None,
-    *,
-    check: Any = None,
+    check: Callable[[T | None], Awaitable[T | ConditionResult[T]]] | None = None,
 ) -> T:
     """Poll durable state until the configured strategy decides to stop waiting.
 
