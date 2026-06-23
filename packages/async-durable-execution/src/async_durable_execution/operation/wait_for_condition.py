@@ -56,7 +56,6 @@ class WaitForConditionConfig(Generic[T]):
     """Configuration for wait_for_condition."""
 
     wait_strategy: WaitDelayStrategy[T] | None = None
-    initial_state: T | None = None
     serdes: SerDes | None = None
 
 
@@ -130,6 +129,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         self,
         check: Callable[[T | None], Awaitable[T | ConditionResult[T]]],
         config: WaitForConditionConfig[T],
+        initial_state: T | None,
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
     ):
@@ -138,12 +138,14 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         Args:
             check: The check function to evaluate the condition
             config: Configuration for the wait_for_condition operation
+            initial_state: The state to pass to the first condition evaluation
             state: The execution state
             operation_identifier: The operation identifier
         """
         super().__init__(state=state, operation_identifier=operation_identifier)
         self.check = check
         self.config = config
+        self.initial_state = initial_state
         self.default_wait_strategy = WaitStrategyBuilder[T]().build()
 
     async def start(self) -> T:
@@ -218,9 +220,9 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                     self.operation_identifier.operation_id,
                     self.operation_name,
                 )
-                current_state = self.config.initial_state
+                current_state = self.initial_state
         else:
-            current_state = self.config.initial_state
+            current_state = self.initial_state
 
         # Get attempt number - current attempt is checkpointed attempts + 1
         # The checkpoint stores completed attempts, so the current attempt being executed is one more
@@ -407,6 +409,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
 async def wait_for_condition(
     condition: Callable[[T | None], Awaitable[ConditionResult[T]]],
     config: WaitForConditionConfig[T] | None = None,
+    initial_state: T | None = None,
     name: str | None = None,
     *,
     check: None = None,
@@ -417,6 +420,7 @@ async def wait_for_condition(
 async def wait_for_condition(
     condition: Callable[[T], Awaitable[T]],
     config: WaitForConditionConfig[T],
+    initial_state: T | None = None,
     name: str | None = None,
     *,
     check: None = None,
@@ -427,6 +431,7 @@ async def wait_for_condition(
 async def wait_for_condition(
     condition: None = None,
     config: WaitForConditionConfig[T] | None = None,
+    initial_state: T | None = None,
     name: str | None = None,
     *,
     check: Callable[[T | None], Awaitable[ConditionResult[T]]],
@@ -436,15 +441,16 @@ async def wait_for_condition(
 async def wait_for_condition(
     condition: Any = None,
     config: WaitForConditionConfig[T] | None = None,
+    initial_state: T | None = None,
     name: str | None = None,
     *,
     check: Any = None,
 ) -> T:
     """Poll durable state until the configured strategy decides to stop waiting.
 
-    The `check` function receives the current state and returns the next state
-    plus a decision to continue or stop. The optional wait strategy only decides
-    how long to wait before the next poll.
+    The condition receives the current state, beginning with `initial_state`,
+    and returns the next state plus a decision to continue or stop. The optional
+    wait strategy only decides how long to wait before the next poll.
     """
     context = _get_durable_context("wait_for_condition")
     if condition is not None and check is not None:
@@ -463,6 +469,7 @@ async def wait_for_condition(
     executor: WaitForConditionOperationExecutor[T] = WaitForConditionOperationExecutor(
         check=condition,
         config=config,
+        initial_state=initial_state,
         state=context.execution_state,
         operation_identifier=OperationIdentifier(
             operation_id=operation_id,

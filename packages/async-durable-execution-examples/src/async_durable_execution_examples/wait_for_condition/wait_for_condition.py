@@ -37,9 +37,12 @@ async def handler(_event: Any, context: LambdaContext) -> int:
             initial_delay=timedelta(seconds=1),
             jitter_strategy=JitterStrategy.NONE,
         ).build(),
-        initial_state=0,
     )
 
-    result = await wait_for_condition(condition=condition_function, config=config)
+    result = await wait_for_condition(
+        condition=condition_function,
+        config=config,
+        initial_state=0,
+    )
 
     return result

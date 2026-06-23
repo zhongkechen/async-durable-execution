@@ -182,7 +182,6 @@ async def test_module_level_context_functions_delegate_to_durable_context():
 
     config = WaitForConditionConfig(
         wait_strategy=lambda state, attempt: WaitForConditionDecision.stop_polling(),
-        initial_state="pending",
     )
 
     mock_wait = AsyncMock(return_value=None)
@@ -273,7 +272,13 @@ async def test_module_level_context_functions_delegate_to_durable_context():
         )
         assert (
             await run_with_context(
-                context, wait_for_condition(check, config, name="condition-name")
+                context,
+                wait_for_condition(
+                    check,
+                    config,
+                    initial_state="pending",
+                    name="condition-name",
+                ),
             )
             == "condition-result"
         )
@@ -307,6 +312,7 @@ async def test_module_level_context_functions_delegate_to_durable_context():
     mock_wait_for_condition_executor.assert_called_once_with(
         check=check,
         config=config,
+        initial_state="pending",
         state=mock_state,
         operation_identifier=ANY,
     )
@@ -1975,9 +1981,7 @@ async def test_wait_for_condition_validation_errors():
     def dummy_wait_strategy(state, attempt):
         return None
 
-    config = WaitForConditionConfig(
-        wait_strategy=dummy_wait_strategy, initial_state="test"
-    )
+    config = WaitForConditionConfig(wait_strategy=dummy_wait_strategy)
 
     # Test None check function
     with pytest.raises(
@@ -2069,9 +2073,7 @@ async def test_context_wait_for_condition_handler_call():
     context = create_test_context(state=state)
 
     # Create config
-    config = WaitForConditionConfig(
-        wait_strategy=test_wait_strategy, initial_state="test"
-    )
+    config = WaitForConditionConfig(wait_strategy=test_wait_strategy)
 
     # Mock the executor to track calls
     with patch(
