@@ -18,6 +18,7 @@ from .processors.context import (
 from .processors.execution import (
     ExecutionProcessor,
 )
+from .processors.invoke import ChainedInvokeProcessor
 from .processors.step import (
     StepProcessor,
 )
@@ -36,25 +37,28 @@ if TYPE_CHECKING:
         OperationProcessor,
     )
 
-from typing import ClassVar
-
 
 class OperationTransformer:
     """Transforms OperationUpdates to Operations while maintaining order and triggering scheduler actions."""
-
-    _DEFAULT_PROCESSORS: ClassVar[dict[OperationType, OperationProcessor]] = {
-        OperationType.STEP: StepProcessor(),
-        OperationType.WAIT: WaitProcessor(),
-        OperationType.CONTEXT: ContextProcessor(),
-        OperationType.CALLBACK: CallbackProcessor(),
-        OperationType.EXECUTION: ExecutionProcessor(),
-    }
 
     def __init__(
         self,
         processors: MutableMapping[OperationType, OperationProcessor] | None = None,
     ):
-        self.processors = processors or self._DEFAULT_PROCESSORS
+        self.processors = processors or {
+            OperationType.STEP: StepProcessor(),
+            OperationType.WAIT: WaitProcessor(),
+            OperationType.CONTEXT: ContextProcessor(),
+            OperationType.CALLBACK: CallbackProcessor(),
+            OperationType.EXECUTION: ExecutionProcessor(),
+            OperationType.CHAINED_INVOKE: ChainedInvokeProcessor(),
+        }
+
+    def mock_invoke_result(self, function_name: str, result: object) -> None:
+        """Register a local mock result for a chained invoke function."""
+        processor = self.processors.get(OperationType.CHAINED_INVOKE)
+        if isinstance(processor, ChainedInvokeProcessor):
+            processor.mock_result(function_name=function_name, result=result)
 
     def process_updates(
         self,

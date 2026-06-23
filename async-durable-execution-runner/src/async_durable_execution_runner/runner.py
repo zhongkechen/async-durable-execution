@@ -622,6 +622,13 @@ class DurableFunctionLocalTestRunner:
     async def send_callback_heartbeat(self, callback_id: str) -> None:
         self._executor.send_callback_heartbeat(callback_id=callback_id)
 
+    def mock_invoke_result(self, function_name: str, result: Any) -> None:
+        """Register a local mock result for a chained invoke function."""
+        self._checkpoint_processor.mock_invoke_result(
+            function_name=function_name,
+            result=result,
+        )
+
     async def run_async(
         self,
     ) -> str:

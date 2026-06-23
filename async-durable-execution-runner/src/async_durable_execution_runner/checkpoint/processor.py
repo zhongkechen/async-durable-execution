@@ -42,6 +42,10 @@ class CheckpointProcessor:
         """Add observer for execution events."""
         self._notifier.add_observer(observer)
 
+    def mock_invoke_result(self, function_name: str, result: object) -> None:
+        """Register a local mock result for a chained invoke function."""
+        self._transformer.mock_invoke_result(function_name=function_name, result=result)
+
     def process_checkpoint(
         self,
         checkpoint_token: str,
