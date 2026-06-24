@@ -383,9 +383,11 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
 
 async def wait_for_condition(
     check: Callable[[T | None], Awaitable[ConditionResult[T]]] | None = None,
-    config: WaitForConditionConfig[T] | None = None,
+    *,
     initial_state: T | None = None,
     name: str | None = None,
+    wait_strategy: WaitDelayStrategy[T] | None = None,
+    serdes: SerDes | None = None,
 ) -> T:
     """Poll durable state until the configured strategy decides to stop waiting.
 
@@ -397,8 +399,10 @@ async def wait_for_condition(
     if check is None:
         msg = "`check` is required for wait_for_condition"
         raise ValidationError(msg)
-    if config is None:
-        config = WaitForConditionConfig()
+    config = WaitForConditionConfig(
+        wait_strategy=wait_strategy,
+        serdes=serdes,
+    )
     assert_async_callable(check, label="check")
 
     operation_id = context.step_counter.create_step_id()

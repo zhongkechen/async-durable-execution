@@ -280,7 +280,7 @@ result = wait_for_callback(
 ### Wait for Condition - Polling
 
 ```python
-from async_durable_execution import WaitForConditionConfig, WaitStrategyBuilder
+from async_durable_execution import WaitStrategyBuilder
 from async_durable_execution import WaitForConditionDecision
 
 
@@ -291,13 +291,11 @@ async def check_job(state: dict, check_ctx) -> dict:
 
 result = wait_for_condition(
     check=check_job,
-    config=WaitForConditionConfig(
-        initial_state={"job_id": "job-123", "status": "pending"},
-        wait_strategy=WaitStrategyBuilder(
-            should_continue_polling=lambda state: state["status"] != "completed",
-            initial_delay=timedelta(seconds=2),
-        ).build()
-    ),
+    initial_state={"job_id": "job-123", "status": "pending"},
+    wait_strategy=WaitStrategyBuilder(
+        should_continue_polling=lambda state: state["status"] != "completed",
+        initial_delay=timedelta(seconds=2),
+    ).build(),
     name="wait-for-job"
 )
 ```

@@ -312,9 +312,9 @@ async def test_module_level_context_functions_delegate_to_durable_context():
                 context,
                 wait_for_condition(
                     check,
-                    config,
                     initial_state="pending",
                     name="condition-name",
+                    wait_strategy=config.wait_strategy,
                 ),
             )
             == "condition-result"
@@ -348,11 +348,13 @@ async def test_module_level_context_functions_delegate_to_durable_context():
     assert mock_child_handler.await_count == 2
     mock_wait_for_condition_executor.assert_called_once_with(
         check=check,
-        config=config,
+        config=ANY,
         initial_state="pending",
         state=mock_state,
         operation_identifier=ANY,
     )
+    created_config = mock_wait_for_condition_executor.call_args.kwargs["config"]
+    assert created_config.wait_strategy is config.wait_strategy
     wait_for_condition_executor.process.assert_awaited_once()
 
 
@@ -2047,13 +2049,14 @@ async def test_wait_for_condition_validation_errors():
     def dummy_wait_strategy(state, attempt):
         return None
 
-    config = WaitForConditionConfig(wait_strategy=dummy_wait_strategy)
-
     # Test None check function
     with pytest.raises(
         ValidationError, match="`check` is required for wait_for_condition"
     ):
-        await run_with_context(context, wait_for_condition(None, config))
+        await run_with_context(
+            context,
+            wait_for_condition(None, wait_strategy=dummy_wait_strategy),
+        )
 
     # None config is valid; check must return state and wait decision.
     async def dummy_check(state):
@@ -2065,7 +2068,7 @@ async def test_wait_for_condition_validation_errors():
         mock_executor = make_async_executor("test")
         mock_executor_class.return_value = mock_executor
 
-        result = await run_with_context(context, wait_for_condition(dummy_check, None))
+        result = await run_with_context(context, wait_for_condition(dummy_check))
 
     assert result == "test"
 
@@ -2138,9 +2141,6 @@ async def test_context_wait_for_condition_handler_call():
 
     context = create_test_context(state=state)
 
-    # Create config
-    config = WaitForConditionConfig(wait_strategy=test_wait_strategy)
-
     # Mock the executor to track calls
     with patch(
         "async_durable_execution.operation.wait_for_condition.WaitForConditionOperationExecutor"
@@ -2149,7 +2149,10 @@ async def test_context_wait_for_condition_handler_call():
         mock_executor_class.return_value = mock_executor
 
         # Call wait_for_condition method
-        result = await run_with_context(context, wait_for_condition(test_check, config))
+        result = await run_with_context(
+            context,
+            wait_for_condition(test_check, wait_strategy=test_wait_strategy),
+        )
 
         # Verify executor was called
         mock_executor_class.assert_called_once()
