@@ -5,7 +5,6 @@ from typing import Any
 
 from async_durable_execution import (
     CompletionConfig,
-    MapConfig,
     RetryStrategyBuilder,
     durable_execution,
     durable_callable,
@@ -19,12 +18,6 @@ from async_durable_execution import (
 async def handler(_event: Any) -> dict[str, Any]:
     """Process items with failure tolerance."""
     items = list(range(1, 11))  # [1, 2, 3, ..., 10]
-
-    # Tolerate up to 3 failures
-    config = MapConfig(
-        max_concurrency=5,
-        completion_config=CompletionConfig(tolerated_failure_count=3),
-    )
 
     # Disable retries so failures happen immediately
     retry_strategy = RetryStrategyBuilder(max_attempts=1).build()
@@ -44,10 +37,11 @@ async def handler(_event: Any) -> dict[str, Any]:
         )
 
     results = await map(
-        inputs=items,
         func=process_item,
+        items=items,
         name="map_with_tolerance",
-        config=config,
+        max_concurrency=5,
+        completion_config=CompletionConfig(tolerated_failure_count=3),
     )
 
     return {

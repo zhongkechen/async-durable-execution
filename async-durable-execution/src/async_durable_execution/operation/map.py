@@ -5,7 +5,16 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Generic, TypeVar, Sequence, Callable, Any, Awaitable
+from typing import (
+    TYPE_CHECKING,
+    Generic,
+    TypeVar,
+    Sequence,
+    Iterable,
+    Callable,
+    Any,
+    Awaitable,
+)
 
 from ..async_tools import get_callable_name
 from .base import CheckpointedResult, get_checkpoint_result
@@ -210,15 +219,48 @@ class MapSummaryGenerator:
 
 
 async def map(
-    inputs: Sequence[U],
     func: Callable[[U | BatchedInput[Any, U]], Awaitable[T]],
+    items: Iterable[U],
+    *,
     name: str | None = None,
-    config: MapConfig | None = None,
+    max_concurrency: int | None = None,
+    item_batcher: ItemBatcher | None = None,
+    completion_config: CompletionConfig | None = None,
+    serdes: SerDes | None = None,
+    item_serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    nesting_type: NestingType = NestingType.NESTED,
+    item_namer: Callable[[U, int], str] | None = None,
 ):
-    """Process a collection durably with optional concurrency and batching controls."""
+    """Process a collection durably with optional concurrency and batching controls.
+
+    Args:
+        func: Async callable that processes each item.
+        items: Items to process.
+        name: Optional durable operation name.
+        max_concurrency: Optional limit for concurrent item processing.
+        item_batcher: Optional item batching configuration.
+        completion_config: Optional completion criteria.
+        serdes: Optional serializer for the map result.
+        item_serdes: Optional serializer for individual map item results.
+        summary_generator: Optional summary generator for large map results.
+        nesting_type: Whether map iterations use nested or flat operation ids.
+        item_namer: Optional callable for naming map item iterations.
+    """
     context = _get_durable_context("map")
     assert_async_callable(func)
+    items_sequence = list(items)
     map_name: str | None = name or get_callable_name(func)
+    config = MapConfig[U](
+        max_concurrency=max_concurrency,
+        item_batcher=item_batcher or ItemBatcher(),
+        completion_config=completion_config or CompletionConfig(),
+        serdes=serdes,
+        item_serdes=item_serdes,
+        summary_generator=summary_generator,
+        nesting_type=nesting_type,
+        item_namer=item_namer,
+    )
 
     operation_id = context.step_counter.create_step_id()
     operation_identifier = OperationIdentifier(
@@ -231,7 +273,7 @@ async def map(
 
     async def map_in_child_context() -> BatchResult[T]:
         return await map_handler(
-            items=inputs,
+            items=items_sequence,
             func=func,
             config=config,
             execution_state=context.execution_state,

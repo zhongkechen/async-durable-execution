@@ -60,12 +60,12 @@ async def handler(event: dict[str, Any]) -> dict[str, Any]:
     await wait(timedelta(seconds=1))
 
     # Step 3: map() - Map with 5 iterations returning numbers 1 to 5
-    map_input = [1, 2, 3, 4, 5]
+    map_items = [1, 2, 3, 4, 5]
 
     map_results = (
         await map(
-            inputs=map_input,
             func=map_item,
+            items=map_items,
             name="map-numbers",
         )
     ).to_dict()

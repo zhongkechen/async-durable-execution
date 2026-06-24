@@ -303,7 +303,7 @@ result = wait_for_condition(
 ### Map - Process Arrays
 
 ```python
-from async_durable_execution import MapConfig, CompletionConfig, get_current_context
+from async_durable_execution import CompletionConfig, get_current_context
 
 
 async def process_item(item: dict) -> dict:
@@ -312,14 +312,12 @@ async def process_item(item: dict) -> dict:
 
 
 results = map(
-    items=items,
     func=process_item,
-    config=MapConfig(
-        max_concurrency=5,
-        completion_config=CompletionConfig(
-            min_successful=8,
-            tolerated_failure_count=2
-        )
+    items=items,
+    max_concurrency=5,
+    completion_config=CompletionConfig(
+        min_successful=8,
+        tolerated_failure_count=2
     ),
     name="process-items"
 )

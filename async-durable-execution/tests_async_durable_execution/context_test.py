@@ -11,7 +11,6 @@ from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 import pytest
 
 from async_durable_execution.async_tools import get_callable_name
-from async_durable_execution.operation.child import ChildConfig
 from async_durable_execution.context import (
     reset_current_context,
     set_current_context,
@@ -22,7 +21,6 @@ from async_durable_execution.operation.callback import (
     CallbackConfig,
 )
 from async_durable_execution.operation.invoke import InvokeConfig
-from async_durable_execution.operation.map import MapConfig
 from async_durable_execution.operation.wait_for_condition import WaitForConditionConfig
 from async_durable_execution import (
     durable_callable,
@@ -290,7 +288,7 @@ async def test_module_level_context_functions_delegate_to_durable_context():
         )
         assert (
             await run_with_context(
-                context, map_operation([1, 2], map_func, name="map-name")
+                context, map_operation(map_func, [1, 2], name="map-name")
             )
             == "map-result"
         )
@@ -442,12 +440,15 @@ async def test_durable_callable_can_be_passed_to_run_in_child_context():
             == "child:hello Ada"
         )
 
-    mock_run_in_child_context.assert_awaited_once_with(
-        context,
-        func=ANY,
-        name="greet-child",
-        config=ChildConfig(),
+    mock_run_in_child_context.assert_awaited_once()
+    assert mock_run_in_child_context.await_args.args[0] is context
+    assert mock_run_in_child_context.await_args.kwargs["name"] == "greet-child"
+    assert mock_run_in_child_context.await_args.kwargs["config"].serdes is None
+    assert mock_run_in_child_context.await_args.kwargs["config"].item_serdes is None
+    assert (
+        mock_run_in_child_context.await_args.kwargs["config"].summary_generator is None
     )
+    assert not mock_run_in_child_context.await_args.kwargs["config"].is_virtual
     assert await mock_run_in_child_context.await_args.kwargs["func"]() == "hello Ada"
 
 
@@ -1392,7 +1393,10 @@ async def test_run_in_child_context_basic(mock_handler):
     assert call_args[1]["operation_identifier"] == OperationIdentifier(
         expected_operation_id, OperationSubType.RUN_IN_CHILD_CONTEXT, None, None
     )
-    assert call_args[1]["config"] == ChildConfig()
+    assert call_args[1]["config"].serdes is None
+    assert call_args[1]["config"].item_serdes is None
+    assert call_args[1]["config"].summary_generator is None
+    assert not call_args[1]["config"].is_virtual
 
 
 @patch("async_durable_execution.operation.child.child_handler")
@@ -1431,10 +1435,10 @@ async def test_run_in_child_context_with_name_and_config(mock_handler):
     assert call_args[1]["operation_identifier"] == OperationIdentifier(
         expected_id, OperationSubType.RUN_IN_CHILD_CONTEXT, None, "original_function"
     )
-    assert call_args[1]["config"] == ChildConfig(
-        summary_generator=summary_generator,
-        is_virtual=True,
-    )
+    assert call_args[1]["config"].serdes is None
+    assert call_args[1]["config"].item_serdes is None
+    assert call_args[1]["config"].summary_generator is summary_generator
+    assert call_args[1]["config"].is_virtual
 
 
 @patch("async_durable_execution.operation.child.child_handler")
@@ -1711,11 +1715,11 @@ async def test_map_basic(mock_handler):
     async def test_function(item):
         return f"processed_{item}"
 
-    inputs = [1, 2, 3]
+    items = [1, 2, 3]
 
     context = create_test_context(state=mock_state)
 
-    result = await run_with_context(context, map_operation(inputs, test_function))
+    result = await run_with_context(context, map_operation(test_function, items))
 
     assert result == "map_result"
     mock_handler.assert_called_once()
@@ -1727,7 +1731,7 @@ async def test_map_basic(mock_handler):
 
 @patch("async_durable_execution.operation.map.child_handler")
 async def test_map_with_name_and_config(mock_handler):
-    """Test map with name and config."""
+    """Test map with name and configuration fields."""
     mock_handler.return_value = "configured_map_result"
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
@@ -1739,13 +1743,12 @@ async def test_map_with_name_and_config(mock_handler):
 
     test_function._original_name = "test_map_function"  # noqa: SLF001
 
-    inputs = ["a", "b", "c"]
-    config = MapConfig()
-
+    items = ["a", "b", "c"]
     context = create_test_context(state=mock_state)
 
     result = await run_with_context(
-        context, map_operation(inputs, test_function, name="custom_map", config=config)
+        context,
+        map_operation(test_function, items, name="custom_map", max_concurrency=2),
     )
 
     assert result == "configured_map_result"
@@ -1767,45 +1770,45 @@ async def test_map_calls_handler_correctly(mock_handler):
     async def test_function(item):
         return item.upper()
 
-    inputs = ["hello", "world"]
+    items = ["hello", "world"]
 
     context = create_test_context(state=mock_state)
 
-    result = await run_with_context(context, map_operation(inputs, test_function))
+    result = await run_with_context(context, map_operation(test_function, items))
 
     assert result == "handler_result"
     mock_handler.assert_called_once()
 
 
 @patch("async_durable_execution.operation.map.map_handler", new_callable=AsyncMock)
-async def test_map_with_empty_inputs(mock_handler):
-    """Test map with empty inputs."""
+async def test_map_with_empty_items(mock_handler):
+    """Test map with empty items."""
     mock_handler.return_value = "empty_map_result"
     mock_state = create_async_child_state()
 
     async def test_function(item):
         return item
 
-    inputs = []
+    items = []
 
     context = create_test_context(state=mock_state)
-    result = await run_with_context(context, map_operation(inputs, test_function))
+    result = await run_with_context(context, map_operation(test_function, items))
     assert result == "empty_map_result"
 
 
 @patch("async_durable_execution.operation.map.map_handler", new_callable=AsyncMock)
 async def test_map_with_different_input_types(mock_handler):
-    """Test map with different input types."""
+    """Test map with different item types."""
     mock_handler.return_value = "mixed_map_result"
     mock_state = create_async_child_state()
 
     async def test_function(item):
         return str(item)
 
-    inputs = [1, "hello", {"key": "value"}, [1, 2, 3]]
+    items = [1, "hello", {"key": "value"}, [1, 2, 3]]
 
     context = create_test_context(state=mock_state)
-    result = await run_with_context(context, map_operation(inputs, test_function))
+    result = await run_with_context(context, map_operation(test_function, items))
     assert result == "mixed_map_result"
 
 
@@ -2006,14 +2009,10 @@ async def test_map_calls_handler(mock_handler):
     async def test_function(item):
         return f"processed_{item}"
 
-    inputs = ["a", "b", "c"]
-    config = MapConfig()
-
+    items = ["a", "b", "c"]
     context = create_test_context(state=mock_state)
 
-    result = await run_with_context(
-        context, map_operation(inputs, test_function, config=config)
-    )
+    result = await run_with_context(context, map_operation(test_function, items))
 
     assert result == "map_result"
     mock_handler.assert_called_once()
@@ -2097,8 +2096,9 @@ async def test_context_map_handler_call():
     ) as mock_map_handler:
         mock_map_handler.return_value = "map_result"
 
-        await run_with_context(context, map_operation([1, 2], test_function))
+        await run_with_context(context, map_operation(test_function, [1, 2]))
         mock_map_handler.assert_called_once()
+        assert mock_map_handler.call_args.kwargs["config"].summary_generator is None
 
 
 async def test_context_parallel_handler_call():

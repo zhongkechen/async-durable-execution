@@ -7,7 +7,6 @@ from async_durable_execution import (
     durable_callable,
     get_current_context,
     step,
-    MapConfig,
     durable_execution,
     map,
     wait,
@@ -24,8 +23,6 @@ async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating large scale map with substantial data."""
     # Create array of 50 items (more manageable for testing)
     items = list(range(1, 51))  # 1 to 50
-
-    config = MapConfig(max_concurrency=10)  # Process 10 items concurrently
     data = await generate_large_string(100)
 
     async def process_item(item: int) -> dict[str, Any]:
@@ -44,10 +41,10 @@ async def handler(_event: Any) -> dict[str, Any]:
         return await step(build_result())
 
     results = await map(
-        inputs=items,
         func=process_item,
+        items=items,
         name="large-scale-map",
-        config=config,
+        max_concurrency=10,
     )
 
     await wait(timedelta(seconds=1), name="wait1")
