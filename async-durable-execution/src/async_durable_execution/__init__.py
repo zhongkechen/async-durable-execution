@@ -37,7 +37,6 @@ from .operation.parallel import (
 from .operation.callback import (
     CallbackConfig,
     create_callback,
-    durable_wait_for_callback,
     wait_for_callback,
     WaitForCallbackContext,
     Callback,
@@ -109,7 +108,6 @@ __all__ = [
     "create_callback",
     "durable_callable",
     "durable_execution",
-    "durable_wait_for_callback",
     "get_attempt",
     "get_current_context",
     "invoke",

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any, TypedDict
 
 from async_durable_execution import (
+    durable_callable,
     durable_execution,
     SerDes,
     wait_for_callback,
@@ -65,7 +66,8 @@ class CustomSerdes(SerDes[CustomData]):
         )
 
 
-async def noop_submitter(_callback_id: str) -> None:
+@durable_callable
+async def noop_submitter() -> None:
     return None
 
 
@@ -74,7 +76,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with custom serdes."""
 
     result: CustomData = await wait_for_callback(
-        noop_submitter,
+        noop_submitter(),
         name="custom-serdes-callback",
         timeout=timedelta(seconds=10),
         heartbeat_timeout=timedelta(seconds=20),

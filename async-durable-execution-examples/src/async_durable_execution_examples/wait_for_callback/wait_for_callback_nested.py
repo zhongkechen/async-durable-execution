@@ -12,7 +12,8 @@ from async_durable_execution import (
 )
 
 
-async def noop_submitter(_callback_id: str) -> None:
+@durable_callable
+async def noop_submitter() -> None:
     return None
 
 
@@ -22,7 +23,7 @@ async def inner_child_context() -> dict[str, Any]:
     await wait(timedelta(seconds=1), name="deep-wait")
 
     nested_callback_result: str = await wait_for_callback(
-        noop_submitter,
+        noop_submitter(),
         name="nested-callback-op",
     )
 
@@ -36,7 +37,7 @@ async def inner_child_context() -> dict[str, Any]:
 async def outer_child_context() -> dict[str, Any]:
     """Outer child context with inner callback and nested context."""
     inner_result: str = await wait_for_callback(
-        noop_submitter,
+        noop_submitter(),
         name="inner-callback-op",
     )
 
@@ -57,7 +58,7 @@ async def outer_child_context() -> dict[str, Any]:
 async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating nested waitForCallback operations across multiple levels."""
     outer_result: str = await wait_for_callback(
-        noop_submitter,
+        noop_submitter(),
         name="outer-callback-op",
     )
 

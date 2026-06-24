@@ -266,7 +266,11 @@ result = run_in_child_context(process_order, name="process-order")
 ### Wait for Callback - External Integration
 
 ```python
-async def submit_approval(callback_id: str):
+from async_durable_execution import get_current_context
+
+
+async def submit_approval():
+    callback_id = get_current_context().callback_id
     send_approval_email(callback_id)
 
 
@@ -443,7 +447,8 @@ async def handler(event: dict) -> str:
 async def handler(event: dict) -> dict:
     plan = step(generate_plan(event), name="generate-plan")
 
-    async def submit_approval(callback_id: str):
+    async def submit_approval():
+        callback_id = get_current_context().callback_id
         send_approval_email(event["approver_email"], plan, callback_id)
 
     answer = wait_for_callback(

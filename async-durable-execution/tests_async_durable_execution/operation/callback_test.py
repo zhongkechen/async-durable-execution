@@ -411,14 +411,18 @@ async def test_wait_for_callback_handler_with_name_and_config():
     step_mock.assert_called_once()
 
 
-async def test_wait_for_callback_handler_submitter_called_with_callback_id():
-    """Test wait_for_callback_handler calls submitter with callback_id."""
+async def test_wait_for_callback_handler_submitter_reads_callback_id_from_context():
+    """Test wait_for_callback_handler exposes callback_id through current context."""
     mock_context = AsyncMock(spec=DurableContext)
     mock_callback = Mock()
     mock_callback.callback_id = "callback_test_id"
     mock_callback.result = AsyncMock(return_value="test_result")
 
-    mock_submitter = AsyncMock(return_value=None)
+    captured_callback_id = None
+
+    async def mock_submitter():
+        nonlocal captured_callback_id
+        captured_callback_id = get_current_context().callback_id
 
     async def capture_step_call(func, name, **_kwargs):
         # Execute the step callable to verify submitter is called correctly
@@ -430,11 +434,7 @@ async def test_wait_for_callback_handler_submitter_called_with_callback_id():
     ):
         await wait_for_callback_handler(mock_context, mock_submitter, "test")
 
-    # Verify submitter was called with only the callback_id.
-    assert mock_submitter.call_count == 1
-    call_args = mock_submitter.call_args[0]
-    assert call_args[0] == "callback_test_id"
-    assert len(call_args) == 1
+    assert captured_callback_id == "callback_test_id"
 
 
 async def test_create_callback_handler_with_none_operation_in_result():
@@ -487,11 +487,10 @@ async def test_wait_for_callback_handler_with_none_callback_id():
         result = await wait_for_callback_handler(mock_context, mock_submitter, "test")
 
     assert result == "result_with_none_id"
-    # Verify submitter was called with only the callback_id.
+    # Verify submitter was called without arguments.
     assert mock_submitter.call_count == 1
     call_args = mock_submitter.call_args[0]
-    assert call_args[0] is None
-    assert len(call_args) == 1
+    assert len(call_args) == 0
 
 
 async def test_wait_for_callback_handler_with_empty_string_callback_id():
@@ -513,11 +512,10 @@ async def test_wait_for_callback_handler_with_empty_string_callback_id():
         result = await wait_for_callback_handler(mock_context, mock_submitter, "test")
 
     assert result == "result_with_empty_id"
-    # Verify submitter was called with only the callback_id.
+    # Verify submitter was called without arguments.
     assert mock_submitter.call_count == 1
     call_args = mock_submitter.call_args[0]
-    assert call_args[0] == ""  # noqa: PLC1901 - explicitly testing empty string, not just falsey
-    assert len(call_args) == 1
+    assert len(call_args) == 0
 
 
 async def test_wait_for_callback_handler_with_large_data():
@@ -733,7 +731,7 @@ async def test_wait_for_callback_handler_submitter_exception_handling():
     mock_callback.callback_id = "callback_exception"
     mock_callback.result = AsyncMock(return_value="exception_result")
 
-    async def failing_submitter(callback_id):
+    async def failing_submitter():
         msg = "Submitter failed"
         raise ValueError(msg)
 
@@ -931,8 +929,7 @@ async def test_callback_lifecycle_complete_flow():
 
     assert callback_id == "lifecycle_cb123"
 
-    async def mock_submitter(cb_id):
-        assert cb_id == "lifecycle_cb123"
+    async def mock_submitter():
         callback_context = get_current_context()
         assert isinstance(callback_context, WaitForCallbackContext)
         assert callback_context.callback_id == "lifecycle_cb123"
@@ -1066,7 +1063,8 @@ async def test_callback_with_complex_submitter():
 
     submission_log = []
 
-    async def complex_submitter(callback_id):
+    async def complex_submitter():
+        callback_id = get_current_context().callback_id
         submission_log.append(f"received_id: {callback_id}")
         if callback_id == "complex_cb789":
             submission_log.append("api_call_success")

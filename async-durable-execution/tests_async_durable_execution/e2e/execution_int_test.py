@@ -15,7 +15,6 @@ from async_durable_execution import (
     step,
     wait,
     wait_for_callback,
-    durable_wait_for_callback,
     DurableContext,
 )
 from async_durable_execution.context import (
@@ -575,15 +574,15 @@ async def test_wait_not_caught_by_exception():
         assert checkpoint.wait_options.wait_seconds == 1
 
 
-async def test_durable_wait_for_callback_decorator():
-    """Test the durable_wait_for_callback decorator with additional parameters."""
+async def test_durable_callable_wait_for_callback_submitter():
+    """Test durable_callable submitter uses callback_id from current context."""
 
     mock_submitter = Mock()
 
-    @durable_wait_for_callback
-    async def submit_to_external_system(callback_id, task_name, priority):
+    @durable_callable
+    async def submit_to_external_system(task_name, priority):
         callback_context = get_current_context()
-        assert callback_context.callback_id == callback_id
+        callback_id = callback_context.callback_id
         mock_submitter(callback_id, task_name, priority)
         logging.getLogger(__name__).info(
             "Submitting %s with callback %s", task_name, callback_id

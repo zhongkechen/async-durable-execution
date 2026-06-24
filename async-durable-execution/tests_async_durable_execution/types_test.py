@@ -34,7 +34,7 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
     async def test_callable():
         return "result"
 
-    async def submitter(_callback_id: str):
+    async def submitter():
         return "submitted"
 
     mock_wait = AsyncMock(return_value=None)
