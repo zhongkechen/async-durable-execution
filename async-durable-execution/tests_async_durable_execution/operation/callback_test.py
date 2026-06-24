@@ -1,6 +1,7 @@
 """Unit tests for callback handler."""
 
 from contextlib import contextmanager
+import inspect
 import math
 from datetime import timedelta
 from unittest.mock import ANY, AsyncMock, Mock, patch
@@ -31,6 +32,8 @@ from async_durable_execution.operation.callback import (
     CallbackConfig,
     CallbackOperationExecutor,
     WaitForCallbackConfig,
+    create_callback,
+    wait_for_callback,
     wait_for_callback_handler,
 )
 from async_durable_execution.models import RetryDecision
@@ -49,6 +52,21 @@ async def create_callback_handler(state, operation_identifier, config=None):
         config=config,
     )
     return await executor.process()
+
+
+def test_create_callback_name_is_keyword_only():
+    """create_callback operation name must be passed as a keyword."""
+    parameters = inspect.signature(create_callback).parameters
+
+    assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+def test_wait_for_callback_name_is_keyword_only():
+    """wait_for_callback operation name must be passed as a keyword."""
+    parameters = inspect.signature(wait_for_callback).parameters
+
+    assert parameters["submitter"].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
+    assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
 async def execute_step_with_mock_context(func):
