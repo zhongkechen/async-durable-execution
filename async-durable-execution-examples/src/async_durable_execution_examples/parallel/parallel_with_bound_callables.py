@@ -4,7 +4,6 @@ import asyncio
 from typing import Any
 
 from async_durable_execution import (
-    ParallelConfig,
     durable_callable,
     durable_execution,
     parallel,
@@ -73,6 +72,6 @@ async def handler(event: dict[str, Any]) -> list[str]:
                 load_config(region="us-east-1"),
             ],
             name="load_all_data",
-            config=ParallelConfig(max_concurrency=3),
+            max_concurrency=3,
         )
     ).get_results()

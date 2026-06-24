@@ -10,7 +10,6 @@ from async_durable_execution import (
     BatchItemStatus,
     BatchResult,
     CompletionReason,
-    ParallelConfig,
     durable_execution,
     ErrorObject,
     JsonSerDes,
@@ -80,8 +79,9 @@ class CustomBatchSerDes(SerDes[BatchResult]):
 @durable_execution
 async def handler(_event: Any) -> dict[str, Any]:
     """Execute parallel tasks with custom batch-level serialization."""
-    # Use custom serdes for the entire BatchResult, default JSON for individual branches
-    config = ParallelConfig(serdes=CustomBatchSerDes(), item_serdes=JsonSerDes())
+    # Use custom serdes for the entire BatchResult and JSON for individual branches.
+    batch_serdes = CustomBatchSerDes()
+    item_serdes = JsonSerDes()
 
     async def branch1() -> int:
         @durable_callable
@@ -107,7 +107,8 @@ async def handler(_event: Any) -> dict[str, Any]:
     results = await parallel(
         branches=[branch1, branch2, branch3],
         name="parallel_with_batch_serdes",
-        config=config,
+        serdes=batch_serdes,
+        item_serdes=item_serdes,
     )
 
     return {

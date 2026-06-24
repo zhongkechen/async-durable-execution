@@ -23,7 +23,6 @@ from async_durable_execution.operation.callback import (
 )
 from async_durable_execution.operation.invoke import InvokeConfig
 from async_durable_execution.operation.map import MapConfig
-from async_durable_execution.operation.parallel import ParallelConfig
 from async_durable_execution.operation.wait_for_condition import WaitForConditionConfig
 from async_durable_execution import (
     durable_callable,
@@ -1840,8 +1839,8 @@ async def test_parallel_basic(mock_handler):
 
 
 @patch("async_durable_execution.operation.parallel.child_handler")
-async def test_parallel_with_name_and_config(mock_handler):
-    """Test parallel with name and config."""
+async def test_parallel_with_name_and_config_fields(mock_handler):
+    """Test parallel with name and direct config fields."""
     mock_handler.return_value = "configured_parallel_result"
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
@@ -1855,12 +1854,18 @@ async def test_parallel_with_name_and_config(mock_handler):
         return "result2"
 
     callables = [task1, task2]
-    config = ParallelConfig()
+    serdes = Mock()
 
     context = create_test_context(state=mock_state)
 
     result = await run_with_context(
-        context, parallel(callables, name="custom_parallel", config=config)
+        context,
+        parallel(
+            callables,
+            name="custom_parallel",
+            max_concurrency=2,
+            serdes=serdes,
+        ),
     )
 
     assert result == "configured_parallel_result"
@@ -1868,6 +1873,8 @@ async def test_parallel_with_name_and_config(mock_handler):
     assert (
         call_args[1]["operation_identifier"].name == "custom_parallel"
     )  # name should be custom_parallel
+    child_config = call_args.kwargs["config"]
+    assert child_config.serdes is serdes
 
 
 @patch("async_durable_execution.operation.parallel.child_handler")
@@ -2028,11 +2035,9 @@ async def test_parallel_calls_handler(mock_handler):
         return "result2"
 
     callables = [task1, task2]
-    config = ParallelConfig()
-
     context = create_test_context(state=mock_state)
 
-    result = await run_with_context(context, parallel(callables, config=config))
+    result = await run_with_context(context, parallel(callables))
 
     assert result == "parallel_result"
     mock_handler.assert_called_once()

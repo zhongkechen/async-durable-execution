@@ -5,7 +5,6 @@ from typing import Any
 from async_durable_execution import (
     durable_callable,
     step,
-    ParallelConfig,
     durable_execution,
     parallel,
 )
@@ -55,6 +54,6 @@ async def handler(_event: Any) -> list[str]:
         await parallel(
             branches=[task1, task2, task3, task4, task5],
             name="parallel_with_concurrency",
-            config=ParallelConfig(max_concurrency=2),
+            max_concurrency=2,
         )
     ).get_results()

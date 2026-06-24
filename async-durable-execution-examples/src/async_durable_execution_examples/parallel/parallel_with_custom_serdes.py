@@ -6,7 +6,6 @@ from typing import Any
 from async_durable_execution import (
     durable_callable,
     step,
-    ParallelConfig,
     durable_execution,
     SerDes,
     SerDesContext,
@@ -40,8 +39,6 @@ async def handler(_event: Any) -> dict[str, Any]:
 
     # Use custom serdes for individual function results only
     # The BatchResult will use default JSON serialization
-    config = ParallelConfig(item_serdes=CustomItemSerDes())
-
     async def task1() -> dict[str, Any]:
         @durable_callable
         async def run() -> dict[str, Any]:
@@ -66,7 +63,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     results = await parallel(
         branches=[task1, task2, task3],
         name="parallel_with_custom_serdes",
-        config=config,
+        item_serdes=CustomItemSerDes(),
     )
 
     return {
