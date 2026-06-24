@@ -15,7 +15,6 @@ from async_durable_execution.exceptions import (
     CallableRuntimeError,
     DurableApiErrorCategory,
     GetExecutionStateError,
-    OrphanedChildException,
 )
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
@@ -39,6 +38,7 @@ from async_durable_execution.operation.base import (
     get_checkpoint_result,
     CheckpointedResult,
 )
+from async_durable_execution.operation.child import OrphanedChildException
 from async_durable_execution.plugin import (
     DurableInstrumentationPlugin,
     PluginExecutor,

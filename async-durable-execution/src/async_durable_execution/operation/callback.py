@@ -18,7 +18,7 @@ from ..context import (
     set_current_context,
     get_current_context,
 )
-from ..exceptions import CallbackError, SuspendExecution
+from ..exceptions import ExecutionError, SuspendExecution, TerminationReason
 from ..models import (
     CallbackOptions,
     Operation,
@@ -47,6 +47,14 @@ T = TypeVar("T")  # Result type
 logger = logging.getLogger(__name__)
 
 PASS_THROUGH_SERDES: SerDes[Any] = PassThroughSerDes()
+
+
+class CallbackError(ExecutionError):
+    """Error in callback handling."""
+
+    def __init__(self, message: str, callback_id: str | None = None):
+        super().__init__(message, TerminationReason.CALLBACK_ERROR)
+        self.callback_id = callback_id
 
 
 @dataclass(frozen=True)

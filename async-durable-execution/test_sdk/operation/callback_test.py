@@ -12,7 +12,7 @@ from async_durable_execution.context import (
     set_current_context,
     get_current_context,
 )
-from async_durable_execution.exceptions import CallbackError, ValidationError
+from async_durable_execution.exceptions import ValidationError
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
     CallbackDetails,
@@ -29,6 +29,7 @@ from async_durable_execution.models import (
 from async_durable_execution.operation import callback
 from async_durable_execution.operation.callback import (
     Callback,
+    CallbackError,
     CallbackConfig,
     CallbackOperationExecutor,
     WaitForCallbackConfig,

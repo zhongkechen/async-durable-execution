@@ -105,14 +105,6 @@ class InvocationError(UnrecoverableError):
         return True
 
 
-class CallbackError(ExecutionError):
-    """Error in callback handling."""
-
-    def __init__(self, message: str, callback_id: str | None = None):
-        super().__init__(message, TerminationReason.CALLBACK_ERROR)
-        self.callback_id = callback_id
-
-
 class DurableApiErrorCategory(Enum):
     """Whether a durable API failure should retry the Lambda or fail execution."""
 
@@ -292,14 +284,6 @@ class CallableRuntimeError(UserlandError):
         self.stack_trace = stack_trace
 
 
-class StepInterruptedError(InvocationError):
-    """Raised when a step is interrupted before it checkpointed at the end."""
-
-    def __init__(self, message: str, step_id: str | None = None):
-        super().__init__(message, TerminationReason.STEP_INTERRUPTED)
-        self.step_id = step_id
-
-
 class BackgroundThreadError(BaseException):
     """Critical error from background checkpoint thread.
 
@@ -446,32 +430,3 @@ class CallableRuntimeErrorSerializableDetails:
 
 class SerDesError(DurableExecutionsError):
     """Raised when serialization fails."""
-
-
-class OrphanedChildException(BaseException):
-    """Raised when a child operation attempts to checkpoint after its parent context has completed.
-
-    This exception inherits from BaseException (not Exception) so that user-space doesn't
-    accidentally catch it with broad exception handlers like 'except Exception'.
-
-    This exception will happen when a parallel branch or map item tries to create a checkpoint
-    after its parent context (i.e the parallel/map operation) has already completed due to meeting
-    completion criteria (e.g., min_successful reached, failure tolerance exceeded).
-
-    Although you cannot cancel running futures in user-space, this will at least terminate the
-    child operation on the next checkpoint attempt, preventing subsequent operations in the
-    child scope from executing.
-
-    Attributes:
-        operation_id: Operation ID of the orphaned child
-    """
-
-    def __init__(self, message: str, operation_id: str):
-        """Initialize OrphanedChildException.
-
-        Args:
-            message: Human-readable error message
-            operation_id: Operation ID of the orphaned child (required)
-        """
-        super().__init__(message)
-        self.operation_id = operation_id

@@ -7,12 +7,12 @@ from typing import Any
 from async_durable_execution import (
     durable_execution,
     get_current_context,
+    JitterStrategy,
     WaitForConditionCheckContext,
     WaitForConditionDecision,
     WaitStrategyBuilder,
     wait_for_condition,
 )
-from async_durable_execution.config import JitterStrategy
 
 
 @durable_execution

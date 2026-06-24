@@ -20,14 +20,10 @@ from ..models import (
     ExecutionCounters,
     SuspendResult,
 )
-from ..exceptions import (
-    OrphanedChildException,
-    SuspendExecution,
-    TimedSuspendExecution,
-)
+from ..exceptions import SuspendExecution, TimedSuspendExecution
 from ..models import ErrorObject, OperationIdentifier
 from .base import get_checkpoint_result
-from .child import ChildConfig, child_handler
+from .child import ChildConfig, OrphanedChildException, child_handler
 from ..serdes import deserialize
 
 
