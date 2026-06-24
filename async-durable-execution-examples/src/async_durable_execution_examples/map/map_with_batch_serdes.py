@@ -16,7 +16,6 @@ from async_durable_execution import (
     ErrorObject,
     JsonSerDes,
     SerDes,
-    SerDesContext,
     map,
 )
 
@@ -24,7 +23,7 @@ from async_durable_execution import (
 class CustomBatchSerDes(SerDes[BatchResult]):
     """Custom serializer for the entire BatchResult."""
 
-    def serialize(self, value: BatchResult, _: SerDesContext) -> str:
+    async def serialize(self, value: BatchResult) -> str:
         # Serialize BatchResult with custom metadata
 
         wrapped = {
@@ -40,7 +39,7 @@ class CustomBatchSerDes(SerDes[BatchResult]):
         }
         return json.dumps(wrapped)
 
-    def deserialize(self, payload: str, _: SerDesContext) -> BatchResult:
+    async def deserialize(self, payload: str) -> BatchResult:
         wrapped = json.loads(payload)
         batch_items = []
         results = wrapped["results"]

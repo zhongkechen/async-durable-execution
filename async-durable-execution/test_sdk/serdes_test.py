@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 import math
@@ -8,6 +9,11 @@ from typing import Any
 
 import pytest
 
+from async_durable_execution.context import (
+    get_current_context,
+    reset_current_context,
+    set_current_context,
+)
 from async_durable_execution.models import (
     BatchItem,
     BatchItemStatus,
@@ -42,15 +48,15 @@ from async_durable_execution.serdes import (
 
 # Custom SerDes implementation for testing
 class CustomStrSerDes(SerDes[str]):
-    def serialize(self, value: str, serdes_context: SerDesContext) -> str:
+    async def serialize(self, value: str) -> str:
         return value.upper()
 
-    def deserialize(self, data: str, serdes_context: SerDesContext) -> str:
+    async def deserialize(self, data: str) -> str:
         return data.lower()
 
 
 class CustomDictSerDes(SerDes[Any]):
-    def serialize(self, value: Any, serdes_context: SerDesContext) -> str:
+    async def serialize(self, value: Any) -> str:
         transformed = self._rec_serialize(value)
         return json.dumps(transformed)
 
@@ -66,7 +72,7 @@ class CustomDictSerDes(SerDes[Any]):
             return str(value * 2)
         return value
 
-    def deserialize(self, data: str, serdes_context: SerDesContext) -> dict[str, Any]:
+    async def deserialize(self, data: str) -> dict[str, Any]:
         parsed = json.loads(data)
         return self._rec_deserialize(parsed)
 
@@ -83,28 +89,28 @@ class CustomDictSerDes(SerDes[Any]):
         return value
 
 
-def test_serdes_abstract():
+async def test_serdes_abstract():
     """Test SerDes abstract base class."""
 
     class TestSerDes(SerDes):
-        def serialize(self, value):
+        async def serialize(self, value):
             return str(value)
 
-        def deserialize(self, data):
+        async def deserialize(self, data):
             return data
 
     serdes = TestSerDes()
-    assert serdes.serialize(42) == "42"
-    assert serdes.deserialize("test") == "test"
+    assert await serdes.serialize(42) == "42"
+    assert await serdes.deserialize("test") == "test"
 
 
-def test_serdes_abstract_methods():
+async def test_serdes_abstract_methods():
     """Test SerDes abstract methods must be implemented."""
     with pytest.raises(TypeError):
         SerDes()
 
 
-def test_serdes_abstract_methods_not_implemented():
+async def test_serdes_abstract_methods_not_implemented():
     """Test SerDes abstract methods raise NotImplementedError when not overridden."""
 
     class IncompleteSerDes(SerDes):
@@ -115,171 +121,207 @@ def test_serdes_abstract_methods_not_implemented():
         IncompleteSerDes()
 
 
-def test_serdes_abstract_methods_coverage():
+async def test_serdes_abstract_methods_coverage():
     """Test to achieve coverage of abstract method pass statements."""
     # To cover the pass statements, call the abstract methods directly
-    SerDes.serialize(None, None, None)  # Covers line 100
-    SerDes.deserialize(None, None, None)  # Covers line 104
+    await SerDes.serialize(None, None)  # Covers line 100
+    await SerDes.deserialize(None, None)  # Covers line 104
 
 
-def test_serialize_invalid_json():
+async def test_serialize_invalid_json():
     circular_ref = {"a": 1}
     circular_ref["self"] = circular_ref
 
     with pytest.raises(ExecutionError) as exc_info:
-        serialize(None, circular_ref, "test-op", "test-arn")
+        await serialize(None, circular_ref, "test-op", "test-arn")
     assert "Serialization failed" in str(exc_info.value)
 
 
-def test_deserialize_invalid_json():
+async def test_deserialize_invalid_json():
     with pytest.raises(ExecutionError) as exc_info:
-        deserialize(None, "invalid json", "test-op", "test-arn")
+        await deserialize(None, "invalid json", "test-op", "test-arn")
     assert "Deserialization failed" in str(exc_info.value)
 
 
-def test_none_serdes_context():
+async def test_none_serdes_context():
     data = {"test": "value"}
-    result = serialize(None, data, None, None)
+    result = await serialize(None, data, None, None)
     # Dict uses envelope format, so roundtrip through deserialize
-    deserialized = deserialize(None, result, None, None)
+    deserialized = await deserialize(None, result, None, None)
     assert deserialized == data
 
 
-def test_default_json_serialization():
+async def test_default_json_serialization():
     data = {"name": "test", "value": 123}
-    serialized = serialize(None, data, "test-op", "test-arn")
+    serialized = await serialize(None, data, "test-op", "test-arn")
     assert isinstance(serialized, str)
     # Dict uses envelope format, so roundtrip through deserialize
-    deserialized = deserialize(None, serialized, "test-op", "test-arn")
+    deserialized = await deserialize(None, serialized, "test-op", "test-arn")
     assert deserialized == data
 
 
-def test_default_json_deserialization():
+async def test_default_json_deserialization():
     # Use a simple list that can be plain JSON
     data = "[1, 2, 3]"
-    deserialized = deserialize(None, data, "test-op", "test-arn")
+    deserialized = await deserialize(None, data, "test-op", "test-arn")
     assert isinstance(deserialized, list)
     assert deserialized == [1, 2, 3]
 
 
-def test_default_json_roundtrip():
+async def test_default_json_roundtrip():
     original = {"name": "test", "value": 123}
-    serialized = serialize(None, original, "test-op", "test-arn")
-    deserialized = deserialize(None, serialized, "test-op", "test-arn")
+    serialized = await serialize(None, original, "test-op", "test-arn")
+    deserialized = await deserialize(None, serialized, "test-op", "test-arn")
     assert deserialized == original
 
 
-def test_custom_str_serdes_serialization():
-    result = serialize(CustomStrSerDes(), "hello world", "test-op", "test-arn")
+async def test_custom_str_serdes_serialization():
+    result = await serialize(CustomStrSerDes(), "hello world", "test-op", "test-arn")
     assert result == "HELLO WORLD"
 
 
-def test_custom_str_serdes_deserialization():
-    result = deserialize(CustomStrSerDes(), "HELLO WORLD", "test-op", "test-arn")
+async def test_custom_str_serdes_deserialization():
+    result = await deserialize(CustomStrSerDes(), "HELLO WORLD", "test-op", "test-arn")
     assert result == "hello world"
 
 
-def test_custom_str_serdes_roundtrip():
+async def test_custom_str_serdes_roundtrip():
     original = "hello world"
-    serialized = serialize(CustomStrSerDes(), original, "test-op", "test-arn")
-    deserialized = deserialize(CustomStrSerDes(), serialized, "test-op", "test-arn")
+    serialized = await serialize(CustomStrSerDes(), original, "test-op", "test-arn")
+    deserialized = await deserialize(
+        CustomStrSerDes(), serialized, "test-op", "test-arn"
+    )
     assert deserialized == "hello world"
 
 
-def test_custom_dict_serdes_serialization():
+async def test_custom_dict_serdes_serialization():
     serdes = CustomDictSerDes()
     original = {"name": "test", "value": 123}
-    serialized = serialize(serdes, original, "test-op", "test-arn")
+    serialized = await serialize(serdes, original, "test-op", "test-arn")
     assert serialized == '{"name": "TEST", "value": "246"}'
-    deserialized = deserialize(serdes, serialized, "test-op", "test-arn")
+    deserialized = await deserialize(serdes, serialized, "test-op", "test-arn")
     assert deserialized == original
 
 
-def test_empty_string_serialization():
-    result = serialize(None, "", "test-op", "test-arn")
+async def test_empty_string_serialization():
+    result = await serialize(None, "", "test-op", "test-arn")
     assert result == '""'
 
 
-def test_empty_string_deserialization():
-    result = deserialize(None, '""', "test-op", "test-arn")
+async def test_empty_string_deserialization():
+    result = await deserialize(None, '""', "test-op", "test-arn")
     assert not result
 
 
-def test_none_value_handling():
-    result = serialize(None, None, "test-op", "test-arn")
+async def test_none_value_handling():
+    result = await serialize(None, None, "test-op", "test-arn")
     assert result == "null"
-    deserialized = deserialize(None, "null", "test-op", "test-arn")
+    deserialized = await deserialize(None, "null", "test-op", "test-arn")
     assert deserialized is None
 
 
-def test_context_propagation():
+async def test_context_propagation():
     class ContextCheckingSerDes(SerDes[str]):
-        def serialize(self, value: str, serdes_context: SerDesContext) -> str:
+        async def serialize(self, value: str) -> str:
+            serdes_context = get_current_context()
             assert serdes_context.operation_id == "test-op"
             assert serdes_context.durable_execution_arn == "test-arn"
             return value + serdes_context.durable_execution_arn
 
-        def deserialize(self, data: str, serdes_context: SerDesContext) -> str:
+        async def deserialize(self, data: str) -> str:
+            serdes_context = get_current_context()
             assert serdes_context.operation_id == "test-op"
             assert serdes_context.durable_execution_arn == "test-arn"
             return data + serdes_context.operation_id
 
     serdes = ContextCheckingSerDes()
     data = "data"
-    serialized = serialize(serdes, data, "test-op", "test-arn")
+    serialized = await serialize(serdes, data, "test-op", "test-arn")
     assert serialized == "data" + "test-arn"
-    deserialized = deserialize(serdes, serialized, "test-op", "test-arn")
+    deserialized = await deserialize(serdes, serialized, "test-op", "test-arn")
     assert deserialized == "data" + "test-arn" + "test-op"
 
 
-def _roundtrip_envelope(value: Any) -> Any:
+async def test_context_restored_after_serdes_operation():
+    previous_context = object()
+    token = set_current_context(previous_context)
+    try:
+        serialized = await serialize(None, {"value": 42}, "test-op", "test-arn")
+        assert get_current_context() is previous_context
+
+        await deserialize(None, serialized, "test-op", "test-arn")
+        assert get_current_context() is previous_context
+    finally:
+        reset_current_context(token)
+
+
+async def test_async_serdes_can_await_io_like_work():
+    class AsyncContextSerDes(SerDes[str]):
+        async def serialize(self, value: str) -> str:
+            await asyncio.sleep(0)
+            serdes_context = get_current_context()
+            return f"{serdes_context.operation_id}:{value}"
+
+        async def deserialize(self, data: str) -> str:
+            await asyncio.sleep(0)
+            serdes_context = get_current_context()
+            return f"{data}:{serdes_context.durable_execution_arn}"
+
+    serialized = await serialize(AsyncContextSerDes(), "payload", "op-1", "arn-1")
+    assert serialized == "op-1:payload"
+
+    deserialized = await deserialize(AsyncContextSerDes(), serialized, "op-1", "arn-1")
+    assert deserialized == "op-1:payload:arn-1"
+
+
+async def _roundtrip_envelope(value: Any) -> Any:
     """Helper for envelope round-trip testing."""
     serdes: ExtendedTypeSerDes[Any] = ExtendedTypeSerDes()
     context = SerDesContext(
         "test-op", "arn:aws:lambda:us-east-1:123456789012:function:test"
     )
-    serialized = serdes.serialize(value, context)
-    return serdes.deserialize(serialized, context)
+    serialized = await serdes.serialize(value)
+    return await serdes.deserialize(serialized)
 
 
-def test_envelope_none_roundtrip():
-    assert _roundtrip_envelope(None) is None
+async def test_envelope_none_roundtrip():
+    assert await _roundtrip_envelope(None) is None
 
 
-def test_envelope_bool_roundtrip():
-    assert _roundtrip_envelope(True) is True
-    assert _roundtrip_envelope(False) is False
+async def test_envelope_bool_roundtrip():
+    assert await _roundtrip_envelope(True) is True
+    assert await _roundtrip_envelope(False) is False
 
 
-def test_envelope_int_roundtrip():
+async def test_envelope_int_roundtrip():
     values = [0, 1, -1, 42, -999, 2**63 - 1, -(2**63)]
     for val in values:
-        assert _roundtrip_envelope(val) == val
+        assert await _roundtrip_envelope(val) == val
 
 
-def test_envelope_float_roundtrip():
+async def test_envelope_float_roundtrip():
     values = [0.0, 1.5, -math.pi, 1e10, -1e-10, float("inf"), float("-inf")]
     for val in values:
-        result = _roundtrip_envelope(val)
+        result = await _roundtrip_envelope(val)
         if val != val:  # NaN check  # noqa: PLR0124
             assert result != result  # NaN != NaN  # noqa: PLR0124
         else:
             assert result == val
 
 
-def test_envelope_float_nan_roundtrip():
+async def test_envelope_float_nan_roundtrip():
     nan_val = float("nan")
-    result = _roundtrip_envelope(nan_val)
+    result = await _roundtrip_envelope(nan_val)
     assert result != result  # NaN != NaN is True  # noqa: PLR0124
 
 
-def test_envelope_str_roundtrip():
+async def test_envelope_str_roundtrip():
     values = ["", "hello", "🚀", "line1\nline2", "tab\there", '"quotes"', "\\backslash"]
     for val in values:
-        assert _roundtrip_envelope(val) == val
+        assert await _roundtrip_envelope(val) == val
 
 
-def test_envelope_datetime_roundtrip():
+async def test_envelope_datetime_roundtrip():
     values = [
         datetime(2024, 1, 1, tzinfo=timezone.utc),
         datetime(2024, 12, 31, 23, 59, 59, 999999, tzinfo=timezone.utc),
@@ -288,10 +330,10 @@ def test_envelope_datetime_roundtrip():
         datetime.now(timezone.utc),
     ]
     for val in values:
-        assert _roundtrip_envelope(val) == val
+        assert await _roundtrip_envelope(val) == val
 
 
-def test_envelope_date_roundtrip():
+async def test_envelope_date_roundtrip():
     values = [
         date(2024, 1, 1),
         date(1970, 1, 1),
@@ -299,10 +341,10 @@ def test_envelope_date_roundtrip():
         date.today(),  # noqa: DTZ011
     ]
     for val in values:
-        assert _roundtrip_envelope(val) == val
+        assert await _roundtrip_envelope(val) == val
 
 
-def test_envelope_decimal_roundtrip():
+async def test_envelope_decimal_roundtrip():
     values = [
         Decimal(0),
         Decimal("3.14159"),
@@ -312,10 +354,10 @@ def test_envelope_decimal_roundtrip():
         Decimal("123456789.123456789"),
     ]
     for val in values:
-        assert _roundtrip_envelope(val) == val
+        assert await _roundtrip_envelope(val) == val
 
 
-def test_envelope_uuid_roundtrip():
+async def test_envelope_uuid_roundtrip():
     values = [
         uuid.uuid4(),
         uuid.UUID("12345678-1234-5678-1234-123456789abc"),
@@ -323,10 +365,10 @@ def test_envelope_uuid_roundtrip():
         uuid.UUID(int=2**128 - 1),
     ]
     for val in values:
-        assert _roundtrip_envelope(val) == val
+        assert await _roundtrip_envelope(val) == val
 
 
-def test_envelope_bytes_roundtrip():
+async def test_envelope_bytes_roundtrip():
     values = [
         b"",
         b"hello",
@@ -335,22 +377,22 @@ def test_envelope_bytes_roundtrip():
         "🚀".encode(),
     ]
     for val in values:
-        assert _roundtrip_envelope(val) == val
+        assert await _roundtrip_envelope(val) == val
 
 
-def test_envelope_bytearray_roundtrip():
+async def test_envelope_bytearray_roundtrip():
     val = bytearray(b"hello world")
-    result = _roundtrip_envelope(val)
+    result = await _roundtrip_envelope(val)
     assert result == b"hello world"  # Returns bytes, not bytearray
 
 
-def test_envelope_memoryview_roundtrip():
+async def test_envelope_memoryview_roundtrip():
     val = memoryview(b"memory test")
-    result = _roundtrip_envelope(val)
+    result = await _roundtrip_envelope(val)
     assert result == b"memory test"  # Returns bytes, not memoryview
 
 
-def test_envelope_tuple_roundtrip():
+async def test_envelope_tuple_roundtrip():
     values = [
         (),
         (1,),
@@ -360,10 +402,10 @@ def test_envelope_tuple_roundtrip():
         ((1, 2), (3, 4)),  # Nested tuples
     ]
     for val in values:
-        assert _roundtrip_envelope(val) == val
+        assert await _roundtrip_envelope(val) == val
 
 
-def test_envelope_list_roundtrip():
+async def test_envelope_list_roundtrip():
     values = [
         [],
         [1],
@@ -373,10 +415,10 @@ def test_envelope_list_roundtrip():
         [[1, 2], [3, 4]],  # Nested lists
     ]
     for val in values:
-        assert _roundtrip_envelope(val) == val
+        assert await _roundtrip_envelope(val) == val
 
 
-def test_envelope_dict_roundtrip():
+async def test_envelope_dict_roundtrip():
     values = [
         {},
         {"a": 1},
@@ -385,10 +427,10 @@ def test_envelope_dict_roundtrip():
         {"mixed": [1, {"deep": True}]},
     ]
     for val in values:
-        assert _roundtrip_envelope(val) == val
+        assert await _roundtrip_envelope(val) == val
 
 
-def test_envelope_deeply_nested_structure():
+async def test_envelope_deeply_nested_structure():
     complex_data = {
         "user": {
             "id": uuid.uuid4(),
@@ -412,10 +454,10 @@ def test_envelope_deeply_nested_structure():
             "token": uuid.uuid4(),
         },
     }
-    assert _roundtrip_envelope(complex_data) == complex_data
+    assert await _roundtrip_envelope(complex_data) == complex_data
 
 
-def test_envelope_mixed_type_collections():
+async def test_envelope_mixed_type_collections():
     mixed_list = [
         None,
         True,
@@ -430,10 +472,10 @@ def test_envelope_mixed_type_collections():
         [4, 5, 6],
         {"key": "value"},
     ]
-    assert _roundtrip_envelope(mixed_list) == mixed_list
+    assert await _roundtrip_envelope(mixed_list) == mixed_list
 
 
-def test_envelope_tuple_with_all_types():
+async def test_envelope_tuple_with_all_types():
     all_types_tuple = (
         None,
         True,
@@ -448,21 +490,21 @@ def test_envelope_tuple_with_all_types():
         [1, 2, 3],
         {"nested": "dict"},
     )
-    assert _roundtrip_envelope(all_types_tuple) == all_types_tuple
+    assert await _roundtrip_envelope(all_types_tuple) == all_types_tuple
 
 
-def test_envelope_unsupported_type_error():
+async def test_envelope_unsupported_type_error():
     serdes = ExtendedTypeSerDes()
     context = SerDesContext("test-op", "test-arn")
     with pytest.raises(SerDesError, match="Unsupported type: <class 'object'>"):
-        serdes.serialize(object(), context)
+        await serdes.serialize(object())
 
 
-def test_envelope_format_structure():
+async def test_envelope_format_structure():
     serdes = ExtendedTypeSerDes()
     context = SerDesContext("test-op", "test-arn")
     # Dict will use envelope format, primitives use plain JSON
-    serialized = serdes.serialize({"test": "value"}, context)
+    serialized = await serdes.serialize({"test": "value"})
     parsed = json.loads(serialized)
 
     # Verify envelope structure
@@ -472,20 +514,20 @@ def test_envelope_format_structure():
     assert parsed["v"]["test"]["v"] == "value"
 
 
-def test_envelope_compact_json_output():
+async def test_envelope_compact_json_output():
     serdes = ExtendedTypeSerDes()
     context = SerDesContext("test-op", "test-arn")
-    serialized = serdes.serialize({"key": "value"}, context)
+    serialized = await serdes.serialize({"key": "value"})
     # Should not contain extra whitespace
     assert " " not in serialized
     assert "\n" not in serialized
 
 
-def test_envelope_bytes_base64_encoding():
+async def test_envelope_bytes_base64_encoding():
     serdes = ExtendedTypeSerDes()
     context = SerDesContext("test-op", "test-arn")
     test_bytes = b"hello world"
-    serialized = serdes.serialize(test_bytes, context)
+    serialized = await serdes.serialize(test_bytes)
     parsed = json.loads(serialized)
 
     # Verify base64 encoding
@@ -493,7 +535,7 @@ def test_envelope_bytes_base64_encoding():
     assert base64.b64decode(encoded_value) == test_bytes
 
 
-def test_envelope_with_main_api():
+async def test_envelope_with_main_api():
     """Test EnvelopeSerDes works with main serialize/deserialize functions."""
     envelope_serdes = ExtendedTypeSerDes()
 
@@ -507,15 +549,15 @@ def test_envelope_with_main_api():
     }
 
     # Serialize with EnvelopeSerDes
-    serialized = serialize(envelope_serdes, test_data, "test-op", "test-arn")
+    serialized = await serialize(envelope_serdes, test_data, "test-op", "test-arn")
 
     # Deserialize with EnvelopeSerDes
-    deserialized = deserialize(envelope_serdes, serialized, "test-op", "test-arn")
+    deserialized = await deserialize(envelope_serdes, serialized, "test-op", "test-arn")
 
     assert deserialized == test_data
 
 
-def test_envelope_vs_json_serdes_compatibility():
+async def test_envelope_vs_json_serdes_compatibility():
     """Test that EnvelopeSerDes and JsonSerDes can coexist."""
     json_serdes = JsonSerDes()
     envelope_serdes = ExtendedTypeSerDes()
@@ -524,15 +566,19 @@ def test_envelope_vs_json_serdes_compatibility():
     simple_data = {"name": "test", "value": 123, "active": True}
 
     # Both should serialize successfully
-    json_result = serialize(json_serdes, simple_data, "test-op", "test-arn")
-    envelope_result = serialize(envelope_serdes, simple_data, "test-op", "test-arn")
+    json_result = await serialize(json_serdes, simple_data, "test-op", "test-arn")
+    envelope_result = await serialize(
+        envelope_serdes, simple_data, "test-op", "test-arn"
+    )
 
     # Results should be different (envelope has wrapper)
     assert json_result != envelope_result
 
     # Both should deserialize to same data
-    json_deserialized = deserialize(json_serdes, json_result, "test-op", "test-arn")
-    envelope_deserialized = deserialize(
+    json_deserialized = await deserialize(
+        json_serdes, json_result, "test-op", "test-arn"
+    )
+    envelope_deserialized = await deserialize(
         envelope_serdes, envelope_result, "test-op", "test-arn"
     )
 
@@ -540,7 +586,7 @@ def test_envelope_vs_json_serdes_compatibility():
     assert envelope_deserialized == simple_data
 
 
-def test_envelope_handles_json_incompatible_types():
+async def test_envelope_handles_json_incompatible_types():
     """Test that EnvelopeSerDes handles types that JsonSerDes cannot."""
     json_serdes = JsonSerDes()
     envelope_serdes = ExtendedTypeSerDes()
@@ -555,29 +601,29 @@ def test_envelope_handles_json_incompatible_types():
 
     # JsonSerDes should fail
     with pytest.raises(ExecutionError):
-        serialize(json_serdes, complex_data, "test-op", "test-arn")
+        await serialize(json_serdes, complex_data, "test-op", "test-arn")
 
     # EnvelopeSerDes should succeed
-    serialized = serialize(envelope_serdes, complex_data, "test-op", "test-arn")
-    deserialized = deserialize(envelope_serdes, serialized, "test-op", "test-arn")
+    serialized = await serialize(envelope_serdes, complex_data, "test-op", "test-arn")
+    deserialized = await deserialize(envelope_serdes, serialized, "test-op", "test-arn")
 
     assert deserialized == complex_data
 
 
-def test_envelope_error_handling_with_main_api():
+async def test_envelope_error_handling_with_main_api():
     """Test error handling when using EnvelopeSerDes with main API."""
     envelope_serdes = ExtendedTypeSerDes()
 
     # Test serialization error
     with pytest.raises(ExecutionError, match="Serialization failed"):
-        serialize(envelope_serdes, object(), "test-op", "test-arn")
+        await serialize(envelope_serdes, object(), "test-op", "test-arn")
 
     # Test deserialization error
     with pytest.raises(ExecutionError, match="Deserialization failed"):
-        deserialize(envelope_serdes, "invalid json", "test-op", "test-arn")
+        await deserialize(envelope_serdes, "invalid json", "test-op", "test-arn")
 
 
-def test_primitive_codec_errors():
+async def test_primitive_codec_errors():
     """Test PrimitiveCodec error cases."""
     primitive_codec = PrimitiveCodec()
     with pytest.raises(SerDesError, match="Unsupported primitive type"):
@@ -587,21 +633,21 @@ def test_primitive_codec_errors():
         primitive_codec.decode(TypeTag.BYTES, "test")
 
 
-def test_bytes_codec_errors():
+async def test_bytes_codec_errors():
     """Test BytesCodec error cases."""
     bytes_codec = BytesCodec()
     with pytest.raises(SerDesError, match="Expected BYTES tag, got"):
         bytes_codec.decode(TypeTag.STR, "test")
 
 
-def test_uuid_codec_errors():
+async def test_uuid_codec_errors():
     """Test UuidCodec error cases."""
     uuid_codec = UuidCodec()
     with pytest.raises(SerDesError, match="Expected UUID tag, got"):
         uuid_codec.decode(TypeTag.STR, "test")
 
 
-def test_decimal_codec_errors():
+async def test_decimal_codec_errors():
     """Test DecimalCodec error cases."""
 
     decimal_codec = DecimalCodec()
@@ -609,7 +655,7 @@ def test_decimal_codec_errors():
         decimal_codec.decode(TypeTag.STR, "test")
 
 
-def test_datetime_codec_errors():
+async def test_datetime_codec_errors():
     """Test DateTimeCodec error cases."""
     datetime_codec = DateTimeCodec()
     with pytest.raises(SerDesError, match="Unsupported datetime type"):
@@ -619,7 +665,7 @@ def test_datetime_codec_errors():
         datetime_codec.decode(TypeTag.BYTES, "test")
 
 
-def test_datetime_codec_z_suffix():
+async def test_datetime_codec_z_suffix():
     """Test DateTimeCodec Z suffix handling."""
     datetime_codec = DateTimeCodec()
     result = datetime_codec.decode(TypeTag.DATETIME, "2024-01-01T00:00:00Z")
@@ -627,7 +673,7 @@ def test_datetime_codec_z_suffix():
     assert result == expected
 
 
-def test_container_codec_errors():
+async def test_container_codec_errors():
     """Test ContainerCodec error cases."""
     container_codec = ContainerCodec()
     type_codec = TypeCodec()
@@ -670,7 +716,7 @@ def test_container_codec_errors():
     assert result == "test"
 
 
-def test_type_codec_errors():
+async def test_type_codec_errors():
     """Test TypeCodec error cases."""
     type_codec = TypeCodec()
 
@@ -685,32 +731,32 @@ def test_type_codec_errors():
         type_codec.decode(MockTag(), "test")
 
 
-def test_extended_serdes_errors():
+async def test_extended_serdes_errors():
     """Test ExtendedTypesSerDes error cases."""
     serdes = ExtendedTypeSerDes()
 
     with pytest.raises(
         SerDesError, match='Malformed envelope: missing "t" or "v" at root'
     ):
-        serdes.deserialize('{"invalid": "envelope"}', None)
+        await serdes.deserialize('{"invalid": "envelope"}')
 
     with pytest.raises(SerDesError, match='Unknown type tag: "unknown"'):
-        serdes.deserialize('{"t": "unknown", "v": "test"}', None)
+        await serdes.deserialize('{"t": "unknown", "v": "test"}')
 
 
-def test_pass_through_serdes():
+async def test_pass_through_serdes():
     serdes = PassThroughSerDes()
 
     data = '"name": "test", "value": 123'
-    serialized = serialize(serdes, data, "test-op", "test-arn")
+    serialized = await serialize(serdes, data, "test-op", "test-arn")
     assert isinstance(serialized, str)
     assert serialized == '"name": "test", "value": 123'
     # Dict uses envelope format, so roundtrip through deserialize
-    deserialized = deserialize(serdes, serialized, "test-op", "test-arn")
+    deserialized = await deserialize(serdes, serialized, "test-op", "test-arn")
     assert deserialized == data
 
 
-def test_envelope_large_data_structure():
+async def test_envelope_large_data_structure():
     """Test with reasonably large data."""
     large_list = list(range(1000))
     large_dict = {f"key_{i}": f"value_{i}" for i in range(100)}
@@ -722,11 +768,11 @@ def test_envelope_large_data_structure():
         "tuple": large_tuple,
     }
 
-    result = _roundtrip_envelope(large_structure)
+    result = await _roundtrip_envelope(large_structure)
     assert result == large_structure
 
 
-def test_envelope_empty_containers():
+async def test_envelope_empty_containers():
     empty_data = {
         "empty_list": [],
         "empty_dict": {},
@@ -734,10 +780,10 @@ def test_envelope_empty_containers():
         "empty_string": "",
         "empty_bytes": b"",
     }
-    assert _roundtrip_envelope(empty_data) == empty_data
+    assert await _roundtrip_envelope(empty_data) == empty_data
 
 
-def test_envelope_type_preservation_after_roundtrip():
+async def test_envelope_type_preservation_after_roundtrip():
     original = {
         "none": None,
         "bool": True,
@@ -754,7 +800,7 @@ def test_envelope_type_preservation_after_roundtrip():
         "dict": {"nested": True},
     }
 
-    result = _roundtrip_envelope(original)
+    result = await _roundtrip_envelope(original)
 
     # Verify types are preserved
     assert result["none"] is None
@@ -772,7 +818,7 @@ def test_envelope_type_preservation_after_roundtrip():
     assert type(result["dict"]) is dict
 
 
-def test_envelope_unicode_and_special_characters():
+async def test_envelope_unicode_and_special_characters():
     unicode_data = {
         "emoji": "🚀🌟💫",
         "chinese": "你好世界",
@@ -781,10 +827,10 @@ def test_envelope_unicode_and_special_characters():
         "special": "\"'\\n\\t\\r",
         "zero_width": "\u200b\u200c\u200d",
     }
-    assert _roundtrip_envelope(unicode_data) == unicode_data
+    assert await _roundtrip_envelope(unicode_data) == unicode_data
 
 
-def test_primitives():
+async def test_primitives():
     primitives = [
         123,
         "hello",
@@ -799,23 +845,21 @@ def test_primitives():
         datetime(2025, 10, 22, 15, 30, 0),  # noqa: DTZ001
     ]
     serdes = ExtendedTypeSerDes()
-    ctx = SerDesContext("test-op", "test-arn")
     for val in primitives:
-        serialized = serdes.serialize(val, ctx)
-        deserialized = serdes.deserialize(serialized, ctx)
+        serialized = await serdes.serialize(val)
+        deserialized = await serdes.deserialize(serialized)
         assert deserialized == val
 
 
-def test_nested_arrays():
+async def test_nested_arrays():
     serdes = ExtendedTypeSerDes()
-    ctx = SerDesContext("test-op", "test-arn")
     val = [1, "two", [3, {"four": 4}], True, b"hi"]
-    serialized = serdes.serialize(val, ctx)
-    deserialized = serdes.deserialize(serialized, ctx)
+    serialized = await serdes.serialize(val)
+    deserialized = await serdes.deserialize(serialized)
     assert deserialized == val
 
 
-def test_nested_dicts():
+async def test_nested_dicts():
     val = {
         "a": 1,
         "b": [2, 3, {"c": 4}],
@@ -824,22 +868,20 @@ def test_nested_dicts():
         "i": uuid.UUID("12345678-1234-5678-1234-567812345678"),
     }
     serdes = ExtendedTypeSerDes()
-    ctx = SerDesContext("test-op", "test-arn")
-    serialized = serdes.serialize(val, ctx)
-    deserialized = serdes.deserialize(serialized, ctx)
+    serialized = await serdes.serialize(val)
+    deserialized = await serdes.deserialize(serialized)
     assert deserialized == val
 
 
-def test_user_dict_with_t_v_keys():
+async def test_user_dict_with_t_v_keys():
     val = {"t": "user t value", "v": "user v value"}
     serdes = ExtendedTypeSerDes()
-    ctx = SerDesContext("test-op", "test-arn")
-    serialized = serdes.serialize(val, ctx)
-    deserialized = serdes.deserialize(serialized, ctx)
+    serialized = await serdes.serialize(val)
+    deserialized = await serdes.deserialize(serialized)
     assert deserialized == val
 
 
-def test_complex_nested_structure():
+async def test_complex_nested_structure():
     val = {
         "list": [1, 2, [3, 4], {"nested_bytes": b"abc"}],
         "tuple": (Decimal("3.14"), True),
@@ -851,13 +893,12 @@ def test_complex_nested_structure():
         "t_v": {"t": "inner t", "v": [1, b"bytes"]},
     }
     serdes = ExtendedTypeSerDes()
-    ctx = SerDesContext("test-op", "test-arn")
-    serialized = serdes.serialize(val, ctx)
-    deserialized = serdes.deserialize(serialized, ctx)
+    serialized = await serdes.serialize(val)
+    deserialized = await serdes.deserialize(serialized)
     assert deserialized == val
 
 
-def test_all_t_v_nested_dicts():
+async def test_all_t_v_nested_dicts():
     val = {
         "t": {"t": "s", "v": "outer t"},
         "v": {
@@ -866,14 +907,13 @@ def test_all_t_v_nested_dicts():
         },
     }
     serdes = ExtendedTypeSerDes()
-    ctx = SerDesContext("test-op", "test-arn")
-    serialized = serdes.serialize(val, ctx)
-    deserialized = serdes.deserialize(serialized, ctx)
+    serialized = await serdes.serialize(val)
+    deserialized = await serdes.deserialize(serialized)
     assert deserialized == val
 
 
 # to_dict() support tests
-def test_default_serdes_supports_to_dict_objects():
+async def test_default_serdes_supports_to_dict_objects():
     """Test that default serdes automatically handles BatchResult serialization/deserialization."""
 
     result = BatchResult(
@@ -882,7 +922,7 @@ def test_default_serdes_supports_to_dict_objects():
     )
 
     # Default serdes should automatically handle BatchResult
-    serialized = serialize(
+    serialized = await serialize(
         serdes=None,
         value=result,
         operation_id="test_op",
@@ -890,7 +930,7 @@ def test_default_serdes_supports_to_dict_objects():
     )
 
     # Deserialize returns BatchResult (not dict)
-    deserialized = deserialize(
+    deserialized = await deserialize(
         serdes=None,
         data=serialized,
         operation_id="test_op",
@@ -903,7 +943,7 @@ def test_default_serdes_supports_to_dict_objects():
     assert deserialized.all[0].result == "test"
 
 
-def test_to_dict_output_is_serializable():
+async def test_to_dict_output_is_serializable():
     """Test that to_dict() output is serializable by default serdes."""
 
     result = BatchResult(
@@ -924,7 +964,7 @@ def test_to_dict_output_is_serializable():
     result_dict = result.to_dict()
 
     # Dict should be serializable
-    serialized = serialize(
+    serialized = await serialize(
         serdes=None,
         value=result_dict,
         operation_id="test_op",
@@ -932,7 +972,7 @@ def test_to_dict_output_is_serializable():
     )
 
     # Deserialize
-    deserialized_dict = deserialize(
+    deserialized_dict = await deserialize(
         serdes=None,
         data=serialized,
         operation_id="test_op",

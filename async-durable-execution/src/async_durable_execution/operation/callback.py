@@ -304,7 +304,7 @@ class Callback(Generic[T]):  # noqa: PYI059
             if checkpointed_result.result is None:
                 return None  # type: ignore
 
-            return deserialize(
+            return await deserialize(
                 serdes=self.serdes if self.serdes is not None else PASS_THROUGH_SERDES,
                 data=checkpointed_result.result,
                 operation_id=self.operation_id,

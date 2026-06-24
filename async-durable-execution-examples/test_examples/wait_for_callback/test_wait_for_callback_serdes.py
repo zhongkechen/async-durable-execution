@@ -35,7 +35,7 @@ async def test_handle_wait_for_callback_with_custom_serdes_configuration(
 
         # Serialize the data using custom serdes for sending
         custom_serdes = CustomSerdes()
-        serialized_data = custom_serdes.serialize(test_data)
+        serialized_data = await custom_serdes.serialize(test_data)
         await runner.send_callback_success(
             callback_id=callback_id, result=serialized_data.encode()
         )

@@ -31,7 +31,7 @@ def get_current_context():
         msg = (
             "get_current_context() can only be used while a durable function, "
             "step function, wait_for_callback submitter, or "
-            "wait_for_condition check is executing."
+            "wait_for_condition check, or SerDes operation is executing."
         )
         raise RuntimeError(msg)
     return current_context

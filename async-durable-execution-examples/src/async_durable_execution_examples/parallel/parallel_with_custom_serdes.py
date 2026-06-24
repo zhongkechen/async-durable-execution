@@ -8,7 +8,6 @@ from async_durable_execution import (
     step,
     durable_execution,
     SerDes,
-    SerDesContext,
     parallel,
 )
 
@@ -16,13 +15,13 @@ from async_durable_execution import (
 class CustomItemSerDes(SerDes[dict[str, Any]]):
     """Custom serializer for individual items that adds metadata."""
 
-    def serialize(self, value: dict[str, Any], _: SerDesContext) -> str:
+    async def serialize(self, value: dict[str, Any]) -> str:
         # Add custom metadata during serialization
         wrapped = {"data": value, "serialized_by": "CustomItemSerDes"}
 
         return json.dumps(wrapped)
 
-    def deserialize(self, payload: str, _: SerDesContext) -> dict[str, Any]:
+    async def deserialize(self, payload: str) -> dict[str, Any]:
         wrapped = json.loads(payload)
         # Extract the original data
         return wrapped["data"]

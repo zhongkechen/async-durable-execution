@@ -22,6 +22,7 @@ Wire Formats:
 from __future__ import annotations
 
 import base64
+import inspect
 import json
 import logging
 import uuid
@@ -32,6 +33,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, Generic, Protocol, TypeVar
 
+from .context import reset_current_context, set_current_context
 from .exceptions import (
     DurableExecutionsError,
     ExecutionError,
@@ -350,12 +352,12 @@ class SerDes(ABC, Generic[T]):
     """Abstract serializer interface for durable operation payloads and results."""
 
     @abstractmethod
-    def serialize(self, value: T, serdes_context: SerDesContext) -> str:
+    async def serialize(self, value: T) -> str:
         """Convert a Python value into the wire format stored by the SDK."""
         pass
 
     @abstractmethod
-    def deserialize(self, data: str, serdes_context: SerDesContext) -> T:
+    async def deserialize(self, data: str) -> T:
         """Reconstruct a Python value from the durable wire format."""
         pass
 
@@ -372,20 +374,20 @@ class SerDes(ABC, Generic[T]):
 class PassThroughSerDes(SerDes[T]):
     """Serializer that leaves already-serialized string payloads unchanged."""
 
-    def serialize(self, value: T, _: SerDesContext) -> str:  # noqa: PLR6301
+    async def serialize(self, value: T) -> str:  # noqa: PLR6301
         return value  # type: ignore
 
-    def deserialize(self, data: str, _: SerDesContext) -> T:  # noqa: PLR6301
+    async def deserialize(self, data: str) -> T:  # noqa: PLR6301
         return data  # type: ignore
 
 
 class JsonSerDes(SerDes[T]):
     """Serializer that uses the standard library `json` module."""
 
-    def serialize(self, value: T, _: SerDesContext) -> str:  # noqa: PLR6301
+    async def serialize(self, value: T) -> str:  # noqa: PLR6301
         return json.dumps(value)
 
-    def deserialize(self, data: str, _: SerDesContext) -> T:  # noqa: PLR6301
+    async def deserialize(self, data: str) -> T:  # noqa: PLR6301
         return json.loads(data)
 
 
@@ -395,8 +397,16 @@ class ExtendedTypeSerDes(SerDes[T]):
     def __init__(self):
         self._codec = TYPE_CODEC
 
-    def serialize(self, value: Any, context: SerDesContext | None = None) -> str:  # noqa: ARG002
+    async def serialize(self, value: Any) -> str:
         """Serialize value to JSON string."""
+        return self.serialize_sync(value)
+
+    async def deserialize(self, data: str) -> Any:
+        """Deserialize JSON string to Python object."""
+        return self.deserialize_sync(data)
+
+    def serialize_sync(self, value: Any) -> str:
+        """Serialize value to JSON string without awaiting."""
         # Fast path for primitives
         if SerDes.is_primitive(value):
             return json.dumps(value, separators=(",", ":"))
@@ -405,8 +415,8 @@ class ExtendedTypeSerDes(SerDes[T]):
         wrapped = self._to_json_serializable(encoded)
         return json.dumps(wrapped, separators=(",", ":"))
 
-    def deserialize(self, data: str, context: SerDesContext | None = None) -> Any:  # noqa: ARG002
-        """Deserialize JSON string to Python object."""
+    def deserialize_sync(self, data: str) -> Any:
+        """Deserialize JSON string to Python object without awaiting."""
         obj = json.loads(data)
 
         # Fast path for primitives
@@ -446,7 +456,7 @@ DEFAULT_JSON_SERDES: SerDes[Any] = JsonSerDes()
 EXTENDED_TYPES_SERDES: SerDes[Any] = ExtendedTypeSerDes()
 
 
-def serialize(
+async def serialize(
     serdes: SerDes[T] | None, value: T, operation_id: str, durable_execution_arn: str
 ) -> str:
     """Serialize value using provided or default serializer.
@@ -465,18 +475,25 @@ def serialize(
     """
     serdes_context: SerDesContext = SerDesContext(operation_id, durable_execution_arn)
     active_serdes: SerDes[T] = serdes or EXTENDED_TYPES_SERDES
+    token = set_current_context(serdes_context)
     try:
-        return active_serdes.serialize(value, serdes_context)
-    except Exception as e:
-        logger.exception(
-            "⚠️ Serialization failed for id: %s",
-            operation_id,
-        )
-        msg = f"Serialization failed for id: {operation_id}, error: {e}."
-        raise ExecutionError(msg) from e
+        try:
+            maybe_serialized: Any = active_serdes.serialize(value)
+            if inspect.isawaitable(maybe_serialized):
+                return await maybe_serialized
+            return maybe_serialized
+        except Exception as e:
+            logger.exception(
+                "⚠️ Serialization failed for id: %s",
+                operation_id,
+            )
+            msg = f"Serialization failed for id: {operation_id}, error: {e}."
+            raise ExecutionError(msg) from e
+    finally:
+        reset_current_context(token)
 
 
-def deserialize(
+async def deserialize(
     serdes: SerDes[T] | None, data: str, operation_id: str, durable_execution_arn: str
 ) -> T:
     """Deserialize data using provided or default serializer.
@@ -495,9 +512,16 @@ def deserialize(
     """
     serdes_context: SerDesContext = SerDesContext(operation_id, durable_execution_arn)
     active_serdes: SerDes[T] = serdes or EXTENDED_TYPES_SERDES
+    token = set_current_context(serdes_context)
     try:
-        return active_serdes.deserialize(data, serdes_context)
-    except Exception as e:
-        logger.exception("⚠️ Deserialization failed for id: %s", operation_id)
-        msg = f"Deserialization failed for id: {operation_id}"
-        raise ExecutionError(msg) from e
+        try:
+            maybe_deserialized: Any = active_serdes.deserialize(data)
+            if inspect.isawaitable(maybe_deserialized):
+                return await maybe_deserialized
+            return maybe_deserialized
+        except Exception as e:
+            logger.exception("⚠️ Deserialization failed for id: %s", operation_id)
+            msg = f"Deserialization failed for id: {operation_id}"
+            raise ExecutionError(msg) from e
+    finally:
+        reset_current_context(token)

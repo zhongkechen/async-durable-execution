@@ -168,7 +168,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             )
             if checkpointed_result.result is None:
                 return None  # type: ignore[return-value]
-            result = self.deserialize_value(
+            result = await self.deserialize_value(
                 data=checkpointed_result.result,
                 serdes=self.config.serdes,
             )
@@ -210,7 +210,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         # Determine current state from checkpoint
         if checkpointed_result.is_started_or_ready() and checkpointed_result.result:
             try:
-                current_state = self.deserialize_value(
+                current_state = await self.deserialize_value(
                     data=checkpointed_result.result,
                     serdes=self.config.serdes,
                 )
@@ -259,7 +259,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
 
             new_state, decision = self._resolve_condition_result(condition_result)
 
-            serialized_state = self.serialize_value(
+            serialized_state = await self.serialize_value(
                 value=new_state,
                 serdes=self.config.serdes,
             )

@@ -90,8 +90,8 @@ async def test_operation_executor_common_serialization_helpers():
     """Test OperationExecutor serializes and deserializes with shared metadata."""
     executor = ConcreteOperationExecutor()
 
-    serialized = executor.serialize_value({"hello": "world"}, DEFAULT_JSON_SERDES)
-    deserialized = executor.deserialize_value(serialized, DEFAULT_JSON_SERDES)
+    serialized = await executor.serialize_value({"hello": "world"}, DEFAULT_JSON_SERDES)
+    deserialized = await executor.deserialize_value(serialized, DEFAULT_JSON_SERDES)
 
     assert serialized == '{"hello": "world"}'
     assert deserialized == {"hello": "world"}

@@ -420,7 +420,7 @@ async def test_step_handler_get_current_context_returns_step_context():
 def test_get_current_context_raises_outside_execution():
     with pytest.raises(
         RuntimeError,
-        match="get_current_context\\(\\) can only be used while a durable function, step function, wait_for_callback submitter, or wait_for_condition check is executing\\.",
+        match="get_current_context\\(\\) can only be used while a durable function, step function, wait_for_callback submitter, or wait_for_condition check, or SerDes operation is executing\\.",
     ):
         get_current_context()
 

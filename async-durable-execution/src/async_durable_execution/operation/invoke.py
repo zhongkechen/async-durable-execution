@@ -70,7 +70,7 @@ class InvokeOperationExecutor(OperationExecutor[R]):
 
     async def start(self) -> R:
         """Start a new invoke operation."""
-        serialized_payload: str = self.serialize_value(
+        serialized_payload: str = await self.serialize_value(
             value=self.payload,
             serdes=self.config.serdes_payload or DEFAULT_JSON_SERDES,
         )
@@ -102,7 +102,7 @@ class InvokeOperationExecutor(OperationExecutor[R]):
             if checkpointed_result.result is None:
                 return None  # type: ignore[return-value]
 
-            result: R = self.deserialize_value(
+            result: R = await self.deserialize_value(
                 data=checkpointed_result.result,
                 serdes=self.config.serdes_result or DEFAULT_JSON_SERDES,
             )
