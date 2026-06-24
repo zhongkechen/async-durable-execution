@@ -4,7 +4,6 @@ from async_durable_execution import (
     durable_callable,
     step,
     CompletionConfig,
-    ParallelConfig,
     durable_execution,
     parallel,
 )
@@ -13,7 +12,7 @@ from async_durable_execution import (
 @durable_execution
 async def handler(_event: Any) -> str:
     # Parallel execution with first_successful completion strategy
-    config = ParallelConfig(completion_config=CompletionConfig.first_successful())
+    completion_config = CompletionConfig.first_successful()
 
     async def task1() -> str:
         @durable_callable
@@ -38,7 +37,11 @@ async def handler(_event: Any) -> str:
 
     branches = [task1, task2, task3]
 
-    results = await parallel(branches, name="first_successful_parallel", config=config)
+    results = await parallel(
+        branches,
+        name="first_successful_parallel",
+        completion_config=completion_config,
+    )
 
     # Extract the first successful result
     successful = results.get_results()

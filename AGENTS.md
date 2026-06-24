@@ -331,7 +331,7 @@ all_results = results.get_results()
 ### Parallel - Parallel Branches
 
 ```python
-from async_durable_execution import ParallelConfig, durable_callable
+from async_durable_execution import durable_callable
 
 
 @durable_callable
@@ -357,7 +357,7 @@ results = await parallel(
         task1(user_id),
         task2(user_id),
     ],
-    config=ParallelConfig(max_concurrency=2),
+    max_concurrency=2,
     name="parallel-ops"
 )
 ```

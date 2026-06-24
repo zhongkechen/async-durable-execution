@@ -1,6 +1,7 @@
 """Tests for the parallel operation module."""
 
 import asyncio
+import inspect
 import importlib
 import json
 from collections.abc import Mapping
@@ -133,6 +134,154 @@ def test_parallel_config_importable_from_package_root():
     from async_durable_execution import ParallelConfig as ImportedConfig
 
     assert ImportedConfig is ParallelConfig
+
+
+def test_parallel_signature_accepts_config_fields_directly():
+    """The public parallel operation exposes config fields directly."""
+    parameters = inspect.signature(parallel).parameters
+
+    assert "config" not in parameters
+    assert "max_concurrency" in parameters
+    assert "completion_config" in parameters
+    assert "serdes" in parameters
+    assert "item_serdes" in parameters
+    assert "summary_generator" in parameters
+    assert "nesting_type" in parameters
+    assert parameters["summary_generator"].default is None
+
+
+def test_parallel_signature_requires_keyword_only_options():
+    """All parallel configuration options are keyword-only."""
+    parameters = inspect.signature(parallel).parameters
+
+    assert parameters["branches"].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
+    assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameters["max_concurrency"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameters["completion_config"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameters["serdes"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameters["item_serdes"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameters["summary_generator"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameters["nesting_type"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+@patch("async_durable_execution.operation.parallel.parallel_handler")
+@patch("async_durable_execution.operation.parallel.child_handler")
+async def test_parallel_passes_config_fields_to_handler(
+    mock_child_handler,
+    mock_parallel_handler,
+):
+    """Direct config fields are folded into the handler config."""
+
+    async def call_child_func(*, func, **_kwargs):
+        return await func()
+
+    async def branch_a():
+        return "a"
+
+    completion_config = CompletionConfig.first_successful()
+    serdes = Mock()
+    item_serdes = Mock()
+    summary_generator = Mock()
+    context = create_test_context(state=create_mock_execution_state())
+
+    mock_child_handler.side_effect = call_child_func
+    mock_parallel_handler.return_value = "parallel_result"
+
+    result = await run_with_context(
+        context,
+        parallel(
+            [branch_a],
+            max_concurrency=7,
+            completion_config=completion_config,
+            serdes=serdes,
+            item_serdes=item_serdes,
+            summary_generator=summary_generator,
+            nesting_type=NestingType.FLAT,
+        ),
+    )
+
+    assert result == "parallel_result"
+    mock_parallel_handler.assert_awaited_once()
+    config = mock_parallel_handler.call_args.kwargs["config"]
+    assert config.max_concurrency == 7
+    assert config.completion_config is completion_config
+    assert config.serdes is serdes
+    assert config.item_serdes is item_serdes
+    assert config.summary_generator is summary_generator
+    assert config.nesting_type is NestingType.FLAT
+
+
+@patch("async_durable_execution.operation.parallel.parallel_handler")
+@patch("async_durable_execution.operation.parallel.child_handler")
+async def test_parallel_passes_explicit_none_summary_generator(
+    mock_child_handler,
+    mock_parallel_handler,
+):
+    """summary_generator defaults to None in the public wrapper."""
+
+    async def call_child_func(*, func, **_kwargs):
+        return await func()
+
+    async def branch_a():
+        return "a"
+
+    context = create_test_context(state=create_mock_execution_state())
+
+    mock_child_handler.side_effect = call_child_func
+    mock_parallel_handler.return_value = "parallel_result"
+
+    result = await run_with_context(
+        context,
+        parallel([branch_a]),
+    )
+
+    assert result == "parallel_result"
+    mock_parallel_handler.assert_awaited_once()
+    config = mock_parallel_handler.call_args.kwargs["config"]
+    assert config.summary_generator is None
+
+
+@patch("async_durable_execution.operation.parallel.parallel_handler")
+@patch("async_durable_execution.operation.parallel.child_handler")
+async def test_parallel_accepts_one_shot_branch_iterable(
+    mock_child_handler,
+    mock_parallel_handler,
+):
+    """The public wrapper consumes branch iterables only once."""
+
+    async def call_child_func(*, func, **_kwargs):
+        return await func()
+
+    async def branch_a():
+        return "a"
+
+    async def branch_b():
+        return "b"
+
+    class OneShotBranches:
+        def __init__(self):
+            self.iteration_count = 0
+
+        def __iter__(self):
+            self.iteration_count += 1
+            if self.iteration_count > 1:
+                msg = "branches were iterated more than once"
+                raise AssertionError(msg)
+            yield branch_a
+            yield branch_b
+
+    branches = OneShotBranches()
+    context = create_test_context(state=create_mock_execution_state())
+
+    mock_child_handler.side_effect = call_child_func
+    mock_parallel_handler.return_value = "parallel_result"
+
+    result = await run_with_context(context, parallel(branches))
+
+    assert result == "parallel_result"
+    assert branches.iteration_count == 1
+    mock_parallel_handler.assert_awaited_once()
+    assert mock_parallel_handler.call_args.kwargs["callables"] == [branch_a, branch_b]
 
 
 async def test_parallel_executor_from_callables():
@@ -1002,7 +1151,8 @@ async def test_parallel_item_serialize(mock_serialize, item_serdes, batch_serdes
             context,
             parallel(
                 [branch_a, branch_b],
-                config=ParallelConfig(serdes=batch_serdes, item_serdes=item_serdes),
+                serdes=batch_serdes,
+                item_serdes=item_serdes,
             ),
         )
 
@@ -1089,7 +1239,8 @@ async def test_parallel_item_deserialize(mock_deserialize, item_serdes, batch_se
             context,
             parallel(
                 [branch_a, branch_b],
-                config=ParallelConfig(serdes=batch_serdes, item_serdes=item_serdes),
+                serdes=batch_serdes,
+                item_serdes=item_serdes,
             ),
         )
 
@@ -1373,7 +1524,7 @@ async def test_parallel_custom_serdes_serializes_batch_result():
                     context,
                     parallel(
                         [branch_a, branch_b],
-                        config=ParallelConfig(serdes=custom_serdes),
+                        serdes=custom_serdes,
                     ),
                 )
 

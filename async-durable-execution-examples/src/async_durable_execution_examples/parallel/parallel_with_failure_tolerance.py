@@ -6,7 +6,6 @@ from async_durable_execution import (
     durable_callable,
     step,
     CompletionConfig,
-    ParallelConfig,
     durable_execution,
     RetryStrategyBuilder,
     parallel,
@@ -18,9 +17,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     """Execute tasks with failure tolerance."""
 
     # Tolerate up to 2 failures
-    config = ParallelConfig(
-        completion_config=CompletionConfig(tolerated_failure_count=2)
-    )
+    completion_config = CompletionConfig(tolerated_failure_count=2)
 
     # Disable retries so failures happen immediately
     retry_strategy = RetryStrategyBuilder(max_attempts=1).build()
@@ -63,7 +60,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     results = await parallel(
         branches=[task1, task2, task3, task4, task5],
         name="parallel_with_tolerance",
-        config=config,
+        completion_config=completion_config,
     )
 
     return {

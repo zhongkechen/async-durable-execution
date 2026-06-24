@@ -11,6 +11,7 @@ from typing import (
     Sequence,
     Callable,
     Awaitable,
+    Iterable,
 )
 
 from .base import get_checkpoint_result
@@ -171,14 +172,31 @@ class ParallelSummaryGenerator:
 
 
 async def parallel(
-    branches: Sequence[Callable[[], Awaitable[T]]],
+    branches: Iterable[Callable[[], Awaitable[T]]],
+    *,
     name: str | None = None,
-    config: ParallelConfig | None = None,
+    max_concurrency: int | None = None,
+    completion_config: CompletionConfig | None = None,
+    serdes: SerDes | None = None,
+    item_serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    nesting_type: NestingType = NestingType.NESTED,
 ):
     """Run multiple bound durable callables concurrently and return a `BatchResult`."""
     context = _get_durable_context("parallel")
+    validated_branches: list[Callable[[], Awaitable[T]]] = []
     for index, branch in enumerate(branches):
         assert_async_callable(branch, label=f"branches[{index}]")
+        validated_branches.append(branch)
+
+    config = ParallelConfig(
+        max_concurrency=max_concurrency,
+        completion_config=completion_config or CompletionConfig.all_successful(),
+        serdes=serdes,
+        item_serdes=item_serdes,
+        summary_generator=summary_generator,
+        nesting_type=nesting_type,
+    )
 
     operation_id = context.step_counter.create_step_id()
     parallel_context = context.create_child_context(operation_id=operation_id)
@@ -191,7 +209,7 @@ async def parallel(
 
     async def parallel_in_child_context() -> BatchResult[T]:
         return await parallel_handler(
-            callables=branches,
+            callables=validated_branches,
             config=config,
             execution_state=context.execution_state,
             parallel_context=parallel_context,
@@ -203,7 +221,7 @@ async def parallel(
         state=context.execution_state,
         operation_identifier=operation_identifier,
         config=ChildConfig(
-            serdes=getattr(config, "serdes", None),
+            serdes=config.serdes,
             item_serdes=None,
         ),
     )
