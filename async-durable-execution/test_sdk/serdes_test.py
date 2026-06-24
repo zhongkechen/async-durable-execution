@@ -188,7 +188,9 @@ async def test_custom_str_serdes_deserialization():
 async def test_custom_str_serdes_roundtrip():
     original = "hello world"
     serialized = await serialize(CustomStrSerDes(), original, "test-op", "test-arn")
-    deserialized = await deserialize(CustomStrSerDes(), serialized, "test-op", "test-arn")
+    deserialized = await deserialize(
+        CustomStrSerDes(), serialized, "test-op", "test-arn"
+    )
     assert deserialized == "hello world"
 
 
@@ -565,13 +567,17 @@ async def test_envelope_vs_json_serdes_compatibility():
 
     # Both should serialize successfully
     json_result = await serialize(json_serdes, simple_data, "test-op", "test-arn")
-    envelope_result = await serialize(envelope_serdes, simple_data, "test-op", "test-arn")
+    envelope_result = await serialize(
+        envelope_serdes, simple_data, "test-op", "test-arn"
+    )
 
     # Results should be different (envelope has wrapper)
     assert json_result != envelope_result
 
     # Both should deserialize to same data
-    json_deserialized = await deserialize(json_serdes, json_result, "test-op", "test-arn")
+    json_deserialized = await deserialize(
+        json_serdes, json_result, "test-op", "test-arn"
+    )
     envelope_deserialized = await deserialize(
         envelope_serdes, envelope_result, "test-op", "test-arn"
     )
