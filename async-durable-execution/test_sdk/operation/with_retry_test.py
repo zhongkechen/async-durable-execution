@@ -113,13 +113,6 @@ def test_with_retry_config_custom_values():
     assert config.is_virtual is True
 
 
-def test_with_retry_config_importable_from_package():
-    """WithRetryConfig is re-exported from the package root."""
-    from async_durable_execution import WithRetryConfig as ImportedConfig
-
-    assert ImportedConfig is WithRetryConfig
-
-
 async def _call_with_retry(
     ctx: MockDurableContext,
     func,

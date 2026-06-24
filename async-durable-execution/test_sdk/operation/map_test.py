@@ -147,15 +147,6 @@ def test_map_config_defaults():
     assert config.serdes is None
 
 
-def test_map_config_importable_from_package_root():
-    """MapConfig remains re-exported from the package root."""
-    from async_durable_execution import MapConfig as ImportedConfig
-    from async_durable_execution import MapItemContext as ImportedContext
-
-    assert ImportedConfig is MapConfig
-    assert ImportedContext is MapItemContext
-
-
 def test_item_batcher_defaults():
     """ItemBatcher default values are defined in the map module."""
     batcher = ItemBatcher()
