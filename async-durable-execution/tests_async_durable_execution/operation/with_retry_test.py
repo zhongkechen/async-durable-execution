@@ -16,6 +16,7 @@ from async_durable_execution.config import (
     RetryStrategyBuilder,
 )
 from async_durable_execution.exceptions import SuspendExecution
+from async_durable_execution.operation.child import ChildConfig
 from async_durable_execution.operation.with_retry import WithRetryConfig
 
 
@@ -23,7 +24,6 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from async_durable_execution import DurableContext
-    from async_durable_execution.operation.child import ChildConfig
 
 _T = TypeVar("_T")
 
@@ -85,24 +85,32 @@ def test_with_retry_config_defaults():
     config = WithRetryConfig()
 
     assert config.retry_strategy is None
-    assert config.wrap_with_run_in_child_context is True
-    assert config.child_context_config is None
+    assert config.serdes is None
+    assert config.item_serdes is None
+    assert config.summary_generator is None
+    assert config.is_virtual is False
 
 
 def test_with_retry_config_custom_values():
     """WithRetryConfig stores explicit values."""
     retry_strategy = MagicMock()
-    child_context_config = MagicMock()
+    serdes = MagicMock()
+    item_serdes = MagicMock()
+    summary_generator = MagicMock()
 
     config = WithRetryConfig(
         retry_strategy=retry_strategy,
-        wrap_with_run_in_child_context=False,
-        child_context_config=child_context_config,
+        serdes=serdes,
+        item_serdes=item_serdes,
+        summary_generator=summary_generator,
+        is_virtual=True,
     )
 
     assert config.retry_strategy is retry_strategy
-    assert config.wrap_with_run_in_child_context is False
-    assert config.child_context_config is child_context_config
+    assert config.serdes is serdes
+    assert config.item_serdes is item_serdes
+    assert config.summary_generator is summary_generator
+    assert config.is_virtual is True
 
 
 def test_with_retry_config_importable_from_package():
@@ -115,9 +123,13 @@ def test_with_retry_config_importable_from_package():
 async def _call_with_retry(
     ctx: MockDurableContext,
     func,
-    config: WithRetryConfig,
     *,
     name: str | None = None,
+    retry_strategy=None,
+    serdes=None,
+    item_serdes=None,
+    summary_generator=None,
+    is_virtual: bool = False,
 ):
     """Invoke with_retry() against a patched ambient context."""
 
@@ -156,36 +168,42 @@ async def _call_with_retry(
             new=AsyncMock(side_effect=fake_run_in_child_context_in_context),
         ),
     ):
-        return await with_retry(func, config, name=name)
+        return await with_retry(
+            func,
+            name=name,
+            retry_strategy=retry_strategy,
+            serdes=serdes,
+            item_serdes=item_serdes,
+            summary_generator=summary_generator,
+            is_virtual=is_virtual,
+        )
 
 
-def _make_config(
+def _make_retry_strategy(
     max_attempts: int = 3,
     initial_delay: timedelta | None = None,
-    wrap_with_run_in_child_context: bool = True,
-    child_context_config: ChildConfig | None = None,
-) -> WithRetryConfig:
-    """Create a WithRetryConfig with no jitter for deterministic tests."""
-    return WithRetryConfig(
-        retry_strategy=RetryStrategyBuilder(
-            max_attempts=max_attempts,
-            initial_delay=initial_delay or timedelta(seconds=1),
-            jitter_strategy=JitterStrategy.NONE,
-        ).build(),
-        wrap_with_run_in_child_context=wrap_with_run_in_child_context,
-        child_context_config=child_context_config,
-    )
+):
+    """Create a retry strategy with no jitter for deterministic tests."""
+    return RetryStrategyBuilder(
+        max_attempts=max_attempts,
+        initial_delay=initial_delay or timedelta(seconds=1),
+        jitter_strategy=JitterStrategy.NONE,
+    ).build()
 
 
 async def test_success_on_first_attempt_returns_result_without_retry():
     """Function succeeds on first attempt returns result without invoking retry strategy."""
     ctx = MockDurableContext()
-    config = _make_config(wrap_with_run_in_child_context=False)
+    retry_strategy = _make_retry_strategy()
 
     async def tracking_func(attempt: int) -> str:
         return "success"
 
-    result = await _call_with_retry(ctx, tracking_func, config)
+    result = await _call_with_retry(
+        ctx,
+        tracking_func,
+        retry_strategy=retry_strategy,
+    )
 
     assert result == "success"
     assert len(ctx.wait_calls) == 0
@@ -194,7 +212,7 @@ async def test_success_on_first_attempt_returns_result_without_retry():
 async def test_function_fails_then_succeeds_returns_successful_result():
     """Function fails then succeeds returns result from successful attempt."""
     ctx = MockDurableContext()
-    config = _make_config(max_attempts=3, wrap_with_run_in_child_context=False)
+    retry_strategy = _make_retry_strategy(max_attempts=3)
 
     call_count = 0
 
@@ -205,7 +223,11 @@ async def test_function_fails_then_succeeds_returns_successful_result():
             raise ValueError(f"fail on attempt {attempt}")
         return "eventual success"
 
-    result = await _call_with_retry(ctx, failing_then_succeeding, config)
+    result = await _call_with_retry(
+        ctx,
+        failing_then_succeeding,
+        retry_strategy=retry_strategy,
+    )
 
     assert result == "eventual success"
     assert call_count == 3
@@ -215,7 +237,7 @@ async def test_function_fails_then_succeeds_returns_successful_result():
 async def test_async_function_fails_then_succeeds_returns_successful_result():
     """Async retry body is awaited inside the retry loop."""
     ctx = MockDurableContext()
-    config = _make_config(max_attempts=3, wrap_with_run_in_child_context=False)
+    retry_strategy = _make_retry_strategy(max_attempts=3)
 
     call_count = 0
 
@@ -227,7 +249,11 @@ async def test_async_function_fails_then_succeeds_returns_successful_result():
             raise ValueError(f"fail on attempt {attempt}")
         return "eventual success"
 
-    result = await _call_with_retry(ctx, failing_then_succeeding, config)
+    result = await _call_with_retry(
+        ctx,
+        failing_then_succeeding,
+        retry_strategy=retry_strategy,
+    )
 
     assert result == "eventual success"
     assert call_count == 3
@@ -237,13 +263,17 @@ async def test_async_function_fails_then_succeeds_returns_successful_result():
 async def test_retry_strategy_returns_should_retry_false_reraises_exception():
     """Retry strategy returns should_retry=False re-raises exception."""
     ctx = MockDurableContext()
-    config = _make_config(max_attempts=1, wrap_with_run_in_child_context=False)
+    retry_strategy = _make_retry_strategy(max_attempts=1)
 
     async def always_fails(attempt: int) -> None:
         raise RuntimeError("permanent failure")
 
     with pytest.raises(RuntimeError, match="permanent failure"):
-        await _call_with_retry(ctx, always_fails, config)
+        await _call_with_retry(
+            ctx,
+            always_fails,
+            retry_strategy=retry_strategy,
+        )
 
     assert len(ctx.wait_calls) == 0
 
@@ -251,13 +281,17 @@ async def test_retry_strategy_returns_should_retry_false_reraises_exception():
 async def test_suspend_execution_is_reraised_immediately():
     """SuspendExecution is re-raised immediately without invoking retry strategy."""
     ctx = MockDurableContext()
-    config = _make_config(max_attempts=5, wrap_with_run_in_child_context=False)
+    retry_strategy = _make_retry_strategy(max_attempts=5)
 
     async def raises_suspend(attempt: int) -> None:
         raise SuspendExecution("suspending")
 
     with pytest.raises(SuspendExecution, match="suspending"):
-        await _call_with_retry(ctx, raises_suspend, config)
+        await _call_with_retry(
+            ctx,
+            raises_suspend,
+            retry_strategy=retry_strategy,
+        )
 
     assert len(ctx.wait_calls) == 0
 
@@ -265,14 +299,18 @@ async def test_suspend_execution_is_reraised_immediately():
 async def test_async_suspend_execution_is_reraised_immediately():
     """SuspendExecution raised after an await still bypasses retry handling."""
     ctx = MockDurableContext()
-    config = _make_config(max_attempts=5, wrap_with_run_in_child_context=False)
+    retry_strategy = _make_retry_strategy(max_attempts=5)
 
     async def raises_suspend(attempt: int) -> None:
         await asyncio.sleep(0)
         raise SuspendExecution("suspending")
 
     with pytest.raises(SuspendExecution, match="suspending"):
-        await _call_with_retry(ctx, raises_suspend, config)
+        await _call_with_retry(
+            ctx,
+            raises_suspend,
+            retry_strategy=retry_strategy,
+        )
 
     assert len(ctx.wait_calls) == 0
 
@@ -280,35 +318,21 @@ async def test_async_suspend_execution_is_reraised_immediately():
 async def test_default_config_wraps_in_child_context():
     """Default config runs the retry loop inside run_in_child_context."""
     ctx = MockDurableContext()
-    config = _make_config(wrap_with_run_in_child_context=True)
+    retry_strategy = _make_retry_strategy()
 
     async def simple_func(attempt: int) -> str:
         return "ok"
 
-    result = await _call_with_retry(ctx, simple_func, config)
+    result = await _call_with_retry(ctx, simple_func, retry_strategy=retry_strategy)
 
     assert result == "ok"
     assert len(ctx.child_context_calls) == 1
 
 
-async def test_wrap_with_run_in_child_context_false_skips_child_context():
-    """wrap_with_run_in_child_context=False skips child context."""
-    ctx = MockDurableContext()
-    config = _make_config(wrap_with_run_in_child_context=False)
-
-    async def simple_func(attempt: int) -> str:
-        return "ok"
-
-    result = await _call_with_retry(ctx, simple_func, config)
-
-    assert result == "ok"
-    assert len(ctx.child_context_calls) == 0
-
-
 async def test_no_name_creates_anonymous_child_context_and_anonymous_waits():
     """Missing name preserves anonymous child/wait operations."""
     ctx = MockDurableContext()
-    config = _make_config(max_attempts=3, wrap_with_run_in_child_context=True)
+    retry_strategy = _make_retry_strategy(max_attempts=3)
 
     call_count = 0
 
@@ -319,11 +343,16 @@ async def test_no_name_creates_anonymous_child_context_and_anonymous_waits():
             raise ValueError("first failure")
         return "ok"
 
-    result = await _call_with_retry(ctx, fails_once, config, name=None)
+    result = await _call_with_retry(
+        ctx,
+        fails_once,
+        name=None,
+        retry_strategy=retry_strategy,
+    )
 
     assert result == "ok"
     assert ctx.child_context_calls == [
-        RunInChildContextCall(name=None, config=None, result="ok")
+        RunInChildContextCall(name=None, config=ChildConfig(), result="ok")
     ]
     assert ctx.wait_calls == [WaitCall(duration=timedelta(seconds=1), name=None)]
 
@@ -331,18 +360,23 @@ async def test_no_name_creates_anonymous_child_context_and_anonymous_waits():
 async def test_name_is_forwarded_to_child_context_and_backoff_waits():
     """Provided name is reused for child context and derived wait names."""
     ctx = MockDurableContext()
-    config = _make_config(max_attempts=3, wrap_with_run_in_child_context=True)
+    retry_strategy = _make_retry_strategy(max_attempts=3)
 
     async def fails_twice(attempt: int) -> str:
         if attempt < 3:
             raise RuntimeError("transient")
         return "done"
 
-    result = await _call_with_retry(ctx, fails_twice, config, name="my-retry")
+    result = await _call_with_retry(
+        ctx,
+        fails_twice,
+        name="my-retry",
+        retry_strategy=retry_strategy,
+    )
 
     assert result == "done"
     assert ctx.child_context_calls == [
-        RunInChildContextCall(name="my-retry", config=None, result="done")
+        RunInChildContextCall(name="my-retry", config=ChildConfig(), result="done")
     ]
     assert ctx.wait_calls == [
         WaitCall(duration=timedelta(seconds=1), name="my-retry-backoff-1"),
@@ -350,25 +384,37 @@ async def test_name_is_forwarded_to_child_context_and_backoff_waits():
     ]
 
 
-async def test_child_context_config_is_forwarded():
-    """child_context_config is forwarded to run_in_child_context."""
+async def test_child_context_fields_are_forwarded():
+    """Child context fields are forwarded to run_in_child_context."""
     ctx = MockDurableContext()
-    child_context_config = MagicMock()
-    config = _make_config(
-        max_attempts=2,
-        wrap_with_run_in_child_context=True,
-        child_context_config=child_context_config,
-    )
+    serdes = MagicMock()
+    item_serdes = MagicMock()
+    summary_generator = MagicMock()
+    retry_strategy = _make_retry_strategy(max_attempts=2)
 
     async def simple_func(attempt: int) -> str:
         return "ok"
 
-    await _call_with_retry(ctx, simple_func, config, name="test")
+    await _call_with_retry(
+        ctx,
+        simple_func,
+        name="test",
+        retry_strategy=retry_strategy,
+        serdes=serdes,
+        item_serdes=item_serdes,
+        summary_generator=summary_generator,
+        is_virtual=True,
+    )
 
     assert ctx.child_context_calls == [
         RunInChildContextCall(
             name="test",
-            config=child_context_config,
+            config=ChildConfig(
+                serdes=serdes,
+                item_serdes=item_serdes,
+                summary_generator=summary_generator,
+                is_virtual=True,
+            ),
             result="ok",
         )
     ]
@@ -377,7 +423,7 @@ async def test_child_context_config_is_forwarded():
 async def test_attempt_number_starts_at_1_and_increments():
     """Attempt numbers start at one and increment across retries."""
     ctx = MockDurableContext()
-    config = _make_config(max_attempts=5, wrap_with_run_in_child_context=False)
+    retry_strategy = _make_retry_strategy(max_attempts=5)
     attempts_seen: list[int] = []
 
     async def record_attempts(attempt: int) -> str:
@@ -386,7 +432,11 @@ async def test_attempt_number_starts_at_1_and_increments():
             raise ValueError("keep retrying")
         return "ok"
 
-    result = await _call_with_retry(ctx, record_attempts, config)
+    result = await _call_with_retry(
+        ctx,
+        record_attempts,
+        retry_strategy=retry_strategy,
+    )
 
     assert result == "ok"
     assert attempts_seen == [1, 2, 3, 4]
@@ -398,26 +448,37 @@ async def test_with_retry_importable_from_package():
     assert callable(with_retry)
 
 
+async def test_with_retry_config_is_not_positional_parameter():
+    """with_retry rejects the removed positional config argument."""
+
+    async def test_function(attempt: int) -> str:
+        return f"attempt-{attempt}"
+
+    with pytest.raises(TypeError):
+        await with_retry(test_function, WithRetryConfig())
+
+
 async def test_integration_with_retry_strategy_builder():
     """Integration test with the real RetryStrategyBuilder."""
     ctx = MockDurableContext()
 
-    config = WithRetryConfig(
-        retry_strategy=RetryStrategyBuilder(
-            max_attempts=4,
-            initial_delay=timedelta(seconds=2),
-            backoff_rate=2.0,
-            jitter_strategy=JitterStrategy.NONE,
-        ).build(),
-        wrap_with_run_in_child_context=False,
-    )
+    retry_strategy = RetryStrategyBuilder(
+        max_attempts=4,
+        initial_delay=timedelta(seconds=2),
+        backoff_rate=2.0,
+        jitter_strategy=JitterStrategy.NONE,
+    ).build()
 
     async def fails_three_times(attempt: int) -> str:
         if attempt < 4:
             raise ValueError("transient")
         return "done"
 
-    result = await _call_with_retry(ctx, fails_three_times, config)
+    result = await _call_with_retry(
+        ctx,
+        fails_three_times,
+        retry_strategy=retry_strategy,
+    )
 
     assert result == "done"
     assert ctx.wait_calls == [
@@ -431,20 +492,21 @@ async def test_integration_retries_exhausted_raises_last_exception():
     """Exhausting retries surfaces the final exception."""
     ctx = MockDurableContext()
 
-    config = WithRetryConfig(
-        retry_strategy=RetryStrategyBuilder(
-            max_attempts=3,
-            initial_delay=timedelta(seconds=1),
-            jitter_strategy=JitterStrategy.NONE,
-        ).build(),
-        wrap_with_run_in_child_context=False,
-    )
+    retry_strategy = RetryStrategyBuilder(
+        max_attempts=3,
+        initial_delay=timedelta(seconds=1),
+        jitter_strategy=JitterStrategy.NONE,
+    ).build()
 
     async def always_fails(attempt: int) -> None:
         raise RuntimeError(f"failure-{attempt}")
 
     with pytest.raises(RuntimeError, match="failure-3"):
-        await _call_with_retry(ctx, always_fails, config)
+        await _call_with_retry(
+            ctx,
+            always_fails,
+            retry_strategy=retry_strategy,
+        )
 
     assert ctx.wait_calls == [
         WaitCall(duration=timedelta(seconds=1), name=None),
