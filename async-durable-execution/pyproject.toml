@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 name = "async-durable-execution"
 dynamic = ["version"]
 description = "Community-maintained durable execution SDK for AWS Lambda in Python"
-readme = "README.md"
+readme = "../README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 keywords = []
@@ -78,7 +78,7 @@ force-single-line = false
 lines-after-imports = 2
 
 [tool.ruff.lint.per-file-ignores]
-"tests_async_durable_execution/**" = [
+"test_sdk/**" = [
   "ARG001",
   "ARG002",
   "ARG005",
