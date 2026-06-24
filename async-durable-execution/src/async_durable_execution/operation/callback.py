@@ -204,8 +204,8 @@ async def wait_for_callback_handler(
 
 
 async def create_callback(
-    name: str | None = None,
     *,
+    name: str | None = None,
     timeout: timedelta | None = None,
     heartbeat_timeout: timedelta | None = None,
     serdes: SerDes | None = None,
@@ -360,8 +360,8 @@ class Callback(Generic[T]):  # noqa: PYI059
 
 async def wait_for_callback(
     submitter: Callable[[str], Awaitable[Any]],
-    name: str | None = None,
     *,
+    name: str | None = None,
     timeout: timedelta | None = None,
     heartbeat_timeout: timedelta | None = None,
     serdes: SerDes | None = None,

@@ -408,8 +408,8 @@ async def _run_in_child_context_in_context(
 
 async def run_in_child_context(
     func: Callable[[], Awaitable[T]],
-    name: str | None = None,
     *,
+    name: str | None = None,
     serdes: SerDes | None = None,
     item_serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,

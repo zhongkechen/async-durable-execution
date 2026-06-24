@@ -28,6 +28,7 @@ from async_durable_execution.operation.child import (
     ChildConfig,
     child_handler as async_child_handler,
     DurableContext,
+    run_in_child_context,
 )
 from async_durable_execution.state import ExecutionState
 from async_durable_execution.types import SummaryGenerator
@@ -81,6 +82,14 @@ def create_test_context(
             parent_id=parent_id,
         ),
     )
+
+
+def test_run_in_child_context_name_is_keyword_only():
+    """run_in_child_context operation name must be passed as a keyword."""
+    parameters = inspect.signature(run_in_child_context).parameters
+
+    assert parameters["func"].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
+    assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
 def test_child_config_defaults():

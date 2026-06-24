@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 from unittest.mock import Mock, patch
 
@@ -26,6 +27,7 @@ from async_durable_execution.models import (
 from async_durable_execution.operation.invoke import (
     InvokeConfig,
     InvokeOperationExecutor,
+    invoke,
 )
 from async_durable_execution.state import ExecutionState
 from async_durable_execution.operation.base import CheckpointedResult
@@ -69,6 +71,15 @@ def test_invoke_config_importable_from_package_root():
     from async_durable_execution import InvokeConfig as ImportedConfig
 
     assert ImportedConfig is InvokeConfig
+
+
+def test_invoke_name_is_keyword_only():
+    """invoke operation name must be passed as a keyword."""
+    parameters = inspect.signature(invoke).parameters
+
+    assert parameters["function_name"].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
+    assert parameters["payload"].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
+    assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
 async def test_invoke_handler_already_succeeded():

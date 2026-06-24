@@ -331,7 +331,7 @@ async def test_callback_deferred_error_handling_to_result():
     @durable_execution
     async def my_handler(event) -> str:
         # Create callback
-        callback = await create_callback("test_callback")
+        callback = await create_callback(name="test_callback")
 
         # This code executes even if callback will eventually fail
         # This is the deferred error handling pattern

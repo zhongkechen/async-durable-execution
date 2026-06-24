@@ -118,7 +118,7 @@ async def _wait_in_context(
     context.execution_state.track_replay(operation_id=operation_id)
 
 
-async def wait(duration: timedelta, name: str | None = None) -> None:
+async def wait(duration: timedelta, *, name: str | None = None) -> None:
     """Suspend the durable execution for at least the given duration.
 
     Args:
