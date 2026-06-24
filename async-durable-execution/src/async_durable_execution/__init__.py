@@ -12,104 +12,136 @@ from .models import (
     BatchResult,
     CompletionReason,
     InvocationStatus,
+    OperationSubType,
     OperationType,
     OperationStatus,
 )
-from .config import RetryPresets, RetryStrategyBuilder
+from .config import JitterStrategy, RetryPresets, RetryStrategyBuilder
 from .context import (
     get_current_context,
 )
 from .async_tools import durable_callable
-from .operation.with_retry import WithRetryConfig, with_retry
-from .operation.map import MapConfig, MapItemContext, map
+from .operation.with_retry import with_retry
+from .operation.map import MapItemContext, map
 from .operation.concurrency import CompletionConfig, NestingType
 from .operation.wait_for_condition import (
-    WaitForConditionConfig,
     WaitStrategyBuilder,
     wait_for_condition,
     WaitForConditionCheckContext,
 )
-from .operation.invoke import InvokeConfig, invoke
+from .operation.invoke import invoke
 from .operation.parallel import (
-    ParallelConfig,
     parallel,
 )
 from .operation.callback import (
-    CallbackConfig,
+    CallbackError,
     create_callback,
-    durable_wait_for_callback,
     wait_for_callback,
     WaitForCallbackContext,
     Callback,
-    WaitForCallbackConfig,
 )
-from .operation.child import run_in_child_context, DurableContext
-from .operation.step import StepConfig, StepContext, StepSemantics, get_attempt, step
+from .operation.child import (
+    run_in_child_context,
+    DurableContext,
+)
+from .operation.step import (
+    StepContext,
+    StepInterruptedError,
+    StepSemantics,
+    get_attempt,
+    step,
+)
 from .models import (
     ErrorObject,
-    OperationIdentifier,
     RetryDecision,
     WaitDecision,
     WaitForConditionDecision,
 )
 
-# Most common exceptions - users need to handle these exceptions
+# User-facing exception types.
 from .exceptions import (
+    CallableRuntimeError,
     DurableExecutionsError,
+    ExecutionError,
+    InvalidStateError,
     InvocationError,
+    SerDesError,
+    UserlandError,
     ValidationError,
 )
 
 # Core decorator - used in every durable function
 from .execution import durable_execution
 from .operation.wait import wait
-from .plugin import DurableInstrumentationPlugin
-from .serdes import JsonSerDes, SerDes, SerDesContext
-from .types import LambdaContext
+from .plugin import (
+    DurableInstrumentationPlugin,
+    InvocationEndInfo,
+    InvocationInfo,
+    InvocationStartInfo,
+    OperationEndInfo,
+    OperationInfo,
+    OperationStartInfo,
+    UserFunctionEndInfo,
+    UserFunctionOutcome,
+    UserFunctionStartInfo,
+)
+from .serdes import ExtendedTypeSerDes, JsonSerDes, SerDes, SerDesContext
+from .types import DurableServiceClient, LambdaContext, SummaryGenerator
 
 __all__ = [
     "BatchItem",
     "BatchItemStatus",
     "BatchResult",
     "Callback",
-    "CallbackConfig",
+    "CallbackError",
+    "CallableRuntimeError",
     "CompletionConfig",
     "CompletionReason",
     "DurableContext",
     "DurableInstrumentationPlugin",
+    "DurableServiceClient",
     "DurableExecutionsError",
     "ErrorObject",
+    "ExecutionError",
+    "ExtendedTypeSerDes",
+    "InvalidStateError",
+    "InvocationEndInfo",
+    "InvocationInfo",
     "InvocationError",
-    "InvokeConfig",
+    "InvocationStartInfo",
     "JsonSerDes",
+    "JitterStrategy",
     "LambdaContext",
-    "MapConfig",
     "MapItemContext",
     "NestingType",
-    "OperationIdentifier",
-    "ParallelConfig",
+    "OperationEndInfo",
+    "OperationInfo",
+    "OperationStartInfo",
+    "OperationSubType",
     "RetryDecision",
     "RetryPresets",
     "RetryStrategyBuilder",
     "SerDes",
     "SerDesContext",
-    "StepConfig",
+    "SerDesError",
     "StepContext",
+    "StepInterruptedError",
     "StepSemantics",
+    "SummaryGenerator",
+    "UserFunctionEndInfo",
+    "UserFunctionOutcome",
+    "UserFunctionStartInfo",
+    "UserlandError",
     "ValidationError",
-    "WaitForCallbackConfig",
     "WaitForCallbackContext",
     "WaitDecision",
     "WaitForConditionCheckContext",
-    "WaitForConditionConfig",
     "WaitForConditionDecision",
     "WaitStrategyBuilder",
-    "WithRetryConfig",
     "__version__",
     "create_callback",
     "durable_callable",
     "durable_execution",
-    "durable_wait_for_callback",
     "get_attempt",
     "get_current_context",
     "invoke",

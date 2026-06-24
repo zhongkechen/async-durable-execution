@@ -30,15 +30,15 @@ dependencies = [
 [tool.hatch.envs.test.scripts]
 all = "pytest {args}"
 cov = "pytest --cov-report=term-missing --cov {args}"
-examples-integration = "pytest --runner-mode=cloud async-durable-execution-examples/tests_async_durable_execution_examples/ -v {args}"
+examples-integration = "pytest --runner-mode=cloud async-durable-execution-examples/test_examples/ -v {args}"
 
 [tool.pytest.ini_options]
 # Declare custom markers to avoid warnings with --strict-markers
 addopts = "-v --strict-markers --import-mode=importlib"
 testpaths = [
-    "async-durable-execution/tests_async_durable_execution",
-    "async-durable-execution-runner/tests_async_durable_execution_runner",
-    "async-durable-execution-examples/tests_async_durable_execution_examples",
+    "async-durable-execution/test_sdk",
+    "async-durable-execution-runner/test_runner",
+    "async-durable-execution-examples/test_examples",
 ]
 markers = []
 asyncio_mode = "auto"
@@ -56,7 +56,7 @@ extra-dependencies = [
 ]
 
 [tool.hatch.envs.types.scripts]
-check = "mypy --install-types --non-interactive {args:async-durable-execution/src/async_durable_execution async-durable-execution/tests_async_durable_execution async-durable-execution-runner/src/async_durable_execution_runner async-durable-execution-runner/tests_async_durable_execution_runner}"
+check = "mypy --install-types --non-interactive {args:async-durable-execution/src/async_durable_execution async-durable-execution/test_sdk async-durable-execution-runner/src/async_durable_execution_runner async-durable-execution-runner/test_runner}"
 
 [tool.hatch.envs.dev-core]
 workspace.members = [
@@ -73,9 +73,9 @@ dependencies = [
 ]
 
 [tool.hatch.envs.dev-core.scripts]
-test = "pytest async-durable-execution/tests_async_durable_execution {args}"
-cov = "pytest --cov-report=term-missing --cov-config=async-durable-execution/pyproject.toml --cov=async-durable-execution/src/async_durable_execution --cov-fail-under=98 async-durable-execution/tests_async_durable_execution {args}"
-typecheck = "mypy --install-types --non-interactive async-durable-execution/src/async_durable_execution async-durable-execution/tests_async_durable_execution"
+test = "pytest async-durable-execution/test_sdk {args}"
+cov = "pytest --cov-report=term-missing --cov-config=async-durable-execution/pyproject.toml --cov=async-durable-execution/src/async_durable_execution --cov-fail-under=98 async-durable-execution/test_sdk {args}"
+typecheck = "mypy --install-types --non-interactive async-durable-execution/src/async_durable_execution async-durable-execution/test_sdk"
 
 [tool.hatch.envs.dev-testing]
 workspace.members = [
@@ -91,9 +91,9 @@ dependencies = [
 ]
 
 [tool.hatch.envs.dev-testing.scripts]
-test = "pytest async-durable-execution-runner/tests_async_durable_execution_runner {args}"
-cov = "pytest --cov-report=term-missing --cov-config=async-durable-execution-runner/pyproject.toml --cov=async-durable-execution-runner/src/async_durable_execution_runner --cov-fail-under=95 async-durable-execution-runner/tests_async_durable_execution_runner {args}"
-typecheck = "mypy --install-types --non-interactive async-durable-execution-runner/src/async_durable_execution_runner async-durable-execution-runner/tests_async_durable_execution_runner"
+test = "pytest async-durable-execution-runner/test_runner {args}"
+cov = "pytest --cov-report=term-missing --cov-config=async-durable-execution-runner/pyproject.toml --cov=async-durable-execution-runner/src/async_durable_execution_runner --cov-fail-under=95 async-durable-execution-runner/test_runner {args}"
+typecheck = "mypy --install-types --non-interactive async-durable-execution-runner/src/async_durable_execution_runner async-durable-execution-runner/test_runner"
 
 [tool.hatch.envs.dev-examples]
 workspace.members = [
@@ -107,7 +107,7 @@ dependencies = [
 ]
 
 [tool.hatch.envs.dev-examples.scripts]
-test = "pytest async-durable-execution-examples/tests_async_durable_execution_examples {args}"
+test = "pytest async-durable-execution-examples/test_examples {args}"
 
 [tool.hatch.envs.test-pypi-examples]
 dependencies = [
@@ -121,7 +121,7 @@ pre-install-commands = [
 ]
 
 [tool.hatch.envs.test-pypi-examples.scripts]
-test = "pytest async-durable-execution-examples/tests_async_durable_execution_examples {args}"
+test = "pytest async-durable-execution-examples/test_examples {args}"
 
 [tool.hatch.envs.examples]
 workspace.members = [

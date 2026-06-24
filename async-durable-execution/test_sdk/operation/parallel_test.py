@@ -129,13 +129,6 @@ def test_parallel_config_defaults():
     assert isinstance(config.completion_config, CompletionConfig)
 
 
-def test_parallel_config_importable_from_package_root():
-    """ParallelConfig remains re-exported from the package root."""
-    from async_durable_execution import ParallelConfig as ImportedConfig
-
-    assert ImportedConfig is ParallelConfig
-
-
 def test_parallel_signature_accepts_config_fields_directly():
     """The public parallel operation exposes config fields directly."""
     parameters = inspect.signature(parallel).parameters

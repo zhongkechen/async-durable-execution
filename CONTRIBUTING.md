@@ -111,10 +111,10 @@ hatch run test:all
 hatch run dev-core:test
 
 # A single test file
-hatch run dev-core:test async-durable-execution/tests_async_durable_execution/path_to_test_module.py
+hatch run dev-core:test async-durable-execution/test_sdk/path_to_test_module.py
 
 # A single test
-hatch run dev-core:test async-durable-execution/tests_async_durable_execution/path_to_test_module.py::test_name
+hatch run dev-core:test async-durable-execution/test_sdk/path_to_test_module.py::test_name
 
 # Filter by pattern
 hatch run test:all -k pattern
@@ -125,6 +125,14 @@ hatch run test:all -k pattern
 ```bash
 hatch run test:all --pdb
 ```
+
+### Common troubleshooting
+
+- `TimeoutError: Execution did not complete within 60s` - Increase the runner
+  timeout, for example `timeout=120`.
+- `ModuleNotFoundError: No module named 'async_durable_execution_runner'` - Run
+  through Hatch, such as `hatch run dev-examples:test`, so workspace
+  dependencies are installed automatically.
 
 ### Test layout
 

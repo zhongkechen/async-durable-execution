@@ -1,6 +1,7 @@
 """Unit tests for wait handler."""
 
 import asyncio
+import inspect
 from unittest.mock import Mock
 
 import pytest
@@ -16,7 +17,7 @@ from async_durable_execution.models import (
     OperationUpdate,
     WaitOptions,
 )
-from async_durable_execution.operation.wait import WaitOperationExecutor
+from async_durable_execution.operation.wait import WaitOperationExecutor, wait
 from async_durable_execution.state import ExecutionState
 from async_durable_execution.operation.base import CheckpointedResult
 
@@ -34,6 +35,14 @@ async def wait_handler(seconds: int, state, operation_identifier) -> None:
         operation_identifier=operation_identifier,
     )
     return await run_async(executor.process())
+
+
+def test_wait_name_is_keyword_only():
+    """wait operation name must be passed as a keyword."""
+    parameters = inspect.signature(wait).parameters
+
+    assert parameters["duration"].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
+    assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
 async def test_wait_handler_already_completed():

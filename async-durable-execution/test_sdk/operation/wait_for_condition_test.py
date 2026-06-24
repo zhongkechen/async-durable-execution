@@ -97,13 +97,6 @@ def test_wait_for_condition_signature_requires_keyword_only_options():
     assert parameters["serdes"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
-def test_wait_for_condition_config_importable_from_package_root():
-    """WaitForConditionConfig remains re-exported from the package root."""
-    from async_durable_execution import WaitForConditionConfig as ImportedConfig
-
-    assert ImportedConfig is WaitForConditionConfig
-
-
 async def _invoke_maybe_async(result):
     return await result
 

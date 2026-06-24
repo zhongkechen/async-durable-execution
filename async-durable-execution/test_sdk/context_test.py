@@ -18,6 +18,7 @@ from async_durable_execution.context import (
 )
 from async_durable_execution.operation.callback import (
     Callback,
+    CallbackError,
     CallbackConfig,
 )
 from async_durable_execution.operation.invoke import InvokeConfig
@@ -38,7 +39,6 @@ from async_durable_execution import (
     DurableContext,
 )
 from async_durable_execution.exceptions import (
-    CallbackError,
     SuspendExecution,
     ValidationError,
 )
@@ -208,7 +208,7 @@ async def test_module_level_context_functions_delegate_to_durable_context():
     async def parallel_func() -> str:
         return "parallel"
 
-    async def submitter(callback_id: str) -> None:
+    async def submitter() -> None:
         return None
 
     async def check(state: str) -> str:

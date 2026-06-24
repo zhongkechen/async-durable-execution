@@ -47,7 +47,7 @@ force-single-line = false
 lines-after-imports = 2
 
 [tool.ruff.lint.per-file-ignores]
-"tests_async_durable_execution_examples/**" = [
+"test_examples/**" = [
   "ARG001",
   "ARG002",
   "ARG005",

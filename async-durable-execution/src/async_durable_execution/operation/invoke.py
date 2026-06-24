@@ -152,8 +152,8 @@ class InvokeOperationExecutor(OperationExecutor[R]):
 async def invoke(
     function_name: str,
     payload: P,
-    name: str | None = None,
     *,
+    name: str | None = None,
     serdes_payload: SerDes[P] | None = None,
     serdes_result: SerDes[R] | None = None,
     tenant_id: str | None = None,

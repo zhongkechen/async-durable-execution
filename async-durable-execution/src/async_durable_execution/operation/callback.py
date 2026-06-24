@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, Concatenate, Generic, TypeVar, ParamSpec
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from ..async_tools import get_callable_name
 from ..models import CallbackTimeoutType
@@ -18,7 +18,7 @@ from ..context import (
     set_current_context,
     get_current_context,
 )
-from ..exceptions import CallbackError, SuspendExecution
+from ..exceptions import ExecutionError, SuspendExecution, TerminationReason
 from ..models import (
     CallbackOptions,
     Operation,
@@ -43,11 +43,18 @@ if TYPE_CHECKING:
     from .child import DurableContext
 
 T = TypeVar("T")  # Result type
-Params = ParamSpec("Params")
 
 logger = logging.getLogger(__name__)
 
 PASS_THROUGH_SERDES: SerDes[Any] = PassThroughSerDes()
+
+
+class CallbackError(ExecutionError):
+    """Error in callback handling."""
+
+    def __init__(self, message: str, callback_id: str | None = None):
+        super().__init__(message, TerminationReason.CALLBACK_ERROR)
+        self.callback_id = callback_id
 
 
 @dataclass(frozen=True)
@@ -161,7 +168,7 @@ class CallbackOperationExecutor(OperationExecutor[str]):
 
 async def wait_for_callback_handler(
     context: DurableContext,
-    submitter: Callable[[str], Awaitable[Any]],
+    submitter: Callable[[], Awaitable[Any]],
     name: str | None = None,
     config: WaitForCallbackConfig | None = None,
 ) -> Any:
@@ -189,7 +196,7 @@ async def wait_for_callback_handler(
         )
         token = set_current_context(callback_context)
         try:
-            return await submitter(callback.callback_id)
+            return await submitter()
         finally:
             reset_current_context(token)
 
@@ -204,8 +211,8 @@ async def wait_for_callback_handler(
 
 
 async def create_callback(
-    name: str | None = None,
     *,
+    name: str | None = None,
     timeout: timedelta | None = None,
     heartbeat_timeout: timedelta | None = None,
     serdes: SerDes | None = None,
@@ -247,54 +254,6 @@ async def create_callback(
     )
     context.execution_state.track_replay(operation_id=operation_id)
     return result
-
-
-def durable_wait_for_callback(
-    func: Callable[Concatenate[str, Params], Awaitable[T]],
-) -> Callable[Params, Callable[[str], Awaitable[T]]]:
-    """Wrap your callable into a wait_for_callback submitter function.
-
-    This decorator allows you to define a submitter function with additional
-    parameters that will be bound when called.
-
-    Args:
-        func: A callable that takes callback_id and additional parameters
-
-    Returns:
-        A wrapper function that binds the additional parameters and returns
-        a submitter function compatible with wait_for_callback
-
-    Example:
-        @durable_wait_for_callback
-        async def submit_to_external_system(
-            callback_id: str,
-            task_name: str,
-            priority: int
-        ):
-            logging.getLogger(__name__).info(
-                "Submitting %s with callback %s", task_name, callback_id
-            )
-            external_api.submit_task(
-                task_name=task_name,
-                priority=priority,
-                callback_id=callback_id
-            )
-
-        # Usage in durable handler:
-        result = await wait_for_callback(
-            submit_to_external_system("my_task", priority=5)
-        )
-    """
-    assert_async_callable(func)
-
-    def wrapper(*args, **kwargs):
-        async def submitter_with_arguments(callback_id: str):
-            return await func(callback_id, *args, **kwargs)
-
-        submitter_with_arguments._original_name = func.__name__  # noqa: SLF001
-        return submitter_with_arguments
-
-    return wrapper
 
 
 class Callback(Generic[T]):  # noqa: PYI059
@@ -359,9 +318,9 @@ class Callback(Generic[T]):  # noqa: PYI059
 
 
 async def wait_for_callback(
-    submitter: Callable[[str], Awaitable[Any]],
-    name: str | None = None,
+    submitter: Callable[[], Awaitable[Any]],
     *,
+    name: str | None = None,
     timeout: timedelta | None = None,
     heartbeat_timeout: timedelta | None = None,
     serdes: SerDes | None = None,
@@ -370,7 +329,8 @@ async def wait_for_callback(
     """Create a callback, run a submitter, then suspend until the callback resolves.
 
     Args:
-        submitter: Async callable that receives the callback id.
+        submitter: Async callable. Use get_current_context().callback_id inside the
+            submitter to access the callback id.
         name: Optional durable operation name.
         timeout: Optional maximum time to wait for callback completion.
         heartbeat_timeout: Optional maximum time to wait between callback heartbeats.

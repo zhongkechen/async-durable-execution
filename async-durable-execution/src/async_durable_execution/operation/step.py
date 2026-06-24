@@ -13,7 +13,8 @@ from ..config import RetryPresets
 from ..exceptions import (
     ExecutionError,
     InvalidStateError,
-    StepInterruptedError,
+    InvocationError,
+    TerminationReason,
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
 )
@@ -45,6 +46,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+
+class StepInterruptedError(InvocationError):
+    """Raised when a step is interrupted before it checkpointed at the end."""
+
+    def __init__(self, message: str, step_id: str | None = None):
+        super().__init__(message, TerminationReason.STEP_INTERRUPTED)
+        self.step_id = step_id
 
 
 class StepSemantics(Enum):

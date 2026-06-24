@@ -50,6 +50,18 @@ T = TypeVar("T")
 CHECKPOINT_SIZE_LIMIT = 256 * 1024
 
 
+class OrphanedChildException(BaseException):
+    """Raised when a child operation checkpoints after its parent context completed.
+
+    This inherits from BaseException so user code does not accidentally catch it
+    with broad exception handlers like ``except Exception``.
+    """
+
+    def __init__(self, message: str, operation_id: str):
+        super().__init__(message)
+        self.operation_id = operation_id
+
+
 @dataclass(frozen=True)
 class ChildConfig(Generic[T]):
     """Configuration options for child context operations."""
@@ -408,8 +420,8 @@ async def _run_in_child_context_in_context(
 
 async def run_in_child_context(
     func: Callable[[], Awaitable[T]],
-    name: str | None = None,
     *,
+    name: str | None = None,
     serdes: SerDes | None = None,
     item_serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,

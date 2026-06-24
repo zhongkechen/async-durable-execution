@@ -1,4 +1,3 @@
-from async_durable_execution.operation import childfrom async_durable_execution.operation import stepfrom async_durable_execution.operation import stepfrom async_durable_execution.operation import stepfrom async_durable_execution.operation import step
 
 # AWS Lambda Durable Functions SDK - Agent Guide
 
@@ -36,8 +35,18 @@ id = str(uuid.uuid4())  # Different on each replay!
 timestamp = time.time()  # Different on each replay!
 
 # ✅ CORRECT: Non-deterministic code inside steps
-id = step.step(lambda: str(uuid.uuid4()), name="generate-id")
-timestamp = context.step(lambda: time.time(), name="get-time")
+@durable_callable
+async def generate_id() -> str:
+    return str(uuid.uuid4())
+
+
+@durable_callable
+async def get_time() -> float:
+    return time.time()
+
+
+id = await step(generate_id(), name="generate-id")
+timestamp = await step(get_time(), name="get-time")
 ```
 
 **Must be in steps:** `time.time()`, `random.random()`, UUID generation, API calls, database queries, file system operations.
@@ -48,17 +57,22 @@ You CANNOT call durable operations inside a step function.
 
 ```python
 # ❌ WRONG: Nested durable operations
-async def process():
-    context.wait(duration=timedelta(seconds=1))  # ERROR!
+@durable_callable
+async def process_with_nested_operation():
+    await wait(duration=timedelta(seconds=1))  # ERROR inside a step!
+
+
+await step(process_with_nested_operation(), name="process")
 
 
 # ✅ CORRECT: Use run_in_child_context for grouping
-async def process(child_ctx: DurableContext):
-    child_ctx.wait(duration=timedelta(seconds=1))
-    child_ctx.step(some_step)
+@durable_callable
+async def process():
+    await wait(duration=timedelta(seconds=1))
+    await step(some_step(), name="some-step")
 
 
-child.run_in_child_context(process, name="process")
+await run_in_child_context(process(), name="process")
 ```
 
 ### Rule 3: Closure Mutations Are Lost on Replay
@@ -68,21 +82,31 @@ Variables mutated inside steps are NOT preserved across replays.
 ```python
 # ❌ WRONG: Counter mutations lost
 counter = 0
+
+
+@durable_callable
 async def increment():
     nonlocal counter
     counter += 1
-context.step(increment)
+
+
+await step(increment(), name="increment")
 print(counter)  # 0 on replay!
 
 # ✅ CORRECT: Return values from steps
-counter = context.step(lambda: counter + 1, name="increment")
+@durable_callable
+async def increment(value: int) -> int:
+    return value + 1
+
+
+counter = await step(increment(counter), name="increment")
 ```
 
 ### Rule 4: Side Effects Outside Steps Repeat
 
-Side effects (logging, API calls) outside steps happen on EVERY replay.
+Side effects (API calls, writes, and non-replay-aware logging) outside steps happen on EVERY replay.
 
-**Exception:** `context.logger` is replay-aware and safe to use anywhere.
+**Exception:** SDK replay-aware standard logging is safe to use anywhere.
 
 ```python
 # ❌ WRONG
@@ -90,8 +114,15 @@ print("Starting")  # Prints multiple times!
 send_email(...)    # Sends multiple emails!
 
 # ✅ CORRECT
-context.logger.info("Starting")  # Deduplicated automatically
-context.step(lambda: send_email(...), name="email")
+logger.info("Starting")  # Deduplicated automatically by the SDK logger filter
+
+
+@durable_callable
+async def send_email_step() -> None:
+    send_email(...)
+
+
+await step(send_email_step(), name="email")
 ```
 
 ## IAM Permissions
@@ -197,22 +228,23 @@ async def handler(event: dict) -> dict:
 ### Steps - Atomic Operations
 
 ```python
-from functools import partial
 from datetime import timedelta
 
-from async_durable_execution import step
+from async_durable_execution import durable_callable
 from async_durable_execution import RetryStrategyBuilder
+from async_durable_execution import step
 
 
+@durable_callable
 async def fetch_user(user_id: str) -> dict:
     return {"id": user_id, "name": "Jane"}
 
 
 # Execute step (uses function name automatically)
-result = step(partial(fetch_user, user_id))
+result = await step(fetch_user(user_id))
 
-# Named step with lambda
-result = step(lambda: fetch_data(), name="fetch-user")
+# Named step
+result = await step(fetch_user(user_id), name="fetch-user")
 
 # With retry configuration
 retry_config = RetryStrategyBuilder(
@@ -220,8 +252,8 @@ retry_config = RetryStrategyBuilder(
     initial_delay=timedelta(seconds=1),
     backoff_rate=2.0,
 )
-result = step(
-    partial(fetch_user, user_id),
+result = await step(
+    fetch_user(user_id),
     retry_strategy=retry_config.build(),
 )
 ```
@@ -232,9 +264,9 @@ result = step(
 from datetime import timedelta
 from async_durable_execution import wait
 
-wait(duration=timedelta(seconds=30))
-wait(duration=timedelta(hours=1))
-wait(duration=timedelta(days=7), name="rate-limit-delay")
+await wait(duration=timedelta(seconds=30))
+await wait(duration=timedelta(hours=1))
+await wait(duration=timedelta(days=7), name="rate-limit-delay")
 ```
 
 ### Invoke - Call Other Functions
@@ -244,7 +276,10 @@ Invoke another durable Lambda function. **Must use qualified function name** (wi
 ```python
 import os
 
-result = invoke(
+from async_durable_execution import invoke
+
+
+result = await invoke(
     function_name=os.environ["PAYMENT_PROCESSOR_ARN"],
     payload={"amount": 100, "currency": "USD"},
     name="process-payment"
@@ -254,24 +289,52 @@ result = invoke(
 ### Child Context - Group Operations
 
 ```python
-async def process_order() -> dict:
-    validated = step(validate_step(data), name="validate")
-    wait(duration=timedelta(seconds=1))
-    processed = step(process_step(validated), name="process")
+from async_durable_execution import (
+    durable_callable,
+    run_in_child_context,
+    step,
+    wait,
+)
+
+
+@durable_callable
+async def validate_step(data: dict) -> dict:
+    return data
+
+
+@durable_callable
+async def process_step(data: dict) -> dict:
+    return data
+
+
+@durable_callable
+async def process_order(data: dict) -> dict:
+    validated = await step(validate_step(data), name="validate")
+    await wait(duration=timedelta(seconds=1))
+    processed = await step(process_step(validated), name="process")
     return processed
 
-result = run_in_child_context(process_order, name="process-order")
+result = await run_in_child_context(process_order(data), name="process-order")
 ```
 
 ### Wait for Callback - External Integration
 
 ```python
-async def submit_approval(callback_id: str):
+from datetime import timedelta
+
+from async_durable_execution import durable_callable
+from async_durable_execution import get_current_context
+from async_durable_execution import wait_for_callback
+
+
+@durable_callable
+async def submit_approval():
+    callback_id = get_current_context().callback_id
     send_approval_email(callback_id)
 
 
-result = wait_for_callback(
-    submitter=submit_approval,
+result = await wait_for_callback(
+    submitter=submit_approval(),
     timeout=timedelta(hours=24),
     name="wait-for-approval"
 )
@@ -280,8 +343,10 @@ result = wait_for_callback(
 ### Wait for Condition - Polling
 
 ```python
+from datetime import timedelta
+
 from async_durable_execution import WaitStrategyBuilder
-from async_durable_execution import WaitForConditionDecision
+from async_durable_execution import wait_for_condition
 
 
 async def check_job(state: dict, check_ctx) -> dict:
@@ -289,11 +354,15 @@ async def check_job(state: dict, check_ctx) -> dict:
     return {"job_id": state["job_id"], "status": status}
 
 
-result = wait_for_condition(
+def should_continue_polling(state: dict) -> bool:
+    return state["status"] != "completed"
+
+
+result = await wait_for_condition(
     check=check_job,
     initial_state={"job_id": "job-123", "status": "pending"},
     wait_strategy=WaitStrategyBuilder(
-        should_continue_polling=lambda state: state["status"] != "completed",
+        should_continue_polling=should_continue_polling,
         initial_delay=timedelta(seconds=2),
     ).build(),
     name="wait-for-job"
@@ -303,15 +372,24 @@ result = wait_for_condition(
 ### Map - Process Arrays
 
 ```python
-from async_durable_execution import CompletionConfig, get_current_context
+from async_durable_execution import CompletionConfig
+from async_durable_execution import durable_callable
+from async_durable_execution import get_current_context
+from async_durable_execution import map
+from async_durable_execution import step
+
+
+@durable_callable
+async def process(item: dict) -> dict:
+    return item
 
 
 async def process_item(item: dict) -> dict:
     map_context = get_current_context()
-    return step(lambda: process(item), name=f"process-{map_context.index}")
+    return await step(process(item), name=f"process-{map_context.index}")
 
 
-results = map(
+results = await map(
     func=process_item,
     items=items,
     max_concurrency=5,
@@ -330,6 +408,8 @@ all_results = results.get_results()
 
 ```python
 from async_durable_execution import durable_callable
+from async_durable_execution import parallel
+from async_durable_execution import step
 
 
 @durable_callable
@@ -369,22 +449,23 @@ pip install async-durable-execution-runner
 ```
 
 ```python
-import pytest
-from async_durable_execution_runner import InvocationStatus
+from async_durable_execution import InvocationStatus
+from async_durable_execution_runner import create_runner
 from my_module import handler
 
 
-def test_workflow(durable_runner):
+async def test_workflow():
     """Test durable function workflow."""
-    with durable_runner(
+    with create_runner(
+        mode="local",
         handler=handler,
         input={"user_id": "123"},
         timeout=10,
     ) as runner:
-        result = runner.run()
+        result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
-    assert result.result == {"success": True}
+    assert result.get_deserialized_result() == {"success": True}
 
     # Get step by name
     step_result = result.get_step("fetch-user")
@@ -403,34 +484,56 @@ def test_workflow(durable_runner):
 ### Multi-Step Workflow
 
 ```python
+@durable_callable
+async def validate_input(event: dict) -> dict:
+    return event
+
+
+@durable_callable
+async def process_data(data: dict) -> dict:
+    return data
+
+
+@durable_callable
+async def send_notification(data: dict) -> None:
+    send_notification_api(data)
+
+
 @durable_execution
 async def handler(event: dict) -> dict:
-    validated = context.step(validate_input(event), name="validate")
-    processed = context.step(process_data(validated), name="process")
-    context.wait(duration=timedelta(seconds=30), name="cooldown")
-    context.step(send_notification(processed), name="notify")
+    validated = await step(validate_input(event), name="validate")
+    processed = await step(process_data(validated), name="process")
+    await wait(duration=timedelta(seconds=30), name="cooldown")
+    await step(send_notification(processed), name="notify")
     return {"success": True, "data": processed}
 ```
 
 ### GenAI Agent (Agentic Loop)
 
 ```python
+@durable_callable
+async def invoke_model(messages: list[dict]) -> dict:
+    return invoke_ai_model(messages)
+
+
+@durable_callable
+async def run_tool(tool: dict, response: str) -> dict:
+    return execute_tool(tool, response)
+
+
 @durable_execution
 async def handler(event: dict) -> str:
     messages = [{"role": "user", "content": event["prompt"]}]
 
     while True:
-        result = step(
-            lambda: invoke_ai_model(messages),
-            name="invoke-model"
-        )
+        result = await step(invoke_model(messages), name="invoke-model")
 
         if result.get("tool") is None:
             return result["response"]
 
         tool = result["tool"]
-        tool_result = step(
-            lambda: execute_tool(tool, result["response"]),
+        tool_result = await step(
+            run_tool(tool, result["response"]),
             name=f"tool-{tool['name']}"
         )
         messages.append({"role": "assistant", "content": tool_result})
@@ -439,21 +542,33 @@ async def handler(event: dict) -> str:
 ### Human-in-the-Loop Approval
 
 ```python
+@durable_callable
+async def generate_plan(event: dict) -> dict:
+    return create_plan(event)
+
+
+@durable_callable
+async def perform_action(plan: dict) -> None:
+    execute_plan(plan)
+
+
 @durable_execution
 async def handler(event: dict) -> dict:
-    plan = step(generate_plan(event), name="generate-plan")
+    plan = await step(generate_plan(event), name="generate-plan")
 
-    async def submit_approval(callback_id: str):
+    @durable_callable
+    async def submit_approval():
+        callback_id = get_current_context().callback_id
         send_approval_email(event["approver_email"], plan, callback_id)
 
-    answer = wait_for_callback(
-        submitter=submit_approval,
+    answer = await wait_for_callback(
+        submitter=submit_approval(),
         timeout=timedelta(hours=24),
         name="wait-for-approval"
     )
 
     if answer == "APPROVED":
-        step(perform_action(plan), name="execute")
+        await step(perform_action(plan), name="execute")
         return {"status": "completed"}
     return {"status": "rejected"}
 ```
@@ -461,21 +576,44 @@ async def handler(event: dict) -> dict:
 ### Saga Pattern (Compensating Transactions)
 
 ```python
+@durable_callable
+async def book_flight(event: dict) -> None:
+    flight_api.book(event)
+
+
+@durable_callable
+async def book_hotel(event: dict) -> None:
+    hotel_api.book(event)
+
+
+@durable_callable
+async def cancel_flight(event: dict) -> None:
+    flight_api.cancel(event)
+
+
+@durable_callable
+async def cancel_hotel(event: dict) -> None:
+    hotel_api.cancel(event)
+
+
 @durable_execution
 async def handler(event: dict) -> dict:
     compensations = []
 
     try:
-        step(book_flight(event), name="book-flight")
-        compensations.append(("cancel-flight", lambda: cancel_flight(event)))
+        await step(book_flight(event), name="book-flight")
+        compensations.append("cancel-flight")
 
-        step(book_hotel(event), name="book-hotel")
-        compensations.append(("cancel-hotel", lambda: cancel_hotel(event)))
+        await step(book_hotel(event), name="book-hotel")
+        compensations.append("cancel-hotel")
 
         return {"success": True}
     except Exception as error:
-        for name, comp_fn in reversed(compensations):
-            step(lambda: comp_fn(), name=name)
+        for name in reversed(compensations):
+            if name == "cancel-flight":
+                await step(cancel_flight(event), name=name)
+            elif name == "cancel-hotel":
+                await step(cancel_hotel(event), name=name)
         raise error
 ```
 

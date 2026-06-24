@@ -16,9 +16,9 @@ from async_durable_execution.exceptions import (
     DurableExecutionsError,
     ExecutionError,
     GetExecutionStateError,
+    InvalidStateError,
     InvocationError,
-    OrphanedChildException,
-    StepInterruptedError,
+    SerDesError,
     SuspendExecution,
     TerminationReason,
     TimedSuspendExecution,
@@ -26,6 +26,51 @@ from async_durable_execution.exceptions import (
     UserlandError,
     ValidationError,
 )
+from async_durable_execution.operation.callback import CallbackError
+from async_durable_execution.operation.step import StepInterruptedError
+
+
+def test_user_facing_exceptions_importable_from_package_root():
+    """User-facing exception types are re-exported from the package root."""
+    import async_durable_execution as ade
+
+    expected_exports = {
+        "CallbackError": CallbackError,
+        "CallableRuntimeError": CallableRuntimeError,
+        "DurableExecutionsError": DurableExecutionsError,
+        "ExecutionError": ExecutionError,
+        "InvalidStateError": InvalidStateError,
+        "InvocationError": InvocationError,
+        "SerDesError": SerDesError,
+        "StepInterruptedError": StepInterruptedError,
+        "UserlandError": UserlandError,
+        "ValidationError": ValidationError,
+    }
+
+    for name, exception_type in expected_exports.items():
+        assert getattr(ade, name) is exception_type
+        assert name in ade.__all__
+
+
+def test_internal_exceptions_not_exported_from_package_root():
+    """Internal control-flow and transport exceptions stay out of root exports."""
+    import async_durable_execution as ade
+
+    internal_names = {
+        "BackgroundThreadError",
+        "BotoClientError",
+        "CheckpointError",
+        "GetExecutionStateError",
+        "NonDeterministicExecutionError",
+        "OrphanedChildException",
+        "SuspendExecution",
+        "TimedSuspendExecution",
+        "UnrecoverableError",
+    }
+
+    for name in internal_names:
+        assert not hasattr(ade, name)
+        assert name not in ade.__all__
 
 
 def test_durable_executions_error():
@@ -233,16 +278,6 @@ def test_callable_runtime_error_with_none_values():
     assert error.data is None
 
 
-def test_step_interrupted_error():
-    """Test StepInterruptedError exception."""
-    error = StepInterruptedError("step interrupted", "step_123")
-    assert str(error) == "step interrupted"
-    assert isinstance(error, InvocationError)
-    assert isinstance(error, UnrecoverableError)
-    assert error.termination_reason == TerminationReason.STEP_INTERRUPTED
-    assert error.step_id == "step_123"
-
-
 def test_suspend_execution():
     """Test SuspendExecution exception."""
     error = SuspendExecution("suspend execution")
@@ -377,47 +412,6 @@ def test_execution_error_with_custom_termination_reason():
     error = ExecutionError("custom error", TerminationReason.SERIALIZATION_ERROR)
     assert str(error) == "custom error"
     assert error.termination_reason == TerminationReason.SERIALIZATION_ERROR
-
-
-def test_orphaned_child_exception_is_base_exception():
-    """Test that OrphanedChildException is a BaseException, not Exception."""
-    assert issubclass(OrphanedChildException, BaseException)
-    assert not issubclass(OrphanedChildException, Exception)
-
-
-def test_orphaned_child_exception_bypasses_user_exception_handler():
-    """Test that OrphanedChildException cannot be caught by user's except Exception handler."""
-    caught_by_exception = False
-    caught_by_base_exception = False
-    exception_instance = None
-
-    try:
-        msg = "test message"
-        raise OrphanedChildException(msg, operation_id="test_op_123")
-    except Exception:  # noqa: BLE001
-        caught_by_exception = True
-    except BaseException as e:  # noqa: BLE001
-        caught_by_base_exception = True
-        exception_instance = e
-
-    expected_msg = "OrphanedChildException should not be caught by except Exception"
-    assert not caught_by_exception, expected_msg
-    expected_base_msg = (
-        "OrphanedChildException should be caught by except BaseException"
-    )
-    assert caught_by_base_exception, expected_base_msg
-
-    # Verify operation_id is preserved
-    assert isinstance(exception_instance, OrphanedChildException)
-    assert exception_instance.operation_id == "test_op_123"
-    assert str(exception_instance) == "test message"
-
-
-def test_orphaned_child_exception_with_operation_id():
-    """Test OrphanedChildException stores operation_id correctly."""
-    exception = OrphanedChildException("parent completed", operation_id="child_op_456")
-    assert exception.operation_id == "child_op_456"
-    assert str(exception) == "parent completed"
 
 
 @pytest.mark.parametrize(
