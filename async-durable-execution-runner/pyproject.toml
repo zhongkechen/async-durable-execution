@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 name = "async-durable-execution-runner"
 dynamic = ["version"]
 description = "Community-maintained durable execution local and cloud test runner for Python"
-readme = "README.md"
+readme = "../README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 keywords = []
@@ -72,19 +72,19 @@ dependencies = [
 ]
 
 [tool.hatch.envs.test.scripts]
-test = "pytest tests_async_durable_execution_runner/ -v"
+test = "pytest test_runner/ -v"
 cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/async_durable_execution_runner --cov-fail-under=95"
 
 [tool.hatch.envs.types]
 extra-dependencies = ["mypy>=1.0.0", "pytest", "pytest-asyncio"]
 [tool.hatch.envs.types.scripts]
-check = "mypy --install-types --non-interactive {args:src/async_durable_execution_runner tests_async_durable_execution_runner}"
+check = "mypy --install-types --non-interactive {args:src/async_durable_execution_runner test_runner}"
 
 [tool.coverage.run]
 source_pkgs = ["async_durable_execution_runner"]
 branch = true
 parallel = true
-omit = ["src/async_durable_execution_runner/__about__.py", "tests_async_durable_execution_runner/*"]
+omit = ["src/async_durable_execution_runner/__about__.py", "test_runner/*"]
 
 [tool.coverage.paths]
 async_durable_execution_runner = [
@@ -92,8 +92,8 @@ async_durable_execution_runner = [
   "*/async-durable-execution-runner/src/async_durable_execution_runner",
 ]
 tests = [
-  "tests_async_durable_execution_runner",
-  "*/async-durable-execution-runner/tests_async_durable_execution_runner",
+  "test_runner",
+  "*/async-durable-execution-runner/test_runner",
 ]
 
 [tool.coverage.report]
@@ -118,7 +118,7 @@ force-single-line = false
 lines-after-imports = 2
 
 [tool.ruff.lint.per-file-ignores]
-"tests_async_durable_execution_runner/**" = [
+"test_runner/**" = [
   "ARG001",
   "ARG002",
   "ARG005",
@@ -133,7 +133,7 @@ lines-after-imports = 2
 
 [tool.pytest.ini_options]
 # Default test discovery paths
-testpaths = ["tests_async_durable_execution_runner"]
+testpaths = ["test_runner"]
 # Default options for all test runs
 addopts = "-v --strict-markers"
 asyncio_mode = "auto"

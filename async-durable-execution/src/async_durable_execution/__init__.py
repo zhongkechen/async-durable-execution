@@ -20,30 +20,26 @@ from .context import (
     get_current_context,
 )
 from .async_tools import durable_callable
-from .operation.with_retry import WithRetryConfig, with_retry
-from .operation.map import MapConfig, MapItemContext, map
+from .operation.with_retry import with_retry
+from .operation.map import MapItemContext, map
 from .operation.concurrency import CompletionConfig, NestingType
 from .operation.wait_for_condition import (
-    WaitForConditionConfig,
     WaitStrategyBuilder,
     wait_for_condition,
     WaitForConditionCheckContext,
 )
-from .operation.invoke import InvokeConfig, invoke
+from .operation.invoke import invoke
 from .operation.parallel import (
-    ParallelConfig,
     parallel,
 )
 from .operation.callback import (
-    CallbackConfig,
     create_callback,
     wait_for_callback,
     WaitForCallbackContext,
     Callback,
-    WaitForCallbackConfig,
 )
 from .operation.child import run_in_child_context, DurableContext
-from .operation.step import StepConfig, StepContext, StepSemantics, get_attempt, step
+from .operation.step import StepContext, StepSemantics, get_attempt, step
 from .models import (
     ErrorObject,
     OperationIdentifier,
@@ -71,7 +67,6 @@ __all__ = [
     "BatchItemStatus",
     "BatchResult",
     "Callback",
-    "CallbackConfig",
     "CompletionConfig",
     "CompletionReason",
     "DurableContext",
@@ -79,31 +74,24 @@ __all__ = [
     "DurableExecutionsError",
     "ErrorObject",
     "InvocationError",
-    "InvokeConfig",
     "JsonSerDes",
     "LambdaContext",
-    "MapConfig",
     "MapItemContext",
     "NestingType",
     "OperationIdentifier",
-    "ParallelConfig",
     "RetryDecision",
     "RetryPresets",
     "RetryStrategyBuilder",
     "SerDes",
     "SerDesContext",
-    "StepConfig",
     "StepContext",
     "StepSemantics",
     "ValidationError",
-    "WaitForCallbackConfig",
     "WaitForCallbackContext",
     "WaitDecision",
     "WaitForConditionCheckContext",
-    "WaitForConditionConfig",
     "WaitForConditionDecision",
     "WaitStrategyBuilder",
-    "WithRetryConfig",
     "__version__",
     "create_callback",
     "durable_callable",

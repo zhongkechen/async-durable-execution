@@ -121,20 +121,6 @@ def test_callback_config_with_values():
     assert config.serdes is serdes
 
 
-def test_callback_config_importable_from_package_root():
-    """CallbackConfig remains re-exported from the package root."""
-    from async_durable_execution import CallbackConfig as ImportedConfig
-
-    assert ImportedConfig is CallbackConfig
-
-
-def test_wait_for_callback_config_importable_from_package_root():
-    """WaitForCallbackConfig remains re-exported from the package root."""
-    from async_durable_execution import WaitForCallbackConfig as ImportedConfig
-
-    assert ImportedConfig is WaitForCallbackConfig
-
-
 async def test_create_callback_handler_new_operation_with_config():
     """Test create_callback_handler creates new checkpoint when operation doesn't exist."""
     mock_state = Mock(spec=ExecutionState)

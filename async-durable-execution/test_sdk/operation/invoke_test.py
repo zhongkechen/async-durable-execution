@@ -66,13 +66,6 @@ def test_invoke_config_with_tenant_id():
     assert config.tenant_id == "test-tenant"
 
 
-def test_invoke_config_importable_from_package_root():
-    """InvokeConfig remains re-exported from the package root."""
-    from async_durable_execution import InvokeConfig as ImportedConfig
-
-    assert ImportedConfig is InvokeConfig
-
-
 def test_invoke_name_is_keyword_only():
     """invoke operation name must be passed as a keyword."""
     parameters = inspect.signature(invoke).parameters
