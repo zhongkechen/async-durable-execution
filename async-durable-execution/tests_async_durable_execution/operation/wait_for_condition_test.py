@@ -29,6 +29,7 @@ import logging
 from async_durable_execution.operation.wait_for_condition import (
     WaitForConditionConfig,
     WaitForConditionOperationExecutor,
+    wait_for_condition,
 )
 from async_durable_execution.state import ExecutionState
 from async_durable_execution import WaitForConditionCheckContext
@@ -74,6 +75,26 @@ def test_wait_for_condition_config_with_serdes():
     )
 
     assert config.serdes is serdes
+
+
+def test_wait_for_condition_signature_accepts_config_fields_directly():
+    """The public wait_for_condition API exposes config fields directly."""
+    parameters = inspect.signature(wait_for_condition).parameters
+
+    assert "config" not in parameters
+    assert "wait_strategy" in parameters
+    assert "serdes" in parameters
+
+
+def test_wait_for_condition_signature_requires_keyword_only_options():
+    """Only the check callable is positional."""
+    parameters = inspect.signature(wait_for_condition).parameters
+
+    assert parameters["check"].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
+    assert parameters["initial_state"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameters["wait_strategy"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameters["serdes"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
 def test_wait_for_condition_config_importable_from_package_root():
