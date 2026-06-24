@@ -14,7 +14,6 @@ from async_durable_execution import (
     with_retry,
     wait_for_callback,
 )
-from async_durable_execution import WithRetryConfig
 
 
 @durable_execution
@@ -41,16 +40,14 @@ async def handler(_event: Any) -> dict[str, Any]:
             heartbeat_timeout=timedelta(seconds=3),
         )
 
-    retry_config = WithRetryConfig(
+    result = await with_retry(
+        retryable_callback_flow,
+        name="callback-with-retry",
         retry_strategy=RetryStrategyBuilder(
             max_attempts=5,
             initial_delay=timedelta(seconds=1),
             backoff_rate=1.0,
         ).build(),
-    )
-
-    result = await with_retry(
-        retryable_callback_flow, retry_config, name="callback-with-retry"
     )
 
     return {

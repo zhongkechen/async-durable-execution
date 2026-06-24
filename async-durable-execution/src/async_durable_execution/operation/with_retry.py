@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Awaitable, TypeVar, Generic
+from typing import TYPE_CHECKING, Callable, Awaitable, TypeVar, Generic
 
 from ..config import RetryStrategyBuilder
 from ..models import RetryDecision
@@ -17,6 +17,10 @@ from .child import (
 )
 from .wait import _wait_in_context
 
+if TYPE_CHECKING:
+    from ..serdes import SerDes
+    from ..types import SummaryGenerator
+
 T = TypeVar("T")
 
 
@@ -25,17 +29,41 @@ class WithRetryConfig(Generic[T]):
     """Configuration for with_retry."""
 
     retry_strategy: Callable[[Exception, int], RetryDecision] | None = None
-    wrap_with_run_in_child_context: bool = True
-    child_context_config: ChildConfig[T] | None = None
+    serdes: SerDes | None = None
+    item_serdes: SerDes | None = None
+    summary_generator: SummaryGenerator | None = None
+    is_virtual: bool = False
 
 
 async def with_retry(
     func: Callable[[int], Awaitable[T]],
-    config: WithRetryConfig[T],
+    *,
     name: str | None = None,
+    retry_strategy: Callable[[Exception, int], RetryDecision] | None = None,
+    serdes: SerDes | None = None,
+    item_serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    is_virtual: bool = False,
 ) -> T:
-    """Retry a block of durable logic with configurable backoff."""
+    """Retry a block of durable logic with configurable backoff.
+
+    Args:
+        func: Async callable to retry. Receives the current attempt number.
+        name: Optional durable operation name.
+        retry_strategy: Optional strategy that decides whether and when to retry.
+        serdes: Optional serializer for the child context result.
+        item_serdes: Optional serializer for child items used by composed operations.
+        summary_generator: Optional summary generator for large child results.
+        is_virtual: Whether the child context should skip lifecycle checkpoints.
+    """
     context = _get_durable_context()
+    config = WithRetryConfig[T](
+        retry_strategy=retry_strategy,
+        serdes=serdes,
+        item_serdes=item_serdes,
+        summary_generator=summary_generator,
+        is_virtual=is_virtual,
+    )
 
     async def run_loop() -> T:
         assert_async_callable(func)
@@ -62,12 +90,14 @@ async def with_retry(
                     name=wait_name,
                 )
 
-    if config.wrap_with_run_in_child_context:
-        return await _run_in_child_context_in_context(
-            context,
-            run_loop,
-            name=name,
-            config=config.child_context_config,
-        )
-
-    return await invoke_user_callable(context, run_loop)
+    return await _run_in_child_context_in_context(
+        context,
+        run_loop,
+        name=name,
+        config=ChildConfig[T](
+            serdes=config.serdes,
+            item_serdes=config.item_serdes,
+            summary_generator=config.summary_generator,
+            is_virtual=config.is_virtual,
+        ),
+    )
