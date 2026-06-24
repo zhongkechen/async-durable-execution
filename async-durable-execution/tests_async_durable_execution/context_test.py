@@ -445,7 +445,7 @@ async def test_durable_callable_can_be_passed_to_run_in_child_context():
         context,
         func=ANY,
         name="greet-child",
-        config=None,
+        config=ChildConfig(),
     )
     assert await mock_run_in_child_context.await_args.kwargs["func"]() == "hello Ada"
 
@@ -1391,12 +1391,12 @@ async def test_run_in_child_context_basic(mock_handler):
     assert call_args[1]["operation_identifier"] == OperationIdentifier(
         expected_operation_id, OperationSubType.RUN_IN_CHILD_CONTEXT, None, None
     )
-    assert call_args[1]["config"] is None
+    assert call_args[1]["config"] == ChildConfig()
 
 
 @patch("async_durable_execution.operation.child.child_handler")
 async def test_run_in_child_context_with_name_and_config(mock_handler):
-    """Test run_in_child_context with name and config."""
+    """Test run_in_child_context with name and configuration fields."""
     mock_handler.return_value = "configured_child_result"
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
@@ -1405,7 +1405,7 @@ async def test_run_in_child_context_with_name_and_config(mock_handler):
     mock_callable = AsyncMock()
     mock_callable._original_name = "original_function"  # noqa: SLF001
 
-    config = ChildConfig()
+    summary_generator = Mock()
 
     context = create_test_context(state=mock_state)
     [
@@ -1413,7 +1413,12 @@ async def test_run_in_child_context_with_name_and_config(mock_handler):
     ]  # Set counter to 3 # noqa: SLF001
 
     result = await run_with_context(
-        context, run_in_child_context(mock_callable, config=config)
+        context,
+        run_in_child_context(
+            mock_callable,
+            summary_generator=summary_generator,
+            is_virtual=True,
+        ),
     )
 
     seq = operation_id_sequence()
@@ -1425,7 +1430,10 @@ async def test_run_in_child_context_with_name_and_config(mock_handler):
     assert call_args[1]["operation_identifier"] == OperationIdentifier(
         expected_id, OperationSubType.RUN_IN_CHILD_CONTEXT, None, "original_function"
     )
-    assert call_args[1]["config"] is config
+    assert call_args[1]["config"] == ChildConfig(
+        summary_generator=summary_generator,
+        is_virtual=True,
+    )
 
 
 @patch("async_durable_execution.operation.child.child_handler")

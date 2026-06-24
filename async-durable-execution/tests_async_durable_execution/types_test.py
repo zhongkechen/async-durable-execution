@@ -3,7 +3,6 @@
 from datetime import timedelta
 from unittest.mock import ANY, AsyncMock, Mock, patch
 
-from async_durable_execution.operation.child import ChildConfig
 from async_durable_execution import (
     create_callback,
     step,
@@ -84,7 +83,6 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
                 await run_in_child_context(
                     test_callable,
                     name="test_child",
-                    config=ChildConfig(),
                 )
                 == "child_result"
             )

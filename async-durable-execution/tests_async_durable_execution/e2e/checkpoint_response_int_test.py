@@ -12,7 +12,6 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from async_durable_execution.operation.child import ChildConfig
 from async_durable_execution.context import (
     get_current_context,
 )
@@ -560,7 +559,7 @@ async def test_end_to_end_child_context_replay_children_mode():
     async def my_handler(event) -> str:
         await run_in_child_context(
             child_function_with_large_result,
-            config=ChildConfig(summary_generator=summary_generator),
+            summary_generator=summary_generator,
         )
         return f"executed_{execution_count['count']}_times"
 
