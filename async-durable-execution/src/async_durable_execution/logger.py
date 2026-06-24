@@ -20,6 +20,8 @@ class DurableContextFilter(logging.Filter):
         context = _current_context.get()
         if context is None:
             return True
+        if not hasattr(context, "execution_state"):
+            return True
 
         if _is_replaying(context):
             return False

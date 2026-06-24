@@ -144,7 +144,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
             if checkpointed_result.result is None:
                 return None  # type: ignore[return-value]
 
-            result: T = deserialize(
+            result: T = await deserialize(
                 serdes=self.config.serdes,
                 data=checkpointed_result.result,
                 operation_id=self.operation_id,
@@ -210,7 +210,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 return raw_result
 
             # Serialize result
-            serialized_result: str = serialize(
+            serialized_result: str = await serialize(
                 serdes=self.config.serdes,
                 value=raw_result,
                 operation_id=self.operation_id,

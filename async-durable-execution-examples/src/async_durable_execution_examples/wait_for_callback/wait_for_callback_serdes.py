@@ -31,7 +31,7 @@ class CustomSerdes(SerDes[CustomData]):
     """Custom serialization/deserialization for CustomData."""
 
     @staticmethod
-    def serialize(data: CustomData, _=None) -> str:
+    async def serialize(data: CustomData) -> str:
         """Serialize CustomData to JSON string."""
         if data is None:
             return None
@@ -46,7 +46,7 @@ class CustomSerdes(SerDes[CustomData]):
         return json.dumps(serialized_data)
 
     @staticmethod
-    def deserialize(data_str: str, _=None) -> CustomData:
+    async def deserialize(data_str: str) -> CustomData:
         """Deserialize JSON string to CustomData."""
         if data_str is None:
             return None

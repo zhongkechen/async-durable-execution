@@ -255,18 +255,18 @@ class OperationExecutor(ABC, Generic[T]):
             is_sync=is_sync,
         )
 
-    def serialize_value(self, value: S, serdes: SerDes[S] | None) -> str:
+    async def serialize_value(self, value: S, serdes: SerDes[S] | None) -> str:
         """Serialize a value using operation-scoped metadata."""
-        return serialize(
+        return await serialize(
             serdes=serdes,
             value=value,
             operation_id=self.operation_id,
             durable_execution_arn=self.durable_execution_arn,
         )
 
-    def deserialize_value(self, data: str, serdes: SerDes[S] | None) -> S:
+    async def deserialize_value(self, data: str, serdes: SerDes[S] | None) -> S:
         """Deserialize a value using operation-scoped metadata."""
-        return deserialize(
+        return await deserialize(
             serdes=serdes,
             data=data,
             operation_id=self.operation_id,

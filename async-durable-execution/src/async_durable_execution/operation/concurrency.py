@@ -413,7 +413,7 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
                         executor_context, executable
                     )
                 elif checkpoint.result is not None:
-                    result = deserialize(
+                    result = await deserialize(
                         serdes=self.item_serdes or self.serdes,
                         data=checkpoint.result,
                         operation_id=operation_id,

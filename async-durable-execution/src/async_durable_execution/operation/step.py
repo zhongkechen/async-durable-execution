@@ -119,7 +119,7 @@ class StepOperationExecutor(OperationExecutor[T]):
             if checkpointed_result.result is None:
                 return None  # type: ignore[return-value]
 
-            result: T = self.deserialize_value(
+            result: T = await self.deserialize_value(
                 data=checkpointed_result.result,
                 serdes=self.config.serdes,
             )
@@ -213,7 +213,7 @@ class StepOperationExecutor(OperationExecutor[T]):
             finally:
                 reset_current_context(token)
 
-            serialized_result: str = self.serialize_value(
+            serialized_result: str = await self.serialize_value(
                 value=raw_result,
                 serdes=self.config.serdes,
             )

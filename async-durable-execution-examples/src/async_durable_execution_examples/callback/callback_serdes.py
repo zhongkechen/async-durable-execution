@@ -7,7 +7,6 @@ from typing import Any
 from async_durable_execution import (
     durable_execution,
     SerDes,
-    SerDesContext,
     create_callback,
 )
 
@@ -41,13 +40,13 @@ class CustomData:
 class CustomDataSerDes(SerDes[CustomData]):
     """Custom serializer for CustomData that handles datetime conversion."""
 
-    def serialize(self, value: CustomData | None, _: SerDesContext) -> str | None:
+    async def serialize(self, value: CustomData | None) -> str | None:
         """Serialize CustomData to JSON string."""
         if value is None:
             return None
         return json.dumps(value.to_dict())
 
-    def deserialize(self, payload: str | None, _: SerDesContext) -> CustomData | None:
+    async def deserialize(self, payload: str | None) -> CustomData | None:
         """Deserialize JSON string to CustomData."""
         if payload is None:
             return None

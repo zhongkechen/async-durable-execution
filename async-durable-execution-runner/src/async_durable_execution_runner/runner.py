@@ -72,7 +72,7 @@ def _deserialize_operation_payload(
         serdes = ExtendedTypeSerDes()
 
     try:
-        return serdes.deserialize(payload)
+        return serdes.deserialize_sync(payload)
     except Exception:
         return json.loads(payload)
 
