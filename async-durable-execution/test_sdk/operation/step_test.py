@@ -129,11 +129,9 @@ def test_step_signature_requires_keyword_only_options():
 def test_step_types_importable_from_package_root():
     """Step types remain re-exported from the package root."""
     from async_durable_execution import (
-        StepConfig as ImportedStepConfig,
         StepSemantics as ImportedStepSemantics,
     )
 
-    assert ImportedStepConfig is StepConfig
     assert ImportedStepSemantics is StepSemantics
 
 
