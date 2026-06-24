@@ -126,6 +126,14 @@ hatch run test:all -k pattern
 hatch run test:all --pdb
 ```
 
+### Common troubleshooting
+
+- `TimeoutError: Execution did not complete within 60s` - Increase the runner
+  timeout, for example `timeout=120`.
+- `ModuleNotFoundError: No module named 'async_durable_execution_runner'` - Run
+  through Hatch, such as `hatch run dev-examples:test`, so workspace
+  dependencies are installed automatically.
+
 ### Test layout
 
 - Put tests in the package `tests/` or `test/` directory that matches the code
