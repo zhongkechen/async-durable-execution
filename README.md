@@ -69,6 +69,13 @@ async def validate_order(order_id: str) -> dict:
     return {"order_id": order_id, "valid": True}
 
 
+@durable_callable
+async def create_receipt(order_id: str) -> dict:
+    await asyncio.sleep(0)
+    logger.info("Creating receipt", extra={"order_id": order_id})
+    return {"receipt_id": f"receipt-{order_id}", "order_id": order_id}
+
+
 @durable_execution
 async def handler(event: dict) -> dict:
     order_id = event["order_id"]
@@ -81,36 +88,12 @@ async def handler(event: dict) -> dict:
     # simulate approval (real world: use wait_for_callback)
     await wait(duration=timedelta(seconds=5), name="await_confirmation")
 
-    return {"status": "approved", "order_id": order_id}
+    receipt = await step(create_receipt(order_id), name="create_receipt")
+
+    return {"status": "approved", "order_id": order_id, "receipt": receipt}
 ```
 
-Async callables are required anywhere the SDK accepts user code, including `map()` item functions, bound `parallel()` branch callables, child contexts, callback submitters, and wait-for-condition checks. Durable context operations are awaitable and run on the same event loop as your handler:
-
-```python
-import asyncio
-import logging
-
-from async_durable_execution import (
-    durable_callable,
-    durable_execution,
-    step,
-)
-
-logger = logging.getLogger(__name__)
-
-
-@durable_callable
-async def fetch_order(order_id: str) -> dict:
-    await asyncio.sleep(0)
-    logger.info("Fetched order", extra={"order_id": order_id})
-    return {"order_id": order_id, "status": "ready"}
-
-
-@durable_execution
-async def handler(event: dict) -> dict:
-    order = await step(fetch_order(event["order_id"]), name="fetch_order")
-    return {"order": order}
-```
+Async callables are required anywhere the SDK accepts user code, including `map()` item functions, bound `parallel()` branch callables, child contexts, callback submitters, and wait-for-condition checks. Durable context operations are awaitable and run on the same event loop as your handler.
 
 Handler input is deserialized from the durable execution payload before your code runs. Empty or whitespace payloads are normalized to `{}`, and malformed JSON fails the invocation before user code executes.
 
@@ -124,83 +107,44 @@ pip install async-durable-execution-runner
 
 The local runner executes the durable handler in process, intercepts checkpoint operations with an in-memory service client, and returns a `DurableFunctionTestResult` that can be inspected by operation name.
 
+Assuming the Quick Start handler above is saved in `order_workflow.py`, a local test can run the same durable function:
+
 ```python
 import json
-from datetime import timedelta
-from functools import partial
-from typing import Any
 
-from async_durable_execution import (
-    InvocationStatus,
-    durable_execution,
-    run_in_child_context,
-    step,
-    wait,
-)
+from async_durable_execution import InvocationStatus
 from async_durable_execution_runner import (
-    ContextOperation,
-    DurableFunctionLocalTestRunner,
     DurableFunctionTestResult,
     StepOperation,
+    create_runner,
 )
 
-
-async def one(a: int, b: int) -> str:
-    return f"{a} {b}"
-
-
-async def two_1(a: int, b: int) -> str:
-    return f"{a} {b}"
-
-
-async def two_2(a: int, b: int) -> str:
-    return f"{b} {a}"
-
-
-async def two(a: int, b: int) -> str:
-    two_1_result = await step(partial(two_1, a, b))
-    two_2_result = await step(partial(two_2, a, b))
-    return f"{two_1_result} {two_2_result}"
-
-
-async def three(a: int, b: int) -> str:
-    return f"{a} {b}"
-
-
-@durable_execution
-async def function_under_test(event: Any) -> list[str]:
-    results: list[str] = []
-
-    result_one = await step(partial(one, 1, 2))
-    results.append(result_one)
-
-    await wait(timedelta(seconds=1))
-
-    result_two = await run_in_child_context(partial(two, 3, 4), name="two")
-    results.append(result_two)
-
-    result_three = await step(partial(three, 5, 6))
-    results.append(result_three)
-
-    return results
+from order_workflow import handler
 
 
 async def test_my_durable_function() -> None:
-    with DurableFunctionLocalTestRunner(
-        handler=function_under_test,
-        input="input str",
+    with create_runner(
+        mode="local",
+        handler=handler,
+        input={"order_id": "order-123"},
         timeout=10,
     ) as runner:
         result: DurableFunctionTestResult = await runner.run()
 
+    receipt = {"receipt_id": "receipt-order-123", "order_id": "order-123"}
+
     assert result.status is InvocationStatus.SUCCEEDED
-    assert result.result == json.dumps(["1 2", "3 4 4 3", "5 6"])
+    assert result.result == json.dumps(
+        {"status": "approved", "order_id": "order-123", "receipt": receipt}
+    )
 
-    one_result: StepOperation = result.get_step("one")
-    assert one_result.result == json.dumps("1 2")
+    validation_result: StepOperation = result.get_step("validate_order")
+    assert validation_result.result == json.dumps(
+        {"order_id": "order-123", "valid": True}
+    )
 
-    two_result: ContextOperation = result.get_context("two")
-    assert two_result.result == json.dumps("3 4 4 3")
+    receipt_result: StepOperation = result.get_step("create_receipt")
+    assert receipt_result.result == json.dumps(receipt)
 ```
 
 The `create_runner()` factory selects local or cloud mode from one call shape:
@@ -208,21 +152,23 @@ The `create_runner()` factory selects local or cloud mode from one call shape:
 ```python
 from async_durable_execution_runner import create_runner
 
+from order_workflow import handler
+
 
 async def test_with_factory() -> None:
     with create_runner(
         mode="local",
-        handler=function_under_test,
-        input={"hello": "world"},
+        handler=handler,
+        input={"order_id": "order-123"},
         timeout=12,
     ) as runner:
         local_result = await runner.run()
 
     with create_runner(
         mode="cloud",
-        function_name="hello-world:$LATEST",
+        function_name="order-workflow:$LATEST",
         region="us-east-1",
-        input={"hello": "world"},
+        input={"order_id": "order-123"},
         timeout=45,
     ) as runner:
         cloud_result = await runner.run()
@@ -317,56 +263,6 @@ Cloud test configuration:
 | `QUALIFIED_FUNCTION_NAME` | Optional fallback for single-function cloud runs. |
 | `--runner-mode` | Pytest mode: `local` or `cloud`. |
 
-## 🏗️ Runner Architecture
-
-The runner package has two execution paths:
-
-- **Local testing** - `DurableFunctionLocalTestRunner` runs the handler in process and injects `InMemoryServiceClient` so checkpoint operations are processed locally.
-- **Cloud testing** - `DurableFunctionCloudTestRunner` invokes a qualified Lambda function and polls for durable execution completion.
-
-Local execution flows through these major components:
-
-1. `DurableTestRunner` starts execution through `Executor`.
-2. `Executor` creates an `Execution` and schedules the initial invocation.
-3. During execution, checkpoint updates are handled by `CheckpointProcessor`.
-4. Operation-specific validators and processors transform updates into step, wait, callback, context, and execution operations.
-5. `ExecutionNotifier` publishes lifecycle events.
-6. `Executor` observes those events and updates execution state until completion.
-7. `DurableFunctionTestResult` exposes status, result payloads, and named operation lookup helpers.
-
-Architecture diagrams live with the runner package:
-
-- [Durable Functions Python Test Framework Architecture](async-durable-execution-runner/assets/dar-python-test-framework-architecture.svg)
-- [Event Flow Sequence Diagram](async-durable-execution-runner/assets/dar-python-test-framework-event-flow.svg)
-
-## 🛠️ Development
-
-This repository uses Hatch workspaces to manage package environments and dependencies:
-
-```console
-# Run the full pytest suite.
-hatch run test:all
-
-# Run SDK tests.
-hatch run dev-core:test
-
-# Run runner tests.
-hatch run dev-testing:test
-
-# Run example tests locally.
-hatch run dev-examples:test
-
-# Run type checks.
-hatch run types:check
-```
-
-CI also runs deployed example integration tests after generating and deploying SAM templates. See [.github/workflows/e2e-tests.yml](.github/workflows/e2e-tests.yml) for details.
-
-Common troubleshooting notes:
-
-- `TimeoutError: Execution did not complete within 60s` - Increase the runner timeout, for example `timeout=120`.
-- `ModuleNotFoundError: No module named 'async_durable_execution_runner'` - Run through Hatch, such as `hatch run dev-examples:test`, so workspace dependencies are installed automatically.
-
 ## 📚 Documentation
 
 The complete documentation for the AWS Durable Execution SDK for Python lives on the AWS Documentation site:
@@ -374,6 +270,8 @@ The complete documentation for the AWS Durable Execution SDK for Python lives on
 - **[Generated API Reference](https://zhongkechen.github.io/async-durable-execution/)** - Auto-generated from Python docstrings and published with GitHub Pages
 - **[AWS Durable Execution Documentation](https://docs.aws.amazon.com/durable-execution/)** - Concepts, getting started, core operations, advanced topics, and API reference
 - **[AWS Lambda Durable Functions Guide](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html)** - How durable functions work on Lambda
+- **[Runner Architecture](docs/runner-architecture.md)** - Local and cloud runner execution flow, components, and diagrams
+- **[Contributing Guide](CONTRIBUTING.md)** - Development workflow, Hatch commands, testing, and pull request guidance
 
 ## 💬 Feedback & Support
 
