@@ -12,7 +12,8 @@ from async_durable_execution import (
 )
 
 
-async def noop_submitter(_callback_id: str) -> None:
+@durable_callable
+async def noop_submitter() -> None:
     return None
 
 
@@ -22,7 +23,7 @@ async def child_context_with_callback() -> dict[str, Any]:
     await wait(timedelta(seconds=1), name="child-wait")
 
     child_callback_result: str = await wait_for_callback(
-        noop_submitter, name="child-callback-op"
+        noop_submitter(), name="child-callback-op"
     )
 
     return {
@@ -35,7 +36,7 @@ async def child_context_with_callback() -> dict[str, Any]:
 async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating waitForCallback within child contexts."""
     parent_result: str = await wait_for_callback(
-        noop_submitter, name="parent-callback-op"
+        noop_submitter(), name="parent-callback-op"
     )
 
     child_context_result: dict[str, Any] = await run_in_child_context(

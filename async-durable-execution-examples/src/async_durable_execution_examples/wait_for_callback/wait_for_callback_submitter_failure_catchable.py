@@ -5,6 +5,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
+    durable_callable,
     durable_execution,
     RetryStrategyBuilder,
     wait_for_callback,
@@ -15,7 +16,8 @@ from async_durable_execution import (
 async def handler(_event: Any) -> dict[str, Any]:
     """Handler demonstrating waitForCallback with failing submitter."""
 
-    async def submitter(_callback_id) -> None:
+    @durable_callable
+    async def submitter() -> None:
         """Submitter function that fails after a delay."""
         await asyncio.sleep(0.05)
         # Submitter fails
@@ -23,7 +25,7 @@ async def handler(_event: Any) -> dict[str, Any]:
 
     try:
         result: str = await wait_for_callback(
-            submitter,
+            submitter(),
             name="failing-submitter-callback",
             timeout=timedelta(seconds=3),
             heartbeat_timeout=timedelta(seconds=3),

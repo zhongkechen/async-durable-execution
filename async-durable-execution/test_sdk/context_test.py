@@ -208,7 +208,7 @@ async def test_module_level_context_functions_delegate_to_durable_context():
     async def parallel_func() -> str:
         return "parallel"
 
-    async def submitter(callback_id: str) -> None:
+    async def submitter() -> None:
         return None
 
     async def check(state: str) -> str:

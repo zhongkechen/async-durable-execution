@@ -28,12 +28,13 @@ async def handler(_event: Any) -> dict[str, Any]:
         name="fetch-user-data",
     )
 
-    async def submitter(_callback_id) -> None:
+    @durable_callable
+    async def submitter() -> None:
         """Submitter uses data from previous step."""
         await asyncio.sleep(0.1)
 
     callback_result: str = await wait_for_callback(
-        submitter,
+        submitter(),
         name="wait-for-callback",
     )
 
