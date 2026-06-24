@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, TypeVar
 
-from .. import get_current_context
+from ..context import get_current_context
 from ..async_tools import assert_async_callable, get_callable_name
 from ..config import RetryPresets
 from ..exceptions import (
