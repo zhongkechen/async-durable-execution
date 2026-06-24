@@ -28,6 +28,7 @@ from async_durable_execution.operation.child import (
     ChildConfig,
     child_handler as async_child_handler,
     DurableContext,
+    OrphanedChildException,
     run_in_child_context,
 )
 from async_durable_execution.state import ExecutionState
@@ -62,6 +63,41 @@ async def child_handler(*args, **kwargs):
             state.wrap_user_function.return_value
         )
     return await async_child_handler(*args, **kwargs)
+
+
+def test_orphaned_child_exception_is_base_exception():
+    """OrphanedChildException is owned by the child operation module."""
+    assert issubclass(OrphanedChildException, BaseException)
+    assert not issubclass(OrphanedChildException, Exception)
+
+
+def test_orphaned_child_exception_bypasses_user_exception_handler():
+    """OrphanedChildException is not caught by broad user exception handlers."""
+    caught_by_exception = False
+    caught_by_base_exception = False
+    exception_instance = None
+
+    try:
+        msg = "test message"
+        raise OrphanedChildException(msg, operation_id="test_op_123")
+    except Exception:  # noqa: BLE001
+        caught_by_exception = True
+    except BaseException as e:  # noqa: BLE001
+        caught_by_base_exception = True
+        exception_instance = e
+
+    assert not caught_by_exception
+    assert caught_by_base_exception
+    assert isinstance(exception_instance, OrphanedChildException)
+    assert exception_instance.operation_id == "test_op_123"
+    assert str(exception_instance) == "test message"
+
+
+def test_orphaned_child_exception_with_operation_id():
+    """OrphanedChildException stores operation_id correctly."""
+    exception = OrphanedChildException("parent completed", operation_id="child_op_456")
+    assert exception.operation_id == "child_op_456"
+    assert str(exception) == "parent completed"
 
 
 def create_test_context(

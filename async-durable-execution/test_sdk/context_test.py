@@ -18,6 +18,7 @@ from async_durable_execution.context import (
 )
 from async_durable_execution.operation.callback import (
     Callback,
+    CallbackError,
     CallbackConfig,
 )
 from async_durable_execution.operation.invoke import InvokeConfig
@@ -38,7 +39,6 @@ from async_durable_execution import (
     DurableContext,
 )
 from async_durable_execution.exceptions import (
-    CallbackError,
     SuspendExecution,
     ValidationError,
 )

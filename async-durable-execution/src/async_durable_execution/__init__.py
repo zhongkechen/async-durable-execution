@@ -12,10 +12,11 @@ from .models import (
     BatchResult,
     CompletionReason,
     InvocationStatus,
+    OperationSubType,
     OperationType,
     OperationStatus,
 )
-from .config import RetryPresets, RetryStrategyBuilder
+from .config import JitterStrategy, RetryPresets, RetryStrategyBuilder
 from .context import (
     get_current_context,
 )
@@ -33,59 +34,104 @@ from .operation.parallel import (
     parallel,
 )
 from .operation.callback import (
+    CallbackError,
     create_callback,
     wait_for_callback,
     WaitForCallbackContext,
     Callback,
 )
-from .operation.child import run_in_child_context, DurableContext
-from .operation.step import StepContext, StepSemantics, get_attempt, step
+from .operation.child import (
+    run_in_child_context,
+    DurableContext,
+)
+from .operation.step import (
+    StepContext,
+    StepInterruptedError,
+    StepSemantics,
+    get_attempt,
+    step,
+)
 from .models import (
     ErrorObject,
-    OperationIdentifier,
     RetryDecision,
     WaitDecision,
     WaitForConditionDecision,
 )
 
-# Most common exceptions - users need to handle these exceptions
+# User-facing exception types.
 from .exceptions import (
+    CallableRuntimeError,
     DurableExecutionsError,
+    ExecutionError,
+    InvalidStateError,
     InvocationError,
+    SerDesError,
+    UserlandError,
     ValidationError,
 )
 
 # Core decorator - used in every durable function
 from .execution import durable_execution
 from .operation.wait import wait
-from .plugin import DurableInstrumentationPlugin
-from .serdes import JsonSerDes, SerDes, SerDesContext
-from .types import LambdaContext
+from .plugin import (
+    DurableInstrumentationPlugin,
+    InvocationEndInfo,
+    InvocationInfo,
+    InvocationStartInfo,
+    OperationEndInfo,
+    OperationInfo,
+    OperationStartInfo,
+    UserFunctionEndInfo,
+    UserFunctionOutcome,
+    UserFunctionStartInfo,
+)
+from .serdes import ExtendedTypeSerDes, JsonSerDes, SerDes, SerDesContext
+from .types import DurableServiceClient, LambdaContext, SummaryGenerator
 
 __all__ = [
     "BatchItem",
     "BatchItemStatus",
     "BatchResult",
     "Callback",
+    "CallbackError",
+    "CallableRuntimeError",
     "CompletionConfig",
     "CompletionReason",
     "DurableContext",
     "DurableInstrumentationPlugin",
+    "DurableServiceClient",
     "DurableExecutionsError",
     "ErrorObject",
+    "ExecutionError",
+    "ExtendedTypeSerDes",
+    "InvalidStateError",
+    "InvocationEndInfo",
+    "InvocationInfo",
     "InvocationError",
+    "InvocationStartInfo",
     "JsonSerDes",
+    "JitterStrategy",
     "LambdaContext",
     "MapItemContext",
     "NestingType",
-    "OperationIdentifier",
+    "OperationEndInfo",
+    "OperationInfo",
+    "OperationStartInfo",
+    "OperationSubType",
     "RetryDecision",
     "RetryPresets",
     "RetryStrategyBuilder",
     "SerDes",
     "SerDesContext",
+    "SerDesError",
     "StepContext",
+    "StepInterruptedError",
     "StepSemantics",
+    "SummaryGenerator",
+    "UserFunctionEndInfo",
+    "UserFunctionOutcome",
+    "UserFunctionStartInfo",
+    "UserlandError",
     "ValidationError",
     "WaitForCallbackContext",
     "WaitDecision",

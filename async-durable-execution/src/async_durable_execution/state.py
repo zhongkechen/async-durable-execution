@@ -17,7 +17,6 @@ from .async_tools import invoke_callable
 from .exceptions import (
     DurableExecutionsError,
     GetExecutionStateError,
-    OrphanedChildException,
     SuspendExecution,
 )
 from .models import (
@@ -31,6 +30,7 @@ from .models import (
 )
 from .types import DurableServiceClient
 from .plugin import PluginExecutor
+from .operation.child import OrphanedChildException
 
 
 if TYPE_CHECKING:

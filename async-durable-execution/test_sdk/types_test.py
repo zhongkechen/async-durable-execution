@@ -15,6 +15,54 @@ from async_durable_execution import (
 from async_durable_execution.context import reset_current_context, set_current_context
 from async_durable_execution.models import OperationIdentifier, OperationSubType
 from async_durable_execution.operation import child
+from async_durable_execution.config import JitterStrategy
+from async_durable_execution.plugin import (
+    InvocationEndInfo,
+    InvocationInfo,
+    InvocationStartInfo,
+    OperationEndInfo,
+    OperationInfo,
+    OperationStartInfo,
+    UserFunctionEndInfo,
+    UserFunctionOutcome,
+    UserFunctionStartInfo,
+)
+from async_durable_execution.serdes import ExtendedTypeSerDes
+from async_durable_execution.types import DurableServiceClient, SummaryGenerator
+
+
+def test_additional_public_types_importable_from_package_root():
+    """Supporting public types remain available from the package root."""
+    import async_durable_execution as ade
+
+    expected_exports = {
+        "DurableServiceClient": DurableServiceClient,
+        "ExtendedTypeSerDes": ExtendedTypeSerDes,
+        "InvocationEndInfo": InvocationEndInfo,
+        "InvocationInfo": InvocationInfo,
+        "InvocationStartInfo": InvocationStartInfo,
+        "JitterStrategy": JitterStrategy,
+        "OperationEndInfo": OperationEndInfo,
+        "OperationInfo": OperationInfo,
+        "OperationStartInfo": OperationStartInfo,
+        "OperationSubType": OperationSubType,
+        "SummaryGenerator": SummaryGenerator,
+        "UserFunctionEndInfo": UserFunctionEndInfo,
+        "UserFunctionOutcome": UserFunctionOutcome,
+        "UserFunctionStartInfo": UserFunctionStartInfo,
+    }
+
+    for name, public_type in expected_exports.items():
+        assert getattr(ade, name) is public_type
+        assert name in ade.__all__
+
+
+def test_internal_model_types_not_exported_from_package_root():
+    """Internal construction models stay in async_durable_execution.models."""
+    import async_durable_execution as ade
+
+    assert not hasattr(ade, "OperationIdentifier")
+    assert "OperationIdentifier" not in ade.__all__
 
 
 async def test_module_level_operations_delegate_to_mock_context_methods():
