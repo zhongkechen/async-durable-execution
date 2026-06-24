@@ -6,7 +6,6 @@ from typing import Any
 
 from async_durable_execution import (
     CompletionConfig,
-    MapConfig,
     durable_callable,
     get_current_context,
     step,
@@ -73,16 +72,12 @@ async def handler(_event: Any) -> dict[str, Any]:
             retry_strategy=retry_config.build(),
         )
 
-    config = MapConfig(
+    results = await map(
+        func=process_item,
+        items=items,
+        name="completion-config-items",
         max_concurrency=3,
         completion_config=completion_config,
-    )
-
-    results = await map(
-        inputs=items,
-        func=process_item,
-        name="completion-config-items",
-        config=config,
     )
 
     logger.info("Map completed with results:")

@@ -15,7 +15,6 @@ from async_durable_execution import (
 from async_durable_execution.context import reset_current_context, set_current_context
 from async_durable_execution.models import OperationIdentifier, OperationSubType
 from async_durable_execution.operation import child
-from async_durable_execution.operation.map import MapConfig
 
 
 async def test_module_level_operations_delegate_to_mock_context_methods():
@@ -86,10 +85,9 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
                 == "child_result"
             )
             assert await map_operation(
-                ["a"],
                 test_callable,
+                ["a"],
                 name="test_map",
-                config=MapConfig(),
             ) == ["mapped"]
             assert await parallel(
                 [test_callable],

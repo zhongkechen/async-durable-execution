@@ -7,7 +7,6 @@ from async_durable_execution import (
     durable_callable,
     get_current_context,
     step,
-    MapConfig,
     durable_execution,
     map,
 )
@@ -31,9 +30,9 @@ async def handler(_event: Any) -> list[int]:
     # Extract results immediately to avoid BatchResult serialization
     return (
         await map(
-            inputs=items,
             func=process_item,
+            items=items,
             name="map_with_concurrency",
-            config=MapConfig(max_concurrency=3),
+            max_concurrency=3,
         )
     ).get_results()

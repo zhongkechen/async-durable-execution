@@ -8,7 +8,6 @@ from async_durable_execution import (
     get_current_context,
     step,
     CompletionConfig,
-    MapConfig,
     durable_execution,
     map,
 )
@@ -18,12 +17,6 @@ from async_durable_execution import (
 async def handler(_event: Any) -> dict[str, Any]:
     """Process items with min_successful threshold."""
     items = list(range(1, 11))  # [1, 2, 3, ..., 10]
-
-    # Configure to complete when 6 items succeed
-    config = MapConfig(
-        max_concurrency=5,
-        completion_config=CompletionConfig(min_successful=6),
-    )
 
     async def process_item(item: int) -> int:
         await asyncio.sleep(0)
@@ -36,10 +29,11 @@ async def handler(_event: Any) -> dict[str, Any]:
         return await step(run(), name=f"item_{map_context.index}")
 
     results = await map(
-        inputs=items,
         func=process_item,
+        items=items,
         name="map_min_successful",
-        config=config,
+        max_concurrency=5,
+        completion_config=CompletionConfig(min_successful=6),
     )
 
     return {

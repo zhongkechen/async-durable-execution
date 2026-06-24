@@ -8,7 +8,6 @@ from async_durable_execution import (
     durable_callable,
     get_current_context,
     step,
-    MapConfig,
     durable_execution,
     SerDes,
     SerDesContext,
@@ -45,10 +44,6 @@ async def handler(_event: Any) -> dict[str, Any]:
         {"id": 3, "name": "item3"},
     ]
 
-    # Use custom serdes for individual items only
-    # The BatchResult will use default JSON serialization
-    config = MapConfig(item_serdes=CustomItemSerDes())
-
     async def process_item(item: dict[str, Any]) -> dict[str, Any]:
         await asyncio.sleep(0)
         map_context = get_current_context()
@@ -64,10 +59,10 @@ async def handler(_event: Any) -> dict[str, Any]:
         return await step(build_result(), name=f"process_{map_context.index}")
 
     results = await map(
-        inputs=items,
         func=process_item,
+        items=items,
         name="map_with_custom_serdes",
-        config=config,
+        item_serdes=CustomItemSerDes(),
     )
 
     return {

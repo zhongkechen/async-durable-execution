@@ -7,7 +7,6 @@ from async_durable_execution import (
     durable_callable,
     get_current_context,
     step,
-    MapConfig,
     durable_execution,
     map,
 )
@@ -31,9 +30,9 @@ async def handler(_event: Any) -> list[int]:
     # Use map() to process items concurrently and extract results immediately
     return (
         await map(
-            inputs=items,
             func=process_item,
+            items=items,
             name="map_operation",
-            config=MapConfig(max_concurrency=2),
+            max_concurrency=2,
         )
     ).get_results()

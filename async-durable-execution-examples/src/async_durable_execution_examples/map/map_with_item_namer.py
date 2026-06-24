@@ -6,7 +6,6 @@ from typing import Any
 from async_durable_execution import (
     durable_callable,
     step,
-    MapConfig,
     durable_execution,
     map,
 )
@@ -32,12 +31,10 @@ async def handler(_event: Any) -> list[str]:
 
     return (
         await map(
-            inputs=orders,
             func=process_order,
+            items=orders,
             name="process_orders",
-            config=MapConfig(
-                max_concurrency=2,
-                item_namer=lambda order, index: f"order-{order['id']}",
-            ),
+            max_concurrency=2,
+            item_namer=lambda order, index: f"order-{order['id']}",
         )
     ).get_results()

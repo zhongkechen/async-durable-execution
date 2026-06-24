@@ -12,7 +12,6 @@ from async_durable_execution import (
     BatchItemStatus,
     BatchResult,
     CompletionReason,
-    MapConfig,
     durable_execution,
     ErrorObject,
     JsonSerDes,
@@ -83,9 +82,6 @@ async def handler(_event: Any) -> dict[str, Any]:
     """Process items with custom batch-level serialization."""
     items = [10, 20, 30, 40]
 
-    # Use custom serdes for the entire BatchResult, default JSON for individual items
-    config = MapConfig(serdes=CustomBatchSerDes(), item_serdes=JsonSerDes())
-
     async def process_item(item: int) -> int:
         await asyncio.sleep(0)
         map_context = get_current_context()
@@ -97,10 +93,11 @@ async def handler(_event: Any) -> dict[str, Any]:
         return await step(double(), name=f"double_{map_context.index}")
 
     results = await map(
-        inputs=items,
         func=process_item,
+        items=items,
         name="map_with_batch_serdes",
-        config=config,
+        serdes=CustomBatchSerDes(),
+        item_serdes=JsonSerDes(),
     )
 
     return {

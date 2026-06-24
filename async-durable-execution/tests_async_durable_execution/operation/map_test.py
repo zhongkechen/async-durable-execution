@@ -951,6 +951,47 @@ async def test_map_config_default_summary_generator_behavior():
     assert test_result == ""  # noqa PLC1901
 
 
+@patch("async_durable_execution.operation.map.child_handler")
+async def test_map_iterates_items_iterable_once(mock_handler):
+    """Test map materializes one-shot items iterables exactly once."""
+    mock_handler.return_value = "map_result"
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = (
+        "arn:aws:durable:us-east-1:123456789012:execution/test"
+    )
+
+    class OneShotItems:
+        def __init__(self):
+            self.iterations = 0
+
+        def __iter__(self):
+            self.iterations += 1
+            if self.iterations > 1:
+                raise AssertionError("items iterated more than once")
+            return iter([1, 2, 3])
+
+    async def test_function(item):
+        return item
+
+    items = OneShotItems()
+    context = create_test_context(state=mock_state)
+
+    result = await run_with_context(context, map_operation(test_function, items))
+
+    assert result == "map_result"
+    assert items.iterations == 1
+
+
+async def test_map_name_is_keyword_only():
+    """Test map rejects name as a positional argument."""
+
+    async def test_function(item):
+        return item
+
+    with pytest.raises(TypeError):
+        map_operation(test_function, [1], "map-name")
+
+
 async def test_map_handler_first_execution_then_replay_integration():
     """Test map_handler called twice - first calls execute, second calls replay."""
 
@@ -1098,9 +1139,10 @@ async def test_map_item_serialize(mock_serialize, item_serdes, batch_serdes):
         await run_with_context(
             context,
             map_operation(
-                ["a", "b"],
                 map_item,
-                config=MapConfig(serdes=batch_serdes, item_serdes=item_serdes),
+                ["a", "b"],
+                serdes=batch_serdes,
+                item_serdes=item_serdes,
             ),
         )
 
@@ -1182,9 +1224,10 @@ async def test_map_item_deserialize(mock_deserialize, item_serdes, batch_serdes)
         await run_with_context(
             context,
             map_operation(
-                ["a", "b"],
                 map_item,
-                config=MapConfig(serdes=batch_serdes, item_serdes=item_serdes),
+                ["a", "b"],
+                serdes=batch_serdes,
+                item_serdes=item_serdes,
             ),
         )
 
@@ -1305,7 +1348,7 @@ async def test_map_handler_serializes_batch_result():
                     return item
 
                 result = await run_with_context(
-                    context, map_operation(["a", "b"], map_item)
+                    context, map_operation(map_item, ["a", "b"])
                 )
 
             assert len(mock_serdes_serialize.call_args_list) == 3
@@ -1375,7 +1418,7 @@ async def test_map_default_serdes_serializes_batch_result():
                     return item
 
                 result = await run_with_context(
-                    context, map_operation(["a", "b"], map_item)
+                    context, map_operation(map_item, ["a", "b"])
                 )
 
             assert isinstance(result, BatchResult)
@@ -1452,9 +1495,9 @@ async def test_map_custom_serdes_serializes_batch_result():
                 result = await run_with_context(
                     context,
                     map_operation(
-                        ["a", "b"],
                         map_item,
-                        config=MapConfig(serdes=custom_serdes),
+                        ["a", "b"],
+                        serdes=custom_serdes,
                     ),
                 )
 
@@ -1496,8 +1539,8 @@ async def test_map_with_empty_list_should_exit_early():
     result = await run_with_context(
         context,
         map_operation(
-            items,
             map_func,
+            items,
             name="EmptyMap",
         ),
     )
