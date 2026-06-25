@@ -22,15 +22,15 @@ from ..models import (
 )
 from ..exceptions import SuspendExecution, TimedSuspendExecution
 from ..models import ErrorObject, OperationIdentifier
-from .base import get_checkpoint_result
-from .child import ChildConfig, OrphanedChildException, child_handler
+from ..primitive.base import get_checkpoint_result
+from ..primitive.child import ChildConfig, OrphanedChildException, child_handler
 from ..serdes import deserialize
 
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from .child import DurableContext
+    from ..primitive.child import DurableContext
     from ..models import OperationSubType
     from ..serdes import SerDes
     from ..state import ExecutionState

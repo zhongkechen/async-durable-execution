@@ -14,7 +14,7 @@ from async_durable_execution import (
 )
 from async_durable_execution.context import reset_current_context, set_current_context
 from async_durable_execution.models import OperationIdentifier, OperationSubType
-from async_durable_execution.operation import child
+from async_durable_execution.primitive import child
 from async_durable_execution.config import JitterStrategy
 from async_durable_execution.plugin import (
     InvocationEndInfo,
@@ -98,26 +98,26 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
     try:
         with (
             patch(
-                "async_durable_execution.operation.step.StepOperationExecutor"
+                "async_durable_execution.primitive.step.StepOperationExecutor"
             ) as mock_step_executor,
             patch(
-                "async_durable_execution.operation.callback.CallbackOperationExecutor"
+                "async_durable_execution.primitive.callback.CallbackOperationExecutor"
             ) as mock_callback_executor,
-            patch("async_durable_execution.operation.wait._wait_in_context", mock_wait),
+            patch("async_durable_execution.primitive.wait._wait_in_context", mock_wait),
             patch(
-                "async_durable_execution.operation.child._run_in_child_context_in_context",
+                "async_durable_execution.primitive.child._run_in_child_context_in_context",
                 mock_child,
             ),
             patch(
-                "async_durable_execution.operation.callback._run_in_child_context_in_context",
+                "async_durable_execution.composite.wait_for_callback._run_in_child_context_in_context",
                 mock_child,
             ),
             patch(
-                "async_durable_execution.operation.map.child_handler",
+                "async_durable_execution.composite.map.child_handler",
                 mock_child_handler,
             ),
             patch(
-                "async_durable_execution.operation.parallel.child_handler",
+                "async_durable_execution.composite.parallel.child_handler",
                 mock_child_handler,
             ),
         ):

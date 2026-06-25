@@ -26,14 +26,16 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.operation import callback
-from async_durable_execution.operation.callback import (
+import async_durable_execution.composite.wait_for_callback as callback
+from async_durable_execution.primitive.callback import (
     Callback,
     CallbackError,
     CallbackConfig,
     CallbackOperationExecutor,
-    WaitForCallbackConfig,
     create_callback,
+)
+from async_durable_execution.composite.wait_for_callback import (
+    WaitForCallbackConfig,
     wait_for_callback,
     wait_for_callback_handler,
 )
@@ -41,7 +43,7 @@ from async_durable_execution.models import RetryDecision
 from async_durable_execution.serdes import SerDes
 from async_durable_execution.state import ExecutionState
 from async_durable_execution import DurableContext, WaitForCallbackContext, StepContext
-from async_durable_execution.operation.base import CheckpointedResult
+from async_durable_execution.primitive.base import CheckpointedResult
 
 
 # Test helper - maintains old handler signature for backward compatibility in tests
@@ -94,7 +96,10 @@ def patch_wait_for_callback_ops(mock_callback, *, step_side_effect=None):
 
     with (
         patch.object(callback, "create_callback", create_callback_mock),
-        patch("async_durable_execution.operation.step.step", step_mock),
+        patch(
+            "async_durable_execution.composite.wait_for_callback.step_operation",
+            step_mock,
+        ),
     ):
         yield create_callback_mock, step_mock
 
@@ -1156,7 +1161,7 @@ async def test_callback_name_variations():
         )
 
 
-@patch("async_durable_execution.operation.callback.OperationUpdate")
+@patch("async_durable_execution.primitive.callback.OperationUpdate")
 async def test_callback_operation_update_creation(mock_operation_update):
     """Test that OperationUpdate.create_callback is called with correct parameters."""
     mock_state = Mock(spec=ExecutionState)

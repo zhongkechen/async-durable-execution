@@ -9,7 +9,7 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from async_durable_execution.operation.concurrency import ConcurrentExecutor
+from async_durable_execution.composite.concurrency import ConcurrentExecutor
 
 # Mock the executor.execute method to return a BatchResult
 from async_durable_execution.models import (
@@ -27,9 +27,9 @@ from async_durable_execution.context import reset_current_context, set_current_c
 from async_durable_execution import durable_callable, parallel, DurableContext
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import OperationSubType
-from async_durable_execution.operation import child
-from async_durable_execution.operation.concurrency import CompletionConfig, NestingType
-from async_durable_execution.operation.parallel import (
+from async_durable_execution.primitive import child
+from async_durable_execution.composite.concurrency import CompletionConfig, NestingType
+from async_durable_execution.composite.parallel import (
     ParallelConfig,
     ParallelExecutor,
     parallel_handler,
@@ -157,8 +157,8 @@ def test_parallel_signature_requires_keyword_only_options():
     assert parameters["nesting_type"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
-@patch("async_durable_execution.operation.parallel.parallel_handler")
-@patch("async_durable_execution.operation.parallel.child_handler")
+@patch("async_durable_execution.composite.parallel.parallel_handler")
+@patch("async_durable_execution.composite.parallel.child_handler")
 async def test_parallel_passes_config_fields_to_handler(
     mock_child_handler,
     mock_parallel_handler,
@@ -204,8 +204,8 @@ async def test_parallel_passes_config_fields_to_handler(
     assert config.nesting_type is NestingType.FLAT
 
 
-@patch("async_durable_execution.operation.parallel.parallel_handler")
-@patch("async_durable_execution.operation.parallel.child_handler")
+@patch("async_durable_execution.composite.parallel.parallel_handler")
+@patch("async_durable_execution.composite.parallel.child_handler")
 async def test_parallel_passes_explicit_none_summary_generator(
     mock_child_handler,
     mock_parallel_handler,
@@ -234,8 +234,8 @@ async def test_parallel_passes_explicit_none_summary_generator(
     assert config.summary_generator is None
 
 
-@patch("async_durable_execution.operation.parallel.parallel_handler")
-@patch("async_durable_execution.operation.parallel.child_handler")
+@patch("async_durable_execution.composite.parallel.parallel_handler")
+@patch("async_durable_execution.composite.parallel.child_handler")
 async def test_parallel_accepts_one_shot_branch_iterable(
     mock_child_handler,
     mock_parallel_handler,
@@ -1036,10 +1036,10 @@ async def test_parallel_handler_first_execution_then_replay():
 
     with (
         patch(
-            "async_durable_execution.operation.parallel.ParallelExecutor.execute"
+            "async_durable_execution.composite.parallel.ParallelExecutor.execute"
         ) as mock_execute,
         patch(
-            "async_durable_execution.operation.parallel.ParallelExecutor.replay"
+            "async_durable_execution.composite.parallel.ParallelExecutor.replay"
         ) as mock_replay,
     ):
         mock_execute.return_value = Mock()  # Mock BatchResult
@@ -1078,7 +1078,7 @@ async def test_parallel_handler_first_execution_then_replay():
         (Mock(), None),
     ],
 )
-@patch("async_durable_execution.operation.child.serialize")
+@patch("async_durable_execution.primitive.child.serialize")
 async def test_parallel_item_serialize(mock_serialize, item_serdes, batch_serdes):
     """Test parallel serializes branches with item_serdes or fallback."""
     mock_serialize.return_value = '"serialized"'
@@ -1166,7 +1166,7 @@ async def test_parallel_item_serialize(mock_serialize, item_serdes, batch_serdes
         (Mock(), None),
     ],
 )
-@patch("async_durable_execution.operation.child.deserialize")
+@patch("async_durable_execution.primitive.child.deserialize")
 async def test_parallel_item_deserialize(mock_deserialize, item_serdes, batch_serdes):
     """Test parallel deserializes branches with item_serdes or fallback."""
     mock_deserialize.return_value = "deserialized"

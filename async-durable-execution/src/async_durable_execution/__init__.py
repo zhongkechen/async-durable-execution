@@ -21,30 +21,32 @@ from .context import (
     get_current_context,
 )
 from .async_tools import durable_callable
-from .operation.with_retry import with_retry
-from .operation.map import MapItemContext, map
-from .operation.concurrency import CompletionConfig, NestingType
-from .operation.wait_for_condition import (
+from .composite.with_retry import with_retry
+from .composite.map import MapItemContext, map
+from .composite.concurrency import CompletionConfig, NestingType
+from .composite.wait_for_condition import (
     WaitStrategyBuilder,
     wait_for_condition,
     WaitForConditionCheckContext,
 )
-from .operation.invoke import invoke
-from .operation.parallel import (
+from .primitive.invoke import invoke
+from .composite.parallel import (
     parallel,
 )
-from .operation.callback import (
+from .primitive.callback import (
     CallbackError,
     create_callback,
-    wait_for_callback,
-    WaitForCallbackContext,
     Callback,
 )
-from .operation.child import (
+from .composite.wait_for_callback import (
+    wait_for_callback,
+    WaitForCallbackContext,
+)
+from .primitive.child import (
     run_in_child_context,
     DurableContext,
 )
-from .operation.step import (
+from .primitive.step import (
     StepContext,
     StepInterruptedError,
     StepSemantics,
@@ -72,7 +74,7 @@ from .exceptions import (
 
 # Core decorator - used in every durable function
 from .execution import durable_execution
-from .operation.wait import wait
+from .primitive.wait import wait
 from .plugin import (
     DurableInstrumentationPlugin,
     InvocationEndInfo,

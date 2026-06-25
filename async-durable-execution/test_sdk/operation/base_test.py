@@ -13,7 +13,7 @@ from async_durable_execution.models import (
     OperationType,
     OperationIdentifier,
 )
-from async_durable_execution.operation.base import (
+from async_durable_execution.primitive.base import (
     OperationExecutor,
     CheckpointedResult,
 )

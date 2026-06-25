@@ -17,8 +17,13 @@ from typing import (
 )
 
 from ..async_tools import get_callable_name
-from .base import CheckpointedResult, get_checkpoint_result
-from .child import ChildConfig, DurableContext, child_handler, _get_durable_context
+from ..primitive.base import CheckpointedResult, get_checkpoint_result
+from ..primitive.child import (
+    ChildConfig,
+    DurableContext,
+    child_handler,
+    _get_durable_context,
+)
 
 from ..async_tools import (
     invoke_user_callable,

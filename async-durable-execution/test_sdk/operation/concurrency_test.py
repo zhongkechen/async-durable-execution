@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from async_durable_execution.async_tools import invoke_callable
-from async_durable_execution.operation.concurrency import (
+from async_durable_execution.composite.concurrency import (
     CompletionConfig,
     ConcurrentExecutor,
     NestingType,
@@ -40,8 +40,8 @@ from async_durable_execution.models import (
     OperationIdentifier,
     OperationSubType,
 )
-from async_durable_execution.operation.child import ChildConfig
-from async_durable_execution.operation.map import MapConfig, MapExecutor
+from async_durable_execution.primitive.child import ChildConfig
+from async_durable_execution.composite.map import MapConfig, MapExecutor
 
 
 def _wrap_user_function_for_test(func, *args, **kwargs):
@@ -2582,7 +2582,7 @@ async def test_operation_id_determinism_across_shuffles():
         executor_context.create_child_context = create_child_context
 
         with patch(
-            "async_durable_execution.operation.concurrency.child_handler",
+            "async_durable_execution.composite.concurrency.child_handler",
             patched_child_handler,
         ):
             await run_async(executor.execute(execution_state, executor_context))

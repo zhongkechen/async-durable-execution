@@ -26,8 +26,8 @@ from async_durable_execution.exceptions import (
     UserlandError,
     ValidationError,
 )
-from async_durable_execution.operation.callback import CallbackError
-from async_durable_execution.operation.step import StepInterruptedError
+from async_durable_execution.primitive.callback import CallbackError
+from async_durable_execution.primitive.step import StepInterruptedError
 
 
 def test_user_facing_exceptions_importable_from_package_root():

@@ -29,9 +29,9 @@ from async_durable_execution.context import (
 from async_durable_execution import map as map_operation, DurableContext
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import OperationSubType
-from async_durable_execution.operation import child  # PLC0415
-from async_durable_execution.operation.concurrency import CompletionConfig, NestingType
-from async_durable_execution.operation.map import (
+from async_durable_execution.primitive import child  # PLC0415
+from async_durable_execution.composite.concurrency import CompletionConfig, NestingType
+from async_durable_execution.composite.map import (
     BatchedInput,
     ItemBatcher,
     MapConfig,
@@ -205,7 +205,7 @@ async def test_map_executor_from_items_default_config():
     assert executor.nesting_type is NestingType.NESTED
 
 
-@patch("async_durable_execution.operation.map.logger")
+@patch("async_durable_execution.composite.map.logger")
 async def test_map_executor_execute_item(mock_logger):
     """Test MapExecutor.execute_item method with logging."""
     items = ["hello", "world"]
@@ -942,7 +942,7 @@ async def test_map_config_default_summary_generator_behavior():
     assert test_result == ""  # noqa PLC1901
 
 
-@patch("async_durable_execution.operation.map.child_handler")
+@patch("async_durable_execution.composite.map.child_handler")
 async def test_map_iterates_items_iterable_once(mock_handler):
     """Test map materializes one-shot items iterables exactly once."""
     mock_handler.return_value = "map_result"
@@ -1026,10 +1026,10 @@ async def test_map_handler_first_execution_then_replay_integration():
 
     with (
         patch(
-            "async_durable_execution.operation.map.MapExecutor.execute"
+            "async_durable_execution.composite.map.MapExecutor.execute"
         ) as mock_execute,
         patch(
-            "async_durable_execution.operation.map.MapExecutor.replay"
+            "async_durable_execution.composite.map.MapExecutor.replay"
         ) as mock_replay,
     ):
         mock_execute.return_value = Mock()  # Mock BatchResult
@@ -1068,7 +1068,7 @@ async def test_map_handler_first_execution_then_replay_integration():
         (Mock(), None),
     ],
 )
-@patch("async_durable_execution.operation.child.serialize")
+@patch("async_durable_execution.primitive.child.serialize")
 async def test_map_item_serialize(mock_serialize, item_serdes, batch_serdes):
     """Test map serializes items with item_serdes or fallback."""
     mock_serialize.return_value = '"serialized"'
@@ -1153,7 +1153,7 @@ async def test_map_item_serialize(mock_serialize, item_serdes, batch_serdes):
         (Mock(), None),
     ],
 )
-@patch("async_durable_execution.operation.child.deserialize")
+@patch("async_durable_execution.primitive.child.deserialize")
 async def test_map_item_deserialize(mock_deserialize, item_serdes, batch_serdes):
     """Test map deserializes items with item_serdes or fallback."""
     mock_deserialize.return_value = "deserialized"
