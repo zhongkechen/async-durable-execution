@@ -1677,10 +1677,25 @@ async def test_wait_for_callback_passes_child_context(mock_executor_class):
     )
     mock_submitter = AsyncMock()
 
-    async def capture_handler_call(context, submitter, name, config):
-        assert isinstance(context, DurableContext)
+    def capture_handler_call(
+        submitter,
+        name,
+        *,
+        timeout=None,
+        heartbeat_timeout=None,
+        serdes=None,
+        retry_strategy=None,
+    ):
         assert submitter is mock_submitter
-        return "handler_result"
+        assert timeout is None
+        assert heartbeat_timeout is None
+        assert serdes is None
+        assert retry_strategy is None
+
+        async def bound_handler():
+            return "handler_result"
+
+        return bound_handler
 
     mock_executor_class.side_effect = capture_handler_call
 
