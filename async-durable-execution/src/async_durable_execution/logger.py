@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from .exceptions import ValidationError
-from .operation.base import OperationContext
+from .primitive.base import OperationContext
 from .context import _current_context
 
 

@@ -30,7 +30,7 @@ from .models import (
 )
 from .types import DurableServiceClient
 from .plugin import PluginExecutor
-from .operation.child import OrphanedChildException
+from .primitive.child import OrphanedChildException
 
 
 if TYPE_CHECKING:

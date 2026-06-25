@@ -28,7 +28,7 @@ from async_durable_execution.models import (
 )
 import logging
 from async_durable_execution.context import get_current_context
-from async_durable_execution.operation.step import (
+from async_durable_execution.primitive.step import (
     StepConfig,
     StepInterruptedError,
     StepOperationExecutor,
@@ -38,7 +38,7 @@ from async_durable_execution.operation.step import (
 from async_durable_execution.models import RetryDecision
 from async_durable_execution.state import ExecutionState
 from async_durable_execution import StepContext
-from async_durable_execution.operation.base import CheckpointedResult
+from async_durable_execution.primitive.base import CheckpointedResult
 
 from ..serdes_test import CustomDictSerDes
 
@@ -677,7 +677,7 @@ async def test_step_handler_pending_without_existing_attempts():
     mock_retry_strategy.assert_not_called()
 
 
-@patch("async_durable_execution.operation.step.StepOperationExecutor.retry_handler")
+@patch("async_durable_execution.primitive.step.StepOperationExecutor.retry_handler")
 async def test_step_handler_retry_handler_no_exception(mock_retry_handler):
     """Test step_handler when retry_handler doesn't raise an exception."""
     mock_state = Mock(spec=ExecutionState)

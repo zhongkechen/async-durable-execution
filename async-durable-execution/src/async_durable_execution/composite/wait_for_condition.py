@@ -9,14 +9,14 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
-from .step import StepContext
+from ..primitive.step import StepContext
 from ..async_tools import assert_async_callable
 from ..config import JitterStrategy, duration_to_seconds
 from ..context import (
     reset_current_context,
     set_current_context,
 )
-from .child import _get_durable_context
+from ..primitive.child import _get_durable_context
 from ..exceptions import (
     ExecutionError,
     ValidationError,
@@ -33,7 +33,11 @@ from ..models import (
     WaitDecision,
     WaitForConditionDecision,
 )
-from .base import CHECKPOINT_NOT_FOUND, CheckpointedResult, OperationExecutor
+from ..primitive.base import (
+    CHECKPOINT_NOT_FOUND,
+    CheckpointedResult,
+    OperationExecutor,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable

@@ -1,4 +1,4 @@
-"""Implementation for the Durable create_callback and wait_for_callback operations."""
+"""Implementation for the backend-supported create_callback operation."""
 
 from __future__ import annotations
 
@@ -7,17 +7,10 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
-from ..async_tools import get_callable_name
 from ..models import CallbackTimeoutType
 
-from .child import _run_in_child_context_in_context, _get_durable_context
-from ..async_tools import assert_async_callable
+from .child import _get_durable_context
 from ..config import duration_to_seconds
-from ..context import (
-    reset_current_context,
-    set_current_context,
-    get_current_context,
-)
 from ..exceptions import ExecutionError, SuspendExecution, TerminationReason
 from ..models import (
     CallbackOptions,
@@ -25,22 +18,17 @@ from ..models import (
     OperationIdentifier,
     OperationUpdate,
     OperationSubType,
-    RetryDecision,
 )
 from .base import (
     CheckpointedResult,
     OperationExecutor,
-    OperationContext,
     get_checkpoint_result,
 )
 from ..serdes import deserialize, SerDes, PassThroughSerDes
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
-
     from ..serdes import SerDes
     from ..state import ExecutionState
-    from .child import DurableContext
 
 T = TypeVar("T")  # Result type
 
@@ -78,13 +66,6 @@ class CallbackConfig:
     def heartbeat_timeout_seconds(self) -> int:
         """Get heartbeat timeout in seconds."""
         return duration_to_seconds(self.heartbeat_timeout, "heartbeat_timeout")
-
-
-@dataclass(frozen=True)
-class WaitForCallbackConfig(CallbackConfig):
-    """Configuration for wait for callback."""
-
-    retry_strategy: Callable[[Exception, int], RetryDecision] | None = None
 
 
 class CallbackOperationExecutor(OperationExecutor[str]):
@@ -164,50 +145,6 @@ class CallbackOperationExecutor(OperationExecutor[str]):
             raise CallbackError(msg)
 
         return checkpointed_result.operation.callback_details.callback_id
-
-
-async def wait_for_callback_handler(
-    context: DurableContext,
-    submitter: Callable[[], Awaitable[Any]],
-    name: str | None = None,
-    config: WaitForCallbackConfig | None = None,
-) -> Any:
-    """Wait for a callback to be invoked by an external system.
-
-    This is a helper function that is used to create a callback and wait for it to be invoked by an external system.
-    """
-    from .step import step as step_operation
-
-    name_with_space: str = f"{name} " if name else ""
-    callback: Callback = await create_callback(
-        name=f"{name_with_space}create callback id",
-        timeout=config.timeout if config else None,
-        heartbeat_timeout=config.heartbeat_timeout if config else None,
-        serdes=config.serdes if config else None,
-    )
-
-    async def submitter_step():
-        step_context = get_current_context()
-        callback_context = WaitForCallbackContext(
-            callback_id=callback.callback_id,
-            execution_state=step_context.execution_state,
-            operation_identifier=step_context.operation_identifier,
-            lambda_context=step_context.lambda_context,
-        )
-        token = set_current_context(callback_context)
-        try:
-            return await submitter()
-        finally:
-            reset_current_context(token)
-
-    await step_operation(
-        func=submitter_step,
-        name=f"{name_with_space}submitter",
-        retry_strategy=config.retry_strategy if config else None,
-        serdes=config.serdes if config else None,
-    )
-
-    return await callback.result()
 
 
 async def create_callback(
@@ -315,62 +252,6 @@ class Callback(Generic[T]):  # noqa: PYI059
         # therefore we should wait
         msg = "Callback result not received yet. Suspending execution while waiting for result."
         raise SuspendExecution(msg)
-
-
-async def wait_for_callback(
-    submitter: Callable[[], Awaitable[Any]],
-    *,
-    name: str | None = None,
-    timeout: timedelta | None = None,
-    heartbeat_timeout: timedelta | None = None,
-    serdes: SerDes | None = None,
-    retry_strategy: Callable[[Exception, int], RetryDecision] | None = None,
-) -> Any:
-    """Create a callback, run a submitter, then suspend until the callback resolves.
-
-    Args:
-        submitter: Async callable. Use get_current_context().callback_id inside the
-            submitter to access the callback id.
-        name: Optional durable operation name.
-        timeout: Optional maximum time to wait for callback completion.
-        heartbeat_timeout: Optional maximum time to wait between callback heartbeats.
-        serdes: Optional serializer for callback results and submitter results.
-        retry_strategy: Optional retry strategy for submitter failures.
-    """
-    context = _get_durable_context("wait_for_callback")
-    assert_async_callable(submitter, label="submitter")
-    step_name: str | None = name or get_callable_name(submitter)
-    logger.debug("wait_for_callback name: %s", step_name)
-    config = WaitForCallbackConfig(
-        timeout=timeout if timeout is not None else timedelta(),
-        heartbeat_timeout=heartbeat_timeout
-        if heartbeat_timeout is not None
-        else timedelta(),
-        serdes=serdes,
-        retry_strategy=retry_strategy,
-    )
-
-    async def wait_in_child_context():
-        current_context = get_current_context()
-        return await wait_for_callback_handler(
-            current_context,
-            submitter,
-            step_name,
-            config,
-        )
-
-    return await _run_in_child_context_in_context(
-        context,
-        wait_in_child_context,
-        name=step_name,
-    )
-
-
-@dataclass(frozen=True)
-class WaitForCallbackContext(OperationContext):
-    """Context available during wait_for_callback submitter execution."""
-
-    callback_id: str = ""
 
 
 def _format_callback_error_message(checkpointed_result: CheckpointedResult) -> str:

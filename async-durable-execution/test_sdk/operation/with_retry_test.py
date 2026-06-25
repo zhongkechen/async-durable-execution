@@ -16,8 +16,8 @@ from async_durable_execution.config import (
     RetryStrategyBuilder,
 )
 from async_durable_execution.exceptions import SuspendExecution
-from async_durable_execution.operation.child import ChildConfig
-from async_durable_execution.operation.with_retry import WithRetryConfig
+from async_durable_execution.primitive.child import ChildConfig
+from async_durable_execution.composite.with_retry import WithRetryConfig
 
 
 if TYPE_CHECKING:
@@ -149,15 +149,15 @@ async def _call_with_retry(
 
     with (
         patch(
-            "async_durable_execution.operation.with_retry._get_durable_context",
+            "async_durable_execution.composite.with_retry._get_durable_context",
             return_value=ctx,
         ),
         patch(
-            "async_durable_execution.operation.with_retry._wait_in_context",
+            "async_durable_execution.composite.with_retry._wait_in_context",
             new=AsyncMock(side_effect=fake_wait_in_context),
         ),
         patch(
-            "async_durable_execution.operation.with_retry._run_in_child_context_in_context",
+            "async_durable_execution.composite.with_retry._run_in_child_context_in_context",
             new=AsyncMock(side_effect=fake_run_in_child_context_in_context),
         ),
     ):

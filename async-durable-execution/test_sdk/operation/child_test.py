@@ -24,7 +24,7 @@ from async_durable_execution.models import (
     OperationSubType,
     OperationType,
 )
-from async_durable_execution.operation.child import (
+from async_durable_execution.primitive.child import (
     ChildConfig,
     child_handler as async_child_handler,
     DurableContext,
@@ -33,7 +33,7 @@ from async_durable_execution.operation.child import (
 )
 from async_durable_execution.state import ExecutionState
 from async_durable_execution.types import SummaryGenerator
-from async_durable_execution.operation.base import CheckpointedResult
+from async_durable_execution.primitive.base import CheckpointedResult
 
 from ..serdes_test import CustomDictSerDes
 

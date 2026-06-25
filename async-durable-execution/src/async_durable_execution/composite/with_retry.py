@@ -5,17 +5,17 @@ from typing import TYPE_CHECKING, Callable, Awaitable, TypeVar, Generic
 
 from ..config import RetryStrategyBuilder
 from ..models import RetryDecision
-from .child import ChildConfig
+from ..primitive.child import ChildConfig
 from ..async_tools import (
     assert_async_callable,
     invoke_user_callable,
 )
 from ..exceptions import SuspendExecution
-from .child import (
+from ..primitive.child import (
     _run_in_child_context_in_context,
     _get_durable_context,
 )
-from .wait import _wait_in_context
+from ..primitive.wait import _wait_in_context
 
 if TYPE_CHECKING:
     from ..serdes import SerDes

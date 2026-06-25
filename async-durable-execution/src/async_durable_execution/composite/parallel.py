@@ -14,8 +14,8 @@ from typing import (
     Iterable,
 )
 
-from .base import get_checkpoint_result
-from .child import ChildConfig, child_handler, _get_durable_context
+from ..primitive.base import get_checkpoint_result
+from ..primitive.child import ChildConfig, child_handler, _get_durable_context
 
 from ..async_tools import (
     invoke_user_callable,
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from ..serdes import SerDes
     from ..state import ExecutionState
     from ..types import SummaryGenerator
-    from .child import DurableContext
+    from ..primitive.child import DurableContext
 
 logger = logging.getLogger(__name__)
 

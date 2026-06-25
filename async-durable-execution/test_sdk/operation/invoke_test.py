@@ -24,13 +24,13 @@ from async_durable_execution.models import (
     OperationSubType,
     OperationType,
 )
-from async_durable_execution.operation.invoke import (
+from async_durable_execution.primitive.invoke import (
     InvokeConfig,
     InvokeOperationExecutor,
     invoke,
 )
 from async_durable_execution.state import ExecutionState
-from async_durable_execution.operation.base import CheckpointedResult
+from async_durable_execution.primitive.base import CheckpointedResult
 
 from ..serdes_test import CustomDictSerDes
 
@@ -622,7 +622,7 @@ async def test_invoke_handler_already_succeeded_with_none_payload():
     mock_state.create_checkpoint.assert_not_called()
 
 
-@patch("async_durable_execution.operation.invoke.suspend_with_optional_resume_delay")
+@patch("async_durable_execution.primitive.invoke.suspend_with_optional_resume_delay")
 async def test_invoke_handler_suspend_does_not_raise(mock_suspend):
     """Test invoke_handler when suspend_with_optional_resume_delay doesn't raise an exception."""
 

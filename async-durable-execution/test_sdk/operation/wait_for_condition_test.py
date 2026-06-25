@@ -26,7 +26,7 @@ from async_durable_execution.models import (
     StepDetails,
 )
 import logging
-from async_durable_execution.operation.wait_for_condition import (
+from async_durable_execution.composite.wait_for_condition import (
     WaitForConditionConfig,
     WaitForConditionOperationExecutor,
     wait_for_condition,
@@ -35,8 +35,8 @@ from async_durable_execution.state import ExecutionState
 from async_durable_execution import WaitForConditionCheckContext
 from async_durable_execution.models import WaitForConditionDecision
 from async_durable_execution.config import JitterStrategy
-from async_durable_execution.operation.base import CheckpointedResult
-from async_durable_execution.operation.wait_for_condition import WaitStrategyBuilder
+from async_durable_execution.primitive.base import CheckpointedResult
+from async_durable_execution.composite.wait_for_condition import WaitStrategyBuilder
 
 from ..serdes_test import CustomDictSerDes
 

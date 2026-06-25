@@ -34,11 +34,11 @@ from async_durable_execution.models import (
     StepDetails,
 )
 from async_durable_execution.client import ThreadedSyncLambdaClient
-from async_durable_execution.operation.base import (
+from async_durable_execution.primitive.base import (
     get_checkpoint_result,
     CheckpointedResult,
 )
-from async_durable_execution.operation.child import OrphanedChildException
+from async_durable_execution.primitive.child import OrphanedChildException
 from async_durable_execution.plugin import (
     DurableInstrumentationPlugin,
     PluginExecutor,
