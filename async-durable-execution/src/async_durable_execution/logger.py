@@ -82,12 +82,11 @@ def configure_durable_logger(logger):
 
 
 def _is_replaying(context: OperationContext) -> bool:
-    state = context.execution_state
-    if state is None:
+    if context.execution_state is None:
         raise ValidationError(
             "The execution state is None",
         )
-    return bool(state.is_replaying())
+    return bool(context.is_replaying())
 
 
 __all__ = [

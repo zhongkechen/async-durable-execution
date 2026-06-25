@@ -23,8 +23,8 @@ from async_durable_execution.models import (
     OperationType,
 )
 from async_durable_execution.plugin import PluginExecutor
-from async_durable_execution.state import ExecutionState, ReplayStatus
-from async_durable_execution import StepContext, DurableContext
+from async_durable_execution.state import ExecutionState
+from async_durable_execution import DurableContext, StepContext
 
 
 class PowertoolsLoggerStub:
@@ -250,16 +250,15 @@ def test_filter_suppresses_logs_during_replay():
         initial_checkpoint_token="test_token",  # noqa: S106
         operations={"op1": operation},
         service_client=Mock(),
-        replay_status=ReplayStatus.REPLAY,
         plugin_executor=PluginExecutor([]),
     )
-    step_context = StepContext(
-        attempt=1,
+    durable_context = DurableContext(
         execution_state=replay_state,
         operation_identifier=OperationIdentifier(
-            operation_id="op1",
-            sub_type=OperationSubType.STEP,
+            operation_id=None,
+            sub_type=OperationSubType.EXECUTION,
         ),
+        replaying=True,
     )
 
     record = logging.LogRecord(
@@ -272,7 +271,7 @@ def test_filter_suppresses_logs_during_replay():
         exc_info=None,
     )
 
-    token = set_current_context(step_context)
+    token = set_current_context(durable_context)
     try:
         allowed = DurableContextFilter().filter(record)
     finally:

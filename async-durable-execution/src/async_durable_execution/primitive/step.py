@@ -381,32 +381,31 @@ async def step(
         step_semantics=step_semantics,
         serdes=serdes,
     )
-    operation_id = context.step_counter.create_step_id()
+    with context._replay_aware(executes_user_code=True):
+        operation_id = context.step_counter.create_step_id()
 
-    operation_identifier = OperationIdentifier(
-        operation_id=operation_id,
-        sub_type=OperationSubType.STEP,
-        parent_id=context.parent_id,
-        name=step_name,
-    )
-    if context.lambda_context is None:
-        executor: StepOperationExecutor[T] = StepOperationExecutor(
-            func=func,
-            config=config,
-            state=context.execution_state,
-            operation_identifier=operation_identifier,
+        operation_identifier = OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=OperationSubType.STEP,
+            parent_id=context.parent_id,
+            name=step_name,
         )
-    else:
-        executor = StepOperationExecutor(
-            func=func,
-            config=config,
-            state=context.execution_state,
-            operation_identifier=operation_identifier,
-            lambda_context=context.lambda_context,
-        )
-    result: T = await executor.process()
-    context.execution_state.track_replay(operation_id=operation_id)
-    return result
+        if context.lambda_context is None:
+            executor: StepOperationExecutor[T] = StepOperationExecutor(
+                func=func,
+                config=config,
+                state=context.execution_state,
+                operation_identifier=operation_identifier,
+            )
+        else:
+            executor = StepOperationExecutor(
+                func=func,
+                config=config,
+                state=context.execution_state,
+                operation_identifier=operation_identifier,
+                lambda_context=context.lambda_context,
+            )
+        return await executor.process()
 
 
 @dataclass(frozen=True)

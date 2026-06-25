@@ -2786,7 +2786,7 @@ async def test_durable_execution_replays_when_paginated_state_has_prior_operatio
     async def test_handler(event: Any) -> dict:
         del event
         durable_context = cast(DurableContext, get_current_context())
-        return {"is_replaying": durable_context.execution_state.is_replaying()}
+        return {"is_replaying": durable_context.is_replaying()}
 
     result = await run_handler(
         test_handler,

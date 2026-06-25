@@ -77,7 +77,6 @@ def create_execution_state():
     state.create_checkpoint = AsyncMock()
     state.create_checkpoint = AsyncMock()
     state.wrap_user_function = _wrap_user_function_for_test
-    state.track_replay = Mock()
     state.operations.get.return_value = create_checkpoint_result()
     return state
 

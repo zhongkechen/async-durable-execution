@@ -468,35 +468,34 @@ async def wait_for_condition(
     )
     assert_async_callable(check, label="check")
 
-    operation_id = context.step_counter.create_step_id()
-    operation_identifier = OperationIdentifier(
-        operation_id=operation_id,
-        sub_type=OperationSubType.WAIT_FOR_CONDITION,
-        parent_id=context.parent_id,
-        name=name,
-    )
-    if context.lambda_context is None:
-        executor: WaitForConditionOperationExecutor[T] = (
-            WaitForConditionOperationExecutor(
+    with context._replay_aware(executes_user_code=True):
+        operation_id = context.step_counter.create_step_id()
+        operation_identifier = OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=OperationSubType.WAIT_FOR_CONDITION,
+            parent_id=context.parent_id,
+            name=name,
+        )
+        if context.lambda_context is None:
+            executor: WaitForConditionOperationExecutor[T] = (
+                WaitForConditionOperationExecutor(
+                    check=check,
+                    config=config,
+                    initial_state=initial_state,
+                    state=context.execution_state,
+                    operation_identifier=operation_identifier,
+                )
+            )
+        else:
+            executor = WaitForConditionOperationExecutor(
                 check=check,
                 config=config,
                 initial_state=initial_state,
                 state=context.execution_state,
                 operation_identifier=operation_identifier,
+                lambda_context=context.lambda_context,
             )
-        )
-    else:
-        executor = WaitForConditionOperationExecutor(
-            check=check,
-            config=config,
-            initial_state=initial_state,
-            state=context.execution_state,
-            operation_identifier=operation_identifier,
-            lambda_context=context.lambda_context,
-        )
-    result: T = await executor.process()
-    context.execution_state.track_replay(operation_id=operation_id)
-    return result
+        return await executor.process()
 
 
 @dataclass(frozen=True)

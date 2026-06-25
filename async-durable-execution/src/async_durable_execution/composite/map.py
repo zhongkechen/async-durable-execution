@@ -269,33 +269,32 @@ async def map(
         item_namer=item_namer,
     )
 
-    operation_id = context.step_counter.create_step_id()
-    operation_identifier = OperationIdentifier(
-        operation_id=operation_id,
-        sub_type=OperationSubType.MAP,
-        parent_id=context.parent_id,
-        name=map_name,
-    )
-    map_context = context.create_child_context(operation_id=operation_id)
-
-    async def map_in_child_context() -> BatchResult[T]:
-        return await map_handler(
-            items=items_sequence,
-            func=func,
-            config=config,
-            execution_state=context.execution_state,
-            map_context=map_context,
-            operation_identifier=operation_identifier,
+    with context._replay_aware():
+        operation_id = context.step_counter.create_step_id()
+        operation_identifier = OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=OperationSubType.MAP,
+            parent_id=context.parent_id,
+            name=map_name,
         )
+        map_context = context.create_child_context(operation_id=operation_id)
 
-    result = await child_handler(
-        func=map_in_child_context,
-        state=context.execution_state,
-        operation_identifier=operation_identifier,
-        config=ChildConfig(
-            serdes=getattr(config, "serdes", None),
-            item_serdes=None,
-        ),
-    )
-    context.execution_state.track_replay(operation_id=operation_id)
-    return result
+        async def map_in_child_context() -> BatchResult[T]:
+            return await map_handler(
+                items=items_sequence,
+                func=func,
+                config=config,
+                execution_state=context.execution_state,
+                map_context=map_context,
+                operation_identifier=operation_identifier,
+            )
+
+        return await child_handler(
+            func=map_in_child_context,
+            state=context.execution_state,
+            operation_identifier=operation_identifier,
+            config=ChildConfig(
+                serdes=getattr(config, "serdes", None),
+                item_serdes=None,
+            ),
+        )

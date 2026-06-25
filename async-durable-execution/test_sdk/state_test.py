@@ -47,7 +47,6 @@ from async_durable_execution.state import (
     CheckpointBatcherConfig,
     ExecutionState as _ExecutionState,
     QueuedOperation,
-    ReplayStatus,
 )
 
 
@@ -78,7 +77,6 @@ def ExecutionState(
     plugin_executor,
     batcher_config: CheckpointBatcherConfig | None = None,
     operations: dict[str, Operation] | None = None,
-    replay_status: ReplayStatus | None = None,
 ):
     state = _ExecutionState(
         durable_execution_arn=durable_execution_arn,
@@ -90,8 +88,6 @@ def ExecutionState(
     state._checkpoint_queue = _CompatAsyncQueue()
     if operations:
         state.operations.update(operations)
-    if replay_status is not None:
-        state._replay_status = replay_status
     return state
 
 
@@ -3115,64 +3111,36 @@ async def test_create_checkpoint_sync_mode_always_blocks():
     await run_async(scenario())
 
 
-async def test_state_replay_mode():
+async def test_state_has_prior_operations_true_for_non_execution_operation():
     operation1 = Operation(
         operation_id="op1",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-    )
-    operation2 = Operation(
-        operation_id="op2",
         operation_type=OperationType.STEP,
         status=OperationStatus.SUCCEEDED,
     )
     execution_state = ExecutionState(
         durable_execution_arn="arn:aws:test",
         initial_checkpoint_token="test_token",  # noqa: S106
-        operations={"op1": operation1, "op2": operation2},
+        operations={"op1": operation1},
         service_client=Mock(),
         plugin_executor=PluginExecutor(plugins=None),
-        replay_status=ReplayStatus.REPLAY,
     )
-    assert execution_state.is_replaying() is True
-    execution_state.track_replay(operation_id="op1")
-    assert execution_state.is_replaying() is True
-    execution_state.track_replay(operation_id="op2")
-    assert execution_state.is_replaying() is False
+    assert execution_state.has_prior_operations() is True
 
 
-async def test_state_replay_mode_with_timed_out():
-    """Test that TIMED_OUT operations are treated as terminal states for replay tracking.
-
-    This test verifies that when an operation has TIMED_OUT status, it is correctly
-    recognized as a completed/terminal state, allowing the replay status to transition
-    from REPLAY to NEW once all completed operations have been visited.
-
-    Regression test for: https://github.com/zhongkechen/async-durable-execution/issues/262
-    """
-    operation1 = Operation(
-        operation_id="op1",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.TIMED_OUT,
-    )
-    operation2 = Operation(
-        operation_id="op2",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
+async def test_state_has_prior_operations_false_for_execution_only():
+    execution_operation = Operation(
+        operation_id="exec1",
+        operation_type=OperationType.EXECUTION,
+        status=OperationStatus.STARTED,
     )
     execution_state = ExecutionState(
         durable_execution_arn="arn:aws:test",
         initial_checkpoint_token="test_token",  # noqa: S106
-        operations={"op1": operation1, "op2": operation2},
+        operations={"exec1": execution_operation},
         service_client=Mock(),
         plugin_executor=PluginExecutor(plugins=None),
-        replay_status=ReplayStatus.REPLAY,
     )
-    assert execution_state.is_replaying() is True
-    execution_state.track_replay(operation_id="op1")
-    assert execution_state.is_replaying() is True
-    execution_state.track_replay(operation_id="op2")
-    assert execution_state.is_replaying() is False
+    assert execution_state.has_prior_operations() is False
 
 
 # Tests for empty checkpoint coalescing (issue #325)

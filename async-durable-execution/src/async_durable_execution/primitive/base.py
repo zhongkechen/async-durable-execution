@@ -52,6 +52,10 @@ class OperationContext:
     def operation_name(self) -> str | None:
         return self.operation_identifier.name
 
+    def is_replaying(self) -> bool:
+        """Return whether the active context is replaying prior user code."""
+        return False
+
 
 @dataclass(frozen=True)
 class CheckpointedResult:

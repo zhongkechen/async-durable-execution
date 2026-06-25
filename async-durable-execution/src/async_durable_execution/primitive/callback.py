@@ -170,27 +170,26 @@ async def create_callback(
         else timedelta(),
         serdes=serdes,
     )
-    operation_id: str = context.step_counter.create_step_id()
+    with context._replay_aware():
+        operation_id: str = context.step_counter.create_step_id()
 
-    executor: CallbackOperationExecutor = CallbackOperationExecutor(
-        state=context.execution_state,
-        operation_identifier=OperationIdentifier(
+        executor: CallbackOperationExecutor = CallbackOperationExecutor(
+            state=context.execution_state,
+            operation_identifier=OperationIdentifier(
+                operation_id=operation_id,
+                sub_type=OperationSubType.CALLBACK,
+                parent_id=context.parent_id,
+                name=name,
+            ),
+            config=config,
+        )
+        callback_id: str = await executor.process()
+        return Callback(
+            callback_id=callback_id,
             operation_id=operation_id,
-            sub_type=OperationSubType.CALLBACK,
-            parent_id=context.parent_id,
-            name=name,
-        ),
-        config=config,
-    )
-    callback_id: str = await executor.process()
-    result: Callback = Callback(
-        callback_id=callback_id,
-        operation_id=operation_id,
-        state=context.execution_state,
-        serdes=config.serdes,
-    )
-    context.execution_state.track_replay(operation_id=operation_id)
-    return result
+            state=context.execution_state,
+            serdes=config.serdes,
+        )
 
 
 class Callback(Generic[T]):  # noqa: PYI059

@@ -10,7 +10,6 @@ from collections import deque
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from .async_tools import invoke_callable
@@ -24,7 +23,6 @@ from .models import (
     Operation,
     OperationIdentifier,
     OperationAction,
-    OperationStatus,
     OperationType,
     OperationUpdate,
 )
@@ -83,13 +81,6 @@ def _completion_set_exception(completion, error: Exception) -> None:
     completion.set_exception(error)
 
 
-class ReplayStatus(Enum):
-    """Status indicating whether execution is replaying or executing new operations."""
-
-    REPLAY = "replay"
-    NEW = "new"
-
-
 class ExecutionState:
     """Get, set and maintain execution state. This is mutable. Create and check checkpoints."""
 
@@ -109,7 +100,6 @@ class ExecutionState:
         plugin_executor: PluginExecutor,
         batcher_config: CheckpointBatcherConfig | None = None,
         operations: MutableMapping[str, Operation] | None = None,
-        replay_status: ReplayStatus = ReplayStatus.NEW,
     ):
         self.operations: MutableMapping[str, Operation] = dict(operations or {})
         self.durable_execution_arn: str = durable_execution_arn
@@ -134,17 +124,12 @@ class ExecutionState:
         # Operations whose parent has completed
         self._parent_done: set[str] = set()
 
-        self._replay_status: ReplayStatus = replay_status
-        self._visited_operations: set[str] = set()
-
     async def initialize(self, invocation_input):
         await self.fetch_paginated_operations(
             invocation_input.initial_execution_state.operations,
             invocation_input.checkpoint_token,
             invocation_input.initial_execution_state.next_marker,
         )
-
-        self.mark_replaying_if_prior_operations_exist()
 
     async def fetch_paginated_operations(
         self,
@@ -237,58 +222,12 @@ class ExecutionState:
 
         return candidate
 
-    def track_replay(self, operation_id: str) -> None:
-        """Check if operation exists with completed status; if not, transition to NEW status.
-
-        This method is called before each operation (step, wait, invoke, etc.) to determine
-        if we've reached the replay boundary. Once we encounter an operation that doesn't
-        exist or isn't completed, we transition from REPLAY to NEW status, which enables
-        logging for all subsequent code.
-
-        Args:
-            operation_id: The operation ID to check
-        """
-        if self._replay_status == ReplayStatus.REPLAY:
-            self._visited_operations.add(operation_id)
-            completed_ops = {
-                op_id
-                for op_id, op in self.operations.items()
-                if op.operation_type != OperationType.EXECUTION
-                and op.status
-                in {
-                    OperationStatus.SUCCEEDED,
-                    OperationStatus.FAILED,
-                    OperationStatus.CANCELLED,
-                    OperationStatus.STOPPED,
-                    OperationStatus.TIMED_OUT,
-                }
-            }
-            if completed_ops.issubset(self._visited_operations):
-                logger.debug(
-                    "Transitioning from REPLAY to NEW status at operation %s",
-                    operation_id,
-                )
-                self._replay_status = ReplayStatus.NEW
-
-    def is_replaying(self) -> bool:
-        """Check if execution is currently in replay mode.
-
-        Returns:
-            True if in REPLAY status, False if in NEW status
-        """
-        return self._replay_status is ReplayStatus.REPLAY
-
-    def mark_replaying_if_prior_operations_exist(self) -> None:
-        """Mark execution state as replaying when non-execution operations exist."""
-        has_prior_operations: bool = any(
+    def has_prior_operations(self) -> bool:
+        """Return True if loaded state contains any non-execution operation."""
+        return any(
             op.operation_type is not OperationType.EXECUTION
-            for op in self.operations.values()
+            for op in tuple(self.operations.values())
         )
-
-        if has_prior_operations:
-            self._replay_status = ReplayStatus.REPLAY
-        else:
-            self._replay_status = ReplayStatus.NEW
 
     async def create_checkpoint(
         self,
