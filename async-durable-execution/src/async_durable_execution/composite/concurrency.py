@@ -6,22 +6,15 @@ import asyncio
 import logging
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from collections import Counter
+from collections.abc import Mapping
+from dataclasses import dataclass, field as dataclass_field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
-from ..models import (
-    BatchItem,
-    BatchItemStatus,
-    BatchResult,
-    BranchStatus,
-    Executable,
-    ExecutableWithState,
-    ExecutionCounters,
-    SuspendResult,
-)
 from ..exceptions import SuspendExecution, TimedSuspendExecution
-from ..models import ErrorObject, OperationIdentifier
+from ..exceptions import InvalidStateError
+from ..models import ErrorObject, OperationIdentifier, SerializableModel, _metadata
 from ..primitive.base import get_checkpoint_result
 from ..primitive.child import ChildConfig, OrphanedChildException, child_handler
 from ..serdes import deserialize
@@ -41,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 CallableType = TypeVar("CallableType")
 ResultType = TypeVar("ResultType")
+R = TypeVar("R")
 
 
 class NestingType(Enum):
@@ -81,6 +75,418 @@ class CompletionConfig:
             tolerated_failure_count=0,
             tolerated_failure_percentage=0,
         )
+
+
+class BatchItemStatus(Enum):
+    """Status of one item or branch inside a batch-style operation."""
+
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    STARTED = "STARTED"
+
+
+class CompletionReason(Enum):
+    """Why a map or parallel operation stopped collecting results."""
+
+    ALL_COMPLETED = "ALL_COMPLETED"
+    MIN_SUCCESSFUL_REACHED = "MIN_SUCCESSFUL_REACHED"
+    FAILURE_TOLERANCE_EXCEEDED = "FAILURE_TOLERANCE_EXCEEDED"
+
+
+@dataclass(frozen=True)
+class SuspendResult:
+    """Internal helper describing whether an executor should suspend."""
+
+    should_suspend: bool
+    exception: SuspendExecution | None = None
+
+    @staticmethod
+    def do_not_suspend() -> SuspendResult:
+        return SuspendResult(should_suspend=False)
+
+    @staticmethod
+    def suspend(exception: SuspendExecution) -> SuspendResult:
+        return SuspendResult(should_suspend=True, exception=exception)
+
+
+@dataclass(frozen=True)
+class BatchItem(SerializableModel, Generic[R]):
+    """Result record for one branch or iteration in `BatchResult`."""
+
+    index: int
+    status: BatchItemStatus
+    result: R | None = dataclass_field(
+        default=None, metadata=_metadata(alias="result", omit_if_none=False)
+    )
+    error: ErrorObject | None = dataclass_field(
+        default=None,
+        metadata=_metadata(alias="error", omit_if_none=False),
+    )
+
+
+@dataclass(frozen=True)
+class BatchResult(SerializableModel, Generic[R]):  # noqa: PYI059
+    """Aggregated outcome of a `map()` or `parallel()` operation."""
+
+    all: list[BatchItem[R]]
+    completion_reason: CompletionReason = dataclass_field(
+        metadata=_metadata(alias="completionReason")
+    )
+
+    @classmethod
+    def from_dict(
+        cls, data: Mapping[str, Any], completion_config: CompletionConfig | None = None
+    ) -> BatchResult[R]:
+        batch_items = [BatchItem.from_dict(item) for item in data["all"]]
+
+        completion_reason_value = data.get("completionReason")
+        if completion_reason_value is None:
+            result = cls.from_items(batch_items, completion_config)
+            logger.warning(
+                "Missing completionReason in BatchResult deserialization, "
+                "inferred '%s' from batch item statuses. "
+                "This may indicate incomplete serialization data.",
+                result.completion_reason.value,
+            )
+            return result
+
+        return cls(
+            all=batch_items,
+            completion_reason=CompletionReason(completion_reason_value),
+        )
+
+    @staticmethod
+    def _get_completion_reason(
+        failure_count: int,
+        success_count: int,
+        completed_count: int,
+        total_count: int,
+        completion_config: CompletionConfig | None,
+    ) -> CompletionReason:
+        if completion_config is None:
+            if failure_count > 0:
+                return CompletionReason.FAILURE_TOLERANCE_EXCEEDED
+        else:
+            has_any_completion_criteria = (
+                completion_config.min_successful is not None
+                or completion_config.tolerated_failure_count is not None
+                or completion_config.tolerated_failure_percentage is not None
+            )
+
+            if not has_any_completion_criteria:
+                if failure_count > 0:
+                    return CompletionReason.FAILURE_TOLERANCE_EXCEEDED
+            else:
+                if (
+                    completion_config.tolerated_failure_count is not None
+                    and failure_count > completion_config.tolerated_failure_count
+                ):
+                    return CompletionReason.FAILURE_TOLERANCE_EXCEEDED
+
+                if (
+                    completion_config.tolerated_failure_percentage is not None
+                    and total_count > 0
+                ):
+                    failure_percentage = (failure_count / total_count) * 100
+                    if (
+                        failure_percentage
+                        > completion_config.tolerated_failure_percentage
+                    ):
+                        return CompletionReason.FAILURE_TOLERANCE_EXCEEDED
+
+        if completed_count == total_count:
+            return CompletionReason.ALL_COMPLETED
+
+        if (
+            completion_config is not None
+            and completion_config.min_successful is not None
+            and success_count >= completion_config.min_successful
+        ):
+            return CompletionReason.MIN_SUCCESSFUL_REACHED
+
+        return CompletionReason.ALL_COMPLETED
+
+    @classmethod
+    def from_items(
+        cls,
+        items: list[BatchItem[R]],
+        completion_config: CompletionConfig | None = None,
+    ) -> BatchResult[R]:
+        statuses = (item.status for item in items)
+        counts = Counter(statuses)
+        succeeded_count = counts.get(BatchItemStatus.SUCCEEDED, 0)
+        failed_count = counts.get(BatchItemStatus.FAILED, 0)
+        started_count = counts.get(BatchItemStatus.STARTED, 0)
+
+        completed_count = succeeded_count + failed_count
+        total_count = started_count + completed_count
+
+        completion_reason = cls._get_completion_reason(
+            failure_count=failed_count,
+            success_count=succeeded_count,
+            completed_count=completed_count,
+            total_count=total_count,
+            completion_config=completion_config,
+        )
+
+        return cls(all=items, completion_reason=completion_reason)
+
+    def succeeded(self) -> list[BatchItem[R]]:
+        return [
+            item
+            for item in self.all
+            if item.status is BatchItemStatus.SUCCEEDED and item.result is not None
+        ]
+
+    def failed(self) -> list[BatchItem[R]]:
+        return [
+            item
+            for item in self.all
+            if item.status is BatchItemStatus.FAILED and item.error is not None
+        ]
+
+    def started(self) -> list[BatchItem[R]]:
+        return [item for item in self.all if item.status is BatchItemStatus.STARTED]
+
+    @property
+    def status(self) -> BatchItemStatus:
+        return BatchItemStatus.FAILED if self.has_failure else BatchItemStatus.SUCCEEDED
+
+    @property
+    def has_failure(self) -> bool:
+        return any(item.status is BatchItemStatus.FAILED for item in self.all)
+
+    def throw_if_error(self) -> None:
+        first_error = next(
+            (item.error for item in self.all if item.status is BatchItemStatus.FAILED),
+            None,
+        )
+        if first_error:
+            raise first_error.to_callable_runtime_error()
+
+    def get_results(self) -> list[R]:
+        return [
+            item.result
+            for item in self.all
+            if item.status is BatchItemStatus.SUCCEEDED and item.result is not None
+        ]
+
+    def get_errors(self) -> list[ErrorObject]:
+        return [
+            item.error
+            for item in self.all
+            if item.status is BatchItemStatus.FAILED and item.error is not None
+        ]
+
+    @property
+    def success_count(self) -> int:
+        return sum(1 for item in self.all if item.status is BatchItemStatus.SUCCEEDED)
+
+    @property
+    def failure_count(self) -> int:
+        return sum(1 for item in self.all if item.status is BatchItemStatus.FAILED)
+
+    @property
+    def started_count(self) -> int:
+        return sum(1 for item in self.all if item.status is BatchItemStatus.STARTED)
+
+    @property
+    def total_count(self) -> int:
+        return len(self.all)
+
+
+@dataclass(frozen=True)
+class Executable(Generic[CallableType]):
+    """Index plus callable payload used by the concurrent executors."""
+
+    index: int
+    func: CallableType
+
+
+class BranchStatus(Enum):
+    """In-memory lifecycle state for a concurrently scheduled branch."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    SUSPENDED = "suspended"
+    SUSPENDED_WITH_TIMEOUT = "suspended_with_timeout"
+    FAILED = "failed"
+
+
+class ExecutableWithState(Generic[CallableType, ResultType]):
+    """Manages the execution state and lifecycle of an executable."""
+
+    def __init__(self, executable: Executable[CallableType]):
+        self.executable = executable
+        self._status = BranchStatus.PENDING
+        self._future: asyncio.Task[ResultType] | None = None
+        self._suspend_until: float | None = None
+        self._result: ResultType = None  # type: ignore[assignment]
+        self._is_result_set = False
+        self._error: Exception | None = None
+
+    @property
+    def future(self) -> asyncio.Task[ResultType]:
+        if self._future is None:
+            msg = f"ExecutableWithState was never started. {self.executable.index}"
+            raise InvalidStateError(msg)
+        return self._future
+
+    @property
+    def status(self) -> BranchStatus:
+        return self._status
+
+    @property
+    def result(self) -> ResultType:
+        if not self._is_result_set or self._status != BranchStatus.COMPLETED:
+            msg = f"result not available in status {self._status}"
+            raise InvalidStateError(msg)
+        return self._result
+
+    @property
+    def error(self) -> Exception:
+        if self._error is None or self._status != BranchStatus.FAILED:
+            msg = f"error not available in status {self._status}"
+            raise InvalidStateError(msg)
+        return self._error
+
+    @property
+    def suspend_until(self) -> float | None:
+        return self._suspend_until
+
+    @property
+    def is_running(self) -> bool:
+        return self._status is BranchStatus.RUNNING
+
+    @property
+    def can_resume(self) -> bool:
+        return self._status is BranchStatus.SUSPENDED or (
+            self._status is BranchStatus.SUSPENDED_WITH_TIMEOUT
+            and self._suspend_until is not None
+            and time.time() >= self._suspend_until
+        )
+
+    @property
+    def index(self) -> int:
+        return self.executable.index
+
+    @property
+    def callable(self) -> CallableType:
+        return self.executable.func
+
+    def run(self, future: asyncio.Task[ResultType]) -> None:
+        if self._status != BranchStatus.PENDING:
+            msg = f"Cannot start running from {self._status}"
+            raise InvalidStateError(msg)
+        self._status = BranchStatus.RUNNING
+        self._future = future
+
+    def suspend(self) -> None:
+        self._status = BranchStatus.SUSPENDED
+        self._suspend_until = None
+
+    def suspend_with_timeout(self, timestamp: float) -> None:
+        self._status = BranchStatus.SUSPENDED_WITH_TIMEOUT
+        self._suspend_until = timestamp
+
+    def complete(self, result: ResultType) -> None:
+        self._status = BranchStatus.COMPLETED
+        self._result = result
+        self._is_result_set = True
+
+    def fail(self, error: Exception) -> None:
+        self._status = BranchStatus.FAILED
+        self._error = error
+
+    def reset_to_pending(self) -> None:
+        self._status = BranchStatus.PENDING
+        self._future = None
+        self._suspend_until = None
+
+
+class ExecutionCounters:
+    """Counters for tracking execution state on a single event loop."""
+
+    def __init__(
+        self,
+        total_tasks: int,
+        min_successful: int,
+        tolerated_failure_count: int | None,
+        tolerated_failure_percentage: float | None,
+    ):
+        self.total_tasks = total_tasks
+        self.min_successful = min_successful
+        self.tolerated_failure_count = tolerated_failure_count
+        self.tolerated_failure_percentage = tolerated_failure_percentage
+        self.success_count = 0
+        self.failure_count = 0
+
+    def complete_task(self) -> None:
+        self.success_count += 1
+
+    def fail_task(self) -> None:
+        self.failure_count += 1
+
+    def should_continue(self) -> bool:
+        if (
+            self.tolerated_failure_count is None
+            and self.tolerated_failure_percentage is None
+        ):
+            return self.failure_count == 0
+
+        if (
+            self.tolerated_failure_count is not None
+            and self.failure_count > self.tolerated_failure_count
+        ):
+            return False
+
+        if self.tolerated_failure_percentage is not None and self.total_tasks > 0:
+            failure_percentage = (self.failure_count / self.total_tasks) * 100
+            if failure_percentage > self.tolerated_failure_percentage:
+                return False
+
+        return True
+
+    def is_complete(self) -> bool:
+        completed_count = self.success_count + self.failure_count
+
+        if completed_count == self.total_tasks:
+            return True
+
+        return self.success_count >= self.min_successful
+
+    def should_complete(self) -> bool:
+        return self.is_complete() or not self.should_continue()
+
+    def is_all_completed(self) -> bool:
+        return self.success_count == self.total_tasks
+
+    def is_min_successful_reached(self) -> bool:
+        return self.success_count >= self.min_successful
+
+    def is_failure_tolerance_exceeded(self) -> bool:
+        return self._is_failure_condition_reached(
+            tolerated_count=self.tolerated_failure_count,
+            tolerated_percentage=self.tolerated_failure_percentage,
+            failure_count=self.failure_count,
+        )
+
+    def _is_failure_condition_reached(
+        self,
+        tolerated_count: int | None,
+        tolerated_percentage: float | None,
+        failure_count: int,
+    ) -> bool:
+        if tolerated_count is not None and failure_count > tolerated_count:
+            return True
+
+        if tolerated_percentage is not None and self.total_tasks > 0:
+            failure_percentage = (failure_count / self.total_tasks) * 100
+            if failure_percentage > tolerated_percentage:
+                return True
+
+        return False
 
 
 class TimerScheduler:

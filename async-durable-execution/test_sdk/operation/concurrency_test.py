@@ -13,20 +13,18 @@ import pytest
 
 from async_durable_execution.async_tools import invoke_callable
 from async_durable_execution.composite.concurrency import (
-    CompletionConfig,
-    ConcurrentExecutor,
-    NestingType,
-    TimerScheduler,
-)
-from async_durable_execution.models import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
     BranchStatus,
+    CompletionConfig,
     CompletionReason,
+    ConcurrentExecutor,
     Executable,
     ExecutableWithState,
     ExecutionCounters,
+    NestingType,
+    TimerScheduler,
 )
 from async_durable_execution import DurableContext, get_current_context
 from async_durable_execution.exceptions import (
@@ -427,7 +425,7 @@ async def test_batch_result_from_dict_default_completion_reason():
         # No completionReason provided
     }
 
-    with patch("async_durable_execution.models.logger") as mock_logger:
+    with patch("async_durable_execution.composite.concurrency.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.ALL_COMPLETED
         # Verify warning was logged
@@ -445,7 +443,7 @@ async def test_batch_result_from_dict_infer_all_completed_all_succeeded():
         # No completionReason provided
     }
 
-    with patch("async_durable_execution.models.logger") as mock_logger:
+    with patch("async_durable_execution.composite.concurrency.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.ALL_COMPLETED
         mock_logger.warning.assert_called_once()
@@ -468,7 +466,7 @@ async def test_batch_result_from_dict_infer_failure_tolerance_exceeded_all_faile
     }
 
     # With no completion config and failures, should fail-fast
-    with patch("async_durable_execution.models.logger") as mock_logger:
+    with patch("async_durable_execution.composite.concurrency.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
         mock_logger.warning.assert_called_once()
@@ -492,7 +490,7 @@ async def test_batch_result_from_dict_infer_all_completed_mixed_success_failure(
     }
 
     # With no config and with failures, fail-fast
-    with patch("async_durable_execution.models.logger") as mock_logger:
+    with patch("async_durable_execution.composite.concurrency.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
         mock_logger.warning.assert_called_once()
@@ -509,7 +507,7 @@ async def test_batch_result_from_dict_infer_min_successful_reached_has_started()
         # No completionReason provided
     }
 
-    with patch("async_durable_execution.models.logger") as mock_logger:
+    with patch("async_durable_execution.composite.concurrency.logger") as mock_logger:
         result = BatchResult.from_dict(data, CompletionConfig(1))
         assert result.completion_reason == CompletionReason.MIN_SUCCESSFUL_REACHED
         mock_logger.warning.assert_called_once()
@@ -522,7 +520,7 @@ async def test_batch_result_from_dict_infer_empty_items():
         # No completionReason provided
     }
 
-    with patch("async_durable_execution.models.logger") as mock_logger:
+    with patch("async_durable_execution.composite.concurrency.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.ALL_COMPLETED
         mock_logger.warning.assert_called_once()
@@ -537,7 +535,7 @@ async def test_batch_result_from_dict_with_explicit_completion_reason():
         "completionReason": "MIN_SUCCESSFUL_REACHED",
     }
 
-    with patch("async_durable_execution.models.logger") as mock_logger:
+    with patch("async_durable_execution.composite.concurrency.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.MIN_SUCCESSFUL_REACHED
         # No warning should be logged when completionReason is provided
@@ -2423,7 +2421,7 @@ async def test_batch_result_from_dict_with_completion_config():
     # With started items, should infer MIN_SUCCESSFUL_REACHED
     completion_config = CompletionConfig(min_successful=1)
 
-    with patch("async_durable_execution.models.logger") as mock_logger:
+    with patch("async_durable_execution.composite.concurrency.logger") as mock_logger:
         result = BatchResult.from_dict(data, completion_config)
         assert result.completion_reason == CompletionReason.MIN_SUCCESSFUL_REACHED
         mock_logger.warning.assert_called_once()
@@ -2450,7 +2448,7 @@ async def test_batch_result_from_dict_all_completed():
     }
 
     # With no config and failures, fail-fast
-    with patch("async_durable_execution.models.logger") as mock_logger:
+    with patch("async_durable_execution.composite.concurrency.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
         mock_logger.warning.assert_called_once()

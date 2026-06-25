@@ -10,13 +10,15 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 # Mock the executor.execute method
-from async_durable_execution.models import (
+from async_durable_execution.composite.concurrency import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
     CompletionReason,
-    ContextDetails,
     Executable,
+)
+from async_durable_execution.models import (
+    ContextDetails,
     Operation,
     OperationStatus,
     OperationType,

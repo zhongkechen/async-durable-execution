@@ -22,7 +22,10 @@ from async_durable_execution.primitive.callback import (
     CallbackConfig,
 )
 from async_durable_execution.primitive.invoke import InvokeConfig
-from async_durable_execution.composite.wait_for_condition import WaitForConditionConfig
+from async_durable_execution.composite.wait_for_condition import (
+    WaitForConditionConfig,
+    WaitForConditionDecision,
+)
 from async_durable_execution import (
     durable_callable,
     create_callback,
@@ -52,7 +55,6 @@ from async_durable_execution.models import (
     OperationType,
 )
 from async_durable_execution.state import ExecutionState
-from async_durable_execution.models import WaitForConditionDecision
 from async_durable_execution.primitive.base import CheckpointedResult
 
 from .serdes_test import CustomDictSerDes
