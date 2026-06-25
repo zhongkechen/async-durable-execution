@@ -37,6 +37,8 @@ def build_context_log_extra(context: OperationContext) -> dict[str, object]:
     extra: dict[str, object] = {}
     execution_arn = context.durable_execution_arn
     if execution_arn:
+        # `executionArn` is used here while `durableExecutionArn` is used everywhere else because
+        # that's what the Lambda Console expects in log records.
         extra["executionArn"] = execution_arn
     parent_id = context.parent_id
     if parent_id:
