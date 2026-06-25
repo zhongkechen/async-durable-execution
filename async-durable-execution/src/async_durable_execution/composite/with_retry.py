@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Awaitable, TypeVar, Generic
+from typing import TYPE_CHECKING, Callable, Awaitable, TypeVar
 
 from ..config import RetryStrategyBuilder
 from ..models import RetryDecision
@@ -22,17 +21,6 @@ if TYPE_CHECKING:
     from ..types import SummaryGenerator
 
 T = TypeVar("T")
-
-
-@dataclass(frozen=True)
-class WithRetryConfig(Generic[T]):
-    """Configuration for with_retry."""
-
-    retry_strategy: Callable[[Exception, int], RetryDecision] | None = None
-    serdes: SerDes | None = None
-    item_serdes: SerDes | None = None
-    summary_generator: SummaryGenerator | None = None
-    is_virtual: bool = False
 
 
 async def with_retry(
@@ -57,17 +45,10 @@ async def with_retry(
         is_virtual: Whether the child context should skip lifecycle checkpoints.
     """
     context = _get_durable_context()
-    config = WithRetryConfig[T](
-        retry_strategy=retry_strategy,
-        serdes=serdes,
-        item_serdes=item_serdes,
-        summary_generator=summary_generator,
-        is_virtual=is_virtual,
-    )
 
     async def run_loop() -> T:
         assert_async_callable(func)
-        retry_strategy = config.retry_strategy or RetryStrategyBuilder().build()
+        retry = retry_strategy or RetryStrategyBuilder().build()
         attempt = 0
         while True:
             attempt += 1
@@ -80,7 +61,7 @@ async def with_retry(
             except SuspendExecution:
                 raise
             except Exception as err:
-                decision = retry_strategy(err, attempt)
+                decision = retry(err, attempt)
                 if not decision.should_retry:
                     raise
                 wait_name = f"{name}-backoff-{attempt}" if name else None
@@ -95,9 +76,9 @@ async def with_retry(
         run_loop,
         name=name,
         config=ChildConfig[T](
-            serdes=config.serdes,
-            item_serdes=config.item_serdes,
-            summary_generator=config.summary_generator,
-            is_virtual=config.is_virtual,
+            serdes=serdes,
+            item_serdes=item_serdes,
+            summary_generator=summary_generator,
+            is_virtual=is_virtual,
         ),
     )

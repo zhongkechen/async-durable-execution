@@ -15,9 +15,9 @@ from async_durable_execution.config import (
     JitterStrategy,
     RetryStrategyBuilder,
 )
+from async_durable_execution.models import RetryDecision
 from async_durable_execution.exceptions import SuspendExecution
 from async_durable_execution.primitive.child import ChildConfig
-from async_durable_execution.composite.with_retry import WithRetryConfig
 
 
 if TYPE_CHECKING:
@@ -78,39 +78,6 @@ class MockDurableContext:
 
     def create_callback(self, *args, **kwargs):
         raise NotImplementedError("create_callback not used in with_retry tests")
-
-
-def test_with_retry_config_defaults():
-    """WithRetryConfig defaults align with the public API."""
-    config = WithRetryConfig()
-
-    assert config.retry_strategy is None
-    assert config.serdes is None
-    assert config.item_serdes is None
-    assert config.summary_generator is None
-    assert config.is_virtual is False
-
-
-def test_with_retry_config_custom_values():
-    """WithRetryConfig stores explicit values."""
-    retry_strategy = MagicMock()
-    serdes = MagicMock()
-    item_serdes = MagicMock()
-    summary_generator = MagicMock()
-
-    config = WithRetryConfig(
-        retry_strategy=retry_strategy,
-        serdes=serdes,
-        item_serdes=item_serdes,
-        summary_generator=summary_generator,
-        is_virtual=True,
-    )
-
-    assert config.retry_strategy is retry_strategy
-    assert config.serdes is serdes
-    assert config.item_serdes is item_serdes
-    assert config.summary_generator is summary_generator
-    assert config.is_virtual is True
 
 
 async def _call_with_retry(
@@ -322,6 +289,27 @@ async def test_default_config_wraps_in_child_context():
     assert len(ctx.child_context_calls) == 1
 
 
+async def test_default_retry_strategy_is_used_when_not_provided():
+    """Default retry strategy retries transient failures."""
+    ctx = MockDurableContext()
+    call_count = 0
+
+    async def fails_once(attempt: int) -> str:
+        nonlocal call_count
+        call_count += 1
+        if attempt == 1:
+            raise ValueError("transient")
+        return "ok"
+
+    result = await _call_with_retry(ctx, fails_once)
+
+    assert result == "ok"
+    assert call_count == 2
+    assert len(ctx.wait_calls) == 1
+    assert ctx.wait_calls[0].duration > timedelta()
+    assert ctx.wait_calls[0].name is None
+
+
 async def test_no_name_creates_anonymous_child_context_and_anonymous_waits():
     """Missing name preserves anonymous child/wait operations."""
     ctx = MockDurableContext()
@@ -442,13 +430,16 @@ async def test_with_retry_importable_from_package():
 
 
 async def test_with_retry_config_is_not_positional_parameter():
-    """with_retry rejects the removed positional config argument."""
+    """with_retry rejects retry configuration as a positional argument."""
 
     async def test_function(attempt: int) -> str:
         return f"attempt-{attempt}"
 
     with pytest.raises(TypeError):
-        await with_retry(test_function, WithRetryConfig())
+        await with_retry(
+            test_function,
+            lambda _err, _attempt: RetryDecision(should_retry=False),
+        )
 
 
 async def test_integration_with_retry_strategy_builder():
