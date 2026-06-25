@@ -227,6 +227,7 @@ async def _wrapper_async(
             execution_state=execution_state,
             operation_identifier=OperationIdentifier.create_execution_op(),
             lambda_context=context,
+            replaying=execution_state.has_prior_operations(),
         )
 
         execution_operation = execution_state.get_execution_operation()
@@ -238,7 +239,7 @@ async def _wrapper_async(
             execution_arn=invocation_input.durable_execution_arn,
             lambda_context=context,
             execution_start_time=execution_operation.start_timestamp,
-            is_first_invocation=not execution_state.is_replaying(),
+            is_first_invocation=not execution_state.has_prior_operations(),
         )
         execution_state.start_checkpointing()
 

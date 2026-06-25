@@ -790,7 +790,6 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
                 is_virtual=is_virtual,
             ),
         )
-        child_context.execution_state.track_replay(operation_id=operation_id)
         return result
 
     async def replay(

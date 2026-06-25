@@ -5,7 +5,9 @@ from __future__ import annotations
 import functools
 import hashlib
 import logging
-from dataclasses import dataclass
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from threading import Lock
 from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
 from .base import (
@@ -342,6 +344,12 @@ class DurableContext(OperationContext):
     """Runtime context available to a durable handler or child context."""
 
     step_id_prefix: str | None = None
+    replaying: bool = False
+    _replay_status_lock: Lock = field(
+        default_factory=Lock,
+        repr=False,
+        compare=False,
+    )
 
     @functools.cached_property
     def step_counter(self):
@@ -378,7 +386,69 @@ class DurableContext(OperationContext):
             ),
             lambda_context=self.lambda_context,
             step_id_prefix=operation_id,
+            replaying=self.is_replaying(),
         )
+
+    def is_replaying(self) -> bool:
+        """Return True while this context is replaying prior operations."""
+        with self._replay_status_lock:
+            return self.replaying
+
+    def _set_replay_status_new(self) -> None:
+        with self._replay_status_lock:
+            object.__setattr__(self, "replaying", False)
+
+    def _peek_next_operation_id(self) -> str:
+        return self.step_counter._create_step_id_for_logical_step(  # noqa: SLF001
+            self.step_counter.get_current() + 1
+        )
+
+    def _next_operation_result(self) -> CheckpointedResult:
+        operation = self.execution_state.operations.get(self._peek_next_operation_id())
+        if isinstance(operation, Operation):
+            return CheckpointedResult.create_from_operation(operation)
+        if operation is None:
+            return CHECKPOINT_NOT_FOUND
+        return operation
+
+    def _next_operation_exists(self) -> bool:
+        return self._next_operation_result().is_existent()
+
+    def _next_operation_is_terminal_checkpoint(self) -> bool:
+        result = self._next_operation_result()
+        return (
+            result.is_succeeded()
+            or result.is_failed()
+            or result.is_cancelled()
+            or result.is_stopped()
+            or result.is_timed_out()
+        )
+
+    @contextmanager
+    def _replay_aware(self, *, executes_user_code: bool = False):
+        """Update this context's replay status around one durable operation."""
+        was_replaying = self.is_replaying()
+        next_exists = was_replaying and self._next_operation_exists()
+        next_terminal = was_replaying and self._next_operation_is_terminal_checkpoint()
+        flip_after = (
+            was_replaying
+            and not executes_user_code
+            and next_exists
+            and not next_terminal
+        )
+
+        if was_replaying and (
+            not next_exists or (executes_user_code and not next_terminal)
+        ):
+            self._set_replay_status_new()
+
+        try:
+            yield
+        finally:
+            if flip_after:
+                self._set_replay_status_new()
+            elif self.is_replaying() and not self._next_operation_exists():
+                self._set_replay_status_new()
 
 
 async def _run_in_child_context_in_context(
@@ -389,33 +459,32 @@ async def _run_in_child_context_in_context(
 ) -> T:
     assert_async_callable(func)
     step_name: str | None = name or get_callable_name(func)
-    operation_id = context.step_counter.create_step_id()
+    with context._replay_aware():
+        operation_id = context.step_counter.create_step_id()
 
-    is_virtual: bool = config.is_virtual if config else False
-    child_context = context.create_child_context(
-        operation_id=operation_id,
-        is_virtual=is_virtual,
-    )
-
-    async def callable_with_child_context():
-        return await invoke_user_callable(
-            child_context,
-            func,
+        is_virtual: bool = config.is_virtual if config else False
+        child_context = context.create_child_context(
+            operation_id=operation_id,
+            is_virtual=is_virtual,
         )
 
-    result = await child_handler(
-        func=callable_with_child_context,
-        state=context.execution_state,
-        operation_identifier=OperationIdentifier(
-            operation_id=operation_id,
-            sub_type=OperationSubType.RUN_IN_CHILD_CONTEXT,
-            parent_id=context.parent_id,
-            name=step_name,
-        ),
-        config=config,
-    )
-    context.execution_state.track_replay(operation_id=operation_id)
-    return result
+        async def callable_with_child_context():
+            return await invoke_user_callable(
+                child_context,
+                func,
+            )
+
+        return await child_handler(
+            func=callable_with_child_context,
+            state=context.execution_state,
+            operation_identifier=OperationIdentifier(
+                operation_id=operation_id,
+                sub_type=OperationSubType.RUN_IN_CHILD_CONTEXT,
+                parent_id=context.parent_id,
+                name=step_name,
+            ),
+            config=config,
+        )
 
 
 async def run_in_child_context(

@@ -174,20 +174,19 @@ async def invoke(
         serdes_result=serdes_result,
         tenant_id=tenant_id,
     )
-    operation_id = context.step_counter.create_step_id()
+    with context._replay_aware():
+        operation_id = context.step_counter.create_step_id()
 
-    executor: InvokeOperationExecutor[R] = InvokeOperationExecutor(
-        function_name=function_name,
-        payload=payload,
-        state=context.execution_state,
-        operation_identifier=OperationIdentifier(
-            operation_id=operation_id,
-            sub_type=OperationSubType.CHAINED_INVOKE,
-            parent_id=context.parent_id,
-            name=name,
-        ),
-        config=config,
-    )
-    result: R = await executor.process()
-    context.execution_state.track_replay(operation_id=operation_id)
-    return result
+        executor: InvokeOperationExecutor[R] = InvokeOperationExecutor(
+            function_name=function_name,
+            payload=payload,
+            state=context.execution_state,
+            operation_identifier=OperationIdentifier(
+                operation_id=operation_id,
+                sub_type=OperationSubType.CHAINED_INVOKE,
+                parent_id=context.parent_id,
+                name=name,
+            ),
+            config=config,
+        )
+        return await executor.process()

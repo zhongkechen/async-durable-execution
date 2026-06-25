@@ -102,20 +102,20 @@ async def _wait_in_context(
     if seconds < 1:
         msg = "duration must be at least 1 second"
         raise ValidationError(msg)
-    operation_id = context.step_counter.create_step_id()
+    with context._replay_aware():
+        operation_id = context.step_counter.create_step_id()
 
-    executor: WaitOperationExecutor = WaitOperationExecutor(
-        seconds=seconds,
-        state=context.execution_state,
-        operation_identifier=OperationIdentifier(
-            operation_id=operation_id,
-            sub_type=OperationSubType.WAIT,
-            parent_id=context.parent_id,
-            name=name,
-        ),
-    )
-    await executor.process()
-    context.execution_state.track_replay(operation_id=operation_id)
+        executor: WaitOperationExecutor = WaitOperationExecutor(
+            seconds=seconds,
+            state=context.execution_state,
+            operation_identifier=OperationIdentifier(
+                operation_id=operation_id,
+                sub_type=OperationSubType.WAIT,
+                parent_id=context.parent_id,
+                name=name,
+            ),
+        )
+        await executor.process()
 
 
 async def wait(duration: timedelta, *, name: str | None = None) -> None:

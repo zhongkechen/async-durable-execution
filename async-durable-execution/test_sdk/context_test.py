@@ -54,6 +54,7 @@ from async_durable_execution.models import (
     OperationSubType,
     OperationType,
 )
+from async_durable_execution.plugin import PluginExecutor
 from async_durable_execution.state import ExecutionState
 from async_durable_execution.primitive.base import CheckpointedResult
 
@@ -2407,3 +2408,78 @@ async def test_durable_callable_branches_bind_parallel_parameters():
     assert await branch_b() == "11"
     assert callable(branch_a)
     assert callable(branch_b)
+
+
+def create_replay_context() -> DurableContext:
+    state = ExecutionState(
+        durable_execution_arn="arn:aws:durable:us-east-1:123456789012:execution/test",
+        initial_checkpoint_token="test_token",  # noqa: S106
+        operations={},
+        service_client=Mock(),
+        plugin_executor=PluginExecutor(plugins=None),
+    )
+    return DurableContext(
+        execution_state=state,
+        operation_identifier=OperationIdentifier.create_execution_op(),
+        replaying=True,
+    )
+
+
+def create_replay_operation(
+    operation_id: str,
+    status: OperationStatus,
+    operation_type: OperationType = OperationType.STEP,
+) -> Operation:
+    return Operation(
+        operation_id=operation_id,
+        operation_type=operation_type,
+        status=status,
+    )
+
+
+def test_replay_aware_flips_new_after_terminal_operation_without_next_operation():
+    ctx = create_replay_context()
+    operation_id = ctx._peek_next_operation_id()  # noqa: SLF001
+    ctx.execution_state.operations[operation_id] = create_replay_operation(
+        operation_id,
+        OperationStatus.SUCCEEDED,
+        OperationType.WAIT,
+    )
+
+    with ctx._replay_aware():  # noqa: SLF001
+        ctx.step_counter.create_step_id()
+        assert ctx.is_replaying() is True
+
+    assert ctx.is_replaying() is False
+
+
+def test_replay_aware_user_code_flips_new_before_retrying_operation():
+    ctx = create_replay_context()
+    operation_id = ctx._peek_next_operation_id()  # noqa: SLF001
+    ctx.execution_state.operations[operation_id] = create_replay_operation(
+        operation_id,
+        OperationStatus.STARTED,
+    )
+
+    with ctx._replay_aware(executes_user_code=True):  # noqa: SLF001
+        ctx.step_counter.create_step_id()
+        assert ctx.is_replaying() is False
+
+    assert ctx.is_replaying() is False
+
+
+def test_child_context_refines_replay_status_independently():
+    parent_ctx = create_replay_context()
+    child_ctx = parent_ctx.create_child_context("child-op")
+    operation_id = child_ctx._peek_next_operation_id()  # noqa: SLF001
+    child_ctx.execution_state.operations[operation_id] = create_replay_operation(
+        operation_id,
+        OperationStatus.STARTED,
+    )
+
+    with child_ctx._replay_aware():  # noqa: SLF001
+        child_ctx.step_counter.create_step_id()
+        assert child_ctx.is_replaying() is True
+
+    assert child_ctx.is_replaying() is False
+    assert parent_ctx.is_replaying() is True

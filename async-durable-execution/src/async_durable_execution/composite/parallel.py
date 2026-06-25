@@ -199,32 +199,31 @@ async def parallel(
         nesting_type=nesting_type,
     )
 
-    operation_id = context.step_counter.create_step_id()
-    parallel_context = context.create_child_context(operation_id=operation_id)
-    operation_identifier = OperationIdentifier(
-        operation_id=operation_id,
-        sub_type=OperationSubType.PARALLEL,
-        parent_id=context.parent_id,
-        name=name,
-    )
-
-    async def parallel_in_child_context() -> BatchResult[T]:
-        return await parallel_handler(
-            callables=validated_branches,
-            config=config,
-            execution_state=context.execution_state,
-            parallel_context=parallel_context,
-            operation_identifier=operation_identifier,
+    with context._replay_aware():
+        operation_id = context.step_counter.create_step_id()
+        parallel_context = context.create_child_context(operation_id=operation_id)
+        operation_identifier = OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=OperationSubType.PARALLEL,
+            parent_id=context.parent_id,
+            name=name,
         )
 
-    result = await child_handler(
-        func=parallel_in_child_context,
-        state=context.execution_state,
-        operation_identifier=operation_identifier,
-        config=ChildConfig(
-            serdes=config.serdes,
-            item_serdes=None,
-        ),
-    )
-    context.execution_state.track_replay(operation_id=operation_id)
-    return result
+        async def parallel_in_child_context() -> BatchResult[T]:
+            return await parallel_handler(
+                callables=validated_branches,
+                config=config,
+                execution_state=context.execution_state,
+                parallel_context=parallel_context,
+                operation_identifier=operation_identifier,
+            )
+
+        return await child_handler(
+            func=parallel_in_child_context,
+            state=context.execution_state,
+            operation_identifier=operation_identifier,
+            config=ChildConfig(
+                serdes=config.serdes,
+                item_serdes=None,
+            ),
+        )
