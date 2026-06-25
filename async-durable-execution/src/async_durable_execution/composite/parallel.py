@@ -25,13 +25,14 @@ from ..async_tools import (
 from .concurrency import (
     CompletionConfig,
     ConcurrentExecutor,
+    Executable,
     NestingType,
 )
-from ..models import Executable, OperationIdentifier, OperationSubType
+from ..models import OperationIdentifier, OperationSubType
 
 
 if TYPE_CHECKING:
-    from ..models import BatchResult
+    from .concurrency import BatchResult
     from ..serdes import SerDes
     from ..state import ExecutionState
     from ..types import SummaryGenerator

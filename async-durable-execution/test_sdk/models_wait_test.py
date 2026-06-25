@@ -2,7 +2,10 @@
 
 from datetime import timedelta
 
-from async_durable_execution.models import WaitDecision, WaitForConditionDecision
+from async_durable_execution.composite.wait_for_condition import (
+    WaitDecision,
+    WaitForConditionDecision,
+)
 
 
 class TestWaitDecision:

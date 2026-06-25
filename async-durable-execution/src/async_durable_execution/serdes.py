@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Generic, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar
 
 from .context import reset_current_context, set_current_context
 from .exceptions import (
@@ -39,7 +39,9 @@ from .exceptions import (
     ExecutionError,
     SerDesError,
 )
-from .models import BatchResult
+
+if TYPE_CHECKING:
+    from .composite.concurrency import BatchResult
 
 
 logger = logging.getLogger(__name__)
@@ -48,6 +50,12 @@ T = TypeVar("T")
 
 TYPE_TOKEN: str = "t"
 VALUE_TOKEN: str = "v"
+
+
+def _get_batch_result_type() -> type[BatchResult]:
+    from .composite.concurrency import BatchResult
+
+    return BatchResult
 
 
 class TypeTag(str, Enum):
@@ -212,7 +220,7 @@ class ContainerCodec(Codec):
         """Encode container using dispatcher for recursive elements."""
 
         match obj:
-            case BatchResult():
+            case obj if isinstance(obj, _get_batch_result_type()):
                 # Encode BatchResult as dict with special tag
                 return EncodedValue(
                     TypeTag.BATCH_RESULT,
@@ -247,7 +255,7 @@ class ContainerCodec(Codec):
                 # Decode BatchResult from dict - value is already the dict structure
                 # First decode it as a dict to unwrap all nested EncodedValues
                 decoded_dict = self.decode(TypeTag.DICT, value)
-                return BatchResult.from_dict(decoded_dict)
+                return _get_batch_result_type().from_dict(decoded_dict)
             case TypeTag.LIST:
                 if not isinstance(value, list):
                     msg = f"Expected list, got {type(value)}"
@@ -309,7 +317,9 @@ class TypeCodec(Codec):
                 return self.decimal_codec.encode(obj)
             case datetime() | date():
                 return self.datetime_codec.encode(obj)
-            case list() | tuple() | dict() | BatchResult():
+            case obj if isinstance(obj, list | tuple | dict) or isinstance(
+                obj, _get_batch_result_type()
+            ):
                 return self.container_codec.encode(obj)
             case _:
                 msg = f"Unsupported type: {type(obj)}"

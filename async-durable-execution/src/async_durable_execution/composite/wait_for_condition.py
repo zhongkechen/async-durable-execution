@@ -30,8 +30,6 @@ from ..models import (
     OperationStatus,
     OperationUpdate,
     OperationSubType,
-    WaitDecision,
-    WaitForConditionDecision,
 )
 from ..primitive.base import (
     CHECKPOINT_NOT_FOUND,
@@ -48,10 +46,71 @@ if TYPE_CHECKING:
 
 
 T = TypeVar("T")
-ConditionResult = tuple[T, WaitForConditionDecision]
-WaitDelayStrategy = Callable[[T, int], WaitDecision | timedelta]
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class WaitDecision:
+    """Decision about whether to wait and with what delay."""
+
+    should_wait: bool
+    delay: timedelta
+
+    def __post_init__(self):
+        if self.delay.total_seconds() < 0:
+            msg = "delay must be non-negative"
+            raise ValueError(msg)
+
+    @property
+    def delay_seconds(self) -> int:
+        """Get delay in seconds."""
+        return int(self.delay.total_seconds())
+
+    @classmethod
+    def wait(cls, delay: timedelta) -> WaitDecision:
+        """Create a wait decision."""
+        return cls(should_wait=True, delay=delay)
+
+    @classmethod
+    def no_wait(cls) -> WaitDecision:
+        """Create a no-wait decision."""
+        return cls(should_wait=False, delay=timedelta())
+
+
+@dataclass(frozen=True)
+class WaitForConditionDecision:
+    """Decision about whether to continue waiting."""
+
+    should_continue: bool
+    delay: timedelta
+
+    def __post_init__(self):
+        if self.delay.total_seconds() < 0:
+            msg = "delay must be non-negative"
+            raise ValueError(msg)
+
+    @property
+    def delay_seconds(self) -> int:
+        """Get delay in seconds."""
+        return int(self.delay.total_seconds())
+
+    @classmethod
+    def continue_waiting(
+        cls,
+        delay: timedelta = timedelta(),
+    ) -> WaitForConditionDecision:
+        """Create a decision to continue waiting."""
+        return cls(should_continue=True, delay=delay)
+
+    @classmethod
+    def stop_polling(cls) -> WaitForConditionDecision:
+        """Create a decision to stop polling."""
+        return cls(should_continue=False, delay=timedelta())
+
+
+ConditionResult = tuple[T, WaitForConditionDecision]
+WaitDelayStrategy = Callable[[T, int], WaitDecision | timedelta]
 
 
 @dataclass(frozen=True)

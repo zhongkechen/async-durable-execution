@@ -30,11 +30,13 @@ from ..async_tools import (
     assert_async_callable,
 )
 from .concurrency import (
+    BatchResult,
     CompletionConfig,
     ConcurrentExecutor,
+    Executable,
     NestingType,
 )
-from ..models import BatchResult, Executable, OperationIdentifier, OperationSubType
+from ..models import OperationIdentifier, OperationSubType
 
 
 if TYPE_CHECKING:

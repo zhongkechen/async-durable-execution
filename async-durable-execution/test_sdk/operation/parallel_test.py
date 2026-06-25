@@ -9,16 +9,18 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from async_durable_execution.composite.concurrency import ConcurrentExecutor
-
-# Mock the executor.execute method to return a BatchResult
-from async_durable_execution.models import (
+from async_durable_execution.composite.concurrency import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
     CompletionReason,
-    ContextDetails,
+    ConcurrentExecutor,
     Executable,
+)
+
+# Mock the executor.execute method to return a BatchResult
+from async_durable_execution.models import (
+    ContextDetails,
     Operation,
     OperationStatus,
     OperationType,

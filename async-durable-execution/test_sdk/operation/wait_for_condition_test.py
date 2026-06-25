@@ -33,7 +33,9 @@ from async_durable_execution.composite.wait_for_condition import (
 )
 from async_durable_execution.state import ExecutionState
 from async_durable_execution import WaitForConditionCheckContext
-from async_durable_execution.models import WaitForConditionDecision
+from async_durable_execution.composite.wait_for_condition import (
+    WaitForConditionDecision,
+)
 from async_durable_execution.config import JitterStrategy
 from async_durable_execution.primitive.base import CheckpointedResult
 from async_durable_execution.composite.wait_for_condition import WaitStrategyBuilder
