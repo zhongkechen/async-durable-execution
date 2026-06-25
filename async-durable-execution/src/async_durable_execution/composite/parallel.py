@@ -74,36 +74,6 @@ class ParallelExecutor(ConcurrentExecutor[Callable, R]):
             nesting_type=nesting_type,
         )
 
-    @classmethod
-    def from_callables(
-        cls,
-        callables: Sequence[Callable[[], Awaitable[R]]],
-        *,
-        max_concurrency: int | None = None,
-        completion_config: CompletionConfig | None = None,
-        serdes: SerDes | None = None,
-        summary_generator: SummaryGenerator | None = None,
-        item_serdes: SerDes | None = None,
-        nesting_type: NestingType = NestingType.NESTED,
-    ) -> ParallelExecutor:
-        """Create ParallelExecutor from a sequence of bound durable callables."""
-        executables: list[Executable[Callable]] = [
-            Executable(index=i, func=func) for i, func in enumerate(callables)
-        ]
-
-        return cls(
-            executables=executables,
-            max_concurrency=max_concurrency,
-            completion_config=completion_config or CompletionConfig.all_successful(),
-            top_level_sub_type=OperationSubType.PARALLEL,
-            iteration_sub_type=OperationSubType.PARALLEL_BRANCH,
-            name_prefix="parallel-branch-",
-            serdes=serdes,
-            summary_generator=summary_generator,
-            item_serdes=item_serdes,
-            nesting_type=nesting_type,
-        )
-
     async def execute_item(self, child_context, executable: Executable[Callable]):  # noqa: PLR6301
         logger.debug("🔀 Processing parallel branch: %s", executable.index)
         if getattr(child_context, "execution_state", None) is not None:
@@ -157,13 +127,18 @@ async def parallel_handler(
     #
     # See TypeScript reference: aws-durable-execution-sdk-js/src/handlers/parallel-handler/parallel-handler.ts (~line 112)
 
-    executor = ParallelExecutor.from_callables(
-        callables,
+    executor: ParallelExecutor[R] = ParallelExecutor(
+        executables=[
+            Executable(index=i, func=func) for i, func in enumerate(callables)
+        ],
         max_concurrency=max_concurrency,
-        completion_config=completion_config,
+        completion_config=completion_config or CompletionConfig.all_successful(),
+        top_level_sub_type=OperationSubType.PARALLEL,
+        iteration_sub_type=OperationSubType.PARALLEL_BRANCH,
+        name_prefix="parallel-branch-",
         serdes=serdes,
-        item_serdes=item_serdes,
         summary_generator=summary_generator,
+        item_serdes=item_serdes,
         nesting_type=nesting_type,
     )
 
