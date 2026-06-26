@@ -16,7 +16,7 @@ from ..exceptions import SuspendExecution, TimedSuspendExecution
 from ..exceptions import InvalidStateError
 from ..models import ErrorObject, OperationIdentifier, SerializableModel, _metadata
 from ..primitive.base import get_checkpoint_result
-from ..primitive.child import ChildConfig, OrphanedChildException, child_handler
+from ..primitive.child import OrphanedChildException, child_handler
 from ..serdes import deserialize
 
 
@@ -784,11 +784,9 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
             run_in_child_handler,
             child_context.execution_state,
             operation_identifier=operation_identifier,
-            config=ChildConfig(
-                serdes=self.item_serdes or self.serdes,
-                summary_generator=self.summary_generator,
-                is_virtual=is_virtual,
-            ),
+            serdes=self.item_serdes or self.serdes,
+            summary_generator=self.summary_generator,
+            is_virtual=is_virtual,
         )
         return result
 

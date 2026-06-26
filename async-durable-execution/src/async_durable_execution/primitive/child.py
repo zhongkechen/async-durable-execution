@@ -8,7 +8,7 @@ import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import TYPE_CHECKING, Generic, TypeVar, cast
+from typing import TYPE_CHECKING, TypeVar, cast
 
 from .base import (
     CHECKPOINT_NOT_FOUND,
@@ -64,16 +64,6 @@ class OrphanedChildException(BaseException):
         self.operation_id = operation_id
 
 
-@dataclass(frozen=True)
-class ChildConfig(Generic[T]):
-    """Configuration options for child context operations."""
-
-    serdes: SerDes | None = None
-    item_serdes: SerDes | None = None
-    summary_generator: SummaryGenerator | None = None
-    is_virtual: bool = False
-
-
 class OperationIdGenerator:
     """Generate deterministic operation ids within a durable execution scope."""
 
@@ -116,7 +106,10 @@ class ChildOperationExecutor(OperationExecutor[T]):
         func: Callable[[], Awaitable[T]],
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
-        config: ChildConfig,
+        *,
+        serdes: SerDes | None = None,
+        summary_generator: SummaryGenerator | None = None,
+        is_virtual: bool = False,
     ):
         """Initialize the child operation executor.
 
@@ -124,12 +117,15 @@ class ChildOperationExecutor(OperationExecutor[T]):
             func: The child context function to execute
             state: The execution state
             operation_identifier: The operation identifier
-            config: The child configuration
+            serdes: Optional serializer for the child context result.
+            summary_generator: Optional summary generator for large child results.
+            is_virtual: Whether this child context should skip lifecycle checkpoints.
         """
         super().__init__(state=state, operation_identifier=operation_identifier)
         self.func = func
-        self.config = config
-        self.is_virtual: bool = config.is_virtual
+        self.serdes = serdes
+        self.summary_generator = summary_generator
+        self.is_virtual = is_virtual
         self.sub_type = operation_identifier.sub_type
 
     async def start(self) -> T:
@@ -159,7 +155,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 return None  # type: ignore[return-value]
 
             result: T = await deserialize(
-                serdes=self.config.serdes,
+                serdes=self.serdes,
                 data=checkpointed_result.result,
                 operation_id=self.operation_id,
                 durable_execution_arn=self.durable_execution_arn,
@@ -225,7 +221,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
 
             # Serialize result
             serialized_result: str = await serialize(
-                serdes=self.config.serdes,
+                serdes=self.serdes,
                 value=raw_result,
                 operation_id=self.operation_id,
                 durable_execution_arn=self.durable_execution_arn,
@@ -255,9 +251,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 replay_children = True
                 # Use summary generator if provided, otherwise use empty string (matches TypeScript)
                 serialized_result = (
-                    self.config.summary_generator(raw_result)
-                    if self.config.summary_generator
-                    else ""
+                    self.summary_generator(raw_result) if self.summary_generator else ""
                 )
 
             # Checkpoint SUCCEED
@@ -310,7 +304,11 @@ async def child_handler(
     func: Callable[[], Awaitable[T]],
     state: ExecutionState,
     operation_identifier: OperationIdentifier,
-    config: ChildConfig | None,
+    *,
+    serdes: SerDes | None = None,
+    item_serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    is_virtual: bool = False,
 ) -> T:
     """Run a function in a child context.
 
@@ -320,9 +318,10 @@ async def child_handler(
         func: The child context function to execute.
         state: The execution state.
         operation_identifier: The operation identifier for this child context.
-        config: The child configuration (optional). When `config.is_virtual`
-            is True, the child context does not checkpoint (START, SUCCEED, FAIL)
-                        for itself.
+        serdes: Optional serializer for the child context result.
+        item_serdes: Optional serializer for child items used by composed operations.
+        summary_generator: Optional summary generator for large child results.
+        is_virtual: Whether the child context should skip lifecycle checkpoints.
 
     Returns:
         The result of executing the child context.
@@ -334,7 +333,9 @@ async def child_handler(
         func,
         state,
         operation_identifier,
-        config or ChildConfig(),
+        serdes=serdes,
+        summary_generator=summary_generator,
+        is_virtual=is_virtual,
     )
     return await executor.process()
 
@@ -455,14 +456,17 @@ async def _run_in_child_context_in_context(
     context: DurableContext,
     func: Callable[[], Awaitable[T]],
     name: str | None = None,
-    config: ChildConfig | None = None,
+    *,
+    serdes: SerDes | None = None,
+    item_serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    is_virtual: bool = False,
 ) -> T:
     assert_async_callable(func)
     step_name: str | None = name or get_callable_name(func)
     with context._replay_aware():
         operation_id = context.step_counter.create_step_id()
 
-        is_virtual: bool = config.is_virtual if config else False
         child_context = context.create_child_context(
             operation_id=operation_id,
             is_virtual=is_virtual,
@@ -483,7 +487,10 @@ async def _run_in_child_context_in_context(
                 parent_id=context.parent_id,
                 name=step_name,
             ),
-            config=config,
+            serdes=serdes,
+            item_serdes=item_serdes,
+            summary_generator=summary_generator,
+            is_virtual=is_virtual,
         )
 
 
@@ -507,17 +514,14 @@ async def run_in_child_context(
         is_virtual: Whether the child context should skip lifecycle checkpoints.
     """
     context = _get_durable_context("run_in_child_context")
-    config = ChildConfig[T](
-        serdes=serdes,
-        item_serdes=item_serdes,
-        summary_generator=summary_generator,
-        is_virtual=is_virtual,
-    )
     return await _run_in_child_context_in_context(
         context,
         func=func,
         name=name,
-        config=config,
+        serdes=serdes,
+        item_serdes=item_serdes,
+        summary_generator=summary_generator,
+        is_virtual=is_virtual,
     )
 
 

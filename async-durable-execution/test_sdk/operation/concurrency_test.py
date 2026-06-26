@@ -38,7 +38,6 @@ from async_durable_execution.models import (
     OperationIdentifier,
     OperationSubType,
 )
-from async_durable_execution.primitive.child import ChildConfig
 from async_durable_execution.composite.map import MapExecutor
 
 
@@ -2523,10 +2522,12 @@ async def test_operation_id_determinism_across_shuffles():
         func,
         execution_state,
         operation_identifier,
-        config: ChildConfig,
+        *,
+        is_virtual: bool = False,
+        **_kwargs,
     ):
         """Patched child handler that captures operation_id -> result mapping."""
-        assert config.is_virtual
+        assert is_virtual
         assert operation_identifier.sub_type == "TEST_ITER"
         result = await invoke_callable(func)
         captured_associations.append((operation_identifier.operation_id, result))

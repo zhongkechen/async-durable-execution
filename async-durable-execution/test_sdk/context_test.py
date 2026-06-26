@@ -449,12 +449,10 @@ async def test_durable_callable_can_be_passed_to_run_in_child_context():
     mock_run_in_child_context.assert_awaited_once()
     assert mock_run_in_child_context.await_args.args[0] is context
     assert mock_run_in_child_context.await_args.kwargs["name"] == "greet-child"
-    assert mock_run_in_child_context.await_args.kwargs["config"].serdes is None
-    assert mock_run_in_child_context.await_args.kwargs["config"].item_serdes is None
-    assert (
-        mock_run_in_child_context.await_args.kwargs["config"].summary_generator is None
-    )
-    assert not mock_run_in_child_context.await_args.kwargs["config"].is_virtual
+    assert mock_run_in_child_context.await_args.kwargs["serdes"] is None
+    assert mock_run_in_child_context.await_args.kwargs["item_serdes"] is None
+    assert mock_run_in_child_context.await_args.kwargs["summary_generator"] is None
+    assert not mock_run_in_child_context.await_args.kwargs["is_virtual"]
     assert await mock_run_in_child_context.await_args.kwargs["func"]() == "hello Ada"
 
 
@@ -1414,10 +1412,10 @@ async def test_run_in_child_context_basic(mock_handler):
     assert call_args[1]["operation_identifier"] == OperationIdentifier(
         expected_operation_id, OperationSubType.RUN_IN_CHILD_CONTEXT, None, None
     )
-    assert call_args[1]["config"].serdes is None
-    assert call_args[1]["config"].item_serdes is None
-    assert call_args[1]["config"].summary_generator is None
-    assert not call_args[1]["config"].is_virtual
+    assert call_args[1]["serdes"] is None
+    assert call_args[1]["item_serdes"] is None
+    assert call_args[1]["summary_generator"] is None
+    assert not call_args[1]["is_virtual"]
 
 
 @patch("async_durable_execution.primitive.child.child_handler")
@@ -1456,10 +1454,10 @@ async def test_run_in_child_context_with_name_and_config(mock_handler):
     assert call_args[1]["operation_identifier"] == OperationIdentifier(
         expected_id, OperationSubType.RUN_IN_CHILD_CONTEXT, None, "original_function"
     )
-    assert call_args[1]["config"].serdes is None
-    assert call_args[1]["config"].item_serdes is None
-    assert call_args[1]["config"].summary_generator is summary_generator
-    assert call_args[1]["config"].is_virtual
+    assert call_args[1]["serdes"] is None
+    assert call_args[1]["item_serdes"] is None
+    assert call_args[1]["summary_generator"] is summary_generator
+    assert call_args[1]["is_virtual"]
 
 
 @patch("async_durable_execution.primitive.child.child_handler")
@@ -1912,8 +1910,7 @@ async def test_parallel_with_name_and_config_fields(mock_handler):
     assert (
         call_args[1]["operation_identifier"].name == "custom_parallel"
     )  # name should be custom_parallel
-    child_config = call_args.kwargs["config"]
-    assert child_config.serdes is serdes
+    assert call_args.kwargs["serdes"] is serdes
 
 
 @patch("async_durable_execution.composite.parallel.child_handler")

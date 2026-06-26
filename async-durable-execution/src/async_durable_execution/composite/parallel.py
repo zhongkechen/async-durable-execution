@@ -14,7 +14,7 @@ from typing import (
 )
 
 from ..primitive.base import get_checkpoint_result
-from ..primitive.child import ChildConfig, child_handler, _get_durable_context
+from ..primitive.child import child_handler, _get_durable_context
 
 from ..async_tools import (
     invoke_user_callable,
@@ -195,8 +195,6 @@ async def parallel(
             ),
             state=context.execution_state,
             operation_identifier=operation_identifier,
-            config=ChildConfig(
-                serdes=serdes,
-                item_serdes=None,
-            ),
+            serdes=serdes,
+            item_serdes=None,
         )
