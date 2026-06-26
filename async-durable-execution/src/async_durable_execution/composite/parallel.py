@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
 from typing import (
     TYPE_CHECKING,
     TypeVar,
@@ -21,6 +20,7 @@ from ..async_tools import (
     invoke_user_callable,
     invoke_callable,
     assert_async_callable,
+    durable_callable,
 )
 from .concurrency import (
     CompletionConfig,
@@ -43,20 +43,6 @@ logger = logging.getLogger(__name__)
 # Result type
 R = TypeVar("R")
 T = TypeVar("T")
-
-
-@dataclass(frozen=True)
-class ParallelConfig:
-    """Configuration options for parallel execution operations."""
-
-    max_concurrency: int | None = None
-    completion_config: CompletionConfig = field(
-        default_factory=CompletionConfig.all_successful
-    )
-    serdes: SerDes | None = None
-    item_serdes: SerDes | None = None
-    summary_generator: SummaryGenerator | None = None
-    nesting_type: NestingType = NestingType.NESTED
 
 
 class ParallelExecutor(ConcurrentExecutor[Callable, R]):
@@ -88,30 +74,6 @@ class ParallelExecutor(ConcurrentExecutor[Callable, R]):
             nesting_type=nesting_type,
         )
 
-    @classmethod
-    def from_callables(
-        cls,
-        callables: Sequence[Callable[[], Awaitable[R]]],
-        config: ParallelConfig,
-    ) -> ParallelExecutor:
-        """Create ParallelExecutor from a sequence of bound durable callables."""
-        executables: list[Executable[Callable]] = [
-            Executable(index=i, func=func) for i, func in enumerate(callables)
-        ]
-
-        return cls(
-            executables=executables,
-            max_concurrency=config.max_concurrency,
-            completion_config=config.completion_config,
-            top_level_sub_type=OperationSubType.PARALLEL,
-            iteration_sub_type=OperationSubType.PARALLEL_BRANCH,
-            name_prefix="parallel-branch-",
-            serdes=config.serdes,
-            summary_generator=config.summary_generator,
-            item_serdes=config.item_serdes,
-            nesting_type=config.nesting_type,
-        )
-
     async def execute_item(self, child_context, executable: Executable[Callable]):  # noqa: PLR6301
         logger.debug("🔀 Processing parallel branch: %s", executable.index)
         if getattr(child_context, "execution_state", None) is not None:
@@ -125,34 +87,6 @@ class ParallelExecutor(ConcurrentExecutor[Callable, R]):
             )
         logger.debug("✅ Processed parallel branch: %s", executable.index)
         return result
-
-
-async def parallel_handler(
-    callables: Sequence[Callable[[], Awaitable[R]]],
-    config: ParallelConfig | None,
-    execution_state: ExecutionState,
-    parallel_context: DurableContext,
-    operation_identifier: OperationIdentifier,
-):
-    """Execute multiple operations in parallel."""
-    # Summary Generator Construction (matches TypeScript implementation):
-    # Construct the summary generator at the handler level, just like TypeScript does in parallel-handler.ts.
-    # This matches the pattern where handlers are responsible for configuring operation-specific behavior.
-    #
-    # See TypeScript reference: aws-durable-execution-sdk-js/src/handlers/parallel-handler/parallel-handler.ts (~line 112)
-
-    executor = ParallelExecutor.from_callables(
-        callables,
-        config or ParallelConfig(summary_generator=ParallelSummaryGenerator()),
-    )
-
-    checkpoint = get_checkpoint_result(
-        execution_state,
-        operation_identifier.require_operation_id(),
-    )
-    if checkpoint.is_succeeded():
-        return await executor.replay(execution_state, parallel_context)
-    return await executor.execute(execution_state, executor_context=parallel_context)
 
 
 class ParallelSummaryGenerator:
@@ -170,6 +104,51 @@ class ParallelSummaryGenerator:
         }
 
         return json.dumps(fields)
+
+
+@durable_callable
+async def parallel_handler(
+    callables: Sequence[Callable[[], Awaitable[R]]],
+    execution_state: ExecutionState,
+    parallel_context: DurableContext,
+    operation_identifier: OperationIdentifier,
+    *,
+    max_concurrency: int | None = None,
+    completion_config: CompletionConfig | None = None,
+    serdes: SerDes | None = None,
+    item_serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = ParallelSummaryGenerator(),
+    nesting_type: NestingType = NestingType.NESTED,
+):
+    """Execute multiple operations in parallel."""
+    # Summary Generator Construction (matches TypeScript implementation):
+    # Construct the summary generator at the handler level, just like TypeScript does in parallel-handler.ts.
+    # This matches the pattern where handlers are responsible for configuring operation-specific behavior.
+    #
+    # See TypeScript reference: aws-durable-execution-sdk-js/src/handlers/parallel-handler/parallel-handler.ts (~line 112)
+
+    executor: ParallelExecutor[R] = ParallelExecutor(
+        executables=[
+            Executable(index=i, func=func) for i, func in enumerate(callables)
+        ],
+        max_concurrency=max_concurrency,
+        completion_config=completion_config or CompletionConfig.all_successful(),
+        top_level_sub_type=OperationSubType.PARALLEL,
+        iteration_sub_type=OperationSubType.PARALLEL_BRANCH,
+        name_prefix="parallel-branch-",
+        serdes=serdes,
+        summary_generator=summary_generator,
+        item_serdes=item_serdes,
+        nesting_type=nesting_type,
+    )
+
+    checkpoint = get_checkpoint_result(
+        execution_state,
+        operation_identifier.require_operation_id(),
+    )
+    if checkpoint.is_succeeded():
+        return await executor.replay(execution_state, parallel_context)
+    return await executor.execute(execution_state, executor_context=parallel_context)
 
 
 async def parallel(
@@ -190,15 +169,6 @@ async def parallel(
         assert_async_callable(branch, label=f"branches[{index}]")
         validated_branches.append(branch)
 
-    config = ParallelConfig(
-        max_concurrency=max_concurrency,
-        completion_config=completion_config or CompletionConfig.all_successful(),
-        serdes=serdes,
-        item_serdes=item_serdes,
-        summary_generator=summary_generator,
-        nesting_type=nesting_type,
-    )
-
     with context._replay_aware():
         operation_id = context.step_counter.create_step_id()
         parallel_context = context.create_child_context(operation_id=operation_id)
@@ -209,21 +179,24 @@ async def parallel(
             name=name,
         )
 
-        async def parallel_in_child_context() -> BatchResult[T]:
-            return await parallel_handler(
+        return await child_handler(
+            func=parallel_handler(
                 callables=validated_branches,
-                config=config,
                 execution_state=context.execution_state,
                 parallel_context=parallel_context,
                 operation_identifier=operation_identifier,
-            )
-
-        return await child_handler(
-            func=parallel_in_child_context,
+                max_concurrency=max_concurrency,
+                completion_config=completion_config
+                or CompletionConfig.all_successful(),
+                serdes=serdes,
+                item_serdes=item_serdes,
+                summary_generator=summary_generator,
+                nesting_type=nesting_type,
+            ),
             state=context.execution_state,
             operation_identifier=operation_identifier,
             config=ChildConfig(
-                serdes=config.serdes,
+                serdes=serdes,
                 item_serdes=None,
             ),
         )

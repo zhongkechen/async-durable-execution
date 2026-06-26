@@ -1958,13 +1958,14 @@ async def test_parallel_calls_handler_correctly(mock_handler):
     mock_handler.assert_called_once()
 
 
-@patch(
-    "async_durable_execution.composite.parallel.parallel_handler",
-    new_callable=AsyncMock,
-)
+@patch("async_durable_execution.composite.parallel.parallel_handler")
 async def test_parallel_with_empty_callables(mock_handler):
     """Test parallel with empty callables."""
-    mock_handler.return_value = "empty_parallel_result"
+
+    async def handler_result():
+        return "empty_parallel_result"
+
+    mock_handler.return_value = handler_result
     mock_state = create_async_child_state()
 
     callables = []
@@ -1974,13 +1975,14 @@ async def test_parallel_with_empty_callables(mock_handler):
     assert result == "empty_parallel_result"
 
 
-@patch(
-    "async_durable_execution.composite.parallel.parallel_handler",
-    new_callable=AsyncMock,
-)
+@patch("async_durable_execution.composite.parallel.parallel_handler")
 async def test_parallel_with_single_callable(mock_handler):
     """Test parallel with single callable."""
-    mock_handler.return_value = "single_parallel_result"
+
+    async def handler_result():
+        return "single_parallel_result"
+
+    mock_handler.return_value = handler_result
     mock_state = create_async_child_state()
 
     async def single_task(context):
@@ -1993,13 +1995,14 @@ async def test_parallel_with_single_callable(mock_handler):
     assert result == "single_parallel_result"
 
 
-@patch(
-    "async_durable_execution.composite.parallel.parallel_handler",
-    new_callable=AsyncMock,
-)
+@patch("async_durable_execution.composite.parallel.parallel_handler")
 async def test_parallel_with_many_callables(mock_handler):
     """Test parallel with many callables."""
-    mock_handler.return_value = "many_parallel_result"
+
+    async def handler_result():
+        return "many_parallel_result"
+
+    mock_handler.return_value = handler_result
     mock_state = create_async_child_state()
 
     def create_task(i):
@@ -2138,10 +2141,13 @@ async def test_context_parallel_handler_call():
 
     # Mock the handlers to track calls
     with patch(
-        "async_durable_execution.composite.parallel.parallel_handler",
-        new_callable=AsyncMock,
+        "async_durable_execution.composite.parallel.parallel_handler"
     ) as mock_parallel_handler:
-        mock_parallel_handler.return_value = "parallel_result"
+
+        async def handler_result():
+            return "parallel_result"
+
+        mock_parallel_handler.return_value = handler_result
 
         await run_with_context(context, parallel([test_callable_1, test_callable_2]))
         mock_parallel_handler.assert_called_once()
