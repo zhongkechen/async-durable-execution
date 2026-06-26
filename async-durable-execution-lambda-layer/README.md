@@ -8,29 +8,25 @@ import `async_durable_execution` without bundling the SDK in the function zip.
 ## Build a Layer Zip
 
 ```console
-pip install async-durable-execution-lambda-layer
-async-durable-execution-build-layer --output dist/async-durable-execution-layer.zip
-```
-
-By default, the builder installs the matching SDK version:
-
-```text
-async-durable-execution==<package version>
-```
-
-For local development from this monorepo, point the builder at the local SDK
-package:
-
-```console
 hatch run python -m async_durable_execution_lambda_layer.builder \
   --sdk-source ../async-durable-execution \
   --output dist/async-durable-execution-layer.zip
 ```
 
+The release workflow uses this package directly from the repository checkout, so
+the builder package does not need to be published to PyPI.
+
+When `--sdk-source` is omitted, the builder installs the matching SDK version:
+
+```text
+async-durable-execution==<package version>
+```
+
 Additional pip arguments can be passed after `--pip-arg`, for example:
 
 ```console
-async-durable-execution-build-layer \
+hatch run python -m async_durable_execution_lambda_layer.builder \
+  --sdk-source ../async-durable-execution \
   --output dist/async-durable-execution-layer.zip \
   --pip-arg=--only-binary=:all:
 ```

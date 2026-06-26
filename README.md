@@ -32,7 +32,7 @@ This fork is specifically focused on making async Python work naturally with dur
 | --- | --- | --- |
 | `async-durable-execution` | Execution SDK for Lambda durable functions | [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution) |
 | `async-durable-execution-runner` | Local/cloud test runner and pytest helpers | [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution-runner.svg)](https://pypi.org/project/async-durable-execution-runner) |
-| `async-durable-execution-lambda-layer` | Builder for Lambda layer zips that vendor the execution SDK | [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution-lambda-layer.svg)](https://pypi.org/project/async-durable-execution-lambda-layer) |
+| `async-durable-execution-lambda-layer` | Repository-only builder for publishing Lambda layer zips that vendor the execution SDK | Shared repo version |
 | `async-durable-execution-examples` | Example durable functions and integration tests for local and cloud workflows | Shared repo version |
 
 ## 🚀 Quick Start
@@ -47,11 +47,13 @@ pip install async-durable-execution
 ```
 
 To share the SDK through a Lambda layer instead of vendoring it in each function
-zip, build a layer archive:
+zip, publish the repository-built layer from GitHub Actions or build a local
+layer archive from this checkout:
 
 ```console
-pip install async-durable-execution-lambda-layer
-async-durable-execution-build-layer --output dist/async-durable-execution-layer.zip
+hatch run python -m async_durable_execution_lambda_layer.builder \
+  --sdk-source async-durable-execution \
+  --output async-durable-execution-lambda-layer/dist/async-durable-execution-layer.zip
 ```
 
 Publish the zip as an `AWS::Serverless::LayerVersion` or

@@ -52,17 +52,31 @@ v2.0.0a2
 
 Creating a GitHub Release triggers the [`pypi-publish.yml`](.github/workflows/pypi-publish.yml) workflow automatically. The workflow:
 
-1. **Builds** the SDK, runner, and Lambda layer builder packages using [Hatch](https://hatch.pypa.io/) (`hatch build`).
+1. **Builds** the SDK and runner packages using [Hatch](https://hatch.pypa.io/) (`hatch build`).
 2. **Uploads** the built distributions as artifacts.
 3. **Publishes** those packages to [PyPI](https://pypi.org/) using trusted publishing (OIDC-based, no API tokens required).
 
 The workflow runs on the `release: [published]` event, so it fires whenever a release is published on GitHub — no manual intervention is needed beyond creating the release.
 
-> **Note:** The current workflow publishes `async-durable-execution`, `async-durable-execution-runner`, and `async-durable-execution-lambda-layer` to PyPI. The examples package still shares the same repo version in `VERSION.py`, but it is not part of the current publish matrix.
+> **Note:** The current workflow publishes `async-durable-execution` and `async-durable-execution-runner` to PyPI. The Lambda layer builder and examples package still share the same repo version in `VERSION.py`, but they are not part of the current PyPI publish matrix.
+
+Creating a GitHub Release also triggers the [`lambda-layer-publish.yml`](.github/workflows/lambda-layer-publish.yml) workflow. The workflow:
+
+1. **Builds** a Lambda layer zip from the release tag using the local `async-durable-execution` package.
+2. **Publishes** a new Lambda layer version with compatible runtimes `python3.10` through `python3.14`.
+3. **Shares** the layer version with principals configured in `LAMBDA_LAYER_SHARE_PRINCIPALS`, or with principals entered in the manual workflow dispatch form.
+
+Set `ACTIONS_LAYER_PUBLISH_ROLE_ARN` to the AWS role used for publishing the layer. The role needs `lambda:PublishLayerVersion` and `lambda:AddLayerVersionPermission` for the target layer. If `ACTIONS_LAYER_PUBLISH_ROLE_ARN` is not set, the workflow falls back to `ACTIONS_INTEGRATION_ROLE_NAME`.
+
+Optional repository variables:
+
+- `LAMBDA_LAYER_AWS_REGION`: AWS Region for publishing. Defaults to `eu-south-1`.
+- `LAMBDA_LAYER_NAME`: Lambda layer name. Defaults to `async-durable-execution`.
+- `LAMBDA_LAYER_SHARE_PRINCIPALS`: Comma, space, or newline-separated AWS account IDs, AWS organization IDs such as `o-abc123`, or `*` for public sharing.
 
 ### Trusted Publisher Configuration
 
-PyPI trusted publishing is configured per project, so `async-durable-execution`, `async-durable-execution-runner`, and `async-durable-execution-lambda-layer` need their own matching publisher entry in PyPI.
+PyPI trusted publishing is configured per project, so `async-durable-execution` and `async-durable-execution-runner` need their own matching publisher entry in PyPI.
 
 For the current workflow, each PyPI project should trust the following GitHub Actions publisher settings:
 
@@ -71,7 +85,6 @@ For the current workflow, each PyPI project should trust the following GitHub Ac
 - Workflow file: `.github/workflows/pypi-publish.yml`
 - Environment for `async-durable-execution`: `async-durable-execution`
 - Environment for `async-durable-execution-runner`: `async-durable-execution-runner`
-- Environment for `async-durable-execution-lambda-layer`: `async-durable-execution-lambda-layer`
 
 If PyPI returns `invalid-publisher`, compare the failing job's OIDC claims with the PyPI project settings first. A mismatch in repository name, workflow filename, or environment name is the most common cause.
 
