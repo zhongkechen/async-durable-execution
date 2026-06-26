@@ -1798,7 +1798,7 @@ async def test_map_calls_handler_correctly(mock_handler):
     mock_handler.assert_called_once()
 
 
-@patch("async_durable_execution.composite.map.map_handler", new_callable=AsyncMock)
+@patch("async_durable_execution.composite.map.child_handler")
 async def test_map_with_empty_items(mock_handler):
     """Test map with empty items."""
     mock_handler.return_value = "empty_map_result"
@@ -1814,7 +1814,7 @@ async def test_map_with_empty_items(mock_handler):
     assert result == "empty_map_result"
 
 
-@patch("async_durable_execution.composite.map.map_handler", new_callable=AsyncMock)
+@patch("async_durable_execution.composite.map.child_handler")
 async def test_map_with_different_input_types(mock_handler):
     """Test map with different item types."""
     mock_handler.return_value = "mixed_map_result"
@@ -2111,15 +2111,26 @@ async def test_context_map_handler_call():
 
     context = create_test_context(state=state)
 
-    # Mock the handlers to track calls
-    with patch(
-        "async_durable_execution.composite.map.map_handler", new_callable=AsyncMock
-    ) as mock_map_handler:
-        mock_map_handler.return_value = "map_result"
+    async def bound_map_handler():
+        return "map_result"
 
-        await run_with_context(context, map_operation(test_function, [1, 2]))
+    # Mock the handlers to track calls.
+    with (
+        patch("async_durable_execution.composite.map.map_handler") as mock_map_handler,
+        patch(
+            "async_durable_execution.composite.map.child_handler",
+            new_callable=AsyncMock,
+        ) as mock_child_handler,
+    ):
+        mock_map_handler.return_value = bound_map_handler
+        mock_child_handler.return_value = "map_result"
+
+        result = await run_with_context(context, map_operation(test_function, [1, 2]))
+
+        assert result == "map_result"
         mock_map_handler.assert_called_once()
-        assert mock_map_handler.call_args.kwargs["config"].summary_generator is None
+        assert mock_child_handler.call_args.kwargs["func"] is bound_map_handler
+        assert mock_map_handler.call_args.kwargs["summary_generator"] is None
 
 
 async def test_context_parallel_handler_call():

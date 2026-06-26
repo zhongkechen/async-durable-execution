@@ -36,7 +36,6 @@ from async_durable_execution.composite.concurrency import CompletionConfig, Nest
 from async_durable_execution.composite.map import (
     BatchedInput,
     ItemBatcher,
-    MapConfig,
     MapExecutor,
     MapItemContext,
     map_handler,
@@ -109,6 +108,10 @@ async def run_with_context(context: DurableContext, awaitable):
         reset_current_context(token)
 
 
+async def invoke_map_handler(*args, **kwargs):
+    return await map_handler(*args, **kwargs)()
+
+
 async def test_map_executor_init():
     """Test MapExecutor initialization."""
     executables = [Executable(index=0, func=lambda: None)]
@@ -139,16 +142,6 @@ def test_batched_input():
     assert batch_input.items == [1, 2, 3]
 
 
-def test_map_config_defaults():
-    """MapConfig keeps its expected defaults."""
-    config = MapConfig()
-
-    assert config.max_concurrency is None
-    assert isinstance(config.item_batcher, ItemBatcher)
-    assert isinstance(config.completion_config, CompletionConfig)
-    assert config.serdes is None
-
-
 def test_item_batcher_defaults():
     """ItemBatcher default values are defined in the map module."""
     batcher = ItemBatcher()
@@ -171,16 +164,26 @@ def test_item_batcher_with_values():
     assert batcher.batch_input == "test_input"
 
 
-async def test_map_executor_from_items():
-    """Test MapExecutor.from_items class method."""
+async def test_map_executor_init_from_items():
+    """Test MapExecutor initialization with item executables."""
     items = ["a", "b", "c"]
 
     async def callable_func(item):
         return item.upper()
 
-    config = MapConfig(max_concurrency=3, nesting_type=NestingType.FLAT)
-
-    executor = MapExecutor.from_items(items, callable_func, config)
+    executor = MapExecutor(
+        executables=[
+            Executable(index=i, func=callable_func) for i in range(len(items))
+        ],
+        items=items,
+        max_concurrency=3,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
+        nesting_type=NestingType.FLAT,
+    )
 
     assert len(executor.executables) == 3
     assert executor.items == items
@@ -189,17 +192,24 @@ async def test_map_executor_from_items():
     assert executor.nesting_type is NestingType.FLAT
 
 
-async def test_map_executor_from_items_default_config():
-    """Test MapExecutor.from_items with default config."""
+async def test_map_executor_init_default_config():
+    """Test MapExecutor initialization with default map config."""
     items = ["x"]
 
     async def callable_func(item):
         return item
 
-    executor = MapExecutor.from_items(
-        items,
-        callable_func,
-        MapConfig(),
+    executor = MapExecutor(
+        executables=[
+            Executable(index=i, func=callable_func) for i in range(len(items))
+        ],
+        items=items,
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
     )
 
     assert len(executor.executables) == 1
@@ -216,10 +226,17 @@ async def test_map_executor_execute_item(mock_logger):
         ctx = get_current_context()
         return f"{item}_{ctx.index}"
 
-    executor = MapExecutor.from_items(
-        items,
-        callable_func,
-        MapConfig(),
+    executor = MapExecutor(
+        executables=[
+            Executable(index=i, func=callable_func) for i in range(len(items))
+        ],
+        items=items,
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
     )
     executable = executor.executables[0]
 
@@ -239,10 +256,17 @@ async def test_map_executor_execute_item_with_context():
         ctx = get_current_context()
         return item * 2 + ctx.index
 
-    executor = MapExecutor.from_items(
-        items,
-        callable_func,
-        MapConfig(),
+    executor = MapExecutor(
+        executables=[
+            Executable(index=i, func=callable_func) for i in range(len(items))
+        ],
+        items=items,
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
     )
     executable = executor.executables[1]
 
@@ -259,10 +283,17 @@ async def test_map_executor_execute_item_with_async_callable():
         ctx = get_current_context()
         return f"{item}-{ctx.index}-{len(ctx.items)}"
 
-    executor = MapExecutor.from_items(
-        items,
-        callable_func,
-        MapConfig(),
+    executor = MapExecutor(
+        executables=[
+            Executable(index=i, func=callable_func) for i in range(len(items))
+        ],
+        items=items,
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
     )
     executable = executor.executables[0]
 
@@ -290,15 +321,13 @@ async def test_map_handler():
             )
 
     execution_state = MockExecutionState()
-    config = MapConfig()
     operation_identifier = OperationIdentifier(
         "test_op", OperationSubType.MAP, "parent", "test_map"
     )
 
-    result = await map_handler(
+    result = await invoke_map_handler(
         items,
         callable_func,
-        config,
         execution_state,
         mock_run_in_child_context,
         operation_identifier,
@@ -307,8 +336,8 @@ async def test_map_handler():
     assert isinstance(result, BatchResult)
 
 
-async def test_map_handler_with_none_config():
-    """Test map_handler with None config creates default MapConfig."""
+async def test_map_handler_with_defaults():
+    """Test map_handler with default options."""
     items = ["test"]
 
     async def callable_func(item):
@@ -329,13 +358,9 @@ async def test_map_handler_with_none_config():
         "test_op", OperationSubType.MAP, "parent", "test_map"
     )
 
-    # Since MapConfig() is called in map_handler when config is None,
-    # we need to provide a valid config to avoid the NameError
-    # This tests the behavior when config is provided instead
-    result = await map_handler(
+    result = await invoke_map_handler(
         items,
         callable_func,
-        MapConfig(),
         execution_state,
         mock_run_in_child_context,
         operation_identifier,
@@ -357,10 +382,17 @@ async def test_map_executor_execute_item_accesses_all_parameters():
         assert ctx.items == items
         return f"{item}_{ctx.index}_{len(ctx.items)}"
 
-    executor = MapExecutor.from_items(
-        items,
-        callable_func,
-        MapConfig(),
+    executor = MapExecutor(
+        executables=[
+            Executable(index=i, func=callable_func) for i in range(len(items))
+        ],
+        items=items,
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
     )
     executable = executor.executables[2]
 
@@ -369,34 +401,48 @@ async def test_map_executor_execute_item_accesses_all_parameters():
     assert result == "third_2_3"
 
 
-async def test_map_executor_from_items_empty_list():
-    """Test MapExecutor.from_items with empty items list."""
+async def test_map_executor_init_empty_list():
+    """Test MapExecutor initialization with empty items list."""
     items = []
 
     async def callable_func(item):
         return item
 
-    executor = MapExecutor.from_items(
-        items,
-        callable_func,
-        MapConfig(),
+    executor = MapExecutor(
+        executables=[
+            Executable(index=i, func=callable_func) for i in range(len(items))
+        ],
+        items=items,
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
     )
 
     assert len(executor.executables) == 0
     assert executor.items == []
 
 
-async def test_map_executor_from_items_single_item():
-    """Test MapExecutor.from_items with single item."""
+async def test_map_executor_init_single_item():
+    """Test MapExecutor initialization with single item."""
     items = ["only"]
 
     async def callable_func(item):
         return f"processed_{item}"
 
-    executor = MapExecutor.from_items(
-        items,
-        callable_func,
-        MapConfig(),
+    executor = MapExecutor(
+        executables=[
+            Executable(index=i, func=callable_func) for i in range(len(items))
+        ],
+        items=items,
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
     )
 
     assert len(executor.executables) == 1
@@ -411,10 +457,17 @@ async def test_map_executor_inheritance():
     async def callable_func(item):
         return item
 
-    executor = MapExecutor.from_items(
-        items,
-        callable_func,
-        MapConfig(),
+    executor = MapExecutor(
+        executables=[
+            Executable(index=i, func=callable_func) for i in range(len(items))
+        ],
+        items=items,
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
     )
 
     # Verify it has inherited attributes from ConcurrentExecutor
@@ -453,15 +506,13 @@ async def test_map_handler_calls_executor_execute():
                 )
 
         execution_state = MockExecutionState()
-        config = MapConfig()
         operation_identifier = OperationIdentifier(
             "test_op", OperationSubType.MAP, "parent", "test_map"
         )
 
-        result = await map_handler(
+        result = await invoke_map_handler(
             items,
             callable_func,
-            config,
             execution_state,
             executor_context,
             operation_identifier,
@@ -474,22 +525,24 @@ async def test_map_handler_calls_executor_execute():
         assert result == mock_batch_result
 
 
-async def test_map_handler_with_none_config_creates_default():
-    """Test that map_handler creates default MapConfig when config is None."""
+async def test_map_handler_passes_default_fields():
+    """Test that map_handler passes default field values to MapExecutor."""
     items = ["test"]
 
     async def callable_func(item):
         return item
 
-    # Mock MapExecutor.from_items to verify it's called with default config
-    with patch.object(MapExecutor, "from_items") as mock_from_items:
+    # Mock MapExecutor to verify it's called with default fields.
+    with patch(
+        "async_durable_execution.composite.map.MapExecutor"
+    ) as mock_executor_class:
         mock_executor = Mock()
         mock_batch_result = BatchResult(
             all=[BatchItem(index=0, status=BatchItemStatus.SUCCEEDED, result="test")],
             completion_reason=CompletionReason.ALL_COMPLETED,
         )
         mock_executor.execute = AsyncMock(return_value=mock_batch_result)
-        mock_from_items.return_value = mock_executor
+        mock_executor_class.return_value = mock_executor
 
         executor_context = Mock()
         executor_context._step_counter._create_step_id_for_logical_step = (  # noqa: SLF001
@@ -509,28 +562,26 @@ async def test_map_handler_with_none_config_creates_default():
             "test_op", OperationSubType.MAP, "parent", "test_map"
         )
 
-        result = await map_handler(
+        result = await invoke_map_handler(
             items,
             callable_func,
-            None,
             execution_state,
             executor_context,
             operation_identifier,
         )
 
-        # Verify from_items was called with a MapConfig instance
-        mock_from_items.assert_called_once()
-        call_args = mock_from_items.call_args
-        # Check that the call was made with keyword arguments
-        if call_args.args:
-            assert call_args.args[0] == items
-            assert call_args.args[1] == callable_func
-            assert isinstance(call_args.args[2], MapConfig)
-        else:
-            # Called with keyword arguments
-            assert call_args.kwargs["items"] == items
-            assert call_args.kwargs["func"] == callable_func
-            assert isinstance(call_args.kwargs["config"], MapConfig)
+        mock_executor_class.assert_called_once()
+        call_args = mock_executor_class.call_args
+        assert call_args.kwargs["items"] == items
+        assert [exe.index for exe in call_args.kwargs["executables"]] == [0]
+        assert all(exe.func == callable_func for exe in call_args.kwargs["executables"])
+        assert call_args.kwargs["max_concurrency"] is None
+        assert isinstance(call_args.kwargs["completion_config"], CompletionConfig)
+        assert call_args.kwargs["serdes"] is None
+        assert call_args.kwargs["summary_generator"] is None
+        assert call_args.kwargs["item_serdes"] is None
+        assert call_args.kwargs["nesting_type"] is NestingType.NESTED
+        assert call_args.kwargs["item_namer"] is None
 
         assert result == mock_batch_result
 
@@ -559,18 +610,18 @@ async def test_map_handler_with_serdes():
     )
     child_context = create_mock_child_context(execution_state)
     executor_context.create_child_context = lambda *args, **kwargs: child_context
-    config = MapConfig(serdes=CustomStrSerDes())
+    serdes = CustomStrSerDes()
     operation_identifier = OperationIdentifier(
         "test_op", OperationSubType.MAP, "parent", "test_map"
     )
 
-    result = await map_handler(
+    result = await invoke_map_handler(
         items,
         callable_func,
-        config,
         execution_state,
         executor_context,
         operation_identifier,
+        serdes=serdes,
     )
 
     # Verify execute was called
@@ -586,8 +637,6 @@ async def test_map_handler_with_summary_generator():
 
     def mock_summary_generator(result):
         return f"Summary of {len(result)} chars for map item"
-
-    config = MapConfig(summary_generator=mock_summary_generator)
 
     executor_context = Mock()
     executor_context.step_counter = Mock()
@@ -612,13 +661,13 @@ async def test_map_handler_with_summary_generator():
     )
 
     # Call map_handler
-    await map_handler(
+    await invoke_map_handler(
         items,
         callable_func,
-        config,
         execution_state,
         executor_context,
         operation_identifier,
+        summary_generator=mock_summary_generator,
     )
 
     # Verify that create_child_context was called twice (N=2 items)
@@ -635,8 +684,8 @@ async def test_map_handler_with_summary_generator():
     assert calls[0] != calls[1]
 
 
-async def test_map_executor_from_items_with_summary_generator():
-    """Test MapExecutor.from_items preserves summary_generator."""
+async def test_map_executor_init_with_summary_generator_preserves_it():
+    """Test MapExecutor initialization preserves summary_generator."""
     items = ["item1"]
 
     async def callable_func(item):
@@ -645,9 +694,19 @@ async def test_map_executor_from_items_with_summary_generator():
     def mock_summary_generator(result):
         return f"Map summary: {result}"
 
-    config = MapConfig(summary_generator=mock_summary_generator)
-
-    executor = MapExecutor.from_items(items, callable_func, config)
+    executor = MapExecutor(
+        executables=[
+            Executable(index=i, func=callable_func) for i in range(len(items))
+        ],
+        items=items,
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
+        summary_generator=mock_summary_generator,
+    )
 
     # Verify that the summary_generator is preserved in the executor
     assert executor.summary_generator is mock_summary_generator
@@ -682,11 +741,10 @@ async def test_map_handler_default_summary_generator():
         "test_op", OperationSubType.MAP, "parent", "test_map"
     )
 
-    # Call map_handler with None config (should use default)
-    await map_handler(
+    # Call map_handler with default fields.
+    await invoke_map_handler(
         items,
         callable_func,
-        None,
         execution_state,
         executor_context,
         operation_identifier,
@@ -733,8 +791,6 @@ async def test_map_handler_with_explicit_none_summary_generator():
         return f"processed_{item}"
 
     items = ["item1", "item2", "item3"]
-    # Explicitly set summary_generator to None
-    config = MapConfig(summary_generator=None)
 
     class MockExecutionState:
         def __init__(self):
@@ -767,13 +823,13 @@ async def test_map_handler_with_explicit_none_summary_generator():
         return_value=create_mock_child_context(execution_state)
     )
     # Call map_handler
-    await map_handler(
+    await invoke_map_handler(
         items=items,
         func=func,
-        config=config,
         execution_state=execution_state,
         map_context=executor_context,
         operation_identifier=operation_identifier,
+        summary_generator=None,
     )
 
     # Verify that create_child_context was called 3 times (N=3 items)
@@ -805,7 +861,6 @@ async def test_map_handler_replay_mechanism():
             self.operations.get.side_effect = _get
 
     execution_state = MockExecutionState()
-    config = MapConfig()
     operation_identifier = OperationIdentifier(
         "test_op", OperationSubType.MAP, "parent", "test_map"
     )
@@ -835,10 +890,9 @@ async def test_map_handler_replay_mechanism():
         )
         mock_replay.return_value = expected_batch_result
 
-        result = await map_handler(
+        result = await invoke_map_handler(
             items,
             callable_func,
-            config,
             execution_state,
             map_context,
             operation_identifier,
@@ -873,7 +927,6 @@ async def test_map_handler_replay_with_replay_children():
             self.operations.get.side_effect = _get
 
     execution_state = MockExecutionState()
-    config = MapConfig()
     operation_identifier = OperationIdentifier(
         "test_op", OperationSubType.MAP, "parent", "test_map"
     )
@@ -904,10 +957,9 @@ async def test_map_handler_replay_with_replay_children():
         )
         mock_replay.return_value = expected_batch_result
 
-        result = await map_handler(
+        result = await invoke_map_handler(
             items,
             callable_func,
-            config,
             execution_state,
             map_context,
             operation_identifier,
@@ -915,33 +967,6 @@ async def test_map_handler_replay_with_replay_children():
 
         mock_replay.assert_called_once_with(execution_state, map_context)
         assert result == expected_batch_result
-
-
-async def test_map_config_with_explicit_none_summary_generator():
-    """Test MapConfig with explicitly set None summary_generator."""
-    config = MapConfig(summary_generator=None)
-
-    assert config.summary_generator is None
-    assert config.max_concurrency is None
-    assert isinstance(config.item_batcher, ItemBatcher)
-    assert isinstance(config.completion_config, CompletionConfig)
-    assert config.serdes is None
-
-
-async def test_map_config_default_summary_generator_behavior():
-    """Test MapConfig() with no summary_generator should result in empty string behavior."""
-    # When creating MapConfig() with no summary_generator specified
-    config = MapConfig()
-
-    # The summary_generator should be None by default
-    assert config.summary_generator is None
-
-    # But when used in the actual child.py logic, it should result in empty string
-    # This matches child.py: config.summary_generator(raw_result) if config.summary_generator else ""
-    test_result = (
-        config.summary_generator("test_data") if config.summary_generator else ""
-    )
-    assert test_result == ""  # noqa PLC1901
 
 
 @patch("async_durable_execution.composite.map.child_handler")
@@ -992,7 +1017,6 @@ async def test_map_handler_first_execution_then_replay_integration():
         return f"processed_{item}"
 
     items = ["a", "b"]
-    config = MapConfig()
     operation_identifier = OperationIdentifier(
         "test_op", OperationSubType.MAP, "parent", "test_map"
     )
@@ -1039,8 +1063,8 @@ async def test_map_handler_first_execution_then_replay_integration():
 
         # FIRST EXECUTION - should call execute
         execution_count = 0
-        await map_handler(
-            items, test_func, config, execution_state, map_context, operation_identifier
+        await invoke_map_handler(
+            items, test_func, execution_state, map_context, operation_identifier
         )
 
         # Verify execute was called, replay was not
@@ -1053,8 +1077,8 @@ async def test_map_handler_first_execution_then_replay_integration():
 
         # SECOND EXECUTION - should call replay
         execution_count = 1
-        await map_handler(
-            items, test_func, config, execution_state, map_context, operation_identifier
+        await invoke_map_handler(
+            items, test_func, execution_state, map_context, operation_identifier
         )
 
         # Verify replay was called, execute was not
@@ -1263,8 +1287,8 @@ async def test_map_result_serialization_roundtrip():
     )
 
     # Execute map
-    result = await map_handler(
-        items, func, MapConfig(), execution_state, map_context, operation_identifier
+    result = await invoke_map_handler(
+        items, func, execution_state, map_context, operation_identifier
     )
 
     # Serialize the BatchResult
@@ -1549,12 +1573,17 @@ async def test_map_with_empty_list_should_exit_early():
 async def test_map_executor_get_iteration_name_default():
     """Without item_namer, iterations use default 'map-item-{index}' naming."""
     items = ["a", "b", "c"]
-    config = MapConfig(max_concurrency=2)
+    func = lambda item: item  # noqa: E731
 
-    executor = MapExecutor.from_items(
+    executor = MapExecutor(
+        executables=[Executable(index=i, func=func) for i in range(len(items))],
         items=items,
-        func=lambda item: item,
-        config=config,
+        max_concurrency=2,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
     )
 
     assert executor.get_iteration_name(0) == "map-item-0"
@@ -1565,15 +1594,18 @@ async def test_map_executor_get_iteration_name_default():
 async def test_map_executor_get_iteration_name_with_item_namer():
     """With item_namer, iterations use custom names."""
     items = [{"id": "order-1"}, {"id": "order-2"}, {"id": "order-3"}]
-    config = MapConfig(
-        max_concurrency=2,
-        item_namer=lambda item, index: f"process-{item['id']}",
-    )
+    func = lambda item: item  # noqa: E731
 
-    executor = MapExecutor.from_items(
+    executor = MapExecutor(
+        executables=[Executable(index=i, func=func) for i in range(len(items))],
         items=items,
-        func=lambda item: item,
-        config=config,
+        max_concurrency=2,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
+        item_namer=lambda item, index: f"process-{item['id']}",
     )
 
     assert executor.get_iteration_name(0) == "process-order-1"
@@ -1590,12 +1622,17 @@ async def test_map_executor_item_namer_receives_item_and_index():
         received_args.append((item, index))
         return f"item-{index}-{item}"
 
-    config = MapConfig(item_namer=namer)
-
-    executor = MapExecutor.from_items(
+    func = lambda item: item  # noqa: E731
+    executor = MapExecutor(
+        executables=[Executable(index=i, func=func) for i in range(len(items))],
         items=items,
-        func=lambda item: item,
-        config=config,
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
+        item_namer=namer,
     )
 
     executor.get_iteration_name(0)
@@ -1607,12 +1644,18 @@ async def test_map_executor_item_namer_receives_item_and_index():
 async def test_map_executor_item_namer_uses_index():
     """item_namer can use the index to generate names."""
     items = [10, 20, 30]
-    config = MapConfig(item_namer=lambda item, index: f"step-{index + 1}")
+    func = lambda item: item  # noqa: E731
 
-    executor = MapExecutor.from_items(
+    executor = MapExecutor(
+        executables=[Executable(index=i, func=func) for i in range(len(items))],
         items=items,
-        func=lambda item: item,
-        config=config,
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
+        item_namer=lambda item, index: f"step-{index + 1}",
     )
 
     assert executor.get_iteration_name(0) == "step-1"
@@ -1623,37 +1666,60 @@ async def test_map_executor_item_namer_uses_index():
 async def test_map_executor_item_namer_none_falls_back_to_default():
     """Explicitly passing item_namer=None uses default naming."""
     items = ["x", "y"]
-    config = MapConfig(item_namer=None)
+    func = lambda item: item  # noqa: E731
 
-    executor = MapExecutor.from_items(
+    executor = MapExecutor(
+        executables=[Executable(index=i, func=func) for i in range(len(items))],
         items=items,
-        func=lambda item: item,
-        config=config,
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
+        item_namer=None,
     )
 
     assert executor.get_iteration_name(0) == "map-item-0"
     assert executor.get_iteration_name(1) == "map-item-1"
 
 
-async def test_map_executor_from_items_passes_item_namer():
-    """MapExecutor.from_items correctly passes item_namer from config."""
+async def test_map_executor_init_passes_item_namer():
+    """MapExecutor initialization correctly passes item_namer."""
     namer = lambda item, index: f"custom-{index}"  # noqa: E731
-    config = MapConfig(item_namer=namer)
+    func = lambda item: item  # noqa: E731
 
-    executor = MapExecutor.from_items(
+    executor = MapExecutor(
+        executables=[Executable(index=0, func=func)],
         items=["a"],
-        func=lambda item: item,
-        config=config,
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
+        item_namer=namer,
     )
 
     assert executor._item_namer is namer
 
 
-async def test_map_config_generic_with_item_namer():
-    """MapConfig can be parameterized with a type and use item_namer."""
-    config: MapConfig[dict] = MapConfig(
-        item_namer=lambda item, index: f"item-{item['name']}",
+async def test_map_executor_item_namer_accepts_typed_items():
+    """item_namer can be typed to match map items."""
+    item_namer = lambda item, index: f"item-{item['name']}"  # noqa: E731
+    items = [{"name": "test"}]
+    func = lambda item: item  # noqa: E731
+
+    executor = MapExecutor(
+        executables=[Executable(index=i, func=func) for i in range(len(items))],
+        items=items,
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
+        item_namer=item_namer,
     )
 
-    assert config.item_namer is not None
-    assert config.item_namer({"name": "test"}, 0) == "item-test"
+    assert executor.get_iteration_name(0) == "item-test"
