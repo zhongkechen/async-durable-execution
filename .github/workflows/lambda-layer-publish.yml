@@ -37,7 +37,7 @@ env:
   AWS_REGION: ${{ inputs['aws-region'] || vars.LAMBDA_LAYER_AWS_REGION || 'eu-south-1' }}
   LAYER_NAME: ${{ inputs['layer-name'] || vars.LAMBDA_LAYER_NAME || 'async-durable-execution' }}
   LAYER_DESCRIPTION: ${{ inputs.description }}
-  SHARE_PRINCIPALS: ${{ inputs['share-principals'] || vars.LAMBDA_LAYER_SHARE_PRINCIPALS }}
+  SHARE_PRINCIPALS: ${{ inputs['share-principals'] || secrets.AWS_ACCOUNT_ID || vars.LAMBDA_LAYER_SHARE_PRINCIPALS }}
   ROLE_TO_ASSUME: ${{ secrets.ACTIONS_LAYER_PUBLISH_ROLE_ARN || secrets.ACTIONS_INTEGRATION_ROLE_NAME }}
   LAYER_ZIP: async-durable-execution-lambda-layer/dist/async-durable-execution-layer.zip
 
