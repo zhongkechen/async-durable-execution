@@ -103,7 +103,9 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
             patch(
                 "async_durable_execution.primitive.callback.CallbackOperationExecutor"
             ) as mock_callback_executor,
-            patch("async_durable_execution.primitive.wait._wait_in_context", mock_wait),
+            patch(
+                "async_durable_execution.primitive.wait.WaitOperationExecutor"
+            ) as mock_wait_executor,
             patch(
                 "async_durable_execution.primitive.child._run_in_child_context_in_context",
                 mock_child,
@@ -123,6 +125,7 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
         ):
             mock_step_executor.return_value = step_executor
             mock_callback_executor.return_value = callback_executor
+            mock_wait_executor.return_value.process = mock_wait
 
             assert await step(test_callable, name="test_step") == "step_result"
             assert (
@@ -158,11 +161,12 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
 
     mock_step_executor.assert_called_once()
     step_executor.process.assert_awaited_once()
-    mock_wait.assert_awaited_once_with(
-        context,
-        duration=timedelta(seconds=5),
-        name="test_wait",
+    mock_wait_executor.assert_called_once_with(
+        seconds=5,
+        state=mock_state,
+        operation_identifier=ANY,
     )
+    mock_wait.assert_awaited_once()
     mock_callback_executor.assert_called_once_with(
         state=mock_state,
         operation_identifier=ANY,

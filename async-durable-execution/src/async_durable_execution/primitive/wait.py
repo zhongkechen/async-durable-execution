@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from ..exceptions import ValidationError, suspend_with_optional_resume_delay
 from ..config import duration_to_seconds
-from .child import _get_durable_context, DurableContext
+from .child import _get_durable_context
 from ..models import (
     Operation,
     OperationIdentifier,
@@ -93,11 +93,14 @@ class WaitOperationExecutor(OperationExecutor[None]):
         suspend_with_optional_resume_delay(msg, self.seconds)  # throws suspend
 
 
-async def _wait_in_context(
-    context: DurableContext,
-    duration: timedelta,
-    name: str | None = None,
-) -> None:
+async def wait(duration: timedelta, *, name: str | None = None) -> None:
+    """Suspend the durable execution for at least the given duration.
+
+    Args:
+        duration: How long the workflow should pause. Must be at least one second.
+        name: Optional operation name shown in execution history.
+    """
+    context = _get_durable_context("wait")
     seconds = duration_to_seconds(duration)
     if seconds < 1:
         msg = "duration must be at least 1 second"
@@ -116,14 +119,3 @@ async def _wait_in_context(
             ),
         )
         await executor.process()
-
-
-async def wait(duration: timedelta, *, name: str | None = None) -> None:
-    """Suspend the durable execution for at least the given duration.
-
-    Args:
-        duration: How long the workflow should pause. Must be at least one second.
-        name: Optional operation name shown in execution history.
-    """
-    context = _get_durable_context("wait")
-    await _wait_in_context(context, duration=duration, name=name)

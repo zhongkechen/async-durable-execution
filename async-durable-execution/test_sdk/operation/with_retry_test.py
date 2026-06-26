@@ -105,12 +105,11 @@ async def _call_with_retry(
 ):
     """Invoke with_retry() against a patched ambient context."""
 
-    async def fake_wait_in_context(
-        context: MockDurableContext,
+    async def fake_wait(
         duration: timedelta,
+        *,
         name: str | None = None,
     ) -> None:
-        assert context is ctx
         ctx.wait_calls.append(WaitCall(duration=duration, name=name))
 
     async def fake_run_in_child_context_in_context(
@@ -142,8 +141,8 @@ async def _call_with_retry(
             return_value=ctx,
         ),
         patch(
-            "async_durable_execution.composite.with_retry._wait_in_context",
-            new=AsyncMock(side_effect=fake_wait_in_context),
+            "async_durable_execution.composite.with_retry.wait",
+            new=AsyncMock(side_effect=fake_wait),
         ),
         patch(
             "async_durable_execution.composite.with_retry._run_in_child_context_in_context",

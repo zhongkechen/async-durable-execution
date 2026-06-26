@@ -13,7 +13,7 @@ from ..primitive.child import (
     _run_in_child_context_in_context,
     _get_durable_context,
 )
-from ..primitive.wait import _wait_in_context
+from ..primitive.wait import wait
 
 if TYPE_CHECKING:
     from ..serdes import SerDes
@@ -64,11 +64,7 @@ async def with_retry(
                 if not decision.should_retry:
                     raise
                 wait_name = f"{name}-backoff-{attempt}" if name else None
-                await _wait_in_context(
-                    context,
-                    duration=decision.delay,
-                    name=wait_name,
-                )
+                await wait(duration=decision.delay, name=wait_name)
 
     return await _run_in_child_context_in_context(
         context,
