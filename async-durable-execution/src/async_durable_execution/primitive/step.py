@@ -8,7 +8,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, TypeVar
 
 from ..context import get_current_context
-from ..async_tools import assert_async_callable, get_callable_name
+from ..async_tools import assert_async_callable, get_callable_name, invoke_user_callable
 from ..config import RetryPresets
 from ..exceptions import (
     ExecutionError,
@@ -27,7 +27,6 @@ from ..models import (
     RetryDecision,
     OperationSubType,
 )
-from ..context import reset_current_context, set_current_context
 from .child import _get_durable_context
 from .base import (
     CHECKPOINT_NOT_FOUND,
@@ -209,11 +208,7 @@ class StepOperationExecutor(OperationExecutor[T]):
                 False,
                 attempt,
             )
-            token = set_current_context(step_context)
-            try:
-                raw_result = await wrapped_user_func()
-            finally:
-                reset_current_context(token)
+            raw_result = await invoke_user_callable(step_context, wrapped_user_func)
 
             serialized_result: str = await self.serialize_value(
                 value=raw_result,

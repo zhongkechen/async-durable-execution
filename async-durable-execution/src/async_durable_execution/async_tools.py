@@ -9,7 +9,7 @@ from .context import reset_current_context, set_current_context
 from .exceptions import ValidationError
 
 if TYPE_CHECKING:
-    from . import DurableContext
+    from .primitive.base import OperationContext
 
 T = TypeVar("T")
 Params = ParamSpec("Params")
@@ -96,7 +96,7 @@ async def invoke_callable(func: Callable[..., Awaitable[T]], *args, **kwargs) ->
 
 
 async def invoke_user_callable(
-    context: DurableContext,
+    context: OperationContext,
     func: Callable[..., Awaitable[T]],
     *args,
     **kwargs,

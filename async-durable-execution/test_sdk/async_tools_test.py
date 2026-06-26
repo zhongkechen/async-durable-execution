@@ -8,6 +8,7 @@ from async_durable_execution.context import get_current_context
 from async_durable_execution import DurableContext
 from async_durable_execution.exceptions import ValidationError
 from async_durable_execution.models import OperationIdentifier, OperationSubType
+from async_durable_execution.primitive.step import StepContext
 from async_durable_execution.state import ExecutionState
 
 
@@ -55,6 +56,26 @@ async def test_invoke_user_callable_sets_context_for_invocation():
     )
 
     async def async_callable() -> DurableContext:
+        return get_current_context()
+
+    assert await invoke_user_callable(context, async_callable) is context
+
+
+async def test_invoke_user_callable_accepts_step_context():
+    state = Mock(spec=ExecutionState)
+    state.durable_execution_arn = (
+        "arn:aws:durable:us-east-1:123456789012:execution/test"
+    )
+    context = StepContext(
+        execution_state=state,
+        operation_identifier=OperationIdentifier(
+            operation_id="step-1",
+            sub_type=OperationSubType.STEP,
+        ),
+        attempt=2,
+    )
+
+    async def async_callable() -> StepContext:
         return get_current_context()
 
     assert await invoke_user_callable(context, async_callable) is context
