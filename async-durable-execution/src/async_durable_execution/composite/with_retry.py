@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, Callable, Awaitable, TypeVar
 
 from ..config import RetryStrategyBuilder
 from ..models import RetryDecision
-from ..primitive.child import ChildConfig
 from ..async_tools import (
     assert_async_callable,
     invoke_user_callable,
@@ -75,10 +74,8 @@ async def with_retry(
         context,
         run_loop,
         name=name,
-        config=ChildConfig[T](
-            serdes=serdes,
-            item_serdes=item_serdes,
-            summary_generator=summary_generator,
-            is_virtual=is_virtual,
-        ),
+        serdes=serdes,
+        item_serdes=item_serdes,
+        summary_generator=summary_generator,
+        is_virtual=is_virtual,
     )

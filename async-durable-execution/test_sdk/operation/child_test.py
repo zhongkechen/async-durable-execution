@@ -25,7 +25,6 @@ from async_durable_execution.models import (
     OperationType,
 )
 from async_durable_execution.primitive.child import (
-    ChildConfig,
     child_handler as async_child_handler,
     DurableContext,
     OrphanedChildException,
@@ -128,63 +127,6 @@ def test_run_in_child_context_name_is_keyword_only():
     assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
-def test_child_config_defaults():
-    """ChildConfig default values are defined in the child module."""
-    config = ChildConfig()
-
-    assert config.serdes is None
-    assert config.item_serdes is None
-    assert config.summary_generator is None
-    assert config.is_virtual is False
-
-
-def test_child_config_with_serdes():
-    """ChildConfig stores a custom batch serializer."""
-    serdes = Mock()
-    config = ChildConfig(serdes=serdes)
-
-    assert config.serdes is serdes
-    assert config.item_serdes is None
-    assert config.summary_generator is None
-    assert config.is_virtual is False
-
-
-def test_child_config_with_item_serdes():
-    """ChildConfig stores a custom item serializer."""
-    item_serdes = Mock()
-    config = ChildConfig(item_serdes=item_serdes)
-
-    assert config.serdes is None
-    assert config.item_serdes is item_serdes
-    assert config.summary_generator is None
-    assert config.is_virtual is False
-
-
-def test_child_config_with_summary_generator():
-    """ChildConfig stores and exposes a summary generator."""
-
-    def mock_summary_generator(result):
-        return f"Summary of {result}"
-
-    config = ChildConfig(summary_generator=mock_summary_generator)
-
-    assert config.serdes is None
-    assert config.item_serdes is None
-    assert config.summary_generator is mock_summary_generator
-    assert config.is_virtual is False
-    assert config.summary_generator("test_data") == "Summary of test_data"
-
-
-def test_child_config_with_is_virtual():
-    """ChildConfig can mark a child context as virtual."""
-    config = ChildConfig(is_virtual=True)
-
-    assert config.serdes is None
-    assert config.item_serdes is None
-    assert config.summary_generator is None
-    assert config.is_virtual is True
-
-
 @pytest.mark.parametrize(
     "expected_sub_type", [OperationSubType.RUN_IN_CHILD_CONTEXT, OperationSubType.STEP]
 )
@@ -214,7 +156,6 @@ async def test_child_handler_not_started(
         mock_callable,
         mock_state,
         OperationIdentifier("op1", expected_sub_type, None, "test_name"),
-        None,
     )
 
     assert result == "fresh_result"
@@ -276,7 +217,6 @@ async def test_child_handler_already_succeeded():
         OperationIdentifier(
             "op2", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
         ),
-        None,
     )
 
     assert result == "cached_result"
@@ -308,7 +248,6 @@ async def test_child_handler_already_succeeded_none_result():
         OperationIdentifier(
             "op3", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
         ),
-        None,
     )
 
     assert result is None
@@ -347,7 +286,6 @@ async def test_child_handler_already_failed():
             OperationIdentifier(
                 "op4", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
             ),
-            None,
         )
 
 
@@ -519,7 +457,6 @@ async def test_child_handler_already_started(
         mock_callable,
         mock_state,
         OperationIdentifier("op5", expected_sub_type, None, "test_name"),
-        None,
     )
 
     assert result == "started_result"
@@ -570,7 +507,6 @@ async def test_child_handler_callable_exception(
             mock_callable,
             mock_state,
             OperationIdentifier("op6", expected_sub_type, None, "test_name"),
-            None,
         )
 
     # Verify get_checkpoint_result called once
@@ -627,7 +563,6 @@ async def test_child_handler_error_wrapped():
             OperationIdentifier(
                 "op7", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
             ),
-            None,
         )
 
     # Verify FAIL checkpoint was created
@@ -662,7 +597,6 @@ async def test_child_handler_invocation_error_reraised():
             OperationIdentifier(
                 "op7b", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
             ),
-            None,
         )
 
     # Verify FAIL checkpoint was created
@@ -675,7 +609,7 @@ async def test_child_handler_invocation_error_reraised():
 
 
 async def test_child_handler_with_config():
-    """Test child_handler with config parameter."""
+    """Test child_handler with direct field parameters."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
     mock_result = Mock()
@@ -686,7 +620,6 @@ async def test_child_handler_with_config():
     mock_state.operations.get.return_value = mock_result
     mock_callable = Mock(return_value="config_result")
     mock_state.wrap_user_function.return_value = mock_callable
-    config = ChildConfig()
 
     result = await child_handler(
         mock_callable,
@@ -694,7 +627,6 @@ async def test_child_handler_with_config():
         OperationIdentifier(
             "op8", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
         ),
-        config,
     )
 
     assert result == "config_result"
@@ -724,7 +656,6 @@ async def test_child_handler_default_serialization():
         OperationIdentifier(
             "op9", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
         ),
-        None,
     )
 
     assert result == complex_result
@@ -752,7 +683,6 @@ async def test_child_handler_custom_serdes_not_start() -> None:
     complex_result = {"key": "value", "number": 42, "list": [1, 2, 3]}
     mock_callable = Mock(return_value=complex_result)
     mock_state.wrap_user_function.return_value = mock_callable
-    child_config: ChildConfig = ChildConfig(serdes=CustomDictSerDes())
 
     await child_handler(
         mock_callable,
@@ -760,7 +690,7 @@ async def test_child_handler_custom_serdes_not_start() -> None:
         OperationIdentifier(
             "op9", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
         ),
-        child_config,
+        serdes=CustomDictSerDes(),
     )
 
     expected_checkpoointed_result = (
@@ -786,7 +716,6 @@ async def test_child_handler_custom_serdes_already_succeeded() -> None:
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.operations.get.return_value = mock_result
     mock_callable = Mock()
-    child_config: ChildConfig = ChildConfig(serdes=CustomDictSerDes())
 
     actual_result = await child_handler(
         mock_callable,
@@ -794,7 +723,7 @@ async def test_child_handler_custom_serdes_already_succeeded() -> None:
         OperationIdentifier(
             "op9", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
         ),
-        child_config,
+        serdes=CustomDictSerDes(),
     )
 
     expected_checkpoointed_result = {"key": "value", "number": 42, "list": [1, 2, 3]}
@@ -828,17 +757,13 @@ async def test_child_handler_large_payload_with_summary_generator() -> None:
     def my_summary(result: str) -> str:
         return "summary"
 
-    child_config: ChildConfig = ChildConfig[str](
-        summary_generator=cast("SummaryGenerator", my_summary)
-    )
-
     actual_result = await child_handler(
         mock_callable,
         mock_state,
         OperationIdentifier(
             "op9", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
         ),
-        child_config,
+        summary_generator=cast("SummaryGenerator", my_summary),
     )
 
     assert large_result == actual_result
@@ -872,7 +797,6 @@ async def test_child_handler_large_payload_without_summary_generator() -> None:
     large_result = "large" * 256 * 1024
     mock_callable = Mock(return_value=large_result)
     mock_state.wrap_user_function.return_value = mock_callable
-    child_config: ChildConfig = ChildConfig()
 
     actual_result = await child_handler(
         mock_callable,
@@ -880,7 +804,6 @@ async def test_child_handler_large_payload_without_summary_generator() -> None:
         OperationIdentifier(
             "op9", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
         ),
-        child_config,
     )
 
     assert large_result == actual_result
@@ -914,7 +837,6 @@ async def test_child_handler_replay_children_mode() -> None:
     complex_result = {"key": "value", "number": 42, "list": [1, 2, 3]}
     mock_callable = Mock(return_value=complex_result)
     mock_state.wrap_user_function.return_value = mock_callable
-    child_config: ChildConfig = ChildConfig()
 
     actual_result = await child_handler(
         mock_callable,
@@ -922,7 +844,6 @@ async def test_child_handler_replay_children_mode() -> None:
         OperationIdentifier(
             "op9", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
         ),
-        child_config,
     )
 
     assert actual_result == complex_result
@@ -959,15 +880,13 @@ async def test_small_payload_with_summary_generator():
     def my_summary(result: str) -> str:
         return "summary_of_small_payload"
 
-    child_config = ChildConfig[str](summary_generator=my_summary)
-
     actual_result = await child_handler(
         mock_callable,
         mock_state,
         OperationIdentifier(
             "op1", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
         ),
-        child_config,
+        summary_generator=my_summary,
     )
 
     assert actual_result == small_result
@@ -1006,15 +925,12 @@ async def test_small_payload_without_summary_generator():
     mock_callable = Mock(return_value=small_result)
     mock_state.wrap_user_function.return_value = mock_callable
 
-    child_config: ChildConfig[str] = ChildConfig[str]()
-
     actual_result = await child_handler(
         mock_callable,
         mock_state,
         OperationIdentifier(
             "op1", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
         ),
-        child_config,
     )
 
     assert actual_result == small_result
@@ -1047,15 +963,13 @@ async def test_child_handler_is_virtual_no_start():
     mock_callable = Mock(return_value="no_checkpoint_result")
     mock_state.wrap_user_function.return_value = mock_callable
 
-    config = ChildConfig(is_virtual=True)
-
     result = await child_handler(
         mock_callable,
         mock_state,
         OperationIdentifier(
             "op1", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
         ),
-        config,
+        is_virtual=True,
     )
 
     assert result == "no_checkpoint_result"
@@ -1088,15 +1002,13 @@ async def test_child_handler_is_virtual_no_succeed():
     mock_callable = Mock(return_value="no_checkpoint_result")
     mock_state.wrap_user_function.return_value = mock_callable
 
-    config = ChildConfig(is_virtual=True)
-
     result = await child_handler(
         mock_callable,
         mock_state,
         OperationIdentifier(
             "op2", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
         ),
-        config,
+        is_virtual=True,
     )
 
     assert result == "no_checkpoint_result"
@@ -1121,15 +1033,13 @@ async def test_child_handler_not_is_virtual_finish_mode():
     mock_callable = Mock(return_value="checkpoint_result")
     mock_state.wrap_user_function.return_value = mock_callable
 
-    config = ChildConfig(is_virtual=False)
-
     result = await child_handler(
         mock_callable,
         mock_state,
         OperationIdentifier(
             "op3", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
         ),
-        config,
+        is_virtual=False,
     )
 
     assert result == "checkpoint_result"
@@ -1173,8 +1083,6 @@ async def test_child_handler_is_virtual_with_exception():
     mock_callable = Mock(side_effect=ValueError("Test error"))
     mock_state.wrap_user_function.return_value = mock_callable
 
-    config = ChildConfig(is_virtual=True)
-
     with pytest.raises(CallableRuntimeError):
         await child_handler(
             mock_callable,
@@ -1182,7 +1090,7 @@ async def test_child_handler_is_virtual_with_exception():
             OperationIdentifier(
                 "op4", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
             ),
-            config,
+            is_virtual=True,
         )
 
     # Verify NO FAIL checkpoint created (virtual contexts suppress all lifecycle checkpoints).
@@ -1205,8 +1113,6 @@ async def test_child_handler_not_is_virtual_with_exception():
     mock_callable = Mock(side_effect=ValueError("Test error"))
     mock_state.wrap_user_function.return_value = mock_callable
 
-    config = ChildConfig(is_virtual=False)
-
     with pytest.raises(CallableRuntimeError):
         await child_handler(
             mock_callable,
@@ -1214,7 +1120,7 @@ async def test_child_handler_not_is_virtual_with_exception():
             OperationIdentifier(
                 "op5", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
             ),
-            config,
+            is_virtual=False,
         )
 
     # Verify START + FAIL checkpoints created (non-virtual path).
@@ -1253,7 +1159,6 @@ async def test_child_handler_is_virtual_comparison():
 
     # is_virtual=False: 2 checkpoints
     mock_state1, mock_callable1 = setup_mocks()
-    config1 = ChildConfig(is_virtual=False)
 
     result1 = await child_handler(
         mock_callable1,
@@ -1261,7 +1166,7 @@ async def test_child_handler_is_virtual_comparison():
         OperationIdentifier(
             "op1", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
         ),
-        config1,
+        is_virtual=False,
     )
 
     assert result1 == "test_result"
@@ -1269,7 +1174,6 @@ async def test_child_handler_is_virtual_comparison():
 
     # is_virtual=True: 0 checkpoints
     mock_state2, mock_callable2 = setup_mocks()
-    config2 = ChildConfig(is_virtual=True)
 
     result2 = await child_handler(
         mock_callable2,
@@ -1277,7 +1181,7 @@ async def test_child_handler_is_virtual_comparison():
         OperationIdentifier(
             "op2", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
         ),
-        config2,
+        is_virtual=True,
     )
 
     assert result2 == "test_result"

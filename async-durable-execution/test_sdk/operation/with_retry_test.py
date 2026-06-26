@@ -17,7 +17,6 @@ from async_durable_execution.config import (
 )
 from async_durable_execution.models import RetryDecision
 from async_durable_execution.exceptions import SuspendExecution
-from async_durable_execution.primitive.child import ChildConfig
 
 
 if TYPE_CHECKING:
@@ -41,7 +40,10 @@ class RunInChildContextCall:
     """Record of a run_in_child_context() call."""
 
     name: str | None
-    config: ChildConfig | None
+    serdes: object = None
+    item_serdes: object = None
+    summary_generator: object = None
+    is_virtual: bool = False
     result: object = None
 
 
@@ -59,11 +61,21 @@ class MockDurableContext:
         self,
         func: Callable[[DurableContext], Awaitable[_T]],
         name: str | None = None,
-        config: ChildConfig | None = None,
+        serdes=None,
+        item_serdes=None,
+        summary_generator=None,
+        is_virtual: bool = False,
     ) -> _T:
         result: _T = await func(self)  # type: ignore[arg-type]
         self.child_context_calls.append(
-            RunInChildContextCall(name=name, config=config, result=result)
+            RunInChildContextCall(
+                name=name,
+                serdes=serdes,
+                item_serdes=item_serdes,
+                summary_generator=summary_generator,
+                is_virtual=is_virtual,
+                result=result,
+            )
         )
         return result
 
@@ -105,12 +117,22 @@ async def _call_with_retry(
         context: MockDurableContext,
         func,
         name: str | None = None,
-        config=None,
+        serdes=None,
+        item_serdes=None,
+        summary_generator=None,
+        is_virtual: bool = False,
     ):
         assert context is ctx
         result = await func()
         ctx.child_context_calls.append(
-            RunInChildContextCall(name=name, config=config, result=result)
+            RunInChildContextCall(
+                name=name,
+                serdes=serdes,
+                item_serdes=item_serdes,
+                summary_generator=summary_generator,
+                is_virtual=is_virtual,
+                result=result,
+            )
         )
         return result
 
@@ -332,9 +354,7 @@ async def test_no_name_creates_anonymous_child_context_and_anonymous_waits():
     )
 
     assert result == "ok"
-    assert ctx.child_context_calls == [
-        RunInChildContextCall(name=None, config=ChildConfig(), result="ok")
-    ]
+    assert ctx.child_context_calls == [RunInChildContextCall(name=None, result="ok")]
     assert ctx.wait_calls == [WaitCall(duration=timedelta(seconds=1), name=None)]
 
 
@@ -357,7 +377,7 @@ async def test_name_is_forwarded_to_child_context_and_backoff_waits():
 
     assert result == "done"
     assert ctx.child_context_calls == [
-        RunInChildContextCall(name="my-retry", config=ChildConfig(), result="done")
+        RunInChildContextCall(name="my-retry", result="done")
     ]
     assert ctx.wait_calls == [
         WaitCall(duration=timedelta(seconds=1), name="my-retry-backoff-1"),
@@ -390,12 +410,10 @@ async def test_child_context_fields_are_forwarded():
     assert ctx.child_context_calls == [
         RunInChildContextCall(
             name="test",
-            config=ChildConfig(
-                serdes=serdes,
-                item_serdes=item_serdes,
-                summary_generator=summary_generator,
-                is_virtual=True,
-            ),
+            serdes=serdes,
+            item_serdes=item_serdes,
+            summary_generator=summary_generator,
+            is_virtual=True,
             result="ok",
         )
     ]

@@ -19,7 +19,6 @@ from typing import (
 from ..async_tools import get_callable_name
 from ..primitive.base import CheckpointedResult, get_checkpoint_result
 from ..primitive.child import (
-    ChildConfig,
     DurableContext,
     child_handler,
     _get_durable_context,
@@ -256,8 +255,6 @@ async def map(
             ),
             state=context.execution_state,
             operation_identifier=operation_identifier,
-            config=ChildConfig(
-                serdes=serdes,
-                item_serdes=None,
-            ),
+            serdes=serdes,
+            item_serdes=None,
         )
