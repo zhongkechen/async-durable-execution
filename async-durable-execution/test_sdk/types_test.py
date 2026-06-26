@@ -166,7 +166,8 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
     mock_callback_executor.assert_called_once_with(
         state=mock_state,
         operation_identifier=ANY,
-        config=ANY,
+        timeout=None,
+        heartbeat_timeout=None,
     )
     callback_executor.process.assert_awaited_once()
     assert mock_child.await_count == 2

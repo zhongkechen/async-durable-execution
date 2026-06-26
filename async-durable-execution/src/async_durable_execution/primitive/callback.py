@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
-
-from ..models import CallbackTimeoutType
 
 from .child import _get_durable_context
 from ..config import duration_to_seconds
 from ..exceptions import ExecutionError, SuspendExecution, TerminationReason
 from ..models import (
     CallbackOptions,
+    CallbackTimeoutType,
     Operation,
     OperationIdentifier,
     OperationUpdate,
@@ -45,29 +43,6 @@ class CallbackError(ExecutionError):
         self.callback_id = callback_id
 
 
-@dataclass(frozen=True)
-class CallbackConfig:
-    """Configuration for callbacks."""
-
-    timeout: timedelta = field(default_factory=timedelta)
-    heartbeat_timeout: timedelta = field(default_factory=timedelta)
-    serdes: SerDes | None = None
-
-    def __post_init__(self):
-        duration_to_seconds(self.timeout, "timeout")
-        duration_to_seconds(self.heartbeat_timeout, "heartbeat_timeout")
-
-    @property
-    def timeout_seconds(self) -> int:
-        """Get timeout in seconds."""
-        return duration_to_seconds(self.timeout, "timeout")
-
-    @property
-    def heartbeat_timeout_seconds(self) -> int:
-        """Get heartbeat timeout in seconds."""
-        return duration_to_seconds(self.heartbeat_timeout, "heartbeat_timeout")
-
-
 class CallbackOperationExecutor(OperationExecutor[str]):
     """Executor for callback operations."""
 
@@ -75,27 +50,37 @@ class CallbackOperationExecutor(OperationExecutor[str]):
         self,
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
-        config: CallbackConfig | None,
+        timeout: timedelta | None = None,
+        heartbeat_timeout: timedelta | None = None,
     ):
         """Initialize the callback operation executor.
 
         Args:
             state: The execution state
             operation_identifier: The operation identifier
-            config: The callback configuration (optional)
+            timeout: Optional maximum time to wait for callback completion.
+            heartbeat_timeout: Optional maximum time to wait between callback heartbeats.
         """
         super().__init__(state=state, operation_identifier=operation_identifier)
-        self.config = config
+        self.timeout = timeout
+        self.heartbeat_timeout = heartbeat_timeout
+
+        if timeout is not None:
+            duration_to_seconds(timeout, "timeout")
+        if heartbeat_timeout is not None:
+            duration_to_seconds(heartbeat_timeout, "heartbeat_timeout")
 
     async def start(self) -> str:
         """Start a new callback operation."""
-        callback_options: CallbackOptions = (
-            CallbackOptions(
-                timeout_seconds=self.config.timeout_seconds,
-                heartbeat_timeout_seconds=self.config.heartbeat_timeout_seconds,
+        callback_options = CallbackOptions(
+            timeout_seconds=duration_to_seconds(self.timeout, "timeout")
+            if self.timeout is not None
+            else 0,
+            heartbeat_timeout_seconds=duration_to_seconds(
+                self.heartbeat_timeout, "heartbeat_timeout"
             )
-            if self.config
-            else CallbackOptions()
+            if self.heartbeat_timeout is not None
+            else 0,
         )
 
         create_callback_operation: OperationUpdate = OperationUpdate.create_callback(
@@ -163,13 +148,6 @@ async def create_callback(
         serdes: Optional serializer for callback results.
     """
     context = _get_durable_context("create_callback")
-    config = CallbackConfig(
-        timeout=timeout if timeout is not None else timedelta(),
-        heartbeat_timeout=heartbeat_timeout
-        if heartbeat_timeout is not None
-        else timedelta(),
-        serdes=serdes,
-    )
     with context._replay_aware():
         operation_id: str = context.step_counter.create_step_id()
 
@@ -181,14 +159,15 @@ async def create_callback(
                 parent_id=context.parent_id,
                 name=name,
             ),
-            config=config,
+            timeout=timeout,
+            heartbeat_timeout=heartbeat_timeout,
         )
         callback_id: str = await executor.process()
         return Callback(
             callback_id=callback_id,
             operation_id=operation_id,
             state=context.execution_state,
-            serdes=config.serdes,
+            serdes=serdes,
         )
 
 
