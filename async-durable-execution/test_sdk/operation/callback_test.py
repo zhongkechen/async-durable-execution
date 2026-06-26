@@ -30,7 +30,6 @@ import async_durable_execution.composite.wait_for_callback as callback
 from async_durable_execution.primitive.callback import (
     Callback,
     CallbackError,
-    CallbackConfig,
     CallbackOperationExecutor,
     create_callback,
 )
@@ -45,13 +44,18 @@ from async_durable_execution import WaitForCallbackContext, StepContext
 from async_durable_execution.primitive.base import CheckpointedResult
 
 
-# Test helper - maintains old handler signature for backward compatibility in tests
-async def create_callback_handler(state, operation_identifier, config=None):
-    """Test helper that wraps CallbackOperationExecutor with old handler signature."""
+async def create_callback_handler(
+    state,
+    operation_identifier,
+    timeout=None,
+    heartbeat_timeout=None,
+):
+    """Test helper that wraps CallbackOperationExecutor."""
     executor = CallbackOperationExecutor(
         state=state,
         operation_identifier=operation_identifier,
-        config=config,
+        timeout=timeout,
+        heartbeat_timeout=heartbeat_timeout,
     )
     return await executor.process()
 
@@ -107,29 +111,6 @@ async def run_wait_for_callback_handler(*args, **kwargs):
     return await wait_for_callback_handler(*args, **kwargs)()
 
 
-def test_callback_config_defaults():
-    """CallbackConfig keeps its expected defaults."""
-    config = CallbackConfig()
-
-    assert config.timeout_seconds == 0
-    assert config.heartbeat_timeout_seconds == 0
-    assert config.serdes is None
-
-
-def test_callback_config_with_values():
-    """CallbackConfig stores explicit values."""
-    serdes = Mock()
-    config = CallbackConfig(
-        timeout=timedelta(seconds=30),
-        heartbeat_timeout=timedelta(seconds=10),
-        serdes=serdes,
-    )
-
-    assert config.timeout_seconds == 30
-    assert config.heartbeat_timeout_seconds == 10
-    assert config.serdes is serdes
-
-
 async def test_create_callback_handler_new_operation_with_config():
     """Test create_callback_handler creates new checkpoint when operation doesn't exist."""
     mock_state = Mock(spec=ExecutionState)
@@ -147,16 +128,13 @@ async def test_create_callback_handler_new_operation_with_config():
         CheckpointedResult.create_from_operation(operation),
     ]
 
-    config = CallbackConfig(
-        timeout=timedelta(minutes=5), heartbeat_timeout=timedelta(minutes=1)
-    )
-
     result = await create_callback_handler(
         state=mock_state,
         operation_identifier=OperationIdentifier(
             "callback1", OperationSubType.CALLBACK, None, "test_callback"
         ),
-        config=config,
+        timeout=timedelta(minutes=5),
+        heartbeat_timeout=timedelta(minutes=1),
     )
 
     assert result == "cb123"
@@ -198,7 +176,6 @@ async def test_create_callback_handler_new_operation_without_config():
         operation_identifier=OperationIdentifier(
             "callback2", OperationSubType.CALLBACK, None
         ),
-        config=None,
     )
 
     assert result == "cb456"
@@ -234,7 +211,6 @@ async def test_create_callback_handler_existing_started_operation():
         operation_identifier=OperationIdentifier(
             "callback3", OperationSubType.CALLBACK, None
         ),
-        config=None,
     )
 
     assert result == "existing_cb123"
@@ -263,7 +239,6 @@ async def test_create_callback_handler_existing_failed_operation():
         operation_identifier=OperationIdentifier(
             "callback4", OperationSubType.CALLBACK, None
         ),
-        config=None,
     )
 
     assert callback_id == "failed_cb4"
@@ -288,7 +263,6 @@ async def test_create_callback_handler_existing_started_missing_callback_details
             operation_identifier=OperationIdentifier(
                 "callback5", OperationSubType.CALLBACK, None
             ),
-            config=None,
         )
 
 
@@ -312,7 +286,6 @@ async def test_create_callback_handler_new_operation_missing_callback_details_af
             operation_identifier=OperationIdentifier(
                 "callback6", OperationSubType.CALLBACK, None
             ),
-            config=None,
         )
 
 
@@ -334,7 +307,6 @@ async def test_create_callback_handler_existing_timed_out_operation():
         operation_identifier=OperationIdentifier(
             "callback_timed_out", OperationSubType.CALLBACK, None
         ),
-        config=None,
     )
 
     assert result == "timed_out_cb123"
@@ -359,7 +331,6 @@ async def test_create_callback_handler_existing_timed_out_missing_callback_detai
             operation_identifier=OperationIdentifier(
                 "callback_timed_out_no_details", OperationSubType.CALLBACK, None
             ),
-            config=None,
         )
 
 
@@ -444,14 +415,17 @@ async def test_create_callback_handler_with_none_operation_in_result():
             operation_identifier=OperationIdentifier(
                 "none_operation", OperationSubType.CALLBACK, None
             ),
-            config=None,
         )
 
 
 async def test_create_callback_handler_with_negative_timeouts():
-    """Test create_callback_handler with negative timeout values in config."""
+    """Test create_callback_handler with negative timeout values."""
     with pytest.raises(ValidationError, match="timeout must be non-negative"):
-        CallbackConfig(
+        await create_callback_handler(
+            state=Mock(spec=ExecutionState),
+            operation_identifier=OperationIdentifier(
+                "negative_timeout", OperationSubType.CALLBACK, None
+            ),
             timeout=timedelta(seconds=-100),
             heartbeat_timeout=timedelta(seconds=-50),
         )
@@ -565,7 +539,6 @@ async def test_create_callback_handler_existing_succeeded_operation():
         operation_identifier=OperationIdentifier(
             "callback_succeeded", OperationSubType.CALLBACK, None
         ),
-        config=None,
     )
 
     assert result == "succeeded_cb123"
@@ -590,7 +563,6 @@ async def test_create_callback_handler_existing_succeeded_missing_callback_detai
             operation_identifier=OperationIdentifier(
                 "callback_succeeded_no_details", OperationSubType.CALLBACK, None
             ),
-            config=None,
         )
 
 
@@ -609,16 +581,13 @@ async def test_create_callback_handler_config_with_zero_timeouts():
         CheckpointedResult.create_from_operation(operation),
     ]
 
-    config = CallbackConfig(
-        timeout=timedelta(seconds=0), heartbeat_timeout=timedelta(seconds=0)
-    )
-
     result = await create_callback_handler(
         state=mock_state,
         operation_identifier=OperationIdentifier(
             "callback_zero", OperationSubType.CALLBACK, None
         ),
-        config=config,
+        timeout=timedelta(seconds=0),
+        heartbeat_timeout=timedelta(seconds=0),
     )
 
     assert result == "cb_zero_timeout"
@@ -639,7 +608,7 @@ async def test_create_callback_handler_config_with_zero_timeouts():
 
 
 async def test_create_callback_handler_config_with_large_timeouts():
-    """Test create_callback_handler with config having large timeout values."""
+    """Test create_callback_handler with large timeout values."""
     mock_state = Mock(spec=ExecutionState)
     callback_details = CallbackDetails(callback_id="cb_large_timeout")
     operation = Operation(
@@ -653,17 +622,13 @@ async def test_create_callback_handler_config_with_large_timeouts():
         CheckpointedResult.create_from_operation(operation),
     ]
 
-    config = CallbackConfig(
-        timeout=timedelta(days=1),
-        heartbeat_timeout=timedelta(hours=1),
-    )
-
     result = await create_callback_handler(
         state=mock_state,
         operation_identifier=OperationIdentifier(
             "callback_large", OperationSubType.CALLBACK, None
         ),
-        config=config,
+        timeout=timedelta(days=1),
+        heartbeat_timeout=timedelta(hours=1),
     )
 
     assert result == "cb_large_timeout"
@@ -701,7 +666,6 @@ async def test_create_callback_handler_empty_operation_id():
     result = await create_callback_handler(
         state=mock_state,
         operation_identifier=OperationIdentifier("", OperationSubType.CALLBACK, None),
-        config=None,
     )
 
     assert result == "cb_empty_id"
@@ -885,15 +849,15 @@ async def test_callback_lifecycle_complete_flow():
         return_value={"status": "completed", "data": "test_data"}
     )
 
-    config = CallbackConfig(
-        timeout=timedelta(minutes=5), heartbeat_timeout=timedelta(minutes=1)
-    )
+    timeout = timedelta(minutes=5)
+    heartbeat_timeout = timedelta(minutes=1)
     callback_id = await create_callback_handler(
         state=mock_state,
         operation_identifier=OperationIdentifier(
             "lifecycle_callback", OperationSubType.CALLBACK, None
         ),
-        config=config,
+        timeout=timeout,
+        heartbeat_timeout=heartbeat_timeout,
     )
 
     assert callback_id == "lifecycle_cb123"
@@ -914,9 +878,9 @@ async def test_callback_lifecycle_complete_flow():
         result = await run_wait_for_callback_handler(
             mock_submitter,
             "lifecycle_test",
-            timeout=config.timeout,
-            heartbeat_timeout=config.heartbeat_timeout,
-            serdes=config.serdes,
+            timeout=timeout,
+            heartbeat_timeout=heartbeat_timeout,
+            serdes=None,
         )
 
     assert result == {"status": "completed", "data": "test_data"}
@@ -942,14 +906,12 @@ async def test_callback_retry_scenario():
         operation_identifier=OperationIdentifier(
             "retry_callback", OperationSubType.CALLBACK, None
         ),
-        config=None,
     )
     callback_id_2 = await create_callback_handler(
         state=mock_state,
         operation_identifier=OperationIdentifier(
             "retry_callback", OperationSubType.CALLBACK, None
         ),
-        config=None,
     )
 
     assert callback_id_1 == callback_id_2 == "retry_cb456"
@@ -974,17 +936,13 @@ async def test_callback_timeout_configuration():
             CheckpointedResult.create_from_operation(operation),
         ]
 
-        config = CallbackConfig(
-            timeout=timedelta(seconds=timeout_seconds),
-            heartbeat_timeout=timedelta(seconds=heartbeat_timeout_seconds),
-        )
-
         callback_id = await create_callback_handler(
             state=mock_state,
             operation_identifier=OperationIdentifier(
                 f"timeout_callback_{timeout_seconds}", OperationSubType.CALLBACK, None
             ),
-            config=config,
+            timeout=timedelta(seconds=timeout_seconds),
+            heartbeat_timeout=timedelta(seconds=heartbeat_timeout_seconds),
         )
 
         assert callback_id == f"timeout_cb_{timeout_seconds}"
@@ -1010,7 +968,6 @@ async def test_callback_error_propagation():
         operation_identifier=OperationIdentifier(
             "error_callback", OperationSubType.CALLBACK, None
         ),
-        config=None,
     )
     assert callback_id == "failed_cb"
 
@@ -1085,7 +1042,6 @@ async def test_callback_state_consistency():
         operation_identifier=OperationIdentifier(
             "consistent_callback", OperationSubType.CALLBACK, None
         ),
-        config=None,
     )
 
     mock_state.operations.get.side_effect = None
@@ -1098,7 +1054,6 @@ async def test_callback_state_consistency():
         operation_identifier=OperationIdentifier(
             "consistent_callback", OperationSubType.CALLBACK, None
         ),
-        config=None,
     )
 
     assert callback_id_1 == callback_id_2 == "consistent_cb"
@@ -1153,16 +1108,13 @@ async def test_callback_operation_update_creation(mock_operation_update):
         CheckpointedResult.create_from_operation(operation),
     ]
 
-    config = CallbackConfig(
-        timeout=timedelta(minutes=10), heartbeat_timeout=timedelta(minutes=2)
-    )
-
     await create_callback_handler(
         state=mock_state,
         operation_identifier=OperationIdentifier(
             "update_test", OperationSubType.CALLBACK, None
         ),
-        config=config,
+        timeout=timedelta(minutes=10),
+        heartbeat_timeout=timedelta(minutes=2),
     )
 
     mock_operation_update.create_callback.assert_called_once_with(
@@ -1194,7 +1146,6 @@ async def test_callback_immediate_response_get_checkpoint_result_called_twice():
         operation_identifier=OperationIdentifier(
             "callback_immediate_1", OperationSubType.CALLBACK, None
         ),
-        config=None,
     )
 
     # Verify callback_id was returned
@@ -1224,7 +1175,6 @@ async def test_callback_immediate_response_create_checkpoint_with_is_sync_true()
         operation_identifier=OperationIdentifier(
             "callback_immediate_2", OperationSubType.CALLBACK, None
         ),
-        config=None,
     )
 
     # Verify callback_id was returned
@@ -1260,7 +1210,6 @@ async def test_callback_immediate_response_immediate_success():
         operation_identifier=OperationIdentifier(
             "callback_immediate_3", OperationSubType.CALLBACK, None
         ),
-        config=None,
     )
 
     # Verify callback_id was returned without raising
@@ -1298,7 +1247,6 @@ async def test_callback_immediate_response_immediate_failure_deferred():
         operation_identifier=OperationIdentifier(
             "callback_immediate_4", OperationSubType.CALLBACK, None
         ),
-        config=None,
     )
 
     # Verify callback_id was returned (error deferred)
@@ -1480,7 +1428,6 @@ async def test_callback_immediate_response_no_immediate_response():
         operation_identifier=OperationIdentifier(
             "callback_immediate_5", OperationSubType.CALLBACK, None
         ),
-        config=None,
     )
 
     # Verify callback_id was returned
@@ -1515,7 +1462,6 @@ async def test_callback_immediate_response_already_completed():
         operation_identifier=OperationIdentifier(
             "callback_immediate_6", OperationSubType.CALLBACK, None
         ),
-        config=None,
     )
 
     # Verify callback_id was returned
@@ -1551,7 +1497,6 @@ async def test_callback_immediate_response_already_failed():
         operation_identifier=OperationIdentifier(
             "callback_immediate_7", OperationSubType.CALLBACK, None
         ),
-        config=None,
     )
 
     # Verify callback_id was returned (error deferred)
@@ -1593,7 +1538,6 @@ async def test_callback_deferred_error_handling_code_execution_between_create_an
         operation_identifier=OperationIdentifier(
             "callback_deferred_error", OperationSubType.CALLBACK, None
         ),
-        config=None,
     )
     assert callback_id == "cb_deferred_error"
 
@@ -1637,16 +1581,13 @@ async def test_callback_immediate_response_with_config():
     succeeded = CheckpointedResult.create_from_operation(succeeded_op)
     mock_state.operations.get.side_effect = [not_found, succeeded]
 
-    config = CallbackConfig(
-        timeout=timedelta(minutes=5), heartbeat_timeout=timedelta(minutes=1)
-    )
-
     result = await create_callback_handler(
         state=mock_state,
         operation_identifier=OperationIdentifier(
             "callback_with_config", OperationSubType.CALLBACK, None
         ),
-        config=config,
+        timeout=timedelta(minutes=5),
+        heartbeat_timeout=timedelta(minutes=1),
     )
 
     # Verify callback_id was returned
@@ -1685,7 +1626,6 @@ async def test_callback_returns_id_when_second_check_returns_started():
         operation_identifier=OperationIdentifier(
             "callback-1", OperationSubType.CALLBACK, None, "test_callback"
         ),
-        config=CallbackConfig(),
     )
     callback_id = await executor.process()
 
@@ -1719,7 +1659,6 @@ async def test_callback_returns_id_when_second_check_returns_started_duplicate()
         operation_identifier=OperationIdentifier(
             "callback-1", OperationSubType.CALLBACK, None, "test_callback"
         ),
-        config=CallbackConfig(),
     )
     callback_id = await executor.process()
 

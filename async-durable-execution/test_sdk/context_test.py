@@ -19,7 +19,6 @@ from async_durable_execution.context import (
 from async_durable_execution.primitive.callback import (
     Callback,
     CallbackError,
-    CallbackConfig,
 )
 from async_durable_execution.composite.wait_for_condition import (
     WaitForConditionConfig,
@@ -329,7 +328,8 @@ async def test_module_level_context_functions_delegate_to_durable_context():
     mock_callback_executor.assert_called_once_with(
         state=mock_state,
         operation_identifier=ANY,
-        config=ANY,
+        timeout=None,
+        heartbeat_timeout=None,
     )
     callback_executor.process.assert_awaited_once()
     mock_invoke_executor.assert_called_once_with(
@@ -700,7 +700,8 @@ async def test_create_callback_basic(mock_executor_class):
         operation_identifier=OperationIdentifier(
             expected_operation_id, OperationSubType.CALLBACK, None, None
         ),
-        config=CallbackConfig(),
+        timeout=None,
+        heartbeat_timeout=None,
     )
     mock_executor.process.assert_called_once()
 
@@ -742,7 +743,8 @@ async def test_create_callback_with_name_and_config(mock_executor_class):
         operation_identifier=OperationIdentifier(
             expected_operation_id, OperationSubType.CALLBACK, None, None
         ),
-        config=CallbackConfig(timeout=timeout, heartbeat_timeout=heartbeat_timeout),
+        timeout=timeout,
+        heartbeat_timeout=heartbeat_timeout,
     )
     mock_executor.process.assert_called_once()
 
@@ -776,7 +778,8 @@ async def test_create_callback_with_parent_id(mock_executor_class):
         operation_identifier=OperationIdentifier(
             expected_operation_id, OperationSubType.CALLBACK, "parent123"
         ),
-        config=CallbackConfig(),
+        timeout=None,
+        heartbeat_timeout=None,
     )
 
 
