@@ -1,0 +1,330 @@
+# Migrating from the Official AWS Python SDK
+
+This guide helps you move code from the official AWS Durable Execution Python SDK
+(`aws-durable-execution-sdk-python`) to this async-first SDK
+(`async-durable-execution`).
+
+The durable execution model is the same: code outside durable operations replays, step
+results are checkpointed, waits suspend without compute charges, callbacks resume from
+external signals, and invoked durable functions must use qualified function names.
+
+The main migration is mechanical: replace the official SDK's synchronous
+`DurableContext` method calls with async top-level operations and make user-provided
+durable code `async def`.
+
+## Package Changes
+
+| Official SDK | This SDK |
+| --- | --- |
+| `aws-durable-execution-sdk-python` | `async-durable-execution` |
+| `aws-durable-execution-sdk-python-testing` | `async-durable-execution-runner` |
+| `aws_durable_execution_sdk_python` imports | `async_durable_execution` imports |
+| Python 3.13+ in the official quickstart | Python 3.10+ |
+
+Install the runtime package:
+
+```console
+pip install async-durable-execution
+```
+
+Install the local/cloud test runner:
+
+```console
+pip install async-durable-execution-runner
+```
+
+## API Mapping
+
+| Official SDK | This SDK |
+| --- | --- |
+| `@durable_execution def handler(event, context)` | `@durable_execution async def handler(event)` |
+| `@durable_step def step_fn(step_context, ...)` | `@durable_callable async def step_fn(...)` |
+| `context.step(my_step(args))` | `await step(my_step(args), name="my-step")` |
+| `context.wait(Duration.from_seconds(10))` | `await wait(timedelta(seconds=10), name="delay")` |
+| `context.create_callback(...)` | `await create_callback(...)` |
+| `callback.result()` | `await callback.result()` |
+| `context.wait_for_callback(...)` | `await wait_for_callback(submitter(), ...)` |
+| `context.invoke(function_name=..., payload=...)` | `await invoke(function_name=..., payload=..., name="...")` |
+| `context.run_in_child_context(...)` | `await run_in_child_context(child(), name="...")` |
+| `context.map(...)` | `await map(func=..., items=..., ...)` |
+| `context.parallel(...)` | `await parallel(branches=[...], ...)` |
+| `context.logger` or `step_context.logger` | standard `logging.getLogger(__name__)` |
+
+This SDK binds the active durable context internally while your async callable runs. If
+you need execution metadata, call `get_current_context()` and read fields such as
+`durable_execution_arn`, `operation_id`, `operation_name`, `lambda_context`, or
+`is_replaying()`.
+
+## Quickstart Migration
+
+Official SDK:
+
+```python
+from aws_durable_execution_sdk_python.config import Duration
+from aws_durable_execution_sdk_python.context import DurableContext, StepContext, durable_step
+from aws_durable_execution_sdk_python.execution import durable_execution
+
+
+@durable_step
+def my_step(step_context: StepContext) -> str:
+    step_context.logger.info("Hello from my_step")
+    return "Hello from Durable Lambda!"
+
+
+@durable_execution
+def lambda_handler(event, context: DurableContext) -> dict:
+    message = context.step(my_step())
+    context.wait(Duration.from_seconds(10))
+    context.logger.info("Resumed after wait")
+    return {"statusCode": 200, "body": message}
+```
+
+This SDK:
+
+```python
+import logging
+from datetime import timedelta
+
+from async_durable_execution import (
+    durable_callable,
+    durable_execution,
+    step,
+    wait,
+)
+
+logger = logging.getLogger(__name__)
+
+
+@durable_callable
+async def my_step() -> str:
+    logger.info("Hello from my_step")
+    return "Hello from Durable Lambda!"
+
+
+@durable_execution
+async def lambda_handler(event: dict) -> dict:
+    message = await step(my_step(), name="my-step")
+    await wait(duration=timedelta(seconds=10), name="delay")
+    logger.info("Resumed after wait")
+    return {"statusCode": 200, "body": message}
+```
+
+## Step Migration
+
+Official steps receive a `StepContext` argument and run synchronously. In this SDK, a
+step function is an async callable created with `@durable_callable`. Pass the resulting
+zero-argument callable to `step()`.
+
+```python
+from async_durable_execution import durable_callable, step
+
+
+@durable_callable
+async def add_numbers(a: int, b: int) -> int:
+    return a + b
+
+
+result = await step(add_numbers(5, 3), name="add-numbers")
+```
+
+Put nondeterministic work and side effects inside steps just as you did with the
+official SDK. Reads of time, UUID generation, random values, API calls, database
+queries, and writes should stay inside `@durable_callable` functions that run through
+`step()`.
+
+Step retry configuration is passed directly to `step()`:
+
+```python
+from datetime import timedelta
+
+from async_durable_execution import RetryStrategyBuilder, step
+
+
+retry_strategy = RetryStrategyBuilder(
+    max_attempts=3,
+    initial_delay=timedelta(seconds=1),
+    backoff_rate=2.0,
+).build()
+
+result = await step(
+    add_numbers(5, 3),
+    name="add-numbers",
+    retry_strategy=retry_strategy,
+)
+```
+
+For at-most-once step semantics, pass `step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY`.
+
+## Waits and Durations
+
+The official SDK uses `Duration` helpers. This SDK uses Python `datetime.timedelta`:
+
+```python
+from datetime import timedelta
+
+from async_durable_execution import wait
+
+
+await wait(duration=timedelta(seconds=30), name="cooldown")
+await wait(duration=timedelta(hours=1), name="hourly-window")
+```
+
+Do not replace durable waits with `time.sleep()` or `asyncio.sleep()` for workflow
+delays. Native sleeps consume Lambda execution time and do not checkpoint the workflow.
+
+## Callbacks
+
+Callback creation and result waiting are both awaitable.
+
+```python
+from datetime import timedelta
+
+from async_durable_execution import create_callback, durable_callable, step
+
+
+@durable_callable
+async def send_approval_request_step(callback_id: str) -> None:
+    send_approval_request(callback_id)
+
+
+callback = await create_callback(
+    name="approval",
+    timeout=timedelta(hours=24),
+)
+await step(
+    send_approval_request_step(callback.callback_id),
+    name="submit-approval",
+)
+approval = await callback.result()
+```
+
+For the combined submit-and-wait pattern, make the submitter a durable callable:
+
+```python
+from datetime import timedelta
+
+from async_durable_execution import (
+    WaitForCallbackContext,
+    durable_callable,
+    get_current_context,
+    wait_for_callback,
+)
+
+
+@durable_callable
+async def submit_approval() -> None:
+    callback_context = get_current_context()
+    assert isinstance(callback_context, WaitForCallbackContext)
+    send_approval_request(callback_context.callback_id)
+
+
+approval = await wait_for_callback(
+    submit_approval(),
+    name="approval",
+    timeout=timedelta(hours=24),
+)
+```
+
+The external system still completes callbacks through the Lambda
+`SendDurableExecutionCallbackSuccess` and `SendDurableExecutionCallbackFailure` APIs.
+
+## Child Contexts, Parallel, and Map
+
+Durable operations cannot be nested inside a step. Use `run_in_child_context()` to group
+durable operations into a reusable sub-workflow:
+
+```python
+from datetime import timedelta
+
+from async_durable_execution import durable_callable, run_in_child_context, step, wait
+
+
+@durable_callable
+async def process_order(order: dict) -> dict:
+    validated = await step(validate(order), name="validate")
+    await wait(timedelta(seconds=1), name="settle")
+    return await step(process(validated), name="process")
+
+
+result = await run_in_child_context(process_order(order), name="process-order")
+```
+
+For fan-out work, migrate official context methods to top-level async helpers:
+
+```python
+from async_durable_execution import CompletionConfig, map, parallel
+
+
+batch_results = await map(
+    func=process_item,
+    items=items,
+    max_concurrency=5,
+    completion_config=CompletionConfig(tolerated_failure_count=2),
+    name="process-items",
+)
+values = batch_results.get_results()
+
+parallel_results = await parallel(
+    branches=[branch_a(), branch_b()],
+    max_concurrency=2,
+    name="parallel-work",
+)
+```
+
+## Logging
+
+Use standard Python logging:
+
+```python
+import logging
+
+logger = logging.getLogger(__name__)
+logger.info("Starting workflow")
+```
+
+The SDK configures replay-aware logging for standard loggers. Avoid `print()` for
+workflow progress because ordinary side effects outside durable operations repeat on
+replay.
+
+## Testing
+
+Replace the official testing package with `async-durable-execution-runner`.
+
+```python
+from async_durable_execution import InvocationStatus
+from async_durable_execution_runner import create_runner
+
+from my_workflow import lambda_handler
+
+
+async def test_workflow() -> None:
+    with create_runner(
+        mode="local",
+        handler=lambda_handler,
+        input={"order_id": "order-123"},
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert result.get_step("my-step").status is InvocationStatus.SUCCEEDED
+```
+
+Name durable operations during migration. Named operations make tests resilient because
+assertions can use `result.get_step("my-step")` instead of depending on operation order.
+
+## Migration Checklist
+
+1. Replace package dependencies and imports.
+2. Change every durable handler, step, child context, callback submitter, map function,
+   parallel branch, and wait-for-condition check to `async def`.
+3. Replace `DurableContext` method calls with awaited top-level operations.
+4. Replace `@durable_step` with `@durable_callable`.
+5. Remove explicit `DurableContext` and `StepContext` parameters unless you are reading
+   metadata through `get_current_context()`.
+6. Replace `Duration` with `datetime.timedelta`.
+7. Move all nondeterministic work and side effects into steps.
+8. Replace context loggers with standard `logging` loggers.
+9. Name operations and update tests to use `async-durable-execution-runner`.
+10. Keep Lambda deployment settings, IAM durable execution permissions, and qualified
+    function invocation practices from the official SDK.
