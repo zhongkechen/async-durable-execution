@@ -63,37 +63,34 @@ class StepSemantics(Enum):
     AT_LEAST_ONCE_PER_RETRY = "AT_LEAST_ONCE_PER_RETRY"
 
 
-@dataclass(frozen=True)
-class StepConfig:
-    """Configuration for a durable `step()` call."""
-
-    retry_strategy: Callable[[Exception, int], RetryDecision] | None = None
-    step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY
-    serdes: SerDes | None = None
-
-
 class StepOperationExecutor(OperationExecutor[T]):
     """Executor for step operations."""
 
     def __init__(
         self,
         func: Callable[[], Awaitable[T]],
-        config: StepConfig,
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
+        retry_strategy: Callable[[Exception, int], RetryDecision] | None = None,
+        step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+        serdes: SerDes | None = None,
         lambda_context: LambdaContext | None = None,
     ):
         """Initialize the step operation executor.
 
         Args:
             func: The step function to execute
-            config: The step configuration
             state: The execution state
             operation_identifier: The operation identifier
+            retry_strategy: Optional retry strategy for step failures
+            step_semantics: Checkpoint timing guarantee for the step attempt
+            serdes: Optional serializer/deserializer for the step result
         """
         super().__init__(state=state, operation_identifier=operation_identifier)
         self.func = func
-        self.config = config
+        self.retry_strategy = retry_strategy
+        self.step_semantics = step_semantics
+        self.serdes = serdes
         self.lambda_context = lambda_context
 
     async def start(self) -> T:
@@ -101,9 +98,7 @@ class StepOperationExecutor(OperationExecutor[T]):
         start_operation: OperationUpdate = OperationUpdate.create_step_start(
             identifier=self.operation_identifier,
         )
-        is_sync: bool = (
-            self.config.step_semantics is StepSemantics.AT_MOST_ONCE_PER_RETRY
-        )
+        is_sync: bool = self.step_semantics is StepSemantics.AT_MOST_ONCE_PER_RETRY
         await self.create_checkpoint(start_operation, is_sync=is_sync)
 
         checkpointed_result = CHECKPOINT_NOT_FOUND
@@ -130,7 +125,7 @@ class StepOperationExecutor(OperationExecutor[T]):
 
             result: T = await self.deserialize_value(
                 data=checkpointed_result.result,
-                serdes=self.config.serdes,
+                serdes=self.serdes,
             )
             return result
 
@@ -147,7 +142,7 @@ class StepOperationExecutor(OperationExecutor[T]):
 
         if (
             operation.status is OperationStatus.STARTED
-            and self.config.step_semantics is StepSemantics.AT_MOST_ONCE_PER_RETRY
+            and self.step_semantics is StepSemantics.AT_MOST_ONCE_PER_RETRY
         ):
             checkpointed_result = CheckpointedResult.create_from_operation(operation)
             msg: str = f"Step operation_id={self.operation_identifier.operation_id} name={self.operation_identifier.name} was previously interrupted"
@@ -156,7 +151,7 @@ class StepOperationExecutor(OperationExecutor[T]):
 
         if (
             operation.status is OperationStatus.STARTED
-            and self.config.step_semantics is StepSemantics.AT_LEAST_ONCE_PER_RETRY
+            and self.step_semantics is StepSemantics.AT_LEAST_ONCE_PER_RETRY
         ):
             return await self.execute(
                 CheckpointedResult.create_from_operation(operation)
@@ -166,9 +161,7 @@ class StepOperationExecutor(OperationExecutor[T]):
             start_operation: OperationUpdate = OperationUpdate.create_step_start(
                 identifier=self.operation_identifier,
             )
-            is_sync: bool = (
-                self.config.step_semantics is StepSemantics.AT_MOST_ONCE_PER_RETRY
-            )
+            is_sync: bool = self.step_semantics is StepSemantics.AT_MOST_ONCE_PER_RETRY
             await self.create_checkpoint(start_operation, is_sync=is_sync)
 
             checkpointed_result = CheckpointedResult.create_from_operation(operation)
@@ -224,7 +217,7 @@ class StepOperationExecutor(OperationExecutor[T]):
 
             serialized_result: str = await self.serialize_value(
                 value=raw_result,
-                serdes=self.config.serdes,
+                serdes=self.serdes,
             )
 
             success_operation: OperationUpdate = OperationUpdate.create_step_succeed(
@@ -284,7 +277,7 @@ class StepOperationExecutor(OperationExecutor[T]):
         """
         error_object = ErrorObject.from_exception(error)
 
-        retry_strategy = self.config.retry_strategy or RetryPresets.default()
+        retry_strategy = self.retry_strategy or RetryPresets.default()
 
         retry_attempt: int = (
             checkpointed_result.operation.step_details.attempt
@@ -376,11 +369,6 @@ async def step(
     assert_async_callable(func)
     step_name = name or get_callable_name(func, include_original_name=False)
     logger.debug("Step name: %s", step_name)
-    config = StepConfig(
-        retry_strategy=retry_strategy,
-        step_semantics=step_semantics,
-        serdes=serdes,
-    )
     with context._replay_aware(executes_user_code=True):
         operation_id = context.step_counter.create_step_id()
 
@@ -393,16 +381,20 @@ async def step(
         if context.lambda_context is None:
             executor: StepOperationExecutor[T] = StepOperationExecutor(
                 func=func,
-                config=config,
                 state=context.execution_state,
                 operation_identifier=operation_identifier,
+                retry_strategy=retry_strategy,
+                step_semantics=step_semantics,
+                serdes=serdes,
             )
         else:
             executor = StepOperationExecutor(
                 func=func,
-                config=config,
                 state=context.execution_state,
                 operation_identifier=operation_identifier,
+                retry_strategy=retry_strategy,
+                step_semantics=step_semantics,
+                serdes=serdes,
                 lambda_context=context.lambda_context,
             )
         return await executor.process()
