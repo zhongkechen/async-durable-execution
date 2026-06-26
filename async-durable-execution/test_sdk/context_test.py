@@ -369,7 +369,7 @@ async def test_durable_callable_can_be_passed_to_step():
     )
     context = create_test_context(state=mock_state)
 
-    def build_executor(*, func, config, state, operation_identifier):
+    def build_executor(*, func, state, operation_identifier, **_kwargs):
         executor = AsyncMock()
 
         async def process():
@@ -389,9 +389,11 @@ async def test_durable_callable_can_be_passed_to_step():
 
     mock_executor_class.assert_called_once_with(
         func=ANY,
-        config=ANY,
         state=mock_state,
         operation_identifier=ANY,
+        retry_strategy=None,
+        step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+        serdes=None,
     )
 
 
@@ -833,8 +835,10 @@ async def test_step_basic(mock_executor_class):
         operation_identifier=OperationIdentifier(
             expected_operation_id, OperationSubType.STEP, None, "mock_callable"
         ),
-        config=ANY,  # StepConfig is created in step()
         func=mock_callable,
+        retry_strategy=None,
+        step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+        serdes=None,
     )
     mock_executor.process.assert_called_once()
 
@@ -880,12 +884,11 @@ async def test_step_with_name_and_config_fields(mock_executor_class):
         operation_identifier=OperationIdentifier(
             expected_id, OperationSubType.STEP, None, "mock_callable"
         ),
-        config=ANY,
         func=mock_callable,
+        retry_strategy=retry_strategy,
+        step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY,
+        serdes=None,
     )
-    created_config = mock_executor_class.call_args.kwargs["config"]
-    assert created_config.retry_strategy is retry_strategy
-    assert created_config.step_semantics is StepSemantics.AT_MOST_ONCE_PER_RETRY
     mock_executor.process.assert_called_once()
 
 
@@ -920,8 +923,10 @@ async def test_step_with_parent_id(mock_executor_class):
         operation_identifier=OperationIdentifier(
             expected_id, OperationSubType.STEP, "parent123", "mock_callable"
         ),
-        config=ANY,
         func=mock_callable,
+        retry_strategy=None,
+        step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+        serdes=None,
     )
     mock_executor.process.assert_called_once()
 
@@ -994,8 +999,10 @@ async def test_step_with_callable_resolves_underlying_function_name(
         operation_identifier=OperationIdentifier(
             expected_id, OperationSubType.STEP, None, "original_function"
         ),
-        config=ANY,
         func=mock_callable,
+        retry_strategy=None,
+        step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+        serdes=None,
     )
     mock_executor.process.assert_called_once()
 
