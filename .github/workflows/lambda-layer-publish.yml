@@ -1,0 +1,147 @@
+name: Publish Lambda Layer
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      aws-region:
+        description: AWS Region where the Lambda layer version is published
+        required: true
+        default: eu-south-1
+      layer-name:
+        description: Lambda layer name
+        required: true
+        default: async-durable-execution
+      share-principals:
+        description: Comma, space, or newline-separated AWS account IDs, organization IDs, or * for public sharing
+        required: false
+        default: ""
+      description:
+        description: Lambda layer version description
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: lambda-layer-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ inputs['aws-region'] || vars.LAMBDA_LAYER_AWS_REGION || 'eu-south-1' }}
+  LAYER_NAME: ${{ inputs['layer-name'] || vars.LAMBDA_LAYER_NAME || 'async-durable-execution' }}
+  LAYER_DESCRIPTION: ${{ inputs.description }}
+  SHARE_PRINCIPALS: ${{ inputs['share-principals'] || vars.LAMBDA_LAYER_SHARE_PRINCIPALS }}
+  ROLE_TO_ASSUME: ${{ secrets.ACTIONS_LAYER_PUBLISH_ROLE_ARN || secrets.ACTIONS_INTEGRATION_ROLE_NAME }}
+  LAYER_ZIP: async-durable-execution-lambda-layer/dist/async-durable-execution-layer.zip
+
+jobs:
+  publish-layer:
+    runs-on: ubuntu-latest
+    environment: lambda-layer-publish
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+
+      - name: Verify AWS publish role is configured
+        run: |
+          if [ -z "$ROLE_TO_ASSUME" ]; then
+            echo "Set ACTIONS_LAYER_PUBLISH_ROLE_ARN or ACTIONS_INTEGRATION_ROLE_NAME before publishing a layer." >&2
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          role-session-name: asyncDurableExecutionLayerPublish
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install Hatch
+        run: python -m pip install --upgrade hatch==1.16.5
+
+      - name: Build Lambda layer zip
+        working-directory: async-durable-execution-lambda-layer
+        run: |
+          hatch run python -m async_durable_execution_lambda_layer.builder \
+            --sdk-source ../async-durable-execution \
+            --output dist/async-durable-execution-layer.zip \
+            --verbose
+
+      - name: Upload layer zip artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: async-durable-execution-layer
+          path: ${{ env.LAYER_ZIP }}
+
+      - name: Publish Lambda layer version
+        id: publish
+        run: |
+          set -euo pipefail
+
+          description="${LAYER_DESCRIPTION:-async-durable-execution SDK ${GITHUB_REF_NAME}}"
+
+          read -r version layer_version_arn < <(
+            aws lambda publish-layer-version \
+              --layer-name "$LAYER_NAME" \
+              --description "$description" \
+              --zip-file "fileb://${LAYER_ZIP}" \
+              --compatible-runtimes python3.10 python3.11 python3.12 python3.13 python3.14 \
+              --compatible-architectures x86_64 arm64 \
+              --license-info Apache-2.0 \
+              --query '[Version, LayerVersionArn]' \
+              --output text
+          )
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "layer-version-arn=${layer_version_arn}" >> "$GITHUB_OUTPUT"
+          echo "Published ${layer_version_arn}"
+
+      - name: Share Lambda layer version
+        if: env.SHARE_PRINCIPALS != ''
+        run: |
+          set -euo pipefail
+
+          for principal in $(printf '%s' "$SHARE_PRINCIPALS" | tr ',\n' '  '); do
+            statement_id="share-${{ steps.publish.outputs.version }}-$(printf '%s' "$principal" | tr -c '[:alnum:]' '-' | cut -c1-80)"
+
+            if [[ "$principal" == o-* ]]; then
+              aws lambda add-layer-version-permission \
+                --layer-name "$LAYER_NAME" \
+                --version-number "${{ steps.publish.outputs.version }}" \
+                --statement-id "$statement_id" \
+                --action lambda:GetLayerVersion \
+                --principal "*" \
+                --organization-id "$principal"
+            else
+              aws lambda add-layer-version-permission \
+                --layer-name "$LAYER_NAME" \
+                --version-number "${{ steps.publish.outputs.version }}" \
+                --statement-id "$statement_id" \
+                --action lambda:GetLayerVersion \
+                --principal "$principal"
+            fi
+
+            echo "Shared layer version ${{ steps.publish.outputs.version }} with ${principal}"
+          done
+
+      - name: Summarize published layer
+        run: |
+          {
+            echo "### Published Lambda layer"
+            echo ""
+            echo "- Layer ARN: \`${{ steps.publish.outputs.layer-version-arn }}\`"
+            echo "- Version: \`${{ steps.publish.outputs.version }}\`"
+            echo "- Region: \`${AWS_REGION}\`"
+            echo "- Shared with: \`${SHARE_PRINCIPALS:-not shared}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
