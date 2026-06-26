@@ -114,7 +114,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          for principal in $(printf '%s' "$SHARE_PRINCIPALS" | tr ',\n' '  '); do
+          normalized_principals="${SHARE_PRINCIPALS//,/ }"
+          normalized_principals="${normalized_principals//$'\n'/ }"
+          read -r -a principals <<< "$normalized_principals"
+
+          for principal in "${principals[@]}"; do
             statement_id="share-${{ steps.publish.outputs.version }}-$(printf '%s' "$principal" | tr -c '[:alnum:]' '-' | cut -c1-80)"
 
             if [[ "$principal" == o-* ]]; then
