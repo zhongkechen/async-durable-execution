@@ -1,10 +1,12 @@
 name: Publish Lambda Layer
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
+      sdk-ref:
+        description: Git ref to build into the layer, such as main or v2.0.0a2
+        required: true
+        default: main
       aws-region:
         description: AWS Region where the Lambda layer version is published
         required: true
@@ -31,6 +33,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  SDK_REF: ${{ inputs['sdk-ref'] }}
   AWS_REGION: ${{ inputs['aws-region'] || vars.LAMBDA_LAYER_AWS_REGION || 'eu-south-1' }}
   LAYER_NAME: ${{ inputs['layer-name'] || vars.LAMBDA_LAYER_NAME || 'async-durable-execution' }}
   LAYER_DESCRIPTION: ${{ inputs.description }}
@@ -45,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.release.tag_name || github.ref }}
+          ref: ${{ env.SDK_REF }}
 
       - name: Verify AWS publish role is configured
         run: |
@@ -88,7 +91,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          description="${LAYER_DESCRIPTION:-async-durable-execution SDK ${GITHUB_REF_NAME}}"
+          description="${LAYER_DESCRIPTION:-async-durable-execution SDK ${SDK_REF}}"
 
           read -r version layer_version_arn < <(
             aws lambda publish-layer-version \
@@ -141,6 +144,7 @@ jobs:
             echo ""
             echo "- Layer ARN: \`${{ steps.publish.outputs.layer-version-arn }}\`"
             echo "- Version: \`${{ steps.publish.outputs.version }}\`"
+            echo "- Source ref: \`${SDK_REF}\`"
             echo "- Region: \`${AWS_REGION}\`"
             echo "- Shared with: \`${SHARE_PRINCIPALS:-not shared}\`"
           } >> "$GITHUB_STEP_SUMMARY"

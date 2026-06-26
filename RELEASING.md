@@ -60,9 +60,9 @@ The workflow runs on the `release: [published]` event, so it fires whenever a re
 
 > **Note:** The current workflow publishes `async-durable-execution` and `async-durable-execution-runner` to PyPI. The Lambda layer builder and examples package still share the same repo version in `VERSION.py`, but they are not part of the current PyPI publish matrix.
 
-Creating a GitHub Release also triggers the [`lambda-layer-publish.yml`](.github/workflows/lambda-layer-publish.yml) workflow. The workflow:
+After creating a GitHub Release, run the [`lambda-layer-publish.yml`](.github/workflows/lambda-layer-publish.yml) workflow manually from the `main` branch. Set `sdk-ref` to the release tag, such as `v2.0.0a2`. The workflow:
 
-1. **Builds** a Lambda layer zip from the release tag using the local `async-durable-execution` package.
+1. **Builds** a Lambda layer zip from `sdk-ref` using the local `async-durable-execution` package.
 2. **Publishes** a new Lambda layer version with compatible runtimes `python3.10` through `python3.14`.
 3. **Shares** the layer version with principals configured in `LAMBDA_LAYER_SHARE_PRINCIPALS`, or with principals entered in the manual workflow dispatch form.
 
