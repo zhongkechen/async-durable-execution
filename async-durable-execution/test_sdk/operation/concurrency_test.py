@@ -39,7 +39,7 @@ from async_durable_execution.models import (
     OperationSubType,
 )
 from async_durable_execution.primitive.child import ChildConfig
-from async_durable_execution.composite.map import MapConfig, MapExecutor
+from async_durable_execution.composite.map import MapExecutor
 
 
 def _wrap_user_function_for_test(func, *args, **kwargs):
@@ -2604,12 +2604,16 @@ async def test_concurrent_executor_replay_with_succeeded_operations():
         return f"result_{item}"
 
     items = ["a", "b"]
-    config = MapConfig()
 
-    executor = MapExecutor.from_items(
+    executor = MapExecutor(
+        executables=[Executable(index=i, func=func1) for i in range(len(items))],
         items=items,
-        func=func1,
-        config=config,
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
     )
 
     # Mock execution state with succeeded operations
@@ -2673,12 +2677,16 @@ async def test_concurrent_executor_replay_with_failed_operations():
         return f"result_{item}"
 
     items = ["a"]
-    config = MapConfig()
 
-    executor = MapExecutor.from_items(
+    executor = MapExecutor(
+        executables=[Executable(index=i, func=func1) for i in range(len(items))],
         items=items,
-        func=func1,
-        config=config,
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
     )
 
     # Mock execution state with failed operation
@@ -2717,12 +2725,16 @@ async def test_concurrent_executor_replay_with_replay_children():
         return f"result_{item}"
 
     items = ["a"]
-    config = MapConfig()
 
-    executor = MapExecutor.from_items(
+    executor = MapExecutor(
+        executables=[Executable(index=i, func=func1) for i in range(len(items))],
         items=items,
-        func=func1,
-        config=config,
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
     )
 
     # Mock execution state with succeeded operation that needs replay
@@ -2890,17 +2902,18 @@ async def test_executor_terminates_quickly_when_impossible_to_succeed():
         return f"ok_{idx}"
 
     items = list(range(100))
-    config = MapConfig(
+
+    executor = MapExecutor(
+        executables=[Executable(index=i, func=task_func) for i in range(len(items))],
+        items=items,
         max_concurrency=10,
         completion_config=CompletionConfig(
             min_successful=99, tolerated_failure_count=1
         ),
-    )
-
-    executor = MapExecutor.from_items(
-        items=items,
-        func=task_func,
-        config=config,
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
     )
 
     execution_state = create_execution_state()

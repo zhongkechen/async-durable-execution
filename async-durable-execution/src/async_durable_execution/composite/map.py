@@ -28,6 +28,7 @@ from ..primitive.child import (
 from ..async_tools import (
     invoke_user_callable,
     assert_async_callable,
+    durable_callable,
 )
 from .concurrency import (
     BatchResult,
@@ -71,20 +72,6 @@ class ItemBatcher(Generic[T]):
 
 
 @dataclass(frozen=True)
-class MapConfig(Generic[T]):
-    """Configuration options for map operations over collections."""
-
-    max_concurrency: int | None = None
-    item_batcher: ItemBatcher = field(default_factory=ItemBatcher)
-    completion_config: CompletionConfig = field(default_factory=CompletionConfig)
-    serdes: SerDes | None = None
-    item_serdes: SerDes | None = None
-    summary_generator: SummaryGenerator | None = None
-    nesting_type: NestingType = NestingType.NESTED
-    item_namer: Callable[[T, int], str] | None = None
-
-
-@dataclass(frozen=True)
 class MapItemContext(DurableContext, Generic[T]):
     """Context exposed while a map item function is executing."""
 
@@ -125,33 +112,6 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
         self.items = items
         self._item_namer = item_namer
 
-    @classmethod
-    def from_items(
-        cls,
-        items: Sequence[T],
-        func: Callable[[T], Awaitable[R]],
-        config: MapConfig[T],
-    ) -> MapExecutor[T, R]:
-        """Create MapExecutor from items and a callable."""
-        executables: list[Executable[Callable]] = [
-            Executable(index=i, func=func) for i in range(len(items))
-        ]
-
-        return cls(
-            executables=executables,
-            items=items,
-            max_concurrency=config.max_concurrency,
-            completion_config=config.completion_config,
-            top_level_sub_type=OperationSubType.MAP,
-            iteration_sub_type=OperationSubType.MAP_ITERATION,
-            name_prefix="map-item-",
-            serdes=config.serdes,
-            summary_generator=config.summary_generator,
-            item_serdes=config.item_serdes,
-            nesting_type=config.nesting_type,
-            item_namer=config.item_namer,
-        )
-
     def get_iteration_name(self, index: int) -> str:
         """Return custom item name if item_namer is provided, otherwise default."""
         if self._item_namer is not None:
@@ -178,38 +138,6 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
         return result
 
 
-async def map_handler(
-    items: Sequence[T],
-    func: Callable[[T], Awaitable[R]],
-    config: MapConfig | None,
-    execution_state: ExecutionState,
-    map_context: DurableContext,
-    operation_identifier: OperationIdentifier,
-):
-    """Execute a callable for each item in parallel."""
-    # Summary Generator Construction (matches TypeScript implementation):
-    # Construct the summary generator at the handler level, just like TypeScript does in map-handler.ts.
-    # This matches the pattern where handlers are responsible for configuring operation-specific behavior.
-    #
-    # See TypeScript reference: aws-durable-execution-sdk-js/src/handlers/map-handler/map-handler.ts (~line 79)
-
-    executor: MapExecutor[T, R] = MapExecutor.from_items(
-        items=items,
-        func=func,
-        config=config or MapConfig(summary_generator=MapSummaryGenerator()),
-    )
-
-    checkpoint: CheckpointedResult = get_checkpoint_result(
-        execution_state,
-        operation_identifier.require_operation_id(),
-    )
-    if checkpoint.is_succeeded():
-        # if we've reached this point, then not only is the step succeeded, but it is also `replay_children`.
-        return await executor.replay(execution_state, map_context)
-    # we are making it explicit that we are now executing within the map_context
-    return await executor.execute(execution_state, executor_context=map_context)
-
-
 class MapSummaryGenerator:
     """Default summary generator for oversized `BatchResult` map payloads."""
 
@@ -223,6 +151,49 @@ class MapSummaryGenerator:
             "type": "MapResult",
         }
         return json.dumps(fields)
+
+
+@durable_callable
+async def map_handler(
+    items: Sequence[T],
+    func: Callable[[T], Awaitable[R]],
+    execution_state: ExecutionState,
+    map_context: DurableContext,
+    operation_identifier: OperationIdentifier,
+    *,
+    max_concurrency: int | None = None,
+    completion_config: CompletionConfig | None = None,
+    serdes: SerDes | None = None,
+    item_serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    nesting_type: NestingType = NestingType.NESTED,
+    item_namer: Callable[[T, int], str] | None = None,
+):
+    """Execute a callable for each item in parallel."""
+    executor: MapExecutor[T, R] = MapExecutor(
+        executables=[Executable(index=i, func=func) for i in range(len(items))],
+        items=items,
+        max_concurrency=max_concurrency,
+        completion_config=completion_config or CompletionConfig(),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=serdes,
+        summary_generator=summary_generator,
+        item_serdes=item_serdes,
+        nesting_type=nesting_type,
+        item_namer=item_namer,
+    )
+
+    checkpoint: CheckpointedResult = get_checkpoint_result(
+        execution_state,
+        operation_identifier.require_operation_id(),
+    )
+    if checkpoint.is_succeeded():
+        # if we've reached this point, then not only is the step succeeded, but it is also `replay_children`.
+        return await executor.replay(execution_state, map_context)
+    # we are making it explicit that we are now executing within the map_context
+    return await executor.execute(execution_state, executor_context=map_context)
 
 
 async def map(
@@ -258,17 +229,6 @@ async def map(
     assert_async_callable(func)
     items_sequence = list(items)
     map_name: str | None = name or get_callable_name(func)
-    config = MapConfig[U](
-        max_concurrency=max_concurrency,
-        item_batcher=item_batcher or ItemBatcher(),
-        completion_config=completion_config or CompletionConfig(),
-        serdes=serdes,
-        item_serdes=item_serdes,
-        summary_generator=summary_generator,
-        nesting_type=nesting_type,
-        item_namer=item_namer,
-    )
-
     with context._replay_aware():
         operation_id = context.step_counter.create_step_id()
         operation_identifier = OperationIdentifier(
@@ -279,22 +239,25 @@ async def map(
         )
         map_context = context.create_child_context(operation_id=operation_id)
 
-        async def map_in_child_context() -> BatchResult[T]:
-            return await map_handler(
+        return await child_handler(
+            func=map_handler(
                 items=items_sequence,
                 func=func,
-                config=config,
                 execution_state=context.execution_state,
                 map_context=map_context,
                 operation_identifier=operation_identifier,
-            )
-
-        return await child_handler(
-            func=map_in_child_context,
+                max_concurrency=max_concurrency,
+                completion_config=completion_config,
+                serdes=serdes,
+                item_serdes=item_serdes,
+                summary_generator=summary_generator,
+                nesting_type=nesting_type,
+                item_namer=item_namer,
+            ),
             state=context.execution_state,
             operation_identifier=operation_identifier,
             config=ChildConfig(
-                serdes=getattr(config, "serdes", None),
+                serdes=serdes,
                 item_serdes=None,
             ),
         )
