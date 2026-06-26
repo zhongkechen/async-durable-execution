@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 from .child import _get_durable_context
 
@@ -34,15 +33,6 @@ R = TypeVar("R")  # Result type
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class InvokeConfig(Generic[P, R]):
-    """Configuration for invoke operations."""
-
-    serdes_payload: SerDes[P] | None = None
-    serdes_result: SerDes[R] | None = None
-    tenant_id: str | None = None
-
-
 class InvokeOperationExecutor(OperationExecutor[R]):
     """Executor for invoke operations."""
 
@@ -52,7 +42,9 @@ class InvokeOperationExecutor(OperationExecutor[R]):
         payload: P,
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
-        config: InvokeConfig[P, R],
+        serdes_payload: SerDes[P] | None = None,
+        serdes_result: SerDes[R] | None = None,
+        tenant_id: str | None = None,
     ):
         """Initialize the invoke operation executor.
 
@@ -61,25 +53,29 @@ class InvokeOperationExecutor(OperationExecutor[R]):
             payload: The payload to pass to the invoked function
             state: The execution state
             operation_identifier: The operation identifier
-            config: Configuration for the invoke operation
+            serdes_payload: Optional serializer for the invocation payload
+            serdes_result: Optional deserializer for the invocation result
+            tenant_id: Optional tenant identifier for the chained invocation
         """
         super().__init__(state=state, operation_identifier=operation_identifier)
         self.function_name = function_name
         self.payload = payload
-        self.config = config
+        self.serdes_payload = serdes_payload
+        self.serdes_result = serdes_result
+        self.tenant_id = tenant_id
 
     async def start(self) -> R:
         """Start a new invoke operation."""
         serialized_payload: str = await self.serialize_value(
             value=self.payload,
-            serdes=self.config.serdes_payload or DEFAULT_JSON_SERDES,
+            serdes=self.serdes_payload or DEFAULT_JSON_SERDES,
         )
         start_operation: OperationUpdate = OperationUpdate.create_invoke_start(
             identifier=self.operation_identifier,
             payload=serialized_payload,
             chained_invoke_options=ChainedInvokeOptions(
                 function_name=self.function_name,
-                tenant_id=self.config.tenant_id,
+                tenant_id=self.tenant_id,
             ),
         )
         await self.create_checkpoint(start_operation, is_sync=True)
@@ -104,7 +100,7 @@ class InvokeOperationExecutor(OperationExecutor[R]):
 
             result: R = await self.deserialize_value(
                 data=checkpointed_result.result,
-                serdes=self.config.serdes_result or DEFAULT_JSON_SERDES,
+                serdes=self.serdes_result or DEFAULT_JSON_SERDES,
             )
             return result
 
@@ -169,11 +165,6 @@ async def invoke(
         tenant_id: Optional tenant identifier for the chained invocation.
     """
     context = _get_durable_context("invoke")
-    config = InvokeConfig[P, R](
-        serdes_payload=serdes_payload,
-        serdes_result=serdes_result,
-        tenant_id=tenant_id,
-    )
     with context._replay_aware():
         operation_id = context.step_counter.create_step_id()
 
@@ -187,6 +178,8 @@ async def invoke(
                 parent_id=context.parent_id,
                 name=name,
             ),
-            config=config,
+            serdes_payload=serdes_payload,
+            serdes_result=serdes_result,
+            tenant_id=tenant_id,
         )
         return await executor.process()

@@ -21,7 +21,6 @@ from async_durable_execution.primitive.callback import (
     CallbackError,
     CallbackConfig,
 )
-from async_durable_execution.primitive.invoke import InvokeConfig
 from async_durable_execution.composite.wait_for_condition import (
     WaitForConditionConfig,
     WaitForConditionDecision,
@@ -338,7 +337,9 @@ async def test_module_level_context_functions_delegate_to_durable_context():
         payload={"x": 1},
         state=mock_state,
         operation_identifier=ANY,
-        config=ANY,
+        serdes_payload=None,
+        serdes_result=None,
+        tenant_id=None,
     )
     invoke_executor.process.assert_awaited_once()
     assert mock_child.await_count == 2
@@ -1033,14 +1034,16 @@ async def test_invoke_basic(mock_executor_class):
         ),
         function_name="test_function",
         payload="test_payload",
-        config=ANY,  # InvokeConfig() is created in invoke()
+        serdes_payload=None,
+        serdes_result=None,
+        tenant_id=None,
     )
     mock_executor.process.assert_called_once()
 
 
 @patch("async_durable_execution.primitive.invoke.InvokeOperationExecutor")
 async def test_invoke_with_name_and_fields(mock_executor_class):
-    """Test invoke with name and config fields."""
+    """Test invoke with name and default fields."""
     mock_executor = make_async_executor("configured_result")
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
@@ -1071,7 +1074,9 @@ async def test_invoke_with_name_and_fields(mock_executor_class):
         ),
         function_name="test_function",
         payload={"key": "value"},
-        config=InvokeConfig[str, str](),
+        serdes_payload=None,
+        serdes_result=None,
+        tenant_id=None,
     )
     mock_executor.process.assert_called_once()
 
@@ -1104,7 +1109,9 @@ async def test_invoke_with_parent_id(mock_executor_class):
         ),
         function_name="test_function",
         payload=None,
-        config=ANY,
+        serdes_payload=None,
+        serdes_result=None,
+        tenant_id=None,
     )
     mock_executor.process.assert_called_once()
 
@@ -1167,14 +1174,16 @@ async def test_invoke_with_none_payload(mock_executor_class):
         ),
         function_name="test_function",
         payload=None,
-        config=ANY,
+        serdes_payload=None,
+        serdes_result=None,
+        tenant_id=None,
     )
     mock_executor.process.assert_called_once()
 
 
 @patch("async_durable_execution.primitive.invoke.InvokeOperationExecutor")
 async def test_invoke_with_custom_serdes(mock_executor_class):
-    """Test invoke with custom serialization config."""
+    """Test invoke with custom serialization fields."""
     mock_executor = make_async_executor({"transformed": "data"})
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
@@ -1208,10 +1217,9 @@ async def test_invoke_with_custom_serdes(mock_executor_class):
         ),
         function_name="test_function",
         payload={"original": "data"},
-        config=InvokeConfig[dict, dict](
-            serdes_payload=payload_serdes,
-            serdes_result=result_serdes,
-        ),
+        serdes_payload=payload_serdes,
+        serdes_result=result_serdes,
+        tenant_id=None,
     )
     mock_executor.process.assert_called_once()
 
@@ -2287,7 +2295,7 @@ async def test_invoke_with_explicit_tenant_id(mock_executor_class):
 
     assert result == "result"
     call_args = mock_executor_class.call_args[1]
-    assert call_args["config"].tenant_id == "explicit-tenant"
+    assert call_args["tenant_id"] == "explicit-tenant"
 
 
 @patch("async_durable_execution.primitive.invoke.InvokeOperationExecutor")
@@ -2305,10 +2313,8 @@ async def test_invoke_without_tenant_id_defaults_to_none(mock_executor_class):
     result = await run_with_context(context, invoke("test_function", "payload"))
 
     assert result == "result"
-    # Config is created as InvokeConfig() when fields are not provided
     call_args = mock_executor_class.call_args[1]
-    assert isinstance(call_args["config"], InvokeConfig)
-    assert call_args["config"].tenant_id is None
+    assert call_args["tenant_id"] is None
 
 
 async def test_durable_execution_arn_exists_on_durable_context():

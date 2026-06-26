@@ -25,7 +25,6 @@ from async_durable_execution.models import (
     OperationType,
 )
 from async_durable_execution.primitive.invoke import (
-    InvokeConfig,
     InvokeOperationExecutor,
     invoke,
 )
@@ -35,35 +34,27 @@ from async_durable_execution.primitive.base import CheckpointedResult
 from ..serdes_test import CustomDictSerDes
 
 
-# Test helper - maintains old handler signature for backward compatibility in tests
-async def invoke_handler(function_name, payload, state, operation_identifier, config):
-    """Test helper that wraps InvokeOperationExecutor with old handler signature."""
-    if not config:
-        config = InvokeConfig()
+# Test helper - keeps executor setup concise in operation tests.
+async def invoke_handler(
+    function_name,
+    payload,
+    state,
+    operation_identifier,
+    serdes_payload=None,
+    serdes_result=None,
+    tenant_id=None,
+):
+    """Test helper that wraps InvokeOperationExecutor."""
     executor = InvokeOperationExecutor(
         function_name=function_name,
         payload=payload,
         state=state,
         operation_identifier=operation_identifier,
-        config=config,
+        serdes_payload=serdes_payload,
+        serdes_result=serdes_result,
+        tenant_id=tenant_id,
     )
     return await executor.process()
-
-
-def test_invoke_config_defaults():
-    """InvokeConfig keeps its expected defaults."""
-    config = InvokeConfig()
-
-    assert config.serdes_payload is None
-    assert config.serdes_result is None
-    assert config.tenant_id is None
-
-
-def test_invoke_config_with_tenant_id():
-    """InvokeConfig stores explicit tenant ids."""
-    config = InvokeConfig(tenant_id="test-tenant")
-
-    assert config.tenant_id == "test-tenant"
 
 
 def test_invoke_name_is_keyword_only():
@@ -96,7 +87,6 @@ async def test_invoke_handler_already_succeeded():
         operation_identifier=OperationIdentifier(
             "invoke1", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
         ),
-        config=None,
     )
 
     assert result == "test_result"
@@ -124,7 +114,6 @@ async def test_invoke_handler_already_succeeded_none_result():
         operation_identifier=OperationIdentifier(
             "invoke2", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
         ),
-        config=None,
     )
 
     assert result is None
@@ -151,7 +140,6 @@ async def test_invoke_handler_already_succeeded_no_chained_invoke_details():
         operation_identifier=OperationIdentifier(
             "invoke3", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
         ),
-        config=None,
     )
 
     assert result is None
@@ -185,7 +173,6 @@ async def test_invoke_handler_already_terminated(kind: OperationStatus):
             operation_identifier=OperationIdentifier(
                 "invoke4", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
             ),
-            config=None,
         )
 
 
@@ -214,7 +201,6 @@ async def test_invoke_handler_already_timed_out():
             operation_identifier=OperationIdentifier(
                 "invoke5", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
             ),
-            config=None,
         )
 
 
@@ -243,7 +229,6 @@ async def test_invoke_handler_already_started(status):
             operation_identifier=OperationIdentifier(
                 "invoke6", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
             ),
-            config=None,
         )
 
 
@@ -261,9 +246,6 @@ async def test_invoke_handler_already_started_with_timeout(status):
     )
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.operations.get.return_value = mock_result
-
-    config = InvokeConfig[str, str]()
-
     with pytest.raises(SuspendExecution):
         await invoke_handler(
             function_name="test_function",
@@ -272,7 +254,6 @@ async def test_invoke_handler_already_started_with_timeout(status):
             operation_identifier=OperationIdentifier(
                 "invoke7", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
             ),
-            config=config,
         )
 
 
@@ -290,9 +271,6 @@ async def test_invoke_handler_new_operation():
     )
     started = CheckpointedResult.create_from_operation(started_op)
     mock_state.operations.get.side_effect = [not_found, started]
-
-    config = InvokeConfig[str, str]()
-
     with pytest.raises(
         SuspendExecution, match="Invoke invoke8 started, suspending for completion"
     ):
@@ -303,7 +281,6 @@ async def test_invoke_handler_new_operation():
             operation_identifier=OperationIdentifier(
                 "invoke8", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
             ),
-            config=config,
         )
 
     # Verify checkpoint was created
@@ -318,8 +295,8 @@ async def test_invoke_handler_new_operation():
     assert operation_update.chained_invoke_options.function_name == "test_function"
 
 
-async def test_invoke_handler_new_operation_with_config():
-    """Test invoke_handler when starting a new operation with explicit config."""
+async def test_invoke_handler_new_operation_with_direct_defaults():
+    """Test invoke_handler when starting a new operation with direct defaults."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
 
@@ -331,9 +308,6 @@ async def test_invoke_handler_new_operation_with_config():
     )
     started = CheckpointedResult.create_from_operation(started_op)
     mock_state.operations.get.side_effect = [not_found, started]
-
-    config = InvokeConfig[str, str]()
-
     with pytest.raises(SuspendExecution):
         await invoke_handler(
             function_name="test_function",
@@ -342,12 +316,11 @@ async def test_invoke_handler_new_operation_with_config():
             operation_identifier=OperationIdentifier(
                 "invoke9", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
             ),
-            config=config,
         )
 
 
-async def test_invoke_handler_new_operation_default_config():
-    """Test invoke_handler when starting a new operation with default config."""
+async def test_invoke_handler_new_operation_default_fields():
+    """Test invoke_handler when starting a new operation with default fields."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
 
@@ -359,9 +332,6 @@ async def test_invoke_handler_new_operation_default_config():
     )
     started = CheckpointedResult.create_from_operation(started_op)
     mock_state.operations.get.side_effect = [not_found, started]
-
-    config = InvokeConfig[str, str]()
-
     with pytest.raises(SuspendExecution):
         await invoke_handler(
             function_name="test_function",
@@ -370,12 +340,11 @@ async def test_invoke_handler_new_operation_default_config():
             operation_identifier=OperationIdentifier(
                 "invoke10", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
             ),
-            config=config,
         )
 
 
-async def test_invoke_handler_no_config():
-    """Test invoke_handler when no config is provided."""
+async def test_invoke_handler_no_optional_fields():
+    """Test invoke_handler when no optional fields is provided."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
 
@@ -396,10 +365,9 @@ async def test_invoke_handler_no_config():
             operation_identifier=OperationIdentifier(
                 "invoke11", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
             ),
-            config=None,
         )
 
-    # Verify default config was used
+    # Verify default fields was used
     operation_update = mock_state.create_checkpoint.call_args[1]["operation_update"]
     chained_invoke_options = operation_update.to_dict()["ChainedInvokeOptions"]
     assert chained_invoke_options["FunctionName"] == "test_function"
@@ -423,9 +391,8 @@ async def test_invoke_handler_custom_serdes():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.operations.get.return_value = mock_result
 
-    config = InvokeConfig[dict, dict](
-        serdes_payload=CustomDictSerDes(), serdes_result=CustomDictSerDes()
-    )
+    serdes_payload = CustomDictSerDes()
+    serdes_result = CustomDictSerDes()
 
     result = await invoke_handler(
         function_name="test_function",
@@ -434,7 +401,8 @@ async def test_invoke_handler_custom_serdes():
         operation_identifier=OperationIdentifier(
             "invoke12", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
         ),
-        config=config,
+        serdes_payload=serdes_payload,
+        serdes_result=serdes_result,
     )
 
     # CustomDictSerDes transforms the result back
@@ -455,9 +423,8 @@ async def test_invoke_handler_custom_serdes_new_operation():
     started = CheckpointedResult.create_from_operation(started_op)
     mock_state.operations.get.side_effect = [not_found, started]
 
-    config = InvokeConfig[dict, dict](
-        serdes_payload=CustomDictSerDes(), serdes_result=CustomDictSerDes()
-    )
+    serdes_payload = CustomDictSerDes()
+    serdes_result = CustomDictSerDes()
     complex_payload = {"key": "value", "number": 42, "list": [1, 2, 3]}
 
     with pytest.raises(SuspendExecution):
@@ -468,7 +435,8 @@ async def test_invoke_handler_custom_serdes_new_operation():
             operation_identifier=OperationIdentifier(
                 "invoke13", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
             ),
-            config=config,
+            serdes_payload=serdes_payload,
+            serdes_result=serdes_result,
         )
 
     # Verify custom serialization was used
@@ -532,7 +500,6 @@ async def test_invoke_handler_with_operation_name(status: OperationStatus):
             operation_identifier=OperationIdentifier(
                 "invoke14", OperationSubType.CHAINED_INVOKE, None, "named_invoke"
             ),
-            config=None,
         )
 
 
@@ -559,7 +526,6 @@ async def test_invoke_handler_without_operation_name(status: OperationStatus):
             operation_identifier=OperationIdentifier(
                 "invoke15", OperationSubType.CHAINED_INVOKE, None, None
             ),
-            config=None,
         )
 
 
@@ -585,7 +551,6 @@ async def test_invoke_handler_with_none_payload():
             operation_identifier=OperationIdentifier(
                 "invoke16", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
             ),
-            config=None,
         )
 
     # Verify checkpoint was created with None payload
@@ -615,7 +580,6 @@ async def test_invoke_handler_already_succeeded_with_none_payload():
         operation_identifier=OperationIdentifier(
             "invoke17", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
         ),
-        config=None,
     )
 
     assert result == "test_result"
@@ -652,7 +616,6 @@ async def test_invoke_handler_suspend_does_not_raise(mock_suspend):
             operation_identifier=OperationIdentifier(
                 "invoke18", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
             ),
-            config=None,
         )
 
     mock_suspend.assert_called_once()
@@ -672,8 +635,6 @@ async def test_invoke_handler_with_tenant_id():
     started = CheckpointedResult.create_from_operation(started_op)
     mock_state.operations.get.side_effect = [not_found, started]
 
-    config = InvokeConfig(tenant_id="test-tenant-123")
-
     with pytest.raises(SuspendExecution):
         await invoke_handler(
             function_name="test_function",
@@ -682,7 +643,7 @@ async def test_invoke_handler_with_tenant_id():
             operation_identifier=OperationIdentifier(
                 "invoke1", OperationSubType.CHAINED_INVOKE, None, None
             ),
-            config=config,
+            tenant_id="test-tenant-123",
         )
 
     # Verify checkpoint was called with tenant_id
@@ -707,8 +668,6 @@ async def test_invoke_handler_without_tenant_id():
     started = CheckpointedResult.create_from_operation(started_op)
     mock_state.operations.get.side_effect = [not_found, started]
 
-    config = InvokeConfig(tenant_id=None)
-
     with pytest.raises(SuspendExecution):
         await invoke_handler(
             function_name="test_function",
@@ -717,7 +676,6 @@ async def test_invoke_handler_without_tenant_id():
             operation_identifier=OperationIdentifier(
                 "invoke1", OperationSubType.CHAINED_INVOKE, None, None
             ),
-            config=config,
         )
 
     # Verify checkpoint was called without tenant_id
@@ -728,8 +686,8 @@ async def test_invoke_handler_without_tenant_id():
     assert "TenantId" not in chained_invoke_options
 
 
-async def test_invoke_handler_default_config_no_tenant_id():
-    """Test invoke_handler with default config has no tenant_id."""
+async def test_invoke_handler_default_fields_no_tenant_id():
+    """Test invoke_handler with default fields has no tenant_id."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
 
@@ -750,7 +708,6 @@ async def test_invoke_handler_default_config_no_tenant_id():
             operation_identifier=OperationIdentifier(
                 "invoke1", OperationSubType.CHAINED_INVOKE, None, None
             ),
-            config=None,
         )
 
     # Verify checkpoint was called without tenant_id
@@ -762,7 +719,7 @@ async def test_invoke_handler_default_config_no_tenant_id():
 
 
 async def test_invoke_handler_defaults_to_json_serdes():
-    """Test invoke_handler uses DEFAULT_JSON_SERDES when config has no serdes."""
+    """Test invoke_handler uses DEFAULT_JSON_SERDES when no serdes fields are provided."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
 
@@ -775,7 +732,6 @@ async def test_invoke_handler_defaults_to_json_serdes():
     started = CheckpointedResult.create_from_operation(started_op)
     mock_state.operations.get.side_effect = [not_found, started]
 
-    config = InvokeConfig[dict, dict](serdes_payload=None, serdes_result=None)
     payload = {"key": "value", "number": 42}
 
     with pytest.raises(SuspendExecution):
@@ -786,7 +742,6 @@ async def test_invoke_handler_defaults_to_json_serdes():
             operation_identifier=OperationIdentifier(
                 "invoke_json", OperationSubType.CHAINED_INVOKE, None, None
             ),
-            config=config,
         )
 
     # Verify JSON serialization was used (not extended types)
@@ -809,8 +764,6 @@ async def test_invoke_handler_result_defaults_to_json_serdes():
     mock_result = CheckpointedResult.create_from_operation(operation)
     mock_state.operations.get.return_value = mock_result
 
-    config = InvokeConfig[dict, dict](serdes_payload=None, serdes_result=None)
-
     result = await invoke_handler(
         function_name="test_function",
         payload={"input": "data"},
@@ -818,7 +771,6 @@ async def test_invoke_handler_result_defaults_to_json_serdes():
         operation_identifier=OperationIdentifier(
             "invoke_result_json", OperationSubType.CHAINED_INVOKE, None, None
         ),
-        config=config,
     )
 
     # Verify JSON deserialization was used (not extended types)
@@ -856,7 +808,6 @@ async def test_invoke_immediate_response_get_checkpoint_result_called_twice():
                 None,
                 "test_invoke",
             ),
-            config=None,
         )
 
     # Verify get_checkpoint_result was called twice
@@ -889,7 +840,6 @@ async def test_invoke_immediate_response_create_checkpoint_with_is_sync_true():
                 None,
                 "test_invoke",
             ),
-            config=None,
         )
 
     # Verify create_checkpoint was called with is_sync=True
@@ -927,7 +877,6 @@ async def test_invoke_immediate_response_immediate_success():
         operation_identifier=OperationIdentifier(
             "invoke_immediate_3", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
         ),
-        config=None,
     )
 
     # Verify result was returned without suspend
@@ -961,7 +910,6 @@ async def test_invoke_immediate_response_immediate_success_with_none_result():
         operation_identifier=OperationIdentifier(
             "invoke_immediate_4", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
         ),
-        config=None,
     )
 
     # Verify None result was returned without suspend
@@ -1008,7 +956,6 @@ async def test_invoke_immediate_response_immediate_failure(status: OperationStat
                 None,
                 "test_invoke",
             ),
-            config=None,
         )
 
     # Verify checkpoint was created
@@ -1047,7 +994,6 @@ async def test_invoke_immediate_response_no_immediate_response():
                 None,
                 "test_invoke",
             ),
-            config=None,
         )
 
     # Verify checkpoint was created
@@ -1084,7 +1030,6 @@ async def test_invoke_immediate_response_already_completed():
         operation_identifier=OperationIdentifier(
             "invoke_immediate_7", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
         ),
-        config=None,
     )
 
     # Verify result was returned
@@ -1095,8 +1040,8 @@ async def test_invoke_immediate_response_already_completed():
     assert mock_state.operations.get.call_count == 1
 
 
-async def test_invoke_immediate_response_with_config_immediate_success():
-    """Test immediate success with explicit config."""
+async def test_invoke_immediate_response_with_default_fields_immediate_success():
+    """Test immediate success with direct defaults."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
 
@@ -1112,9 +1057,6 @@ async def test_invoke_immediate_response_with_config_immediate_success():
     )
     succeeded = CheckpointedResult.create_from_operation(succeeded_op)
     mock_state.operations.get.side_effect = [not_found, succeeded]
-
-    config = InvokeConfig[str, str]()
-
     result = await invoke_handler(
         function_name="test_function",
         payload="test_input",
@@ -1122,7 +1064,6 @@ async def test_invoke_immediate_response_with_config_immediate_success():
         operation_identifier=OperationIdentifier(
             "invoke_immediate_8", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
         ),
-        config=config,
     )
 
     # Verify result was returned without suspend
@@ -1130,8 +1071,8 @@ async def test_invoke_immediate_response_with_config_immediate_success():
     assert mock_state.operations.get.call_count == 2
 
 
-async def test_invoke_immediate_response_with_config_no_immediate_response():
-    """Test no immediate response with explicit config.
+async def test_invoke_immediate_response_with_default_fields_no_immediate_response():
+    """Test no immediate response with direct defaults.
 
     When no immediate response, operation should suspend normally.
     """
@@ -1147,9 +1088,6 @@ async def test_invoke_immediate_response_with_config_no_immediate_response():
     )
     started = CheckpointedResult.create_from_operation(started_op)
     mock_state.operations.get.side_effect = [not_found, started]
-
-    config = InvokeConfig[str, str]()
-
     # Verify operation suspends normally
     with pytest.raises(SuspendExecution):
         await invoke_handler(
@@ -1162,7 +1100,6 @@ async def test_invoke_immediate_response_with_config_no_immediate_response():
                 None,
                 "test_invoke",
             ),
-            config=config,
         )
 
     assert mock_state.operations.get.call_count == 2
@@ -1186,9 +1123,8 @@ async def test_invoke_immediate_response_with_custom_serdes():
     succeeded = CheckpointedResult.create_from_operation(succeeded_op)
     mock_state.operations.get.side_effect = [not_found, succeeded]
 
-    config = InvokeConfig[dict, dict](
-        serdes_payload=CustomDictSerDes(), serdes_result=CustomDictSerDes()
-    )
+    serdes_payload = CustomDictSerDes()
+    serdes_result = CustomDictSerDes()
 
     result = await invoke_handler(
         function_name="test_function",
@@ -1197,7 +1133,8 @@ async def test_invoke_immediate_response_with_custom_serdes():
         operation_identifier=OperationIdentifier(
             "invoke_immediate_10", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
         ),
-        config=config,
+        serdes_payload=serdes_payload,
+        serdes_result=serdes_result,
     )
 
     # Verify custom deserialization was used
@@ -1234,7 +1171,6 @@ async def test_invoke_suspends_when_second_check_returns_started():
         ),
         function_name="my-function",
         payload={"data": "test"},
-        config=InvokeConfig(),
     )
 
     with pytest.raises(SuspendExecution):
@@ -1270,7 +1206,6 @@ async def test_invoke_suspends_when_second_check_returns_started_duplicate():
         operation_identifier=OperationIdentifier(
             "invoke-1", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
         ),
-        config=InvokeConfig(),
     )
 
     with pytest.raises(SuspendExecution):
