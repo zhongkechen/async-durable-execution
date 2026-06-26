@@ -66,7 +66,7 @@ Creating a GitHub Release also triggers the [`lambda-layer-publish.yml`](.github
 2. **Publishes** a new Lambda layer version with compatible runtimes `python3.10` through `python3.14`.
 3. **Shares** the layer version with principals configured in `LAMBDA_LAYER_SHARE_PRINCIPALS`, or with principals entered in the manual workflow dispatch form.
 
-Set `ACTIONS_LAYER_PUBLISH_ROLE_ARN` to the AWS role used for publishing the layer. The role needs `lambda:PublishLayerVersion` and `lambda:AddLayerVersionPermission` for the target layer. If `ACTIONS_LAYER_PUBLISH_ROLE_ARN` is not set, the workflow falls back to `ACTIONS_INTEGRATION_ROLE_NAME`.
+Set the repository secret `ACTIONS_LAYER_PUBLISH_ROLE_ARN` to the AWS role used for publishing the layer. The role needs `lambda:PublishLayerVersion` and `lambda:AddLayerVersionPermission` for the target layer. If `ACTIONS_LAYER_PUBLISH_ROLE_ARN` is not set, the workflow falls back to `ACTIONS_INTEGRATION_ROLE_NAME`.
 
 Optional repository variables:
 

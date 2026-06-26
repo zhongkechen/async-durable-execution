@@ -41,7 +41,6 @@ env:
 jobs:
   publish-layer:
     runs-on: ubuntu-latest
-    environment: lambda-layer-publish
 
     steps:
       - uses: actions/checkout@v7
