@@ -77,7 +77,15 @@ def durable_callable(
     The returned callable can be passed to durable operations such as `step()`
     and `run_in_child_context()`, keeping durable operation creation explicit
     while avoiding manual `functools.partial(...)` wrapping at the callsite.
+
+    Class and static methods are supported with either decorator order:
+    `@classmethod`/`@staticmethod` may appear above or below `@durable_callable`.
     """
+    if isinstance(func, classmethod):
+        return classmethod(durable_callable(func.__func__))  # type: ignore[return-value]
+    if isinstance(func, staticmethod):
+        return staticmethod(durable_callable(func.__func__))  # type: ignore[return-value]
+
     assert_async_callable(func)
 
     @functools.wraps(func)

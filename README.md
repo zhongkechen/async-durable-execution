@@ -109,6 +109,21 @@ async def handler(event: dict) -> dict:
 
 Async callables are required anywhere the SDK accepts user code, including `map()` item functions, bound `parallel()` branch callables, child contexts, callback submitters, and wait-for-condition checks. Durable context operations are awaitable and run on the same event loop as your handler.
 
+When decorating class or static methods, `@durable_callable` can be used in either order with `@classmethod` or `@staticmethod`; both of these are valid:
+
+```python
+class Steps:
+    @durable_callable
+    @classmethod
+    async def from_class(cls) -> str:
+        return cls.__name__
+
+    @staticmethod
+    @durable_callable
+    async def from_static() -> str:
+        return "ok"
+```
+
 Handler input is deserialized from the durable execution payload before your code runs. Empty or whitespace payloads are normalized to `{}`, and malformed JSON fails the invocation before user code executes.
 
 ## 🧪 Testing Durable Functions
