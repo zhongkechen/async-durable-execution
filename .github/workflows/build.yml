@@ -32,7 +32,7 @@ jobs:
         python -m pip install hatch==1.16.5
     - name: static analysis
       run: |
-        for pkg in async-durable-execution async-durable-execution-examples async-durable-execution-runner; do
+        for pkg in async-durable-execution async-durable-execution-examples async-durable-execution-lambda-layer async-durable-execution-runner; do
           if [ -f "$pkg/pyproject.toml" ]; then
             echo "=== Checking format: $pkg ==="
             cd "$pkg"
@@ -46,7 +46,7 @@ jobs:
       run: hatch run test:cov
     - name: Build distribution
       run: |
-        for pkg in async-durable-execution async-durable-execution-examples async-durable-execution-runner; do
+        for pkg in async-durable-execution async-durable-execution-examples async-durable-execution-lambda-layer async-durable-execution-runner; do
           if [ -f "$pkg/pyproject.toml" ]; then
             echo "=== Building: $pkg ==="
             cd "$pkg"

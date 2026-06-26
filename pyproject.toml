@@ -10,6 +10,7 @@ path = "VERSION.py"
 workspace.members = [
   "async-durable-execution",
   "async-durable-execution-examples",
+  "async-durable-execution-lambda-layer",
   "async-durable-execution-runner",
 ]
 
@@ -17,6 +18,7 @@ workspace.members = [
 workspace.members = [
   "async-durable-execution",
   "async-durable-execution-examples",
+  "async-durable-execution-lambda-layer",
   "async-durable-execution-runner",
 ]
 dependencies = [
@@ -37,6 +39,7 @@ examples-integration = "pytest --runner-mode=cloud async-durable-execution-examp
 addopts = "-v --strict-markers --import-mode=importlib"
 testpaths = [
     "async-durable-execution/test_sdk",
+    "async-durable-execution-lambda-layer/test_layer",
     "async-durable-execution-runner/test_runner",
     "async-durable-execution-examples/test_examples",
 ]
@@ -47,6 +50,7 @@ asyncio_mode = "auto"
 workspace.members = [
   "async-durable-execution",
   "async-durable-execution-examples",
+  "async-durable-execution-lambda-layer",
   "async-durable-execution-runner",
 ]
 extra-dependencies = [
@@ -56,11 +60,12 @@ extra-dependencies = [
 ]
 
 [tool.hatch.envs.types.scripts]
-check = "mypy --install-types --non-interactive {args:async-durable-execution/src/async_durable_execution async-durable-execution/test_sdk async-durable-execution-runner/src/async_durable_execution_runner async-durable-execution-runner/test_runner}"
+check = "mypy --install-types --non-interactive {args:async-durable-execution/src/async_durable_execution async-durable-execution/test_sdk async-durable-execution-lambda-layer/src/async_durable_execution_lambda_layer async-durable-execution-lambda-layer/test_layer async-durable-execution-runner/src/async_durable_execution_runner async-durable-execution-runner/test_runner}"
 
 [tool.hatch.envs.dev-core]
 workspace.members = [
   "async-durable-execution",
+  "async-durable-execution-lambda-layer",
   "async-durable-execution-runner",
 ]
 dependencies = [
@@ -80,6 +85,7 @@ typecheck = "mypy --install-types --non-interactive async-durable-execution/src/
 [tool.hatch.envs.dev-testing]
 workspace.members = [
   "async-durable-execution",
+  "async-durable-execution-lambda-layer",
   "async-durable-execution-runner",
 ]
 dependencies = [
@@ -99,6 +105,7 @@ typecheck = "mypy --install-types --non-interactive async-durable-execution-runn
 workspace.members = [
   "async-durable-execution",
   "async-durable-execution-examples",
+  "async-durable-execution-lambda-layer",
   "async-durable-execution-runner",
 ]
 dependencies = [
@@ -127,6 +134,7 @@ test = "pytest async-durable-execution-examples/test_examples {args}"
 workspace.members = [
   "async-durable-execution",
   "async-durable-execution-examples",
+  "async-durable-execution-lambda-layer",
   "async-durable-execution-runner",
 ]
 
@@ -157,6 +165,7 @@ select = []
 known-first-party = [
   "async_durable_execution",
   "async_durable_execution_examples",
+  "async_durable_execution_lambda_layer",
   "async_durable_execution_runner",
 ]
 force-single-line = false

@@ -10,6 +10,7 @@ This monorepo contains the following packages:
 |---------|------|------------|
 | `async-durable-execution` | `async-durable-execution` | `v` |
 | `async-durable-execution-runner` | `async-durable-execution-runner` | `v` |
+| `async-durable-execution-lambda-layer` | `async-durable-execution-lambda-layer` | `v` |
 | `async-durable-execution-examples` | `async-durable-execution-examples` | `v` |
 
 ## Versioning
@@ -18,7 +19,7 @@ All packages share a single version number defined in the repository root:
 
 - Shared version source: `VERSION.py`
 
-Package metadata reads from `VERSION.py`, so bumping that file updates the SDK, runner, and examples package together.
+Package metadata reads from `VERSION.py`, so bumping that file updates the SDK, runner, Lambda layer builder, and examples package together.
 
 ## Cutting a Release
 
@@ -51,17 +52,17 @@ v2.0.0a2
 
 Creating a GitHub Release triggers the [`pypi-publish.yml`](.github/workflows/pypi-publish.yml) workflow automatically. The workflow:
 
-1. **Builds** the SDK and runner packages using [Hatch](https://hatch.pypa.io/) (`hatch build`).
+1. **Builds** the SDK, runner, and Lambda layer builder packages using [Hatch](https://hatch.pypa.io/) (`hatch build`).
 2. **Uploads** the built distributions as artifacts.
-3. **Publishes** both packages to [PyPI](https://pypi.org/) using trusted publishing (OIDC-based, no API tokens required).
+3. **Publishes** those packages to [PyPI](https://pypi.org/) using trusted publishing (OIDC-based, no API tokens required).
 
 The workflow runs on the `release: [published]` event, so it fires whenever a release is published on GitHub — no manual intervention is needed beyond creating the release.
 
-> **Note:** The current workflow publishes `async-durable-execution` and `async-durable-execution-runner` to PyPI. The examples package still shares the same repo version in `VERSION.py`, but it is not part of the current publish matrix.
+> **Note:** The current workflow publishes `async-durable-execution`, `async-durable-execution-runner`, and `async-durable-execution-lambda-layer` to PyPI. The examples package still shares the same repo version in `VERSION.py`, but it is not part of the current publish matrix.
 
 ### Trusted Publisher Configuration
 
-PyPI trusted publishing is configured per project, so both `async-durable-execution` and `async-durable-execution-runner` need their own matching publisher entry in PyPI.
+PyPI trusted publishing is configured per project, so `async-durable-execution`, `async-durable-execution-runner`, and `async-durable-execution-lambda-layer` need their own matching publisher entry in PyPI.
 
 For the current workflow, each PyPI project should trust the following GitHub Actions publisher settings:
 
@@ -70,10 +71,11 @@ For the current workflow, each PyPI project should trust the following GitHub Ac
 - Workflow file: `.github/workflows/pypi-publish.yml`
 - Environment for `async-durable-execution`: `async-durable-execution`
 - Environment for `async-durable-execution-runner`: `async-durable-execution-runner`
+- Environment for `async-durable-execution-lambda-layer`: `async-durable-execution-lambda-layer`
 
 If PyPI returns `invalid-publisher`, compare the failing job's OIDC claims with the PyPI project settings first. A mismatch in repository name, workflow filename, or environment name is the most common cause.
 
-> **Tip:** The OIDC subject includes the GitHub environment name. If PyPI expects `async-durable-execution` or `async-durable-execution-runner` but the workflow emits a different environment, trusted publishing will fail with `invalid-publisher`.
+> **Tip:** The OIDC subject includes the GitHub environment name. If PyPI expects the package-specific environment but the workflow emits a different environment, trusted publishing will fail with `invalid-publisher`.
 
 ## Release Notes Format
 
