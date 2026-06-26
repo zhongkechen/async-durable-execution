@@ -245,7 +245,9 @@ async def test_module_level_context_functions_delegate_to_durable_context():
         patch(
             "async_durable_execution.composite.wait_for_condition.WaitForConditionOperationExecutor"
         ) as mock_wait_for_condition_executor,
-        patch("async_durable_execution.primitive.wait._wait_in_context", mock_wait),
+        patch(
+            "async_durable_execution.primitive.wait.WaitOperationExecutor"
+        ) as mock_wait_executor,
         patch(
             "async_durable_execution.primitive.child._run_in_child_context_in_context",
             mock_child,
@@ -266,6 +268,7 @@ async def test_module_level_context_functions_delegate_to_durable_context():
         mock_callback_executor.return_value = callback_executor
         mock_invoke_executor.return_value = invoke_executor
         mock_wait_for_condition_executor.return_value = wait_for_condition_executor
+        mock_wait_executor.return_value.process = mock_wait
 
         assert (
             await run_with_context(context, step(step_func, name="step-name"))
@@ -320,11 +323,12 @@ async def test_module_level_context_functions_delegate_to_durable_context():
 
     mock_step_executor.assert_called_once()
     step_executor.process.assert_awaited_once()
-    mock_wait.assert_awaited_once_with(
-        context,
-        duration=timedelta(seconds=1),
-        name="wait-name",
+    mock_wait_executor.assert_called_once_with(
+        seconds=1,
+        state=mock_state,
+        operation_identifier=ANY,
     )
+    mock_wait.assert_awaited_once()
     mock_callback_executor.assert_called_once_with(
         state=mock_state,
         operation_identifier=ANY,
