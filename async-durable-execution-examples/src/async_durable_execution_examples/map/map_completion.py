@@ -32,12 +32,10 @@ async def handler(_event: Any) -> dict[str, Any]:
     # Fixed completion config that causes the issue
     completion_config = CompletionConfig(
         min_successful=2,
-        tolerated_failure_percentage=50,
+        tolerated_failure_count=2,
     )
 
-    logger.info(
-        "Starting map with config: min_successful=2, tolerated_failure_percentage=50"
-    )
+    logger.info("Starting map with config: min_successful=2, tolerated_failure_count=2")
     logger.info(
         f"Items pattern: {', '.join(['FAIL' if i['shouldFail'] else 'SUCCESS' for i in items])}"
     )

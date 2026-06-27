@@ -73,7 +73,6 @@ def test_completion_config_defaults():
 
     assert config.min_successful is None
     assert config.tolerated_failure_count is None
-    assert config.tolerated_failure_percentage is None
 
 
 def test_completion_config_first_successful():
@@ -82,7 +81,6 @@ def test_completion_config_first_successful():
 
     assert config.min_successful == 1
     assert config.tolerated_failure_count is None
-    assert config.tolerated_failure_percentage is None
 
 
 def test_completion_config_all_completed():
@@ -91,7 +89,6 @@ def test_completion_config_all_completed():
 
     assert config.min_successful is None
     assert config.tolerated_failure_count is None
-    assert config.tolerated_failure_percentage is None
 
 
 def test_completion_config_all_successful():
@@ -100,7 +97,6 @@ def test_completion_config_all_successful():
 
     assert config.min_successful is None
     assert config.tolerated_failure_count == 0
-    assert config.tolerated_failure_percentage == 0
 
 
 def test_nesting_type_enum():
@@ -782,20 +778,18 @@ async def test_execution_counters_creation():
         total_tasks=10,
         min_successful=8,
         tolerated_failure_count=2,
-        tolerated_failure_percentage=20.0,
     )
 
     assert counters.total_tasks == 10
     assert counters.min_successful == 8
     assert counters.tolerated_failure_count == 2
-    assert counters.tolerated_failure_percentage == 20.0
     assert counters.success_count == 0
     assert counters.failure_count == 0
 
 
 async def test_execution_counters_complete_task():
     """Test ExecutionCounters complete_task method."""
-    counters = ExecutionCounters(5, 3, None, None)
+    counters = ExecutionCounters(5, 3, None)
 
     counters.complete_task()
     assert counters.success_count == 1
@@ -803,7 +797,7 @@ async def test_execution_counters_complete_task():
 
 async def test_execution_counters_fail_task():
     """Test ExecutionCounters fail_task method."""
-    counters = ExecutionCounters(5, 3, None, None)
+    counters = ExecutionCounters(5, 3, None)
 
     counters.fail_task()
     assert counters.failure_count == 1
@@ -811,7 +805,7 @@ async def test_execution_counters_fail_task():
 
 async def test_execution_counters_should_complete_min_successful():
     """Test ExecutionCounters should_complete with min successful reached."""
-    counters = ExecutionCounters(5, 3, None, None)
+    counters = ExecutionCounters(5, 3, None)
 
     assert not counters.should_complete()
 
@@ -824,7 +818,7 @@ async def test_execution_counters_should_complete_min_successful():
 
 async def test_execution_counters_should_complete_failure_count():
     """Test ExecutionCounters should_complete with failure count exceeded."""
-    counters = ExecutionCounters(5, 3, 1, None)
+    counters = ExecutionCounters(5, 3, 1)
 
     assert not counters.should_complete()
 
@@ -835,22 +829,9 @@ async def test_execution_counters_should_complete_failure_count():
     assert counters.should_complete()
 
 
-async def test_execution_counters_should_complete_failure_percentage():
-    """Test ExecutionCounters should_complete with failure percentage exceeded."""
-    counters = ExecutionCounters(10, 8, None, 15.0)
-
-    assert not counters.should_complete()
-
-    counters.fail_task()
-    assert not counters.should_complete()
-
-    counters.fail_task()
-    assert counters.should_complete()  # 20% > 15%
-
-
 async def test_execution_counters_is_all_completed():
     """Test ExecutionCounters is_all_completed method."""
-    counters = ExecutionCounters(3, 2, None, None)
+    counters = ExecutionCounters(3, 2, None)
 
     assert not counters.is_all_completed()
 
@@ -864,7 +845,7 @@ async def test_execution_counters_is_all_completed():
 
 async def test_execution_counters_is_min_successful_reached():
     """Test ExecutionCounters is_min_successful_reached method."""
-    counters = ExecutionCounters(5, 3, None, None)
+    counters = ExecutionCounters(5, 3, None)
 
     assert not counters.is_min_successful_reached()
 
@@ -878,7 +859,7 @@ async def test_execution_counters_is_min_successful_reached():
 
 async def test_execution_counters_is_failure_tolerance_exceeded():
     """Test ExecutionCounters is_failure_tolerance_exceeded method."""
-    counters = ExecutionCounters(10, 8, 2, None)
+    counters = ExecutionCounters(10, 8, 2)
 
     assert not counters.is_failure_tolerance_exceeded()
 
@@ -892,28 +873,14 @@ async def test_execution_counters_is_failure_tolerance_exceeded():
 
 async def test_execution_counters_zero_total_tasks():
     """Test ExecutionCounters with zero total tasks."""
-    counters = ExecutionCounters(0, 0, None, 50.0)
+    counters = ExecutionCounters(0, 0, None)
 
-    # Should not fail with division by zero
     assert not counters.is_failure_tolerance_exceeded()
-
-
-async def test_execution_counters_failure_percentage_edge_case():
-    """Test ExecutionCounters failure percentage at exact threshold."""
-    counters = ExecutionCounters(10, 5, None, 20.0)
-
-    # Exactly at threshold (20%)
-    counters.failure_count = 2
-    assert not counters.is_failure_tolerance_exceeded()
-
-    # Just over threshold
-    counters.failure_count = 3
-    assert counters.is_failure_tolerance_exceeded()
 
 
 async def test_execution_counters_increment_counts():
     """Test ExecutionCounters increments counts correctly on one event loop."""
-    counters = ExecutionCounters(100, 50, None, None)
+    counters = ExecutionCounters(100, 50, None)
     for _ in range(50):
         counters.complete_task()
 
@@ -1005,7 +972,6 @@ async def test_concurrent_executor_full_execution_path():
     completion_config = CompletionConfig(
         min_successful=2,
         tolerated_failure_count=None,
-        tolerated_failure_percentage=None,
     )
     executor = TestExecutor(
         executables=executables,
@@ -1060,7 +1026,6 @@ async def test_concurrent_executor_on_task_complete_timed_suspend():
     completion_config = CompletionConfig(
         min_successful=1,
         tolerated_failure_count=None,
-        tolerated_failure_percentage=None,
     )
 
     executor = TestExecutor(
@@ -1098,7 +1063,6 @@ async def test_concurrent_executor_on_task_complete_suspend():
     completion_config = CompletionConfig(
         min_successful=1,
         tolerated_failure_count=None,
-        tolerated_failure_percentage=None,
     )
 
     executor = TestExecutor(
@@ -1133,7 +1097,6 @@ async def test_concurrent_executor_on_task_complete_exception():
     completion_config = CompletionConfig(
         min_successful=1,
         tolerated_failure_count=None,
-        tolerated_failure_percentage=None,
     )
 
     executor = TestExecutor(
@@ -1182,7 +1145,6 @@ async def test_concurrent_executor_create_result_with_early_exit():
         # setting min successful to None to execute all children and avoid early stopping
         min_successful=None,
         tolerated_failure_count=None,
-        tolerated_failure_percentage=None,
     )
 
     executor = TestExecutor(
@@ -1219,7 +1181,6 @@ async def test_concurrent_executor_execute_item_in_child_context():
     completion_config = CompletionConfig(
         min_successful=1,
         tolerated_failure_count=None,
-        tolerated_failure_percentage=None,
     )
 
     executor = TestExecutor(
@@ -1243,7 +1204,7 @@ async def test_concurrent_executor_execute_item_in_child_context():
 
 async def test_execution_counters_impossible_to_succeed():
     """Test ExecutionCounters should_complete when impossible to succeed."""
-    counters = ExecutionCounters(5, 4, None, None)
+    counters = ExecutionCounters(5, 4, None)
 
     # Fail 3 tasks, leaving only 2 remaining (can't reach min_successful of 4)
     counters.fail_task()
@@ -1268,7 +1229,6 @@ async def test_concurrent_executor_create_result_failure_tolerance_exceeded():
     completion_config = CompletionConfig(
         min_successful=1,
         tolerated_failure_count=0,
-        tolerated_failure_percentage=None,
     )
 
     executor = TestExecutor(
@@ -1302,7 +1262,6 @@ async def test_single_task_suspend_bubbles_up():
     completion_config = CompletionConfig(
         min_successful=1,
         tolerated_failure_count=None,
-        tolerated_failure_percentage=None,
     )
 
     executor = TestExecutor(
@@ -1385,7 +1344,6 @@ async def test_concurrent_executor_with_single_task_resubmit():
     completion_config = CompletionConfig(
         min_successful=1,
         tolerated_failure_count=None,
-        tolerated_failure_percentage=None,
     )
 
     executor = TestExecutor(
@@ -1454,7 +1412,6 @@ async def test_concurrent_executor_with_timed_resubmit_while_other_task_running(
     completion_config = CompletionConfig(
         min_successful=2,
         tolerated_failure_count=None,
-        tolerated_failure_percentage=None,
     )
 
     executor = TestExecutor(
@@ -1510,7 +1467,6 @@ async def test_concurrent_executor_should_execution_suspend_with_timeout():
     completion_config = CompletionConfig(
         min_successful=1,
         tolerated_failure_count=None,
-        tolerated_failure_percentage=None,
     )
 
     executor = TestExecutor(
@@ -1548,7 +1504,6 @@ async def test_concurrent_executor_should_execution_suspend_indefinite():
     completion_config = CompletionConfig(
         min_successful=1,
         tolerated_failure_count=None,
-        tolerated_failure_percentage=None,
     )
 
     executor = TestExecutor(
@@ -1589,7 +1544,6 @@ async def test_concurrent_executor_create_result_with_failed_status():
     completion_config = CompletionConfig(
         min_successful=1,
         tolerated_failure_count=0,
-        tolerated_failure_percentage=None,
     )
 
     executor = TestExecutor(
@@ -1639,7 +1593,6 @@ async def test_concurrent_executor_mixed_suspend_states():
     completion_config = CompletionConfig(
         min_successful=1,
         tolerated_failure_count=None,
-        tolerated_failure_percentage=None,
     )
 
     executor = TestExecutor(
@@ -1680,7 +1633,6 @@ async def test_concurrent_executor_multiple_timed_suspends():
     completion_config = CompletionConfig(
         min_successful=1,
         tolerated_failure_count=None,
-        tolerated_failure_percentage=None,
     )
 
     executor = TestExecutor(
@@ -1747,7 +1699,6 @@ async def test_should_execution_suspend_earliest_timestamp_comparison():
     completion_config = CompletionConfig(
         min_successful=1,
         tolerated_failure_count=None,
-        tolerated_failure_percentage=None,
     )
 
     executor = TestExecutor(
@@ -1794,9 +1745,7 @@ async def test_concurrent_executor_execute_with_failing_task():
         return "test"
 
     executables = [Executable(0, failure_callable)]
-    completion_config = CompletionConfig(
-        min_successful=1, tolerated_failure_count=0, tolerated_failure_percentage=None
-    )
+    completion_config = CompletionConfig(min_successful=1, tolerated_failure_count=0)
 
     executor = TestExecutor(
         executables=executables,
@@ -1847,7 +1796,6 @@ async def test_create_result_no_failed_executables():
     completion_config = CompletionConfig(
         min_successful=1,
         tolerated_failure_count=None,
-        tolerated_failure_percentage=None,
     )
 
     executor = TestExecutor(
@@ -1885,7 +1833,6 @@ async def test_create_result_with_suspended_executable():
     completion_config = CompletionConfig(
         min_successful=1,
         tolerated_failure_count=None,
-        tolerated_failure_percentage=None,
     )
 
     executor = TestExecutor(
@@ -2867,7 +2814,6 @@ async def test_executor_does_not_deadlock_when_all_tasks_terminal_but_completion
     completion_config = CompletionConfig(
         min_successful=2,
         tolerated_failure_count=1,
-        tolerated_failure_percentage=None,
     )
 
     executor = TestExecutor(
@@ -3300,8 +3246,8 @@ async def test_from_items_tolerance_count_exceeded():
     assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
 
 
-async def test_from_items_tolerance_percentage_exceeded():
-    """Validates: Requirements 1.2 - Tolerance percentage."""
+async def test_from_items_tolerance_count_exceeded_multiple_failures():
+    """Validates: Requirements 1.2 - Tolerance count."""
     items = [
         BatchItem(0, BatchItemStatus.SUCCEEDED, result="ok"),
         BatchItem(
@@ -3314,8 +3260,7 @@ async def test_from_items_tolerance_percentage_exceeded():
             3, BatchItemStatus.FAILED, error=ErrorObject("msg", "Error", None, None)
         ),
     ]
-    config = CompletionConfig(tolerated_failure_percentage=50.0)
-    # 3 failures out of 4 = 75% > 50%
+    config = CompletionConfig(tolerated_failure_count=2)
     result = BatchResult.from_items(items, completion_config=config)
     assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
 
