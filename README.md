@@ -55,7 +55,7 @@ pip install "async-durable-execution[aioboto]"
 The `aioboto` extra installs the published `aiobotocore` package. When it is
 installed, the SDK creates an async Lambda client by default for durable
 checkpoint and state APIs. Without the extra, it continues to use the bundled
-`boto3` dependency through a threaded async adapter. Explicitly provided Lambda
+`botocore` dependency through a threaded async adapter. Explicitly provided Lambda
 API clients are detected as sync or async and wrapped accordingly.
 
 To share the SDK through a Lambda layer instead of vendoring it in each function

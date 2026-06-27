@@ -121,7 +121,7 @@ def durable_execution(
 
     Args:
         func: The user function to decorate
-        boto3_client: Optional boto3 Lambda client to use
+        boto3_client: Optional sync or async Lambda API client to use
         service_client: Optional durable service client to use. Intended for
             testing and local execution tooling.
         plugins: Optional list of plugins to use (EXPERIMENTAL: This
@@ -140,7 +140,7 @@ def durable_execution(
     plugin_executor = PluginExecutor(config.plugins)
 
     # Use the explicitly provided durable client when present. Otherwise, delay
-    # boto3 client construction until invocation so importing decorated handlers
+    # Lambda API client construction until invocation so importing decorated handlers
     # does not require AWS environment configuration.
     active_service_client = config.service_client
 

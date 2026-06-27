@@ -7,8 +7,8 @@ import importlib.util
 import logging
 from typing import Any, cast
 
-import boto3
 from botocore.config import Config
+from botocore.session import get_session
 
 from .__about__ import __version__
 from .exceptions import CheckpointError, GetExecutionStateError
@@ -37,9 +37,11 @@ def aioboto_is_installed() -> bool:
 
 
 def create_default_client() -> LambdaApiClient:
-    """Create the default boto3 Lambda client used for durable API calls."""
+    """Create the default botocore Lambda client used for durable API calls."""
+    session = get_session()
     return cast(
-        "LambdaApiClient", boto3.client("lambda", config=_create_client_config())
+        "LambdaApiClient",
+        session.create_client("lambda", config=_create_client_config()),
     )
 
 
@@ -73,7 +75,7 @@ def create_default_service_client(
 
 
 class ThreadedSyncLambdaClient(DurableServiceClient):
-    """Adapt the sync boto3 Lambda client to the async service interface."""
+    """Adapt the sync botocore Lambda client to the async service interface."""
 
     _cached_boto_client: LambdaApiClient | None = None
 

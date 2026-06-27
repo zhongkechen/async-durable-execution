@@ -8,8 +8,8 @@ from threading import Lock
 from typing import TYPE_CHECKING, Any, Protocol
 from uuid import uuid4
 
-import boto3  # type: ignore
 from botocore.config import Config  # type: ignore
+from botocore.session import get_session  # type: ignore
 
 from async_durable_execution.execution import (
     DurableExecutionInvocationInput,
@@ -42,9 +42,10 @@ _LAMBDA_CLIENT_CONFIG = Config(
 
 
 def create_lambda_client(endpoint_url: str | None, region_name: str) -> Any:
-    """Create a boto3 Lambda client configured for durable function invocations."""
+    """Create a botocore Lambda client configured for durable function invocations."""
 
-    return boto3.client(
+    session = get_session()
+    return session.create_client(
         "lambda",
         endpoint_url=endpoint_url,
         region_name=region_name,

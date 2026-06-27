@@ -55,14 +55,14 @@ from async_durable_execution.types import DurableServiceClient
 
 @pytest.fixture
 def reset_lambda_client_cache():
-    """Reset the class-level boto3 client cache before and after each test."""
+    """Reset the class-level botocore client cache before and after each test."""
     ThreadedSyncLambdaClient._cached_boto_client = None  # noqa: SLF001
     yield
     ThreadedSyncLambdaClient._cached_boto_client = None  # noqa: SLF001
 
 
-@patch("async_durable_execution.client.boto3")
-async def test_lambda_client_checkpoint(mock_boto3):
+@patch("async_durable_execution.client.get_session")
+async def test_lambda_client_checkpoint(_mock_get_session):
     """Test ThreadedSyncLambdaClient.checkpoint method."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
@@ -372,18 +372,19 @@ async def test_async_lambda_client_get_execution_state():
 
 
 @patch.dict("os.environ", {}, clear=True)
-@patch("async_durable_execution.client.boto3.client")
+@patch("async_durable_execution.client.get_session")
 async def test_create_default_client_builds_lambda_client_with_expected_config(
-    mock_boto_client, reset_lambda_client_cache
+    mock_get_session, reset_lambda_client_cache
 ):
-    """Test create_default_client builds a lambda boto client with expected config."""
+    """Test create_default_client builds a lambda botocore client with expected config."""
     mock_client = Mock()
-    mock_boto_client.return_value = mock_client
+    mock_get_session.return_value.create_client.return_value = mock_client
 
     client = create_default_client()
 
-    mock_boto_client.assert_called_once()
-    call_args = mock_boto_client.call_args
+    mock_get_session.assert_called_once_with()
+    mock_get_session.return_value.create_client.assert_called_once()
+    call_args = mock_get_session.return_value.create_client.call_args
     assert call_args[0][0] == "lambda"
     assert "config" in call_args[1]
     config = call_args[1]["config"]
@@ -441,10 +442,10 @@ async def test_create_default_service_client_uses_aioboto_when_installed(
 
 
 @patch("async_durable_execution.client.aioboto_is_installed", return_value=True)
-async def test_create_default_service_client_uses_explicit_boto3_client(
+async def test_create_default_service_client_uses_explicit_botocore_client(
     _mock_aioboto_is_installed,
 ):
-    """Test explicit boto3 clients keep using the sync adapter."""
+    """Test explicit botocore clients keep using the sync adapter."""
     mock_client = Mock()
 
     service_client = create_default_service_client(mock_client)
@@ -459,7 +460,7 @@ async def test_create_default_service_client_uses_sync_client_when_aioboto_missi
     _mock_aioboto_is_installed,
     mock_create_default_client,
 ):
-    """Test default service client falls back to boto3 when aioboto is missing."""
+    """Test default service client falls back to botocore when aioboto is missing."""
     mock_client = Mock()
     mock_create_default_client.return_value = mock_client
 
@@ -485,18 +486,19 @@ async def test_create_default_service_client_uses_explicit_async_client(
 
 
 @patch.dict("os.environ", {"AWS_ENDPOINT_URL_LAMBDA": "http://localhost:3000"})
-@patch("async_durable_execution.client.boto3.client")
-async def test_create_default_client_defers_endpoint_handling_to_boto3(
-    mock_boto_client, reset_lambda_client_cache
+@patch("async_durable_execution.client.get_session")
+async def test_create_default_client_builds_botocore_client_with_lambda_endpoint_env(
+    mock_get_session, reset_lambda_client_cache
 ):
-    """Test create_default_client still delegates endpoint handling to boto3."""
+    """Test create_default_client delegates endpoint handling to botocore."""
     mock_client = Mock()
-    mock_boto_client.return_value = mock_client
+    mock_get_session.return_value.create_client.return_value = mock_client
 
     client = create_default_client()
 
-    mock_boto_client.assert_called_once()
-    call_args = mock_boto_client.call_args
+    mock_get_session.assert_called_once_with()
+    mock_get_session.return_value.create_client.assert_called_once()
+    call_args = mock_get_session.return_value.create_client.call_args
     assert call_args[0][0] == "lambda"
     assert "config" in call_args[1]
     config = call_args[1]["config"]
