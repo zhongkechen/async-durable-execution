@@ -75,12 +75,7 @@ async def test_wait_handler_not_completed():
     not_found_result.is_succeeded.return_value = False
     not_found_result.is_existent.return_value = False
 
-    # Second call: checkpoint exists but not completed (no immediate response)
-    started_result = Mock(spec=CheckpointedResult)
-    started_result.is_succeeded.return_value = False
-    started_result.is_existent.return_value = True
-
-    mock_state.operations.get.side_effect = [not_found_result, started_result]
+    mock_state.operations.get.return_value = not_found_result
 
     with pytest.raises(SuspendExecution, match="Wait for 30 seconds"):
         await wait_handler(
@@ -91,8 +86,7 @@ async def test_wait_handler_not_completed():
             ),
         )
 
-    # Should be called twice: once before checkpoint, once after to check for immediate response
-    assert mock_state.operations.get.call_count == 2
+    mock_state.operations.get.assert_called_once_with("wait2")
 
     expected_operation = OperationUpdate(
         operation_id="wait2",
@@ -116,12 +110,7 @@ async def test_wait_handler_with_none_name():
     not_found_result.is_succeeded.return_value = False
     not_found_result.is_existent.return_value = False
 
-    # Second call: checkpoint exists but not completed (no immediate response)
-    started_result = Mock(spec=CheckpointedResult)
-    started_result.is_succeeded.return_value = False
-    started_result.is_existent.return_value = True
-
-    mock_state.operations.get.side_effect = [not_found_result, started_result]
+    mock_state.operations.get.return_value = not_found_result
 
     with pytest.raises(SuspendExecution, match="Wait for 5 seconds"):
         await wait_handler(
@@ -132,8 +121,7 @@ async def test_wait_handler_with_none_name():
             seconds=5,
         )
 
-    # Should be called twice: once before checkpoint, once after to check for immediate response
-    assert mock_state.operations.get.call_count == 2
+    mock_state.operations.get.assert_called_once_with("wait3")
 
     expected_operation = OperationUpdate(
         operation_id="wait3",
@@ -169,17 +157,11 @@ async def test_wait_handler_with_existent():
     mock_state.create_checkpoint.assert_not_called()
 
 
-# Immediate response handling tests
+# Start/replay handling tests
 
 
-async def test_wait_status_evaluation_after_checkpoint():
-    """Test that status is evaluated twice: before and after checkpoint creation.
-
-    This verifies the immediate response pattern:
-    1. Check status (checkpoint doesn't exist)
-    2. Create checkpoint with is_sync=True
-    3. Check status again (catches immediate response)
-    """
+async def test_wait_starts_without_second_status_evaluation():
+    """Test that start creates the checkpoint and suspends without re-reading state."""
     # Arrange
     mock_state = Mock(spec=ExecutionState)
 
@@ -188,12 +170,7 @@ async def test_wait_status_evaluation_after_checkpoint():
     not_found_result.is_succeeded.return_value = False
     not_found_result.is_existent.return_value = False
 
-    # Second call: checkpoint exists but not completed (no immediate response)
-    started_result = Mock(spec=CheckpointedResult)
-    started_result.is_succeeded.return_value = False
-    started_result.is_existent.return_value = True
-
-    mock_state.operations.get.side_effect = [not_found_result, started_result]
+    mock_state.operations.get.return_value = not_found_result
 
     executor = WaitOperationExecutor(
         seconds=30,
@@ -207,9 +184,7 @@ async def test_wait_status_evaluation_after_checkpoint():
     with pytest.raises(SuspendExecution):
         await run_async(executor.process())
 
-    # Assert - verify status checked twice
-    assert mock_state.operations.get.call_count == 2
-    mock_state.operations.get.assert_any_call("wait_eval")
+    mock_state.operations.get.assert_called_once_with("wait_eval")
 
     # Verify checkpoint created with is_sync=True
     expected_operation = OperationUpdate(
@@ -226,26 +201,15 @@ async def test_wait_status_evaluation_after_checkpoint():
     )
 
 
-async def test_wait_immediate_success_handling():
-    """Test that immediate SUCCEEDED response returns without suspend.
-
-    When the checkpoint returns SUCCEEDED on the second status check,
-    the operation should return immediately without suspending.
-    """
+async def test_wait_new_operation_suspends_after_checkpoint_creation():
+    """Test that a new wait suspends immediately after checkpoint creation."""
     # Arrange
     mock_state = Mock(spec=ExecutionState)
 
     # First call: checkpoint doesn't exist
     not_found_result = CheckpointedResult.create_not_found()
 
-    succeeded_operation = Operation(
-        operation_id="wait_immediate",
-        operation_type=OperationType.WAIT,
-        status=OperationStatus.SUCCEEDED,
-    )
-    succeeded_result = CheckpointedResult.create_from_operation(succeeded_operation)
-
-    mock_state.operations.get.side_effect = [not_found_result, succeeded_result]
+    mock_state.operations.get.return_value = not_found_result
 
     executor = WaitOperationExecutor(
         seconds=5,
@@ -255,25 +219,17 @@ async def test_wait_immediate_success_handling():
         ),
     )
 
-    # Act
-    result = await run_async(executor.process())
-
-    # Assert - verify immediate return without suspend
-    assert result is None  # Wait returns None
+    with pytest.raises(SuspendExecution, match="Wait for 5 seconds"):
+        await run_async(executor.process())
 
     # Verify checkpoint was created
     assert mock_state.create_checkpoint.call_count == 1
 
-    # Verify status checked twice
-    assert mock_state.operations.get.call_count == 2
+    mock_state.operations.get.assert_called_once_with("wait_immediate")
 
 
 async def test_wait_no_immediate_response_suspends():
-    """Test that wait suspends when no immediate response received.
-
-    When the checkpoint returns STARTED (not completed) on the second check,
-    the operation should suspend to wait for timer completion.
-    """
+    """Test that wait suspends after creating a checkpoint."""
     # Arrange
     mock_state = Mock(spec=ExecutionState)
 
@@ -282,12 +238,7 @@ async def test_wait_no_immediate_response_suspends():
     not_found_result.is_succeeded.return_value = False
     not_found_result.is_existent.return_value = False
 
-    # Second call: checkpoint exists but not completed
-    started_result = Mock(spec=CheckpointedResult)
-    started_result.is_succeeded.return_value = False
-    started_result.is_existent.return_value = True
-
-    mock_state.operations.get.side_effect = [not_found_result, started_result]
+    mock_state.operations.get.return_value = not_found_result
 
     executor = WaitOperationExecutor(
         seconds=60,
@@ -307,8 +258,7 @@ async def test_wait_no_immediate_response_suspends():
     # Verify checkpoint was created
     assert mock_state.create_checkpoint.call_count == 1
 
-    # Verify status checked twice
-    assert mock_state.operations.get.call_count == 2
+    mock_state.operations.get.assert_called_once_with("wait_suspend")
 
 
 async def test_wait_already_completed_no_checkpoint():
@@ -352,7 +302,7 @@ async def test_wait_already_completed_no_checkpoint():
 
 
 async def test_wait_with_various_durations():
-    """Test wait operations with different durations handle immediate response correctly."""
+    """Test wait operations with different durations suspend with the right delay."""
     for seconds in [1, 30, 300, 3600]:
         # Arrange
         mock_state = Mock(spec=ExecutionState)
@@ -360,17 +310,7 @@ async def test_wait_with_various_durations():
         # First call: checkpoint doesn't exist
         not_found_result = CheckpointedResult.create_not_found()
 
-        succeeded_operation = Operation(
-            operation_id=f"wait_duration_{seconds}",
-            operation_type=OperationType.WAIT,
-            status=OperationStatus.SUCCEEDED,
-        )
-        succeeded_result = CheckpointedResult.create_from_operation(succeeded_operation)
-
-        mock_state.operations.get.side_effect = [
-            not_found_result,
-            succeeded_result,
-        ]
+        mock_state.operations.get.return_value = not_found_result
 
         executor = WaitOperationExecutor(
             seconds=seconds,
@@ -381,36 +321,23 @@ async def test_wait_with_various_durations():
         )
 
         # Act
-        result = await run_async(executor.process())
+        with pytest.raises(SuspendExecution, match=f"Wait for {seconds} seconds"):
+            await run_async(executor.process())
 
         # Assert
-        assert result is None
-        assert mock_state.operations.get.call_count == 2
+        mock_state.operations.get.assert_called_once_with(f"wait_duration_{seconds}")
 
         # Verify correct wait duration in checkpoint
         call_args = mock_state.create_checkpoint.call_args
         assert call_args[1]["operation_update"].wait_options.wait_seconds == seconds
 
 
-async def test_wait_suspends_when_second_check_returns_started():
-    """Test backward compatibility: when the second checkpoint check returns
-    STARTED (not terminal), the wait operation suspends normally.
-    """
+async def test_wait_suspends_without_second_check():
+    """Test that a new wait suspends without checking the created operation."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
 
-    # First call: checkpoint doesn't exist
-    # Second call: checkpoint returns STARTED (no immediate response)
-    mock_state.operations.get.side_effect = [
-        CheckpointedResult.create_not_found(),
-        CheckpointedResult.create_from_operation(
-            Operation(
-                operation_id="wait-1",
-                operation_type=OperationType.WAIT,
-                status=OperationStatus.STARTED,
-            )
-        ),
-    ]
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     executor = WaitOperationExecutor(
         seconds=5,
@@ -423,28 +350,16 @@ async def test_wait_suspends_when_second_check_returns_started():
     with pytest.raises(SuspendExecution):
         await run_async(executor.process())
 
-    # Assert - behaves like "old way"
-    assert mock_state.operations.get.call_count == 2  # Double-check happened
-    mock_state.create_checkpoint.assert_called_once()  # START checkpoint created
+    mock_state.operations.get.assert_called_once_with("wait-1")
+    mock_state.create_checkpoint.assert_called_once()
 
 
-async def test_wait_suspends_when_second_check_returns_started_duplicate():
-    """Test backward compatibility: when the second checkpoint check returns
-    STARTED (not terminal), the wait operation suspends normally.
-    """
+async def test_wait_suspends_without_second_check_duplicate():
+    """Test that a new wait suspends without checking the created operation."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
 
-    # First call: checkpoint doesn't exist
-    # Second call: checkpoint returns STARTED (no immediate response)
-    not_found = CheckpointedResult.create_not_found()
-    started_op = Operation(
-        operation_id="wait-1",
-        operation_type=OperationType.WAIT,
-        status=OperationStatus.STARTED,
-    )
-    started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.operations.get.side_effect = [not_found, started]
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     executor = WaitOperationExecutor(
         seconds=5,
@@ -457,6 +372,5 @@ async def test_wait_suspends_when_second_check_returns_started_duplicate():
     with pytest.raises(SuspendExecution):
         await run_async(executor.process())
 
-    # Assert - behaves like "old way"
-    assert mock_state.operations.get.call_count == 2  # Double-check happened
-    mock_state.create_checkpoint.assert_called_once()  # START checkpoint created
+    mock_state.operations.get.assert_called_once_with("wait-1")
+    mock_state.create_checkpoint.assert_called_once()
