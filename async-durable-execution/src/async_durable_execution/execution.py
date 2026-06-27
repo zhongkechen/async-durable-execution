@@ -12,7 +12,7 @@ from .async_tools import (
     invoke_user_callable,
     assert_async_callable,
 )
-from . import DurableContext
+from .primitive.child import DurableContext
 from .exceptions import (
     CheckpointError,
     ExecutionError,
