@@ -16,14 +16,16 @@ async def test_invoke_uses_mocked_child_result(durable_runner, request):
     child_result = {"price": 42, "currency": "USD"}
     runner_mode = request.config.getoption("--runner-mode")
     child_function_name = _get_child_function_name(runner_mode)
+    input_payload = {
+        "order_id": "order-123",
+        "child_function_name": child_function_name,
+    }
+    if runner_mode != "cloud":
+        input_payload["tenant_id"] = "tenant-abc"
 
     with durable_runner(
         handler=invoke.handler,
-        input={
-            "order_id": "order-123",
-            "child_function_name": child_function_name,
-            "tenant_id": "tenant-abc",
-        },
+        input=input_payload,
         timeout=10,
     ) as runner:
         if runner.mode != "cloud":
