@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, TypeVar
 
-from .child import _get_durable_context
+from .child import get_durable_context
 
 from ..exceptions import (
     CallableRuntimeError,
@@ -170,7 +170,7 @@ async def invoke(
         serdes_result: Optional deserializer for the invocation result.
         tenant_id: Optional tenant identifier for the chained invocation.
     """
-    context = _get_durable_context("invoke")
+    context = get_durable_context("invoke")
     with context._replay_aware():
         operation_id = context.step_counter.create_step_id()
 

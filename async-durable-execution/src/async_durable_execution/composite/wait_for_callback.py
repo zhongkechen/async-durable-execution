@@ -12,10 +12,7 @@ from ..context import get_current_context, reset_current_context, set_current_co
 from ..models import RetryDecision
 from ..primitive.base import OperationContext
 from ..primitive.callback import Callback, create_callback
-from ..primitive.child import (
-    _get_durable_context,
-    _run_in_child_context_in_context,
-)
+from ..primitive.child import run_in_child_context
 from ..primitive.step import step as step_operation
 
 if TYPE_CHECKING:
@@ -51,7 +48,6 @@ async def wait_for_callback_handler(
             callback_id=callback.callback_id,
             execution_state=step_context.execution_state,
             operation_identifier=step_context.operation_identifier,
-            lambda_context=step_context.lambda_context,
         )
         token = set_current_context(callback_context)
         try:
@@ -89,13 +85,11 @@ async def wait_for_callback(
         serdes: Optional serializer for callback results and submitter results.
         retry_strategy: Optional retry strategy for submitter failures.
     """
-    context = _get_durable_context("wait_for_callback")
     assert_async_callable(submitter, label="submitter")
     step_name = name if name is not None else getattr(submitter, "__name__", None)
     logger.debug("wait_for_callback name: %s", step_name)
 
-    return await _run_in_child_context_in_context(
-        context,
+    return await run_in_child_context(
         wait_for_callback_handler(
             submitter,
             step_name,

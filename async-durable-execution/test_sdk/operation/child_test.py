@@ -25,7 +25,7 @@ from async_durable_execution.models import (
     OperationType,
 )
 from async_durable_execution.primitive.child import (
-    child_handler as async_child_handler,
+    ChildOperationExecutor,
     DurableContext,
     OrphanedChildException,
     run_in_child_context,
@@ -61,7 +61,18 @@ async def child_handler(*args, **kwargs):
         state.wrap_user_function.return_value = _asyncify(
             state.wrap_user_function.return_value
         )
-    return await async_child_handler(*args, **kwargs)
+    func = args[0] if args else kwargs.pop("func")
+    state = args[1] if len(args) > 1 else kwargs.pop("state")
+    operation_identifier = (
+        args[2] if len(args) > 2 else kwargs.pop("operation_identifier")
+    )
+    executor = ChildOperationExecutor(
+        func,
+        state,
+        operation_identifier,
+        **kwargs,
+    )
+    return await executor.process()
 
 
 def test_orphaned_child_exception_is_base_exception():

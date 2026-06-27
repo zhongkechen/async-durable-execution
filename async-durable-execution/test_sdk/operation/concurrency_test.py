@@ -2518,7 +2518,7 @@ async def test_operation_id_determinism_across_shuffles():
     # Track operation_id -> result associations
     captured_associations = []
 
-    async def patched_child_handler(
+    def patched_child_handler(
         func,
         execution_state,
         operation_identifier,
@@ -2527,11 +2527,17 @@ async def test_operation_id_determinism_across_shuffles():
         **_kwargs,
     ):
         """Patched child handler that captures operation_id -> result mapping."""
-        assert is_virtual
-        assert operation_identifier.sub_type == "TEST_ITER"
-        result = await invoke_callable(func)
-        captured_associations.append((operation_identifier.operation_id, result))
-        return result
+        mock_executor = Mock()
+
+        async def process():
+            assert is_virtual
+            assert operation_identifier.sub_type == "TEST_ITER"
+            result = await invoke_callable(func)
+            captured_associations.append((operation_identifier.operation_id, result))
+            return result
+
+        mock_executor.process = AsyncMock(side_effect=process)
+        return mock_executor
 
     execution_state = create_execution_state()
 
@@ -2580,7 +2586,7 @@ async def test_operation_id_determinism_across_shuffles():
         executor_context.create_child_context = create_child_context
 
         with patch(
-            "async_durable_execution.composite.concurrency.child_handler",
+            "async_durable_execution.composite.concurrency.ChildOperationExecutor",
             patched_child_handler,
         ):
             await run_async(executor.execute(execution_state, executor_context))

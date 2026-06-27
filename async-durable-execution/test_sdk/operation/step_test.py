@@ -367,6 +367,7 @@ async def test_step_handler_passes_lambda_context_to_step_context():
     )
     lambda_context = Mock()
     lambda_context.aws_request_id = "request-123"
+    mock_state.lambda_context = lambda_context
 
     async def step_callable():
         current_context = get_current_context()
@@ -383,7 +384,6 @@ async def test_step_handler_passes_lambda_context_to_step_context():
             "test_step",
         ),
         step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY,
-        lambda_context=lambda_context,
     )
 
     result = await executor.process()

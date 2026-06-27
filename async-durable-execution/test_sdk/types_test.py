@@ -1,7 +1,7 @@
 """Tests for the types module."""
 
 from datetime import timedelta
-from unittest.mock import ANY, AsyncMock, Mock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
 from async_durable_execution import (
     create_callback,
@@ -29,6 +29,12 @@ from async_durable_execution.plugin import (
 )
 from async_durable_execution.serdes import ExtendedTypeSerDes
 from async_durable_execution.types import DurableServiceClient, SummaryGenerator
+
+
+def make_async_executor(result):
+    mock_executor = MagicMock()
+    mock_executor.process = AsyncMock(return_value=result)
+    return mock_executor
 
 
 def test_additional_public_types_importable_from_package_root():
@@ -86,8 +92,12 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
         return "submitted"
 
     mock_wait = AsyncMock(return_value=None)
-    mock_child = AsyncMock(side_effect=["child_result", "callback_result"])
-    mock_child_handler = AsyncMock(side_effect=[["mapped"], ["parallel"]])
+    mock_callback_child = AsyncMock(return_value="callback_result")
+    mock_child_executor = MagicMock(return_value=make_async_executor("child_result"))
+    mock_map_child_executor = MagicMock(return_value=make_async_executor(["mapped"]))
+    mock_parallel_child_executor = MagicMock(
+        return_value=make_async_executor(["parallel"])
+    )
 
     step_executor = AsyncMock()
     step_executor.process.return_value = "step_result"
@@ -107,20 +117,20 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
                 "async_durable_execution.primitive.wait.WaitOperationExecutor"
             ) as mock_wait_executor,
             patch(
-                "async_durable_execution.primitive.child._run_in_child_context_in_context",
-                mock_child,
+                "async_durable_execution.primitive.child.ChildOperationExecutor",
+                mock_child_executor,
             ),
             patch(
-                "async_durable_execution.composite.wait_for_callback._run_in_child_context_in_context",
-                mock_child,
+                "async_durable_execution.composite.wait_for_callback.run_in_child_context",
+                mock_callback_child,
             ),
             patch(
-                "async_durable_execution.composite.map.child_handler",
-                mock_child_handler,
+                "async_durable_execution.composite.map.ChildOperationExecutor",
+                mock_map_child_executor,
             ),
             patch(
-                "async_durable_execution.composite.parallel.child_handler",
-                mock_child_handler,
+                "async_durable_execution.composite.parallel.ChildOperationExecutor",
+                mock_parallel_child_executor,
             ),
         ):
             mock_step_executor.return_value = step_executor
@@ -174,11 +184,12 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
         heartbeat_timeout=None,
     )
     callback_executor.process.assert_awaited_once()
-    assert mock_child.await_count == 2
-    assert mock_child.await_args_list[0].kwargs["func"] is test_callable
-    assert mock_child.await_args_list[0].kwargs["name"] == "test_child"
-    assert mock_child.await_args_list[1].kwargs["name"] == "test_wait_for_callback"
-    assert mock_child_handler.await_count == 2
+    mock_child_executor.assert_called_once()
+    assert mock_child_executor.call_args.args[2].name == "test_child"
+    mock_callback_child.assert_awaited_once()
+    assert mock_callback_child.await_args.kwargs["name"] == "test_wait_for_callback"
+    mock_map_child_executor.assert_called_once()
+    mock_parallel_child_executor.assert_called_once()
 
 
 async def test_concrete_callback_implementation():

@@ -969,10 +969,12 @@ async def test_map_handler_replay_with_replay_children():
         assert result == expected_batch_result
 
 
-@patch("async_durable_execution.composite.map.child_handler")
+@patch("async_durable_execution.composite.map.ChildOperationExecutor")
 async def test_map_iterates_items_iterable_once(mock_handler):
     """Test map materializes one-shot items iterables exactly once."""
-    mock_handler.return_value = "map_result"
+    mock_executor = Mock()
+    mock_executor.process = AsyncMock(return_value="map_result")
+    mock_handler.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"

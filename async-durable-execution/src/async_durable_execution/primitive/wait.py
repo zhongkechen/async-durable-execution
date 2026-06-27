@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from ..exceptions import ValidationError, suspend_with_optional_resume_delay
 from ..config import duration_to_seconds
-from .child import _get_durable_context
+from .child import get_durable_context
 from ..models import (
     Operation,
     OperationIdentifier,
@@ -92,7 +92,7 @@ async def wait(duration: timedelta, *, name: str | None = None) -> None:
         duration: How long the workflow should pause. Must be at least one second.
         name: Optional operation name shown in execution history.
     """
-    context = _get_durable_context("wait")
+    context = get_durable_context("wait")
     seconds = duration_to_seconds(duration)
     if seconds < 1:
         msg = "duration must be at least 1 second"

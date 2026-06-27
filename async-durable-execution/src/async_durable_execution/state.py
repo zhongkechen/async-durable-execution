@@ -33,6 +33,7 @@ from .primitive.child import OrphanedChildException
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
+    from .types import LambdaContext
 
 logger = logging.getLogger(__name__)
 
@@ -98,11 +99,13 @@ class ExecutionState:
         initial_checkpoint_token: str,
         service_client: DurableServiceClient,
         plugin_executor: PluginExecutor,
+        lambda_context: LambdaContext | None = None,
         batcher_config: CheckpointBatcherConfig | None = None,
         operations: MutableMapping[str, Operation] | None = None,
     ):
         self.operations: MutableMapping[str, Operation] = dict(operations or {})
         self.durable_execution_arn: str = durable_execution_arn
+        self.lambda_context: LambdaContext | None = lambda_context
         self._current_checkpoint_token: str = initial_checkpoint_token
         self._service_client: DurableServiceClient = service_client
         self._plugin_executor: PluginExecutor = plugin_executor

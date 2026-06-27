@@ -238,6 +238,7 @@ async def _wrapper_async(
         initial_checkpoint_token=invocation_input.checkpoint_token,
         service_client=service_client,
         plugin_executor=plugin_executor,
+        lambda_context=context,
     )
 
     try:
@@ -248,7 +249,6 @@ async def _wrapper_async(
         root_context = DurableContext(
             execution_state=execution_state,
             operation_identifier=OperationIdentifier.create_execution_op(),
-            lambda_context=context,
             replaying=execution_state.has_prior_operations(),
         )
 

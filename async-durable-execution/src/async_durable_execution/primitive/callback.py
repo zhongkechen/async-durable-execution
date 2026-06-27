@@ -6,7 +6,7 @@ import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
-from .child import _get_durable_context
+from .child import get_durable_context
 from ..config import duration_to_seconds
 from ..exceptions import ExecutionError, SuspendExecution, TerminationReason
 from ..models import (
@@ -144,7 +144,7 @@ async def create_callback(
         heartbeat_timeout: Optional maximum time to wait between callback heartbeats.
         serdes: Optional serializer for callback results.
     """
-    context = _get_durable_context("create_callback")
+    context = get_durable_context("create_callback")
     with context._replay_aware():
         operation_id: str = context.step_counter.create_step_id()
 

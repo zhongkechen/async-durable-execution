@@ -18,9 +18,9 @@ from typing import (
 
 from ..primitive.base import CheckpointedResult, get_checkpoint_result
 from ..primitive.child import (
+    ChildOperationExecutor,
     DurableContext,
-    child_handler,
-    _get_durable_context,
+    get_durable_context,
 )
 
 from ..async_tools import (
@@ -122,7 +122,6 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
         map_item_context = MapItemContext(
             execution_state=child_context.execution_state,
             operation_identifier=child_context.operation_identifier,
-            lambda_context=child_context.lambda_context,
             step_id_prefix=child_context.step_id_prefix,
             index=executable.index,
             items=self.items,
@@ -223,7 +222,7 @@ async def map(
         nesting_type: Whether map iterations use nested or flat operation ids.
         item_namer: Optional callable for naming map item iterations.
     """
-    context = _get_durable_context("map")
+    context = get_durable_context("map")
     assert_async_callable(func)
     items_sequence = list(items)
     map_name = name if name is not None else getattr(func, "__name__", None)
@@ -237,8 +236,8 @@ async def map(
         )
         map_context = context.create_child_context(operation_id=operation_id)
 
-        return await child_handler(
-            func=map_handler(
+        executor = ChildOperationExecutor(
+            map_handler(
                 items=items_sequence,
                 func=func,
                 execution_state=context.execution_state,
@@ -252,8 +251,8 @@ async def map(
                 nesting_type=nesting_type,
                 item_namer=item_namer,
             ),
-            state=context.execution_state,
-            operation_identifier=operation_identifier,
+            context.execution_state,
+            operation_identifier,
             serdes=serdes,
-            item_serdes=None,
         )
+        return await executor.process()
