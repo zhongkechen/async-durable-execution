@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 from .async_tools import (
     invoke_user_callable,
-    assert_async_callable,
 )
 from .primitive.child import DurableContext
 from .exceptions import (
@@ -135,7 +134,6 @@ def durable_execution(
         )
     config = DurableConfig(**kwargs)
     logger.debug("Starting durable execution handler...")
-    assert_async_callable(func, label="func")
     plugin_executor = PluginExecutor(config.plugins)
 
     # Use the explicitly provided durable client when present. Otherwise, delay

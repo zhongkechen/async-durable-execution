@@ -1,47 +1,16 @@
 from __future__ import annotations
 
 import functools
-import inspect
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, ParamSpec, TypeVar, cast
 
 from .context import reset_current_context, set_current_context
-from .exceptions import ValidationError
 
 if TYPE_CHECKING:
     from .primitive.base import OperationContext
 
 T = TypeVar("T")
 Params = ParamSpec("Params")
-
-
-def is_async_callable(func: Callable[..., object]) -> bool:
-    """Return whether `func` can be awaited by durable operations."""
-    if inspect.iscoroutinefunction(func):
-        return True
-    if isinstance(func, functools.partial):
-        return is_async_callable(func.func)
-
-    call = getattr(func, "__call__", None)
-    return call is not None and inspect.iscoroutinefunction(call)
-
-
-def assert_async_callable(
-    func: Callable[..., object],
-    *,
-    label: str = "func",
-) -> None:
-    """Validate that a durable-operation callback is asynchronous."""
-    if is_async_callable(func):
-        return
-
-    name = getattr(func, "__name__", None) or type(func).__name__
-
-    msg = (
-        f"`{label}` must be an async function. "
-        f"Non-async callables are no longer supported: {name}."
-    )
-    raise ValidationError(msg)
 
 
 def durable_callable(
@@ -61,8 +30,6 @@ def durable_callable(
     if isinstance(func, staticmethod):
         return staticmethod(durable_callable(func.__func__))  # type: ignore[return-value]
 
-    assert_async_callable(func)
-
     @functools.wraps(func)
     def wrapper(
         *args: Params.args, **kwargs: Params.kwargs
@@ -74,12 +41,6 @@ def durable_callable(
     return wrapper
 
 
-async def invoke_callable(func: Callable[..., Awaitable[T]], *args, **kwargs) -> T:
-    """Call an async function after validating it is awaitable."""
-    assert_async_callable(func)
-    return await func(*args, **kwargs)
-
-
 async def invoke_user_callable(
     context: OperationContext,
     func: Callable[..., Awaitable[T]],
@@ -89,10 +50,6 @@ async def invoke_user_callable(
     """Invoke user code while temporarily binding the supplied durable context."""
     token = set_current_context(context)
     try:
-        return await invoke_callable(
-            func,
-            *args,
-            **kwargs,
-        )
+        return await func(*args, **kwargs)
     finally:
         reset_current_context(token)

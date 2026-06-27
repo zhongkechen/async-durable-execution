@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
-from ..async_tools import assert_async_callable, durable_callable, invoke_user_callable
+from ..async_tools import durable_callable, invoke_user_callable
 from ..context import get_current_context
 from ..models import RetryDecision
 from ..primitive.base import OperationContext
@@ -81,7 +81,6 @@ async def wait_for_callback(
         serdes: Optional serializer for callback results and submitter results.
         retry_strategy: Optional retry strategy for submitter failures.
     """
-    assert_async_callable(submitter, label="submitter")
     context_name = name if name is not None else getattr(submitter, "__name__", None)
     logger.debug("wait_for_callback name: %s", context_name)
 
