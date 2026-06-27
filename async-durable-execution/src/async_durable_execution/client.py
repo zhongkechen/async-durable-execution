@@ -33,7 +33,7 @@ def _create_client_config() -> Config:
 
 def aioboto_is_installed() -> bool:
     """Return whether the optional aioboto dependency is available."""
-    return importlib.util.find_spec("aioboto3") is not None
+    return importlib.util.find_spec("aiobotocore") is not None
 
 
 def create_default_client() -> LambdaApiClient:
@@ -45,9 +45,9 @@ def create_default_client() -> LambdaApiClient:
 
 def create_default_async_client() -> AsyncLambdaApiClient:
     """Create the default aioboto Lambda client used for durable API calls."""
-    aioboto3 = importlib.import_module("aioboto3")
-    session = aioboto3.Session()
-    return _Aioboto3LambdaApiClient(
+    aiobotocore_session = importlib.import_module("aiobotocore.session")
+    session = aiobotocore_session.get_session()
+    return _AiobotocoreLambdaApiClient(
         session.client("lambda", config=_create_client_config())
     )
 
@@ -132,8 +132,8 @@ class ThreadedSyncLambdaClient(DurableServiceClient):
             raise error from None
 
 
-class _Aioboto3LambdaApiClient:
-    """Lazily enter an aioboto3 Lambda client context for durable API calls."""
+class _AiobotocoreLambdaApiClient:
+    """Lazily enter an aiobotocore Lambda client context for durable API calls."""
 
     def __init__(self, client_context: Any) -> None:
         self._client_context = client_context

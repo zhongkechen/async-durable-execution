@@ -31,7 +31,7 @@ hatch run python -m async_durable_execution_lambda_layer.builder \
   --output dist/async-durable-execution-layer.zip
 ```
 
-The `aioboto` extra installs the published `aioboto3` package. When it is
+The `aioboto` extra installs the published `aiobotocore` package. When it is
 present in the function environment, the SDK creates an async Lambda client by
 default for durable checkpoint and state APIs. Without it, the SDK uses `boto3`
 through a threaded async adapter.

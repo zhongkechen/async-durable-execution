@@ -26,7 +26,7 @@ classifiers = [
 dependencies = ["boto3>=1.42.1"]
 
 [project.optional-dependencies]
-aioboto = ["aioboto3"]
+aioboto = ["aiobotocore"]
 typing = ["boto3-stubs[lambda]>=1.42.1"]
 
 [project.urls]
