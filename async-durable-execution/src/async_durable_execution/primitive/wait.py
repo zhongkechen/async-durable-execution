@@ -17,7 +17,7 @@ from ..models import (
     OperationUpdate,
     WaitOptions,
 )
-from .base import CheckpointedResult, OperationExecutor
+from .base import OperationExecutor
 
 if TYPE_CHECKING:
     from ..state import ExecutionState
@@ -53,16 +53,12 @@ class WaitOperationExecutor(OperationExecutor[None]):
         await self.create_checkpoint(operation, is_sync=True)
 
         logger.debug(
-            "Wait checkpoint created for id: %s, name: %s, will check for immediate response",
+            "Wait checkpoint created for id: %s, name: %s, will suspend",
             self.operation_identifier.operation_id,
             self.operation_identifier.name,
         )
 
-        checkpointed_result = self.get_checkpointed_result()
-        if not checkpointed_result.operation:
-            msg = "Missing wait operation after START checkpoint."
-            raise ValidationError(msg)
-        return await self.replay(checkpointed_result.operation)
+        return await self.execute()
 
     async def replay(self, operation: Operation) -> None:
         """Replay an existing wait operation from its checkpoint."""
@@ -74,17 +70,13 @@ class WaitOperationExecutor(OperationExecutor[None]):
             )
             return None
 
-        await self.execute(CheckpointedResult.create_from_operation(operation))
-        return None
+        await self.execute()
 
-    async def execute(self, _checkpointed_result: CheckpointedResult) -> None:
+    async def execute(self) -> None:  # type: ignore[override]
         """Execute wait by suspending.
 
         Wait operations 'execute' by suspending execution until the timer completes.
         This method never returns normally - it always suspends.
-
-        Args:
-            _checkpointed_result: The checkpoint data (unused for wait)
 
         Raises:
             SuspendExecution: Always suspends to wait for timer completion
