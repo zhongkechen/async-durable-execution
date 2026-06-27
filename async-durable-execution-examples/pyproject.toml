@@ -10,7 +10,7 @@ description = "Examples for the async durable execution Python packages"
 requires-python = ">=3.10"
 authors = [{ name = "Zhongke Chen" }]
 dependencies = [
-  "async-durable-execution>=2.0.0b1",
+  "async-durable-execution[aioboto]>=2.0.0b1",
   "async-durable-execution-runner>=2.0.0b1"
 ]
 

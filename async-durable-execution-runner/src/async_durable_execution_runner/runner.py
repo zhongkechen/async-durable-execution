@@ -13,9 +13,9 @@ from typing import (
     cast,
 )
 
-import boto3  # type: ignore
 from botocore.config import Config  # type: ignore
 from botocore.exceptions import ClientError  # type: ignore
+from botocore.session import get_session  # type: ignore
 
 from async_durable_execution import InvocationStatus
 from async_durable_execution.models import (
@@ -785,7 +785,8 @@ class DurableFunctionCloudTestRunner:
         self._default_timeout = timeout
 
         client_config = Config(parameter_validation=False)
-        self.lambda_client = boto3.client(
+        session = get_session()
+        self.lambda_client: Any = session.create_client(
             "lambda",
             endpoint_url=lambda_endpoint,
             region_name=region,
@@ -807,7 +808,7 @@ class DurableFunctionCloudTestRunner:
         self.close()
 
     def close(self) -> None:
-        """Close the underlying boto3 client when supported."""
+        """Close the underlying botocore client when supported."""
         close = getattr(self.lambda_client, "close", None)
         if callable(close):
             close()

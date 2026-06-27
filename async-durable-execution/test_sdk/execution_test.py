@@ -307,9 +307,16 @@ async def test_durable_execution_invocation_output_from_dict_no_result():
 
 async def test_durable_execution_client_selection_env_normal_result():
     """Test durable_execution selects correct client from environment."""
-    with patch(
-        "async_durable_execution.execution.ThreadedSyncLambdaClient"
-    ) as mock_lambda_client:
+    mock_lambda_api_client = Mock()
+    with (
+        patch(
+            "async_durable_execution.execution.ThreadedSyncLambdaClient"
+        ) as mock_lambda_client,
+        patch(
+            "async_durable_execution.execution.create_default_client",
+            return_value=mock_lambda_api_client,
+        ),
+    ):
         mock_client = Mock(spec=DurableServiceClient)
         mock_lambda_client.return_value = mock_client
 
@@ -353,7 +360,7 @@ async def test_durable_execution_client_selection_env_normal_result():
 
         assert result["Status"] == InvocationStatus.SUCCEEDED.value
         assert result["Result"] == '{"result": "success"}'
-        mock_lambda_client.assert_called_once_with(client=None)
+        mock_lambda_client.assert_called_once_with(client=mock_lambda_api_client)
         mock_client.checkpoint.assert_not_called()
 
 
@@ -373,9 +380,16 @@ async def test_durable_execution_defers_default_client_until_invocation():
 
 async def test_durable_execution_client_selection_env_large_result():
     """Test durable_execution selects correct client from environment."""
-    with patch(
-        "async_durable_execution.execution.ThreadedSyncLambdaClient"
-    ) as mock_lambda_client:
+    mock_lambda_api_client = Mock()
+    with (
+        patch(
+            "async_durable_execution.execution.ThreadedSyncLambdaClient"
+        ) as mock_lambda_client,
+        patch(
+            "async_durable_execution.execution.create_default_client",
+            return_value=mock_lambda_api_client,
+        ),
+    ):
         mock_client = Mock(spec=DurableServiceClient)
         mock_lambda_client.return_value = mock_client
 
@@ -419,7 +433,7 @@ async def test_durable_execution_client_selection_env_large_result():
 
         assert result["Status"] == InvocationStatus.SUCCEEDED.value
         assert not result["Result"]
-        mock_lambda_client.assert_called_once_with(client=None)
+        mock_lambda_client.assert_called_once_with(client=mock_lambda_api_client)
         mock_client.checkpoint.assert_called_once()
 
 
@@ -715,9 +729,16 @@ async def test_durable_execution_execution_error_handling():
 
 async def test_durable_execution_client_selection_default():
     """Test durable_execution selects correct client using default initialization."""
-    with patch(
-        "async_durable_execution.execution.ThreadedSyncLambdaClient"
-    ) as mock_lambda_client:
+    mock_lambda_api_client = Mock()
+    with (
+        patch(
+            "async_durable_execution.execution.ThreadedSyncLambdaClient"
+        ) as mock_lambda_client,
+        patch(
+            "async_durable_execution.execution.create_default_client",
+            return_value=mock_lambda_api_client,
+        ),
+    ):
         mock_client = Mock(spec=DurableServiceClient)
         mock_lambda_client.return_value = mock_client
 
@@ -760,7 +781,7 @@ async def test_durable_execution_client_selection_default():
         result = await run_handler(test_handler, event, lambda_context)
 
         assert result["Status"] == InvocationStatus.SUCCEEDED.value
-        mock_lambda_client.assert_called_once_with(client=None)
+        mock_lambda_client.assert_called_once_with(client=mock_lambda_api_client)
 
 
 async def test_durable_handler_empty_input_payload():

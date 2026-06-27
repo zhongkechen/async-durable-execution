@@ -6,7 +6,7 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from .async_tools import (
     invoke_user_callable,
@@ -29,7 +29,10 @@ from .models import (
     SerializableModel,
 )
 from .client import (
+    AsyncLambdaClient,
     ThreadedSyncLambdaClient,
+    create_default_client,
+    lambda_api_client_is_async,
 )
 from .logger import configure_durable_logger
 from .plugin import (
@@ -43,8 +46,9 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from .types import (
-        LambdaContext,
+        AsyncLambdaApiClient,
         DurableServiceClient,
+        LambdaContext,
         LambdaApiClient,
     )
 
@@ -101,7 +105,7 @@ def _bind_service_client_to_handler(
 
 @dataclass(frozen=True)
 class DurableConfig:
-    boto3_client: LambdaApiClient | None = None
+    boto3_client: LambdaApiClient | AsyncLambdaApiClient | None = None
     service_client: DurableServiceClient | None = None
     plugins: list[DurableInstrumentationPlugin] | None = None
 
@@ -116,7 +120,7 @@ def durable_execution(
 
     Args:
         func: The user function to decorate
-        boto3_client: Optional boto3 Lambda client to use
+        boto3_client: Optional sync or async Lambda API client to use
         service_client: Optional durable service client to use. Intended for
             testing and local execution tooling.
         plugins: Optional list of plugins to use (EXPERIMENTAL: This
@@ -135,14 +139,32 @@ def durable_execution(
     plugin_executor = PluginExecutor(config.plugins)
 
     # Use the explicitly provided durable client when present. Otherwise, delay
-    # boto3 client construction until invocation so importing decorated handlers
+    # Lambda API client construction until invocation so importing decorated handlers
     # does not require AWS environment configuration.
     active_service_client = config.service_client
 
     def get_active_service_client() -> DurableServiceClient:
         nonlocal active_service_client
         if active_service_client is None:
-            active_service_client = ThreadedSyncLambdaClient(client=config.boto3_client)
+            if config.boto3_client is not None:
+                if lambda_api_client_is_async(config.boto3_client):
+                    active_service_client = AsyncLambdaClient(
+                        cast("AsyncLambdaApiClient", config.boto3_client)
+                    )
+                else:
+                    active_service_client = ThreadedSyncLambdaClient(
+                        client=cast("LambdaApiClient", config.boto3_client)
+                    )
+            else:
+                lambda_client = create_default_client()
+                if lambda_api_client_is_async(lambda_client):
+                    active_service_client = AsyncLambdaClient(
+                        cast("AsyncLambdaApiClient", lambda_client)
+                    )
+                else:
+                    active_service_client = ThreadedSyncLambdaClient(
+                        client=cast("LambdaApiClient", lambda_client)
+                    )
         return active_service_client
 
     async def async_wrapper(

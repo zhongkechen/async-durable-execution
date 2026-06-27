@@ -23,10 +23,11 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dependencies = ["boto3>=1.42.1"]
+dependencies = ["botocore>=1.42.90,<1.43.1"]
 
 [project.optional-dependencies]
-typing = ["boto3-stubs[lambda]>=1.42.1"]
+aioboto = ["aiobotocore"]
+typing = ["botocore-stubs>=1.42.40,<1.43.0"]
 
 [project.urls]
 Documentation = "https://github.com/zhongkechen/async-durable-execution#readme"

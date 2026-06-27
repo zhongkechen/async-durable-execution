@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, Awaitable, Protocol, TypeVar
 
 from .models import (
     OperationUpdate,
@@ -74,3 +74,15 @@ class LambdaApiClient(Protocol):
     def get_durable_execution_state(
         self, **kwargs: Any
     ) -> Mapping[str, Any]: ...  # pragma: no cover
+
+
+class AsyncLambdaApiClient(Protocol):
+    """Minimal async Lambda client surface needed by durable execution."""
+
+    def checkpoint_durable_execution(
+        self, **kwargs: Any
+    ) -> Awaitable[Mapping[str, Any]]: ...  # pragma: no cover
+
+    def get_durable_execution_state(
+        self, **kwargs: Any
+    ) -> Awaitable[Mapping[str, Any]]: ...  # pragma: no cover

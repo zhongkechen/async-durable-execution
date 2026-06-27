@@ -157,16 +157,16 @@ def test_lambda_invoker_init():
 
 
 def test_lambda_invoker_create():
-    """Test creating LambdaInvoker with boto3 client."""
-    with patch("async_durable_execution_runner.invoker.boto3") as mock_boto3:
+    """Test creating LambdaInvoker with botocore client."""
+    with patch("async_durable_execution_runner.invoker.get_session") as mock_boto3:
         mock_client = Mock()
-        mock_boto3.client.return_value = mock_client
+        mock_boto3.return_value.create_client.return_value = mock_client
 
         invoker = LambdaInvoker.create("http://localhost:3001", "us-west-2")
 
         assert isinstance(invoker, LambdaInvoker)
         assert invoker.lambda_client is mock_client
-        mock_boto3.client.assert_called_once_with(
+        mock_boto3.return_value.create_client.assert_called_once_with(
             "lambda",
             endpoint_url="http://localhost:3001",
             region_name="us-west-2",
