@@ -16,7 +16,7 @@ from typing import (
 from ..primitive.child import ChildOperationExecutor, get_durable_context
 
 from ..context import invoke_user_callable
-from ..decorators import durable_callable
+from ..execution import durable_callable
 from .concurrency import (
     CompletionConfig,
     ConcurrentExecutor,

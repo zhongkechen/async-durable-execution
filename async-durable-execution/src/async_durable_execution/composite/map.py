@@ -23,7 +23,7 @@ from ..primitive.child import (
 )
 
 from ..context import invoke_user_callable
-from ..decorators import durable_callable
+from ..execution import durable_callable
 from .concurrency import (
     BatchResult,
     CompletionConfig,

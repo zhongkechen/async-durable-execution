@@ -16,7 +16,6 @@ from .config import JitterStrategy, RetryPresets, RetryStrategyBuilder
 from .context import (
     get_current_context,
 )
-from .decorators import durable_callable
 from .composite.with_retry import with_retry
 from .composite.map import MapItemContext, map
 from .composite.concurrency import (
@@ -76,7 +75,7 @@ from .exceptions import (
 )
 
 # Core decorator - used in every durable function
-from .execution import durable_execution
+from .execution import durable_callable, durable_execution
 from .primitive.wait import wait
 from .plugin import (
     DurableInstrumentationPlugin,
