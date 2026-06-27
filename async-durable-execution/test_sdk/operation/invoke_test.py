@@ -778,24 +778,16 @@ async def test_invoke_handler_result_defaults_to_json_serdes():
 
 
 # ============================================================================
-# Immediate Response Handling Tests
+# Start Handling Tests
 # ============================================================================
 
 
-async def test_invoke_immediate_response_get_checkpoint_result_called_twice():
-    """Test that get_checkpoint_result is called twice when checkpoint is created."""
+async def test_invoke_start_get_checkpoint_result_called_once():
+    """Test start creates checkpoint then suspends without reloading it."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
 
-    # First call: not found, second call: started (no immediate response)
-    not_found = CheckpointedResult.create_not_found()
-    started_op = Operation(
-        operation_id="invoke_immediate_1",
-        operation_type=OperationType.CHAINED_INVOKE,
-        status=OperationStatus.STARTED,
-    )
-    started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.operations.get.side_effect = [not_found, started]
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     with pytest.raises(SuspendExecution):
         await invoke_handler(
@@ -810,24 +802,16 @@ async def test_invoke_immediate_response_get_checkpoint_result_called_twice():
             ),
         )
 
-    # Verify get_checkpoint_result was called twice
-    assert mock_state.operations.get.call_count == 2
+    assert mock_state.operations.get.call_count == 1
+    mock_state.create_checkpoint.assert_called_once()
 
 
-async def test_invoke_immediate_response_create_checkpoint_with_is_sync_true():
+async def test_invoke_start_create_checkpoint_with_is_sync_true():
     """Test that create_checkpoint is called with is_sync=True."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
 
-    # First call: not found, second call: started
-    not_found = CheckpointedResult.create_not_found()
-    started_op = Operation(
-        operation_id="invoke_immediate_2",
-        operation_type=OperationType.CHAINED_INVOKE,
-        status=OperationStatus.STARTED,
-    )
-    started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.operations.get.side_effect = [not_found, started]
+    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
 
     with pytest.raises(SuspendExecution):
         await invoke_handler(
@@ -846,160 +830,6 @@ async def test_invoke_immediate_response_create_checkpoint_with_is_sync_true():
     mock_state.create_checkpoint.assert_called_once()
     call_kwargs = mock_state.create_checkpoint.call_args[1]
     assert call_kwargs["is_sync"] is True
-
-
-async def test_invoke_immediate_response_immediate_success():
-    """Test immediate success: checkpoint returns SUCCEEDED on second check.
-
-    When checkpoint returns SUCCEEDED on second check, operation returns result
-    without suspend.
-    """
-    mock_state = Mock(spec=ExecutionState)
-    mock_state.durable_execution_arn = "test_arn"
-
-    # First call: not found, second call: succeeded (immediate response)
-    not_found = CheckpointedResult.create_not_found()
-    succeeded_op = Operation(
-        operation_id="invoke_immediate_3",
-        operation_type=OperationType.CHAINED_INVOKE,
-        status=OperationStatus.SUCCEEDED,
-        chained_invoke_details=ChainedInvokeDetails(
-            result=json.dumps("immediate_result")
-        ),
-    )
-    succeeded = CheckpointedResult.create_from_operation(succeeded_op)
-    mock_state.operations.get.side_effect = [not_found, succeeded]
-
-    result = await invoke_handler(
-        function_name="test_function",
-        payload="test_input",
-        state=mock_state,
-        operation_identifier=OperationIdentifier(
-            "invoke_immediate_3", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
-        ),
-    )
-
-    # Verify result was returned without suspend
-    assert result == "immediate_result"
-    # Verify checkpoint was created
-    mock_state.create_checkpoint.assert_called_once()
-    # Verify get_checkpoint_result was called twice
-    assert mock_state.operations.get.call_count == 2
-
-
-async def test_invoke_immediate_response_immediate_success_with_none_result():
-    """Test immediate success with None result."""
-    mock_state = Mock(spec=ExecutionState)
-    mock_state.durable_execution_arn = "test_arn"
-
-    # First call: not found, second call: succeeded with None result
-    not_found = CheckpointedResult.create_not_found()
-    succeeded_op = Operation(
-        operation_id="invoke_immediate_4",
-        operation_type=OperationType.CHAINED_INVOKE,
-        status=OperationStatus.SUCCEEDED,
-        chained_invoke_details=ChainedInvokeDetails(result=None),
-    )
-    succeeded = CheckpointedResult.create_from_operation(succeeded_op)
-    mock_state.operations.get.side_effect = [not_found, succeeded]
-
-    result = await invoke_handler(
-        function_name="test_function",
-        payload="test_input",
-        state=mock_state,
-        operation_identifier=OperationIdentifier(
-            "invoke_immediate_4", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
-        ),
-    )
-
-    # Verify None result was returned without suspend
-    assert result is None
-    assert mock_state.operations.get.call_count == 2
-
-
-@pytest.mark.parametrize(
-    "status",
-    [OperationStatus.FAILED, OperationStatus.TIMED_OUT, OperationStatus.STOPPED],
-)
-async def test_invoke_immediate_response_immediate_failure(status: OperationStatus):
-    """Test immediate failure: checkpoint returns FAILED/TIMED_OUT/STOPPED on second check.
-
-    When checkpoint returns a failure status on second check, operation raises error
-    without suspend.
-    """
-    mock_state = Mock(spec=ExecutionState)
-    mock_state.durable_execution_arn = "test_arn"
-
-    # First call: not found, second call: failed (immediate response)
-    not_found = CheckpointedResult.create_not_found()
-    error = ErrorObject(
-        message="Immediate failure", type="TestError", data=None, stack_trace=None
-    )
-    failed_op = Operation(
-        operation_id="invoke_immediate_5",
-        operation_type=OperationType.CHAINED_INVOKE,
-        status=status,
-        chained_invoke_details=ChainedInvokeDetails(error=error),
-    )
-    failed = CheckpointedResult.create_from_operation(failed_op)
-    mock_state.operations.get.side_effect = [not_found, failed]
-
-    # Verify error is raised without suspend
-    with pytest.raises(CallableRuntimeError):
-        await invoke_handler(
-            function_name="test_function",
-            payload="test_input",
-            state=mock_state,
-            operation_identifier=OperationIdentifier(
-                "invoke_immediate_5",
-                OperationSubType.CHAINED_INVOKE,
-                None,
-                "test_invoke",
-            ),
-        )
-
-    # Verify checkpoint was created
-    mock_state.create_checkpoint.assert_called_once()
-    # Verify get_checkpoint_result was called twice
-    assert mock_state.operations.get.call_count == 2
-
-
-async def test_invoke_immediate_response_no_immediate_response():
-    """Test no immediate response: checkpoint returns STARTED on second check.
-
-    When checkpoint returns STARTED on second check, operation suspends normally.
-    """
-    mock_state = Mock(spec=ExecutionState)
-    mock_state.durable_execution_arn = "test_arn"
-
-    # First call: not found, second call: started (no immediate response)
-    not_found = CheckpointedResult.create_not_found()
-    started_op = Operation(
-        operation_id="invoke_immediate_6",
-        operation_type=OperationType.CHAINED_INVOKE,
-        status=OperationStatus.STARTED,
-    )
-    started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.operations.get.side_effect = [not_found, started]
-
-    # Verify operation suspends
-    with pytest.raises(SuspendExecution):
-        await invoke_handler(
-            function_name="test_function",
-            payload="test_input",
-            state=mock_state,
-            operation_identifier=OperationIdentifier(
-                "invoke_immediate_6",
-                OperationSubType.CHAINED_INVOKE,
-                None,
-                "test_invoke",
-            ),
-        )
-
-    # Verify checkpoint was created
-    mock_state.create_checkpoint.assert_called_once()
-    # Verify get_checkpoint_result was called twice
-    assert mock_state.operations.get.call_count == 2
 
 
 async def test_invoke_immediate_response_already_completed():
@@ -1038,179 +868,3 @@ async def test_invoke_immediate_response_already_completed():
     mock_state.create_checkpoint.assert_not_called()
     # Verify get_checkpoint_result was called only once
     assert mock_state.operations.get.call_count == 1
-
-
-async def test_invoke_immediate_response_with_default_fields_immediate_success():
-    """Test immediate success with direct defaults."""
-    mock_state = Mock(spec=ExecutionState)
-    mock_state.durable_execution_arn = "test_arn"
-
-    # First call: not found, second call: succeeded
-    not_found = CheckpointedResult.create_not_found()
-    succeeded_op = Operation(
-        operation_id="invoke_immediate_8",
-        operation_type=OperationType.CHAINED_INVOKE,
-        status=OperationStatus.SUCCEEDED,
-        chained_invoke_details=ChainedInvokeDetails(
-            result=json.dumps("timeout_result")
-        ),
-    )
-    succeeded = CheckpointedResult.create_from_operation(succeeded_op)
-    mock_state.operations.get.side_effect = [not_found, succeeded]
-    result = await invoke_handler(
-        function_name="test_function",
-        payload="test_input",
-        state=mock_state,
-        operation_identifier=OperationIdentifier(
-            "invoke_immediate_8", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
-        ),
-    )
-
-    # Verify result was returned without suspend
-    assert result == "timeout_result"
-    assert mock_state.operations.get.call_count == 2
-
-
-async def test_invoke_immediate_response_with_default_fields_no_immediate_response():
-    """Test no immediate response with direct defaults.
-
-    When no immediate response, operation should suspend normally.
-    """
-    mock_state = Mock(spec=ExecutionState)
-    mock_state.durable_execution_arn = "test_arn"
-
-    # First call: not found, second call: started
-    not_found = CheckpointedResult.create_not_found()
-    started_op = Operation(
-        operation_id="invoke_immediate_9",
-        operation_type=OperationType.CHAINED_INVOKE,
-        status=OperationStatus.STARTED,
-    )
-    started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.operations.get.side_effect = [not_found, started]
-    # Verify operation suspends normally
-    with pytest.raises(SuspendExecution):
-        await invoke_handler(
-            function_name="test_function",
-            payload="test_input",
-            state=mock_state,
-            operation_identifier=OperationIdentifier(
-                "invoke_immediate_9",
-                OperationSubType.CHAINED_INVOKE,
-                None,
-                "test_invoke",
-            ),
-        )
-
-    assert mock_state.operations.get.call_count == 2
-
-
-async def test_invoke_immediate_response_with_custom_serdes():
-    """Test immediate success with custom serialization."""
-    mock_state = Mock(spec=ExecutionState)
-    mock_state.durable_execution_arn = "test_arn"
-
-    # First call: not found, second call: succeeded
-    not_found = CheckpointedResult.create_not_found()
-    succeeded_op = Operation(
-        operation_id="invoke_immediate_10",
-        operation_type=OperationType.CHAINED_INVOKE,
-        status=OperationStatus.SUCCEEDED,
-        chained_invoke_details=ChainedInvokeDetails(
-            result='{"key": "VALUE", "number": "84", "list": [1, 2, 3]}'
-        ),
-    )
-    succeeded = CheckpointedResult.create_from_operation(succeeded_op)
-    mock_state.operations.get.side_effect = [not_found, succeeded]
-
-    serdes_payload = CustomDictSerDes()
-    serdes_result = CustomDictSerDes()
-
-    result = await invoke_handler(
-        function_name="test_function",
-        payload={"key": "value", "number": 42, "list": [1, 2, 3]},
-        state=mock_state,
-        operation_identifier=OperationIdentifier(
-            "invoke_immediate_10", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
-        ),
-        serdes_payload=serdes_payload,
-        serdes_result=serdes_result,
-    )
-
-    # Verify custom deserialization was used
-    assert result == {"key": "value", "number": 42, "list": [1, 2, 3]}
-    assert mock_state.operations.get.call_count == 2
-
-
-async def test_invoke_suspends_when_second_check_returns_started():
-    """Test backward compatibility: when the second checkpoint check returns
-    STARTED (not terminal), the invoke operation suspends normally.
-
-    Validates: Requirements 8.1, 8.2
-    """
-    mock_state = Mock(spec=ExecutionState)
-    mock_state.durable_execution_arn = "test_arn"
-
-    # First call: checkpoint doesn't exist
-    # Second call: checkpoint returns STARTED (no immediate response)
-    mock_state.operations.get.side_effect = [
-        CheckpointedResult.create_not_found(),
-        CheckpointedResult.create_from_operation(
-            Operation(
-                operation_id="invoke-1",
-                operation_type=OperationType.STEP,
-                status=OperationStatus.STARTED,
-            )
-        ),
-    ]
-
-    executor = InvokeOperationExecutor(
-        state=mock_state,
-        operation_identifier=OperationIdentifier(
-            "invoke-1", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
-        ),
-        function_name="my-function",
-        payload={"data": "test"},
-    )
-
-    with pytest.raises(SuspendExecution):
-        await executor.process()
-
-    # Assert - behaves like "old way"
-    assert mock_state.operations.get.call_count == 2  # Double-check happened
-    mock_state.create_checkpoint.assert_called_once()  # START checkpoint created
-
-
-async def test_invoke_suspends_when_second_check_returns_started_duplicate():
-    """Test backward compatibility: when the second checkpoint check returns
-    STARTED (not terminal), the invoke operation suspends normally.
-    """
-    mock_state = Mock(spec=ExecutionState)
-    mock_state.durable_execution_arn = "test_arn"
-
-    # First call: checkpoint doesn't exist
-    # Second call: checkpoint returns STARTED (no immediate response)
-    not_found = CheckpointedResult.create_not_found()
-    started_op = Operation(
-        operation_id="invoke-1",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.STARTED,
-    )
-    started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.operations.get.side_effect = [not_found, started]
-
-    executor = InvokeOperationExecutor(
-        function_name="my-function",
-        payload={"data": "test"},
-        state=mock_state,
-        operation_identifier=OperationIdentifier(
-            "invoke-1", OperationSubType.CHAINED_INVOKE, None, "test_invoke"
-        ),
-    )
-
-    with pytest.raises(SuspendExecution):
-        await executor.process()
-
-    # Assert - behaves like "old way"
-    assert mock_state.operations.get.call_count == 2  # Double-check happened
-    mock_state.create_checkpoint.assert_called_once()  # START checkpoint created
