@@ -151,15 +151,17 @@ def test_parallel_signature_requires_keyword_only_options():
 
 
 @patch("async_durable_execution.composite.parallel.parallel_handler")
-@patch("async_durable_execution.composite.parallel.child_handler")
+@patch("async_durable_execution.composite.parallel.ChildOperationExecutor")
 async def test_parallel_passes_config_fields_to_handler(
     mock_child_handler,
     mock_parallel_handler,
 ):
     """Direct config fields are passed to the handler."""
 
-    async def call_child_func(*, func, **_kwargs):
-        return await func()
+    def call_child_func(func, *_args, **_kwargs):
+        mock_executor = Mock()
+        mock_executor.process = AsyncMock(side_effect=func)
+        return mock_executor
 
     async def branch_a():
         return "a"
@@ -201,15 +203,17 @@ async def test_parallel_passes_config_fields_to_handler(
 
 
 @patch("async_durable_execution.composite.parallel.parallel_handler")
-@patch("async_durable_execution.composite.parallel.child_handler")
+@patch("async_durable_execution.composite.parallel.ChildOperationExecutor")
 async def test_parallel_passes_explicit_none_summary_generator(
     mock_child_handler,
     mock_parallel_handler,
 ):
     """summary_generator defaults to None in the public wrapper."""
 
-    async def call_child_func(*, func, **_kwargs):
-        return await func()
+    def call_child_func(func, *_args, **_kwargs):
+        mock_executor = Mock()
+        mock_executor.process = AsyncMock(side_effect=func)
+        return mock_executor
 
     async def branch_a():
         return "a"
@@ -233,15 +237,17 @@ async def test_parallel_passes_explicit_none_summary_generator(
 
 
 @patch("async_durable_execution.composite.parallel.parallel_handler")
-@patch("async_durable_execution.composite.parallel.child_handler")
+@patch("async_durable_execution.composite.parallel.ChildOperationExecutor")
 async def test_parallel_accepts_one_shot_branch_iterable(
     mock_child_handler,
     mock_parallel_handler,
 ):
     """The public wrapper consumes branch iterables only once."""
 
-    async def call_child_func(*, func, **_kwargs):
-        return await func()
+    def call_child_func(func, *_args, **_kwargs):
+        mock_executor = Mock()
+        mock_executor.process = AsyncMock(side_effect=func)
+        return mock_executor
 
     async def branch_a():
         return "a"

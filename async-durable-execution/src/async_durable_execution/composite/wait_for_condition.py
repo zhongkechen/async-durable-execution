@@ -16,7 +16,7 @@ from ..context import (
     reset_current_context,
     set_current_context,
 )
-from ..primitive.child import _get_durable_context
+from ..primitive.child import get_durable_context
 from ..exceptions import (
     ExecutionError,
     ValidationError,
@@ -458,7 +458,7 @@ async def wait_for_condition(
     and returns the next state plus a decision to continue or stop. The optional
     wait strategy only decides how long to wait before the next poll.
     """
-    context = _get_durable_context("wait_for_condition")
+    context = get_durable_context("wait_for_condition")
     if check is None:
         msg = "`check` is required for wait_for_condition"
         raise ValidationError(msg)

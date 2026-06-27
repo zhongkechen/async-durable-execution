@@ -41,7 +41,6 @@ class RunInChildContextCall:
 
     name: str | None
     serdes: object = None
-    item_serdes: object = None
     summary_generator: object = None
     is_virtual: bool = False
     result: object = None
@@ -62,7 +61,6 @@ class MockDurableContext:
         func: Callable[[DurableContext], Awaitable[_T]],
         name: str | None = None,
         serdes=None,
-        item_serdes=None,
         summary_generator=None,
         is_virtual: bool = False,
     ) -> _T:
@@ -71,7 +69,6 @@ class MockDurableContext:
             RunInChildContextCall(
                 name=name,
                 serdes=serdes,
-                item_serdes=item_serdes,
                 summary_generator=summary_generator,
                 is_virtual=is_virtual,
                 result=result,
@@ -99,7 +96,6 @@ async def _call_with_retry(
     name: str | None = None,
     retry_strategy=None,
     serdes=None,
-    item_serdes=None,
     summary_generator=None,
     is_virtual: bool = False,
 ):
@@ -112,22 +108,18 @@ async def _call_with_retry(
     ) -> None:
         ctx.wait_calls.append(WaitCall(duration=duration, name=name))
 
-    async def fake_run_in_child_context_in_context(
-        context: MockDurableContext,
+    async def fake_run_in_child_context(
         func,
         name: str | None = None,
         serdes=None,
-        item_serdes=None,
         summary_generator=None,
         is_virtual: bool = False,
     ):
-        assert context is ctx
         result = await func()
         ctx.child_context_calls.append(
             RunInChildContextCall(
                 name=name,
                 serdes=serdes,
-                item_serdes=item_serdes,
                 summary_generator=summary_generator,
                 is_virtual=is_virtual,
                 result=result,
@@ -137,7 +129,7 @@ async def _call_with_retry(
 
     with (
         patch(
-            "async_durable_execution.composite.with_retry._get_durable_context",
+            "async_durable_execution.composite.with_retry.get_durable_context",
             return_value=ctx,
         ),
         patch(
@@ -145,8 +137,8 @@ async def _call_with_retry(
             new=AsyncMock(side_effect=fake_wait),
         ),
         patch(
-            "async_durable_execution.composite.with_retry._run_in_child_context_in_context",
-            new=AsyncMock(side_effect=fake_run_in_child_context_in_context),
+            "async_durable_execution.composite.with_retry.run_in_child_context",
+            new=AsyncMock(side_effect=fake_run_in_child_context),
         ),
     ):
         return await with_retry(
@@ -154,7 +146,6 @@ async def _call_with_retry(
             name=name,
             retry_strategy=retry_strategy,
             serdes=serdes,
-            item_serdes=item_serdes,
             summary_generator=summary_generator,
             is_virtual=is_virtual,
         )
@@ -388,7 +379,6 @@ async def test_child_context_fields_are_forwarded():
     """Child context fields are forwarded to run_in_child_context."""
     ctx = MockDurableContext()
     serdes = MagicMock()
-    item_serdes = MagicMock()
     summary_generator = MagicMock()
     retry_strategy = _make_retry_strategy(max_attempts=2)
 
@@ -401,7 +391,6 @@ async def test_child_context_fields_are_forwarded():
         name="test",
         retry_strategy=retry_strategy,
         serdes=serdes,
-        item_serdes=item_serdes,
         summary_generator=summary_generator,
         is_virtual=True,
     )
@@ -410,7 +399,6 @@ async def test_child_context_fields_are_forwarded():
         RunInChildContextCall(
             name="test",
             serdes=serdes,
-            item_serdes=item_serdes,
             summary_generator=summary_generator,
             is_virtual=True,
             result="ok",

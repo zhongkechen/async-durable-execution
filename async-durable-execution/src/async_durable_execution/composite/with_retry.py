@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Awaitable, TypeVar
+from typing import TYPE_CHECKING, Awaitable, Callable, TypeVar
 
 from ..config import RetryStrategyBuilder
 from ..models import RetryDecision
@@ -10,8 +10,8 @@ from ..async_tools import (
 )
 from ..exceptions import SuspendExecution
 from ..primitive.child import (
-    _run_in_child_context_in_context,
-    _get_durable_context,
+    get_durable_context,
+    run_in_child_context,
 )
 from ..primitive.wait import wait
 
@@ -28,7 +28,6 @@ async def with_retry(
     name: str | None = None,
     retry_strategy: Callable[[Exception, int], RetryDecision] | None = None,
     serdes: SerDes | None = None,
-    item_serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
 ) -> T:
@@ -39,11 +38,10 @@ async def with_retry(
         name: Optional durable operation name.
         retry_strategy: Optional strategy that decides whether and when to retry.
         serdes: Optional serializer for the child context result.
-        item_serdes: Optional serializer for child items used by composed operations.
         summary_generator: Optional summary generator for large child results.
         is_virtual: Whether the child context should skip lifecycle checkpoints.
     """
-    context = _get_durable_context()
+    context = get_durable_context()
 
     async def run_loop() -> T:
         assert_async_callable(func)
@@ -66,12 +64,10 @@ async def with_retry(
                 wait_name = f"{name}-backoff-{attempt}" if name else None
                 await wait(duration=decision.delay, name=wait_name)
 
-    return await _run_in_child_context_in_context(
-        context,
+    return await run_in_child_context(
         run_loop,
         name=name,
         serdes=serdes,
-        item_serdes=item_serdes,
         summary_generator=summary_generator,
         is_virtual=is_virtual,
     )

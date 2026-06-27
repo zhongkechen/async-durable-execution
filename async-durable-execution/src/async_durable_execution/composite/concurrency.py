@@ -16,7 +16,7 @@ from ..exceptions import SuspendExecution, TimedSuspendExecution
 from ..exceptions import InvalidStateError
 from ..models import ErrorObject, OperationIdentifier, SerializableModel, _metadata
 from ..primitive.base import get_checkpoint_result
-from ..primitive.child import OrphanedChildException, child_handler
+from ..primitive.child import ChildOperationExecutor, OrphanedChildException
 from ..serdes import deserialize
 
 
@@ -777,18 +777,18 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
             name=name,
         )
 
-        async def run_in_child_handler() -> ResultType:
+        async def run_child_operation() -> ResultType:
             return await self.execute_item(child_context, executable)
 
-        result = await child_handler(
-            run_in_child_handler,
+        executor: ChildOperationExecutor[ResultType] = ChildOperationExecutor(
+            run_child_operation,
             child_context.execution_state,
-            operation_identifier=operation_identifier,
+            operation_identifier,
             serdes=self.item_serdes or self.serdes,
             summary_generator=self.summary_generator,
             is_virtual=is_virtual,
         )
-        return result
+        return await executor.process()
 
     async def replay(
         self, execution_state: ExecutionState, executor_context: DurableContext

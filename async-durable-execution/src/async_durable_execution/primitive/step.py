@@ -27,7 +27,7 @@ from ..models import (
     RetryDecision,
     OperationSubType,
 )
-from .child import _get_durable_context
+from .child import get_durable_context
 from .base import (
     OperationExecutor,
     OperationContext,
@@ -355,7 +355,7 @@ async def step(
     Durable steps are the main way to isolate non-deterministic work such as API
     calls, clock reads, UUID generation, and database access from replayed code.
     """
-    context = _get_durable_context()
+    context = get_durable_context()
     assert_async_callable(func)
     step_name = name if name is not None else getattr(func, "__name__", None)
     logger.debug("Step name: %s", step_name)

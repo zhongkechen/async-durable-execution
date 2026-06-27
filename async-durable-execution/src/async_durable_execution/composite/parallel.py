@@ -14,7 +14,7 @@ from typing import (
 )
 
 from ..primitive.base import get_checkpoint_result
-from ..primitive.child import child_handler, _get_durable_context
+from ..primitive.child import ChildOperationExecutor, get_durable_context
 
 from ..async_tools import (
     invoke_user_callable,
@@ -163,7 +163,7 @@ async def parallel(
     nesting_type: NestingType = NestingType.NESTED,
 ):
     """Run multiple bound durable callables concurrently and return a `BatchResult`."""
-    context = _get_durable_context("parallel")
+    context = get_durable_context("parallel")
     validated_branches: list[Callable[[], Awaitable[T]]] = []
     for index, branch in enumerate(branches):
         assert_async_callable(branch, label=f"branches[{index}]")
@@ -179,8 +179,8 @@ async def parallel(
             name=name,
         )
 
-        return await child_handler(
-            func=parallel_handler(
+        executor: ChildOperationExecutor[BatchResult[T]] = ChildOperationExecutor(
+            parallel_handler(
                 callables=validated_branches,
                 execution_state=context.execution_state,
                 parallel_context=parallel_context,
@@ -193,8 +193,8 @@ async def parallel(
                 summary_generator=summary_generator,
                 nesting_type=nesting_type,
             ),
-            state=context.execution_state,
-            operation_identifier=operation_identifier,
+            context.execution_state,
+            operation_identifier,
             serdes=serdes,
-            item_serdes=None,
         )
+        return await executor.process()
