@@ -36,7 +36,7 @@ def aioboto_is_installed() -> bool:
     return importlib.util.find_spec("aiobotocore") is not None
 
 
-def create_default_client() -> LambdaApiClient:
+def create_default_sync_client() -> LambdaApiClient:
     """Create the default botocore Lambda client used for durable API calls."""
     session = get_session()
     return cast(
@@ -54,6 +54,13 @@ def create_default_async_client() -> AsyncLambdaApiClient:
     )
 
 
+def create_default_client() -> LambdaApiClient | AsyncLambdaApiClient:
+    """Create the default Lambda client, preferring async when aioboto is installed."""
+    if aioboto_is_installed():
+        return create_default_async_client()
+    return create_default_sync_client()
+
+
 def lambda_api_client_is_async(
     client: LambdaApiClient | AsyncLambdaApiClient,
 ) -> bool:
@@ -65,13 +72,10 @@ def create_default_service_client(
     client: LambdaApiClient | AsyncLambdaApiClient | None = None,
 ) -> DurableServiceClient:
     """Create the default durable service client."""
-    if client is not None:
-        if lambda_api_client_is_async(client):
-            return AsyncLambdaClient(cast("AsyncLambdaApiClient", client))
-        return ThreadedSyncLambdaClient(cast("LambdaApiClient", client))
-    if aioboto_is_installed():
-        return AsyncLambdaClient(create_default_async_client())
-    return ThreadedSyncLambdaClient(create_default_client())
+    lambda_client = client or create_default_client()
+    if lambda_api_client_is_async(lambda_client):
+        return AsyncLambdaClient(cast("AsyncLambdaApiClient", lambda_client))
+    return ThreadedSyncLambdaClient(cast("LambdaApiClient", lambda_client))
 
 
 class ThreadedSyncLambdaClient(DurableServiceClient):
@@ -80,7 +84,7 @@ class ThreadedSyncLambdaClient(DurableServiceClient):
     _cached_boto_client: LambdaApiClient | None = None
 
     def __init__(self, client: LambdaApiClient | None) -> None:
-        self.client = client or create_default_client()
+        self.client = client or create_default_sync_client()
 
     async def checkpoint(
         self,
@@ -217,5 +221,6 @@ __all__ = [
     "create_default_async_client",
     "create_default_client",
     "create_default_service_client",
+    "create_default_sync_client",
     "lambda_api_client_is_async",
 ]

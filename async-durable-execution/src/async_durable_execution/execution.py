@@ -31,8 +31,7 @@ from .models import (
 from .client import (
     AsyncLambdaClient,
     ThreadedSyncLambdaClient,
-    aioboto_is_installed,
-    create_default_async_client,
+    create_default_client,
     lambda_api_client_is_async,
 )
 from .logger import configure_durable_logger
@@ -156,10 +155,16 @@ def durable_execution(
                     active_service_client = ThreadedSyncLambdaClient(
                         client=cast("LambdaApiClient", config.boto3_client)
                     )
-            elif aioboto_is_installed():
-                active_service_client = AsyncLambdaClient(create_default_async_client())
             else:
-                active_service_client = ThreadedSyncLambdaClient(client=None)
+                lambda_client = create_default_client()
+                if lambda_api_client_is_async(lambda_client):
+                    active_service_client = AsyncLambdaClient(
+                        cast("AsyncLambdaApiClient", lambda_client)
+                    )
+                else:
+                    active_service_client = ThreadedSyncLambdaClient(
+                        client=cast("LambdaApiClient", lambda_client)
+                    )
         return active_service_client
 
     async def async_wrapper(

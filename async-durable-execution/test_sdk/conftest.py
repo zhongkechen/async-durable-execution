@@ -9,6 +9,3 @@ def default_to_sync_lambda_client(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "async_durable_execution.client.aioboto_is_installed", lambda: False
     )
-    monkeypatch.setattr(
-        "async_durable_execution.execution.aioboto_is_installed", lambda: False
-    )

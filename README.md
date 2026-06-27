@@ -56,7 +56,9 @@ The `aioboto` extra installs the published `aiobotocore` package. When it is
 installed, the SDK creates an async Lambda client by default for durable
 checkpoint and state APIs. Without the extra, it continues to use the bundled
 `botocore` dependency through a threaded async adapter. Explicitly provided Lambda
-API clients are detected as sync or async and wrapped accordingly.
+API clients are detected as sync or async and wrapped accordingly. Code that must
+force the sync `botocore` client can use
+`async_durable_execution.client.create_default_sync_client()`.
 
 To share the SDK through a Lambda layer instead of vendoring it in each function
 zip, publish the repository-built layer from GitHub Actions or build a local

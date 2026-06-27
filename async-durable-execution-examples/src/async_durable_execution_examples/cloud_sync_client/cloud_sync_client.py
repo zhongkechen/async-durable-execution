@@ -3,10 +3,10 @@
 from typing import Any
 
 from async_durable_execution import durable_callable, durable_execution, step
-from async_durable_execution.client import create_default_client
+from async_durable_execution.client import create_default_sync_client
 
 
-_sync_lambda_client = create_default_client()
+_sync_lambda_client = create_default_sync_client()
 
 
 @durable_callable

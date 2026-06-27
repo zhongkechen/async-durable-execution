@@ -34,7 +34,8 @@ hatch run python -m async_durable_execution_lambda_layer.builder \
 The `aioboto` extra installs the published `aiobotocore` package. When it is
 present in the function environment, the SDK creates an async Lambda client by
 default for durable checkpoint and state APIs. Without it, the SDK uses `botocore`
-through a threaded async adapter.
+through a threaded async adapter. Code that must force the sync `botocore` client
+can use `async_durable_execution.client.create_default_sync_client()`.
 
 Additional pip arguments can be passed after `--pip-arg`, for example:
 
