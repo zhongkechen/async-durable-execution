@@ -37,7 +37,6 @@ from async_durable_execution.primitive.step import (
 from async_durable_execution.models import RetryDecision
 from async_durable_execution.state import ExecutionState
 from async_durable_execution import StepContext
-from async_durable_execution.primitive.base import CheckpointedResult
 
 from ..serdes_test import CustomDictSerDes
 

@@ -19,7 +19,6 @@ from async_durable_execution.models import (
 )
 from async_durable_execution.primitive.wait import WaitOperationExecutor, wait
 from async_durable_execution.state import ExecutionState
-from async_durable_execution.primitive.base import CheckpointedResult
 
 
 async def run_async(awaitable):
