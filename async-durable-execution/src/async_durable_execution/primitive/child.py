@@ -186,13 +186,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
         )
         try:
             replaying_children = self._is_replay_children(operation)
-            wrapped_user_func = self.state.wrap_user_function(
-                self.func,
-                self.operation_identifier,
-                replaying_children,
-                attempt=None if operation else 1,
-            )
-            raw_result: T = await wrapped_user_func()
+            raw_result: T = await self.func()
 
             if self.is_virtual:
                 logger.debug(

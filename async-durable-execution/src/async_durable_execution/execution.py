@@ -32,10 +32,6 @@ from .client import (
     lambda_api_client_is_async,
 )
 from .logger import configure_durable_logger
-from .plugin import (
-    DurableInstrumentationPlugin,
-    PluginExecutor,
-)
 from .state import ExecutionState
 
 
@@ -121,13 +117,11 @@ def _bind_service_client_to_handler(
     if original_handler is None:
         return handler
 
-    plugins = handler_attrs.get("_durable_execution_plugins")
     boto3_client = handler_attrs.get("_durable_execution_boto3_client")
     return durable_execution(
         original_handler,
         boto3_client=boto3_client,
         service_client=service_client,
-        plugins=plugins,
     )
 
 
@@ -135,7 +129,6 @@ def _bind_service_client_to_handler(
 class DurableConfig:
     boto3_client: LambdaApiClient | AsyncLambdaApiClient | None = None
     service_client: DurableServiceClient | None = None
-    plugins: list[DurableInstrumentationPlugin] | None = None
 
 
 def durable_execution(
@@ -151,8 +144,6 @@ def durable_execution(
         boto3_client: Optional sync or async Lambda API client to use
         service_client: Optional durable service client to use. Intended for
             testing and local execution tooling.
-        plugins: Optional list of plugins to use (EXPERIMENTAL: This
-            feature has known issues and this parameter may change or be removed.)
     """
     # Decorator called with parameters
     if func is None:
@@ -163,7 +154,6 @@ def durable_execution(
         )
     config = DurableConfig(**kwargs)
     logger.debug("Starting durable execution handler...")
-    plugin_executor = PluginExecutor(config.plugins)
 
     # Use the explicitly provided durable client when present. Otherwise, delay
     # Lambda API client construction until invocation so importing decorated handlers
@@ -198,9 +188,7 @@ def durable_execution(
         event: Any, context: LambdaContext
     ) -> MutableMapping[str, Any]:
         return (
-            await _wrapper_with_plugins(
-                func, event, context, plugin_executor, get_active_service_client()
-            )
+            await _wrapper_async(func, event, context, get_active_service_client())
         ).to_dict()
 
     @functools.wraps(func)
@@ -210,34 +198,8 @@ def durable_execution(
     wrapper._async_handler = async_wrapper  # type: ignore[attr-defined]  # noqa: SLF001
     wrapper._durable_execution_original = func  # type: ignore[attr-defined]  # noqa: SLF001
     wrapper._durable_execution_boto3_client = config.boto3_client  # type: ignore[attr-defined]  # noqa: SLF001
-    wrapper._durable_execution_plugins = config.plugins  # type: ignore[attr-defined]  # noqa: SLF001
 
     return wrapper
-
-
-async def _wrapper_with_plugins(
-    user_func: Callable[[Any], Any],
-    event: Any,
-    context: LambdaContext,
-    plugin_executor: PluginExecutor,
-    service_client: DurableServiceClient,
-) -> DurableExecutionInvocationOutput:
-    with plugin_executor.run():
-        try:
-            output = await _wrapper_async(
-                user_func, event, context, plugin_executor, service_client
-            )
-            await plugin_executor.on_invocation_end(
-                output=output,
-            )
-            return output
-        except Exception as e:
-            await plugin_executor.on_invocation_end(
-                output=DurableExecutionInvocationOutput.create_retry(
-                    ErrorObject.from_exception(e)
-                ),
-            )
-            raise
 
 
 def deserialize_input(event: Any) -> DurableExecutionInvocationInput:
@@ -256,7 +218,6 @@ async def _wrapper_async(
     user_func: Callable[[Any], Any],
     event: Any,
     context: LambdaContext,
-    plugin_executor: PluginExecutor,
     service_client: DurableServiceClient,
 ) -> DurableExecutionInvocationOutput:
     invocation_input = deserialize_input(event)
@@ -264,7 +225,6 @@ async def _wrapper_async(
         durable_execution_arn=invocation_input.durable_execution_arn,
         initial_checkpoint_token=invocation_input.checkpoint_token,
         service_client=service_client,
-        plugin_executor=plugin_executor,
         lambda_context=context,
     )
 
@@ -279,17 +239,9 @@ async def _wrapper_async(
             replaying=execution_state.has_prior_operations(),
         )
 
-        execution_operation = execution_state.get_execution_operation()
-        if execution_operation is None:
+        if execution_state.get_execution_operation() is None:
             msg = "Execution state is missing the root execution operation."
             raise RuntimeError(msg)
-        # execute the plugins
-        await plugin_executor.on_invocation_start(
-            execution_arn=invocation_input.durable_execution_arn,
-            lambda_context=context,
-            execution_start_time=execution_operation.start_timestamp,
-            is_first_invocation=not execution_state.has_prior_operations(),
-        )
         execution_state.start_checkpointing()
 
         logger.debug("execution arn: %s", invocation_input.durable_execution_arn)

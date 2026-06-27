@@ -3,30 +3,24 @@
 from __future__ import annotations
 
 import asyncio
-import functools
 import json
 import logging
 from collections import deque
 import time
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .exceptions import (
     DurableExecutionsError,
     GetExecutionStateError,
-    SuspendExecution,
 )
 from .models import (
-    ErrorObject,
     Operation,
-    OperationIdentifier,
     OperationAction,
     OperationType,
     OperationUpdate,
 )
 from .client import DurableServiceClient
-from .plugin import PluginExecutor
 from .primitive.child import OrphanedChildException
 
 
@@ -97,7 +91,6 @@ class ExecutionState:
         durable_execution_arn: str,
         initial_checkpoint_token: str,
         service_client: DurableServiceClient,
-        plugin_executor: PluginExecutor,
         lambda_context: LambdaContext | None = None,
         batcher_config: CheckpointBatcherConfig | None = None,
         operations: MutableMapping[str, Operation] | None = None,
@@ -107,7 +100,6 @@ class ExecutionState:
         self.lambda_context: LambdaContext | None = lambda_context
         self._current_checkpoint_token: str = initial_checkpoint_token
         self._service_client: DurableServiceClient = service_client
-        self._plugin_executor: PluginExecutor = plugin_executor
 
         # Checkpoint batching configuration
         self._batcher_config = batcher_config or CheckpointBatcherConfig()
@@ -479,12 +471,6 @@ class ExecutionState:
                         for operation in updated_operations
                     }
 
-                    for update in updates:
-                        await self._plugin_executor.on_operation_action(update)
-
-                    for operation in updated_operations:
-                        await self._plugin_executor.on_operation_update(operation)
-
                     # Signal completion for any synchronous operations
                     for queued_op in batch:
                         if not _completion_done(queued_op.completion_future):
@@ -704,35 +690,3 @@ class ExecutionState:
 
     def close(self):
         self.stop_checkpointing()
-
-    def wrap_user_function(
-        self,
-        user_function: Callable,
-        operation_identifier: OperationIdentifier,
-        is_replay_children: bool = False,
-        attempt: int | None = None,
-    ):
-        @functools.wraps(user_function)
-        async def wrapper(*args, **kwargs):
-            start_info = await self._plugin_executor.on_user_function_start(
-                operation_identifier, is_replay_children, attempt
-            )
-            try:
-                result = await user_function(*args, **kwargs)
-                await self._plugin_executor.on_user_function_end(start_info, None)
-                return result
-            except SuspendExecution as e:
-                await self._plugin_executor.on_user_function_end(
-                    start_info,
-                    ErrorObject(
-                        type=type(e).__name__, message=None, data=None, stack_trace=None
-                    ),
-                )
-                raise
-            except Exception as e:
-                await self._plugin_executor.on_user_function_end(
-                    start_info, ErrorObject.from_exception(e)
-                )
-                raise
-
-        return wrapper

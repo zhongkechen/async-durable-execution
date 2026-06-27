@@ -16,17 +16,6 @@ from async_durable_execution.context import reset_current_context, set_current_c
 from async_durable_execution.models import OperationIdentifier, OperationSubType
 from async_durable_execution.primitive import child
 from async_durable_execution.config import JitterStrategy
-from async_durable_execution.plugin import (
-    InvocationEndInfo,
-    InvocationInfo,
-    InvocationStartInfo,
-    OperationEndInfo,
-    OperationInfo,
-    OperationStartInfo,
-    UserFunctionEndInfo,
-    UserFunctionOutcome,
-    UserFunctionStartInfo,
-)
 from async_durable_execution.serdes import ExtendedTypeSerDes
 from async_durable_execution.client import DurableServiceClient
 from async_durable_execution.types import SummaryGenerator
@@ -45,18 +34,9 @@ def test_additional_public_types_importable_from_package_root():
     expected_exports = {
         "DurableServiceClient": DurableServiceClient,
         "ExtendedTypeSerDes": ExtendedTypeSerDes,
-        "InvocationEndInfo": InvocationEndInfo,
-        "InvocationInfo": InvocationInfo,
-        "InvocationStartInfo": InvocationStartInfo,
         "JitterStrategy": JitterStrategy,
-        "OperationEndInfo": OperationEndInfo,
-        "OperationInfo": OperationInfo,
-        "OperationStartInfo": OperationStartInfo,
         "OperationSubType": OperationSubType,
         "SummaryGenerator": SummaryGenerator,
-        "UserFunctionEndInfo": UserFunctionEndInfo,
-        "UserFunctionOutcome": UserFunctionOutcome,
-        "UserFunctionStartInfo": UserFunctionStartInfo,
     }
 
     for name, public_type in expected_exports.items():

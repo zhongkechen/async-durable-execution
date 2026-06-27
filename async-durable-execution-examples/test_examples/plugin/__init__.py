@@ -1,1 +1,0 @@
-"""Plugin example tests."""

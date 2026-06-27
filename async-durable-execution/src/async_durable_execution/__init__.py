@@ -73,18 +73,6 @@ from .exceptions import (
 # Core decorator - used in every durable function
 from .execution import durable_callable, durable_execution
 from .primitive.wait import wait
-from .plugin import (
-    DurableInstrumentationPlugin,
-    InvocationEndInfo,
-    InvocationInfo,
-    InvocationStartInfo,
-    OperationEndInfo,
-    OperationInfo,
-    OperationStartInfo,
-    UserFunctionEndInfo,
-    UserFunctionOutcome,
-    UserFunctionStartInfo,
-)
 from .serdes import ExtendedTypeSerDes, JsonSerDes, SerDes, SerDesContext
 from .client import DurableServiceClient
 from .types import LambdaContext, SummaryGenerator
@@ -114,26 +102,19 @@ __all__ = [
     "CompletionConfig",
     "CompletionReason",
     "DurableContext",
-    "DurableInstrumentationPlugin",
     "DurableServiceClient",
     "DurableExecutionsError",
     "ErrorObject",
     "ExecutionError",
     "ExtendedTypeSerDes",
     "InvalidStateError",
-    "InvocationEndInfo",
-    "InvocationInfo",
     "InvocationError",
-    "InvocationStartInfo",
     "InvocationStatus",
     "JsonSerDes",
     "JitterStrategy",
     "LambdaContext",
     "MapItemContext",
     "NestingType",
-    "OperationEndInfo",
-    "OperationInfo",
-    "OperationStartInfo",
     "OperationStatus",
     "OperationSubType",
     "OperationType",
@@ -147,9 +128,6 @@ __all__ = [
     "StepInterruptedError",
     "StepSemantics",
     "SummaryGenerator",
-    "UserFunctionEndInfo",
-    "UserFunctionOutcome",
-    "UserFunctionStartInfo",
     "UserlandError",
     "ValidationError",
     "WaitForCallbackContext",

@@ -44,13 +44,6 @@ from async_durable_execution.models import (
 from async_durable_execution.composite.map import MapExecutor
 
 
-def _wrap_user_function_for_test(func, *args, **kwargs):
-    async def wrapper(*a, **kw):
-        return await func(*a, **kw)
-
-    return wrapper
-
-
 async def run_async(awaitable):
     return await awaitable
 
@@ -61,8 +54,6 @@ def create_execution_state():
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
     state.create_checkpoint = AsyncMock()
-    state.create_checkpoint = AsyncMock()
-    state.wrap_user_function = _wrap_user_function_for_test
     state.operations.get.return_value = None
     return state
 
@@ -2562,7 +2553,6 @@ async def test_concurrent_executor_replay_with_succeeded_operations():
     mock_execution_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    mock_execution_state.wrap_user_function = _wrap_user_function_for_test
     mock_execution_state.create_checkpoint = AsyncMock()
 
     def mock_get_operation(operation_id):
