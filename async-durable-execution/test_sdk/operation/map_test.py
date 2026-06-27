@@ -1174,7 +1174,7 @@ async def test_map_item_deserialize(mock_deserialize, item_serdes, batch_serdes)
     """Test map deserializes items with item_serdes or fallback."""
     mock_deserialize.return_value = "deserialized"
     if batch_serdes is not None:
-        batch_serdes.serialize.return_value = '"serialized"'
+        batch_serdes.serialize = AsyncMock(return_value='"serialized"')
 
     parent_checkpoint = Mock()
     parent_checkpoint.is_succeeded.return_value = False

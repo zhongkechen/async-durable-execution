@@ -22,7 +22,6 @@ Wire Formats:
 from __future__ import annotations
 
 import base64
-import inspect
 import json
 import logging
 import uuid
@@ -33,7 +32,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar
 
-from .context import reset_current_context, set_current_context
+from .context import invoke_user_callable
 from .exceptions import (
     DurableExecutionsError,
     ExecutionError,
@@ -485,22 +484,19 @@ async def serialize(
     """
     serdes_context: SerDesContext = SerDesContext(operation_id, durable_execution_arn)
     active_serdes: SerDes[T] = serdes or EXTENDED_TYPES_SERDES
-    token = set_current_context(serdes_context)
+
+    async def serialize_value() -> str:
+        return await active_serdes.serialize(value)
+
     try:
-        try:
-            maybe_serialized: Any = active_serdes.serialize(value)
-            if inspect.isawaitable(maybe_serialized):
-                return await maybe_serialized
-            return maybe_serialized
-        except Exception as e:
-            logger.exception(
-                "⚠️ Serialization failed for id: %s",
-                operation_id,
-            )
-            msg = f"Serialization failed for id: {operation_id}, error: {e}."
-            raise ExecutionError(msg) from e
-    finally:
-        reset_current_context(token)
+        return await invoke_user_callable(serdes_context, serialize_value)
+    except Exception as e:
+        logger.exception(
+            "⚠️ Serialization failed for id: %s",
+            operation_id,
+        )
+        msg = f"Serialization failed for id: {operation_id}, error: {e}."
+        raise ExecutionError(msg) from e
 
 
 async def deserialize(
@@ -522,16 +518,13 @@ async def deserialize(
     """
     serdes_context: SerDesContext = SerDesContext(operation_id, durable_execution_arn)
     active_serdes: SerDes[T] = serdes or EXTENDED_TYPES_SERDES
-    token = set_current_context(serdes_context)
+
+    async def deserialize_value() -> T:
+        return await active_serdes.deserialize(data)
+
     try:
-        try:
-            maybe_deserialized: Any = active_serdes.deserialize(data)
-            if inspect.isawaitable(maybe_deserialized):
-                return await maybe_deserialized
-            return maybe_deserialized
-        except Exception as e:
-            logger.exception("⚠️ Deserialization failed for id: %s", operation_id)
-            msg = f"Deserialization failed for id: {operation_id}"
-            raise ExecutionError(msg) from e
-    finally:
-        reset_current_context(token)
+        return await invoke_user_callable(serdes_context, deserialize_value)
+    except Exception as e:
+        logger.exception("⚠️ Deserialization failed for id: %s", operation_id)
+        msg = f"Deserialization failed for id: {operation_id}"
+        raise ExecutionError(msg) from e
