@@ -214,7 +214,7 @@ def build_template(
                         }
                     ],
                 },
-            }
+            },
         },
     }
 
