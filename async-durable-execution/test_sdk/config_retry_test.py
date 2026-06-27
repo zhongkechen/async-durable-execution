@@ -63,12 +63,24 @@ def test_default_config():
     """Test default configuration values."""
     config = RetryStrategyBuilder()
     assert config.max_attempts == 3
+    assert config.initial_delay == 5
+    assert config.max_delay == 300
     assert config.initial_delay_seconds == 5
     assert config.max_delay_seconds == 300
     assert config.backoff_rate == 2.0
     assert config.jitter_strategy == JitterStrategy.FULL
     assert config.retryable_errors is None
     assert config.retryable_error_types is None
+
+
+def test_config_accepts_int_seconds():
+    """Test duration fields accept integer seconds."""
+    config = RetryStrategyBuilder(initial_delay=2, max_delay=50)
+
+    assert config.initial_delay == 2
+    assert config.max_delay == 50
+    assert config.initial_delay_seconds == 2
+    assert config.max_delay_seconds == 50
 
 
 def test_max_attempts_exceeded():

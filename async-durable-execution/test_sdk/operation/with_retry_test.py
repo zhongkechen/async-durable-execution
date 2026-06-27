@@ -12,6 +12,7 @@ import pytest
 
 from async_durable_execution import with_retry, with_retry as imported_with_retry
 from async_durable_execution.config import (
+    Duration,
     JitterStrategy,
     RetryStrategyBuilder,
 )
@@ -36,7 +37,7 @@ _T = TypeVar("_T")
 class WaitCall:
     """Record of a wait() call."""
 
-    duration: timedelta
+    duration: Duration
     name: str | None
 
 
@@ -58,7 +59,7 @@ class MockDurableContext:
     wait_calls: list[WaitCall] = field(default_factory=list)
     child_context_calls: list[RunInChildContextCall] = field(default_factory=list)
 
-    async def wait(self, duration: timedelta, name: str | None = None) -> None:
+    async def wait(self, duration: Duration, name: str | None = None) -> None:
         self.wait_calls.append(WaitCall(duration=duration, name=name))
 
     async def run_in_child_context(
@@ -107,7 +108,7 @@ async def _call_with_retry(
     """Invoke with_retry() against a patched ambient context."""
 
     async def fake_wait(
-        duration: timedelta,
+        duration: Duration,
         *,
         name: str | None = None,
     ) -> None:
@@ -350,7 +351,7 @@ async def test_default_retry_strategy_is_used_when_not_provided():
     assert result == "ok"
     assert call_count == 2
     assert len(ctx.wait_calls) == 1
-    assert ctx.wait_calls[0].duration > timedelta()
+    assert ctx.wait_calls[0].duration > 0
     assert ctx.wait_calls[0].name is None
 
 
@@ -377,7 +378,7 @@ async def test_no_name_creates_anonymous_child_context_and_anonymous_waits():
 
     assert result == "ok"
     assert ctx.child_context_calls == [RunInChildContextCall(name=None, result="ok")]
-    assert ctx.wait_calls == [WaitCall(duration=timedelta(seconds=1), name=None)]
+    assert ctx.wait_calls == [WaitCall(duration=1, name=None)]
 
 
 async def test_name_is_forwarded_to_child_context_and_backoff_waits():
@@ -402,8 +403,8 @@ async def test_name_is_forwarded_to_child_context_and_backoff_waits():
         RunInChildContextCall(name="my-retry", result="done")
     ]
     assert ctx.wait_calls == [
-        WaitCall(duration=timedelta(seconds=1), name="my-retry-backoff-1"),
-        WaitCall(duration=timedelta(seconds=2), name="my-retry-backoff-2"),
+        WaitCall(duration=1, name="my-retry-backoff-1"),
+        WaitCall(duration=2, name="my-retry-backoff-2"),
     ]
 
 
@@ -503,9 +504,9 @@ async def test_integration_with_retry_strategy_builder():
 
     assert result == "done"
     assert ctx.wait_calls == [
-        WaitCall(duration=timedelta(seconds=2), name=None),
-        WaitCall(duration=timedelta(seconds=4), name=None),
-        WaitCall(duration=timedelta(seconds=8), name=None),
+        WaitCall(duration=2, name=None),
+        WaitCall(duration=4, name=None),
+        WaitCall(duration=8, name=None),
     ]
 
 
@@ -530,6 +531,6 @@ async def test_integration_retries_exhausted_raises_last_exception():
         )
 
     assert ctx.wait_calls == [
-        WaitCall(duration=timedelta(seconds=1), name=None),
-        WaitCall(duration=timedelta(seconds=2), name=None),
+        WaitCall(duration=1, name=None),
+        WaitCall(duration=2, name=None),
     ]
