@@ -14,10 +14,7 @@ from .base import (
     OperationExecutor,
     OperationContext,
 )
-from ..async_tools import (
-    invoke_user_callable,
-)
-from ..context import get_current_context
+from ..context import get_current_context, invoke_user_callable
 from ..exceptions import (
     CallableRuntimeError,
     InvocationError,

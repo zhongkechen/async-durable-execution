@@ -16,7 +16,7 @@ from .config import JitterStrategy, RetryPresets, RetryStrategyBuilder
 from .context import (
     get_current_context,
 )
-from .async_tools import durable_callable
+from .decorators import durable_callable
 from .composite.with_retry import with_retry
 from .composite.map import MapItemContext, map
 from .composite.concurrency import (

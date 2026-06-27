@@ -2,12 +2,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, ParamSpec, TypeVar, cast
-
-from .context import reset_current_context, set_current_context
-
-if TYPE_CHECKING:
-    from .primitive.base import OperationContext
+from typing import ParamSpec, TypeVar
 
 T = TypeVar("T")
 Params = ParamSpec("Params")
@@ -39,17 +34,3 @@ def durable_callable(
         return bound
 
     return wrapper
-
-
-async def invoke_user_callable(
-    context: OperationContext,
-    func: Callable[..., Awaitable[T]],
-    *args,
-    **kwargs,
-) -> T:
-    """Invoke user code while temporarily binding the supplied durable context."""
-    token = set_current_context(context)
-    try:
-        return await func(*args, **kwargs)
-    finally:
-        reset_current_context(token)

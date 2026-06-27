@@ -7,8 +7,9 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
-from ..async_tools import durable_callable, invoke_user_callable
 from ..context import get_current_context
+from ..context import invoke_user_callable
+from ..decorators import durable_callable
 from ..models import RetryDecision
 from ..primitive.base import OperationContext
 from ..primitive.callback import Callback, create_callback

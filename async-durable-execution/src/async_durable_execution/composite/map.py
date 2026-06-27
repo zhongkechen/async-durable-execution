@@ -22,10 +22,8 @@ from ..primitive.child import (
     get_durable_context,
 )
 
-from ..async_tools import (
-    invoke_user_callable,
-    durable_callable,
-)
+from ..context import invoke_user_callable
+from ..decorators import durable_callable
 from .concurrency import (
     BatchResult,
     CompletionConfig,

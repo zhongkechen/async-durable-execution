@@ -8,9 +8,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, cast
 
-from .async_tools import (
-    invoke_user_callable,
-)
+from .context import invoke_user_callable
 from .primitive.child import DurableContext
 from .exceptions import (
     CheckpointError,
