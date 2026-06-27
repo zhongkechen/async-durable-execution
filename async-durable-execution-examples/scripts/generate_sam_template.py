@@ -28,6 +28,11 @@ SPECIAL_LOGGING_CONFIG = {
         "LogFormat": "JSON",
     },
 }
+EXAMPLE_DEPENDENCIES = {
+    "async_durable_execution_examples.invoke.invoke.handler": [
+        "async_durable_execution_examples.invoke.price_order_child.handler"
+    ],
+}
 
 
 def build_examples_catalog() -> dict[str, Any]:
@@ -195,6 +200,7 @@ def build_template(
                                         "Action": [
                                             "lambda:CheckpointDurableExecution",
                                             "lambda:GetDurableExecutionState",
+                                            "lambda:InvokeFunction",
                                         ],
                                         "Resource": "*",
                                     }
@@ -276,9 +282,12 @@ def generate_sam_template(
             raise SystemExit(msg)
         selected_examples = [selected_examples[0]]
 
+    selected_examples = include_example_dependencies(selected_examples, catalog)
+
     template = build_template(
         selected_examples,
-        include_function_name_parameter=example_name is not None,
+        include_function_name_parameter=example_name is not None
+        and len(selected_examples) == 1,
         runtime=runtime,
     )
 
@@ -291,6 +300,27 @@ def generate_sam_template(
         file.write("\n")
 
     return template_path
+
+
+def include_example_dependencies(
+    selected_examples: list[dict[str, Any]],
+    catalog: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Include extra functions needed by selected examples in cloud tests."""
+    examples_by_handler = {
+        example["handler"]: example for example in catalog["examples"]
+    }
+    selected_by_handler = {example["handler"]: example for example in selected_examples}
+
+    for example in selected_examples:
+        for dependency_handler in EXAMPLE_DEPENDENCIES.get(example["handler"], []):
+            dependency = examples_by_handler.get(dependency_handler)
+            if dependency is None:
+                msg = f"Example dependency missing from catalog: {dependency_handler}"
+                raise SystemExit(msg)
+            selected_by_handler[dependency_handler] = dependency
+
+    return list(selected_by_handler.values())
 
 
 def main() -> int:

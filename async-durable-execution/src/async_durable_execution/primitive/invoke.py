@@ -7,7 +7,11 @@ from typing import TYPE_CHECKING, TypeVar
 
 from .child import _get_durable_context
 
-from ..exceptions import ExecutionError, suspend_with_optional_resume_delay
+from ..exceptions import (
+    CallableRuntimeError,
+    ExecutionError,
+    suspend_with_optional_resume_delay,
+)
 from ..models import (
     ChainedInvokeOptions,
     Operation,
@@ -18,7 +22,7 @@ from ..models import (
 )
 
 # Import base classes for operation executor pattern
-from .base import CheckpointedResult, OperationExecutor
+from .base import OperationExecutor
 from ..serdes import (
     DEFAULT_JSON_SERDES,
 )
@@ -81,25 +85,22 @@ class InvokeOperationExecutor(OperationExecutor[R]):
         await self.create_checkpoint(start_operation, is_sync=True)
 
         logger.debug(
-            "🚀 Invoke %s started, will check for immediate response",
+            "🚀 Invoke %s started, will suspend for completion",
             self.operation_name or self.function_name,
         )
 
-        checkpointed_result = self.get_checkpointed_result()
-        if not checkpointed_result.operation:
-            error_msg = "Missing invoke operation after START checkpoint."
-            raise ExecutionError(error_msg)
-        return await self.replay(checkpointed_result.operation)
+        return await self.execute()
 
     async def replay(self, operation: Operation) -> R:
         """Replay an existing invoke operation from its checkpoint."""
+        invoke_details = operation.chained_invoke_details
         if operation.status is OperationStatus.SUCCEEDED:
-            checkpointed_result = CheckpointedResult.create_from_operation(operation)
-            if checkpointed_result.result is None:
+            result_data = invoke_details.result if invoke_details else None
+            if result_data is None:
                 return None  # type: ignore[return-value]
 
             result: R = await self.deserialize_value(
-                data=checkpointed_result.result,
+                data=result_data,
                 serdes=self.serdes_result or DEFAULT_JSON_SERDES,
             )
             return result
@@ -110,26 +111,31 @@ class InvokeOperationExecutor(OperationExecutor[R]):
             or operation.status is OperationStatus.TIMED_OUT
             or operation.status is OperationStatus.STOPPED
         ):
-            CheckpointedResult.create_from_operation(operation).raise_callable_error()
+            error = invoke_details.error if invoke_details else None
+            if error is None:
+                raise CallableRuntimeError(
+                    message="Unknown error. No ErrorObject exists on the Checkpoint Operation.",
+                    error_type=None,
+                    data=None,
+                    stack_trace=None,
+                )
 
-        checkpointed_result = CheckpointedResult.create_from_operation(operation)
+            raise error.to_callable_runtime_error()
+
         if operation.status is OperationStatus.STARTED:
             logger.debug(
                 "⏳ Invoke %s still in progress, will suspend",
                 self.operation_name or self.function_name,
             )
-            return await self.execute(checkpointed_result)
+            return await self.execute()
 
-        return await self.execute(checkpointed_result)
+        return await self.execute()
 
-    async def execute(self, _checkpointed_result: CheckpointedResult) -> R:
+    async def execute(self) -> R:  # type: ignore[override]
         """Execute invoke operation by suspending to wait for async completion.
 
         The invoke operation doesn't execute synchronously - it suspends and
         the backend executes the invoked function asynchronously.
-
-        Args:
-            checkpointed_result: The checkpoint data (unused, but required by interface)
 
         Returns:
             Never returns - always suspends

@@ -1,27 +1,35 @@
 """Tests for invoke example."""
 
+import os
+
 import pytest
 
 from async_durable_execution import InvocationStatus, OperationStatus
 from async_durable_execution_examples.invoke import invoke
+from function_naming import to_function_name_suffix
 
 
-async def test_invoke_uses_mocked_child_result(durable_runner):
-    child_function_name = "price-order-child:$LATEST"
+CHILD_HANDLER = "async_durable_execution_examples.invoke.price_order_child.handler"
+
+
+async def test_invoke_uses_mocked_child_result(durable_runner, request):
     child_result = {"price": 42, "currency": "USD"}
+    runner_mode = request.config.getoption("--runner-mode")
+    child_function_name = _get_child_function_name(runner_mode)
+    input_payload = {
+        "order_id": "order-123",
+        "child_function_name": child_function_name,
+    }
+    if runner_mode != "cloud":
+        input_payload["tenant_id"] = "tenant-abc"
 
     with durable_runner(
         handler=invoke.handler,
-        input={
-            "order_id": "order-123",
-            "child_function_name": child_function_name,
-            "tenant_id": "tenant-abc",
-        },
+        input=input_payload,
         timeout=10,
     ) as runner:
-        if runner.mode == "cloud":
-            pytest.skip("invoke example uses a local runner mock child result")
-        runner.mock_invoke_result(child_function_name, child_result)
+        if runner.mode != "cloud":
+            runner.mock_invoke_result(child_function_name, child_result)
         result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED
@@ -34,3 +42,18 @@ async def test_invoke_uses_mocked_child_result(durable_runner):
     invoke_operation = result.get_invoke("price-order")
     assert invoke_operation.status is OperationStatus.SUCCEEDED
     assert invoke_operation.get_deserialized_result() == child_result
+
+
+def _get_child_function_name(runner_mode: str) -> str:
+    if runner_mode != "cloud":
+        return "price-order-child:$LATEST"
+
+    function_name_prefix = os.environ.get("PYTEST_FUNCTION_NAME_PREFIX")
+    if function_name_prefix:
+        child_name = f"{function_name_prefix}{to_function_name_suffix(CHILD_HANDLER)}"
+        return f"{child_name}:$LATEST"
+
+    pytest.fail(
+        "Cloud invoke test requires PYTEST_FUNCTION_NAME_PREFIX so the deployed "
+        "child function name can be derived."
+    )
