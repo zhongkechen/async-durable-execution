@@ -1410,6 +1410,41 @@ async def test_synchronous_checkpoint_blocks_until_complete():
     assert state._checkpoint_queue.qsize() == 0
 
 
+async def test_synchronous_checkpoint_returns_updated_operation():
+    """Test that create_checkpoint(is_sync=True) returns the checkpointed operation."""
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
+    updated_operation = Operation(
+        operation_id="test_op",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.STARTED,
+    )
+    mock_lambda_client.checkpoint.return_value = CheckpointOutput(
+        checkpoint_token="new_token",  # noqa: S106
+        new_execution_state=CheckpointUpdatedExecutionState(
+            operations=[updated_operation],
+            next_marker=None,
+        ),
+    )
+
+    state = ExecutionState(
+        durable_execution_arn="test_arn",
+        initial_checkpoint_token="token123",  # noqa: S106
+        operations={},
+        service_client=mock_lambda_client,
+        plugin_executor=PluginExecutor(plugins=None),
+    )
+
+    operation_update = OperationUpdate(
+        operation_id="test_op",
+        operation_type=OperationType.STEP,
+        action=OperationAction.START,
+    )
+
+    result = await state.create_checkpoint(operation_update, is_sync=True)
+
+    assert result == updated_operation
+
+
 async def test_operations_dictionary_access():
     """Test checkpoint reads reflect direct state updates."""
     mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
