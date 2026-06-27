@@ -22,11 +22,8 @@ from ..primitive.child import (
     get_durable_context,
 )
 
-from ..async_tools import (
-    invoke_user_callable,
-    assert_async_callable,
-    durable_callable,
-)
+from ..context import invoke_user_callable
+from ..execution import durable_callable
 from .concurrency import (
     BatchResult,
     CompletionConfig,
@@ -221,7 +218,6 @@ async def map(
         item_namer: Optional callable for naming map item iterations.
     """
     context = get_durable_context("map")
-    assert_async_callable(func)
     items_sequence = list(items)
     map_name = name if name is not None else getattr(func, "__name__", None)
     with context._replay_aware():

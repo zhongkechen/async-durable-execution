@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from async_durable_execution.async_tools import invoke_callable
 from async_durable_execution.composite.concurrency import (
     BatchItem,
     BatchItemStatus,
@@ -46,7 +45,10 @@ from async_durable_execution.composite.map import MapExecutor
 
 
 def _wrap_user_function_for_test(func, *args, **kwargs):
-    return lambda *a, **kw: invoke_callable(func, *a, **kw)
+    async def wrapper(*a, **kw):
+        return await func(*a, **kw)
+
+    return wrapper
 
 
 async def run_async(awaitable):
@@ -2517,7 +2519,7 @@ async def test_operation_id_determinism_across_shuffles():
         async def process():
             assert is_virtual
             assert operation_identifier.sub_type == "TEST_ITER"
-            result = await invoke_callable(func)
+            result = await func()
             captured_associations.append((operation_identifier.operation_id, result))
             return result
 
@@ -2937,7 +2939,7 @@ async def test_executor_exits_early_with_min_successful():
 
     class TestExecutor(ConcurrentExecutor):
         async def execute_item(self, child_context, executable):
-            return await invoke_callable(executable.func)
+            return await executable.func()
 
     execution_times = []
 
@@ -3005,7 +3007,7 @@ async def test_executor_returns_with_incomplete_branches():
 
     class TestExecutor(ConcurrentExecutor):
         async def execute_item(self, child_context, executable):
-            return await invoke_callable(executable.func)
+            return await executable.func()
 
     operation_tracker = Mock()
 
@@ -3070,7 +3072,7 @@ async def test_executor_returns_before_slow_branch_completes():
 
     class TestExecutor(ConcurrentExecutor):
         async def execute_item(self, child_context, executable):
-            return await invoke_callable(executable.func)
+            return await executable.func()
 
     slow_branch_mock = Mock()
 

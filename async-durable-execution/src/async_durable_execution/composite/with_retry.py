@@ -4,9 +4,6 @@ from typing import TYPE_CHECKING, Awaitable, Callable, TypeVar
 
 from ..config import RetryStrategyBuilder
 from ..models import RetryDecision
-from ..async_tools import (
-    assert_async_callable,
-)
 from ..exceptions import SuspendExecution
 from ..primitive.child import (
     run_in_child_context,
@@ -41,7 +38,6 @@ async def with_retry(
     """
 
     async def run_loop() -> T:
-        assert_async_callable(func)
         retry = retry_strategy or RetryStrategyBuilder().build()
         attempt = 0
         while True:

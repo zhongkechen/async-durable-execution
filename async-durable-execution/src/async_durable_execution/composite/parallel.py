@@ -15,12 +15,8 @@ from typing import (
 
 from ..primitive.child import ChildOperationExecutor, get_durable_context
 
-from ..async_tools import (
-    invoke_user_callable,
-    invoke_callable,
-    assert_async_callable,
-    durable_callable,
-)
+from ..context import invoke_user_callable
+from ..execution import durable_callable
 from .concurrency import (
     CompletionConfig,
     ConcurrentExecutor,
@@ -81,9 +77,7 @@ class ParallelExecutor(ConcurrentExecutor[Callable, R]):
                 executable.func,
             )
         else:
-            result = await invoke_callable(
-                executable.func,
-            )
+            result = await executable.func()
         logger.debug("✅ Processed parallel branch: %s", executable.index)
         return result
 
@@ -163,8 +157,7 @@ async def parallel(
     """Run multiple bound durable callables concurrently and return a `BatchResult`."""
     context = get_durable_context("parallel")
     validated_branches: list[Callable[[], Awaitable[T]]] = []
-    for index, branch in enumerate(branches):
-        assert_async_callable(branch, label=f"branches[{index}]")
+    for branch in branches:
         validated_branches.append(branch)
 
     with context._replay_aware():

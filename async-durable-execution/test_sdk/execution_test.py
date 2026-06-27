@@ -22,7 +22,6 @@ from async_durable_execution.exceptions import (
     GetExecutionStateError,
     InvocationError,
     SuspendExecution,
-    ValidationError,
 )
 from async_durable_execution.execution import (
     DurableExecutionInvocationInput,
@@ -3196,17 +3195,6 @@ async def test_durable_execution_handler_can_access_lambda_context_from_current_
         "request_id": lambda_context.aws_request_id,
         "has_durable_context": True,
     }
-
-
-async def test_durable_execution_rejects_sync_handler():
-    with pytest.raises(
-        ValidationError,
-        match="Non-async callables are no longer supported",
-    ):
-
-        @durable_execution
-        def test_handler(event: Any) -> dict:
-            return {"result": "sync-success"}
 
 
 async def test_durable_execution_supports_async_steps_inside_async_handler():

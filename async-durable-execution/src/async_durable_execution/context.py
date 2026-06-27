@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from contextvars import ContextVar, Token
+from typing import TYPE_CHECKING, TypeVar
+
+if TYPE_CHECKING:
+    from .primitive.base import OperationContext
+
+T = TypeVar("T")
 
 
 _current_context: ContextVar = ContextVar(
@@ -35,3 +42,17 @@ def get_current_context():
         )
         raise RuntimeError(msg)
     return current_context
+
+
+async def invoke_user_callable(
+    context: OperationContext,
+    func: Callable[..., Awaitable[T]],
+    *args,
+    **kwargs,
+) -> T:
+    """Invoke user code while temporarily binding the supplied durable context."""
+    token = set_current_context(context)
+    try:
+        return await func(*args, **kwargs)
+    finally:
+        reset_current_context(token)

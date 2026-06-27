@@ -14,11 +14,7 @@ from .base import (
     OperationExecutor,
     OperationContext,
 )
-from ..async_tools import (
-    assert_async_callable,
-    invoke_user_callable,
-)
-from ..context import get_current_context
+from ..context import get_current_context, invoke_user_callable
 from ..exceptions import (
     CallableRuntimeError,
     InvocationError,
@@ -448,7 +444,6 @@ async def run_in_child_context(
         is_virtual: Whether the child context should skip lifecycle checkpoints.
     """
     context = get_durable_context("run_in_child_context")
-    assert_async_callable(func)
     step_name = name if name is not None else getattr(func, "__name__", None)
     with context._replay_aware():
         operation_id = context.step_counter.create_step_id()

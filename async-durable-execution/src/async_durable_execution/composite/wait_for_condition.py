@@ -10,7 +10,6 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
 from ..primitive.step import StepContext
-from ..async_tools import assert_async_callable
 from ..config import JitterStrategy, duration_to_seconds
 from ..context import (
     reset_current_context,
@@ -475,7 +474,6 @@ async def wait_for_condition(
     if check is None:
         msg = "`check` is required for wait_for_condition"
         raise ValidationError(msg)
-    assert_async_callable(check, label="check")
 
     with context._replay_aware(executes_user_code=True):
         operation_id = context.step_counter.create_step_id()

@@ -7,8 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, TypeVar
 
-from ..context import get_current_context
-from ..async_tools import assert_async_callable, invoke_user_callable
+from ..context import get_current_context, invoke_user_callable
 from ..config import RetryPresets
 from ..exceptions import (
     CallableRuntimeError,
@@ -352,7 +351,6 @@ async def step(
     calls, clock reads, UUID generation, and database access from replayed code.
     """
     context = get_durable_context()
-    assert_async_callable(func)
     step_name = name if name is not None else getattr(func, "__name__", None)
     logger.debug("Step name: %s", step_name)
     with context._replay_aware(executes_user_code=True):

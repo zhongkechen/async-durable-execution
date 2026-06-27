@@ -12,7 +12,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from .async_tools import invoke_callable
 from .exceptions import (
     DurableExecutionsError,
     GetExecutionStateError,
@@ -719,7 +718,7 @@ class ExecutionState:
                 operation_identifier, is_replay_children, attempt
             )
             try:
-                result = await invoke_callable(user_function, *args, **kwargs)
+                result = await user_function(*args, **kwargs)
                 await self._plugin_executor.on_user_function_end(start_info, None)
                 return result
             except SuspendExecution as e:

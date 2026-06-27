@@ -6,12 +6,9 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
 
-from .async_tools import (
-    invoke_user_callable,
-    assert_async_callable,
-)
+from .context import invoke_user_callable
 from .primitive.child import DurableContext
 from .exceptions import (
     CheckpointError,
@@ -57,6 +54,37 @@ logger = logging.getLogger(__name__)
 
 # 6MB in bytes, minus 50 bytes for envelope
 LAMBDA_RESPONSE_SIZE_LIMIT = 6 * 1024 * 1024 - 50
+
+T = TypeVar("T")
+Params = ParamSpec("Params")
+
+
+def durable_callable(
+    func: Callable[Params, Awaitable[T]],
+) -> Callable[Params, Callable[[], Awaitable[T]]]:
+    """Wrap an async function so calling it returns a zero-argument durable callable.
+
+    The returned callable can be passed to durable operations such as `step()`
+    and `run_in_child_context()`, keeping durable operation creation explicit
+    while avoiding manual `functools.partial(...)` wrapping at the callsite.
+
+    Class and static methods are supported with either decorator order:
+    `@classmethod`/`@staticmethod` may appear above or below `@durable_callable`.
+    """
+    if isinstance(func, classmethod):
+        return classmethod(durable_callable(func.__func__))  # type: ignore[return-value]
+    if isinstance(func, staticmethod):
+        return staticmethod(durable_callable(func.__func__))  # type: ignore[return-value]
+
+    @functools.wraps(func)
+    def wrapper(
+        *args: Params.args, **kwargs: Params.kwargs
+    ) -> Callable[[], Awaitable[T]]:
+        bound = functools.partial(func, *args, **kwargs)
+        setattr(bound, "__name__", func.__name__)
+        return bound
+
+    return wrapper
 
 
 @dataclass(frozen=True)
@@ -135,7 +163,6 @@ def durable_execution(
         )
     config = DurableConfig(**kwargs)
     logger.debug("Starting durable execution handler...")
-    assert_async_callable(func, label="func")
     plugin_executor = PluginExecutor(config.plugins)
 
     # Use the explicitly provided durable client when present. Otherwise, delay
