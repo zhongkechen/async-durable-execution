@@ -15,6 +15,11 @@ from async_durable_execution.config import (
     JitterStrategy,
     RetryStrategyBuilder,
 )
+from async_durable_execution.context import (
+    get_current_context,
+    reset_current_context,
+    set_current_context,
+)
 from async_durable_execution.models import RetryDecision
 from async_durable_execution.exceptions import SuspendExecution
 
@@ -128,10 +133,6 @@ async def _call_with_retry(
         return result
 
     with (
-        patch(
-            "async_durable_execution.composite.with_retry.get_durable_context",
-            return_value=ctx,
-        ),
         patch(
             "async_durable_execution.composite.with_retry.wait",
             new=AsyncMock(side_effect=fake_wait),
@@ -299,6 +300,37 @@ async def test_default_config_wraps_in_child_context():
 
     assert result == "ok"
     assert len(ctx.child_context_calls) == 1
+
+
+async def test_retry_body_runs_with_child_context_bound():
+    """The retry body keeps the child context installed by run_in_child_context."""
+    parent_ctx = object()
+    child_ctx = object()
+
+    async def fake_run_in_child_context(func, **_kwargs):
+        token = set_current_context(child_ctx)
+        try:
+            return await func()
+        finally:
+            reset_current_context(token)
+
+    async def current_context_is_child(_attempt: int) -> bool:
+        return get_current_context() is child_ctx
+
+    with (
+        patch(
+            "async_durable_execution.composite.with_retry.run_in_child_context",
+            new=AsyncMock(side_effect=fake_run_in_child_context),
+        ),
+        patch(
+            "async_durable_execution.composite.with_retry.get_durable_context",
+            return_value=parent_ctx,
+            create=True,
+        ),
+    ):
+        result = await with_retry(current_context_is_child)
+
+    assert result is True
 
 
 async def test_default_retry_strategy_is_used_when_not_provided():
