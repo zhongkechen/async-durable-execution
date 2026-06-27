@@ -48,7 +48,6 @@ async def wait_for_callback_handler(
             callback_id=callback.callback_id,
             execution_state=step_context.execution_state,
             operation_identifier=step_context.operation_identifier,
-            lambda_context=step_context.lambda_context,
         )
         token = set_current_context(callback_context)
         try:

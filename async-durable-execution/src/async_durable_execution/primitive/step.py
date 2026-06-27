@@ -38,7 +38,6 @@ if TYPE_CHECKING:
 
     from ..serdes import SerDes
     from ..state import ExecutionState
-    from ..types import LambdaContext
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +70,6 @@ class StepOperationExecutor(OperationExecutor[T]):
         retry_strategy: Callable[[Exception, int], RetryDecision] | None = None,
         step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
         serdes: SerDes | None = None,
-        lambda_context: LambdaContext | None = None,
     ):
         """Initialize the step operation executor.
 
@@ -88,7 +86,6 @@ class StepOperationExecutor(OperationExecutor[T]):
         self.retry_strategy = retry_strategy
         self.step_semantics = step_semantics
         self.serdes = serdes
-        self.lambda_context = lambda_context
 
     async def start(self) -> T:
         """Start a new step operation."""
@@ -181,7 +178,6 @@ class StepOperationExecutor(OperationExecutor[T]):
             attempt=attempt,
             execution_state=self.state,
             operation_identifier=self.operation_identifier,
-            lambda_context=self.lambda_context,
         )
 
         try:
@@ -368,25 +364,14 @@ async def step(
             parent_id=context.parent_id,
             name=step_name,
         )
-        if context.lambda_context is None:
-            executor: StepOperationExecutor[T] = StepOperationExecutor(
-                func=func,
-                state=context.execution_state,
-                operation_identifier=operation_identifier,
-                retry_strategy=retry_strategy,
-                step_semantics=step_semantics,
-                serdes=serdes,
-            )
-        else:
-            executor = StepOperationExecutor(
-                func=func,
-                state=context.execution_state,
-                operation_identifier=operation_identifier,
-                retry_strategy=retry_strategy,
-                step_semantics=step_semantics,
-                serdes=serdes,
-                lambda_context=context.lambda_context,
-            )
+        executor: StepOperationExecutor[T] = StepOperationExecutor(
+            func=func,
+            state=context.execution_state,
+            operation_identifier=operation_identifier,
+            retry_strategy=retry_strategy,
+            step_semantics=step_semantics,
+            serdes=serdes,
+        )
         return await executor.process()
 
 

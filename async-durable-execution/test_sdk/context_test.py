@@ -157,6 +157,7 @@ async def test_step_context_exposes_lambda_context_from_operation_context():
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
     lambda_context = Mock()
+    mock_state.lambda_context = lambda_context
 
     context = StepContext(
         execution_state=mock_state,
@@ -165,7 +166,6 @@ async def test_step_context_exposes_lambda_context_from_operation_context():
             sub_type=OperationSubType.STEP,
             parent_id=None,
         ),
-        lambda_context=lambda_context,
         attempt=1,
     )
 
@@ -178,10 +178,10 @@ async def test_child_context_inherits_lambda_context_from_operation_context():
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
     lambda_context = Mock()
+    mock_state.lambda_context = lambda_context
     parent_context = DurableContext(
         execution_state=mock_state,
         operation_identifier=OperationIdentifier.create_execution_op(),
-        lambda_context=lambda_context,
     )
 
     child_context = parent_context.create_child_context("child-op-1")
@@ -2350,12 +2350,10 @@ async def test_from_lambda_context_sets_durable_execution_arn():
     expected_arn = "arn:aws:durable:ap-south-1:555666777888:execution/lambda-exec"
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = expected_arn
-    mock_lambda_context = Mock()
 
     context = DurableContext(
         execution_state=mock_state,
         operation_identifier=OperationIdentifier.create_execution_op(),
-        lambda_context=mock_lambda_context,
     )
 
     assert context.durable_execution_arn == expected_arn

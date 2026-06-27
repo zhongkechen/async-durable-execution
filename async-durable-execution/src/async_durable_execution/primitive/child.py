@@ -343,7 +343,6 @@ class DurableContext(OperationContext):
                 sub_type=OperationSubType.EXECUTION,
                 parent_id=child_parent_id,
             ),
-            lambda_context=self.lambda_context,
             step_id_prefix=operation_id,
             replaying=self.is_replaying(),
         )

@@ -75,6 +75,7 @@ def ExecutionState(
     initial_checkpoint_token: str,
     service_client,
     plugin_executor,
+    lambda_context=None,
     batcher_config: CheckpointBatcherConfig | None = None,
     operations: dict[str, Operation] | None = None,
 ):
@@ -83,6 +84,7 @@ def ExecutionState(
         initial_checkpoint_token=initial_checkpoint_token,
         service_client=service_client,
         plugin_executor=plugin_executor,
+        lambda_context=lambda_context,
         batcher_config=batcher_config,
     )
     state._checkpoint_queue = _CompatAsyncQueue()

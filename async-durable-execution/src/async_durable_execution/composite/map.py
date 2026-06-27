@@ -122,7 +122,6 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
         map_item_context = MapItemContext(
             execution_state=child_context.execution_state,
             operation_identifier=child_context.operation_identifier,
-            lambda_context=child_context.lambda_context,
             step_id_prefix=child_context.step_id_prefix,
             index=executable.index,
             items=self.items,

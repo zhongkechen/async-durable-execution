@@ -33,7 +33,11 @@ class OperationContext:
 
     execution_state: ExecutionState
     operation_identifier: OperationIdentifier
-    lambda_context: LambdaContext | None = None
+
+    @property
+    def lambda_context(self) -> LambdaContext | None:
+        """Get the Lambda context for the active invocation."""
+        return self.execution_state.lambda_context
 
     @property
     def durable_execution_arn(self) -> str:
