@@ -20,7 +20,6 @@ from async_durable_execution.primitive.callback import (
     CallbackError,
 )
 from async_durable_execution.composite.wait_for_condition import (
-    WaitForConditionConfig,
     WaitForConditionDecision,
 )
 from async_durable_execution import (
@@ -53,8 +52,6 @@ from async_durable_execution.models import (
 )
 from async_durable_execution.plugin import PluginExecutor
 from async_durable_execution.state import ExecutionState
-from async_durable_execution.primitive.base import CheckpointedResult
-
 from .serdes_test import CustomDictSerDes
 from .test_helpers import operation_id_sequence
 
@@ -120,7 +117,7 @@ def create_async_child_state() -> Mock:
     state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    state.operations.get.return_value = CheckpointedResult.create_not_found()
+    state.operations.get.return_value = None
     state.create_checkpoint = AsyncMock()
     state.wrap_user_function = lambda func, *args, **kwargs: func
     return state
@@ -214,9 +211,7 @@ async def test_module_level_context_functions_delegate_to_durable_context():
     async def check(state: str) -> str:
         return state
 
-    config = WaitForConditionConfig(
-        wait_strategy=lambda state, attempt: WaitForConditionDecision.stop_polling(),
-    )
+    wait_strategy = lambda state, attempt: WaitForConditionDecision.stop_polling()
 
     mock_wait = AsyncMock(return_value=None)
     mock_child = AsyncMock(return_value="child-result")
@@ -319,7 +314,7 @@ async def test_module_level_context_functions_delegate_to_durable_context():
                     check,
                     initial_state="pending",
                     name="condition-name",
-                    wait_strategy=config.wait_strategy,
+                    wait_strategy=wait_strategy,
                 ),
             )
             == "condition-result"
@@ -356,13 +351,12 @@ async def test_module_level_context_functions_delegate_to_durable_context():
     assert mock_parallel_child_executor.call_count == 1
     mock_wait_for_condition_executor.assert_called_once_with(
         check=check,
-        config=ANY,
         initial_state="pending",
         state=mock_state,
         operation_identifier=ANY,
+        wait_strategy=wait_strategy,
+        serdes=None,
     )
-    created_config = mock_wait_for_condition_executor.call_args.kwargs["config"]
-    assert created_config.wait_strategy is config.wait_strategy
     wait_for_condition_executor.process.assert_awaited_once()
 
 

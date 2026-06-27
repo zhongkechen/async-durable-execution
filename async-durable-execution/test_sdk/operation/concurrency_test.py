@@ -34,9 +34,13 @@ from async_durable_execution.exceptions import (
     TimedSuspendExecution,
 )
 from async_durable_execution.models import (
+    ContextDetails,
     ErrorObject,
+    Operation,
     OperationIdentifier,
+    OperationStatus,
     OperationSubType,
+    OperationType,
 )
 from async_durable_execution.composite.map import MapExecutor
 
@@ -49,25 +53,6 @@ async def run_async(awaitable):
     return await awaitable
 
 
-def create_checkpoint_result(
-    *,
-    succeeded: bool = False,
-    failed: bool = False,
-    replay_children: bool = False,
-    existent: bool = False,
-    result=None,
-    error=None,
-):
-    checkpoint = Mock()
-    checkpoint.is_succeeded.return_value = succeeded
-    checkpoint.is_failed.return_value = failed
-    checkpoint.is_replay_children.return_value = replay_children
-    checkpoint.is_existent.return_value = existent
-    checkpoint.result = result
-    checkpoint.error = error
-    return checkpoint
-
-
 def create_execution_state():
     state = Mock()
     state.durable_execution_arn = (
@@ -76,7 +61,7 @@ def create_execution_state():
     state.create_checkpoint = AsyncMock()
     state.create_checkpoint = AsyncMock()
     state.wrap_user_function = _wrap_user_function_for_test
-    state.operations.get.return_value = create_checkpoint_result()
+    state.operations.get.return_value = None
     return state
 
 
@@ -2631,18 +2616,16 @@ async def test_concurrent_executor_replay_with_succeeded_operations():
     mock_execution_state.wrap_user_function = _wrap_user_function_for_test
     mock_execution_state.create_checkpoint = AsyncMock()
 
-    def mock_get_checkpoint_result(operation_id):
-        mock_result = Mock()
-        mock_result.is_succeeded.return_value = True
-        mock_result.is_failed.return_value = False
-        mock_result.is_replay_children.return_value = False
-        mock_result.is_existent.return_value = True
-        # Provide properly serialized JSON data
-        mock_result.result = f'"cached_result_{operation_id}"'  # JSON string
-        return mock_result
+    def mock_get_operation(operation_id):
+        return Operation(
+            operation_id=operation_id,
+            operation_type=OperationType.CONTEXT,
+            status=OperationStatus.SUCCEEDED,
+            context_details=ContextDetails(result=f'"cached_result_{operation_id}"'),
+        )
 
     mock_execution_state.operations = Mock()
-    mock_execution_state.operations.get = Mock(side_effect=mock_get_checkpoint_result)
+    mock_execution_state.operations.get = Mock(side_effect=mock_get_operation)
 
     def mock_create_step_id_for_logical_step(step):
         return f"op_{step}"
@@ -2699,15 +2682,23 @@ async def test_concurrent_executor_replay_with_failed_operations():
     # Mock execution state with failed operation
     mock_execution_state = Mock()
 
-    def mock_get_checkpoint_result(operation_id):
-        mock_result = Mock()
-        mock_result.is_succeeded.return_value = False
-        mock_result.is_failed.return_value = True
-        mock_result.error = Exception("Test error")
-        return mock_result
+    def mock_get_operation(operation_id):
+        return Operation(
+            operation_id=operation_id,
+            operation_type=OperationType.CONTEXT,
+            status=OperationStatus.FAILED,
+            context_details=ContextDetails(
+                error=ErrorObject(
+                    message="Test error",
+                    type="Exception",
+                    data=None,
+                    stack_trace=None,
+                )
+            ),
+        )
 
     mock_execution_state.operations = Mock()
-    mock_execution_state.operations.get = Mock(side_effect=mock_get_checkpoint_result)
+    mock_execution_state.operations.get = Mock(side_effect=mock_get_operation)
 
     # Mock executor context
     mock_executor_context = Mock()
@@ -2747,15 +2738,16 @@ async def test_concurrent_executor_replay_with_replay_children():
     # Mock execution state with succeeded operation that needs replay
     mock_execution_state = Mock()
 
-    def mock_get_checkpoint_result(operation_id):
-        mock_result = Mock()
-        mock_result.is_succeeded.return_value = True
-        mock_result.is_failed.return_value = False
-        mock_result.is_replay_children.return_value = True
-        return mock_result
+    def mock_get_operation(operation_id):
+        return Operation(
+            operation_id=operation_id,
+            operation_type=OperationType.CONTEXT,
+            status=OperationStatus.SUCCEEDED,
+            context_details=ContextDetails(replay_children=True),
+        )
 
     mock_execution_state.operations = Mock()
-    mock_execution_state.operations.get = Mock(side_effect=mock_get_checkpoint_result)
+    mock_execution_state.operations.get = Mock(side_effect=mock_get_operation)
 
     # Mock executor context
     mock_executor_context = Mock()
@@ -3388,14 +3380,7 @@ async def test_flat_mode_stamps_grandparent_as_inner_op_parent_id():
 
     execution_state = create_execution_state()
 
-    # Mock out the checkpoint so the real child_handler reports "not
-    # existent" (non-existent checkpoint -> normal execution path).
-    mock_checkpoint = Mock()
-    mock_checkpoint.is_succeeded.return_value = False
-    mock_checkpoint.is_failed.return_value = False
-    mock_checkpoint.is_existent.return_value = False
-    mock_checkpoint.is_replay_children.return_value = False
-    execution_state.operations.get.return_value = mock_checkpoint
+    execution_state.operations.get.return_value = None
 
     # Build a real DurableContext that represents the map/parallel op.
     map_op_id = "map-op-id"
@@ -3444,12 +3429,7 @@ async def test_nested_mode_stamps_branch_op_as_inner_op_parent_id():
 
     execution_state = create_execution_state()
 
-    mock_checkpoint = Mock()
-    mock_checkpoint.is_succeeded.return_value = False
-    mock_checkpoint.is_failed.return_value = False
-    mock_checkpoint.is_existent.return_value = False
-    mock_checkpoint.is_replay_children.return_value = False
-    execution_state.operations.get.return_value = mock_checkpoint
+    execution_state.operations.get.return_value = None
 
     map_op_id = "map-op-id"
     executor_context = DurableContext(
@@ -3515,12 +3495,7 @@ async def test_flat_mode_produces_deterministic_step_ids_across_runs():
     async def make_run():
         execution_state = create_execution_state()
 
-        mock_checkpoint = Mock()
-        mock_checkpoint.is_succeeded.return_value = False
-        mock_checkpoint.is_failed.return_value = False
-        mock_checkpoint.is_existent.return_value = False
-        mock_checkpoint.is_replay_children.return_value = False
-        execution_state.operations.get.return_value = mock_checkpoint
+        execution_state.operations.get.return_value = None
 
         executor_context = DurableContext(
             execution_state=execution_state,

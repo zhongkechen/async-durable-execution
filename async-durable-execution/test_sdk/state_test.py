@@ -34,10 +34,7 @@ from async_durable_execution.models import (
     StepDetails,
 )
 from async_durable_execution.client import ThreadedSyncLambdaClient
-from async_durable_execution.primitive.base import (
-    get_checkpoint_result,
-    CheckpointedResult,
-)
+from async_durable_execution.primitive.base import CheckpointedResult
 from async_durable_execution.primitive.child import OrphanedChildException
 from async_durable_execution.plugin import (
     DurableInstrumentationPlugin,
@@ -468,93 +465,6 @@ async def test_execution_state_creation():
     assert state.operations == {}
 
 
-async def test_get_checkpoint_result_success_with_result():
-    """Test get_checkpoint_result with successful operation and result."""
-    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
-    step_details = StepDetails(result="test_result")
-    operation = Operation(
-        operation_id="op1",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-        step_details=step_details,
-    )
-    state = ExecutionState(
-        durable_execution_arn="test_arn",
-        initial_checkpoint_token="token123",  # noqa: S106
-        operations={"op1": operation},
-        service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
-    )
-
-    result = get_checkpoint_result(state, "op1")
-    assert result.is_succeeded() is True
-    assert result.result == "test_result"
-    assert result.operation == operation
-
-
-async def test_get_checkpoint_result_success_without_step_details():
-    """Test get_checkpoint_result with successful operation but no step details."""
-    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
-    operation = Operation(
-        operation_id="op1",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-    )
-    state = ExecutionState(
-        durable_execution_arn="test_arn",
-        initial_checkpoint_token="token123",  # noqa: S106
-        operations={"op1": operation},
-        service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
-    )
-
-    result = get_checkpoint_result(state, "op1")
-    assert result.is_succeeded() is True
-    assert result.result is None
-    assert result.operation == operation
-
-
-async def test_get_checkpoint_result_operation_not_succeeded():
-    """Test get_checkpoint_result with failed operation."""
-    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
-    operation = Operation(
-        operation_id="op1",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.FAILED,
-    )
-    state = ExecutionState(
-        durable_execution_arn="test_arn",
-        initial_checkpoint_token="token123",  # noqa: S106
-        operations={"op1": operation},
-        service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
-    )
-
-    result = get_checkpoint_result(state, "op1")
-    assert result.is_failed() is True
-    assert result.result is None
-    assert result.operation == operation
-
-
-async def test_get_checkpoint_result_operation_not_found():
-    """Test get_checkpoint_result with nonexistent operation."""
-    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
-    state = ExecutionState(
-        durable_execution_arn="test_arn",
-        initial_checkpoint_token="token123",  # noqa: S106
-        operations={},
-        service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
-    )
-    state.start_checkpointing = Mock()
-    state.start_checkpointing = Mock()
-
-    result = get_checkpoint_result(state, "nonexistent")
-    assert result.is_succeeded() is False
-    assert result.result is None
-    assert result.operation is None
-
-
 async def test_create_checkpoint():
     """Test create_checkpoint method enqueues operations asynchronously."""
     mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
@@ -639,29 +549,6 @@ async def test_create_checkpoint_with_no_args():
     queued_op = state._checkpoint_queue.get_nowait()
     assert queued_op.operation_update is None  # Empty checkpoint (default)
     assert queued_op.completion_future is None  # Async operation
-
-
-async def test_get_checkpoint_result_started():
-    """Test get_checkpoint_result with started operation."""
-    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
-    operation = Operation(
-        operation_id="op1",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.STARTED,
-    )
-    state = ExecutionState(
-        durable_execution_arn="test_arn",
-        initial_checkpoint_token="token123",  # noqa: S106
-        operations={"op1": operation},
-        service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
-    )
-
-    result = get_checkpoint_result(state, "op1")
-    assert result.is_started() is True
-    assert result.is_succeeded() is False
-    assert result.is_failed() is False
-    assert result.operation == operation
 
 
 async def test_checkpointed_result_is_timed_out():
@@ -1465,9 +1352,10 @@ async def test_operations_dictionary_access():
         status=OperationStatus.SUCCEEDED,
     )
 
-    result = get_checkpoint_result(state, "op1")
+    result = state.operations.get("op1")
 
-    assert result.is_succeeded()
+    assert result is not None
+    assert result.status is OperationStatus.SUCCEEDED
 
 
 async def test_stop_checkpointing_signals_background_thread():

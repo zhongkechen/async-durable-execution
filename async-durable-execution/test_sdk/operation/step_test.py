@@ -161,7 +161,7 @@ async def test_step_handler_already_succeeded():
         status=OperationStatus.SUCCEEDED,
         step_details=StepDetails(result=json.dumps("test_result")),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
 
     mock_callable = Mock(return_value="should_not_call")
@@ -189,7 +189,7 @@ async def test_step_handler_already_succeeded_none_result():
         status=OperationStatus.SUCCEEDED,
         step_details=StepDetails(result=None),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
 
     mock_callable = Mock()
@@ -219,7 +219,7 @@ async def test_step_handler_already_failed():
         status=OperationStatus.FAILED,
         step_details=StepDetails(error=error),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
 
     mock_callable = Mock()
@@ -246,7 +246,7 @@ async def test_step_handler_started_at_most_once():
         status=OperationStatus.STARTED,
         step_details=StepDetails(attempt=0),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
 
     mock_callable = Mock()
@@ -274,7 +274,7 @@ async def test_step_handler_started_at_least_once():
         status=OperationStatus.STARTED,
         step_details=StepDetails(error=error),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
 
     mock_callable = Mock(return_value="success_result")
@@ -292,7 +292,7 @@ async def test_step_handler_started_at_least_once():
 async def test_step_handler_success_at_least_once():
     """Test step_handler successful execution with AT_LEAST_ONCE semantics."""
     mock_state = Mock(spec=ExecutionState)
-    mock_result = CheckpointedResult.create_not_found()
+    mock_result = None
     mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
@@ -332,7 +332,7 @@ async def test_step_handler_success_at_least_once():
 async def test_step_handler_passes_attempt_to_step_context():
     """Test step execution exposes the current attempt on StepContext."""
     mock_state = Mock(spec=ExecutionState)
-    mock_result = CheckpointedResult.create_not_found()
+    mock_result = None
     mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
     mock_state.wrap_user_function.side_effect = lambda func, *args, **kwargs: _asyncify(
@@ -359,7 +359,7 @@ async def test_step_handler_passes_attempt_to_step_context():
 async def test_step_handler_passes_lambda_context_to_step_context():
     """Step execution exposes the Lambda context on StepContext."""
     mock_state = Mock(spec=ExecutionState)
-    mock_result = CheckpointedResult.create_not_found()
+    mock_result = None
     mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
     mock_state.wrap_user_function.side_effect = lambda func, *args, **kwargs: _asyncify(
@@ -394,7 +394,7 @@ async def test_step_handler_passes_lambda_context_to_step_context():
 async def test_step_handler_get_current_context_returns_step_context():
     """get_current_context() should expose StepContext while a step is executing."""
     mock_state = Mock(spec=ExecutionState)
-    mock_result = CheckpointedResult.create_not_found()
+    mock_result = None
     mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
     mock_state.wrap_user_function.side_effect = lambda func, *args, **kwargs: _asyncify(
@@ -430,14 +430,14 @@ async def test_step_handler_success_at_most_once():
     mock_state.durable_execution_arn = "test_arn"
 
     # First call: not found, second call: started (after sync checkpoint)
-    not_found = CheckpointedResult.create_not_found()
+    not_found = None
     started_op = Operation(
         operation_id="step7",
         operation_type=OperationType.STEP,
         status=OperationStatus.STARTED,
         step_details=StepDetails(attempt=0),
     )
-    started = CheckpointedResult.create_from_operation(started_op)
+    started = started_op
     mock_state.operations.get.side_effect = [not_found, started]
 
     mock_callable = Mock(return_value="success_result")
@@ -476,7 +476,7 @@ async def test_step_handler_success_at_most_once():
 async def test_step_handler_non_retriable_execution_error():
     """Test step_handler with ExecutionError exception."""
     mock_state = Mock(spec=ExecutionState)
-    mock_result = CheckpointedResult.create_not_found()
+    mock_result = None
     mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
@@ -496,7 +496,7 @@ async def test_step_handler_non_retriable_execution_error():
 async def test_step_handler_retry_success():
     """Test step_handler with retry that succeeds."""
     mock_state = Mock(spec=ExecutionState)
-    mock_result = CheckpointedResult.create_not_found()
+    mock_result = None
     mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
@@ -537,7 +537,7 @@ async def test_step_handler_retry_success():
 async def test_step_handler_retry_exhausted():
     """Test step_handler with retry exhausted."""
     mock_state = Mock(spec=ExecutionState)
-    mock_result = CheckpointedResult.create_not_found()
+    mock_result = None
     mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
@@ -578,7 +578,7 @@ async def test_step_handler_retry_exhausted():
 async def test_step_handler_retry_interrupted_error():
     """Test step_handler with StepInterruptedError in retry."""
     mock_state = Mock(spec=ExecutionState)
-    mock_result = CheckpointedResult.create_not_found()
+    mock_result = None
     mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
@@ -615,7 +615,7 @@ async def test_step_handler_retry_with_existing_attempts():
             ),
         ),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
@@ -648,7 +648,7 @@ async def test_step_handler_pending_without_existing_attempts():
         status=OperationStatus.PENDING,
         step_details=StepDetails(attempt=2),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
@@ -677,14 +677,14 @@ async def test_step_handler_retry_handler_no_exception(mock_retry_handler):
     mock_state.durable_execution_arn = "test_arn"
 
     # First call: not found, second call: started (AT_LEAST_ONCE default)
-    not_found = CheckpointedResult.create_not_found()
+    not_found = None
     started_op = Operation(
         operation_id="step13",
         operation_type=OperationType.STEP,
         status=OperationStatus.STARTED,
         step_details=StepDetails(attempt=0),
     )
-    started = CheckpointedResult.create_from_operation(started_op)
+    started = started_op
     mock_state.operations.get.side_effect = [not_found, started]
 
     # Mock retry_handler to not raise an exception (which it should always do)
@@ -710,7 +710,7 @@ async def test_step_handler_retry_handler_no_exception(mock_retry_handler):
 
 async def test_step_handler_custom_serdes_success():
     mock_state = Mock(spec=ExecutionState)
-    mock_result = CheckpointedResult.create_not_found()
+    mock_result = None
     mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
@@ -747,7 +747,7 @@ async def test_step_handler_custom_serdes_already_succeeded():
             result='{"key": "VALUE", "number": "84", "list": [1, 2, 3]}'
         ),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
 
     mock_callable = Mock(return_value="should_not_call")
@@ -773,7 +773,7 @@ async def test_step_start_does_not_refresh_checkpoint_after_start():
 
     # First call: not found (checkpoint doesn't exist).
     # start() should not call get_checkpointed_result again after START.
-    not_found = CheckpointedResult.create_not_found()
+    not_found = None
     mock_state.operations.get.return_value = not_found
 
     mock_callable = Mock(return_value="success_result")
@@ -799,7 +799,7 @@ async def test_step_immediate_response_create_checkpoint_sync_at_most_once():
     mock_state.durable_execution_arn = "test_arn"
 
     # First call: not found; start does not reread after the START checkpoint.
-    not_found = CheckpointedResult.create_not_found()
+    not_found = None
     mock_state.operations.get.return_value = not_found
 
     mock_callable = Mock(return_value="success_result")
@@ -825,8 +825,8 @@ async def test_step_immediate_response_create_checkpoint_async_at_least_once():
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
 
-    # For AT_LEAST_ONCE, only one call to get_checkpoint_result (no second check)
-    not_found = CheckpointedResult.create_not_found()
+    # For AT_LEAST_ONCE, only one call to direct state lookup (no second check)
+    not_found = None
     mock_state.operations.get.return_value = not_found
 
     mock_callable = Mock(return_value="success_result")
@@ -853,7 +853,7 @@ async def test_step_immediate_response_immediate_success():
     mock_state.durable_execution_arn = "test_arn"
 
     # First call: not found; start proceeds to execute without a second read.
-    not_found = CheckpointedResult.create_not_found()
+    not_found = None
     mock_state.operations.get.return_value = not_found
 
     mock_callable = Mock(return_value="immediate_success_result")
@@ -882,7 +882,7 @@ async def test_step_immediate_response_immediate_failure():
     mock_state.durable_execution_arn = "test_arn"
 
     # First call: not found; start proceeds to execute without a second read.
-    not_found = CheckpointedResult.create_not_found()
+    not_found = None
     mock_state.operations.get.return_value = not_found
 
     # Make the step function raise an error
@@ -917,7 +917,7 @@ async def test_step_start_executes_without_second_checkpoint_read():
     mock_state.durable_execution_arn = "test_arn"
 
     # First call: not found; start proceeds to execute without a second read.
-    not_found = CheckpointedResult.create_not_found()
+    not_found = None
     mock_state.operations.get.return_value = not_found
 
     mock_callable = Mock(return_value="normal_execution_result")
@@ -952,7 +952,7 @@ async def test_step_immediate_response_already_completed():
         status=OperationStatus.SUCCEEDED,
         step_details=StepDetails(result=json.dumps("already_completed_result")),
     )
-    succeeded = CheckpointedResult.create_from_operation(succeeded_op)
+    succeeded = succeeded_op
     mock_state.operations.get.return_value = succeeded
 
     mock_callable = Mock(return_value="should_not_call")
@@ -971,7 +971,7 @@ async def test_step_immediate_response_already_completed():
     assert result == "already_completed_result"
     mock_callable.assert_not_called()
     mock_state.create_checkpoint.assert_not_called()
-    # Only one call to get_checkpoint_result (no second check needed)
+    # Only one call to direct state lookup (no second check needed)
     assert mock_state.operations.get.call_count == 1
 
 
@@ -984,14 +984,14 @@ async def test_step_executes_function_when_second_check_returns_started():
 
     # First call: checkpoint doesn't exist
     # Second call: checkpoint returns STARTED (no immediate response)
-    not_found = CheckpointedResult.create_not_found()
+    not_found = None
     started_op = Operation(
         operation_id="step-1",
         operation_type=OperationType.STEP,
         status=OperationStatus.STARTED,
         step_details=StepDetails(attempt=1),
     )
-    started = CheckpointedResult.create_from_operation(started_op)
+    started = started_op
     mock_state.operations.get.side_effect = [not_found, started]
 
     mock_step_function = Mock(return_value="result")
@@ -1027,7 +1027,7 @@ async def test_step_creates_start_checkpoint_when_status_is_ready():
         status=OperationStatus.READY,
         step_details=StepDetails(attempt=0),
     )
-    ready_result = CheckpointedResult.create_from_operation(ready_op)
+    ready_result = ready_op
 
     # After creating the sync START checkpoint, the refreshed result returns STARTED
     started_op = Operation(
@@ -1036,7 +1036,7 @@ async def test_step_creates_start_checkpoint_when_status_is_ready():
         status=OperationStatus.STARTED,
         step_details=StepDetails(attempt=0),
     )
-    started_result = CheckpointedResult.create_from_operation(started_op)
+    started_result = started_op
     mock_state.operations.get.side_effect = [ready_result, started_result]
 
     mock_callable = Mock(return_value="ready_step_result")

@@ -197,24 +197,6 @@ class CheckpointedResult:
         return None
 
 
-CHECKPOINT_NOT_FOUND = CheckpointedResult.create_not_found()
-
-
-def get_checkpoint_result(
-    state: ExecutionState,
-    checkpoint_id: str,
-) -> CheckpointedResult:
-    """Get a checkpoint result from execution state."""
-    checkpoint = state.operations.get(checkpoint_id)
-    if isinstance(checkpoint, Operation):
-        return CheckpointedResult.create_from_operation(checkpoint)
-
-    if checkpoint is None:
-        return CHECKPOINT_NOT_FOUND
-
-    return checkpoint
-
-
 class OperationExecutor(ABC, Generic[T]):
     """Base class for durable operations with shared state and serdes helpers."""
 
@@ -240,10 +222,6 @@ class OperationExecutor(ABC, Generic[T]):
     def durable_execution_arn(self) -> str:
         """Return the durable execution ARN for serialization helpers."""
         return self.state.durable_execution_arn
-
-    def get_checkpointed_result(self) -> CheckpointedResult:
-        """Load the current checkpoint state for this operation."""
-        return get_checkpoint_result(self.state, self.operation_id)
 
     async def create_checkpoint(
         self,
@@ -280,10 +258,9 @@ class OperationExecutor(ABC, Generic[T]):
             durable_execution_arn=self.durable_execution_arn,
         )
 
-    @abstractmethod
-    async def execute(self, checkpointed_result: CheckpointedResult) -> T:
+    async def execute(self, operation: Operation | None) -> T:
         """Execute operation logic with checkpoint data."""
-        ...  # pragma: no cover
+        raise NotImplementedError  # pragma: no cover
 
     @abstractmethod
     async def start(self) -> T:
@@ -297,15 +274,7 @@ class OperationExecutor(ABC, Generic[T]):
 
     async def process(self) -> T:
         """Process the operation, including replay and checkpoint handling."""
-        checkpointed_result = self.get_checkpointed_result()
-        if not checkpointed_result.is_existent():
+        operation = self.state.operations.get(self.operation_id)
+        if operation is None:
             return await self.start()
-        if checkpointed_result.operation is None:
-            msg = f"Missing checkpoint operation for replay: {self.operation_id}"
-            raise CallableRuntimeError(
-                message=msg,
-                error_type=None,
-                data=None,
-                stack_trace=None,
-            )
-        return await self.replay(checkpointed_result.operation)
+        return await self.replay(operation)

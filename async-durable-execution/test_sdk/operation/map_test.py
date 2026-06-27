@@ -851,12 +851,14 @@ async def test_map_handler_replay_mechanism():
             self.operations = Mock()
 
             def _get(operation_id):
-                mock_result = Mock()
-                mock_result.is_succeeded.return_value = True
-                mock_result.is_replay_children.return_value = False
-                # Provide properly serialized JSON data
-                mock_result.result = f'"cached_result_{operation_id}"'  # JSON string
-                return mock_result
+                return Operation(
+                    operation_id=operation_id,
+                    operation_type=OperationType.CONTEXT,
+                    status=OperationStatus.SUCCEEDED,
+                    context_details=ContextDetails(
+                        result=f'"cached_result_{operation_id}"'
+                    ),
+                )
 
             self.operations.get.side_effect = _get
 
@@ -916,13 +918,11 @@ async def test_map_handler_replay_with_replay_children():
             self.operations = Mock()
 
             def _get(operation_id):
-                mock_result = Mock()
-                if operation_id == "test_op":
-                    mock_result.is_succeeded.return_value = True
-                else:  # child operations
-                    mock_result.is_succeeded.return_value = True
-                    mock_result.is_replay_children.return_value = True
-                return mock_result
+                return Operation(
+                    operation_id=operation_id,
+                    operation_type=OperationType.CONTEXT,
+                    status=OperationStatus.SUCCEEDED,
+                )
 
             self.operations.get.side_effect = _get
 
@@ -1034,18 +1034,20 @@ async def test_map_handler_first_execution_then_replay_integration():
 
             def _get(operation_id):
                 nonlocal execution_count
-                mock_result = Mock()
 
                 if operation_id == "test_op":
                     # Main operation checkpoint
                     if execution_count == 0:
                         # First execution - operation not succeeded yet
-                        mock_result.is_succeeded.return_value = False
-                    else:
-                        # Second execution - operation succeeded, trigger replay
-                        mock_result.is_succeeded.return_value = True
+                        return None
+                    # Second execution - operation succeeded, trigger replay
+                    return Operation(
+                        operation_id=operation_id,
+                        operation_type=OperationType.CONTEXT,
+                        status=OperationStatus.SUCCEEDED,
+                    )
 
-                return mock_result
+                return None
 
             self.operations.get.side_effect = _get
 
@@ -1101,29 +1103,21 @@ async def test_map_item_serialize(mock_serialize, item_serdes, batch_serdes):
     """Test map serializes items with item_serdes or fallback."""
     mock_serialize.return_value = '"serialized"'
 
-    parent_checkpoint = child.CheckpointedResult.create_from_operation(
-        Operation(
-            operation_id="parent",
-            operation_type=OperationType.CONTEXT,
-            status=OperationStatus.STARTED,
-        )
+    parent_checkpoint = Operation(
+        operation_id="parent",
+        operation_type=OperationType.CONTEXT,
+        status=OperationStatus.STARTED,
     )
 
     def child_checkpoint_for(op_id: str):
-        return child.CheckpointedResult.create_from_operation(
-            Operation(
-                operation_id=op_id,
-                operation_type=OperationType.CONTEXT,
-                status=OperationStatus.STARTED,
-            )
+        return Operation(
+            operation_id=op_id,
+            operation_type=OperationType.CONTEXT,
+            status=OperationStatus.STARTED,
         )
 
     def get_checkpoint(op_id):
-        return (
-            child_checkpoint_for(op_id)
-            if op_id.startswith("child-")
-            else parent_checkpoint
-        )
+        return child_checkpoint_for(op_id) if op_id.startswith("child-") else None
 
     mock_state = Mock()
     mock_state.durable_execution_arn = "arn:test"
@@ -1194,21 +1188,15 @@ async def test_map_item_deserialize(mock_deserialize, item_serdes, batch_serdes)
     parent_checkpoint.is_existent.return_value = False
 
     def child_checkpoint_for(op_id: str):
-        return child.CheckpointedResult.create_from_operation(
-            Operation(
-                operation_id=op_id,
-                operation_type=OperationType.CONTEXT,
-                status=OperationStatus.SUCCEEDED,
-                context_details=ContextDetails(result='"cached"'),
-            )
+        return Operation(
+            operation_id=op_id,
+            operation_type=OperationType.CONTEXT,
+            status=OperationStatus.SUCCEEDED,
+            context_details=ContextDetails(result='"cached"'),
         )
 
     def get_checkpoint(op_id):
-        return (
-            child_checkpoint_for(op_id)
-            if op_id.startswith("child-")
-            else parent_checkpoint
-        )
+        return child_checkpoint_for(op_id) if op_id.startswith("child-") else None
 
     mock_state = Mock()
     mock_state.durable_execution_arn = "arn:test"
@@ -1328,11 +1316,7 @@ async def test_map_handler_serializes_batch_result():
             child_checkpoint.is_replay_children.return_value = False
 
             def get_checkpoint(op_id):
-                return (
-                    child_checkpoint
-                    if op_id.startswith("child-")
-                    else parent_checkpoint
-                )
+                return None
 
             mock_state = Mock()
             mock_state.durable_execution_arn = "arn:test"
@@ -1398,11 +1382,7 @@ async def test_map_default_serdes_serializes_batch_result():
             child_checkpoint.is_replay_children.return_value = False
 
             def get_checkpoint(op_id):
-                return (
-                    child_checkpoint
-                    if op_id.startswith("child-")
-                    else parent_checkpoint
-                )
+                return None
 
             mock_state = Mock()
             mock_state.durable_execution_arn = "arn:test"
@@ -1473,11 +1453,7 @@ async def test_map_custom_serdes_serializes_batch_result():
             child_checkpoint.is_replay_children.return_value = False
 
             def get_checkpoint(op_id):
-                return (
-                    child_checkpoint
-                    if op_id.startswith("child-")
-                    else parent_checkpoint
-                )
+                return None
 
             mock_state = Mock()
             mock_state.durable_execution_arn = "arn:test"
@@ -1546,7 +1522,7 @@ async def test_map_with_empty_list_should_exit_early():
     parent_checkpoint.is_existent.return_value = False
 
     mock_state.operations = Mock()
-    mock_state.operations.get = Mock(return_value=parent_checkpoint)
+    mock_state.operations.get = Mock(return_value=None)
     mock_state.create_checkpoint = AsyncMock()
     mock_state.wrap_user_function = lambda func, *args, **kwargs: (
         lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)

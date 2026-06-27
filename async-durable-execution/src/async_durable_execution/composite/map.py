@@ -16,7 +16,6 @@ from typing import (
     Awaitable,
 )
 
-from ..primitive.base import CheckpointedResult, get_checkpoint_result
 from ..primitive.child import (
     ChildOperationExecutor,
     DurableContext,
@@ -35,7 +34,7 @@ from .concurrency import (
     Executable,
     NestingType,
 )
-from ..models import OperationIdentifier, OperationSubType
+from ..models import OperationIdentifier, OperationStatus, OperationSubType
 
 
 if TYPE_CHECKING:
@@ -182,11 +181,10 @@ async def map_handler(
         item_namer=item_namer,
     )
 
-    checkpoint: CheckpointedResult = get_checkpoint_result(
-        execution_state,
-        operation_identifier.require_operation_id(),
+    operation = execution_state.operations.get(
+        operation_identifier.require_operation_id()
     )
-    if checkpoint.is_succeeded():
+    if operation is not None and operation.status is OperationStatus.SUCCEEDED:
         # if we've reached this point, then not only is the step succeeded, but it is also `replay_children`.
         return await executor.replay(execution_state, map_context)
     # we are making it explicit that we are now executing within the map_context

@@ -7,13 +7,13 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
-from ..async_tools import assert_async_callable, durable_callable
-from ..context import get_current_context, reset_current_context, set_current_context
+from ..async_tools import assert_async_callable, durable_callable, invoke_user_callable
+from ..context import get_current_context
 from ..models import RetryDecision
 from ..primitive.base import OperationContext
 from ..primitive.callback import Callback, create_callback
 from ..primitive.child import run_in_child_context
-from ..primitive.step import step as step_operation
+from ..primitive.step import step
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -49,13 +49,9 @@ async def wait_for_callback_handler(
             execution_state=step_context.execution_state,
             operation_identifier=step_context.operation_identifier,
         )
-        token = set_current_context(callback_context)
-        try:
-            return await submitter()
-        finally:
-            reset_current_context(token)
+        return await invoke_user_callable(callback_context, submitter)
 
-    await step_operation(
+    await step(
         func=submitter_step,
         name=submitter_step_name,
         retry_strategy=retry_strategy,
@@ -86,19 +82,19 @@ async def wait_for_callback(
         retry_strategy: Optional retry strategy for submitter failures.
     """
     assert_async_callable(submitter, label="submitter")
-    step_name = name if name is not None else getattr(submitter, "__name__", None)
-    logger.debug("wait_for_callback name: %s", step_name)
+    context_name = name if name is not None else getattr(submitter, "__name__", None)
+    logger.debug("wait_for_callback name: %s", context_name)
 
     return await run_in_child_context(
         wait_for_callback_handler(
             submitter,
-            step_name,
+            name=context_name,
             timeout=timeout,
             heartbeat_timeout=heartbeat_timeout,
             serdes=serdes,
             retry_strategy=retry_strategy,
         ),
-        name=step_name,
+        name=context_name,
     )
 
 

@@ -11,8 +11,6 @@ from threading import Lock
 from typing import TYPE_CHECKING, TypeVar, cast
 
 from .base import (
-    CHECKPOINT_NOT_FOUND,
-    CheckpointedResult,
     OperationExecutor,
     OperationContext,
 )
@@ -387,26 +385,23 @@ class DurableContext(OperationContext):
             self.step_counter.get_current() + 1
         )
 
-    def _next_operation_result(self) -> CheckpointedResult:
-        operation = self.execution_state.operations.get(self._peek_next_operation_id())
-        if isinstance(operation, Operation):
-            return CheckpointedResult.create_from_operation(operation)
-        if operation is None:
-            return CHECKPOINT_NOT_FOUND
-        return operation
+    def _next_operation_result(self) -> Operation | None:
+        return self.execution_state.operations.get(self._peek_next_operation_id())
 
     def _next_operation_exists(self) -> bool:
-        return self._next_operation_result().is_existent()
+        return self._next_operation_result() is not None
 
     def _next_operation_is_terminal_checkpoint(self) -> bool:
-        result = self._next_operation_result()
-        return (
-            result.is_succeeded()
-            or result.is_failed()
-            or result.is_cancelled()
-            or result.is_stopped()
-            or result.is_timed_out()
-        )
+        operation = self._next_operation_result()
+        if operation is None:
+            return False
+        return operation.status in {
+            OperationStatus.SUCCEEDED,
+            OperationStatus.FAILED,
+            OperationStatus.CANCELLED,
+            OperationStatus.STOPPED,
+            OperationStatus.TIMED_OUT,
+        }
 
     @contextmanager
     def _replay_aware(self, *, executes_user_code: bool = False):

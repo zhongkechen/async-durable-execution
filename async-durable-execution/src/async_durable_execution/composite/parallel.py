@@ -13,7 +13,6 @@ from typing import (
     Iterable,
 )
 
-from ..primitive.base import get_checkpoint_result
 from ..primitive.child import ChildOperationExecutor, get_durable_context
 
 from ..async_tools import (
@@ -28,7 +27,7 @@ from .concurrency import (
     Executable,
     NestingType,
 )
-from ..models import OperationIdentifier, OperationSubType
+from ..models import OperationIdentifier, OperationStatus, OperationSubType
 
 
 if TYPE_CHECKING:
@@ -142,11 +141,10 @@ async def parallel_handler(
         nesting_type=nesting_type,
     )
 
-    checkpoint = get_checkpoint_result(
-        execution_state,
-        operation_identifier.require_operation_id(),
+    operation = execution_state.operations.get(
+        operation_identifier.require_operation_id()
     )
-    if checkpoint.is_succeeded():
+    if operation is not None and operation.status is OperationStatus.SUCCEEDED:
         return await executor.replay(execution_state, parallel_context)
     return await executor.execute(execution_state, executor_context=parallel_context)
 

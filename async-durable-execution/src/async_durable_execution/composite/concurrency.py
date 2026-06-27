@@ -14,8 +14,13 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from ..exceptions import SuspendExecution, TimedSuspendExecution
 from ..exceptions import InvalidStateError
-from ..models import ErrorObject, OperationIdentifier, SerializableModel, _metadata
-from ..primitive.base import get_checkpoint_result
+from ..models import (
+    ErrorObject,
+    OperationIdentifier,
+    OperationStatus,
+    SerializableModel,
+    _metadata,
+)
 from ..primitive.child import ChildOperationExecutor, OrphanedChildException
 from ..serdes import deserialize
 
@@ -800,26 +805,34 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
                     executable.index
                 )
             )
-            checkpoint = get_checkpoint_result(execution_state, operation_id)
+            operation = execution_state.operations.get(operation_id)
 
             result: ResultType | None = None
             error = None
             status: BatchItemStatus
-            if checkpoint.is_succeeded():
+            if operation is not None and operation.status is OperationStatus.SUCCEEDED:
                 status = BatchItemStatus.SUCCEEDED
-                if checkpoint.is_replay_children():
+                operation_details = operation.context_details
+                if operation_details is not None and operation_details.replay_children:
                     result = await self._execute_item_in_child_context(
                         executor_context, executable
                     )
-                elif checkpoint.result is not None:
+                elif (
+                    operation_details is not None
+                    and operation_details.result is not None
+                ):
                     result = await deserialize(
                         serdes=self.item_serdes or self.serdes,
-                        data=checkpoint.result,
+                        data=operation_details.result,
                         operation_id=operation_id,
                         durable_execution_arn=execution_state.durable_execution_arn,
                     )
-            elif checkpoint.is_failed():
-                error = checkpoint.error
+            elif operation is not None and operation.status is OperationStatus.FAILED:
+                error = (
+                    operation.context_details.error
+                    if operation.context_details is not None
+                    else None
+                )
                 status = BatchItemStatus.FAILED
             else:
                 status = BatchItemStatus.STARTED
