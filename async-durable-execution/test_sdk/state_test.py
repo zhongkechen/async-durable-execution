@@ -53,7 +53,7 @@ class _ImmediateAwaitable:
 class _CompatAsyncQueue(asyncio.Queue[QueuedOperation | None]):
     """Compatibility queue so legacy direct test puts still work."""
 
-    def put(self, item: QueuedOperation | None):  # type: ignore[override]
+    def put(self, item: QueuedOperation | None):
         self.put_nowait(item)
         return _ImmediateAwaitable()
 
@@ -80,8 +80,10 @@ def ExecutionState(
     return state
 
 
-ExecutionState._calculate_operation_size = staticmethod(  # type: ignore[attr-defined]
-    _ExecutionState._calculate_operation_size
+setattr(
+    ExecutionState,
+    "_calculate_operation_size",
+    staticmethod(_ExecutionState._calculate_operation_size),
 )
 
 

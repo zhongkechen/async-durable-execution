@@ -120,7 +120,7 @@ class InvalidParameterValueException(AwsApiException):
 
     http_status_code = 400
 
-    def __init__(self, message: str) -> None:
+    def __init__(self, message: str | None) -> None:
         """Initialize with message field (lowercase per Smithy definition)."""
         self.message = message
         super().__init__(message)

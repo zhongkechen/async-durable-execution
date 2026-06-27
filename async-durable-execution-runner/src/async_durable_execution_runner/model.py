@@ -1231,10 +1231,10 @@ class InvocationCompletedDetails:
         """Deserialize from JSON dict with Unix millisecond timestamps."""
         start_ts: datetime.datetime | None = TimestampConverter.from_unix_millis(
             data["StartTimestamp"]
-        )  # type: ignore[arg-type]
+        )
         end_ts: datetime.datetime | None = TimestampConverter.from_unix_millis(
             data["EndTimestamp"]
-        )  # type: ignore[arg-type]
+        )
 
         if start_ts is None or end_ts is None:
             raise InvalidParameterValueException(

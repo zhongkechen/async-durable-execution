@@ -145,7 +145,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
             )
             result_payload = self._get_result(operation)
             if result_payload is None:
-                return None  # type: ignore[return-value]
+                return cast("T", None)
 
             result: T = await deserialize(
                 serdes=self.serdes,
@@ -165,7 +165,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
 
         return await self.execute(operation)
 
-    async def execute(self, operation: Operation | None) -> T:  # type: ignore[override]
+    async def execute(self, operation: Operation | None) -> T:
         """Execute child context function with error handling and large payload support.
 
         Args:

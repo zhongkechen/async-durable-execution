@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import TYPE_CHECKING, TypeVar
+from typing import TypeVar
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -24,11 +25,6 @@ from async_durable_execution.context import (
 )
 from async_durable_execution.exceptions import SuspendExecution
 
-
-if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
-
-    from async_durable_execution import DurableContext
 
 _T = TypeVar("_T")
 
@@ -64,13 +60,13 @@ class MockDurableContext:
 
     async def run_in_child_context(
         self,
-        func: Callable[[DurableContext], Awaitable[_T]],
+        func: Callable[[MockDurableContext], Awaitable[_T]],
         name: str | None = None,
         serdes=None,
         summary_generator=None,
         is_virtual: bool = False,
     ) -> _T:
-        result: _T = await func(self)  # type: ignore[arg-type]
+        result: _T = await func(self)
         self.child_context_calls.append(
             RunInChildContextCall(
                 name=name,

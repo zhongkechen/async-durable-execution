@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, TypeVar, cast
 
 from ..context import get_current_context, invoke_user_callable
 from ..config import RetryDecision, RetryPresets
@@ -107,7 +107,7 @@ class StepOperationExecutor(OperationExecutor[T]):
                 operation.step_details.result if operation.step_details else None
             )
             if result_payload is None:
-                return None  # type: ignore[return-value]
+                return cast("T", None)
 
             result: T = await self.deserialize_value(
                 data=result_payload,
@@ -154,7 +154,7 @@ class StepOperationExecutor(OperationExecutor[T]):
 
         return await self.execute(operation)
 
-    async def execute(self, operation: Operation | None) -> T:  # type: ignore[override]
+    async def execute(self, operation: Operation | None) -> T:
         """Execute step function with error handling and retry logic.
 
         Args:

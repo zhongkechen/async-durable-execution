@@ -2916,7 +2916,7 @@ async def test_durable_execution_non_retryable_initial_pagination_error_returns_
         message=f"{error_code} error",
         error_category=error_category,
         error={"Code": error_code, "Message": f"{error_code} error"},
-        response_metadata={"HTTPStatusCode": status_code},  # type: ignore[arg-type]
+        response_metadata={"HTTPStatusCode": status_code},
     )
     mock_client.get_execution_state.side_effect = non_retryable_error
 

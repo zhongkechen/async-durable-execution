@@ -314,7 +314,7 @@ def test_empty_message_handling() -> None:
 def test_none_message_handling() -> None:
     """Test that None messages are converted to empty strings."""
     # This tests the edge case where message might be None
-    exception = exceptions.InvalidParameterValueException(None)  # type: ignore
+    exception = exceptions.InvalidParameterValueException(None)
     json_dict = exception.to_dict()
 
     # Should convert None to string "None" for JSON compatibility

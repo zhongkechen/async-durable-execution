@@ -97,7 +97,7 @@ class CallbackOperationExecutor(OperationExecutor[str]):
 
         return await self.execute(operation)
 
-    async def execute(self, operation: Operation) -> str:  # type: ignore[override]
+    async def execute(self, operation: Operation | None) -> str:
         """Execute callback operation by extracting the callback_id.
 
         Callbacks don't execute logic - they just extract and return the callback_id
@@ -112,7 +112,7 @@ class CallbackOperationExecutor(OperationExecutor[str]):
         Raises:
             CallbackError: If callback_details are missing (should never happen)
         """
-        if not operation.callback_details:
+        if operation is None or not operation.callback_details:
             msg = f"Missing callback details for operation: {self.operation_identifier.operation_id}"
             raise CallbackError(msg)
 
@@ -204,7 +204,7 @@ class Callback(Generic[T]):  # noqa: PYI059
                 not operation.callback_details
                 or operation.callback_details.result is None
             ):
-                return None  # type: ignore
+                return None
 
             return await deserialize(
                 serdes=self.serdes if self.serdes is not None else PASS_THROUGH_SERDES,

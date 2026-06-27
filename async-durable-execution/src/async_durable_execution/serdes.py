@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar, cast
 
 from .context import invoke_user_callable
 from .exceptions import (
@@ -384,10 +384,10 @@ class PassThroughSerDes(SerDes[T]):
     """Serializer that leaves already-serialized string payloads unchanged."""
 
     async def serialize(self, value: T) -> str:  # noqa: PLR6301
-        return value  # type: ignore
+        return cast("str", value)
 
     async def deserialize(self, data: str) -> T:  # noqa: PLR6301
-        return data  # type: ignore
+        return cast("T", data)
 
 
 class JsonSerDes(SerDes[T]):

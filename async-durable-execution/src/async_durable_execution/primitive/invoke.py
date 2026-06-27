@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, TypeVar, cast
 
 from .child import get_durable_context
 
@@ -97,7 +97,7 @@ class InvokeOperationExecutor(OperationExecutor[R]):
         if operation.status is OperationStatus.SUCCEEDED:
             result_data = invoke_details.result if invoke_details else None
             if result_data is None:
-                return None  # type: ignore[return-value]
+                return cast("R", None)
 
             result: R = await self.deserialize_value(
                 data=result_data,
@@ -131,7 +131,7 @@ class InvokeOperationExecutor(OperationExecutor[R]):
 
         return await self.execute()
 
-    async def execute(self) -> R:  # type: ignore[override]
+    async def execute(self, operation: Operation | None = None) -> R:
         """Execute invoke operation by suspending to wait for async completion.
 
         The invoke operation doesn't execute synchronously - it suspends and
