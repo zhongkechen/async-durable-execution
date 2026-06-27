@@ -22,6 +22,7 @@ from ..async_tools import (
 )
 from ..context import get_current_context
 from ..exceptions import (
+    CallableRuntimeError,
     InvocationError,
     SuspendExecution,
 )
@@ -135,47 +136,46 @@ class ChildOperationExecutor(OperationExecutor[T]):
             )
             await self.create_checkpoint(start_operation, is_sync=False)
 
-        return await self.execute(CHECKPOINT_NOT_FOUND)
+        return await self.execute(None)
 
     async def replay(self, operation: Operation) -> T:
         """Replay an existing child context operation from its checkpoint."""
-        checkpointed_result = CheckpointedResult.create_from_operation(operation)
         if (
             operation.status is OperationStatus.SUCCEEDED
-            and not checkpointed_result.is_replay_children()
+            and not self._is_replay_children(operation)
         ):
             logger.debug(
                 "Child context already completed, skipping execution for id: %s, name: %s",
                 self.operation_identifier.operation_id,
                 self.operation_name,
             )
-            if checkpointed_result.result is None:
+            result_payload = self._get_result(operation)
+            if result_payload is None:
                 return None  # type: ignore[return-value]
 
             result: T = await deserialize(
                 serdes=self.serdes,
-                data=checkpointed_result.result,
+                data=result_payload,
                 operation_id=self.operation_id,
                 durable_execution_arn=self.durable_execution_arn,
             )
             return result
 
-        if (
-            operation.status is OperationStatus.SUCCEEDED
-            and checkpointed_result.is_replay_children()
+        if operation.status is OperationStatus.SUCCEEDED and self._is_replay_children(
+            operation
         ):
-            return await self.execute(checkpointed_result)
+            return await self.execute(operation)
 
         if operation.status is OperationStatus.FAILED:
-            checkpointed_result.raise_callable_error()
+            self._raise_callable_error(operation)
 
-        return await self.execute(checkpointed_result)
+        return await self.execute(operation)
 
-    async def execute(self, checkpointed_result: CheckpointedResult) -> T:
+    async def execute(self, operation: Operation | None) -> T:  # type: ignore[override]
         """Execute child context function with error handling and large payload support.
 
         Args:
-            checkpointed_result: The checkpoint data containing operation state
+            operation: The checkpointed operation state, if any
 
         Returns:
             The result of executing the child context function
@@ -191,12 +191,12 @@ class ChildOperationExecutor(OperationExecutor[T]):
             self.operation_identifier.name,
         )
         try:
-            # TODO: fix attempt (checkpointed_result.is_existent is always True)
+            replaying_children = self._is_replay_children(operation)
             wrapped_user_func = self.state.wrap_user_function(
                 self.func,
                 self.operation_identifier,
-                checkpointed_result.is_replay_children(),
-                attempt=None if checkpointed_result.is_existent() else 1,
+                replaying_children,
+                attempt=None if operation else 1,
             )
             raw_result: T = await wrapped_user_func()
 
@@ -209,7 +209,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 return raw_result
 
             # If in replay_children mode, return without checkpointing
-            if checkpointed_result.is_replay_children():
+            if replaying_children:
                 logger.debug(
                     "ReplayChildren mode: Executed child context again on replay due to large payload. Exiting child context without creating another checkpoint. id: %s, name: %s",
                     self.operation_identifier.operation_id,
@@ -296,6 +296,32 @@ class ChildOperationExecutor(OperationExecutor[T]):
             if isinstance(e, InvocationError):
                 raise
             raise error_object.to_callable_runtime_error() from e
+
+    @staticmethod
+    def _is_replay_children(operation: Operation | None) -> bool:
+        if operation is None or operation.context_details is None:
+            return False
+        return operation.context_details.replay_children
+
+    @staticmethod
+    def _get_result(operation: Operation) -> str | None:
+        if operation.context_details is None:
+            return None
+        return operation.context_details.result
+
+    @staticmethod
+    def _raise_callable_error(operation: Operation) -> None:
+        error = operation.context_details.error if operation.context_details else None
+        if error is None:
+            msg = "Unknown error. No ErrorObject exists on the Checkpoint Operation."
+            raise CallableRuntimeError(
+                message=msg,
+                error_type=None,
+                data=None,
+                stack_trace=None,
+            )
+
+        raise error.to_callable_runtime_error()
 
 
 @dataclass(frozen=True)
