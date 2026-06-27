@@ -22,7 +22,6 @@ from async_durable_execution.models import (
     OperationSubType,
     OperationType,
 )
-from async_durable_execution.plugin import PluginExecutor
 from async_durable_execution.state import ExecutionState
 from async_durable_execution import DurableContext, StepContext
 
@@ -105,7 +104,6 @@ EXECUTION_STATE = ExecutionState(
     durable_execution_arn="arn:aws:test",
     initial_checkpoint_token="test_token",  # noqa: S106
     service_client=Mock(),
-    plugin_executor=PluginExecutor(plugins=None),
 )
 
 
@@ -250,7 +248,6 @@ def test_filter_suppresses_logs_during_replay():
         initial_checkpoint_token="test_token",  # noqa: S106
         operations={"op1": operation},
         service_client=Mock(),
-        plugin_executor=PluginExecutor([]),
     )
     durable_context = DurableContext(
         execution_state=replay_state,

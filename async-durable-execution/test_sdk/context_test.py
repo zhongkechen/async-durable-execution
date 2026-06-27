@@ -50,7 +50,6 @@ from async_durable_execution.models import (
     OperationSubType,
     OperationType,
 )
-from async_durable_execution.plugin import PluginExecutor
 from async_durable_execution.state import ExecutionState
 from .serdes_test import CustomDictSerDes
 from .test_helpers import operation_id_sequence
@@ -119,7 +118,6 @@ def create_async_child_state() -> Mock:
     )
     state.operations.get.return_value = None
     state.create_checkpoint = AsyncMock()
-    state.wrap_user_function = lambda func, *args, **kwargs: func
     return state
 
 
@@ -2495,7 +2493,6 @@ def create_replay_context() -> DurableContext:
         initial_checkpoint_token="test_token",  # noqa: S106
         operations={},
         service_client=Mock(),
-        plugin_executor=PluginExecutor(plugins=None),
     )
     return DurableContext(
         execution_state=state,

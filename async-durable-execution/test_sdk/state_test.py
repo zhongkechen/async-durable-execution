@@ -32,10 +32,6 @@ from async_durable_execution.models import (
 )
 from async_durable_execution.client import ThreadedSyncLambdaClient
 from async_durable_execution.primitive.child import OrphanedChildException
-from async_durable_execution.plugin import (
-    DurableInstrumentationPlugin,
-    PluginExecutor,
-)
 from async_durable_execution.state import (
     CheckpointBatcherConfig,
     ExecutionState as _ExecutionState,
@@ -67,7 +63,6 @@ def ExecutionState(
     durable_execution_arn: str,
     initial_checkpoint_token: str,
     service_client,
-    plugin_executor,
     lambda_context=None,
     batcher_config: CheckpointBatcherConfig | None = None,
     operations: dict[str, Operation] | None = None,
@@ -76,7 +71,6 @@ def ExecutionState(
         durable_execution_arn=durable_execution_arn,
         initial_checkpoint_token=initial_checkpoint_token,
         service_client=service_client,
-        plugin_executor=plugin_executor,
         lambda_context=lambda_context,
         batcher_config=batcher_config,
     )
@@ -105,7 +99,6 @@ async def test_execution_state_creation():
         initial_checkpoint_token="test_token",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
     assert state.durable_execution_arn == "test_arn"
     assert state.operations == {}
@@ -120,7 +113,6 @@ async def test_create_checkpoint():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
     state.start_checkpointing = Mock()
 
@@ -154,7 +146,6 @@ async def test_create_checkpoint_with_none():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
     state.start_checkpointing = Mock()
 
@@ -180,7 +171,6 @@ async def test_create_checkpoint_with_no_args():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
     state.start_checkpointing = Mock()
 
@@ -241,7 +231,6 @@ async def test_fetch_paginated_operations_with_marker():
         durable_execution_arn="test_arn",
         initial_checkpoint_token="token123",  # noqa: S106
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     await state.fetch_paginated_operations(
@@ -340,7 +329,6 @@ async def test_fetch_paginated_operations_stores_partial_results_on_error():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     with pytest.raises(GetExecutionStateError):
@@ -379,7 +367,6 @@ async def test_fetch_paginated_operations_logs_error(caplog):
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     with pytest.raises(GetExecutionStateError):
@@ -489,7 +476,6 @@ async def test_checkpoint_batch_respects_default_max_items_limit():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
         batcher_config=config,
     )
 
@@ -558,7 +544,6 @@ async def test_collect_checkpoint_batch_respects_size_limit():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
         batcher_config=config,
     )
 
@@ -592,7 +577,6 @@ async def test_collect_checkpoint_batch_uses_overflow_queue():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Put operations in overflow queue
@@ -644,7 +628,6 @@ async def test_collect_checkpoint_batch_handles_empty_checkpoint():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Enqueue empty checkpoint
@@ -680,7 +663,6 @@ async def test_collect_checkpoint_batch_returns_empty_when_stopped():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Signal stop before collecting
@@ -702,7 +684,6 @@ async def test_parent_child_relationship_building():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Create parent operation
@@ -744,7 +725,6 @@ async def test_descendant_cancellation_when_parent_completes():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Build parent-child hierarchy
@@ -784,7 +764,6 @@ async def test_rejection_of_operations_from_completed_parents():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Build parent-child hierarchy
@@ -834,7 +813,6 @@ async def test_nested_parallel_operations_deep_hierarchy():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Build deep hierarchy: grandparent -> parent -> child
@@ -891,7 +869,6 @@ async def test_synchronous_checkpoint_blocks_until_complete():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     operation_update = OperationUpdate(
@@ -927,7 +904,6 @@ async def test_synchronous_checkpoint_returns_updated_operation():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     operation_update = OperationUpdate(
@@ -950,7 +926,6 @@ async def test_operations_dictionary_access():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     state.operations["op1"] = Operation(
@@ -974,7 +949,6 @@ async def test_stop_checkpointing_signals_background_thread():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Verify event is not set initially
@@ -1003,7 +977,6 @@ async def test_create_checkpoint_with_parent_id():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Create parent operation
@@ -1045,7 +1018,6 @@ async def test_create_checkpoint_rejects_orphaned_operation():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
     state.start_checkpointing = Mock()
 
@@ -1097,7 +1069,6 @@ async def test_mark_orphans_handles_cycles():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Manually create a cycle (shouldn't happen in practice, but test defensive code)
@@ -1127,7 +1098,6 @@ async def test_checkpoint_batches_forever_exception_handling():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Create synchronous operation
@@ -1161,7 +1131,6 @@ async def test_collect_checkpoint_batch_shutdown_path():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Add operation to queue (would be a non-essential async checkpoint in practice)
@@ -1191,7 +1160,6 @@ async def test_collect_checkpoint_batch_shutdown_empty_queue():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Signal shutdown with empty queue
@@ -1219,7 +1187,6 @@ async def test_collect_checkpoint_batch_overflow_put_back():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
         batcher_config=config,
     )
 
@@ -1269,7 +1236,6 @@ async def test_create_checkpoint_with_none_operation_update_sync():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     async def scenario():
@@ -1289,7 +1255,6 @@ async def test_checkpoint_batches_forever_exception_with_no_sync_operations():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Create async operation (no completion event)
@@ -1320,7 +1285,6 @@ async def test_collect_checkpoint_batch_size_limit_during_time_window():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
         batcher_config=config,
     )
 
@@ -1371,7 +1335,6 @@ async def test_collect_checkpoint_batch_respects_max_operations_limit():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
         batcher_config=config,
     )
 
@@ -1415,7 +1378,6 @@ async def test_collect_checkpoint_batch_time_window_expires():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
         batcher_config=config,
     )
 
@@ -1473,7 +1435,6 @@ async def test_collect_checkpoint_batch_handles_legacy_asyncio_timeout_error(
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
         batcher_config=config,
     )
     first_op = OperationUpdate(
@@ -1518,7 +1479,6 @@ async def test_collect_checkpoint_batch_empty_overflow_queue_path():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Ensure overflow queue is empty (it should be by default)
@@ -1556,7 +1516,6 @@ async def test_collect_checkpoint_batch_overflow_queue_hits_operation_limit():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
         batcher_config=config,
     )
 
@@ -1596,7 +1555,6 @@ async def test_collect_checkpoint_batch_overflow_queue_size_limit():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
         batcher_config=config,
     )
 
@@ -1641,7 +1599,6 @@ async def test_checkpoint_error_signals_completion_futures_with_error():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Create synchronous operation with completion event
@@ -1678,7 +1635,6 @@ async def test_synchronous_caller_receives_error_on_background_thread_failure():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     operation_update = OperationUpdate(
@@ -1711,7 +1667,6 @@ async def test_exception_propagates_through_threadpoolexecutor():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Enqueue an operation
@@ -1745,7 +1700,6 @@ async def test_multiple_sync_operations_all_remain_blocked_on_error():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Create multiple synchronous operations
@@ -1786,7 +1740,6 @@ async def test_async_operations_not_affected_by_error_handling():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Create async operation (no completion event)
@@ -1824,7 +1777,6 @@ async def test_mixed_sync_async_operations_only_sync_blocked_on_error():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     # Create sync operation with completion future
@@ -1872,7 +1824,6 @@ async def test_create_checkpoint_accepts_is_sync_parameter():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     operation_update = OperationUpdate(
@@ -1908,7 +1859,6 @@ async def test_create_checkpoint_default_is_sync_true():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     operation_update = OperationUpdate(
@@ -1948,7 +1898,6 @@ async def test_create_checkpoint_explicit_is_sync_true():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     operation_update = OperationUpdate(
@@ -1989,7 +1938,6 @@ async def test_create_checkpoint_is_sync_false_no_completion_event():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     operation_update = OperationUpdate(
@@ -2023,7 +1971,6 @@ async def test_create_checkpoint_is_sync_false_returns_immediately():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     operation_update = OperationUpdate(
@@ -2064,7 +2011,6 @@ async def test_create_checkpoint_with_none_defaults_to_sync():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     async def scenario():
@@ -2097,7 +2043,6 @@ async def test_create_checkpoint_no_args_defaults_to_sync():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     async def scenario():
@@ -2133,7 +2078,6 @@ async def test_collect_checkpoint_batch_overflow_queue_size_limit_final():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
         batcher_config=config,
     )
 
@@ -2194,7 +2138,6 @@ async def test_create_checkpoint_blocks_until_completion_default():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     operation_update = OperationUpdate(
@@ -2239,7 +2182,6 @@ async def test_create_checkpoint_blocks_until_completion_explicit_true():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     operation_update = OperationUpdate(
@@ -2272,7 +2214,6 @@ async def test_create_checkpoint_completion_event_created_and_signaled():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     operation_update = OperationUpdate(
@@ -2316,7 +2257,6 @@ async def test_create_checkpoint_completion_event_not_signaled_on_failure():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     operation_update = OperationUpdate(
@@ -2349,7 +2289,6 @@ async def test_create_checkpoint_caller_remains_blocked_on_background_failure():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     operation_update = OperationUpdate(
@@ -2390,7 +2329,6 @@ async def test_create_checkpoint_multiple_sync_calls_all_block():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     num_callers = 3
@@ -2450,7 +2388,6 @@ async def test_create_checkpoint_with_empty_checkpoint_sync():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     def delayed_checkpoint(**_kwargs):
@@ -2489,7 +2426,6 @@ async def test_create_checkpoint_sync_mode_success():
         initial_checkpoint_token="initial-token",  # noqa: S106
         operations={},
         service_client=mock_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     async def scenario():
@@ -2518,7 +2454,6 @@ async def test_create_checkpoint_sync_mode_raises_original_error():
         initial_checkpoint_token="initial-token",  # noqa: S106
         operations={},
         service_client=mock_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     async def scenario():
@@ -2552,7 +2487,6 @@ async def test_create_checkpoint_sync_mode_always_blocks():
         initial_checkpoint_token="initial-token",  # noqa: S106
         operations={},
         service_client=mock_client,
-        plugin_executor=PluginExecutor(plugins=None),
     )
 
     async def scenario():
@@ -2582,7 +2516,6 @@ async def test_state_has_prior_operations_true_for_non_execution_operation():
         initial_checkpoint_token="test_token",  # noqa: S106
         operations={"op1": operation1},
         service_client=Mock(),
-        plugin_executor=PluginExecutor(plugins=None),
     )
     assert execution_state.has_prior_operations() is True
 
@@ -2598,7 +2531,6 @@ async def test_state_has_prior_operations_false_for_execution_only():
         initial_checkpoint_token="test_token",  # noqa: S106
         operations={"exec1": execution_operation},
         service_client=Mock(),
-        plugin_executor=PluginExecutor(plugins=None),
     )
     assert execution_state.has_prior_operations() is False
 
@@ -2625,7 +2557,6 @@ async def test_collect_checkpoint_batch_coalesces_many_empty_checkpoints():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
         batcher_config=config,
     )
 
@@ -2659,7 +2590,6 @@ async def test_collect_checkpoint_batch_empty_checkpoints_with_real_ops_respects
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
         batcher_config=config,
     )
 
@@ -2699,7 +2629,6 @@ async def test_collect_checkpoint_batch_overflow_coalesces_empty_checkpoints():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
         batcher_config=config,
     )
 
@@ -2740,7 +2669,6 @@ async def test_checkpoint_batches_forever_single_api_call_for_many_empty_checkpo
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
         batcher_config=config,
     )
 
@@ -2781,7 +2709,6 @@ async def test_collect_checkpoint_batch_first_empty_counts_toward_limit():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
         batcher_config=config,
     )
 
@@ -2836,7 +2763,6 @@ async def test_execution_state_get_execution_operation_no_operations():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
         batcher_config=config,
     )
 
@@ -2868,7 +2794,6 @@ async def test_initial_execution_state_get_execution_operation_wrong_type():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={"step1": operation},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
         batcher_config=config,
     )
 
@@ -2905,409 +2830,8 @@ async def test_initial_execution_state_get_raw_input_payload_none():
         initial_checkpoint_token="token123",  # noqa: S106
         operations={"step1": operation},
         service_client=mock_lambda_client,
-        plugin_executor=PluginExecutor(plugins=None),
         batcher_config=config,
     )
 
     result = state.get_raw_input_payload()
     assert result is None
-
-
-class _RecordingPlugin(DurableInstrumentationPlugin):
-    """Plugin that records all hook calls for assertion."""
-
-    def __init__(self) -> None:
-        self.calls: list[str] = []
-
-    def on_execution_start(self, info):
-        self.calls.append("execution_start")
-
-    def on_execution_end(self, info):
-        self.calls.append("execution_end")
-
-    async def on_invocation_start(self, info):
-        self.calls.append("invocation_start")
-
-    async def on_invocation_end(self, info):
-        self.calls.append("invocation_end")
-
-    async def on_operation_start(self, info):
-        self.calls.append(f"operation_start:{info.operation_id}")
-
-    async def on_operation_end(self, info):
-        self.calls.append(f"operation_end:{info.operation_id}")
-
-    async def on_user_function_start(self, info):
-        self.calls.append(f"user_function_start:{info.operation_id}")
-
-    async def on_user_function_end(self, info):
-        self.calls.append(f"user_function_end:{info.operation_id}")
-
-
-async def test_execution_state_accepts_plugin_executor_parameter():
-    """Test that ExecutionState can be created with a plugin_executor parameter."""
-    mock_client = Mock(spec=ThreadedSyncLambdaClient)
-    plugin = _RecordingPlugin()
-    plugin_executor = PluginExecutor(plugins=[plugin])
-
-    state = ExecutionState(
-        durable_execution_arn="test_arn",
-        initial_checkpoint_token="token123",  # noqa: S106
-        operations={},
-        service_client=mock_client,
-        plugin_executor=plugin_executor,
-    )
-
-    assert state._plugin_executor is plugin_executor
-
-
-async def test_plugin_executor_on_operation_action_called_on_checkpoint():
-    """Test that plugin_executor.on_operation_action is called for each update after checkpoint."""
-    mock_client = create_autospec(ThreadedSyncLambdaClient)
-
-    # Return a succeeded step operation from checkpoint
-    step_op = Operation(
-        operation_id="step-1",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-        step_details=StepDetails(attempt=1, result='"done"'),
-    )
-    mock_client.checkpoint.return_value = CheckpointOutput(
-        checkpoint_token="new_token",  # noqa: S106
-        new_execution_state=CheckpointUpdatedExecutionState(
-            operations=[step_op],
-            next_marker=None,
-        ),
-    )
-
-    plugin = _RecordingPlugin()
-    plugin_executor = PluginExecutor(plugins=[plugin])
-    with plugin_executor.run():
-        state = ExecutionState(
-            durable_execution_arn="test_arn",
-            initial_checkpoint_token="token123",  # noqa: S106
-            operations={},
-            service_client=mock_client,
-            plugin_executor=plugin_executor,
-        )
-
-        async def scenario():
-            operation_update = OperationUpdate(
-                operation_id="step-1",
-                operation_type=OperationType.STEP,
-                action=OperationAction.START,
-                name="my-step",
-            )
-            await state.create_checkpoint(operation_update, is_sync=True)
-            await stop_checkpointing_task(state)
-
-        await run_async(scenario())
-
-    # on_operation_action is called for START updates
-    assert "operation_start:step-1" in plugin.calls
-
-
-async def test_plugin_executor_on_operation_update_called_for_terminal_operations():
-    """Test that plugin_executor.on_operation_update is called for terminal operations."""
-    mock_client = create_autospec(ThreadedSyncLambdaClient)
-
-    # Return a succeeded step operation from checkpoint
-    step_op = Operation(
-        operation_id="step-1",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-        step_details=StepDetails(attempt=1, result='"done"'),
-    )
-    mock_client.checkpoint.return_value = CheckpointOutput(
-        checkpoint_token="new_token",  # noqa: S106
-        new_execution_state=CheckpointUpdatedExecutionState(
-            operations=[step_op],
-            next_marker=None,
-        ),
-    )
-
-    plugin = _RecordingPlugin()
-    plugin_executor = PluginExecutor(plugins=[plugin])
-    with plugin_executor.run():
-        state = ExecutionState(
-            durable_execution_arn="test_arn",
-            initial_checkpoint_token="token123",  # noqa: S106
-            operations={},
-            service_client=mock_client,
-            plugin_executor=plugin_executor,
-        )
-
-        async def scenario():
-            operation_update = OperationUpdate(
-                operation_id="step-1",
-                operation_type=OperationType.STEP,
-                action=OperationAction.SUCCEED,
-                name="my-step",
-                payload='"done"',
-            )
-            await state.create_checkpoint(operation_update, is_sync=True)
-            await stop_checkpointing_task(state)
-
-        await run_async(scenario())
-
-    assert "operation_end:step-1" in plugin.calls
-
-
-async def test_plugin_executor_not_called_for_non_terminal_operations():
-    """Test that plugin_executor.on_operation_update does not fire for non-terminal operations."""
-    mock_client = create_autospec(spec=ThreadedSyncLambdaClient)
-
-    # Return a STARTED step operation from checkpoint
-    step_op = Operation(
-        operation_id="step-1",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.STARTED,
-        step_details=None,
-    )
-    mock_client.checkpoint.return_value = CheckpointOutput(
-        checkpoint_token="new_token",  # noqa: S106
-        new_execution_state=CheckpointUpdatedExecutionState(
-            operations=[step_op],
-            next_marker=None,
-        ),
-    )
-
-    plugin = _RecordingPlugin()
-    plugin_executor = PluginExecutor(plugins=[plugin])
-    with plugin_executor.run():
-        state = ExecutionState(
-            durable_execution_arn="test_arn",
-            initial_checkpoint_token="token123",  # noqa: S106
-            operations={},
-            service_client=mock_client,
-            plugin_executor=plugin_executor,
-        )
-
-        async def scenario():
-            operation_update = OperationUpdate(
-                operation_id="step-1",
-                operation_type=OperationType.STEP,
-                action=OperationAction.START,
-                name="my-step",
-            )
-            await state.create_checkpoint(operation_update, is_sync=True)
-            await stop_checkpointing_task(state)
-
-        await run_async(scenario())
-
-    # on_operation_action fires for START
-    assert "operation_start:step-1" in plugin.calls
-    # But on_operation_update should NOT fire operation_end for STARTED status
-    operation_end_calls = [c for c in plugin.calls if c.startswith("operation_end")]
-    assert len(operation_end_calls) == 0
-
-
-async def test_plugin_executor_called_for_multiple_updates_in_batch():
-    """Test that plugin_executor is called for each update in a batch."""
-    mock_client = create_autospec(spec=ThreadedSyncLambdaClient)
-
-    # Return multiple operations from checkpoint
-    step_op1 = Operation(
-        operation_id="step-1",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-        step_details=StepDetails(attempt=1, result='"result1"'),
-    )
-    step_op2 = Operation(
-        operation_id="step-2",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-        step_details=StepDetails(attempt=1, result='"result2"'),
-    )
-    mock_client.checkpoint.return_value = CheckpointOutput(
-        checkpoint_token="new_token",  # noqa: S106
-        new_execution_state=CheckpointUpdatedExecutionState(
-            operations=[step_op1, step_op2],
-            next_marker=None,
-        ),
-    )
-
-    plugin = _RecordingPlugin()
-    plugin_executor = PluginExecutor(plugins=[plugin])
-    with plugin_executor.run():
-        config = CheckpointBatcherConfig(
-            max_batch_time_seconds=0.2,
-            max_batch_operations=10,
-        )
-
-        state = ExecutionState(
-            durable_execution_arn="test_arn",
-            initial_checkpoint_token="token123",  # noqa: S106
-            operations={},
-            service_client=mock_client,
-            plugin_executor=plugin_executor,
-            batcher_config=config,
-        )
-
-        async def scenario():
-            op1 = OperationUpdate(
-                operation_id="step-1",
-                operation_type=OperationType.STEP,
-                action=OperationAction.START,
-                name="step-1",
-            )
-            op2 = OperationUpdate(
-                operation_id="step-2",
-                operation_type=OperationType.STEP,
-                action=OperationAction.START,
-                name="step-2",
-            )
-            await state.create_checkpoint(op1, is_sync=False)
-            await state.create_checkpoint(op2, is_sync=True)
-            await stop_checkpointing_task(state)
-
-        await run_async(scenario())
-
-    # Both operations should have triggered on_operation_action
-    assert "operation_start:step-1" in plugin.calls
-    assert "operation_start:step-2" in plugin.calls
-    # Both terminal operations should have triggered on_operation_update
-    assert "operation_end:step-1" in plugin.calls
-    assert "operation_end:step-2" in plugin.calls
-
-
-async def test_plugin_executor_not_called_on_checkpoint_failure():
-    """Test that plugin_executor is NOT called when checkpoint API fails."""
-    mock_client = create_autospec(spec=ThreadedSyncLambdaClient)
-    mock_client.checkpoint.side_effect = RuntimeError("API error")
-
-    plugin = _RecordingPlugin()
-    plugin_executor = PluginExecutor(plugins=[plugin])
-    with plugin_executor.run():
-        state = ExecutionState(
-            durable_execution_arn="test_arn",
-            initial_checkpoint_token="token123",  # noqa: S106
-            operations={},
-            service_client=mock_client,
-            plugin_executor=plugin_executor,
-        )
-
-        async def scenario():
-            operation_update = OperationUpdate(
-                operation_id="step-1",
-                operation_type=OperationType.STEP,
-                action=OperationAction.START,
-                name="my-step",
-            )
-
-            with pytest.raises(RuntimeError, match="API error"):
-                await state.create_checkpoint(operation_update, is_sync=True)
-            await stop_checkpointing_task(state)
-
-        await run_async(scenario())
-
-    # Plugin should NOT have been called since checkpoint failed
-    assert "operation_start:step-1" not in plugin.calls
-    assert "operation_end:step-1" not in plugin.calls
-
-
-async def test_plugin_executor_exception_does_not_break_checkpointing():
-    """Test that a plugin exception does not break the checkpoint processing loop."""
-    mock_client = create_autospec(spec=ThreadedSyncLambdaClient)
-
-    step_op = Operation(
-        operation_id="step-1",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-        step_details=StepDetails(attempt=1, result='"done"'),
-    )
-    mock_client.checkpoint.return_value = CheckpointOutput(
-        checkpoint_token="new_token",  # noqa: S106
-        new_execution_state=CheckpointUpdatedExecutionState(
-            operations=[step_op],
-            next_marker=None,
-        ),
-    )
-
-    class _ExplodingPlugin(DurableInstrumentationPlugin):
-        async def on_operation_start(self, info):
-            raise RuntimeError("plugin exploded")
-
-        async def on_operation_end(self, info):
-            raise RuntimeError("plugin exploded")
-
-    exploding_plugin = _ExplodingPlugin()
-    plugin_executor = PluginExecutor(plugins=[exploding_plugin])
-    with plugin_executor.run():
-        state = ExecutionState(
-            durable_execution_arn="test_arn",
-            initial_checkpoint_token="token123",  # noqa: S106
-            operations={},
-            service_client=mock_client,
-            plugin_executor=plugin_executor,
-        )
-
-        async def scenario():
-            operation_update = OperationUpdate(
-                operation_id="step-1",
-                operation_type=OperationType.STEP,
-                action=OperationAction.START,
-                name="my-step",
-            )
-            await state.create_checkpoint(operation_update, is_sync=True)
-
-            assert mock_client.checkpoint.call_count == 1
-            await stop_checkpointing_task(state)
-
-        await run_async(scenario())
-
-
-async def test_plugin_executor_not_called_for_pending_operations():
-    """Test that plugin_executor.on_operation_update fires on_user_function_end for PENDING operations."""
-    mock_client = create_autospec(spec=ThreadedSyncLambdaClient)
-
-    # Return a PENDING step operation from checkpoint (simulates a retry scenario)
-    step_op = Operation(
-        operation_id="step-1",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.PENDING,
-        step_details=StepDetails(
-            attempt=1,
-            result=None,
-            error=ErrorObject(
-                message="transient failure",
-                type="RetryableError",
-                data=None,
-                stack_trace=None,
-            ),
-        ),
-    )
-    mock_client.checkpoint.return_value = CheckpointOutput(
-        checkpoint_token="new_token",  # noqa: S106
-        new_execution_state=CheckpointUpdatedExecutionState(
-            operations=[step_op],
-            next_marker=None,
-        ),
-    )
-
-    plugin = _RecordingPlugin()
-    plugin_executor = PluginExecutor(plugins=[plugin])
-    with plugin_executor.run():
-        state = ExecutionState(
-            durable_execution_arn="test_arn",
-            initial_checkpoint_token="token123",  # noqa: S106
-            operations={},
-            service_client=mock_client,
-            plugin_executor=plugin_executor,
-        )
-
-        async def scenario():
-            operation_update = OperationUpdate(
-                operation_id="step-1",
-                operation_type=OperationType.STEP,
-                action=OperationAction.START,
-                name="my-step",
-            )
-            await state.create_checkpoint(operation_update, is_sync=True)
-            await stop_checkpointing_task(state)
-
-        await run_async(scenario())
-
-    # operation_end should NOT fire for PENDING (only for terminal statuses)
-    operation_end_calls = [c for c in plugin.calls if c.startswith("operation_end")]
-    assert len(operation_end_calls) == 0

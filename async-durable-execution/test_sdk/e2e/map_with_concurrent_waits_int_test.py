@@ -42,7 +42,6 @@ from async_durable_execution.models import (
     OperationUpdate,
 )
 from async_durable_execution.client import ThreadedSyncLambdaClient
-from async_durable_execution.plugin import PluginExecutor
 from async_durable_execution.state import (
     CheckpointBatcherConfig,
     ExecutionState,
@@ -65,7 +64,6 @@ def _make_state(
         initial_checkpoint_token="token-0",  # noqa: S106
         service_client=mock_client,
         batcher_config=config,
-        plugin_executor=PluginExecutor([]),
     )
 
 

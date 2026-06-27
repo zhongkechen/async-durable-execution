@@ -180,13 +180,7 @@ class StepOperationExecutor(OperationExecutor[T]):
 
         try:
             # This is the actual code provided by the caller to execute durably inside the step
-            wrapped_user_func = self.state.wrap_user_function(
-                self.func,
-                self.operation_identifier,
-                False,
-                attempt,
-            )
-            raw_result = await invoke_user_callable(step_context, wrapped_user_func)
+            raw_result = await invoke_user_callable(step_context, self.func)
 
             serialized_result: str = await self.serialize_value(
                 value=raw_result,

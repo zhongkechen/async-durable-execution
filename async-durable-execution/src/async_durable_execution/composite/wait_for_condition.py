@@ -291,12 +291,6 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 execution_state=self.state,
                 operation_identifier=self.operation_identifier,
             )
-            wrapped_user_func = self.state.wrap_user_function(
-                self.check,
-                self.operation_identifier,
-                False,
-                attempt,
-            )
             token = set_current_context(
                 WaitForConditionCheckContext(
                     attempt=attempt,
@@ -305,7 +299,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 )
             )
             try:
-                condition_result = await wrapped_user_func(current_state)
+                condition_result = await self.check(current_state)
             finally:
                 reset_current_context(token)
 

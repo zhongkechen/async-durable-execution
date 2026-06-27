@@ -82,9 +82,6 @@ def create_mock_execution_state():
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
     state.create_checkpoint = AsyncMock()
-    state.wrap_user_function = lambda func, *args, **kwargs: (
-        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
-    )
     return state
 
 
@@ -1124,9 +1121,6 @@ async def test_map_item_serialize(mock_serialize, item_serdes, batch_serdes):
     mock_state.operations = Mock()
     mock_state.operations.get = Mock(side_effect=get_checkpoint)
     mock_state.create_checkpoint = AsyncMock()
-    mock_state.wrap_user_function = lambda func, *args, **kwargs: (
-        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
-    )
 
     context_map = {}
 
@@ -1203,9 +1197,6 @@ async def test_map_item_deserialize(mock_deserialize, item_serdes, batch_serdes)
     mock_state.operations = Mock()
     mock_state.operations.get = Mock(side_effect=get_checkpoint)
     mock_state.create_checkpoint = AsyncMock()
-    mock_state.wrap_user_function = lambda func, *args, **kwargs: (
-        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
-    )
 
     context_map = {}
 
@@ -1323,9 +1314,6 @@ async def test_map_handler_serializes_batch_result():
             mock_state.operations = Mock()
             mock_state.operations.get = Mock(side_effect=get_checkpoint)
             mock_state.create_checkpoint = AsyncMock()
-            mock_state.wrap_user_function = lambda func, *args, **kwargs: (
-                lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
-            )
 
             context_map = {}
 
@@ -1389,9 +1377,6 @@ async def test_map_default_serdes_serializes_batch_result():
             mock_state.operations = Mock()
             mock_state.operations.get = Mock(side_effect=get_checkpoint)
             mock_state.create_checkpoint = AsyncMock()
-            mock_state.wrap_user_function = lambda func, *args, **kwargs: (
-                lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
-            )
 
             context_map = {}
 
@@ -1460,9 +1445,6 @@ async def test_map_custom_serdes_serializes_batch_result():
             mock_state.operations = Mock()
             mock_state.operations.get = Mock(side_effect=get_checkpoint)
             mock_state.create_checkpoint = AsyncMock()
-            mock_state.wrap_user_function = lambda func, *args, **kwargs: (
-                lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
-            )
 
             context_map = {}
 
@@ -1524,9 +1506,6 @@ async def test_map_with_empty_list_should_exit_early():
     mock_state.operations = Mock()
     mock_state.operations.get = Mock(return_value=None)
     mock_state.create_checkpoint = AsyncMock()
-    mock_state.wrap_user_function = lambda func, *args, **kwargs: (
-        lambda *a, **kw: _invoke_maybe_async(func, *a, **kw)
-    )
 
     context = create_test_context(state=mock_state)
 

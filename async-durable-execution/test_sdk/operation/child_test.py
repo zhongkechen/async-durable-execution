@@ -47,20 +47,7 @@ def _asyncify(func):
 
 
 async def child_handler(*args, **kwargs):
-    state = (
-        kwargs.get("state")
-        if "state" in kwargs
-        else (args[1] if len(args) > 1 else None)
-    )
-    if (
-        state is not None
-        and hasattr(state, "wrap_user_function")
-        and hasattr(state.wrap_user_function, "return_value")
-    ):
-        state.wrap_user_function.return_value = _asyncify(
-            state.wrap_user_function.return_value
-        )
-    func = args[0] if args else kwargs.pop("func")
+    func = _asyncify(args[0] if args else kwargs.pop("func"))
     state = args[1] if len(args) > 1 else kwargs.pop("state")
     operation_identifier = (
         args[2] if len(args) > 2 else kwargs.pop("operation_identifier")
@@ -160,8 +147,6 @@ async def test_child_handler_not_started(
     mock_result.is_existent.return_value = False
     mock_state.operations.get.return_value = None
     mock_callable = Mock(return_value="fresh_result")
-    mock_state.wrap_user_function.return_value = mock_callable
-
     result = await child_handler(
         mock_callable,
         mock_state,
@@ -461,8 +446,6 @@ async def test_child_handler_already_started(
     mock_result = operation
     mock_state.operations.get.return_value = mock_result
     mock_callable = Mock(return_value="started_result")
-    mock_state.wrap_user_function.return_value = mock_callable
-
     result = await child_handler(
         mock_callable,
         mock_state,
@@ -510,8 +493,6 @@ async def test_child_handler_callable_exception(
     mock_result.is_existent.return_value = False
     mock_state.operations.get.return_value = None
     mock_callable = Mock(side_effect=ValueError("Test error"))
-    mock_state.wrap_user_function.return_value = mock_callable
-
     with pytest.raises(CallableRuntimeError):
         await child_handler(
             mock_callable,
@@ -564,8 +545,6 @@ async def test_child_handler_error_wrapped():
     mock_state.operations.get.return_value = None
     test_error = RuntimeError("Test error")
     mock_callable = Mock(side_effect=test_error)
-    mock_state.wrap_user_function.return_value = mock_callable
-
     with pytest.raises(CallableRuntimeError):
         await child_handler(
             mock_callable,
@@ -598,8 +577,6 @@ async def test_child_handler_invocation_error_reraised():
     mock_state.operations.get.return_value = None
     test_error = InvocationError("Invocation failed")
     mock_callable = Mock(side_effect=test_error)
-    mock_state.wrap_user_function.return_value = mock_callable
-
     with pytest.raises(InvocationError, match="Invocation failed"):
         await child_handler(
             mock_callable,
@@ -629,8 +606,6 @@ async def test_child_handler_with_config():
     mock_result.is_existent.return_value = False
     mock_state.operations.get.return_value = None
     mock_callable = Mock(return_value="config_result")
-    mock_state.wrap_user_function.return_value = mock_callable
-
     result = await child_handler(
         mock_callable,
         mock_state,
@@ -658,8 +633,6 @@ async def test_child_handler_default_serialization():
     mock_state.operations.get.return_value = None
     complex_result = {"key": "value", "number": 42, "list": [1, 2, 3]}
     mock_callable = Mock(return_value=complex_result)
-    mock_state.wrap_user_function.return_value = mock_callable
-
     result = await child_handler(
         mock_callable,
         mock_state,
@@ -692,8 +665,6 @@ async def test_child_handler_custom_serdes_not_start() -> None:
     mock_state.operations.get.return_value = None
     complex_result = {"key": "value", "number": 42, "list": [1, 2, 3]}
     mock_callable = Mock(return_value=complex_result)
-    mock_state.wrap_user_function.return_value = mock_callable
-
     await child_handler(
         mock_callable,
         mock_state,
@@ -762,7 +733,6 @@ async def test_child_handler_large_payload_with_summary_generator() -> None:
     mock_state.operations.get.return_value = None
     large_result = "large" * 256 * 1024
     mock_callable = Mock(return_value=large_result)
-    mock_state.wrap_user_function.return_value = mock_callable
 
     def my_summary(result: str) -> str:
         return "summary"
@@ -806,8 +776,6 @@ async def test_child_handler_large_payload_without_summary_generator() -> None:
     mock_state.operations.get.return_value = None
     large_result = "large" * 256 * 1024
     mock_callable = Mock(return_value=large_result)
-    mock_state.wrap_user_function.return_value = mock_callable
-
     actual_result = await child_handler(
         mock_callable,
         mock_state,
@@ -846,8 +814,6 @@ async def test_child_handler_replay_children_mode() -> None:
     )
     complex_result = {"key": "value", "number": 42, "list": [1, 2, 3]}
     mock_callable = Mock(return_value=complex_result)
-    mock_state.wrap_user_function.return_value = mock_callable
-
     actual_result = await child_handler(
         mock_callable,
         mock_state,
@@ -885,7 +851,6 @@ async def test_small_payload_with_summary_generator():
     # Small payload (< 256KB)
     small_result = "small_payload"
     mock_callable = Mock(return_value=small_result)
-    mock_state.wrap_user_function.return_value = mock_callable
 
     def my_summary(result: str) -> str:
         return "summary_of_small_payload"
@@ -933,8 +898,6 @@ async def test_small_payload_without_summary_generator():
     # Small payload (< 256KB); no summary_generator provided
     small_result = "small_payload"
     mock_callable = Mock(return_value=small_result)
-    mock_state.wrap_user_function.return_value = mock_callable
-
     actual_result = await child_handler(
         mock_callable,
         mock_state,
@@ -971,8 +934,6 @@ async def test_child_handler_is_virtual_no_start():
     mock_result.is_existent.return_value = False
     mock_state.operations.get.return_value = None
     mock_callable = Mock(return_value="no_checkpoint_result")
-    mock_state.wrap_user_function.return_value = mock_callable
-
     result = await child_handler(
         mock_callable,
         mock_state,
@@ -1010,8 +971,6 @@ async def test_child_handler_is_virtual_no_succeed():
     mock_result.is_existent.return_value = False
     mock_state.operations.get.return_value = None
     mock_callable = Mock(return_value="no_checkpoint_result")
-    mock_state.wrap_user_function.return_value = mock_callable
-
     result = await child_handler(
         mock_callable,
         mock_state,
@@ -1041,8 +1000,6 @@ async def test_child_handler_not_is_virtual_finish_mode():
     mock_result.is_existent.return_value = False
     mock_state.operations.get.return_value = None
     mock_callable = Mock(return_value="checkpoint_result")
-    mock_state.wrap_user_function.return_value = mock_callable
-
     result = await child_handler(
         mock_callable,
         mock_state,
@@ -1091,8 +1048,6 @@ async def test_child_handler_is_virtual_with_exception():
     mock_result.is_existent.return_value = False
     mock_state.operations.get.return_value = None
     mock_callable = Mock(side_effect=ValueError("Test error"))
-    mock_state.wrap_user_function.return_value = mock_callable
-
     with pytest.raises(CallableRuntimeError):
         await child_handler(
             mock_callable,
@@ -1121,8 +1076,6 @@ async def test_child_handler_not_is_virtual_with_exception():
     mock_result.is_existent.return_value = False
     mock_state.operations.get.return_value = None
     mock_callable = Mock(side_effect=ValueError("Test error"))
-    mock_state.wrap_user_function.return_value = mock_callable
-
     with pytest.raises(CallableRuntimeError):
         await child_handler(
             mock_callable,
@@ -1164,7 +1117,6 @@ async def test_child_handler_is_virtual_comparison():
         mock_result.is_existent.return_value = False
         mock_state.operations.get.return_value = None
         mock_callable = Mock(return_value="test_result")
-        mock_state.wrap_user_function.return_value = mock_callable
         return mock_state, mock_callable
 
     # is_virtual=False: 2 checkpoints
