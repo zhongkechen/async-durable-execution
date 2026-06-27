@@ -62,17 +62,17 @@ class QueuedOperation:
     """
 
     operation_update: OperationUpdate | None
-    completion_future: asyncio.Future[None] | None = None
+    completion_future: asyncio.Future[Operation | None] | None = None
 
 
 def _completion_done(completion) -> bool:
     return completion is None or completion.done()
 
 
-def _completion_set_result(completion) -> None:
+def _completion_set_result(completion, operation: Operation | None = None) -> None:
     if completion is None:
         return
-    completion.set_result(None)
+    completion.set_result(operation)
 
 
 def _completion_set_exception(completion, error: Exception) -> None:
@@ -233,7 +233,7 @@ class ExecutionState:
         self,
         operation_update: OperationUpdate | None = None,
         is_sync: bool = True,  # noqa: FBT001, FBT002
-    ):
+    ) -> Operation | None:
         """Create a checkpoint with optional synchronous behavior.
 
         This method enqueues a checkpoint operation for processing by the background
@@ -275,6 +275,10 @@ class ExecutionState:
                             operations list.
             is_sync: If True (default), blocks until the checkpoint is processed.
                     If False, returns immediately without blocking for performance.
+
+        Returns:
+            The updated operation for synchronous checkpoints with an operation update.
+            Returns None for asynchronous checkpoints and empty checkpoints.
 
         Raises:
             Any exception from checkpoint processing will propagate back to the
@@ -331,7 +335,7 @@ class ExecutionState:
         if self._checkpointing_task is None or self._checkpointing_task.done():
             self.start_checkpointing()
 
-        completion_future: asyncio.Future[None] | None = None
+        completion_future: asyncio.Future[Operation | None] | None = None
         if is_sync:
             completion_future = asyncio.get_running_loop().create_future()
 
@@ -348,9 +352,10 @@ class ExecutionState:
                 # this shouldn't ever be possible
                 msg: str = "completion_future must be set for synchronous execution"
                 raise DurableExecutionsError(msg)
-            await completion_future
+            return await completion_future
         else:
             logger.debug("Enqueued checkpoint operation for asynchronous processing")
+            return None
 
     def _mark_orphans(self, context_id: str) -> None:
         """Mark all descendants (direct and transitive) as orphaned.
@@ -467,6 +472,10 @@ class ExecutionState:
                         output.checkpoint_token,
                         output.new_execution_state.next_marker,
                     )
+                    updated_operations_by_id = {
+                        operation.operation_id: operation
+                        for operation in updated_operations
+                    }
 
                     for update in updates:
                         await self._plugin_executor.on_operation_action(update)
@@ -477,7 +486,14 @@ class ExecutionState:
                     # Signal completion for any synchronous operations
                     for queued_op in batch:
                         if not _completion_done(queued_op.completion_future):
-                            _completion_set_result(queued_op.completion_future)
+                            operation = None
+                            if queued_op.operation_update is not None:
+                                operation = updated_operations_by_id.get(
+                                    queued_op.operation_update.operation_id
+                                )
+                            _completion_set_result(
+                                queued_op.completion_future, operation
+                            )
                 except Exception as e:
                     # Checkpoint failed - wake blocked coroutines so they can raise error
                     logger.exception("Checkpoint batch processing failed")

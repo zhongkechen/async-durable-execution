@@ -508,8 +508,7 @@ async def test_callback_result_succeeded():
             callback_id="callback1", result=json.dumps("success_result")
         ),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = operation
 
     callback = Callback("callback1", "op1", mock_state)
     result = await run_async(callback.result())
@@ -530,8 +529,7 @@ async def test_callback_result_succeeded_with_plain_str():
             callback_id="callback1", result="success_result"
         ),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = operation
 
     callback = Callback("callback1", "op1", mock_state)
     result = await run_async(callback.result())
@@ -549,8 +547,7 @@ async def test_callback_result_succeeded_none():
         status=OperationStatus.SUCCEEDED,
         callback_details=CallbackDetails(callback_id="callback2", result=None),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = operation
 
     callback = Callback("callback2", "op2", mock_state)
     result = await run_async(callback.result())
@@ -567,8 +564,7 @@ async def test_callback_result_started_no_timeout():
         status=OperationStatus.STARTED,
         callback_details=CallbackDetails(callback_id="callback3"),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = operation
 
     callback = Callback("callback3", "op3", mock_state)
 
@@ -585,8 +581,7 @@ async def test_callback_result_started_with_timeout():
         status=OperationStatus.STARTED,
         callback_details=CallbackDetails(callback_id="callback4"),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = operation
 
     callback = Callback("callback4", "op4", mock_state)
 
@@ -606,8 +601,7 @@ async def test_callback_result_failed():
         status=OperationStatus.FAILED,
         callback_details=CallbackDetails(callback_id="callback5", error=error),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = operation
 
     callback = Callback("callback5", "op5", mock_state)
 
@@ -618,8 +612,7 @@ async def test_callback_result_failed():
 async def test_callback_result_not_started():
     """Test Callback.result() when operation not started."""
     mock_state = Mock(spec=ExecutionState)
-    mock_result = CheckpointedResult.create_not_found()
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = None
 
     callback = Callback("callback6", "op6", mock_state)
 
@@ -639,8 +632,7 @@ async def test_callback_custom_serdes_result_succeeded():
             result='{"key": "VALUE", "number": "84", "list": [1, 2, 3]}',
         ),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = operation
 
     callback = Callback("callback1", "op1", mock_state, CustomDictSerDes())
     result = await run_async(callback.result())
@@ -665,8 +657,7 @@ async def test_callback_result_timed_out():
         status=OperationStatus.TIMED_OUT,
         callback_details=CallbackDetails(callback_id="callback_timeout", error=error),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = operation
 
     callback = Callback("callback_timeout", "op_timeout", mock_state)
 

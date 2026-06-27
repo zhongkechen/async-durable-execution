@@ -14,6 +14,7 @@ from ..models import (
     CallbackTimeoutType,
     Operation,
     OperationIdentifier,
+    OperationStatus,
     OperationUpdate,
     OperationSubType,
 )
@@ -88,13 +89,12 @@ class CallbackOperationExecutor(OperationExecutor[str]):
             callback_options=callback_options,
         )
 
-        await self.create_checkpoint(create_callback_operation)
+        operation = await self.create_checkpoint(create_callback_operation)
 
-        checkpointed_result = self.get_checkpointed_result()
-        if not checkpointed_result.operation:
+        if not operation:
             msg = f"Missing callback details for operation: {self.operation_identifier.operation_id}"
             raise CallbackError(msg)
-        return await self.replay(checkpointed_result.operation)
+        return await self.replay(operation)
 
     async def replay(self, operation: Operation) -> str:
         """Replay an existing callback operation from its checkpoint."""
@@ -105,16 +105,16 @@ class CallbackOperationExecutor(OperationExecutor[str]):
             )
             raise CallbackError(msg)
 
-        return await self.execute(CheckpointedResult.create_from_operation(operation))
+        return await self.execute(operation)
 
-    async def execute(self, checkpointed_result: CheckpointedResult) -> str:
+    async def execute(self, operation: Operation) -> str:  # type: ignore[override]
         """Execute callback operation by extracting the callback_id.
 
         Callbacks don't execute logic - they just extract and return the callback_id
-        from the checkpoint data.
+        from the operation data.
 
         Args:
-            checkpointed_result: The checkpoint data containing callback_details
+            operation: The callback operation containing callback_details
 
         Returns:
             The callback_id from the checkpoint
@@ -122,14 +122,11 @@ class CallbackOperationExecutor(OperationExecutor[str]):
         Raises:
             CallbackError: If callback_details are missing (should never happen)
         """
-        if (
-            not checkpointed_result.operation
-            or not checkpointed_result.operation.callback_details
-        ):
+        if not operation.callback_details:
             msg = f"Missing callback details for operation: {self.operation_identifier.operation_id}"
             raise CallbackError(msg)
 
-        return checkpointed_result.operation.callback_details.callback_id
+        return operation.callback_details.callback_id
 
 
 async def create_callback(
@@ -197,31 +194,31 @@ class Callback(Generic[T]):  # noqa: PYI059
         heartbeats: SendDurableExecutionCallbackSuccess, SendDurableExecutionCallbackFailure
         and SendDurableExecutionCallbackHeartbeat.
         """
-        checkpointed_result: CheckpointedResult = get_checkpoint_result(
-            self.state,
-            self.operation_id,
-        )
+        operation = self.state.operations.get(self.operation_id)
 
-        if not checkpointed_result.is_existent():
+        if not isinstance(operation, Operation):
             msg = "Callback operation must exist"
             raise CallbackError(message=msg, callback_id=self.callback_id)
 
-        if (
-            checkpointed_result.is_failed()
-            or checkpointed_result.is_cancelled()
-            or checkpointed_result.is_timed_out()
-            or checkpointed_result.is_stopped()
-        ):
-            msg = _format_callback_error_message(checkpointed_result)
+        if operation.status in {
+            OperationStatus.FAILED,
+            OperationStatus.CANCELLED,
+            OperationStatus.TIMED_OUT,
+            OperationStatus.STOPPED,
+        }:
+            msg = _format_callback_error_message(operation)
             raise CallbackError(message=msg, callback_id=self.callback_id)
 
-        if checkpointed_result.is_succeeded():
-            if checkpointed_result.result is None:
+        if operation.status is OperationStatus.SUCCEEDED:
+            if (
+                not operation.callback_details
+                or operation.callback_details.result is None
+            ):
                 return None  # type: ignore
 
             return await deserialize(
                 serdes=self.serdes if self.serdes is not None else PASS_THROUGH_SERDES,
-                data=checkpointed_result.result,
+                data=operation.callback_details.result,
                 operation_id=self.operation_id,
                 durable_execution_arn=self.state.durable_execution_arn,
             )
@@ -232,15 +229,15 @@ class Callback(Generic[T]):  # noqa: PYI059
         raise SuspendExecution(msg)
 
 
-def _format_callback_error_message(checkpointed_result: CheckpointedResult) -> str:
+def _format_callback_error_message(operation: Operation) -> str:
     """Build a stable callback error message from checkpoint state."""
-    error = checkpointed_result.error
+    error = operation.callback_details.error if operation.callback_details else None
     if not error or not error.message:
         return "Callback failed"
 
     message = error.message
     if (
-        checkpointed_result.is_timed_out()
+        operation.status is OperationStatus.TIMED_OUT
         and error.type in {timeout.value for timeout in CallbackTimeoutType}
         and error.type not in message
     ):

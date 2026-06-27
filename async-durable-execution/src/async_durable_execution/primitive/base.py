@@ -246,15 +246,14 @@ class OperationExecutor(ABC, Generic[T]):
         operation_update: OperationUpdate,
         *,
         is_sync: bool | None = None,
-    ) -> None:
+    ) -> Operation | None:
         """Persist a checkpoint update for this operation."""
         if is_sync is None:
-            await self.state.create_checkpoint(
+            return await self.state.create_checkpoint(
                 operation_update=operation_update,
             )
-            return
 
-        await self.state.create_checkpoint(
+        return await self.state.create_checkpoint(
             operation_update=operation_update,
             is_sync=is_sync,
         )
