@@ -147,7 +147,7 @@ async def test_child_handler_not_started(
     """Test child_handler when operation not started.
 
     Verifies:
-    - get_checkpoint_result is called once (async checkpoint, no second check)
+    - direct state lookup is called once (async checkpoint, no second check)
     - create_checkpoint is called with is_sync=False for START
     - Operation executes and creates SUCCEED checkpoint
     """
@@ -159,7 +159,7 @@ async def test_child_handler_not_started(
     mock_result.is_started.return_value = False
     mock_result.is_replay_children.return_value = False
     mock_result.is_existent.return_value = False
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = None
     mock_callable = Mock(return_value="fresh_result")
     mock_state.wrap_user_function.return_value = mock_callable
 
@@ -171,7 +171,7 @@ async def test_child_handler_not_started(
 
     assert result == "fresh_result"
 
-    # Verify get_checkpoint_result called once (async checkpoint, no second check)
+    # Verify direct state lookup called once (async checkpoint, no second check)
     assert mock_state.operations.get.call_count == 1
 
     # Verify create_checkpoint called twice (start and succeed)
@@ -208,7 +208,7 @@ async def test_child_handler_already_succeeded():
     Verifies:
     - Returns cached result without executing function
     - No checkpoint created
-    - get_checkpoint_result called once
+    - direct state lookup called once
     """
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -218,7 +218,7 @@ async def test_child_handler_already_succeeded():
         status=OperationStatus.SUCCEEDED,
         context_details=ContextDetails(result=json.dumps("cached_result")),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
     mock_callable = Mock()
 
@@ -235,7 +235,7 @@ async def test_child_handler_already_succeeded():
     mock_callable.assert_not_called()
     # Verify no checkpoint created
     mock_state.create_checkpoint.assert_not_called()
-    # Verify get_checkpoint_result called once
+    # Verify direct state lookup called once
     assert mock_state.operations.get.call_count == 1
 
 
@@ -249,7 +249,7 @@ async def test_child_handler_already_succeeded_none_result():
         status=OperationStatus.SUCCEEDED,
         context_details=ContextDetails(result=None),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
     mock_callable = Mock()
 
@@ -271,7 +271,7 @@ async def test_child_handler_already_failed():
     Verifies:
     - Already failed: raises error without executing function
     - No checkpoint created
-    - get_checkpoint_result called once
+    - direct state lookup called once
     """
     mock_state = Mock(spec=ExecutionState)
     error = ErrorObject(
@@ -286,7 +286,7 @@ async def test_child_handler_already_failed():
         status=OperationStatus.FAILED,
         context_details=ContextDetails(error=error),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
     mock_callable = Mock()
 
@@ -450,7 +450,7 @@ async def test_child_handler_already_started(
     Verifies:
     - Operation executes when already started
     - Only SUCCEED checkpoint created (no START)
-    - get_checkpoint_result called once
+    - direct state lookup called once
     """
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -459,7 +459,7 @@ async def test_child_handler_already_started(
         operation_type=OperationType.CONTEXT,
         status=OperationStatus.STARTED,
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
     mock_callable = Mock(return_value="started_result")
     mock_state.wrap_user_function.return_value = mock_callable
@@ -472,7 +472,7 @@ async def test_child_handler_already_started(
 
     assert result == "started_result"
 
-    # Verify get_checkpoint_result called once
+    # Verify direct state lookup called once
     assert mock_state.operations.get.call_count == 1
 
     # Verify only success checkpoint (no START since already started)
@@ -499,7 +499,7 @@ async def test_child_handler_callable_exception(
 
     Verifies:
     - Error handling: checkpoints FAIL and raises wrapped error
-    - get_checkpoint_result called once
+    - direct state lookup called once
     - create_checkpoint called with is_sync=False for START
     """
     mock_state = Mock(spec=ExecutionState)
@@ -509,7 +509,7 @@ async def test_child_handler_callable_exception(
     mock_result.is_failed.return_value = False
     mock_result.is_started.return_value = False
     mock_result.is_existent.return_value = False
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = None
     mock_callable = Mock(side_effect=ValueError("Test error"))
     mock_state.wrap_user_function.return_value = mock_callable
 
@@ -520,7 +520,7 @@ async def test_child_handler_callable_exception(
             OperationIdentifier("op6", expected_sub_type, None, "test_name"),
         )
 
-    # Verify get_checkpoint_result called once
+    # Verify direct state lookup called once
     assert mock_state.operations.get.call_count == 1
 
     # Verify create_checkpoint called twice (start and fail)
@@ -562,7 +562,7 @@ async def test_child_handler_error_wrapped():
     mock_result.is_failed.return_value = False
     mock_result.is_started.return_value = False
     mock_result.is_existent.return_value = False
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = None
     test_error = RuntimeError("Test error")
     mock_callable = Mock(side_effect=test_error)
     mock_state.wrap_user_function.return_value = mock_callable
@@ -596,7 +596,7 @@ async def test_child_handler_invocation_error_reraised():
     mock_result.is_failed.return_value = False
     mock_result.is_started.return_value = False
     mock_result.is_existent.return_value = False
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = None
     test_error = InvocationError("Invocation failed")
     mock_callable = Mock(side_effect=test_error)
     mock_state.wrap_user_function.return_value = mock_callable
@@ -628,7 +628,7 @@ async def test_child_handler_with_config():
     mock_result.is_failed.return_value = False
     mock_result.is_started.return_value = False
     mock_result.is_existent.return_value = False
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = None
     mock_callable = Mock(return_value="config_result")
     mock_state.wrap_user_function.return_value = mock_callable
 
@@ -642,7 +642,7 @@ async def test_child_handler_with_config():
 
     assert result == "config_result"
     mock_callable.assert_called_once()
-    # Verify get_checkpoint_result called once
+    # Verify direct state lookup called once
     assert mock_state.operations.get.call_count == 1
 
 
@@ -656,7 +656,7 @@ async def test_child_handler_default_serialization():
     mock_result.is_started.return_value = False
     mock_result.is_replay_children.return_value = False
     mock_result.is_existent.return_value = False
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = None
     complex_result = {"key": "value", "number": 42, "list": [1, 2, 3]}
     mock_callable = Mock(return_value=complex_result)
     mock_state.wrap_user_function.return_value = mock_callable
@@ -670,7 +670,7 @@ async def test_child_handler_default_serialization():
     )
 
     assert result == complex_result
-    # Verify get_checkpoint_result called once
+    # Verify direct state lookup called once
     assert mock_state.operations.get.call_count == 1
     # Verify JSON serialization was used in checkpoint
     success_call = [
@@ -690,7 +690,7 @@ async def test_child_handler_custom_serdes_not_start() -> None:
     mock_result.is_started.return_value = False
     mock_result.is_replay_children.return_value = False
     mock_result.is_existent.return_value = False
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = None
     complex_result = {"key": "value", "number": 42, "list": [1, 2, 3]}
     mock_callable = Mock(return_value=complex_result)
     mock_state.wrap_user_function.return_value = mock_callable
@@ -724,7 +724,7 @@ async def test_child_handler_custom_serdes_already_succeeded() -> None:
             result='{"key": "VALUE", "number": "84", "list": [1, 2, 3]}'
         ),
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
     mock_callable = Mock()
 
@@ -740,7 +740,7 @@ async def test_child_handler_custom_serdes_already_succeeded() -> None:
     expected_checkpoointed_result = {"key": "value", "number": 42, "list": [1, 2, 3]}
 
     assert actual_result == expected_checkpoointed_result
-    # Verify get_checkpoint_result called once
+    # Verify direct state lookup called once
     assert mock_state.operations.get.call_count == 1
 
 
@@ -750,7 +750,7 @@ async def test_child_handler_large_payload_with_summary_generator() -> None:
 
     Verifies:
     - Large payload: uses ReplayChildren mode with summary_generator
-    - get_checkpoint_result called once
+    - direct state lookup called once
     """
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -760,7 +760,7 @@ async def test_child_handler_large_payload_with_summary_generator() -> None:
     mock_result.is_started.return_value = False
     mock_result.is_replay_children.return_value = False
     mock_result.is_existent.return_value = False
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = None
     large_result = "large" * 256 * 1024
     mock_callable = Mock(return_value=large_result)
     mock_state.wrap_user_function.return_value = mock_callable
@@ -778,7 +778,7 @@ async def test_child_handler_large_payload_with_summary_generator() -> None:
     )
 
     assert large_result == actual_result
-    # Verify get_checkpoint_result called once
+    # Verify direct state lookup called once
     assert mock_state.operations.get.call_count == 1
     # Verify replay_children mode with summary
     success_call = mock_state.create_checkpoint.call_args_list[1]
@@ -794,7 +794,7 @@ async def test_child_handler_large_payload_without_summary_generator() -> None:
 
     Verifies:
     - Large payload without summary_generator: uses ReplayChildren mode with empty string
-    - get_checkpoint_result called once
+    - direct state lookup called once
     """
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -804,7 +804,7 @@ async def test_child_handler_large_payload_without_summary_generator() -> None:
     mock_result.is_started.return_value = False
     mock_result.is_replay_children.return_value = False
     mock_result.is_existent.return_value = False
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = None
     large_result = "large" * 256 * 1024
     mock_callable = Mock(return_value=large_result)
     mock_state.wrap_user_function.return_value = mock_callable
@@ -818,7 +818,7 @@ async def test_child_handler_large_payload_without_summary_generator() -> None:
     )
 
     assert large_result == actual_result
-    # Verify get_checkpoint_result called once
+    # Verify direct state lookup called once
     assert mock_state.operations.get.call_count == 1
     # Verify replay_children mode with empty string
     success_call = mock_state.create_checkpoint.call_args_list[1]
@@ -835,16 +835,16 @@ async def test_child_handler_replay_children_mode() -> None:
     Verifies:
     - Already succeeded with replay_children: re-executes function
     - No checkpoint created (returns without checkpointing)
-    - get_checkpoint_result called once
+    - direct state lookup called once
     """
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
-    mock_result = Mock()
-    mock_result.is_succeeded.return_value = True
-    mock_result.is_failed.return_value = False
-    mock_result.is_started.return_value = True
-    mock_result.is_replay_children.return_value = True
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = Operation(
+        operation_id="op9",
+        operation_type=OperationType.CONTEXT,
+        status=OperationStatus.SUCCEEDED,
+        context_details=ContextDetails(replay_children=True),
+    )
     complex_result = {"key": "value", "number": 42, "list": [1, 2, 3]}
     mock_callable = Mock(return_value=complex_result)
     mock_state.wrap_user_function.return_value = mock_callable
@@ -862,7 +862,7 @@ async def test_child_handler_replay_children_mode() -> None:
     mock_callable.assert_called_once()
     # Verify no checkpoint created (returns without checkpointing in replay mode)
     mock_state.create_checkpoint.assert_not_called()
-    # Verify get_checkpoint_result called once
+    # Verify direct state lookup called once
     assert mock_state.operations.get.call_count == 1
 
 
@@ -871,7 +871,7 @@ async def test_small_payload_with_summary_generator():
 
     Verifies:
     - Small payload does NOT trigger replay_children even with summary_generator
-    - get_checkpoint_result called once
+    - direct state lookup called once
     """
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -881,7 +881,7 @@ async def test_small_payload_with_summary_generator():
     mock_result.is_started.return_value = False
     mock_result.is_replay_children.return_value = False
     mock_result.is_existent.return_value = False
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = None
 
     # Small payload (< 256KB)
     small_result = "small_payload"
@@ -901,7 +901,7 @@ async def test_small_payload_with_summary_generator():
     )
 
     assert actual_result == small_result
-    # Verify get_checkpoint_result called once
+    # Verify direct state lookup called once
     assert mock_state.operations.get.call_count == 1
     success_call = mock_state.create_checkpoint.call_args_list[1]
     success_operation = success_call[1]["operation_update"]
@@ -929,7 +929,7 @@ async def test_small_payload_without_summary_generator():
     mock_result.is_started.return_value = False
     mock_result.is_replay_children.return_value = False
     mock_result.is_existent.return_value = False
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = None
 
     # Small payload (< 256KB); no summary_generator provided
     small_result = "small_payload"
@@ -970,7 +970,7 @@ async def test_child_handler_is_virtual_no_start():
     mock_result.is_started.return_value = False
     mock_result.is_replay_children.return_value = False
     mock_result.is_existent.return_value = False
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = None
     mock_callable = Mock(return_value="no_checkpoint_result")
     mock_state.wrap_user_function.return_value = mock_callable
 
@@ -985,7 +985,7 @@ async def test_child_handler_is_virtual_no_start():
 
     assert result == "no_checkpoint_result"
 
-    # Verify get_checkpoint_result called once
+    # Verify direct state lookup called once
     assert mock_state.operations.get.call_count == 1
 
     # Verify no checkpoints created (virtual context writes none)
@@ -1009,7 +1009,7 @@ async def test_child_handler_is_virtual_no_succeed():
     mock_result.is_started.return_value = False
     mock_result.is_replay_children.return_value = False
     mock_result.is_existent.return_value = False
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = None
     mock_callable = Mock(return_value="no_checkpoint_result")
     mock_state.wrap_user_function.return_value = mock_callable
 
@@ -1040,7 +1040,7 @@ async def test_child_handler_not_is_virtual_finish_mode():
     mock_result.is_started.return_value = False
     mock_result.is_replay_children.return_value = False
     mock_result.is_existent.return_value = False
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = None
     mock_callable = Mock(return_value="checkpoint_result")
     mock_state.wrap_user_function.return_value = mock_callable
 
@@ -1090,7 +1090,7 @@ async def test_child_handler_is_virtual_with_exception():
     mock_result.is_started.return_value = False
     mock_result.is_replay_children.return_value = False
     mock_result.is_existent.return_value = False
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = None
     mock_callable = Mock(side_effect=ValueError("Test error"))
     mock_state.wrap_user_function.return_value = mock_callable
 
@@ -1120,7 +1120,7 @@ async def test_child_handler_not_is_virtual_with_exception():
     mock_result.is_started.return_value = False
     mock_result.is_replay_children.return_value = False
     mock_result.is_existent.return_value = False
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = None
     mock_callable = Mock(side_effect=ValueError("Test error"))
     mock_state.wrap_user_function.return_value = mock_callable
 
@@ -1163,7 +1163,7 @@ async def test_child_handler_is_virtual_comparison():
         mock_result.is_started.return_value = False
         mock_result.is_replay_children.return_value = False
         mock_result.is_existent.return_value = False
-        mock_state.operations.get.return_value = mock_result
+        mock_state.operations.get.return_value = None
         mock_callable = Mock(return_value="test_result")
         mock_state.wrap_user_function.return_value = mock_callable
         return mock_state, mock_callable

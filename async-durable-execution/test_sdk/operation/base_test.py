@@ -13,10 +13,7 @@ from async_durable_execution.models import (
     OperationType,
     OperationIdentifier,
 )
-from async_durable_execution.primitive.base import (
-    OperationExecutor,
-    CheckpointedResult,
-)
+from async_durable_execution.primitive.base import OperationExecutor
 from async_durable_execution.serdes import DEFAULT_JSON_SERDES
 
 
@@ -40,7 +37,7 @@ class ConcreteOperationExecutor(OperationExecutor[str]):
         self.start_called = 0
         self.replay_called = 0
 
-    async def execute(self, checkpointed_result: CheckpointedResult) -> str:
+    async def execute(self, operation: Operation | None) -> str:
         """Mock implementation that returns configured result."""
         self.execute_called += 1
         return self.execute_result_to_return
@@ -53,7 +50,8 @@ class ConcreteOperationExecutor(OperationExecutor[str]):
     async def replay(self, operation: Operation) -> str:
         """Mock implementation for a replayed operation."""
         self.replay_called += 1
-        return await self.execute(CheckpointedResult.create_from_operation(operation))
+        self.execute_called += 1
+        return self.execute_result_to_return
 
 
 def create_mock_operation(status: OperationStatus) -> Operation:
@@ -65,12 +63,10 @@ def create_mock_operation(status: OperationStatus) -> Operation:
     )
 
 
-async def test_operation_executor_common_properties_and_helpers():
-    """Test OperationExecutor exposes shared fields and helpers."""
+async def test_operation_executor_common_properties():
+    """Test OperationExecutor exposes shared fields."""
     state = Mock()
     state.durable_execution_arn = "arn:aws:lambda:us-west-2:123:function:test"
-    operation = create_mock_operation(OperationStatus.STARTED)
-    state.operations.get.return_value = operation
     operation_identifier = OperationIdentifier(
         "shared-op", OperationSubType.STEP, "parent-1", "shared-name"
     )
@@ -81,9 +77,6 @@ async def test_operation_executor_common_properties_and_helpers():
     assert executor.operation_id == "shared-op"
     assert executor.operation_name == "shared-name"
     assert executor.durable_execution_arn == state.durable_execution_arn
-    checkpoint = executor.get_checkpointed_result()
-    assert checkpoint.operation is operation
-    state.operations.get.assert_called_once_with("shared-op")
 
 
 async def test_operation_executor_common_serialization_helpers():
@@ -130,7 +123,7 @@ async def test_operation_executor_process_dispatches_to_start_for_new_operations
     """Test base process dispatches to start when no checkpoint exists."""
     state = Mock()
     state.durable_execution_arn = "test-arn"
-    state.operations.get.return_value = CheckpointedResult.create_not_found()
+    state.operations.get.return_value = None
     executor = ConcreteOperationExecutor(state=state)
 
     result = await executor.process()
@@ -156,8 +149,8 @@ async def test_operation_executor_process_dispatches_to_replay_for_existing_oper
     assert executor.execute_called == 1
 
 
-def test_operation_executor_requires_subclass_start_replay_and_execute():
-    """Test OperationExecutor remains abstract for start, replay, and execute."""
+def test_operation_executor_requires_subclass_start_and_replay():
+    """Test OperationExecutor remains abstract for start and replay."""
 
     class IncompleteOperationExecutor(OperationExecutor[str], ABC):
         pass
@@ -172,3 +165,27 @@ def test_operation_executor_requires_subclass_start_replay_and_execute():
                 "test_op", OperationSubType.STEP, None, "test-name"
             ),
         )
+
+
+async def test_operation_executor_execute_is_not_abstract():
+    """Test execute is optional for subclasses that implement start and replay."""
+
+    class MinimalOperationExecutor(OperationExecutor[str]):
+        async def start(self) -> str:
+            return "started"
+
+        async def replay(self, operation: Operation) -> str:
+            return "replayed"
+
+    state = Mock()
+    state.durable_execution_arn = "test-arn"
+
+    executor = MinimalOperationExecutor(
+        state=state,
+        operation_identifier=OperationIdentifier(
+            "test_op", OperationSubType.STEP, None, "test-name"
+        ),
+    )
+
+    with pytest.raises(NotImplementedError):
+        await executor.execute(None)

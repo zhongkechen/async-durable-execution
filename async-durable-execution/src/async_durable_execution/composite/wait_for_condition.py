@@ -18,6 +18,7 @@ from ..context import (
 )
 from ..primitive.child import get_durable_context
 from ..exceptions import (
+    CallableRuntimeError,
     ExecutionError,
     ValidationError,
     suspend_with_optional_resume_delay,
@@ -31,11 +32,7 @@ from ..models import (
     OperationUpdate,
     OperationSubType,
 )
-from ..primitive.base import (
-    CHECKPOINT_NOT_FOUND,
-    CheckpointedResult,
-    OperationExecutor,
-)
+from ..primitive.base import OperationExecutor
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
@@ -112,14 +109,6 @@ ConditionResult = tuple[T, WaitForConditionDecision]
 WaitDelayStrategy = Callable[[T, int], WaitDecision | timedelta]
 
 
-@dataclass(frozen=True)
-class WaitForConditionConfig(Generic[T]):
-    """Configuration for wait_for_condition."""
-
-    wait_strategy: WaitDelayStrategy[T] | None = None
-    serdes: SerDes | None = None
-
-
 @dataclass
 class WaitStrategyBuilder(Generic[T]):
     """Build polling strategies for `wait_for_condition()`."""
@@ -189,24 +178,27 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
     def __init__(
         self,
         check: Callable[[T | None], Awaitable[ConditionResult[T]]],
-        config: WaitForConditionConfig[T],
         initial_state: T | None,
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
+        wait_strategy: WaitDelayStrategy[T] | None = None,
+        serdes: SerDes | None = None,
     ):
         """Initialize the wait_for_condition executor.
 
         Args:
             check: The check function to evaluate the condition
-            config: Configuration for the wait_for_condition operation
             initial_state: The state to pass to the first condition evaluation
             state: The execution state
             operation_identifier: The operation identifier
+            wait_strategy: Optional strategy for deciding retry delays
+            serdes: Optional serializer/deserializer for state payloads
         """
         super().__init__(state=state, operation_identifier=operation_identifier)
         self.check = check
-        self.config = config
         self.initial_state = initial_state
+        self.wait_strategy = wait_strategy
+        self.serdes = serdes
         self.default_wait_strategy = WaitStrategyBuilder[T]().build()
 
     async def start(self) -> T:
@@ -215,50 +207,70 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             identifier=self.operation_identifier,
         )
         await self.create_checkpoint(start_operation, is_sync=False)
-        return await self.execute(CHECKPOINT_NOT_FOUND)
+        return await self.execute(None)
 
     async def replay(self, operation: Operation) -> T:
         """Replay an existing wait_for_condition operation from its checkpoint."""
         if operation.status is OperationStatus.SUCCEEDED:
-            checkpointed_result = CheckpointedResult.create_from_operation(operation)
             logger.debug(
                 "wait_for_condition already completed for id: %s, name: %s",
                 self.operation_identifier.operation_id,
                 self.operation_name,
             )
-            if checkpointed_result.result is None:
-                return None  # type: ignore[return-value]
-            result = await self.deserialize_value(
-                data=checkpointed_result.result,
-                serdes=self.config.serdes,
+            result = (
+                operation.step_details.result
+                if operation.step_details is not None
+                else None
             )
-            return result
+            if result is None:
+                return None  # type: ignore[return-value]
+            return await self.deserialize_value(
+                data=result,
+                serdes=self.serdes,
+            )
 
         if operation.status is OperationStatus.FAILED:
-            CheckpointedResult.create_from_operation(operation).raise_callable_error()
+            error = (
+                operation.step_details.error
+                if operation.step_details is not None
+                else None
+            )
+            if error is None:
+                msg = (
+                    "Unknown error. No ErrorObject exists on the Checkpoint Operation."
+                )
+                raise CallableRuntimeError(
+                    message=msg,
+                    error_type=None,
+                    data=None,
+                    stack_trace=None,
+                )
+            raise error.to_callable_runtime_error()
 
         if operation.status is OperationStatus.PENDING:
-            checkpointed_result = CheckpointedResult.create_from_operation(operation)
-            scheduled_timestamp = checkpointed_result.get_next_attempt_timestamp()
+            scheduled_timestamp = (
+                operation.step_details.next_attempt_timestamp
+                if operation.step_details is not None
+                else None
+            )
             suspend_with_optional_resume_timestamp(
                 msg=f"wait_for_condition {self.operation_name or self.operation_identifier.operation_id} will retry at timestamp {scheduled_timestamp}",
                 datetime_timestamp=scheduled_timestamp,
             )
 
-        checkpointed_result = CheckpointedResult.create_from_operation(operation)
         if operation.status is not OperationStatus.STARTED:
             start_operation = OperationUpdate.create_wait_for_condition_start(
                 identifier=self.operation_identifier,
             )
             await self.create_checkpoint(start_operation, is_sync=False)
 
-        return await self.execute(checkpointed_result)
+        return await self.execute(operation)
 
-    async def execute(self, checkpointed_result: CheckpointedResult) -> T:
+    async def execute(self, operation: Operation | None) -> T:
         """Execute check function and handle decision.
 
         Args:
-            checkpointed_result: The checkpoint data
+            operation: The checkpoint operation, if one exists.
 
         Returns:
             The final state when condition is met
@@ -268,11 +280,17 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             Raises error if check function fails
         """
         # Determine current state from checkpoint
-        if checkpointed_result.is_started_or_ready() and checkpointed_result.result:
+        operation_details = operation.step_details if operation is not None else None
+        if (
+            operation is not None
+            and operation.status in {OperationStatus.STARTED, OperationStatus.READY}
+            and operation_details is not None
+            and operation_details.result
+        ):
             try:
                 current_state = await self.deserialize_value(
-                    data=checkpointed_result.result,
-                    serdes=self.config.serdes,
+                    data=operation_details.result,
+                    serdes=self.serdes,
                 )
             except Exception:
                 # Default to initial state if there's an error getting checkpointed state
@@ -288,8 +306,8 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         # Get attempt number - current attempt is checkpointed attempts + 1
         # The checkpoint stores completed attempts, so the current attempt being executed is one more
         attempt: int = 1
-        if checkpointed_result.operation and checkpointed_result.operation.step_details:
-            attempt = checkpointed_result.operation.step_details.attempt + 1
+        if operation_details is not None:
+            attempt = operation_details.attempt + 1
 
         try:
             step_context = StepContext(
@@ -319,7 +337,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
 
             serialized_state = await self.serialize_value(
                 value=new_state,
-                serdes=self.config.serdes,
+                serdes=self.serdes,
             )
 
             logger.debug(
@@ -420,7 +438,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         raise ValidationError(msg)
 
     def _resolve_delay_seconds(self, new_state: T, attempt: int) -> int:
-        wait_strategy = self.config.wait_strategy or self.default_wait_strategy
+        wait_strategy = self.wait_strategy or self.default_wait_strategy
         wait_decision = wait_strategy(new_state, attempt)
 
         return self._wait_decision_to_seconds(wait_decision)
@@ -457,10 +475,6 @@ async def wait_for_condition(
     if check is None:
         msg = "`check` is required for wait_for_condition"
         raise ValidationError(msg)
-    config = WaitForConditionConfig(
-        wait_strategy=wait_strategy,
-        serdes=serdes,
-    )
     assert_async_callable(check, label="check")
 
     with context._replay_aware(executes_user_code=True):
@@ -474,10 +488,11 @@ async def wait_for_condition(
         executor: WaitForConditionOperationExecutor[T] = (
             WaitForConditionOperationExecutor(
                 check=check,
-                config=config,
                 initial_state=initial_state,
                 state=context.execution_state,
                 operation_identifier=operation_identifier,
+                wait_strategy=wait_strategy,
+                serdes=serdes,
             )
         )
         return await executor.process()

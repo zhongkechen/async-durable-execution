@@ -53,7 +53,7 @@ async def test_wait_handler_already_completed():
         operation_type=OperationType.WAIT,
         status=OperationStatus.SUCCEEDED,
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
 
     await wait_handler(
@@ -70,12 +70,7 @@ async def test_wait_handler_not_completed():
     """Test wait_handler when operation is not completed."""
     mock_state = Mock(spec=ExecutionState)
 
-    # First call: checkpoint doesn't exist
-    not_found_result = Mock(spec=CheckpointedResult)
-    not_found_result.is_succeeded.return_value = False
-    not_found_result.is_existent.return_value = False
-
-    mock_state.operations.get.return_value = not_found_result
+    mock_state.operations.get.return_value = None
 
     with pytest.raises(SuspendExecution, match="Wait for 30 seconds"):
         await wait_handler(
@@ -105,12 +100,7 @@ async def test_wait_handler_with_none_name():
     """Test wait_handler with None name."""
     mock_state = Mock(spec=ExecutionState)
 
-    # First call: checkpoint doesn't exist
-    not_found_result = Mock(spec=CheckpointedResult)
-    not_found_result.is_succeeded.return_value = False
-    not_found_result.is_existent.return_value = False
-
-    mock_state.operations.get.return_value = not_found_result
+    mock_state.operations.get.return_value = None
 
     with pytest.raises(SuspendExecution, match="Wait for 5 seconds"):
         await wait_handler(
@@ -139,10 +129,11 @@ async def test_wait_handler_with_none_name():
 async def test_wait_handler_with_existent():
     """Test wait_handler with existent operation."""
     mock_state = Mock(spec=ExecutionState)
-    mock_result = Mock(spec=CheckpointedResult)
-    mock_result.is_succeeded.return_value = False
-    mock_result.is_existent.return_value = True
-    mock_state.operations.get.return_value = mock_result
+    mock_state.operations.get.return_value = Operation(
+        operation_id="wait4",
+        operation_type=OperationType.WAIT,
+        status=OperationStatus.STARTED,
+    )
 
     with pytest.raises(SuspendExecution, match="Wait for 5 seconds"):
         await wait_handler(
@@ -165,12 +156,7 @@ async def test_wait_starts_without_second_status_evaluation():
     # Arrange
     mock_state = Mock(spec=ExecutionState)
 
-    # First call: checkpoint doesn't exist
-    not_found_result = Mock(spec=CheckpointedResult)
-    not_found_result.is_succeeded.return_value = False
-    not_found_result.is_existent.return_value = False
-
-    mock_state.operations.get.return_value = not_found_result
+    mock_state.operations.get.return_value = None
 
     executor = WaitOperationExecutor(
         seconds=30,
@@ -207,7 +193,7 @@ async def test_wait_new_operation_suspends_after_checkpoint_creation():
     mock_state = Mock(spec=ExecutionState)
 
     # First call: checkpoint doesn't exist
-    not_found_result = CheckpointedResult.create_not_found()
+    not_found_result = None
 
     mock_state.operations.get.return_value = not_found_result
 
@@ -233,12 +219,7 @@ async def test_wait_no_immediate_response_suspends():
     # Arrange
     mock_state = Mock(spec=ExecutionState)
 
-    # First call: checkpoint doesn't exist
-    not_found_result = Mock(spec=CheckpointedResult)
-    not_found_result.is_succeeded.return_value = False
-    not_found_result.is_existent.return_value = False
-
-    mock_state.operations.get.return_value = not_found_result
+    mock_state.operations.get.return_value = None
 
     executor = WaitOperationExecutor(
         seconds=60,
@@ -276,7 +257,7 @@ async def test_wait_already_completed_no_checkpoint():
         operation_type=OperationType.WAIT,
         status=OperationStatus.SUCCEEDED,
     )
-    succeeded_result = CheckpointedResult.create_from_operation(succeeded_operation)
+    succeeded_result = succeeded_operation
 
     mock_state.operations.get.return_value = succeeded_result
 
@@ -308,7 +289,7 @@ async def test_wait_with_various_durations():
         mock_state = Mock(spec=ExecutionState)
 
         # First call: checkpoint doesn't exist
-        not_found_result = CheckpointedResult.create_not_found()
+        not_found_result = None
 
         mock_state.operations.get.return_value = not_found_result
 
@@ -337,7 +318,7 @@ async def test_wait_suspends_without_second_check():
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
 
-    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
+    mock_state.operations.get.return_value = None
 
     executor = WaitOperationExecutor(
         seconds=5,
@@ -359,7 +340,7 @@ async def test_wait_suspends_without_second_check_duplicate():
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
 
-    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
+    mock_state.operations.get.return_value = None
 
     executor = WaitOperationExecutor(
         seconds=5,

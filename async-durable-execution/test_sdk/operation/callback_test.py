@@ -62,7 +62,7 @@ async def create_callback_handler(
 
 def mock_new_callback_checkpoint(mock_state, operation):
     """Configure state mocks for a missing callback that checkpoint creation returns."""
-    mock_state.operations.get.return_value = CheckpointedResult.create_not_found()
+    mock_state.operations.get.return_value = None
     mock_state.create_checkpoint.return_value = operation
 
 
@@ -106,7 +106,7 @@ def patch_wait_for_callback_ops(mock_callback, *, step_side_effect=None):
     with (
         patch.object(callback, "create_callback", create_callback_mock),
         patch(
-            "async_durable_execution.composite.wait_for_callback.step_operation",
+            "async_durable_execution.composite.wait_for_callback.step",
             step_mock,
         ),
     ):
@@ -203,7 +203,7 @@ async def test_create_callback_handler_existing_started_operation():
         status=OperationStatus.STARTED,
         callback_details=callback_details,
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
 
     result = await create_callback_handler(
@@ -230,7 +230,7 @@ async def test_create_callback_handler_existing_failed_operation():
         status=OperationStatus.FAILED,
         callback_details=CallbackDetails(callback_id="failed_cb4"),
     )
-    mock_result = CheckpointedResult.create_from_operation(failed_op)
+    mock_result = failed_op
     mock_state.operations.get.return_value = mock_result
 
     # Should return callback_id without raising
@@ -254,7 +254,7 @@ async def test_create_callback_handler_existing_started_missing_callback_details
         status=OperationStatus.STARTED,
         callback_details=None,
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
 
     with pytest.raises(CallbackError, match="Missing callback details"):
@@ -296,7 +296,7 @@ async def test_create_callback_handler_existing_timed_out_operation():
         status=OperationStatus.TIMED_OUT,
         callback_details=callback_details,
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
 
     result = await create_callback_handler(
@@ -319,7 +319,7 @@ async def test_create_callback_handler_existing_timed_out_missing_callback_detai
         status=OperationStatus.TIMED_OUT,
         callback_details=None,
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
 
     with pytest.raises(CallbackError, match="Missing callback details"):
@@ -403,7 +403,7 @@ async def test_create_callback_handler_with_none_operation_in_result():
         status=OperationStatus.STARTED,
         callback_details=None,
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
 
     with pytest.raises(CallbackError, match="Missing callback details"):
@@ -528,7 +528,7 @@ async def test_create_callback_handler_existing_succeeded_operation():
         status=OperationStatus.SUCCEEDED,
         callback_details=callback_details,
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
 
     result = await create_callback_handler(
@@ -551,7 +551,7 @@ async def test_create_callback_handler_existing_succeeded_missing_callback_detai
         status=OperationStatus.SUCCEEDED,
         callback_details=None,
     )
-    mock_result = CheckpointedResult.create_from_operation(operation)
+    mock_result = operation
     mock_state.operations.get.return_value = mock_result
 
     with pytest.raises(CallbackError, match="Missing callback details"):
@@ -882,9 +882,7 @@ async def test_callback_retry_scenario():
         callback_details=callback_details,
     )
 
-    mock_state.operations.get.return_value = CheckpointedResult.create_from_operation(
-        operation
-    )
+    mock_state.operations.get.return_value = operation
 
     callback_id_1 = await create_callback_handler(
         state=mock_state,
@@ -941,7 +939,7 @@ async def test_callback_error_propagation():
         status=OperationStatus.FAILED,
         callback_details=CallbackDetails(callback_id="failed_cb"),
     )
-    mock_result = CheckpointedResult.create_from_operation(failed_op)
+    mock_result = failed_op
     mock_state.operations.get.return_value = mock_result
 
     # Should return callback_id without raising
@@ -1024,9 +1022,7 @@ async def test_callback_state_consistency():
     )
 
     mock_state.operations.get.side_effect = None
-    mock_state.operations.get.return_value = CheckpointedResult.create_from_operation(
-        succeeded_operation
-    )
+    mock_state.operations.get.return_value = succeeded_operation
 
     callback_id_2 = await create_callback_handler(
         state=mock_state,
@@ -1405,7 +1401,7 @@ async def test_callback_immediate_response_already_completed():
         status=OperationStatus.SUCCEEDED,
         callback_details=callback_details,
     )
-    succeeded = CheckpointedResult.create_from_operation(succeeded_op)
+    succeeded = succeeded_op
     mock_state.operations.get.return_value = succeeded
 
     result = await create_callback_handler(
@@ -1419,7 +1415,7 @@ async def test_callback_immediate_response_already_completed():
     assert result == "cb_already_completed"
     # Verify no checkpoint was created (already exists)
     mock_state.create_checkpoint.assert_not_called()
-    # Verify get_checkpoint_result was called only once
+    # Verify direct state lookup was called only once
     assert mock_state.operations.get.call_count == 1
 
 
@@ -1439,7 +1435,7 @@ async def test_callback_immediate_response_already_failed():
         status=OperationStatus.FAILED,
         callback_details=callback_details,
     )
-    failed = CheckpointedResult.create_from_operation(failed_op)
+    failed = failed_op
     mock_state.operations.get.return_value = failed
 
     # Should return callback_id without raising
@@ -1454,7 +1450,7 @@ async def test_callback_immediate_response_already_failed():
     assert result == "cb_already_failed"
     # Verify no checkpoint was created (already exists)
     mock_state.create_checkpoint.assert_not_called()
-    # Verify get_checkpoint_result was called only once
+    # Verify direct state lookup was called only once
     assert mock_state.operations.get.call_count == 1
 
 

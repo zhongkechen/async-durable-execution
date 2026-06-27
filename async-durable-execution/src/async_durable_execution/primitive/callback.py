@@ -18,12 +18,8 @@ from ..models import (
     OperationUpdate,
     OperationSubType,
 )
-from .base import (
-    CheckpointedResult,
-    OperationExecutor,
-    get_checkpoint_result,
-)
-from ..serdes import deserialize, SerDes, PassThroughSerDes
+from .base import OperationExecutor
+from ..serdes import deserialize, PassThroughSerDes
 
 if TYPE_CHECKING:
     from ..serdes import SerDes
