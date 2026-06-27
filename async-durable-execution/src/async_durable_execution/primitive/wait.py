@@ -71,7 +71,7 @@ class WaitOperationExecutor(OperationExecutor[None]):
 
         await self.execute()
 
-    async def execute(self) -> None:  # type: ignore[override]
+    async def execute(self, operation: Operation | None = None) -> None:
         """Execute wait by suspending.
 
         Wait operations 'execute' by suspending execution until the timer completes.

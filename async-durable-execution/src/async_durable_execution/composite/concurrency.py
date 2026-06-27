@@ -10,7 +10,7 @@ from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass, field as dataclass_field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 from ..exceptions import SuspendExecution, TimedSuspendExecution
 from ..exceptions import InvalidStateError
@@ -311,7 +311,7 @@ class ExecutableWithState(Generic[CallableType, ResultType]):
         self._status = BranchStatus.PENDING
         self._future: asyncio.Task[ResultType] | None = None
         self._suspend_until: float | None = None
-        self._result: ResultType = None  # type: ignore[assignment]
+        self._result: ResultType | None = None
         self._is_result_set = False
         self._error: Exception | None = None
 
@@ -331,7 +331,7 @@ class ExecutableWithState(Generic[CallableType, ResultType]):
         if not self._is_result_set or self._status != BranchStatus.COMPLETED:
             msg = f"result not available in status {self._status}"
             raise InvalidStateError(msg)
-        return self._result
+        return cast("ResultType", self._result)
 
     @property
     def error(self) -> Exception:

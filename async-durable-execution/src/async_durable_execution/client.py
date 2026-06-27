@@ -123,7 +123,7 @@ class ThreadedSyncLambdaClient(DurableServiceClient):
                 DurableExecutionArn=durable_execution_arn,
                 CheckpointToken=checkpoint_token,
                 Updates=cast("Any", [o.to_dict() for o in updates]),
-                **optional_params,  # type: ignore[arg-type]
+                **optional_params,
             )
 
             return CheckpointOutput.from_dict(result)
@@ -201,7 +201,7 @@ class AsyncLambdaClient(DurableServiceClient):
                 DurableExecutionArn=durable_execution_arn,
                 CheckpointToken=checkpoint_token,
                 Updates=cast("Any", [o.to_dict() for o in updates]),
-                **optional_params,  # type: ignore[arg-type]
+                **optional_params,
             )
 
             return CheckpointOutput.from_dict(result)

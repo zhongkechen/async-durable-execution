@@ -1159,7 +1159,7 @@ def test_error_response_immutable():
     )
 
     with pytest.raises(AttributeError):
-        error_response.error_type = "ModifiedException"  # type: ignore
+        error_response.error_type = "ModifiedException"
 
 
 # Tests for missing coverage in StartDurableExecutionInput

@@ -68,9 +68,9 @@ def durable_callable(
     `@classmethod`/`@staticmethod` may appear above or below `@durable_callable`.
     """
     if isinstance(func, classmethod):
-        return classmethod(durable_callable(func.__func__))  # type: ignore[return-value]
+        return classmethod(durable_callable(func.__func__))
     if isinstance(func, staticmethod):
-        return staticmethod(durable_callable(func.__func__))  # type: ignore[return-value]
+        return staticmethod(durable_callable(func.__func__))
 
     @functools.wraps(func)
     def wrapper(
@@ -195,9 +195,9 @@ def durable_execution(
     def wrapper(event: Any, context: LambdaContext) -> MutableMapping[str, Any]:
         return asyncio.run(async_wrapper(event, context))
 
-    wrapper._async_handler = async_wrapper  # type: ignore[attr-defined]  # noqa: SLF001
-    wrapper._durable_execution_original = func  # type: ignore[attr-defined]  # noqa: SLF001
-    wrapper._durable_execution_boto3_client = config.boto3_client  # type: ignore[attr-defined]  # noqa: SLF001
+    setattr(wrapper, "_async_handler", async_wrapper)
+    setattr(wrapper, "_durable_execution_original", func)
+    setattr(wrapper, "_durable_execution_boto3_client", config.boto3_client)
 
     return wrapper
 
@@ -299,7 +299,7 @@ async def handle_user_function_exception(
         if not e.is_retryable():
             logger.exception(
                 "Non-retryable Durable API error. Must fail execution without retry.",
-                extra=e.build_logger_extras(),  # type: ignore[attr-defined]
+                extra=e.build_logger_extras(),
             )
             return DurableExecutionInvocationOutput(
                 status=InvocationStatus.FAILED,

@@ -40,7 +40,7 @@ class AwsErrorObj(TypedDict):
     Message: str | None
 
 
-class AwsErrorMetadata(TypedDict):
+class AwsErrorMetadata(TypedDict, total=False):
     """Subset of boto response metadata used for retry classification."""
 
     RequestId: str | None
@@ -103,6 +103,10 @@ class InvocationError(UnrecoverableError):
         error codes and HTTP status codes.
         """
         return True
+
+    def build_logger_extras(self) -> dict:
+        """Return structured logging extras for retryable invocation errors."""
+        return {}
 
 
 class DurableApiErrorCategory(Enum):

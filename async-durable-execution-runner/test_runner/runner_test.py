@@ -2093,7 +2093,7 @@ async def test_cloud_runner_wait_for_callback_already_completed(mock_boto3):
 @patch("async_durable_execution_runner.runner.get_session")
 async def test_cloud_runner_wait_for_callback_client_error_retryable(mock_boto3):
     """Test wait_for_callback with retryable ClientError."""
-    from botocore.exceptions import ClientError  # type: ignore
+    from botocore.exceptions import ClientError
 
     from async_durable_execution_runner.runner import (
         DurableFunctionCloudTestRunner,

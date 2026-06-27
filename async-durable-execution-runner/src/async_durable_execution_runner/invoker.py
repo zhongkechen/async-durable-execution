@@ -8,8 +8,8 @@ from threading import Lock
 from typing import TYPE_CHECKING, Any, Protocol
 from uuid import uuid4
 
-from botocore.config import Config  # type: ignore
-from botocore.session import get_session  # type: ignore
+from botocore.config import Config
+from botocore.session import get_session
 
 from async_durable_execution.execution import (
     DurableExecutionInvocationInput,

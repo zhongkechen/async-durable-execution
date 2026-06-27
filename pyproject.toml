@@ -60,7 +60,7 @@ extra-dependencies = [
 ]
 
 [tool.hatch.envs.types.scripts]
-check = "mypy --install-types --non-interactive {args:async-durable-execution/src/async_durable_execution async-durable-execution/test_sdk async-durable-execution-lambda-layer/src/async_durable_execution_lambda_layer async-durable-execution-lambda-layer/test_layer async-durable-execution-runner/src/async_durable_execution_runner async-durable-execution-runner/test_runner}"
+check = "mypy --install-types --non-interactive --warn-unused-ignores {args:async-durable-execution/src/async_durable_execution async-durable-execution/test_sdk async-durable-execution-lambda-layer/src/async_durable_execution_lambda_layer async-durable-execution-lambda-layer/test_layer async-durable-execution-runner/src/async_durable_execution_runner async-durable-execution-runner/test_runner}"
 
 [tool.hatch.envs.dev-core]
 workspace.members = [

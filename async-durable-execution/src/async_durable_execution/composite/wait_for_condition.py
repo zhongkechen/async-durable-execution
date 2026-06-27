@@ -199,7 +199,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 else None
             )
             if result is None:
-                return None  # type: ignore[return-value]
+                return cast("T", None)
             return await self.deserialize_value(
                 data=result,
                 serdes=self.serdes,
