@@ -3,7 +3,7 @@
 import asyncio
 import datetime
 from datetime import timezone
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -39,8 +39,11 @@ from async_durable_execution.models import (
     WaitOptions,
 )
 from async_durable_execution.client import (
+    AsyncLambdaClient,
     ThreadedSyncLambdaClient,
+    create_default_async_client,
     create_default_client,
+    create_default_service_client,
 )
 from async_durable_execution.types import DurableServiceClient
 
@@ -321,6 +324,53 @@ async def test_lambda_client_constructor():
     assert isinstance(client, ThreadedSyncLambdaClient)
 
 
+async def test_async_lambda_client_checkpoint():
+    """Test AsyncLambdaClient.checkpoint method."""
+    mock_client = Mock()
+    mock_client.checkpoint_durable_execution = AsyncMock(
+        return_value={
+            "CheckpointToken": "new_token",
+            "NewExecutionState": {"Operations": []},
+        }
+    )
+    lambda_client = AsyncLambdaClient(mock_client)
+    update = OperationUpdate(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        action=OperationAction.START,
+    )
+
+    result = await lambda_client.checkpoint("arn123", "token123", [update], None)
+
+    mock_client.checkpoint_durable_execution.assert_awaited_once_with(
+        DurableExecutionArn="arn123",
+        CheckpointToken="token123",
+        Updates=[update.to_dict()],
+    )
+    assert isinstance(result, CheckpointOutput)
+    assert result.checkpoint_token == "new_token"  # noqa: S105
+
+
+async def test_async_lambda_client_get_execution_state():
+    """Test AsyncLambdaClient.get_execution_state method."""
+    mock_client = Mock()
+    mock_client.get_durable_execution_state = AsyncMock(
+        return_value={"Operations": [], "CheckpointToken": "new_token"}
+    )
+    lambda_client = AsyncLambdaClient(mock_client)
+
+    result = await lambda_client.get_execution_state("arn123", "token123", "marker")
+
+    mock_client.get_durable_execution_state.assert_awaited_once_with(
+        DurableExecutionArn="arn123",
+        CheckpointToken="token123",
+        Marker="marker",
+        MaxItems=1000,
+    )
+    assert isinstance(result, StateOutput)
+    assert result.operations == []
+
+
 @patch.dict("os.environ", {}, clear=True)
 @patch("async_durable_execution.client.boto3.client")
 async def test_create_default_client_builds_lambda_client_with_expected_config(
@@ -343,6 +393,75 @@ async def test_create_default_client_builds_lambda_client_with_expected_config(
         config.user_agent_extra == f"durable-execution-sdk-python/{__version__}-async"
     )
     assert client is mock_client
+
+
+@patch("async_durable_execution.client.importlib.import_module")
+async def test_create_default_async_client_builds_lambda_client_with_expected_config(
+    mock_import_module,
+):
+    """Test create_default_async_client builds a lambda aioboto client."""
+    mock_client = Mock()
+    mock_aioboto = Mock()
+    mock_aioboto.client.return_value = mock_client
+    mock_import_module.return_value = mock_aioboto
+
+    client = create_default_async_client()
+
+    mock_import_module.assert_called_once_with("aioboto")
+    mock_aioboto.client.assert_called_once()
+    call_args = mock_aioboto.client.call_args
+    assert call_args[0][0] == "lambda"
+    assert "config" in call_args[1]
+    config = call_args[1]["config"]
+    assert config.connect_timeout == 5
+    assert config.read_timeout == 50
+    assert (
+        config.user_agent_extra == f"durable-execution-sdk-python/{__version__}-async"
+    )
+    assert client is mock_client
+
+
+@patch("async_durable_execution.client.create_default_async_client")
+@patch("async_durable_execution.client.aioboto_is_installed", return_value=True)
+async def test_create_default_service_client_uses_aioboto_when_installed(
+    _mock_aioboto_is_installed,
+    mock_create_default_async_client,
+):
+    """Test create_default_service_client uses aioboto by default when installed."""
+    mock_client = Mock()
+    mock_create_default_async_client.return_value = mock_client
+
+    service_client = create_default_service_client()
+
+    assert isinstance(service_client, AsyncLambdaClient)
+    assert service_client.client is mock_client
+
+
+@patch("async_durable_execution.client.aioboto_is_installed", return_value=True)
+async def test_create_default_service_client_uses_explicit_boto3_client(
+    _mock_aioboto_is_installed,
+):
+    """Test explicit boto3 clients keep using the sync adapter."""
+    mock_client = Mock()
+
+    service_client = create_default_service_client(mock_client)
+
+    assert isinstance(service_client, ThreadedSyncLambdaClient)
+    assert service_client.client is mock_client
+
+
+@patch("async_durable_execution.client.aioboto_is_installed", return_value=False)
+async def test_create_default_service_client_uses_explicit_async_client(
+    _mock_aioboto_is_installed,
+):
+    """Test explicit async Lambda clients use the async adapter."""
+    mock_client = Mock()
+    mock_client.checkpoint_durable_execution = AsyncMock()
+
+    service_client = create_default_service_client(mock_client)
+
+    assert isinstance(service_client, AsyncLambdaClient)
+    assert service_client.client is mock_client
 
 
 @patch.dict("os.environ", {"AWS_ENDPOINT_URL_LAMBDA": "http://localhost:3000"})

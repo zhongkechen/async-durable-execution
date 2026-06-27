@@ -22,6 +22,19 @@ When `--sdk-source` is omitted, the builder installs the matching SDK version:
 async-durable-execution==<package version>
 ```
 
+To include the optional async Lambda service client dependency in the layer,
+install the SDK with its `aioboto` extra:
+
+```console
+hatch run python -m async_durable_execution_lambda_layer.builder \
+  --sdk-source "../async-durable-execution[aioboto]" \
+  --output dist/async-durable-execution-layer.zip
+```
+
+When `aioboto` is present in the function environment, the SDK creates an async
+Lambda client by default for durable checkpoint and state APIs. Without it, the
+SDK uses `boto3` through a threaded async adapter.
+
 Additional pip arguments can be passed after `--pip-arg`, for example:
 
 ```console

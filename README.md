@@ -46,6 +46,18 @@ Install the execution SDK:
 pip install async-durable-execution
 ```
 
+For an async Lambda service client, install the optional `aioboto` extra:
+
+```console
+pip install "async-durable-execution[aioboto]"
+```
+
+When `aioboto` is installed, the SDK creates an async Lambda client by default
+for durable checkpoint and state APIs. Without the extra, it continues to use
+the bundled `boto3` dependency through a threaded async adapter. Explicitly
+provided Lambda API clients are detected as sync or async and wrapped
+accordingly.
+
 To share the SDK through a Lambda layer instead of vendoring it in each function
 zip, publish the repository-built layer from GitHub Actions or build a local
 layer archive from this checkout:

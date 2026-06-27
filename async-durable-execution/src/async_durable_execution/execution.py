@@ -6,7 +6,7 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from .async_tools import (
     invoke_user_callable,
@@ -29,7 +29,11 @@ from .models import (
     SerializableModel,
 )
 from .client import (
+    AsyncLambdaClient,
     ThreadedSyncLambdaClient,
+    aioboto_is_installed,
+    create_default_async_client,
+    lambda_api_client_is_async,
 )
 from .logger import configure_durable_logger
 from .plugin import (
@@ -43,8 +47,9 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from .types import (
-        LambdaContext,
+        AsyncLambdaApiClient,
         DurableServiceClient,
+        LambdaContext,
         LambdaApiClient,
     )
 
@@ -101,7 +106,7 @@ def _bind_service_client_to_handler(
 
 @dataclass(frozen=True)
 class DurableConfig:
-    boto3_client: LambdaApiClient | None = None
+    boto3_client: LambdaApiClient | AsyncLambdaApiClient | None = None
     service_client: DurableServiceClient | None = None
     plugins: list[DurableInstrumentationPlugin] | None = None
 
@@ -142,7 +147,19 @@ def durable_execution(
     def get_active_service_client() -> DurableServiceClient:
         nonlocal active_service_client
         if active_service_client is None:
-            active_service_client = ThreadedSyncLambdaClient(client=config.boto3_client)
+            if config.boto3_client is not None:
+                if lambda_api_client_is_async(config.boto3_client):
+                    active_service_client = AsyncLambdaClient(
+                        cast("AsyncLambdaApiClient", config.boto3_client)
+                    )
+                else:
+                    active_service_client = ThreadedSyncLambdaClient(
+                        client=cast("LambdaApiClient", config.boto3_client)
+                    )
+            elif aioboto_is_installed():
+                active_service_client = AsyncLambdaClient(create_default_async_client())
+            else:
+                active_service_client = ThreadedSyncLambdaClient(client=None)
         return active_service_client
 
     async def async_wrapper(
