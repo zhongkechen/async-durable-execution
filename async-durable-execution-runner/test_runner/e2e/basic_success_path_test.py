@@ -47,7 +47,7 @@ async def test_basic_durable_function() -> None:
     async def function_under_test(event: Any) -> list[str]:
         results: list[str] = []
 
-        result_one: str = await step(partial(one, 1, 2))
+        result_one: str = await step(partial(one, 1, 2), name="one")
         results.append(result_one)
 
         await wait(timedelta(seconds=1))
@@ -58,7 +58,7 @@ async def test_basic_durable_function() -> None:
         )
         results.append(result_two)
 
-        result_three: str = await step(partial(three, 5, 6))
+        result_three: str = await step(partial(three, 5, 6), name="three")
         results.append(result_three)
 
         return results

@@ -18,7 +18,6 @@ from .base import (
 )
 from ..async_tools import (
     assert_async_callable,
-    get_callable_name,
     invoke_user_callable,
 )
 from ..context import get_current_context
@@ -463,7 +462,7 @@ async def _run_in_child_context_in_context(
     is_virtual: bool = False,
 ) -> T:
     assert_async_callable(func)
-    step_name: str | None = name or get_callable_name(func)
+    step_name = name if name is not None else getattr(func, "__name__", None)
     with context._replay_aware():
         operation_id = context.step_counter.create_step_id()
 

@@ -25,7 +25,7 @@ async def test_with_retry_callback_fails_twice_then_succeeds(durable_runner):
         # Attempt 1: external system fails
         callback_id_1 = await runner.wait_for_callback(
             execution_arn=execution_arn,
-            name="external-call-attempt-1 create callback id",
+            name="external-call-attempt-1-callback",
         )
         await runner.send_callback_failure(
             callback_id=callback_id_1,
@@ -35,7 +35,7 @@ async def test_with_retry_callback_fails_twice_then_succeeds(durable_runner):
         # Attempt 2: external system fails again
         callback_id_2 = await runner.wait_for_callback(
             execution_arn=execution_arn,
-            name="external-call-attempt-2 create callback id",
+            name="external-call-attempt-2-callback",
         )
         await runner.send_callback_failure(
             callback_id=callback_id_2,
@@ -45,7 +45,7 @@ async def test_with_retry_callback_fails_twice_then_succeeds(durable_runner):
         # Attempt 3: external system succeeds
         callback_id_3 = await runner.wait_for_callback(
             execution_arn=execution_arn,
-            name="external-call-attempt-3 create callback id",
+            name="external-call-attempt-3-callback",
         )
         await runner.send_callback_success(
             callback_id=callback_id_3,

@@ -364,7 +364,7 @@ async def test_wait_for_callback_handler_with_name_and_config():
 
     assert result == "named_callback_result"
     create_callback_mock.assert_called_once_with(
-        name="test_callback create callback id",
+        name="test_callback-callback",
         timeout=None,
         heartbeat_timeout=None,
         serdes=None,
@@ -512,7 +512,7 @@ async def test_wait_for_callback_handler_with_unicode_names():
             result = await run_wait_for_callback_handler(mock_submitter, name)
 
         assert result == f"result_for_{name}"
-        expected_name = f"{name} submitter"
+        expected_name = f"{name}-submitter"
         step_mock.assert_called_once_with(
             func=ANY,
             name=expected_name,
@@ -750,7 +750,7 @@ async def test_wait_for_callback_handler_step_name_formatting():
     step_calls = step_mock.call_args_list
     assert len(step_calls) == 1
     _, kwargs = step_calls[0]
-    assert kwargs["name"] == "test with spaces submitter"
+    assert kwargs["name"] == "test with spaces-submitter"
 
 
 async def test_wait_for_callback_handler_config_propagation():
@@ -773,7 +773,7 @@ async def test_wait_for_callback_handler_config_propagation():
 
     assert result == "config_result"
     create_callback_mock.assert_called_once_with(
-        name="config_test create callback id",
+        name="config_test-callback",
         timeout=timeout,
         heartbeat_timeout=heartbeat_timeout,
         serdes=None,
@@ -1082,7 +1082,7 @@ async def test_callback_name_variations():
             result = await run_wait_for_callback_handler(mock_submitter, name)
 
         assert result == f"result_for_{name}"
-        expected_name = f"{name} submitter" if name else "submitter"
+        expected_name = f"{name}-submitter" if name is not None else "submitter"
         step_mock.assert_called_once_with(
             func=ANY,
             name=expected_name,

@@ -33,7 +33,7 @@ async def test_handle_multiple_invocations_tracking_with_wait_for_callback_opera
 
         # Wait for second callback and get callback_id
         second_callback_id = await runner.wait_for_callback(
-            execution_arn=execution_arn, name="second-callback create callback id"
+            execution_arn=execution_arn, name="second-callback-callback"
         )
 
         # Complete second callback

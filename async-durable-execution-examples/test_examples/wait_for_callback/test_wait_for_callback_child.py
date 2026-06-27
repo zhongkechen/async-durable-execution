@@ -23,7 +23,7 @@ async def test_handle_wait_for_callback_within_child_contexts(durable_runner):
         )
         # Wait for child callback and get callback_id
         child_callback_id = await runner.wait_for_callback(
-            execution_arn=execution_arn, name="child-callback-op create callback id"
+            execution_arn=execution_arn, name="child-callback-op-callback"
         )
         # Send child callback result
         child_callback_result = json.dumps({"childData": 42})

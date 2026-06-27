@@ -16,7 +16,6 @@ from typing import (
     Awaitable,
 )
 
-from ..async_tools import get_callable_name
 from ..primitive.base import CheckpointedResult, get_checkpoint_result
 from ..primitive.child import (
     DurableContext,
@@ -227,7 +226,7 @@ async def map(
     context = _get_durable_context("map")
     assert_async_callable(func)
     items_sequence = list(items)
-    map_name: str | None = name or get_callable_name(func)
+    map_name = name if name is not None else getattr(func, "__name__", None)
     with context._replay_aware():
         operation_id = context.step_counter.create_step_id()
         operation_identifier = OperationIdentifier(

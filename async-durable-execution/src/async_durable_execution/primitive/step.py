@@ -8,7 +8,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, TypeVar
 
 from ..context import get_current_context
-from ..async_tools import assert_async_callable, get_callable_name, invoke_user_callable
+from ..async_tools import assert_async_callable, invoke_user_callable
 from ..config import RetryPresets
 from ..exceptions import (
     ExecutionError,
@@ -362,7 +362,7 @@ async def step(
     """
     context = _get_durable_context()
     assert_async_callable(func)
-    step_name = name or get_callable_name(func, include_original_name=False)
+    step_name = name if name is not None else getattr(func, "__name__", None)
     logger.debug("Step name: %s", step_name)
     with context._replay_aware(executes_user_code=True):
         operation_id = context.step_counter.create_step_id()
