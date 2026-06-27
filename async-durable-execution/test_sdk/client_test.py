@@ -46,7 +46,7 @@ from async_durable_execution.client import (
     create_default_service_client,
     create_default_sync_client,
 )
-from async_durable_execution.types import DurableServiceClient
+from async_durable_execution.client import DurableServiceClient
 
 
 # =============================================================================

@@ -37,7 +37,7 @@ from async_durable_execution.composite.wait_for_callback import (
     wait_for_callback,
     wait_for_callback_handler,
 )
-from async_durable_execution.models import RetryDecision
+from async_durable_execution.config import RetryDecision
 from async_durable_execution.serdes import SerDes
 from async_durable_execution.state import ExecutionState
 from async_durable_execution import WaitForCallbackContext, StepContext

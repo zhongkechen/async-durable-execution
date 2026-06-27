@@ -12,7 +12,7 @@ from .models import (
     OperationType,
     OperationStatus,
 )
-from .config import JitterStrategy, RetryPresets, RetryStrategyBuilder
+from .config import JitterStrategy, RetryDecision, RetryPresets, RetryStrategyBuilder
 from .context import (
     get_current_context,
 )
@@ -56,10 +56,7 @@ from .primitive.step import (
     get_attempt,
     step,
 )
-from .models import (
-    ErrorObject,
-    RetryDecision,
-)
+from .models import ErrorObject
 
 # User-facing exception types.
 from .exceptions import (
@@ -89,7 +86,8 @@ from .plugin import (
     UserFunctionStartInfo,
 )
 from .serdes import ExtendedTypeSerDes, JsonSerDes, SerDes, SerDesContext
-from .types import DurableServiceClient, LambdaContext, SummaryGenerator
+from .client import DurableServiceClient
+from .types import LambdaContext, SummaryGenerator
 
 __all__ = [
     "__version__",

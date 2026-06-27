@@ -14,6 +14,7 @@ from async_durable_execution import with_retry, with_retry as imported_with_retr
 from async_durable_execution.config import (
     Duration,
     JitterStrategy,
+    RetryDecision,
     RetryStrategyBuilder,
 )
 from async_durable_execution.context import (
@@ -21,7 +22,6 @@ from async_durable_execution.context import (
     reset_current_context,
     set_current_context,
 )
-from async_durable_execution.models import RetryDecision
 from async_durable_execution.exceptions import SuspendExecution
 
 

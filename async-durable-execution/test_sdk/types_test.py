@@ -28,7 +28,8 @@ from async_durable_execution.plugin import (
     UserFunctionStartInfo,
 )
 from async_durable_execution.serdes import ExtendedTypeSerDes
-from async_durable_execution.types import DurableServiceClient, SummaryGenerator
+from async_durable_execution.client import DurableServiceClient
+from async_durable_execution.types import SummaryGenerator
 
 
 def make_async_executor(result):

@@ -25,7 +25,7 @@ from .models import (
     OperationType,
     OperationUpdate,
 )
-from .types import DurableServiceClient
+from .client import DurableServiceClient
 from .plugin import PluginExecutor
 from .primitive.child import OrphanedChildException
 

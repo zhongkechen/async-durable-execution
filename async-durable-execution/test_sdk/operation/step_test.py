@@ -34,7 +34,7 @@ from async_durable_execution.primitive.step import (
     StepSemantics,
     step,
 )
-from async_durable_execution.models import RetryDecision
+from async_durable_execution.config import RetryDecision
 from async_durable_execution.state import ExecutionState
 from async_durable_execution import StepContext
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Awaitable, Callable, TypeVar
 
 from ..config import RetryStrategyBuilder
-from ..models import RetryDecision
+from ..config import RetryDecision
 from ..exceptions import SuspendExecution
 from ..primitive.child import (
     run_in_child_context,

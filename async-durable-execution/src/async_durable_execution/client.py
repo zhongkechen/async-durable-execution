@@ -5,7 +5,7 @@ import inspect
 import importlib
 import importlib.util
 import logging
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 from botocore.config import Config
 from botocore.session import get_session
@@ -17,9 +17,29 @@ from .models import (
     OperationUpdate,
     StateOutput,
 )
-from .types import AsyncLambdaApiClient, DurableServiceClient, LambdaApiClient
+from .types import AsyncLambdaApiClient, LambdaApiClient
 
 logger = logging.getLogger(__name__)
+
+
+class DurableServiceClient(Protocol):
+    """Durable Service clients must implement this interface."""
+
+    async def checkpoint(
+        self,
+        durable_execution_arn: str,
+        checkpoint_token: str,
+        updates: list[OperationUpdate],
+        client_token: str | None,
+    ) -> CheckpointOutput: ...  # pragma: no cover
+
+    async def get_execution_state(
+        self,
+        durable_execution_arn: str,
+        checkpoint_token: str,
+        next_marker: str,
+        max_items: int = 1000,
+    ) -> StateOutput: ...  # pragma: no cover
 
 
 def _create_client_config() -> Config:
@@ -217,6 +237,7 @@ class AsyncLambdaClient(DurableServiceClient):
 
 __all__ = [
     "AsyncLambdaClient",
+    "DurableServiceClient",
     "ThreadedSyncLambdaClient",
     "create_default_async_client",
     "create_default_client",

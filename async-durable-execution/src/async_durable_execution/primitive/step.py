@@ -8,7 +8,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, TypeVar
 
 from ..context import get_current_context, invoke_user_callable
-from ..config import RetryPresets
+from ..config import RetryDecision, RetryPresets
 from ..exceptions import (
     CallableRuntimeError,
     ExecutionError,
@@ -23,7 +23,6 @@ from ..models import (
     OperationIdentifier,
     OperationStatus,
     OperationUpdate,
-    RetryDecision,
     OperationSubType,
 )
 from .child import get_durable_context
