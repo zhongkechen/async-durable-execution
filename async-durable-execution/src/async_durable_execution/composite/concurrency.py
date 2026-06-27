@@ -55,14 +55,12 @@ class CompletionConfig:
 
     min_successful: int | None = None
     tolerated_failure_count: int | None = None
-    tolerated_failure_percentage: int | float | None = None
 
     @staticmethod
     def first_successful():
         return CompletionConfig(
             min_successful=1,
             tolerated_failure_count=None,
-            tolerated_failure_percentage=None,
         )
 
     @staticmethod
@@ -70,7 +68,6 @@ class CompletionConfig:
         return CompletionConfig(
             min_successful=None,
             tolerated_failure_count=None,
-            tolerated_failure_percentage=None,
         )
 
     @staticmethod
@@ -78,7 +75,6 @@ class CompletionConfig:
         return CompletionConfig(
             min_successful=None,
             tolerated_failure_count=0,
-            tolerated_failure_percentage=0,
         )
 
 
@@ -175,7 +171,6 @@ class BatchResult(SerializableModel, Generic[R]):  # noqa: PYI059
             has_any_completion_criteria = (
                 completion_config.min_successful is not None
                 or completion_config.tolerated_failure_count is not None
-                or completion_config.tolerated_failure_percentage is not None
             )
 
             if not has_any_completion_criteria:
@@ -187,17 +182,6 @@ class BatchResult(SerializableModel, Generic[R]):  # noqa: PYI059
                     and failure_count > completion_config.tolerated_failure_count
                 ):
                     return CompletionReason.FAILURE_TOLERANCE_EXCEEDED
-
-                if (
-                    completion_config.tolerated_failure_percentage is not None
-                    and total_count > 0
-                ):
-                    failure_percentage = (failure_count / total_count) * 100
-                    if (
-                        failure_percentage
-                        > completion_config.tolerated_failure_percentage
-                    ):
-                        return CompletionReason.FAILURE_TOLERANCE_EXCEEDED
 
         if completed_count == total_count:
             return CompletionReason.ALL_COMPLETED
@@ -418,12 +402,10 @@ class ExecutionCounters:
         total_tasks: int,
         min_successful: int,
         tolerated_failure_count: int | None,
-        tolerated_failure_percentage: float | None,
     ):
         self.total_tasks = total_tasks
         self.min_successful = min_successful
         self.tolerated_failure_count = tolerated_failure_count
-        self.tolerated_failure_percentage = tolerated_failure_percentage
         self.success_count = 0
         self.failure_count = 0
 
@@ -434,10 +416,7 @@ class ExecutionCounters:
         self.failure_count += 1
 
     def should_continue(self) -> bool:
-        if (
-            self.tolerated_failure_count is None
-            and self.tolerated_failure_percentage is None
-        ):
+        if self.tolerated_failure_count is None:
             return self.failure_count == 0
 
         if (
@@ -445,11 +424,6 @@ class ExecutionCounters:
             and self.failure_count > self.tolerated_failure_count
         ):
             return False
-
-        if self.tolerated_failure_percentage is not None and self.total_tasks > 0:
-            failure_percentage = (self.failure_count / self.total_tasks) * 100
-            if failure_percentage > self.tolerated_failure_percentage:
-                return False
 
         return True
 
@@ -473,23 +447,16 @@ class ExecutionCounters:
     def is_failure_tolerance_exceeded(self) -> bool:
         return self._is_failure_condition_reached(
             tolerated_count=self.tolerated_failure_count,
-            tolerated_percentage=self.tolerated_failure_percentage,
             failure_count=self.failure_count,
         )
 
     def _is_failure_condition_reached(
         self,
         tolerated_count: int | None,
-        tolerated_percentage: float | None,
         failure_count: int,
     ) -> bool:
         if tolerated_count is not None and failure_count > tolerated_count:
             return True
-
-        if tolerated_percentage is not None and self.total_tasks > 0:
-            failure_percentage = (failure_count / self.total_tasks) * 100
-            if failure_percentage > tolerated_percentage:
-                return True
 
         return False
 
@@ -567,7 +534,6 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
             len(executables),
             min_successful,
             self.completion_config.tolerated_failure_count,
-            self.completion_config.tolerated_failure_percentage,
         )
         self.executables_with_state: list[ExecutableWithState] = []
         self.serdes = serdes
