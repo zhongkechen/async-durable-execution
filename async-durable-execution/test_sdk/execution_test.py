@@ -7,7 +7,7 @@ import logging
 import os
 import time
 from typing import Any, cast
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -780,6 +780,100 @@ async def test_durable_execution_client_selection_default():
 
         assert result["Status"] == InvocationStatus.SUCCEEDED.value
         mock_lambda_client.assert_called_once_with(client=mock_lambda_api_client)
+
+
+async def test_durable_execution_default_async_client_is_invocation_scoped():
+    """Test default async clients are not cached across asyncio.run event loops."""
+
+    class StubAsyncLambdaApiClient:
+        async def checkpoint_durable_execution(self, **_kwargs):
+            return {}
+
+        async def get_durable_execution_state(self, **_kwargs):
+            return {}
+
+    class ClosingServiceClient:
+        def __init__(self, checkpoint_token: str) -> None:
+            self.checkpoint_token = checkpoint_token
+            self.closed = False
+
+        async def checkpoint(
+            self,
+            _durable_execution_arn: str,
+            _checkpoint_token: str,
+            _updates: list[OperationUpdate],
+            _client_token: str | None,
+        ) -> CheckpointOutput:
+            return CheckpointOutput(
+                checkpoint_token=self.checkpoint_token,
+                new_execution_state=CheckpointUpdatedExecutionState(),
+            )
+
+        async def get_execution_state(
+            self,
+            _durable_execution_arn: str,
+            _checkpoint_token: str,
+            _next_marker: str,
+            _max_items: int = 1000,
+        ) -> StateOutput:
+            return StateOutput(operations=[], next_marker="")
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    lambda_api_client_1 = StubAsyncLambdaApiClient()
+    lambda_api_client_2 = StubAsyncLambdaApiClient()
+    service_client_1 = ClosingServiceClient("new_token_1")  # noqa: S106
+    service_client_2 = ClosingServiceClient("new_token_2")  # noqa: S106
+
+    with (
+        patch(
+            "async_durable_execution.execution.AsyncLambdaClient",
+            side_effect=[service_client_1, service_client_2],
+        ) as mock_async_lambda_client,
+        patch(
+            "async_durable_execution.execution.create_default_client",
+            side_effect=[lambda_api_client_1, lambda_api_client_2],
+        ) as mock_create_default_client,
+    ):
+
+        @durable_execution
+        async def test_handler(event: Any) -> dict:
+            return {"result": "success"}
+
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 1000000  # noqa: SLF001
+        lambda_context.invoked_function_arn = None
+        lambda_context.tenant_id = None
+
+        event = {
+            "DurableExecutionArn": "arn:test:execution/exec1",
+            "CheckpointToken": "token123",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "exec1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+        }
+
+        result_1 = await test_handler._async_handler(event, lambda_context)  # noqa: SLF001
+        result_2 = await test_handler._async_handler(event, lambda_context)  # noqa: SLF001
+
+        assert result_1["Status"] == InvocationStatus.SUCCEEDED.value
+        assert result_2["Status"] == InvocationStatus.SUCCEEDED.value
+        assert mock_create_default_client.call_count == 2
+        assert mock_async_lambda_client.call_count == 2
+        assert service_client_1.closed
+        assert service_client_2.closed
 
 
 async def test_durable_handler_empty_input_payload():

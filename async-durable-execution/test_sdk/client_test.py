@@ -41,6 +41,7 @@ from async_durable_execution.models import (
 from async_durable_execution.client import (
     AsyncLambdaClient,
     ThreadedSyncLambdaClient,
+    _AiobotocoreLambdaApiClient,
     create_default_async_client,
     create_default_client,
     create_default_service_client,
@@ -456,6 +457,39 @@ async def test_create_default_async_client_builds_lambda_client_with_expected_co
         config.user_agent_extra == f"durable-execution-sdk-python/{__version__}-async"
     )
     assert client._client_context is mock_client  # noqa: SLF001
+
+
+async def test_aiobotocore_lambda_api_client_closes_entered_context():
+    """Test aiobotocore client context is exited after async client use."""
+    entered_client = Mock()
+    entered_client.checkpoint_durable_execution = AsyncMock(
+        return_value={
+            "CheckpointToken": "new-token",
+            "NewExecutionState": {"Operations": []},
+        }
+    )
+    client_context = Mock()
+    client_context.__aenter__ = AsyncMock(return_value=entered_client)
+    client_context.__aexit__ = AsyncMock()
+    client = _AiobotocoreLambdaApiClient(client_context)
+
+    await client.checkpoint_durable_execution()
+    await client.aclose()
+
+    client_context.__aenter__.assert_awaited_once_with()
+    client_context.__aexit__.assert_awaited_once_with(None, None, None)
+    assert client._client is None  # noqa: SLF001
+
+
+async def test_async_lambda_client_closes_wrapped_client():
+    """Test AsyncLambdaClient closes wrapped SDK-owned async clients."""
+    wrapped_client = Mock()
+    wrapped_client.aclose = AsyncMock()
+    client = AsyncLambdaClient(wrapped_client)
+
+    await client.aclose()
+
+    wrapped_client.aclose.assert_awaited_once_with()
 
 
 @patch("async_durable_execution.client.create_default_client")

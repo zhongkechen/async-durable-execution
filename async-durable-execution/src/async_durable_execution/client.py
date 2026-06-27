@@ -178,6 +178,12 @@ class _AiobotocoreLambdaApiClient:
         client = await self._get_client()
         return await client.get_durable_execution_state(**kwargs)
 
+    async def aclose(self) -> None:
+        if self._client is None:
+            return
+        await self._client_context.__aexit__(None, None, None)
+        self._client = None
+
 
 class AsyncLambdaClient(DurableServiceClient):
     """Adapt an async aioboto Lambda client to the durable service interface."""
@@ -233,6 +239,12 @@ class AsyncLambdaClient(DurableServiceClient):
                 "Failed to get execution state.", extra=error.build_logger_extras()
             )
             raise error from None
+
+    async def aclose(self) -> None:
+        close = getattr(self.client, "aclose", None)
+        if close is None:
+            return
+        await close()
 
 
 __all__ = [
