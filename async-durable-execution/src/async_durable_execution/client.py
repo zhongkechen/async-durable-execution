@@ -33,7 +33,7 @@ def _create_client_config() -> Config:
 
 def aioboto_is_installed() -> bool:
     """Return whether the optional aioboto dependency is available."""
-    return importlib.util.find_spec("aioboto") is not None
+    return importlib.util.find_spec("aioboto3") is not None
 
 
 def create_default_client() -> LambdaApiClient:
@@ -45,8 +45,11 @@ def create_default_client() -> LambdaApiClient:
 
 def create_default_async_client() -> AsyncLambdaApiClient:
     """Create the default aioboto Lambda client used for durable API calls."""
-    aioboto = importlib.import_module("aioboto")
-    return aioboto.client("lambda", config=_create_client_config())
+    aioboto3 = importlib.import_module("aioboto3")
+    session = aioboto3.Session()
+    return _Aioboto3LambdaApiClient(
+        session.client("lambda", config=_create_client_config())
+    )
 
 
 def lambda_api_client_is_async(
@@ -127,6 +130,27 @@ class ThreadedSyncLambdaClient(DurableServiceClient):
                 "Failed to get execution state.", extra=error.build_logger_extras()
             )
             raise error from None
+
+
+class _Aioboto3LambdaApiClient:
+    """Lazily enter an aioboto3 Lambda client context for durable API calls."""
+
+    def __init__(self, client_context: Any) -> None:
+        self._client_context = client_context
+        self._client: Any | None = None
+
+    async def _get_client(self) -> Any:
+        if self._client is None:
+            self._client = await self._client_context.__aenter__()
+        return self._client
+
+    async def checkpoint_durable_execution(self, **kwargs: Any) -> Any:
+        client = await self._get_client()
+        return await client.checkpoint_durable_execution(**kwargs)
+
+    async def get_durable_execution_state(self, **kwargs: Any) -> Any:
+        client = await self._get_client()
+        return await client.get_durable_execution_state(**kwargs)
 
 
 class AsyncLambdaClient(DurableServiceClient):

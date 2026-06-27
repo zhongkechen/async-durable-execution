@@ -401,15 +401,18 @@ async def test_create_default_async_client_builds_lambda_client_with_expected_co
 ):
     """Test create_default_async_client builds a lambda aioboto client."""
     mock_client = Mock()
-    mock_aioboto = Mock()
-    mock_aioboto.client.return_value = mock_client
-    mock_import_module.return_value = mock_aioboto
+    mock_session = Mock()
+    mock_aioboto3 = Mock()
+    mock_aioboto3.Session.return_value = mock_session
+    mock_session.client.return_value = mock_client
+    mock_import_module.return_value = mock_aioboto3
 
     client = create_default_async_client()
 
-    mock_import_module.assert_called_once_with("aioboto")
-    mock_aioboto.client.assert_called_once()
-    call_args = mock_aioboto.client.call_args
+    mock_import_module.assert_called_once_with("aioboto3")
+    mock_aioboto3.Session.assert_called_once_with()
+    mock_session.client.assert_called_once()
+    call_args = mock_session.client.call_args
     assert call_args[0][0] == "lambda"
     assert "config" in call_args[1]
     config = call_args[1]["config"]
@@ -418,7 +421,7 @@ async def test_create_default_async_client_builds_lambda_client_with_expected_co
     assert (
         config.user_agent_extra == f"durable-execution-sdk-python/{__version__}-async"
     )
-    assert client is mock_client
+    assert client._client_context is mock_client  # noqa: SLF001
 
 
 @patch("async_durable_execution.client.create_default_async_client")
