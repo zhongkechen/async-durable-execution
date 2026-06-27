@@ -1,8 +1,8 @@
-"""Tests for retry decision models."""
+"""Tests for retry decision configuration."""
 
 from datetime import timedelta
 
-from async_durable_execution.models import RetryDecision
+from async_durable_execution.config import RetryDecision
 
 
 def test_retry_factory():

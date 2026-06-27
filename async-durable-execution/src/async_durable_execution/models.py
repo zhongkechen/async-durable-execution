@@ -18,54 +18,6 @@ from .exceptions import CallableRuntimeError
 ReplayChildren: TypeAlias = bool
 OperationPayload: TypeAlias = str
 TimeoutSeconds: TypeAlias = int
-Duration: TypeAlias = datetime.timedelta | int
-
-
-def _duration_to_seconds(duration: Duration, field_name: str = "duration") -> int:
-    if isinstance(duration, bool) or not isinstance(duration, int | datetime.timedelta):
-        msg = f"{field_name} must be an int number of seconds or a timedelta"
-        raise ValueError(msg)
-
-    seconds = (
-        int(duration.total_seconds())
-        if isinstance(duration, datetime.timedelta)
-        else duration
-    )
-    if seconds < 0:
-        msg = f"{field_name} must be non-negative"
-        raise ValueError(msg)
-    return seconds
-
-
-@dataclass(frozen=True)
-class RetryDecision:
-    """Decision about whether to retry an operation and with what delay."""
-
-    should_retry: bool
-    delay: Duration
-
-    def __post_init__(self):
-        object.__setattr__(self, "delay", _duration_to_seconds(self.delay, "delay"))
-
-    @property
-    def delay_seconds(self) -> int:
-        """Get delay in seconds."""
-        return _duration_to_seconds(self.delay, "delay")
-
-    @classmethod
-    def retry(cls, delay: Duration) -> "RetryDecision":
-        """Create a retry decision."""
-        return cls(should_retry=True, delay=delay)
-
-    @classmethod
-    def retry_after_delay(cls, delay_seconds: int) -> "RetryDecision":
-        """Create a retry decision from a delay in seconds."""
-        return cls.retry(delay_seconds)
-
-    @classmethod
-    def no_retry(cls) -> "RetryDecision":
-        """Create a no-retry decision."""
-        return cls(should_retry=False, delay=0)
 
 
 def _metadata(

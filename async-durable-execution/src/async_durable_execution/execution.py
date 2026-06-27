@@ -42,9 +42,9 @@ from .state import ExecutionState
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from .client import DurableServiceClient
     from .types import (
         AsyncLambdaApiClient,
-        DurableServiceClient,
         LambdaContext,
         LambdaApiClient,
     )

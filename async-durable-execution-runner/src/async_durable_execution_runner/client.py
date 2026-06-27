@@ -7,7 +7,7 @@ from async_durable_execution.models import (
     OperationUpdate,
     StateOutput,
 )
-from async_durable_execution.types import DurableServiceClient
+from async_durable_execution.client import DurableServiceClient
 from .checkpoint.processor import (
     CheckpointProcessor,
 )
