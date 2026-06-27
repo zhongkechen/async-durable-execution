@@ -6,11 +6,9 @@ from ..config import RetryStrategyBuilder
 from ..models import RetryDecision
 from ..async_tools import (
     assert_async_callable,
-    invoke_user_callable,
 )
 from ..exceptions import SuspendExecution
 from ..primitive.child import (
-    get_durable_context,
     run_in_child_context,
 )
 from ..primitive.wait import wait
@@ -41,7 +39,6 @@ async def with_retry(
         summary_generator: Optional summary generator for large child results.
         is_virtual: Whether the child context should skip lifecycle checkpoints.
     """
-    context = get_durable_context()
 
     async def run_loop() -> T:
         assert_async_callable(func)
@@ -50,11 +47,7 @@ async def with_retry(
         while True:
             attempt += 1
             try:
-                return await invoke_user_callable(
-                    context,
-                    func,
-                    attempt,
-                )
+                return await func(attempt)
             except SuspendExecution:
                 raise
             except Exception as err:
