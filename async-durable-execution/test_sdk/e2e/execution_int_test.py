@@ -675,14 +675,14 @@ async def test_durable_callable_wait_for_callback_submitter():
         assert second_checkpoint.operation_type is OperationType.CALLBACK
         assert second_checkpoint.action is OperationAction.START
         assert second_checkpoint.parent_id == first_checkpoint.operation_id
-        assert second_checkpoint.name == "submit_to_external_system create callback id"
+        assert second_checkpoint.name == "submit_to_external_system-callback"
 
         # Third: STEP START
         third_checkpoint = all_operations[2]
         assert third_checkpoint.operation_type is OperationType.STEP
         assert third_checkpoint.action is OperationAction.START
         assert third_checkpoint.parent_id == first_checkpoint.operation_id
-        assert third_checkpoint.name == "submit_to_external_system submitter"
+        assert third_checkpoint.name == "submit_to_external_system-submitter"
 
         # Fourth: STEP SUCCEED
         fourth_checkpoint = all_operations[3]

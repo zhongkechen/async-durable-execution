@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
-from ..async_tools import assert_async_callable, durable_callable, get_callable_name
+from ..async_tools import assert_async_callable, durable_callable
 from ..context import get_current_context, reset_current_context, set_current_context
 from ..models import RetryDecision
 from ..primitive.base import OperationContext
@@ -36,9 +36,10 @@ async def wait_for_callback_handler(
     retry_strategy: Callable[[Exception, int], RetryDecision] | None = None,
 ) -> Any:
     """Create a callback, run a submitter, and wait for callback completion."""
-    name_with_space: str = f"{name} " if name else ""
+    callback_name = f"{name}-callback" if name is not None else "callback"
+    submitter_step_name = f"{name}-submitter" if name is not None else "submitter"
     callback: Callback = await create_callback(
-        name=f"{name_with_space}create callback id",
+        name=callback_name,
         timeout=timeout,
         heartbeat_timeout=heartbeat_timeout,
         serdes=serdes,
@@ -60,7 +61,7 @@ async def wait_for_callback_handler(
 
     await step_operation(
         func=submitter_step,
-        name=f"{name_with_space}submitter",
+        name=submitter_step_name,
         retry_strategy=retry_strategy,
         serdes=serdes,
     )
@@ -90,7 +91,7 @@ async def wait_for_callback(
     """
     context = _get_durable_context("wait_for_callback")
     assert_async_callable(submitter, label="submitter")
-    step_name: str | None = name or get_callable_name(submitter)
+    step_name = name if name is not None else getattr(submitter, "__name__", None)
     logger.debug("wait_for_callback name: %s", step_name)
 
     return await _run_in_child_context_in_context(

@@ -26,29 +26,6 @@ def is_async_callable(func: Callable[..., object]) -> bool:
     return call is not None and inspect.iscoroutinefunction(call)
 
 
-def get_callable_name(
-    func: Callable[..., object],
-    *,
-    include_original_name: bool = True,
-) -> str | None:
-    """Best-effort name lookup used for default operation names."""
-    if isinstance(func, functools.partial):
-        return get_callable_name(
-            func.func,
-            include_original_name=include_original_name,
-        )
-
-    if include_original_name:
-        original_name = getattr(func, "_original_name", None)
-        if original_name is not None:
-            return original_name
-
-    if inspect.isfunction(func) or inspect.ismethod(func):
-        return getattr(func, "__name__", None)
-
-    return None
-
-
 def assert_async_callable(
     func: Callable[..., object],
     *,
@@ -58,9 +35,7 @@ def assert_async_callable(
     if is_async_callable(func):
         return
 
-    name = get_callable_name(func)
-    if name is None:
-        name = type(func).__name__
+    name = getattr(func, "__name__", None) or type(func).__name__
 
     msg = (
         f"`{label}` must be an async function. "
@@ -92,7 +67,9 @@ def durable_callable(
     def wrapper(
         *args: Params.args, **kwargs: Params.kwargs
     ) -> Callable[[], Awaitable[T]]:
-        return functools.partial(func, *args, **kwargs)
+        bound = functools.partial(func, *args, **kwargs)
+        setattr(bound, "__name__", func.__name__)
+        return bound
 
     return wrapper
 

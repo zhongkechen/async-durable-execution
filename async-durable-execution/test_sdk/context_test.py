@@ -10,7 +10,6 @@ from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from async_durable_execution.async_tools import get_callable_name
 from async_durable_execution.context import (
     reset_current_context,
     set_current_context,
@@ -874,6 +873,7 @@ async def test_step_with_name_and_config_fields(mock_executor_class):
         context,
         step(
             mock_callable,
+            name="mock-callable",
             retry_strategy=retry_strategy,
             step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY,
         ),
@@ -888,7 +888,7 @@ async def test_step_with_name_and_config_fields(mock_executor_class):
     mock_executor_class.assert_called_once_with(
         state=mock_state,
         operation_identifier=OperationIdentifier(
-            expected_id, OperationSubType.STEP, None, "mock_callable"
+            expected_id, OperationSubType.STEP, None, "mock-callable"
         ),
         func=mock_callable,
         retry_strategy=retry_strategy,
@@ -975,10 +975,10 @@ async def test_step_increments_counter(mock_executor_class):
 
 
 @patch("async_durable_execution.primitive.step.StepOperationExecutor")
-async def test_step_with_callable_resolves_underlying_function_name(
+async def test_step_with_callable_has_no_default_name(
     mock_executor_class,
 ):
-    """Test step derives its name from the callable function."""
+    """Test step does not derive its name from the callable function."""
     mock_executor = make_async_executor("named_result")
 
     mock_executor_class.return_value = mock_executor
@@ -1003,7 +1003,7 @@ async def test_step_with_callable_resolves_underlying_function_name(
     mock_executor_class.assert_called_once_with(
         state=mock_state,
         operation_identifier=OperationIdentifier(
-            expected_id, OperationSubType.STEP, None, "original_function"
+            expected_id, OperationSubType.STEP, None, None
         ),
         func=mock_callable,
         retry_strategy=None,
@@ -1414,7 +1414,10 @@ async def test_run_in_child_context_basic(mock_handler):
     call_args = mock_handler.call_args
     assert call_args[1]["state"] is mock_state
     assert call_args[1]["operation_identifier"] == OperationIdentifier(
-        expected_operation_id, OperationSubType.RUN_IN_CHILD_CONTEXT, None, None
+        expected_operation_id,
+        OperationSubType.RUN_IN_CHILD_CONTEXT,
+        None,
+        "AsyncMock",
     )
     assert call_args[1]["serdes"] is None
     assert call_args[1]["item_serdes"] is None
@@ -1431,7 +1434,6 @@ async def test_run_in_child_context_with_name_and_config(mock_handler):
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
     mock_callable = AsyncMock()
-    mock_callable._original_name = "original_function"  # noqa: SLF001
 
     summary_generator = Mock()
 
@@ -1444,6 +1446,7 @@ async def test_run_in_child_context_with_name_and_config(mock_handler):
         context,
         run_in_child_context(
             mock_callable,
+            name="original_function",
             summary_generator=summary_generator,
             is_virtual=True,
         ),
@@ -1494,7 +1497,10 @@ async def test_run_in_child_context_with_parent_id(mock_executor_class):
 
     call_args = mock_executor_class.call_args
     assert call_args[1]["operation_identifier"] == OperationIdentifier(
-        expected_id, OperationSubType.RUN_IN_CHILD_CONTEXT, "parent456", None
+        expected_id,
+        OperationSubType.RUN_IN_CHILD_CONTEXT,
+        "parent456",
+        "AsyncMock",
     )
 
 
@@ -1565,18 +1571,18 @@ async def test_run_in_child_context_increments_counter(mock_executor_class):
     assert mock_executor_class.call_args_list[0][1][
         "operation_identifier"
     ] == OperationIdentifier(
-        expected_id1, OperationSubType.RUN_IN_CHILD_CONTEXT, None, None
+        expected_id1, OperationSubType.RUN_IN_CHILD_CONTEXT, None, "AsyncMock"
     )
     assert mock_executor_class.call_args_list[1][1][
         "operation_identifier"
     ] == OperationIdentifier(
-        expected_id2, OperationSubType.RUN_IN_CHILD_CONTEXT, None, None
+        expected_id2, OperationSubType.RUN_IN_CHILD_CONTEXT, None, "AsyncMock"
     )
 
 
 @patch("async_durable_execution.primitive.child.child_handler")
-async def test_run_in_child_context_resolves_name_from_callable(mock_executor_class):
-    """Test run_in_child_context resolves name from callable._original_name."""
+async def test_run_in_child_context_uses_callable_name(mock_executor_class):
+    """Test run_in_child_context uses func.__name__ when name is not provided."""
     mock_executor = MagicMock()
 
     mock_executor.process.return_value = "named_result"
@@ -1594,7 +1600,7 @@ async def test_run_in_child_context_resolves_name_from_callable(mock_executor_cl
     await run_with_context(context, run_in_child_context(mock_callable))
 
     call_args = mock_executor_class.call_args
-    assert call_args[1]["operation_identifier"].name == "original_function_name"
+    assert call_args[1]["operation_identifier"].name == "AsyncMock"
 
 
 @patch("async_durable_execution.composite.wait_for_callback.wait_for_callback_handler")
@@ -1625,7 +1631,7 @@ async def test_wait_for_callback_basic(mock_executor_class):
         # Verify the child context callable
         call_args = mock_run_in_child.call_args
         assert callable(call_args.args[1])
-        assert call_args.kwargs["name"] is None
+        assert call_args.kwargs["name"] == "AsyncMock"
 
 
 @patch("async_durable_execution.composite.wait_for_callback.wait_for_callback_handler")
@@ -1638,7 +1644,6 @@ async def test_wait_for_callback_with_name_and_config(mock_executor_class):
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
     mock_submitter = AsyncMock()
-    mock_submitter._original_name = "submit_function"  # noqa: SLF001
     timeout = timedelta(seconds=30)
     heartbeat_timeout = timedelta(seconds=10)
 
@@ -1652,6 +1657,7 @@ async def test_wait_for_callback_with_name_and_config(mock_executor_class):
             context,
             wait_for_callback(
                 mock_submitter,
+                name="submit_function",
                 timeout=timeout,
                 heartbeat_timeout=heartbeat_timeout,
             ),
@@ -1664,8 +1670,8 @@ async def test_wait_for_callback_with_name_and_config(mock_executor_class):
 
 
 @patch("async_durable_execution.composite.wait_for_callback.wait_for_callback_handler")
-async def test_wait_for_callback_resolves_name_from_submitter(mock_executor_class):
-    """Test wait_for_callback resolves name from submitter._original_name."""
+async def test_wait_for_callback_uses_submitter_name(mock_executor_class):
+    """Test wait_for_callback uses submitter.__name__ when name is not provided."""
     mock_executor = make_async_executor("named_callback_result")
     mock_executor_class.return_value = mock_executor
     mock_state = Mock(spec=ExecutionState)
@@ -1685,7 +1691,7 @@ async def test_wait_for_callback_resolves_name_from_submitter(mock_executor_clas
 
         call_args = mock_run_in_child.call_args
         assert callable(call_args.args[1])
-        assert call_args.kwargs["name"] == "submit_task"
+        assert call_args.kwargs["name"] == "AsyncMock"
 
 
 @patch("async_durable_execution.composite.wait_for_callback.wait_for_callback_handler")
@@ -1765,6 +1771,7 @@ async def test_map_basic(mock_handler):
     # Verify the child handler was called with correct parameters
     call_args = mock_handler.call_args
     assert call_args[1]["operation_identifier"].sub_type is OperationSubType.MAP
+    assert call_args[1]["operation_identifier"].name == "test_function"
 
 
 @patch("async_durable_execution.composite.map.child_handler")
@@ -1918,9 +1925,9 @@ async def test_parallel_with_name_and_config_fields(mock_handler):
 
 
 @patch("async_durable_execution.composite.parallel.child_handler")
-async def test_parallel_resolves_name_from_callable(mock_handler):
-    """Test parallel resolves name from callable._original_name."""
-    mock_handler.return_value = "named_parallel_result"
+async def test_parallel_has_no_default_name(mock_handler):
+    """Test parallel has no name when no name is provided."""
+    mock_handler.return_value = "unnamed_parallel_result"
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
@@ -1932,24 +1939,14 @@ async def test_parallel_resolves_name_from_callable(mock_handler):
     async def task2(context):
         return "result2"
 
-    # Mock callable with _original_name
-    mock_callable = AsyncMock()
-    mock_callable._original_name = "parallel_tasks"  # noqa: SLF001
-
     callables = [task1, task2]
 
     context = create_test_context(state=mock_state)
 
-    # Use _resolve_step_name to test name resolution
-    resolved_name = get_callable_name(mock_callable)  # noqa: SLF001
-    assert resolved_name == "parallel_tasks"
-
     await run_with_context(context, parallel(callables))
 
     call_args = mock_handler.call_args
-    assert (
-        call_args[1]["operation_identifier"].name is None
-    )  # name should be None since callables don't have _original_name
+    assert call_args[1]["operation_identifier"].name is None
 
 
 @patch("async_durable_execution.composite.parallel.child_handler")

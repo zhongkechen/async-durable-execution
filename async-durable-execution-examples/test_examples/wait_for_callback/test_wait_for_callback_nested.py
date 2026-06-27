@@ -25,7 +25,7 @@ async def test_handle_nested_wait_for_callback_operations_in_child_contexts(
 
         # Complete inner callback
         inner_callback_id = await runner.wait_for_callback(
-            execution_arn=execution_arn, name="inner-callback-op create callback id"
+            execution_arn=execution_arn, name="inner-callback-op-callback"
         )
         inner_callback_result = json.dumps({"level": "inner-completed"})
         await runner.send_callback_success(
@@ -34,7 +34,7 @@ async def test_handle_nested_wait_for_callback_operations_in_child_contexts(
 
         # Complete nested callback
         nested_callback_id = await runner.wait_for_callback(
-            execution_arn=execution_arn, name="nested-callback-op create callback id"
+            execution_arn=execution_arn, name="nested-callback-op-callback"
         )
         nested_callback_result = json.dumps({"level": "nested-completed"})
         await runner.send_callback_success(
