@@ -11,8 +11,8 @@ from ..context import get_current_context
 from ..async_tools import assert_async_callable, invoke_user_callable
 from ..config import RetryPresets
 from ..exceptions import (
+    CallableRuntimeError,
     ExecutionError,
-    InvalidStateError,
     InvocationError,
     TerminationReason,
     suspend_with_optional_resume_delay,
@@ -29,8 +29,6 @@ from ..models import (
 )
 from .child import _get_durable_context
 from .base import (
-    CHECKPOINT_NOT_FOUND,
-    CheckpointedResult,
     OperationExecutor,
     OperationContext,
 )
@@ -100,40 +98,37 @@ class StepOperationExecutor(OperationExecutor[T]):
         is_sync: bool = self.step_semantics is StepSemantics.AT_MOST_ONCE_PER_RETRY
         await self.create_checkpoint(start_operation, is_sync=is_sync)
 
-        checkpointed_result = CHECKPOINT_NOT_FOUND
-        if is_sync:
-            refreshed_result: CheckpointedResult = self.get_checkpointed_result()
-            if not refreshed_result.is_started():
-                error_msg: str = f"Unexpected status after START checkpoint: {refreshed_result.status}"
-                raise InvalidStateError(error_msg)
-            checkpointed_result = refreshed_result
-
-        return await self.execute(checkpointed_result)
+        return await self.execute(None)
 
     async def replay(self, operation: Operation) -> T:
         """Replay an existing step operation from its checkpoint."""
         if operation.status is OperationStatus.SUCCEEDED:
-            checkpointed_result = CheckpointedResult.create_from_operation(operation)
             logger.debug(
                 "Step already completed, skipping execution for id: %s, name: %s",
                 self.operation_identifier.operation_id,
                 self.operation_name,
             )
-            if checkpointed_result.result is None:
+            result_payload = (
+                operation.step_details.result if operation.step_details else None
+            )
+            if result_payload is None:
                 return None  # type: ignore[return-value]
 
             result: T = await self.deserialize_value(
-                data=checkpointed_result.result,
+                data=result_payload,
                 serdes=self.serdes,
             )
             return result
 
         if operation.status is OperationStatus.FAILED:
-            CheckpointedResult.create_from_operation(operation).raise_callable_error()
+            self._raise_callable_error(operation)
 
         if operation.status is OperationStatus.PENDING:
-            checkpointed_result = CheckpointedResult.create_from_operation(operation)
-            scheduled_timestamp = checkpointed_result.get_next_attempt_timestamp()
+            scheduled_timestamp = (
+                operation.step_details.next_attempt_timestamp
+                if operation.step_details
+                else None
+            )
             suspend_with_optional_resume_timestamp(
                 msg=f"Retry scheduled for {self.operation_name or self.operation_identifier.operation_id} will retry at timestamp {scheduled_timestamp}",
                 datetime_timestamp=scheduled_timestamp,
@@ -143,18 +138,15 @@ class StepOperationExecutor(OperationExecutor[T]):
             operation.status is OperationStatus.STARTED
             and self.step_semantics is StepSemantics.AT_MOST_ONCE_PER_RETRY
         ):
-            checkpointed_result = CheckpointedResult.create_from_operation(operation)
             msg: str = f"Step operation_id={self.operation_identifier.operation_id} name={self.operation_identifier.name} was previously interrupted"
-            await self.retry_handler(StepInterruptedError(msg), checkpointed_result)
-            checkpointed_result.raise_callable_error()
+            await self.retry_handler(StepInterruptedError(msg), operation)
+            self._raise_callable_error(operation)
 
         if (
             operation.status is OperationStatus.STARTED
             and self.step_semantics is StepSemantics.AT_LEAST_ONCE_PER_RETRY
         ):
-            return await self.execute(
-                CheckpointedResult.create_from_operation(operation)
-            )
+            return await self.execute(operation)
 
         if operation.status is OperationStatus.READY:
             start_operation: OperationUpdate = OperationUpdate.create_step_start(
@@ -163,23 +155,15 @@ class StepOperationExecutor(OperationExecutor[T]):
             is_sync: bool = self.step_semantics is StepSemantics.AT_MOST_ONCE_PER_RETRY
             await self.create_checkpoint(start_operation, is_sync=is_sync)
 
-            checkpointed_result = CheckpointedResult.create_from_operation(operation)
-            if is_sync:
-                refreshed_result: CheckpointedResult = self.get_checkpointed_result()
-                if not refreshed_result.is_started():
-                    error_msg: str = f"Unexpected status after START checkpoint: {refreshed_result.status}"
-                    raise InvalidStateError(error_msg)
-                checkpointed_result = refreshed_result
+            return await self.execute(operation)
 
-            return await self.execute(checkpointed_result)
+        return await self.execute(operation)
 
-        return await self.execute(CheckpointedResult.create_from_operation(operation))
-
-    async def execute(self, checkpointed_result: CheckpointedResult) -> T:
+    async def execute(self, operation: Operation | None) -> T:  # type: ignore[override]
         """Execute step function with error handling and retry logic.
 
         Args:
-            checkpointed_result: The checkpoint data containing operation state
+            operation: The checkpointed operation state, if any
 
         Returns:
             The result of executing the step function
@@ -190,8 +174,8 @@ class StepOperationExecutor(OperationExecutor[T]):
         """
         # Get current attempt - checkpointed attempts + 1
         attempt: int = 1
-        if checkpointed_result.operation and checkpointed_result.operation.step_details:
-            attempt = checkpointed_result.operation.step_details.attempt + 1
+        if operation and operation.step_details:
+            attempt = operation.step_details.attempt + 1
 
         step_context: StepContext = StepContext(
             attempt=attempt,
@@ -248,7 +232,7 @@ class StepOperationExecutor(OperationExecutor[T]):
                 self.operation_identifier.name,
             )
 
-            await self.retry_handler(e, checkpointed_result)
+            await self.retry_handler(e, operation)
             # If we've failed to raise an exception from the retry_handler, then we are in a
             # weird state, and should crash terminate the execution
             msg = "retry handler should have raised an exception, but did not."
@@ -257,13 +241,13 @@ class StepOperationExecutor(OperationExecutor[T]):
     async def retry_handler(
         self,
         error: Exception,
-        checkpointed_result: CheckpointedResult,
+        operation: Operation | None,
     ):
         """Checkpoint and suspend for replay if retry required, otherwise raise error.
 
         Args:
             error: The exception that occurred during step execution
-            checkpointed_result: The checkpoint data containing operation state
+            operation: The checkpointed operation state, if any
 
         Raises:
             SuspendExecution: If retry is scheduled
@@ -275,11 +259,8 @@ class StepOperationExecutor(OperationExecutor[T]):
         retry_strategy = self.retry_strategy or RetryPresets.default()
 
         retry_attempt: int = (
-            checkpointed_result.operation.step_details.attempt
-            if (
-                checkpointed_result.operation
-                and checkpointed_result.operation.step_details
-            )
+            operation.step_details.attempt
+            if operation and operation.step_details
             else 0
         )
         retry_decision: RetryDecision = retry_strategy(error, retry_attempt + 1)
@@ -345,6 +326,20 @@ class StepOperationExecutor(OperationExecutor[T]):
             raise error
 
         raise error_object.to_callable_runtime_error()
+
+    @staticmethod
+    def _raise_callable_error(operation: Operation) -> None:
+        error = operation.step_details.error if operation.step_details else None
+        if error is None:
+            msg = "Unknown error. No ErrorObject exists on the Checkpoint Operation."
+            raise CallableRuntimeError(
+                message=msg,
+                error_type=None,
+                data=None,
+                stack_trace=None,
+            )
+
+        raise error.to_callable_runtime_error()
 
 
 async def step(

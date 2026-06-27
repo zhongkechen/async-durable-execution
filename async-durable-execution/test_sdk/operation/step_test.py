@@ -763,25 +763,18 @@ async def test_step_handler_custom_serdes_already_succeeded():
     assert result == {"key": "value", "number": 42, "list": [1, 2, 3]}
 
 
-# Tests for immediate response handling
+# Tests for start checkpoint refresh handling
 
 
-async def test_step_immediate_response_get_checkpoint_called_twice():
-    """Test that get_checkpoint_result is called twice when checkpoint is created."""
+async def test_step_start_does_not_refresh_checkpoint_after_start():
+    """Test that start execution does not reread the checkpoint after START."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
 
-    # First call: not found (checkpoint doesn't exist)
-    # Second call: started (checkpoint created, no immediate response)
+    # First call: not found (checkpoint doesn't exist).
+    # start() should not call get_checkpointed_result again after START.
     not_found = CheckpointedResult.create_not_found()
-    started_op = Operation(
-        operation_id="step_immediate_1",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.STARTED,
-        step_details=StepDetails(attempt=0),
-    )
-    started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.operations.get.side_effect = [not_found, started]
+    mock_state.operations.get.return_value = not_found
 
     mock_callable = Mock(return_value="success_result")
     mock_state.wrap_user_function.return_value = mock_callable
@@ -796,8 +789,7 @@ async def test_step_immediate_response_get_checkpoint_called_twice():
         step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY,
     )
 
-    # Verify get_checkpoint_result was called twice (before and after checkpoint creation)
-    assert mock_state.operations.get.call_count == 2
+    assert mock_state.operations.get.call_count == 1
     assert result == "success_result"
 
 
@@ -806,16 +798,9 @@ async def test_step_immediate_response_create_checkpoint_sync_at_most_once():
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
 
-    # First call: not found, second call: started
+    # First call: not found; start does not reread after the START checkpoint.
     not_found = CheckpointedResult.create_not_found()
-    started_op = Operation(
-        operation_id="step_immediate_2",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.STARTED,
-        step_details=StepDetails(attempt=0),
-    )
-    started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.operations.get.side_effect = [not_found, started]
+    mock_state.operations.get.return_value = not_found
 
     mock_callable = Mock(return_value="success_result")
     mock_state.wrap_user_function.return_value = mock_callable
@@ -863,25 +848,13 @@ async def test_step_immediate_response_create_checkpoint_async_at_least_once():
 
 
 async def test_step_immediate_response_immediate_success():
-    """Test immediate success: checkpoint returns SUCCEEDED on second check, operation returns without suspend.
-
-    Note: The current implementation calls get_checkpoint_result twice inside process()
-    for sync checkpoints, so we need to handle that in the mock setup.
-    """
+    """Test successful execution without a checkpoint refresh after START."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
 
-    # First call: not found
-    # Second call: started (no immediate response, proceed to execute)
+    # First call: not found; start proceeds to execute without a second read.
     not_found = CheckpointedResult.create_not_found()
-    started_op = Operation(
-        operation_id="step_immediate_4",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.STARTED,
-        step_details=StepDetails(attempt=0),
-    )
-    started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.operations.get.side_effect = [not_found, started]
+    mock_state.operations.get.return_value = not_found
 
     mock_callable = Mock(return_value="immediate_success_result")
     mock_state.wrap_user_function.return_value = mock_callable
@@ -904,21 +877,13 @@ async def test_step_immediate_response_immediate_success():
 
 
 async def test_step_immediate_response_immediate_failure():
-    """Test immediate failure: checkpoint returns FAILED on second check, operation raises error without suspend."""
+    """Test step failure without a checkpoint refresh after START."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
 
-    # First call: not found
-    # Second call: started (current implementation doesn't support immediate terminal responses from START)
+    # First call: not found; start proceeds to execute without a second read.
     not_found = CheckpointedResult.create_not_found()
-    started_op = Operation(
-        operation_id="step_immediate_5",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.STARTED,
-        step_details=StepDetails(attempt=0),
-    )
-    started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.operations.get.side_effect = [not_found, started]
+    mock_state.operations.get.return_value = not_found
 
     # Make the step function raise an error
     mock_callable = Mock(side_effect=RuntimeError("Step execution error"))
@@ -946,22 +911,14 @@ async def test_step_immediate_response_immediate_failure():
     assert mock_state.create_checkpoint.call_count == 2
 
 
-async def test_step_immediate_response_no_immediate_response():
-    """Test no immediate response: checkpoint returns STARTED on second check, operation executes step function."""
+async def test_step_start_executes_without_second_checkpoint_read():
+    """Test start execution runs the step function after the initial checkpoint read."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
 
-    # First call: not found
-    # Second call: started (no immediate response, proceed to execute)
+    # First call: not found; start proceeds to execute without a second read.
     not_found = CheckpointedResult.create_not_found()
-    started_op = Operation(
-        operation_id="step_immediate_6",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.STARTED,
-        step_details=StepDetails(attempt=0),
-    )
-    started = CheckpointedResult.create_from_operation(started_op)
-    mock_state.operations.get.side_effect = [not_found, started]
+    mock_state.operations.get.return_value = not_found
 
     mock_callable = Mock(return_value="normal_execution_result")
     mock_state.wrap_user_function.return_value = mock_callable
