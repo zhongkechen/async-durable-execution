@@ -12,14 +12,16 @@ logger = logging.getLogger(__name__)
 
 
 def build_examples() -> None:
-    """Build examples with vendored package dependencies for SAM packaging."""
+    """Build examples for SAM packaging.
+
+    The SDK is deployed as a Lambda layer by the e2e workflow, so the function
+    artifact only needs the example handlers.
+    """
     examples_dir = Path(__file__).resolve().parent.parent
     build_dir = examples_dir / "build"
     repo_dir = examples_dir.parent
 
     runtime_packages = [
-        repo_dir / "async-durable-execution",
-        repo_dir / "async-durable-execution-runner",
         repo_dir / "async-durable-execution-examples",
     ]
 

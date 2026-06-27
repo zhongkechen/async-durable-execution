@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import inspect
 import json
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
 
@@ -160,36 +162,48 @@ def durable_execution(
     # does not require AWS environment configuration.
     active_service_client = config.service_client
 
-    def get_active_service_client() -> DurableServiceClient:
+    @asynccontextmanager
+    async def active_service_client_context() -> AsyncIterator[DurableServiceClient]:
         nonlocal active_service_client
-        if active_service_client is None:
-            if config.boto3_client is not None:
-                if lambda_api_client_is_async(config.boto3_client):
-                    active_service_client = AsyncLambdaClient(
-                        cast("AsyncLambdaApiClient", config.boto3_client)
-                    )
-                else:
-                    active_service_client = ThreadedSyncLambdaClient(
-                        client=cast("LambdaApiClient", config.boto3_client)
-                    )
+        if active_service_client is not None:
+            yield active_service_client
+            return
+
+        if config.boto3_client is not None:
+            if lambda_api_client_is_async(config.boto3_client):
+                active_service_client = AsyncLambdaClient(
+                    cast("AsyncLambdaApiClient", config.boto3_client)
+                )
             else:
-                lambda_client = create_default_client()
-                if lambda_api_client_is_async(lambda_client):
-                    active_service_client = AsyncLambdaClient(
-                        cast("AsyncLambdaApiClient", lambda_client)
-                    )
-                else:
-                    active_service_client = ThreadedSyncLambdaClient(
-                        client=cast("LambdaApiClient", lambda_client)
-                    )
-        return active_service_client
+                active_service_client = ThreadedSyncLambdaClient(
+                    client=cast("LambdaApiClient", config.boto3_client)
+                )
+            yield active_service_client
+            return
+
+        lambda_client = create_default_client()
+        if lambda_api_client_is_async(lambda_client):
+            service_client = AsyncLambdaClient(
+                cast("AsyncLambdaApiClient", lambda_client)
+            )
+            try:
+                yield service_client
+            finally:
+                await _close_service_client(service_client)
+            return
+
+        active_service_client = ThreadedSyncLambdaClient(
+            client=cast("LambdaApiClient", lambda_client)
+        )
+        yield active_service_client
 
     async def async_wrapper(
         event: Any, context: LambdaContext
     ) -> MutableMapping[str, Any]:
-        return (
-            await _wrapper_async(func, event, context, get_active_service_client())
-        ).to_dict()
+        async with active_service_client_context() as service_client:
+            return (
+                await _wrapper_async(func, event, context, service_client)
+            ).to_dict()
 
     @functools.wraps(func)
     def wrapper(event: Any, context: LambdaContext) -> MutableMapping[str, Any]:
@@ -260,6 +274,15 @@ async def _wrapper_async(
         return await handle_user_function_exception(execution_state, e)
     finally:
         await execution_state.aclose()
+
+
+async def _close_service_client(service_client: DurableServiceClient) -> None:
+    close = getattr(service_client, "aclose", None)
+    if close is None:
+        return
+    result = close()
+    if inspect.isawaitable(result):
+        await result
 
 
 async def handle_user_function_result(
