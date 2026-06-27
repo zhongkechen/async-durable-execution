@@ -50,7 +50,7 @@ def create_default_async_client() -> AsyncLambdaApiClient:
     aiobotocore_session = importlib.import_module("aiobotocore.session")
     session = aiobotocore_session.get_session()
     return _AiobotocoreLambdaApiClient(
-        session.client("lambda", config=_create_client_config())
+        session.create_client("lambda", config=_create_client_config())
     )
 
 

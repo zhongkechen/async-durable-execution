@@ -405,15 +405,15 @@ async def test_create_default_async_client_builds_lambda_client_with_expected_co
     mock_session = Mock()
     mock_aiobotocore_session = Mock()
     mock_aiobotocore_session.get_session.return_value = mock_session
-    mock_session.client.return_value = mock_client
+    mock_session.create_client.return_value = mock_client
     mock_import_module.return_value = mock_aiobotocore_session
 
     client = create_default_async_client()
 
     mock_import_module.assert_called_once_with("aiobotocore.session")
     mock_aiobotocore_session.get_session.assert_called_once_with()
-    mock_session.client.assert_called_once()
-    call_args = mock_session.client.call_args
+    mock_session.create_client.assert_called_once()
+    call_args = mock_session.create_client.call_args
     assert call_args[0][0] == "lambda"
     assert "config" in call_args[1]
     config = call_args[1]["config"]
