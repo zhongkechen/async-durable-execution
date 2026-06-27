@@ -450,6 +450,23 @@ async def test_create_default_service_client_uses_explicit_boto3_client(
     assert service_client.client is mock_client
 
 
+@patch("async_durable_execution.client.create_default_client")
+@patch("async_durable_execution.client.aioboto_is_installed", return_value=False)
+async def test_create_default_service_client_uses_sync_client_when_aioboto_missing(
+    _mock_aioboto_is_installed,
+    mock_create_default_client,
+):
+    """Test default service client falls back to boto3 when aioboto is missing."""
+    mock_client = Mock()
+    mock_create_default_client.return_value = mock_client
+
+    service_client = create_default_service_client()
+
+    assert isinstance(service_client, ThreadedSyncLambdaClient)
+    assert service_client.client is mock_client
+    mock_create_default_client.assert_called_once_with()
+
+
 @patch("async_durable_execution.client.aioboto_is_installed", return_value=False)
 async def test_create_default_service_client_uses_explicit_async_client(
     _mock_aioboto_is_installed,
