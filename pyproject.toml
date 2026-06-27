@@ -142,7 +142,7 @@ workspace.members = [
 pip = "python -m pip {args}"
 generate-sam-template = "python async-durable-execution-examples/scripts/generate_sam_template.py {args}"
 build = "python async-durable-execution-examples/scripts/build_examples.py"
-build-layer = "python -m async_durable_execution_lambda_layer.builder --sdk-source ./async-durable-execution --output async-durable-execution-lambda-layer/dist/async-durable-execution-layer.zip"
+build-layer = "python -m async_durable_execution_lambda_layer.builder --sdk-source './async-durable-execution[aioboto]' --output async-durable-execution-lambda-layer/dist/async-durable-execution-layer.zip"
 clean = "rm -rf async-durable-execution-examples/build async-durable-execution-examples/.aws-sam async-durable-execution-examples/*.zip async-durable-execution-examples/template.generated.json async-durable-execution-lambda-layer/dist"
 
 [tool.hatch.envs.docs]
