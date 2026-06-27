@@ -6,19 +6,14 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from ..exceptions import CallableRuntimeError
 from ..models import (
-    ErrorObject,
     Operation,
     OperationIdentifier,
-    OperationStatus,
-    OperationType,
 )
 from ..serdes import SerDes, deserialize, serialize
 
 
 if TYPE_CHECKING:
-    import datetime
     from ..models import OperationUpdate
     from ..state import ExecutionState
     from ..types import LambdaContext
@@ -59,142 +54,6 @@ class OperationContext:
     def is_replaying(self) -> bool:
         """Return whether the active context is replaying prior user code."""
         return False
-
-
-@dataclass(frozen=True)
-class CheckpointedResult:
-    """Result of a checkpointed operation."""
-
-    operation: Operation | None = None
-    status: OperationStatus | None = None
-    result: str | None = None
-    error: ErrorObject | None = None
-
-    @classmethod
-    def create_from_operation(cls, operation: Operation) -> CheckpointedResult:
-        """Create a result from an operation."""
-        result: str | None = None
-        error: ErrorObject | None = None
-        match operation.operation_type:
-            case OperationType.STEP:
-                step_details = operation.step_details
-                result = step_details.result if step_details else None
-                error = step_details.error if step_details else None
-            case OperationType.CALLBACK:
-                callback_details = operation.callback_details
-                result = callback_details.result if callback_details else None
-                error = callback_details.error if callback_details else None
-            case OperationType.CHAINED_INVOKE:
-                invoke_details = operation.chained_invoke_details
-                result = invoke_details.result if invoke_details else None
-                error = invoke_details.error if invoke_details else None
-            case OperationType.CONTEXT:
-                context_details = operation.context_details
-                result = context_details.result if context_details else None
-                error = context_details.error if context_details else None
-
-        return cls(
-            operation=operation,
-            status=operation.status,
-            result=result,
-            error=error,
-        )
-
-    @classmethod
-    def create_not_found(cls) -> CheckpointedResult:
-        """Create a result when the checkpoint was not found."""
-        return cls(operation=None)
-
-    def is_existent(self) -> bool:
-        """Return true if a checkpoint of any type exists."""
-        return self.operation is not None
-
-    def is_succeeded(self) -> bool:
-        """Return True if the checkpointed operation is SUCCEEDED."""
-        op = self.operation
-        if not op:
-            return False
-        return op.status is OperationStatus.SUCCEEDED
-
-    def is_cancelled(self) -> bool:
-        if op := self.operation:
-            return op.status is OperationStatus.CANCELLED
-        return False
-
-    def is_failed(self) -> bool:
-        """Return True if the checkpointed operation is FAILED."""
-        op = self.operation
-        if not op:
-            return False
-        return op.status is OperationStatus.FAILED
-
-    def is_stopped(self) -> bool:
-        """Return True if the checkpointed operation is STOPPED."""
-        op = self.operation
-        if not op:
-            return False
-        return op.status is OperationStatus.STOPPED
-
-    def is_started(self) -> bool:
-        """Return True if the checkpointed operation is STARTED."""
-        op = self.operation
-        if not op:
-            return False
-        return op.status is OperationStatus.STARTED
-
-    def is_started_or_ready(self) -> bool:
-        """Return True if the checkpointed operation is STARTED or READY."""
-        op = self.operation
-        if not op:
-            return False
-        return op.status in {OperationStatus.STARTED, OperationStatus.READY}
-
-    def is_pending(self) -> bool:
-        """Return True if the checkpointed operation is PENDING."""
-        op = self.operation
-        if not op:
-            return False
-        return op.status is OperationStatus.PENDING
-
-    def is_ready(self) -> bool:
-        """Return True if the checkpointed operation is READY."""
-        op = self.operation
-        if not op:
-            return False
-        return op.status is OperationStatus.READY
-
-    def is_timed_out(self) -> bool:
-        """Return True if the checkpointed operation is TIMED_OUT."""
-        op = self.operation
-        if not op:
-            return False
-        return op.status is OperationStatus.TIMED_OUT
-
-    def is_replay_children(self) -> bool:
-        op = self.operation
-        if not op:
-            return False
-        return op.context_details.replay_children if op.context_details else False
-
-    def raise_callable_error(self, msg: str | None = None) -> None:
-        if self.error is None:
-            err_msg = (
-                msg
-                or "Unknown error. No ErrorObject exists on the Checkpoint Operation."
-            )
-            raise CallableRuntimeError(
-                message=err_msg,
-                error_type=None,
-                data=None,
-                stack_trace=None,
-            )
-
-        raise self.error.to_callable_runtime_error()
-
-    def get_next_attempt_timestamp(self) -> datetime.datetime | None:
-        if self.operation and self.operation.step_details:
-            return self.operation.step_details.next_attempt_timestamp
-        return None
 
 
 class OperationExecutor(ABC, Generic[T]):

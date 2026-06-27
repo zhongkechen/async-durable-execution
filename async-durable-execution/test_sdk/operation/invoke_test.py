@@ -29,7 +29,6 @@ from async_durable_execution.primitive.invoke import (
     invoke,
 )
 from async_durable_execution.state import ExecutionState
-from async_durable_execution.primitive.base import CheckpointedResult
 
 from ..serdes_test import CustomDictSerDes
 

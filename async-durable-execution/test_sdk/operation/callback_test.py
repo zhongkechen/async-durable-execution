@@ -41,7 +41,6 @@ from async_durable_execution.models import RetryDecision
 from async_durable_execution.serdes import SerDes
 from async_durable_execution.state import ExecutionState
 from async_durable_execution import WaitForCallbackContext, StepContext
-from async_durable_execution.primitive.base import CheckpointedResult
 
 
 async def create_callback_handler(
@@ -395,7 +394,7 @@ async def test_wait_for_callback_handler_submitter_reads_callback_id_from_contex
 
 
 async def test_create_callback_handler_with_none_operation_in_result():
-    """Test create_callback_handler when CheckpointedResult has None operation."""
+    """Test create_callback_handler when callback details are missing."""
     mock_state = Mock(spec=ExecutionState)
     operation = Operation(
         operation_id="none_operation",
