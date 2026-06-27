@@ -14,6 +14,10 @@ PACKAGE_PREFIX = "async_durable_execution_examples"
 DEFAULT_AWS_REGION = "eu-south-1"
 DEFAULT_LAMBDA_ENDPOINT = f"https://lambda.{DEFAULT_AWS_REGION}.amazonaws.com"
 DEFAULT_RUNTIME = "python3.13"
+SDK_LAYER_LOGICAL_ID = "AsyncDurableExecutionSdkLayer"
+SDK_LAYER_CONTENT_URI = (
+    "../async-durable-execution-lambda-layer/dist/async-durable-execution-layer.zip"
+)
 DEFAULT_DURABLE_CONFIG = {
     "RetentionPeriodInDays": 7,
     "ExecutionTimeout": 300,
@@ -27,11 +31,6 @@ SPECIAL_LOGGING_CONFIG = {
         "ApplicationLogLevel": "INFO",
         "LogFormat": "JSON",
     },
-}
-EXAMPLE_DEPENDENCIES = {
-    "async_durable_execution_examples.invoke.invoke.handler": [
-        "async_durable_execution_examples.invoke.price_order_child.handler"
-    ],
 }
 
 
@@ -140,23 +139,19 @@ def load_catalog() -> dict[str, Any]:
 def build_template(
     examples: list[dict[str, Any]],
     *,
-    include_function_name_parameter: bool,
     runtime: str = DEFAULT_RUNTIME,
 ) -> dict[str, Any]:
-    """Build a SAM template for one or more examples."""
+    """Build a SAM template for all examples."""
     parameters: dict[str, Any] = {
         "LambdaEndpoint": {
             "Type": "String",
             "Default": DEFAULT_LAMBDA_ENDPOINT,
-        }
-    }
-    if include_function_name_parameter:
-        parameters["FunctionName"] = {"Type": "String"}
-    else:
-        parameters["FunctionNamePrefix"] = {
+        },
+        "FunctionNamePrefix": {
             "Type": "String",
             "Default": "",
-        }
+        },
+    }
 
     template: dict[str, Any] = {
         "AWSTemplateFormatVersion": "2010-09-09",
@@ -173,6 +168,16 @@ def build_template(
         },
         "Parameters": parameters,
         "Resources": {
+            SDK_LAYER_LOGICAL_ID: {
+                "Type": "AWS::Serverless::LayerVersion",
+                "Properties": {
+                    "LayerName": {"Fn::Sub": "${FunctionNamePrefix}sdk"},
+                    "Description": "async-durable-execution SDK for e2e functions",
+                    "ContentUri": SDK_LAYER_CONTENT_URI,
+                    "CompatibleRuntimes": [runtime],
+                    "CompatibleArchitectures": ["x86_64"],
+                },
+            },
             "DurableFunctionRole": {
                 "Type": "AWS::IAM::Role",
                 "Properties": {
@@ -221,14 +226,12 @@ def build_template(
             "Handler": example["handler"],
             "Description": example["description"],
             "Role": {"Fn::GetAtt": ["DurableFunctionRole", "Arn"]},
+            "Layers": [{"Ref": SDK_LAYER_LOGICAL_ID}],
+            "FunctionName": {
+                "Fn::Sub": f"${{FunctionNamePrefix}}{function_name_suffix}"
+            },
         }
 
-        if include_function_name_parameter:
-            properties["FunctionName"] = {"Ref": "FunctionName"}
-        else:
-            properties["FunctionName"] = {
-                "Fn::Sub": f"${{FunctionNamePrefix}}{function_name_suffix}"
-            }
         if "durableConfig" in example:
             properties["DurableConfig"] = example["durableConfig"]
 
@@ -262,32 +265,15 @@ def validate_catalog_test_coverage(catalog: dict[str, Any]) -> None:
 
 def generate_sam_template(
     *,
-    example_name: str | None = None,
     output_path: Path | None = None,
     runtime: str = DEFAULT_RUNTIME,
 ) -> Path:
-    """Generate a SAM template for either the full catalog or one example."""
+    """Generate a SAM template for the full examples stack."""
     catalog = load_catalog()
     validate_catalog_test_coverage(catalog)
-    selected_examples = catalog["examples"]
-
-    if example_name is not None:
-        selected_examples = [
-            example
-            for example in catalog["examples"]
-            if example["name"].lower() == example_name.lower()
-        ]
-        if not selected_examples:
-            msg = f"Example not found in catalog: {example_name}"
-            raise SystemExit(msg)
-        selected_examples = [selected_examples[0]]
-
-    selected_examples = include_example_dependencies(selected_examples, catalog)
 
     template = build_template(
-        selected_examples,
-        include_function_name_parameter=example_name is not None
-        and len(selected_examples) == 1,
+        catalog["examples"],
         runtime=runtime,
     )
 
@@ -302,33 +288,8 @@ def generate_sam_template(
     return template_path
 
 
-def include_example_dependencies(
-    selected_examples: list[dict[str, Any]],
-    catalog: dict[str, Any],
-) -> list[dict[str, Any]]:
-    """Include extra functions needed by selected examples in cloud tests."""
-    examples_by_handler = {
-        example["handler"]: example for example in catalog["examples"]
-    }
-    selected_by_handler = {example["handler"]: example for example in selected_examples}
-
-    for example in selected_examples:
-        for dependency_handler in EXAMPLE_DEPENDENCIES.get(example["handler"], []):
-            dependency = examples_by_handler.get(dependency_handler)
-            if dependency is None:
-                msg = f"Example dependency missing from catalog: {dependency_handler}"
-                raise SystemExit(msg)
-            selected_by_handler[dependency_handler] = dependency
-
-    return list(selected_by_handler.values())
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate a SAM template for examples")
-    parser.add_argument(
-        "--example-name",
-        help="Generate a template for a single catalog example",
-    )
     parser.add_argument(
         "--output",
         type=Path,
@@ -342,7 +303,6 @@ def main() -> int:
     args = parser.parse_args()
 
     template_path = generate_sam_template(
-        example_name=args.example_name,
         output_path=args.output,
         runtime=args.runtime,
     )

@@ -52,6 +52,9 @@ jobs:
     - name: Setup SAM CLI
       uses: aws-actions/setup-sam@v3
 
+    - name: Build SDK Lambda layer
+      run: hatch run examples:build-layer
+
     - name: Build examples
       run: hatch run examples:build
 
