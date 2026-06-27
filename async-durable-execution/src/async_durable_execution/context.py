@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 if TYPE_CHECKING:
     from .primitive.base import OperationContext
+    from .serdes import SerDesContext
 
 T = TypeVar("T")
 
@@ -45,7 +46,7 @@ def get_current_context():
 
 
 async def invoke_user_callable(
-    context: OperationContext,
+    context: OperationContext | SerDesContext,
     func: Callable[..., Awaitable[T]],
     *args,
     **kwargs,
