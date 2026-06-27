@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from ..exceptions import ValidationError, suspend_with_optional_resume_delay
-from ..config import duration_to_seconds
+from ..config import Duration, duration_to_seconds
 from .child import get_durable_context
 from ..models import (
     Operation,
@@ -85,11 +84,11 @@ class WaitOperationExecutor(OperationExecutor[None]):
         suspend_with_optional_resume_delay(msg, self.seconds)  # throws suspend
 
 
-async def wait(duration: timedelta, *, name: str | None = None) -> None:
+async def wait(duration: Duration, *, name: str | None = None) -> None:
     """Suspend the durable execution for at least the given duration.
 
     Args:
-        duration: How long the workflow should pause. Must be at least one second.
+        duration: Seconds or timedelta to pause. Must be at least one second.
         name: Optional operation name shown in execution history.
     """
     context = get_durable_context("wait")

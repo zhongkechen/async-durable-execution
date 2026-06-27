@@ -10,7 +10,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
 from ..primitive.step import StepContext
-from ..config import JitterStrategy, duration_to_seconds
+from ..config import Duration, JitterStrategy, duration_to_seconds
 from ..context import (
     reset_current_context,
     set_current_context,
@@ -45,32 +45,11 @@ T = TypeVar("T")
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class WaitDecision:
-    """Decision about whether to wait and with what delay."""
-
-    should_wait: bool
-    delay: timedelta
-
-    def __post_init__(self):
-        if self.delay.total_seconds() < 0:
-            msg = "delay must be non-negative"
-            raise ValueError(msg)
-
-    @property
-    def delay_seconds(self) -> int:
-        """Get delay in seconds."""
-        return int(self.delay.total_seconds())
-
-    @classmethod
-    def wait(cls, delay: timedelta) -> WaitDecision:
-        """Create a wait decision."""
-        return cls(should_wait=True, delay=delay)
-
-    @classmethod
-    def no_wait(cls) -> WaitDecision:
-        """Create a no-wait decision."""
-        return cls(should_wait=False, delay=timedelta())
+def _decision_delay_to_seconds(delay: Duration) -> int:
+    try:
+        return duration_to_seconds(delay, "delay")
+    except ValidationError as error:
+        raise ValueError(str(error)) from error
 
 
 @dataclass(frozen=True)
@@ -78,22 +57,20 @@ class WaitForConditionDecision:
     """Decision about whether to continue waiting."""
 
     should_continue: bool
-    delay: timedelta
+    delay: Duration
 
     def __post_init__(self):
-        if self.delay.total_seconds() < 0:
-            msg = "delay must be non-negative"
-            raise ValueError(msg)
+        object.__setattr__(self, "delay", _decision_delay_to_seconds(self.delay))
 
     @property
     def delay_seconds(self) -> int:
         """Get delay in seconds."""
-        return int(self.delay.total_seconds())
+        return _decision_delay_to_seconds(self.delay)
 
     @classmethod
     def continue_waiting(
         cls,
-        delay: timedelta = timedelta(),
+        delay: Duration = 0,
     ) -> WaitForConditionDecision:
         """Create a decision to continue waiting."""
         return cls(should_continue=True, delay=delay)
@@ -101,11 +78,11 @@ class WaitForConditionDecision:
     @classmethod
     def stop_polling(cls) -> WaitForConditionDecision:
         """Create a decision to stop polling."""
-        return cls(should_continue=False, delay=timedelta())
+        return cls(should_continue=False, delay=0)
 
 
 ConditionResult = tuple[T, WaitForConditionDecision]
-WaitDelayStrategy = Callable[[T, int], WaitDecision | timedelta]
+WaitDelayStrategy = Callable[[T, int], Duration]
 
 
 @dataclass
@@ -114,17 +91,17 @@ class WaitStrategyBuilder(Generic[T]):
 
     should_continue_polling: Callable[[T], bool] | None = None
     max_attempts: int = 60
-    initial_delay: timedelta = field(default_factory=lambda: timedelta(seconds=5))
-    max_delay: timedelta = field(default_factory=lambda: timedelta(minutes=5))
+    initial_delay: Duration = 5
+    max_delay: Duration = 300
     backoff_rate: int | float = 1.5
     jitter_strategy: JitterStrategy = field(default=JitterStrategy.FULL)
-    timeout: timedelta | None = None
+    timeout: Duration | None = None
 
     def __post_init__(self):
-        duration_to_seconds(self.initial_delay, "initial_delay")
-        duration_to_seconds(self.max_delay, "max_delay")
+        self.initial_delay = duration_to_seconds(self.initial_delay, "initial_delay")
+        self.max_delay = duration_to_seconds(self.max_delay, "max_delay")
         if self.timeout is not None:
-            duration_to_seconds(self.timeout, "timeout")
+            self.timeout = duration_to_seconds(self.timeout, "timeout")
 
     @property
     def initial_delay_seconds(self) -> int:
@@ -143,21 +120,21 @@ class WaitStrategyBuilder(Generic[T]):
             return None
         return duration_to_seconds(self.timeout, "timeout")
 
-    def build(self) -> Callable[[T, int], WaitDecision]:
+    def build(self) -> Callable[[T, int], int]:
         """Build a wait strategy callable from this builder."""
 
-        def wait_strategy(result: T, attempts_made: int) -> WaitDecision:
+        def wait_strategy(result: T, attempts_made: int) -> int:
             if (
                 self.should_continue_polling is not None
                 and not self.should_continue_polling(result)
             ):
-                return WaitDecision.no_wait()
+                return 0
 
             if (
                 self.should_continue_polling is not None
                 and attempts_made >= self.max_attempts
             ):
-                return WaitDecision.no_wait()
+                return 0
 
             base_delay: float = min(
                 self.initial_delay_seconds * (self.backoff_rate ** (attempts_made - 1)),
@@ -166,7 +143,7 @@ class WaitStrategyBuilder(Generic[T]):
             delay_with_jitter: float = self.jitter_strategy.apply_jitter(base_delay)
             final_delay: int = max(1, math.ceil(delay_with_jitter))
 
-            return WaitDecision.wait(timedelta(seconds=final_delay))
+            return final_delay
 
         return wait_strategy
 
@@ -373,7 +350,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             if delay_seconds < 1:
                 logger.warning(
                     (
-                        "WaitDecision delay_seconds step for id: %s, name: %s,"
+                        "wait_for_condition delay_seconds step for id: %s, name: %s,"
                         "is %d < 1. Setting to minimum of 1 seconds."
                     ),
                     self.operation_identifier.operation_id,
@@ -438,21 +415,12 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
 
     def _resolve_delay_seconds(self, new_state: T, attempt: int) -> int:
         wait_strategy = self.wait_strategy or self.default_wait_strategy
-        wait_decision = wait_strategy(new_state, attempt)
+        wait_delay = wait_strategy(new_state, attempt)
 
-        return self._wait_decision_to_seconds(wait_decision)
+        if isinstance(wait_delay, int | timedelta):
+            return duration_to_seconds(wait_delay, "wait_strategy delay")
 
-    def _wait_decision_to_seconds(
-        self,
-        wait_decision: WaitDecision | timedelta,
-    ) -> int:
-        if isinstance(wait_decision, WaitDecision):
-            return wait_decision.delay_seconds
-
-        if isinstance(wait_decision, timedelta):
-            return int(wait_decision.total_seconds())
-
-        msg = "wait_for_condition wait_strategy must return timedelta or WaitDecision"
+        msg = "wait_for_condition wait_strategy must return int seconds or timedelta"
         raise ValidationError(msg)
 
 

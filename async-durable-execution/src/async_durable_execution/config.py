@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeAlias
 
 from .exceptions import ValidationError
 from .models import RetryDecision
@@ -16,14 +16,22 @@ from .models import RetryDecision
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+Duration: TypeAlias = int | timedelta
 
-def duration_to_seconds(duration: timedelta, field_name: str = "duration") -> int:
-    """Convert a timedelta to whole seconds after validating it is non-negative."""
-    total_seconds = duration.total_seconds()
-    if total_seconds < 0:
+
+def duration_to_seconds(duration: Duration, field_name: str = "duration") -> int:
+    """Convert a seconds integer or timedelta to whole seconds."""
+    if isinstance(duration, bool) or not isinstance(duration, int | timedelta):
+        msg = f"{field_name} must be an int number of seconds or a timedelta"
+        raise ValidationError(msg)
+
+    seconds = (
+        int(duration.total_seconds()) if isinstance(duration, timedelta) else duration
+    )
+    if seconds < 0:
         msg = f"{field_name} must be non-negative"
         raise ValidationError(msg)
-    return int(total_seconds)
+    return seconds
 
 
 class JitterStrategy(str, Enum):
@@ -71,18 +79,16 @@ class RetryStrategyBuilder:
     """Build exponential-backoff retry strategies for durable operations."""
 
     max_attempts: int = 3
-    initial_delay: timedelta = field(default_factory=lambda: timedelta(seconds=5))
-    max_delay: timedelta = field(
-        default_factory=lambda: timedelta(minutes=5)
-    )  # 5 minutes
+    initial_delay: Duration = 5
+    max_delay: Duration = 300
     backoff_rate: int | float = 2.0
     jitter_strategy: JitterStrategy = field(default=JitterStrategy.FULL)
     retryable_errors: list[str | re.Pattern] | None = None
     retryable_error_types: list[type[Exception]] | None = None
 
     def __post_init__(self):
-        duration_to_seconds(self.initial_delay, "initial_delay")
-        duration_to_seconds(self.max_delay, "max_delay")
+        self.initial_delay = duration_to_seconds(self.initial_delay, "initial_delay")
+        self.max_delay = duration_to_seconds(self.max_delay, "max_delay")
 
     @property
     def initial_delay_seconds(self) -> int:
@@ -134,7 +140,7 @@ class RetryStrategyBuilder:
             delay_with_jitter: float = self.jitter_strategy.apply_jitter(base_delay)
             final_delay: int = max(1, math.ceil(delay_with_jitter))
 
-            return RetryDecision.retry(timedelta(seconds=final_delay))
+            return RetryDecision.retry(final_delay)
 
         return retry_strategy
 
@@ -152,8 +158,8 @@ class RetryPresets:
         """Default retries, will be used automatically if retryConfig is missing."""
         return RetryStrategyBuilder(
             max_attempts=6,
-            initial_delay=timedelta(seconds=5),
-            max_delay=timedelta(minutes=1),
+            initial_delay=5,
+            max_delay=60,
             backoff_rate=2,
             jitter_strategy=JitterStrategy.FULL,
         ).build()
@@ -170,8 +176,8 @@ class RetryPresets:
         """Longer retries for resource availability."""
         return RetryStrategyBuilder(
             max_attempts=5,
-            initial_delay=timedelta(seconds=5),
-            max_delay=timedelta(minutes=5),
+            initial_delay=5,
+            max_delay=300,
             backoff_rate=2,
         ).build()
 
@@ -180,8 +186,8 @@ class RetryPresets:
         """Aggressive retries for critical operations."""
         return RetryStrategyBuilder(
             max_attempts=10,
-            initial_delay=timedelta(seconds=1),
-            max_delay=timedelta(minutes=1),
+            initial_delay=1,
+            max_delay=60,
             backoff_rate=1.5,
             jitter_strategy=JitterStrategy.NONE,
         ).build()

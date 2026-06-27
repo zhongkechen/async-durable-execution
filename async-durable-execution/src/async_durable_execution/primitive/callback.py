@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from .child import get_durable_context
-from ..config import duration_to_seconds
+from ..config import Duration, duration_to_seconds
 from ..exceptions import ExecutionError, SuspendExecution, TerminationReason
 from ..models import (
     CallbackOptions,
@@ -47,8 +46,8 @@ class CallbackOperationExecutor(OperationExecutor[str]):
         self,
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
-        timeout: timedelta | None = None,
-        heartbeat_timeout: timedelta | None = None,
+        timeout: Duration | None = None,
+        heartbeat_timeout: Duration | None = None,
     ):
         """Initialize the callback operation executor.
 
@@ -59,25 +58,20 @@ class CallbackOperationExecutor(OperationExecutor[str]):
             heartbeat_timeout: Optional maximum time to wait between callback heartbeats.
         """
         super().__init__(state=state, operation_identifier=operation_identifier)
-        self.timeout = timeout
-        self.heartbeat_timeout = heartbeat_timeout
-
-        if timeout is not None:
-            duration_to_seconds(timeout, "timeout")
-        if heartbeat_timeout is not None:
+        self.timeout_seconds = (
+            duration_to_seconds(timeout, "timeout") if timeout is not None else 0
+        )
+        self.heartbeat_timeout_seconds = (
             duration_to_seconds(heartbeat_timeout, "heartbeat_timeout")
+            if heartbeat_timeout is not None
+            else 0
+        )
 
     async def start(self) -> str:
         """Start a new callback operation."""
         callback_options = CallbackOptions(
-            timeout_seconds=duration_to_seconds(self.timeout, "timeout")
-            if self.timeout is not None
-            else 0,
-            heartbeat_timeout_seconds=duration_to_seconds(
-                self.heartbeat_timeout, "heartbeat_timeout"
-            )
-            if self.heartbeat_timeout is not None
-            else 0,
+            timeout_seconds=self.timeout_seconds,
+            heartbeat_timeout_seconds=self.heartbeat_timeout_seconds,
         )
 
         create_callback_operation: OperationUpdate = OperationUpdate.create_callback(
@@ -128,8 +122,8 @@ class CallbackOperationExecutor(OperationExecutor[str]):
 async def create_callback(
     *,
     name: str | None = None,
-    timeout: timedelta | None = None,
-    heartbeat_timeout: timedelta | None = None,
+    timeout: Duration | None = None,
+    heartbeat_timeout: Duration | None = None,
     serdes: SerDes | None = None,
 ) -> Callback:
     """Create a durable callback handle that external systems can complete later.

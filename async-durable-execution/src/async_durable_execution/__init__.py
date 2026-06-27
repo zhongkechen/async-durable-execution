@@ -27,7 +27,6 @@ from .composite.concurrency import (
     NestingType,
 )
 from .composite.wait_for_condition import (
-    WaitDecision,
     WaitStrategyBuilder,
     WaitForConditionDecision,
     wait_for_condition,
@@ -156,7 +155,6 @@ __all__ = [
     "UserlandError",
     "ValidationError",
     "WaitForCallbackContext",
-    "WaitDecision",
     "WaitForConditionCheckContext",
     "WaitForConditionDecision",
     "WaitStrategyBuilder",

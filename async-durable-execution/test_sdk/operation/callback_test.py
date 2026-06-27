@@ -157,6 +157,46 @@ async def test_create_callback_handler_new_operation_with_config():
     mock_state.operations.get.assert_called_once_with("callback1")
 
 
+async def test_create_callback_handler_accepts_int_seconds_config():
+    """Test create_callback_handler timeout fields accept integer seconds."""
+    mock_state = Mock(spec=ExecutionState)
+
+    callback_details = CallbackDetails(callback_id="cb123")
+    operation = Operation(
+        operation_id="callback1",
+        operation_type=OperationType.CALLBACK,
+        status=OperationStatus.STARTED,
+        callback_details=callback_details,
+    )
+    mock_new_callback_checkpoint(mock_state, operation)
+
+    result = await create_callback_handler(
+        state=mock_state,
+        operation_identifier=OperationIdentifier(
+            "callback1", OperationSubType.CALLBACK, None, "test_callback"
+        ),
+        timeout=300,
+        heartbeat_timeout=60,
+    )
+
+    assert result == "cb123"
+    expected_operation = OperationUpdate(
+        operation_id="callback1",
+        parent_id=None,
+        operation_type=OperationType.CALLBACK,
+        sub_type=OperationSubType.CALLBACK,
+        action=OperationAction.START,
+        name="test_callback",
+        callback_options=CallbackOptions(
+            timeout_seconds=300, heartbeat_timeout_seconds=60
+        ),
+    )
+    mock_state.create_checkpoint.assert_called_once_with(
+        operation_update=expected_operation
+    )
+    mock_state.operations.get.assert_called_once_with("callback1")
+
+
 async def test_create_callback_handler_new_operation_without_config():
     """Test create_callback_handler creates new checkpoint without config."""
     mock_state = Mock(spec=ExecutionState)
@@ -763,6 +803,30 @@ async def test_wait_for_callback_handler_config_propagation():
         name="config_test-callback",
         timeout=timeout,
         heartbeat_timeout=heartbeat_timeout,
+        serdes=None,
+    )
+
+
+async def test_wait_for_callback_handler_accepts_int_seconds_config():
+    """Test wait_for_callback_handler timeout fields accept integer seconds."""
+    mock_callback = Mock()
+    mock_callback.callback_id = "callback_config_prop"
+    mock_callback.result = AsyncMock(return_value="config_result")
+    mock_submitter = AsyncMock(return_value=None)
+
+    with patch_wait_for_callback_ops(mock_callback) as (create_callback_mock, _):
+        result = await run_wait_for_callback_handler(
+            mock_submitter,
+            "config_test",
+            timeout=120,
+            heartbeat_timeout=30,
+        )
+
+    assert result == "config_result"
+    create_callback_mock.assert_called_once_with(
+        name="config_test-callback",
+        timeout=120,
+        heartbeat_timeout=30,
         serdes=None,
     )
 

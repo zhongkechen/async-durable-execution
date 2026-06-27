@@ -211,7 +211,7 @@ async def test_module_level_context_functions_delegate_to_durable_context():
     async def check(state: str) -> str:
         return state
 
-    wait_strategy = lambda state, attempt: WaitForConditionDecision.stop_polling()
+    wait_strategy = lambda state, attempt: 0
 
     mock_wait = AsyncMock(return_value=None)
     mock_child = AsyncMock(return_value="child-result")
@@ -739,6 +739,43 @@ async def test_create_callback_with_name_and_config(mock_executor_class):
 
 
 @patch("async_durable_execution.primitive.callback.CallbackOperationExecutor")
+async def test_create_callback_accepts_int_seconds(mock_executor_class):
+    """Test create_callback timeout fields accept integer seconds."""
+    mock_executor = make_async_executor("callback456")
+    mock_executor_class.return_value = mock_executor
+
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = (
+        "arn:aws:durable:us-east-1:123456789012:execution/test"
+    )
+
+    context = create_test_context(state=mock_state)
+    operation_ids = operation_id_sequence()
+    expected_operation_id = next(operation_ids)
+
+    callback = await run_with_context(
+        context,
+        create_callback(
+            timeout=30,
+            heartbeat_timeout=10,
+        ),
+    )
+
+    assert callback.callback_id == "callback456"
+    assert callback.operation_id == expected_operation_id
+
+    mock_executor_class.assert_called_once_with(
+        state=mock_state,
+        operation_identifier=OperationIdentifier(
+            expected_operation_id, OperationSubType.CALLBACK, None, None
+        ),
+        timeout=30,
+        heartbeat_timeout=10,
+    )
+    mock_executor.process.assert_called_once()
+
+
+@patch("async_durable_execution.primitive.callback.CallbackOperationExecutor")
 async def test_create_callback_with_parent_id(mock_executor_class):
     """Test create_callback with parent_id."""
 
@@ -1233,6 +1270,33 @@ async def test_wait_basic(mock_executor_class):
     expected_operation_id = next(operation_ids)
 
     await run_with_context(context, wait(timedelta(seconds=30)))
+
+    mock_executor_class.assert_called_once_with(
+        state=mock_state,
+        operation_identifier=OperationIdentifier(
+            expected_operation_id, OperationSubType.WAIT, None, None
+        ),
+        seconds=30,
+    )
+    mock_executor.process.assert_called_once()
+
+
+@patch("async_durable_execution.primitive.wait.WaitOperationExecutor")
+async def test_wait_accepts_int_seconds(mock_executor_class):
+    """Test wait accepts integer seconds."""
+    mock_executor = make_async_executor(None)
+    mock_executor_class.return_value = mock_executor
+
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = (
+        "arn:aws:durable:us-east-1:123456789012:execution/test"
+    )
+
+    context = create_test_context(state=mock_state)
+    operation_ids = operation_id_sequence()
+    expected_operation_id = next(operation_ids)
+
+    await run_with_context(context, wait(30))
 
     mock_executor_class.assert_called_once_with(
         state=mock_state,
@@ -2159,8 +2223,8 @@ async def test_context_wait_for_condition_handler_call():
         execution_calls.append("check_called")
         return state
 
-    async def test_wait_strategy(state, attempt):
-        return WaitForConditionDecision.stop_polling()
+    def test_wait_strategy(state, attempt):
+        return 0
 
     # Create mock state and context
     state = Mock()

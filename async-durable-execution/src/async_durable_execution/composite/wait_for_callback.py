@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
+from ..config import Duration
 from ..context import get_current_context
 from ..context import invoke_user_callable
 from ..execution import durable_callable
@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 async def wait_for_callback_handler(
     submitter: Callable[[], Awaitable[Any]],
     name: str | None = None,
-    timeout: timedelta | None = None,
-    heartbeat_timeout: timedelta | None = None,
+    timeout: Duration | None = None,
+    heartbeat_timeout: Duration | None = None,
     serdes: SerDes | None = None,
     retry_strategy: Callable[[Exception, int], RetryDecision] | None = None,
 ) -> Any:
@@ -66,8 +66,8 @@ async def wait_for_callback(
     submitter: Callable[[], Awaitable[Any]],
     *,
     name: str | None = None,
-    timeout: timedelta | None = None,
-    heartbeat_timeout: timedelta | None = None,
+    timeout: Duration | None = None,
+    heartbeat_timeout: Duration | None = None,
     serdes: SerDes | None = None,
     retry_strategy: Callable[[Exception, int], RetryDecision] | None = None,
 ) -> Any:

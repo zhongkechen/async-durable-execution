@@ -618,6 +618,33 @@ async def test_wait_for_condition_custom_delay_seconds():
         )
 
 
+async def test_wait_for_condition_custom_delay_accepts_int_seconds():
+    """Test wait_for_condition custom strategy can return integer seconds."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "arn:aws:test"
+    mock_state.operations.get.return_value = None
+
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+
+    def check_func(state):
+        return state + 1, WaitForConditionDecision.continue_waiting()
+
+    mock_state.wrap_user_function.return_value = check_func
+
+    def wait_strategy(state, attempt):
+        return 60
+
+    with pytest.raises(SuspendExecution, match="will retry in 60 seconds"):
+        await wait_for_condition_handler(
+            state=mock_state,
+            operation_identifier=op_id,
+            check=check_func,
+            wait_strategy=wait_strategy,
+        )
+
+
 async def test_wait_for_condition_attempt_number_passed_to_strategy():
     """Test that attempt number is correctly passed to wait strategy."""
     mock_state = Mock(spec=ExecutionState)
@@ -1357,11 +1384,30 @@ def test_wait_strategy_builder_defaults():
     config = WaitStrategyBuilder(should_continue_polling=lambda x: True)
 
     assert config.max_attempts == 60
+    assert config.initial_delay == 5
+    assert config.max_delay == 300
     assert config.initial_delay_seconds == 5
     assert config.max_delay_seconds == 300
     assert config.backoff_rate == 1.5
     assert config.jitter_strategy == JitterStrategy.FULL
     assert config.timeout_seconds is None
+
+
+def test_wait_strategy_builder_accepts_int_seconds():
+    """WaitStrategyBuilder duration fields accept integer seconds."""
+    config = WaitStrategyBuilder(
+        should_continue_polling=lambda x: True,
+        initial_delay=2,
+        max_delay=50,
+        timeout=120,
+    )
+
+    assert config.initial_delay == 2
+    assert config.max_delay == 50
+    assert config.timeout == 120
+    assert config.initial_delay_seconds == 2
+    assert config.max_delay_seconds == 50
+    assert config.timeout_seconds == 120
 
 
 def test_wait_strategy_builder_importable_from_package_root():
@@ -1376,8 +1422,8 @@ def test_condition_met_returns_no_wait():
     config = WaitStrategyBuilder(should_continue_polling=lambda x: False)
     strategy = config.build()
 
-    decision = strategy("completed", 1)
-    assert decision.should_wait is False
+    delay = strategy("completed", 1)
+    assert delay == 0
 
 
 def test_max_attempts_exceeded():
@@ -1385,8 +1431,8 @@ def test_max_attempts_exceeded():
     config = WaitStrategyBuilder(should_continue_polling=lambda x: True, max_attempts=5)
     strategy = config.build()
 
-    decision = strategy("pending", 5)
-    assert decision.should_wait is False
+    delay = strategy("pending", 5)
+    assert delay == 0
 
 
 def test_should_continue_polling():
@@ -1394,8 +1440,8 @@ def test_should_continue_polling():
     config = WaitStrategyBuilder(should_continue_polling=lambda x: x == "pending")
     strategy = config.build()
 
-    decision = strategy("pending", 1)
-    assert decision.should_wait is True
+    delay = strategy("pending", 1)
+    assert delay > 0
 
 
 @patch("random.random")
@@ -1410,8 +1456,8 @@ def test_exponential_backoff_calculation(mock_random):
     )
     strategy = config.build()
 
-    assert strategy("pending", 1).delay_seconds == 1
-    assert strategy("pending", 2).delay_seconds == 2
+    assert strategy("pending", 1) == 1
+    assert strategy("pending", 2) == 2
 
 
 def test_max_delay_cap():
@@ -1425,7 +1471,7 @@ def test_max_delay_cap():
     )
     strategy = config.build()
 
-    assert strategy("pending", 2).delay_seconds == 50
+    assert strategy("pending", 2) == 50
 
 
 def test_minimum_delay_one_second():
@@ -1437,7 +1483,7 @@ def test_minimum_delay_one_second():
     )
     strategy = config.build()
 
-    assert strategy("pending", 1).delay_seconds == 1
+    assert strategy("pending", 1) == 1
 
 
 @patch("random.random")
@@ -1450,7 +1496,7 @@ def test_full_jitter_integration(mock_random):
         jitter_strategy=JitterStrategy.FULL,
     )
 
-    assert config.build()("pending", 1).delay_seconds == 8
+    assert config.build()("pending", 1) == 8
 
 
 @patch("random.random")
@@ -1463,7 +1509,7 @@ def test_half_jitter_integration(mock_random):
         jitter_strategy=JitterStrategy.HALF,
     )
 
-    assert config.build()("pending", 1).delay_seconds == 5
+    assert config.build()("pending", 1) == 5
 
 
 def test_none_jitter_integration():
@@ -1474,7 +1520,7 @@ def test_none_jitter_integration():
         jitter_strategy=JitterStrategy.NONE,
     )
 
-    assert config.build()("pending", 1).delay_seconds == 10
+    assert config.build()("pending", 1) == 10
 
 
 def test_stateful_condition_check():
@@ -1490,8 +1536,8 @@ def test_stateful_condition_check():
     )
     strategy = config.build()
 
-    assert strategy(State(1), 1).should_wait is True
-    assert strategy(State(3), 1).should_wait is False
+    assert strategy(State(1), 1) > 0
+    assert strategy(State(3), 1) == 0
 
 
 def test_complex_condition_logic():
@@ -1502,9 +1548,9 @@ def test_complex_condition_logic():
 
     strategy = WaitStrategyBuilder(should_continue_polling=complex_condition).build()
 
-    assert strategy({"status": "pending", "retries": 2}, 1).should_wait is True
-    assert strategy({"status": "completed", "retries": 2}, 1).should_wait is False
-    assert strategy({"status": "pending", "retries": 5}, 1).should_wait is False
+    assert strategy({"status": "pending", "retries": 2}, 1) > 0
+    assert strategy({"status": "completed", "retries": 2}, 1) == 0
+    assert strategy({"status": "pending", "retries": 5}, 1) == 0
 
 
 def test_zero_backoff_rate():
@@ -1516,7 +1562,7 @@ def test_zero_backoff_rate():
         jitter_strategy=JitterStrategy.NONE,
     )
 
-    assert config.build()("pending", 1).delay_seconds == 5
+    assert config.build()("pending", 1) == 5
 
 
 def test_fractional_backoff_rate():
@@ -1528,7 +1574,7 @@ def test_fractional_backoff_rate():
         jitter_strategy=JitterStrategy.NONE,
     )
 
-    assert config.build()("pending", 2).delay_seconds == 4
+    assert config.build()("pending", 2) == 4
 
 
 def test_large_backoff_rate():
@@ -1541,7 +1587,7 @@ def test_large_backoff_rate():
         jitter_strategy=JitterStrategy.NONE,
     )
 
-    assert config.build()("pending", 3).delay_seconds == 100
+    assert config.build()("pending", 3) == 100
 
 
 def test_attempt_at_boundary():
@@ -1549,8 +1595,8 @@ def test_attempt_at_boundary():
     config = WaitStrategyBuilder(should_continue_polling=lambda x: True, max_attempts=3)
     strategy = config.build()
 
-    assert strategy("pending", 3).should_wait is False
-    assert strategy("pending", 2).should_wait is True
+    assert strategy("pending", 3) == 0
+    assert strategy("pending", 2) > 0
 
 
 def test_negative_delay_clamped_to_one():
@@ -1562,7 +1608,7 @@ def test_negative_delay_clamped_to_one():
         jitter_strategy=JitterStrategy.NONE,
     )
 
-    assert config.build()("pending", 1).delay_seconds == 1
+    assert config.build()("pending", 1) == 1
 
 
 @patch("random.random")
@@ -1575,15 +1621,15 @@ def test_rounding_behavior(mock_random):
         jitter_strategy=JitterStrategy.FULL,
     )
 
-    assert config.build()("pending", 1).delay_seconds == 1
+    assert config.build()("pending", 1) == 1
 
 
 def test_lambda_condition():
     """Lambdas can be used for continue-polling checks."""
     strategy = WaitStrategyBuilder(should_continue_polling=lambda x: x < 10).build()
 
-    assert strategy(5, 1).should_wait is True
-    assert strategy(10, 1).should_wait is False
+    assert strategy(5, 1) > 0
+    assert strategy(10, 1) == 0
 
 
 def test_function_condition():
@@ -1594,8 +1640,8 @@ def test_function_condition():
 
     strategy = WaitStrategyBuilder(should_continue_polling=is_pending).build()
 
-    assert strategy("pending", 1).should_wait is True
-    assert strategy("completed", 1).should_wait is False
+    assert strategy("pending", 1) > 0
+    assert strategy("completed", 1) == 0
 
 
 def test_method_condition():
@@ -1613,5 +1659,5 @@ def test_method_condition():
         should_continue_polling=checker.should_continue
     ).build()
 
-    assert strategy(50, 1).should_wait is True
-    assert strategy(100, 1).should_wait is False
+    assert strategy(50, 1) > 0
+    assert strategy(100, 1) == 0
