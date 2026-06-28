@@ -27,8 +27,8 @@ from ..context import bind_current_context
 from ..execution import durable_callable
 from ..models import OperationIdentifier, OperationSubType
 from ..primitive.child import (
-    ChildOperationExecutor,
     DurableContext,
+    _run_in_child_context,
     get_durable_context,
 )
 
@@ -206,33 +206,39 @@ async def map(
     context = get_durable_context("map")
     items_sequence = list(items)
     map_name = name if name is not None else getattr(func, "__name__", None)
-    with context._replay_aware():
-        operation_id = context.step_counter.create_step_id()
+
+    async def run_map_handler() -> BatchResult[T]:
+        map_context = get_durable_context("map")
+        operation_id = map_context.step_id_prefix
+        if operation_id is None:
+            msg = "map operation id is not available in the current context"
+            raise RuntimeError(msg)
         operation_identifier = OperationIdentifier(
             operation_id=operation_id,
             sub_type=OperationSubType.MAP,
-            parent_id=context.parent_id,
+            parent_id=map_context.parent_id,
             name=map_name,
         )
-        map_context = context.create_child_context(operation_id=operation_id)
 
-        executor = ChildOperationExecutor(
-            map_handler(
-                items=items_sequence,
-                func=func,
-                execution_state=context.execution_state,
-                map_context=map_context,
-                operation_identifier=operation_identifier,
-                max_concurrency=max_concurrency,
-                completion_config=completion_config,
-                serdes=serdes,
-                item_serdes=item_serdes,
-                summary_generator=summary_generator,
-                nesting_type=nesting_type,
-                item_namer=item_namer,
-            ),
-            context.execution_state,
-            operation_identifier,
+        handler = map_handler(
+            items=items_sequence,
+            func=func,
+            execution_state=context.execution_state,
+            map_context=map_context,
+            operation_identifier=operation_identifier,
+            max_concurrency=max_concurrency,
+            completion_config=completion_config,
             serdes=serdes,
+            item_serdes=item_serdes,
+            summary_generator=summary_generator,
+            nesting_type=nesting_type,
+            item_namer=item_namer,
         )
-        return await executor.process()
+        return await handler()
+
+    return await _run_in_child_context(
+        run_map_handler,
+        sub_type=OperationSubType.MAP,
+        name=map_name,
+        serdes=serdes,
+    )

@@ -10,6 +10,7 @@ from typing import cast
 from unittest.mock import Mock
 
 import pytest
+from async_durable_execution.context import bind_current_context
 from async_durable_execution.exceptions import (
     CallableRuntimeError,
     InvocationError,
@@ -28,6 +29,7 @@ from async_durable_execution.primitive.child import (
     ChildOperationExecutor,
     DurableContext,
     OrphanedChildException,
+    _run_in_child_context,
     run_in_child_context,
 )
 from async_durable_execution.state import ExecutionState
@@ -122,6 +124,39 @@ def test_run_in_child_context_name_is_keyword_only():
 
     assert parameters["func"].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
     assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+async def test_internal_run_in_child_context_uses_custom_sub_type():
+    """Internal helper records the caller-supplied operation subtype."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "test_arn"
+    mock_state.operations.get.return_value = None
+    context = create_test_context(state=mock_state, parent_id="parent")
+
+    async def child_func():
+        return "custom_result"
+
+    with bind_current_context(context):
+        result = await _run_in_child_context(
+            child_func,
+            sub_type=OperationSubType.MAP,
+            name="custom-child",
+        )
+
+    assert result == "custom_result"
+    assert mock_state.create_checkpoint.call_count == 2
+
+    start_operation = mock_state.create_checkpoint.call_args_list[0].kwargs[
+        "operation_update"
+    ]
+    success_operation = mock_state.create_checkpoint.call_args_list[1].kwargs[
+        "operation_update"
+    ]
+
+    assert start_operation.sub_type is OperationSubType.MAP
+    assert start_operation.name == "custom-child"
+    assert success_operation.sub_type is OperationSubType.MAP
+    assert success_operation.name == "custom-child"
 
 
 @pytest.mark.parametrize(

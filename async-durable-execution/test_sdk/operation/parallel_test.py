@@ -70,6 +70,7 @@ def create_mock_execution_state():
     state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
+    state.operations.get.return_value = None
     state.create_checkpoint = AsyncMock()
     return state
 
@@ -171,17 +172,10 @@ def test_parallel_signature_requires_keyword_only_options():
 
 
 @patch("async_durable_execution.composite.parallel.parallel_handler")
-@patch("async_durable_execution.composite.parallel.ChildOperationExecutor")
 async def test_parallel_passes_config_fields_to_handler(
-    mock_child_handler,
     mock_parallel_handler,
 ):
     """Direct config fields are passed to the handler."""
-
-    def call_child_func(func, *_args, **_kwargs):
-        mock_executor = Mock()
-        mock_executor.process = AsyncMock(side_effect=func)
-        return mock_executor
 
     async def branch_a():
         return "a"
@@ -191,11 +185,11 @@ async def test_parallel_passes_config_fields_to_handler(
 
     completion_config = CompletionConfig.first_successful()
     serdes = Mock()
+    serdes.serialize = AsyncMock(return_value='"parallel_result"')
     item_serdes = Mock()
     summary_generator = Mock()
     context = create_test_context(state=create_mock_execution_state())
 
-    mock_child_handler.side_effect = call_child_func
     mock_parallel_handler.return_value = handler_result
 
     result = await run_with_context(
@@ -223,17 +217,10 @@ async def test_parallel_passes_config_fields_to_handler(
 
 
 @patch("async_durable_execution.composite.parallel.parallel_handler")
-@patch("async_durable_execution.composite.parallel.ChildOperationExecutor")
 async def test_parallel_passes_explicit_none_summary_generator(
-    mock_child_handler,
     mock_parallel_handler,
 ):
     """summary_generator defaults to None in the public wrapper."""
-
-    def call_child_func(func, *_args, **_kwargs):
-        mock_executor = Mock()
-        mock_executor.process = AsyncMock(side_effect=func)
-        return mock_executor
 
     async def branch_a():
         return "a"
@@ -243,7 +230,6 @@ async def test_parallel_passes_explicit_none_summary_generator(
 
     context = create_test_context(state=create_mock_execution_state())
 
-    mock_child_handler.side_effect = call_child_func
     mock_parallel_handler.return_value = handler_result
 
     result = await run_with_context(
@@ -257,17 +243,10 @@ async def test_parallel_passes_explicit_none_summary_generator(
 
 
 @patch("async_durable_execution.composite.parallel.parallel_handler")
-@patch("async_durable_execution.composite.parallel.ChildOperationExecutor")
 async def test_parallel_accepts_one_shot_branch_iterable(
-    mock_child_handler,
     mock_parallel_handler,
 ):
     """The public wrapper consumes branch iterables only once."""
-
-    def call_child_func(func, *_args, **_kwargs):
-        mock_executor = Mock()
-        mock_executor.process = AsyncMock(side_effect=func)
-        return mock_executor
 
     async def branch_a():
         return "a"
@@ -293,7 +272,6 @@ async def test_parallel_accepts_one_shot_branch_iterable(
     branches = OneShotBranches()
     context = create_test_context(state=create_mock_execution_state())
 
-    mock_child_handler.side_effect = call_child_func
     mock_parallel_handler.return_value = handler_result
 
     result = await run_with_context(context, parallel(branches))

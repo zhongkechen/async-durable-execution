@@ -13,7 +13,11 @@ from typing import (
     Iterable,
 )
 
-from ..primitive.child import ChildOperationExecutor, get_durable_context
+from ..primitive.child import (
+    DurableContext,
+    _run_in_child_context,
+    get_durable_context,
+)
 
 from ..context import bind_current_context
 from ..execution import durable_callable
@@ -31,7 +35,6 @@ if TYPE_CHECKING:
     from ..serdes import SerDes
     from ..state import ExecutionState
     from ..types import SummaryGenerator
-    from ..primitive.child import DurableContext
 
 logger = logging.getLogger(__name__)
 
@@ -159,32 +162,36 @@ async def parallel(
     for branch in branches:
         validated_branches.append(branch)
 
-    with context._replay_aware():
-        operation_id = context.step_counter.create_step_id()
-        parallel_context = context.create_child_context(operation_id=operation_id)
+    async def run_parallel_handler() -> BatchResult[T]:
+        parallel_context = get_durable_context("parallel")
+        operation_id = parallel_context.step_id_prefix
+        if operation_id is None:
+            msg = "parallel operation id is not available in the current context"
+            raise RuntimeError(msg)
         operation_identifier = OperationIdentifier(
             operation_id=operation_id,
             sub_type=OperationSubType.PARALLEL,
-            parent_id=context.parent_id,
+            parent_id=parallel_context.parent_id,
             name=name,
         )
 
-        executor: ChildOperationExecutor[BatchResult[T]] = ChildOperationExecutor(
-            parallel_handler(
-                callables=validated_branches,
-                execution_state=context.execution_state,
-                parallel_context=parallel_context,
-                operation_identifier=operation_identifier,
-                max_concurrency=max_concurrency,
-                completion_config=completion_config
-                or CompletionConfig.all_successful(),
-                serdes=serdes,
-                item_serdes=item_serdes,
-                summary_generator=summary_generator,
-                nesting_type=nesting_type,
-            ),
-            context.execution_state,
-            operation_identifier,
+        handler = parallel_handler(
+            callables=validated_branches,
+            execution_state=context.execution_state,
+            parallel_context=parallel_context,
+            operation_identifier=operation_identifier,
+            max_concurrency=max_concurrency,
+            completion_config=completion_config or CompletionConfig.all_successful(),
             serdes=serdes,
+            item_serdes=item_serdes,
+            summary_generator=summary_generator,
+            nesting_type=nesting_type,
         )
-        return await executor.process()
+        return await handler()
+
+    return await _run_in_child_context(
+        run_parallel_handler,
+        sub_type=OperationSubType.PARALLEL,
+        name=name,
+        serdes=serdes,
+    )

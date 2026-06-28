@@ -433,14 +433,41 @@ async def run_in_child_context(
         summary_generator: Optional summary generator for large child results.
         is_virtual: Whether the child context should skip lifecycle checkpoints.
     """
-    context = get_durable_context("run_in_child_context")
+
     step_name = name if name is not None else getattr(func, "__name__", None)
+    return await _run_in_child_context(
+        func,
+        sub_type=OperationSubType.RUN_IN_CHILD_CONTEXT,
+        name=step_name,
+        serdes=serdes,
+        summary_generator=summary_generator,
+        is_virtual=is_virtual,
+    )
+
+
+async def _run_in_child_context(
+    func: Callable[[], Awaitable[T]],
+    *,
+    sub_type: OperationSubType,
+    name: str | None = None,
+    serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    is_virtual: bool = False,
+) -> T:
+    """Execute a durable sub-workflow with an explicit operation subtype."""
+    context = get_durable_context("run_in_child_context")
     with context._replay_aware():
         operation_id = context.step_counter.create_step_id()
 
         child_context = context.create_child_context(
             operation_id=operation_id,
             is_virtual=is_virtual,
+        )
+        operation_identifier = OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=sub_type,
+            parent_id=context.parent_id,
+            name=name,
         )
 
         async def callable_with_child_context():
@@ -450,12 +477,7 @@ async def run_in_child_context(
         executor: ChildOperationExecutor[T] = ChildOperationExecutor(
             callable_with_child_context,
             context.execution_state,
-            OperationIdentifier(
-                operation_id=operation_id,
-                sub_type=OperationSubType.RUN_IN_CHILD_CONTEXT,
-                parent_id=context.parent_id,
-                name=step_name,
-            ),
+            operation_identifier,
             serdes=serdes,
             summary_generator=summary_generator,
             is_virtual=is_virtual,
