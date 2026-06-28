@@ -983,6 +983,7 @@ __all__ = [
     "OperationType",
     "OperationUpdate",
     "ReplayChildren",
+    "SerializableModel",
     "StateOutput",
     "StepDetails",
     "StepOptions",

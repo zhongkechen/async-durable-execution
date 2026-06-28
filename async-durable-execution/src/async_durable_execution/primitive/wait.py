@@ -5,9 +5,10 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from ..exceptions import ValidationError, suspend_with_optional_resume_delay
-from ..config import Duration, duration_to_seconds
+from .base import OperationExecutor
 from .child import get_durable_context
+from ..config import Duration, duration_to_seconds
+from ..exceptions import ValidationError, suspend_with_optional_resume_delay
 from ..models import (
     Operation,
     OperationIdentifier,
@@ -16,7 +17,6 @@ from ..models import (
     OperationUpdate,
     WaitOptions,
 )
-from .base import OperationExecutor
 
 if TYPE_CHECKING:
     from ..state import ExecutionState

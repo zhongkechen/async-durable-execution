@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, TypeVar, cast
 
+# Import base classes for operation executor pattern
+from .base import OperationExecutor
 from .child import get_durable_context
-
 from ..exceptions import (
     CallableRuntimeError,
     ExecutionError,
@@ -20,9 +21,6 @@ from ..models import (
     OperationUpdate,
     OperationSubType,
 )
-
-# Import base classes for operation executor pattern
-from .base import OperationExecutor
 from ..serdes import (
     DEFAULT_JSON_SERDES,
 )
