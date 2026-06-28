@@ -33,7 +33,7 @@ from ..serdes import deserialize, serialize
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from ..composite.concurrency import SummaryGenerator
+    from ..composite.parallel import SummaryGenerator
     from ..serdes import SerDes
     from ..state import ExecutionState
 

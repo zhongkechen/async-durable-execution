@@ -14,7 +14,7 @@ from async_durable_execution.context import (
     reset_current_context,
     set_current_context,
 )
-from async_durable_execution.composite.concurrency import (
+from async_durable_execution.composite.parallel import (
     BatchItem,
     BatchItemStatus,
     BatchResult,

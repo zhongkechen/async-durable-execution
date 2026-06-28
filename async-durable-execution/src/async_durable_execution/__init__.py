@@ -19,7 +19,7 @@ from .context import (
 )
 from .composite.with_retry import with_retry
 from .composite.map import MapItemContext, map
-from .composite.concurrency import (
+from .composite.parallel import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
