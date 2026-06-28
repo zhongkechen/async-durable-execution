@@ -81,6 +81,29 @@ def create_mock_child_context(state):
     return child_context
 
 
+def create_parallel_executor(**kwargs):
+    execution_state = kwargs.pop("execution_state", None)
+    if execution_state is None:
+        execution_state = create_mock_execution_state()
+    operation_identifier = kwargs.pop("operation_identifier", None)
+    if operation_identifier is None:
+        operation_identifier = OperationIdentifier(
+            "test_op",
+            OperationSubType.PARALLEL,
+            "parent",
+            "test_parallel",
+        )
+    executor_context = kwargs.pop("executor_context", None)
+    if executor_context is None:
+        executor_context = create_test_context(execution_state)
+    return ParallelExecutor(
+        execution_state=execution_state,
+        operation_identifier=operation_identifier,
+        executor_context=executor_context,
+        **kwargs,
+    )
+
+
 async def run_with_context(context: DurableContext, awaitable):
     token = set_current_context(context)
     try:
@@ -99,7 +122,7 @@ async def test_parallel_executor_init():
     executables = [Executable(index=0, func=lambda x: x)]
     completion_config = CompletionConfig.all_successful()
 
-    executor = ParallelExecutor(
+    executor = create_parallel_executor(
         executables=executables,
         max_concurrency=2,
         completion_config=completion_config,
@@ -294,7 +317,7 @@ async def test_parallel_executor_init_with_callables():
         Executable(index=0, func=func1),
         Executable(index=1, func=func2),
     ]
-    executor = ParallelExecutor(
+    executor = create_parallel_executor(
         executables=executables,
         max_concurrency=3,
         completion_config=CompletionConfig.all_successful(),
@@ -324,7 +347,7 @@ async def test_parallel_executor_execute_item():
         return "processed"
 
     executable = Executable(index=0, func=test_func)
-    executor = ParallelExecutor(
+    executor = create_parallel_executor(
         executables=[executable],
         max_concurrency=None,
         completion_config=CompletionConfig.all_successful(),
@@ -346,7 +369,7 @@ async def test_parallel_executor_execute_item_with_async_callable():
         return "processed"
 
     executable = Executable(index=0, func=test_func)
-    executor = ParallelExecutor(
+    executor = create_parallel_executor(
         executables=[executable],
         max_concurrency=None,
         completion_config=CompletionConfig.all_successful(),
@@ -369,7 +392,7 @@ async def test_parallel_executor_execute_item_with_exception():
         raise ValueError(msg)
 
     executable = Executable(index=0, func=failing_func)
-    executor = ParallelExecutor(
+    executor = create_parallel_executor(
         executables=[executable],
         max_concurrency=None,
         completion_config=CompletionConfig.all_successful(),
@@ -499,7 +522,7 @@ async def test_parallel_handler_creates_executor_with_correct_config():
     ) as mock_executor_class:
         mock_batch_result = Mock(spec=BatchResult)
         mock_executor = Mock()
-        mock_executor.execute = AsyncMock(return_value=mock_batch_result)
+        mock_executor.process = AsyncMock(return_value=mock_batch_result)
         mock_executor_class.return_value = mock_executor
 
         result = await parallel_handler(
@@ -521,10 +544,11 @@ async def test_parallel_handler_creates_executor_with_correct_config():
             summary_generator=ANY,
             item_serdes=None,
             nesting_type=NestingType.NESTED,
+            execution_state=execution_state,
+            operation_identifier=operation_identifier,
+            executor_context=executor_context,
         )
-        mock_executor.execute.assert_called_once_with(
-            execution_state, executor_context=executor_context
-        )
+        mock_executor.process.assert_called_once_with()
         assert result == mock_batch_result
 
 
@@ -559,7 +583,7 @@ async def test_parallel_handler_creates_executor_with_default_fields():
     ) as mock_executor_class:
         mock_batch_result = Mock(spec=BatchResult)
         mock_executor = Mock()
-        mock_executor.execute = AsyncMock(return_value=mock_batch_result)
+        mock_executor.process = AsyncMock(return_value=mock_batch_result)
         mock_executor_class.return_value = mock_executor
 
         result = await parallel_handler(
@@ -578,13 +602,17 @@ async def test_parallel_handler_creates_executor_with_default_fields():
             summary_generator=ANY,
             item_serdes=None,
             nesting_type=NestingType.NESTED,
+            execution_state=execution_state,
+            operation_identifier=operation_identifier,
+            executor_context=executor_context,
         )
+        mock_executor.process.assert_called_once_with()
 
 
 async def test_parallel_executor_inheritance():
     """Test that ParallelExecutor properly inherits from ConcurrentExecutor."""
     executables = [Executable(index=0, func=lambda x: x)]
-    executor = ParallelExecutor(
+    executor = create_parallel_executor(
         executables=executables,
         max_concurrency=None,
         completion_config=CompletionConfig.all_successful(),
@@ -599,7 +627,7 @@ async def test_parallel_executor_inheritance():
 
 async def test_parallel_executor_init_empty_list():
     """Test ParallelExecutor with empty executables list."""
-    executor = ParallelExecutor(
+    executor = create_parallel_executor(
         executables=[],
         max_concurrency=None,
         completion_config=CompletionConfig.all_successful(),
@@ -625,7 +653,7 @@ async def test_parallel_executor_execute_item_return_type():
     async def dict_func():
         return {"key": "value"}
 
-    executor = ParallelExecutor(
+    executor = create_parallel_executor(
         executables=[],
         max_concurrency=None,
         completion_config=CompletionConfig.all_successful(),
@@ -745,7 +773,7 @@ async def test_parallel_executor_init_with_summary_generator():
     def mock_summary_generator(result):
         return f"Summary: {result}"
 
-    executor = ParallelExecutor(
+    executor = create_parallel_executor(
         executables=[Executable(index=0, func=func1)],
         max_concurrency=None,
         completion_config=CompletionConfig.all_successful(),
@@ -904,8 +932,8 @@ async def test_parallel_handler_replay_mechanism():
         side_effect=["child_1", "child_2"]
     )
 
-    # Mock the executor's replay method
-    with patch.object(ParallelExecutor, "replay") as mock_replay:
+    # Mock the executor's replay_completed method
+    with patch.object(ParallelExecutor, "replay_completed") as mock_replay:
         expected_batch_result = BatchResult(
             all=[
                 BatchItem(
@@ -965,9 +993,9 @@ async def test_parallel_handler_replay_with_replay_children():
         return_value="child_1"
     )
 
-    # Mock the executor's replay method and _execute_item_in_child_context
+    # Mock the executor's replay_completed method and _execute_item_in_child_context
     with (
-        patch.object(ParallelExecutor, "replay") as mock_replay,
+        patch.object(ParallelExecutor, "replay_completed") as mock_replay,
         patch.object(
             ParallelExecutor, "_execute_item_in_child_context"
         ) as mock_execute_item,
@@ -1043,7 +1071,7 @@ async def test_parallel_handler_first_execution_then_replay():
             "async_durable_execution.composite.parallel.ParallelExecutor.execute"
         ) as mock_execute,
         patch(
-            "async_durable_execution.composite.parallel.ParallelExecutor.replay"
+            "async_durable_execution.composite.parallel.ParallelExecutor.replay_completed"
         ) as mock_replay,
     ):
         mock_execute.return_value = Mock()  # Mock BatchResult
@@ -1505,7 +1533,7 @@ async def test_parallel_executor_get_iteration_name_default():
     async def branch_c():
         return "c"
 
-    executor = ParallelExecutor(
+    executor = create_parallel_executor(
         executables=[
             Executable(index=0, func=branch_a),
             Executable(index=1, func=branch_b),
@@ -1533,7 +1561,7 @@ async def test_parallel_executor_execute_item_with_bound_durable_callable():
 
     executable = Executable(index=0, func=branch_func("bound"))
 
-    executor = ParallelExecutor(
+    executor = create_parallel_executor(
         executables=[executable],
         max_concurrency=None,
         completion_config=CompletionConfig.all_successful(),

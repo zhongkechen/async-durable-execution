@@ -50,12 +50,14 @@ async def with_retry(
                 decision = retry(err, attempt)
                 if not decision.should_retry:
                     raise
-                wait_name = f"{name}-backoff-{attempt}" if name else None
+                wait_name = (
+                    f"{name}-backoff-{attempt}" if name else f"backoff-{attempt}"
+                )
                 await wait(duration=decision.delay, name=wait_name)
 
     return await run_in_child_context(
         run_loop,
-        name=name,
+        name=name or "with-retry",
         serdes=serdes,
         summary_generator=summary_generator,
         is_virtual=is_virtual,

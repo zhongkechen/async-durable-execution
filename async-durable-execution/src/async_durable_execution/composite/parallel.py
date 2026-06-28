@@ -23,7 +23,7 @@ from .concurrency import (
     Executable,
     NestingType,
 )
-from ..models import OperationIdentifier, OperationStatus, OperationSubType
+from ..models import OperationIdentifier, OperationSubType
 
 
 if TYPE_CHECKING:
@@ -45,6 +45,9 @@ class ParallelExecutor(ConcurrentExecutor[Callable, R]):
 
     def __init__(
         self,
+        execution_state: ExecutionState,
+        operation_identifier: OperationIdentifier,
+        executor_context: DurableContext,
         executables: list[Executable[Callable]],
         max_concurrency: int | None,
         completion_config,
@@ -67,6 +70,9 @@ class ParallelExecutor(ConcurrentExecutor[Callable, R]):
             summary_generator=summary_generator,
             item_serdes=item_serdes,
             nesting_type=nesting_type,
+            execution_state=execution_state,
+            operation_identifier=operation_identifier,
+            executor_context=executor_context,
         )
 
     async def execute_item(self, child_context, executable: Executable[Callable]):  # noqa: PLR6301
@@ -133,14 +139,12 @@ async def parallel_handler(
         summary_generator=summary_generator,
         item_serdes=item_serdes,
         nesting_type=nesting_type,
+        execution_state=execution_state,
+        operation_identifier=operation_identifier,
+        executor_context=parallel_context,
     )
 
-    operation = execution_state.operations.get(
-        operation_identifier.require_operation_id()
-    )
-    if operation is not None and operation.status is OperationStatus.SUCCEEDED:
-        return await executor.replay(execution_state, parallel_context)
-    return await executor.execute(execution_state, executor_context=parallel_context)
+    return await executor.process()
 
 
 async def parallel(

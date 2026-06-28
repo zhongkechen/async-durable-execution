@@ -16,14 +16,6 @@ from typing import (
     Awaitable,
 )
 
-from ..primitive.child import (
-    ChildOperationExecutor,
-    DurableContext,
-    get_durable_context,
-)
-
-from ..context import invoke_user_callable
-from ..execution import durable_callable
 from .concurrency import (
     BatchResult,
     CompletionConfig,
@@ -31,8 +23,14 @@ from .concurrency import (
     Executable,
     NestingType,
 )
-from ..models import OperationIdentifier, OperationStatus, OperationSubType
-
+from ..context import invoke_user_callable
+from ..execution import durable_callable
+from ..models import OperationIdentifier, OperationSubType
+from ..primitive.child import (
+    ChildOperationExecutor,
+    DurableContext,
+    get_durable_context,
+)
 
 if TYPE_CHECKING:
     from ..serdes import SerDes
@@ -57,15 +55,6 @@ class BatchedInput(Generic[T, U]):
 
 
 @dataclass(frozen=True)
-class ItemBatcher(Generic[T]):
-    """Configuration for batching items in map operations."""
-
-    max_items_per_batch: int = 0
-    max_item_bytes_per_batch: int | float = 0
-    batch_input: T | None = None
-
-
-@dataclass(frozen=True)
 class MapItemContext(DurableContext, Generic[T]):
     """Context exposed while a map item function is executing."""
 
@@ -78,6 +67,9 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
 
     def __init__(
         self,
+        execution_state: ExecutionState,
+        operation_identifier: OperationIdentifier,
+        executor_context: DurableContext,
         executables: list[Executable[Callable]],
         items: Sequence[T],
         max_concurrency: int | None,
@@ -102,6 +94,9 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
             summary_generator=summary_generator,
             item_serdes=item_serdes,
             nesting_type=nesting_type,
+            execution_state=execution_state,
+            operation_identifier=operation_identifier,
+            executor_context=executor_context,
         )
         self.items = items
         self._item_namer = item_namer
@@ -176,16 +171,12 @@ async def map_handler(
         item_serdes=item_serdes,
         nesting_type=nesting_type,
         item_namer=item_namer,
+        execution_state=execution_state,
+        operation_identifier=operation_identifier,
+        executor_context=map_context,
     )
 
-    operation = execution_state.operations.get(
-        operation_identifier.require_operation_id()
-    )
-    if operation is not None and operation.status is OperationStatus.SUCCEEDED:
-        # if we've reached this point, then not only is the step succeeded, but it is also `replay_children`.
-        return await executor.replay(execution_state, map_context)
-    # we are making it explicit that we are now executing within the map_context
-    return await executor.execute(execution_state, executor_context=map_context)
+    return await executor.process()
 
 
 async def map(
@@ -194,7 +185,6 @@ async def map(
     *,
     name: str | None = None,
     max_concurrency: int | None = None,
-    item_batcher: ItemBatcher | None = None,
     completion_config: CompletionConfig | None = None,
     serdes: SerDes | None = None,
     item_serdes: SerDes | None = None,
@@ -202,14 +192,13 @@ async def map(
     nesting_type: NestingType = NestingType.NESTED,
     item_namer: Callable[[U, int], str] | None = None,
 ):
-    """Process a collection durably with optional concurrency and batching controls.
+    """Process a collection durably with optional concurrency controls.
 
     Args:
         func: Async callable that processes each item.
         items: Items to process.
         name: Optional durable operation name.
         max_concurrency: Optional limit for concurrent item processing.
-        item_batcher: Optional item batching configuration.
         completion_config: Optional completion criteria.
         serdes: Optional serializer for the map result.
         item_serdes: Optional serializer for individual map item results.

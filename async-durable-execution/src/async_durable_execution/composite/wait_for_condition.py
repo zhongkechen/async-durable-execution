@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-import math
 import logging
+import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
-from ..primitive.step import StepContext
 from ..config import Duration, JitterStrategy, duration_to_seconds
 from ..context import (
     reset_current_context,
     set_current_context,
 )
-from ..primitive.child import get_durable_context
 from ..exceptions import (
     CallableRuntimeError,
     ExecutionError,
@@ -32,6 +30,8 @@ from ..models import (
     OperationSubType,
 )
 from ..primitive.base import OperationExecutor
+from ..primitive.child import get_durable_context
+from ..primitive.step import StepContext
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable

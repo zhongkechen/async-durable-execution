@@ -16,11 +16,13 @@ from ..exceptions import SuspendExecution, TimedSuspendExecution
 from ..exceptions import InvalidStateError
 from ..models import (
     ErrorObject,
+    Operation,
     OperationIdentifier,
     OperationStatus,
     SerializableModel,
     _metadata,
 )
+from ..primitive.base import OperationExecutor
 from ..primitive.child import ChildOperationExecutor, OrphanedChildException
 from ..serdes import deserialize
 
@@ -501,11 +503,18 @@ class TimerScheduler:
         self._resume_tasks.clear()
 
 
-class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
+class ConcurrentExecutor(
+    OperationExecutor[BatchResult[ResultType]],
+    ABC,
+    Generic[CallableType, ResultType],
+):
     """Execute durable operations concurrently using asyncio tasks."""
 
     def __init__(
         self,
+        execution_state: ExecutionState,
+        operation_identifier: OperationIdentifier,
+        executor_context: DurableContext,
         executables: list[Executable[CallableType]],
         max_concurrency: int | None,
         completion_config: CompletionConfig,
@@ -517,6 +526,11 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
         summary_generator: SummaryGenerator | None = None,
         nesting_type: NestingType = NestingType.NESTED,
     ):
+        super().__init__(
+            state=execution_state,
+            operation_identifier=operation_identifier,
+        )
+        self.executor_context = executor_context
         self.executables = executables
         self.max_concurrency = max_concurrency
         self.completion_config = completion_config
@@ -550,9 +564,15 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
     def get_iteration_name(self, index: int) -> str:
         return f"{self.name_prefix}{index}"
 
-    async def execute(
-        self, execution_state: ExecutionState, executor_context: DurableContext
-    ) -> BatchResult[ResultType]:
+    async def start(self) -> BatchResult[ResultType]:
+        return await self.execute()
+
+    async def replay(self, operation: Operation) -> BatchResult[ResultType]:
+        if operation.status is OperationStatus.SUCCEEDED:
+            return await self.replay_completed(self.state, self.executor_context)
+        return await self.execute()
+
+    async def execute(self) -> BatchResult[ResultType]:
         logger.debug(
             "▶️ Executing concurrent operation, items: %d", len(self.executables)
         )
@@ -579,7 +599,7 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
             async def run_task() -> ResultType:
                 async with semaphore:
                     return await self._execute_item_in_child_context(
-                        executor_context,
+                        self.executor_context,
                         executable_with_state.executable,
                     )
 
@@ -602,7 +622,7 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
         async def resubmitter(
             executable_with_state: ExecutableWithState[CallableType, ResultType],
         ) -> None:
-            await execution_state.create_checkpoint(is_sync=False)
+            await self.state.create_checkpoint(is_sync=False)
             await submit_task(executable_with_state)
 
         async with TimerScheduler(resubmitter) as scheduler:
@@ -761,7 +781,7 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
         )
         return await executor.process()
 
-    async def replay(
+    async def replay_completed(
         self, execution_state: ExecutionState, executor_context: DurableContext
     ) -> BatchResult[ResultType]:
         items: list[BatchItem[ResultType]] = []

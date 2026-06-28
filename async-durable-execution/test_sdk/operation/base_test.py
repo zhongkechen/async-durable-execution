@@ -168,7 +168,7 @@ def test_operation_executor_requires_subclass_start_and_replay():
 
 
 async def test_operation_executor_execute_is_not_abstract():
-    """Test execute is optional for subclasses that implement start and replay."""
+    """Test execute is not required for subclasses that implement start and replay."""
 
     class MinimalOperationExecutor(OperationExecutor[str]):
         async def start(self) -> str:
@@ -187,5 +187,9 @@ async def test_operation_executor_execute_is_not_abstract():
         ),
     )
 
-    with pytest.raises(NotImplementedError):
-        await executor.execute(None)
+    assert not hasattr(executor, "execute")
+    state.operations.get.return_value = None
+    assert await executor.process() == "started"
+
+    state.operations.get.return_value = create_mock_operation(OperationStatus.SUCCEEDED)
+    assert await executor.process() == "replayed"

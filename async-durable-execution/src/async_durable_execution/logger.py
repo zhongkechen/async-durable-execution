@@ -9,10 +9,6 @@ from .primitive.base import OperationContext
 from .context import _current_context
 
 
-_configured_logger_ids: set[int] = set()
-_configured_handler_ids: set[int] = set()
-
-
 class DurableContextFilter(logging.Filter):
     """Add durable execution metadata from the active contextvar to log records."""
 
@@ -66,20 +62,12 @@ def configure_durable_logger(logger):
     if not callable(add_filter):
         return logger
 
-    logger_id = id(logger)
-    if logger_id not in _configured_logger_ids and not any(
-        isinstance(item, DurableContextFilter) for item in filters
-    ):
+    if not any(isinstance(item, DurableContextFilter) for item in filters):
         add_filter(DurableContextFilter())
-        _configured_logger_ids.add(logger_id)
 
     for handler in getattr(logger, "handlers", ()):
-        handler_id = id(handler)
-        if handler_id in _configured_handler_ids:
-            continue
         if not any(isinstance(item, DurableContextFilter) for item in handler.filters):
             handler.addFilter(DurableContextFilter())
-        _configured_handler_ids.add(handler_id)
     return logger
 
 
