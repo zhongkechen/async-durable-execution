@@ -81,11 +81,14 @@ build-layer = "python scripts/build_layer.py --sdk-source './async-durable-execu
 clean = "rm -rf async-durable-execution-examples/build async-durable-execution-examples/.aws-sam async-durable-execution-examples/*.zip async-durable-execution-examples/template.generated.json dist"
 
 [tool.hatch.envs.docs]
-workspace.members = ["async-durable-execution"]
+workspace.members = [
+  "async-durable-execution",
+  "async-durable-execution-runner",
+]
 dependencies = ["pdoc>=15,<16"]
 
 [tool.hatch.envs.docs.scripts]
-build = "pdoc async_durable_execution -o site/api"
+build = "pdoc async_durable_execution async_durable_execution_runner -o site/api"
 clean = "rm -rf site/api"
 
 [tool.ruff]
