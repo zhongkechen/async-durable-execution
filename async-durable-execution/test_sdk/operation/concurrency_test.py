@@ -1028,7 +1028,7 @@ async def test_concurrent_executor_full_execution_path():
     execution_state = create_execution_state()
     executor_context = create_executor_context(execution_state)
 
-    result = await run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute())
     assert len(result.all) >= 1
 
 
@@ -1206,7 +1206,7 @@ async def test_concurrent_executor_create_result_with_early_exit():
     execution_state = create_execution_state()
     executor_context = create_executor_context(execution_state)
 
-    result = await run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute())
 
     assert len(result.all) == 2
     assert result.all[0].status == BatchItemStatus.SUCCEEDED
@@ -1292,7 +1292,7 @@ async def test_concurrent_executor_create_result_failure_tolerance_exceeded():
     execution_state = create_execution_state()
     executor_context = create_executor_context(execution_state)
 
-    result = await run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute())
     # NEW BEHAVIOR: With tolerated_failure_count=0 and 1 failure,
     # tolerance is exceeded, so FAILURE_TOLERANCE_EXCEEDED
     assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
@@ -1328,7 +1328,7 @@ async def test_single_task_suspend_bubbles_up():
 
     # Should raise TimedSuspendExecution since no other tasks running
     with pytest.raises(TimedSuspendExecution):
-        await run_async(executor.execute(execution_state, executor_context))
+        await run_async(executor.execute())
 
 
 async def test_multiple_tasks_one_suspends_execution_continues():
@@ -1371,7 +1371,7 @@ async def test_multiple_tasks_one_suspends_execution_continues():
 
     # Should raise TimedSuspendExecution after Task B completes
     with pytest.raises(TimedSuspendExecution):
-        await run_async(executor.execute(execution_state, executor_context))
+        await run_async(executor.execute())
 
     # Assert that Task B did complete before suspension
     assert executor.task_b_completed
@@ -1412,7 +1412,7 @@ async def test_concurrent_executor_with_single_task_resubmit():
 
     # Should raise TimedSuspendExecution since single task suspends
     with pytest.raises(TimedSuspendExecution):
-        await run_async(executor.execute(execution_state, executor_context))
+        await run_async(executor.execute())
 
 
 async def test_concurrent_executor_with_timed_resubmit_while_other_task_running():
@@ -1480,7 +1480,7 @@ async def test_concurrent_executor_with_timed_resubmit_while_other_task_running(
     executor_context = create_executor_context(execution_state)
 
     # Should complete successfully after B resubmits and both tasks finish
-    result = await run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute())
 
     # Verify results
     assert len(result.all) == 2
@@ -1614,7 +1614,7 @@ async def test_concurrent_executor_create_result_with_failed_status():
     execution_state = create_execution_state()
     executor_context = create_executor_context(execution_state)
 
-    result = await run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute())
 
     assert len(result.all) == 1
     assert result.all[0].status == BatchItemStatus.FAILED
@@ -1819,7 +1819,7 @@ async def test_concurrent_executor_execute_with_failing_task():
     execution_state = create_execution_state()
     executor_context = create_executor_context(execution_state)
 
-    result = await run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute())
 
     assert len(result.all) == 1
     assert result.all[0].status == BatchItemStatus.FAILED
@@ -1871,7 +1871,7 @@ async def test_create_result_no_failed_executables():
     execution_state = create_execution_state()
     executor_context = create_executor_context(execution_state)
 
-    result = await run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute())
 
     assert len(result.all) == 1
     assert result.all[0].status == BatchItemStatus.SUCCEEDED
@@ -1911,7 +1911,7 @@ async def test_create_result_with_suspended_executable():
 
     # Should raise SuspendExecution since single task suspends
     with pytest.raises(SuspendExecution):
-        await run_async(executor.execute(execution_state, executor_context))
+        await run_async(executor.execute())
 
 
 # Tests for _create_result method match statement branches
@@ -2596,7 +2596,7 @@ async def test_operation_id_determinism_across_shuffles():
             "async_durable_execution.composite.concurrency.ChildOperationExecutor",
             patched_child_handler,
         ):
-            await run_async(executor.execute(execution_state, executor_context))
+            await run_async(executor.execute())
 
         associations_per_run.append(captured_associations.copy())
 
@@ -2646,10 +2646,7 @@ async def test_concurrent_executor_start_calls_execute():
     ) as mock_execute:
         result = await executor.start()
 
-    mock_execute.assert_called_once_with(
-        execution_state,
-        executor_context=executor_context,
-    )
+    mock_execute.assert_called_once_with()
     assert result is expected_result
 
 
@@ -2734,10 +2731,7 @@ async def test_concurrent_executor_replay_incomplete_operation_calls_execute():
     ):
         result = await executor.replay(operation)
 
-    mock_execute.assert_called_once_with(
-        execution_state,
-        executor_context=executor_context,
-    )
+    mock_execute.assert_called_once_with()
     mock_replay.assert_not_called()
     assert result is expected_result
 
@@ -3034,7 +3028,7 @@ async def test_executor_does_not_deadlock_when_all_tasks_terminal_but_completion
     executor_context = create_executor_context(execution_state)
 
     # Should return (not hang) and batch should reflect one FAILED and one SUCCEEDED
-    result = await run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute())
     statuses = {item.index: item.status for item in result.all}
     assert statuses[0] == BatchItemStatus.FAILED
     assert statuses[1] == BatchItemStatus.SUCCEEDED
@@ -3070,7 +3064,7 @@ async def test_executor_terminates_quickly_when_impossible_to_succeed():
     execution_state = create_execution_state()
     executor_context = create_executor_context(execution_state)
 
-    result = await run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute())
 
     # With tolerated_failure_count=1, executor stops when failure_count > 1 (at 2 failures)
     # Executor terminates early rather than executing all 100 tasks
@@ -3130,7 +3124,7 @@ async def test_executor_exits_early_with_min_successful():
     )
 
     start_time = time.time()
-    result = await run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute())
     elapsed_time = time.time() - start_time
 
     # Should complete in less than 1.5 second (not wait for 2-second sleep)
@@ -3198,7 +3192,7 @@ async def test_executor_returns_with_incomplete_branches():
         lambda idx: f"step_{idx}"
     )
 
-    result = await run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute())
 
     # Verify fast branch executed
     assert operation_tracker.fast_executed.call_count == 1
@@ -3258,7 +3252,7 @@ async def test_executor_returns_before_slow_branch_completes():
         lambda idx: f"step_{idx}"
     )
 
-    result = await run_async(executor.execute(execution_state, executor_context))
+    result = await run_async(executor.execute())
 
     # Executor should have returned before slow branch completed
     assert not slow_branch_mock.completed.called, (
@@ -3667,6 +3661,8 @@ async def test_flat_mode_produces_deterministic_step_ids_across_runs():
         ]
         executor = create_concurrent_executor(
             TestExecutor,
+            execution_state=execution_state,
+            executor_context=executor_context,
             executables=executables,
             max_concurrency=3,
             completion_config=CompletionConfig(min_successful=3),
@@ -3676,7 +3672,7 @@ async def test_flat_mode_produces_deterministic_step_ids_across_runs():
             serdes=None,
             nesting_type=NestingType.FLAT,
         )
-        await run_async(executor.execute(execution_state, executor_context))
+        await run_async(executor.execute())
         return executor.captured
 
     run_a = await make_run()

@@ -553,14 +553,6 @@ class ConcurrentExecutor(
         self.serdes = serdes
         self.item_serdes = item_serdes
 
-    def _require_process_context(self) -> tuple[ExecutionState, DurableContext]:
-        if not hasattr(self, "state") or self.executor_context is None:
-            raise InvalidStateError(
-                "ConcurrentExecutor.process() requires execution state, operation "
-                "identifier, and executor context."
-            )
-        return self.state, self.executor_context
-
     @abstractmethod
     async def execute_item(
         self,
@@ -573,34 +565,14 @@ class ConcurrentExecutor(
         return f"{self.name_prefix}{index}"
 
     async def start(self) -> BatchResult[ResultType]:
-        execution_state, executor_context = self._require_process_context()
-        return await self.execute(execution_state, executor_context=executor_context)
+        return await self.execute()
 
     async def replay(self, operation: Operation) -> BatchResult[ResultType]:
-        execution_state, executor_context = self._require_process_context()
         if operation.status is OperationStatus.SUCCEEDED:
-            return await self.replay_completed(execution_state, executor_context)
-        return await self.execute(execution_state, executor_context=executor_context)
+            return await self.replay_completed(self.state, self.executor_context)
+        return await self.execute()
 
-    async def execute(
-        self,
-        execution_state: object | None = None,
-        executor_context: DurableContext | None = None,
-    ) -> BatchResult[ResultType]:
-        if (
-            execution_state is None
-            or isinstance(execution_state, Operation)
-            or executor_context is None
-        ):
-            stored_execution_state, stored_executor_context = (
-                self._require_process_context()
-            )
-            if execution_state is None or isinstance(execution_state, Operation):
-                execution_state = stored_execution_state
-            if executor_context is None:
-                executor_context = stored_executor_context
-
-        execution_state = cast("ExecutionState", execution_state)
+    async def execute(self) -> BatchResult[ResultType]:
         logger.debug(
             "▶️ Executing concurrent operation, items: %d", len(self.executables)
         )
@@ -627,7 +599,7 @@ class ConcurrentExecutor(
             async def run_task() -> ResultType:
                 async with semaphore:
                     return await self._execute_item_in_child_context(
-                        executor_context,
+                        self.executor_context,
                         executable_with_state.executable,
                     )
 
@@ -650,7 +622,7 @@ class ConcurrentExecutor(
         async def resubmitter(
             executable_with_state: ExecutableWithState[CallableType, ResultType],
         ) -> None:
-            await execution_state.create_checkpoint(is_sync=False)
+            await self.state.create_checkpoint(is_sync=False)
             await submit_task(executable_with_state)
 
         async with TimerScheduler(resubmitter) as scheduler:

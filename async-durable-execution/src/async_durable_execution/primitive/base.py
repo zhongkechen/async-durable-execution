@@ -117,10 +117,6 @@ class OperationExecutor(ABC, Generic[T]):
             durable_execution_arn=self.durable_execution_arn,
         )
 
-    async def execute(self, operation: Operation | None) -> T:
-        """Execute operation logic with checkpoint data."""
-        raise NotImplementedError  # pragma: no cover
-
     @abstractmethod
     async def start(self) -> T:
         """Start a new operation with no existing checkpoint."""

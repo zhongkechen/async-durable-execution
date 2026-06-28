@@ -516,9 +516,7 @@ async def test_map_handler_calls_executor_execute():
         )
 
         # Verify execute was called
-        mock_execute.assert_called_once_with(
-            execution_state, executor_context=executor_context
-        )
+        mock_execute.assert_called_once_with()
         assert result == mock_batch_result
 
 
