@@ -10,6 +10,7 @@ on:
       - 'async-durable-execution/src/**'
       - 'async-durable-execution-examples/**'
       - 'async-durable-execution-runner/src/**'
+      - 'scripts/**'
       - '.github/workflows/e2e-tests.yml'
   workflow_dispatch:
 
@@ -60,7 +61,7 @@ jobs:
 
     - name: Generate SAM template
       run: |
-        python async-durable-execution-examples/scripts/generate_sam_template.py \
+        python scripts/generate_sam_template.py \
           --runtime "python${{ matrix.python-version }}" \
           --output async-durable-execution-examples/template.generated.json
 

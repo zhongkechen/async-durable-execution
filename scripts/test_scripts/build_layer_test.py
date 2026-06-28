@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from async_durable_execution_lambda_layer.builder import create_layer_archive
-from async_durable_execution_lambda_layer.builder import default_sdk_spec
+from scripts.build_layer import create_layer_archive
+from scripts.build_layer import default_sdk_spec
 
 
 def test_default_sdk_spec_uses_shared_version() -> None:

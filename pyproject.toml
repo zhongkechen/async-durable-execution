@@ -10,7 +10,6 @@ path = "VERSION.py"
 workspace.members = [
   "async-durable-execution",
   "async-durable-execution-examples",
-  "async-durable-execution-lambda-layer",
   "async-durable-execution-runner",
 ]
 
@@ -18,103 +17,40 @@ workspace.members = [
 workspace.members = [
   "async-durable-execution",
   "async-durable-execution-examples",
-  "async-durable-execution-lambda-layer",
   "async-durable-execution-runner",
 ]
 dependencies = [
   "coverage[toml]",
+  "mypy>=1.0.0",
   "pytest",
   "pytest-asyncio",
   "pytest-cov",
   "pytest-xdist",
+  "botocore-stubs>=1.42.40,<1.43.0",
 ]
 
 [tool.hatch.envs.test.scripts]
 all = "pytest {args}"
 cov = "pytest --cov-report=term-missing --cov {args}"
+sdk = "pytest async-durable-execution/test_sdk {args}"
+sdk-cov = "pytest --cov-report=term-missing --cov-config=async-durable-execution/pyproject.toml --cov=async-durable-execution/src/async_durable_execution --cov-fail-under=98 async-durable-execution/test_sdk {args}"
+runner = "pytest async-durable-execution-runner/test_runner {args}"
+runner-cov = "pytest --cov-report=term-missing --cov-config=async-durable-execution-runner/pyproject.toml --cov=async-durable-execution-runner/src/async_durable_execution_runner --cov-fail-under=95 async-durable-execution-runner/test_runner {args}"
+examples = "pytest async-durable-execution-examples/test_examples {args}"
 examples-integration = "pytest --runner-mode=cloud async-durable-execution-examples/test_examples/ -v {args}"
+typecheck = "mypy --install-types --non-interactive --warn-unused-ignores {args:async-durable-execution/src/async_durable_execution async-durable-execution/test_sdk async-durable-execution-runner/src/async_durable_execution_runner async-durable-execution-runner/test_runner scripts}"
 
 [tool.pytest.ini_options]
 # Declare custom markers to avoid warnings with --strict-markers
 addopts = "-v --strict-markers --import-mode=importlib"
 testpaths = [
     "async-durable-execution/test_sdk",
-    "async-durable-execution-lambda-layer/test_layer",
     "async-durable-execution-runner/test_runner",
     "async-durable-execution-examples/test_examples",
+    "scripts/test_scripts",
 ]
 markers = []
 asyncio_mode = "auto"
-
-[tool.hatch.envs.types]
-workspace.members = [
-  "async-durable-execution",
-  "async-durable-execution-examples",
-  "async-durable-execution-lambda-layer",
-  "async-durable-execution-runner",
-]
-extra-dependencies = [
-  "mypy>=1.0.0",
-  "pytest",
-  "botocore-stubs>=1.42.40,<1.43.0",
-]
-
-[tool.hatch.envs.types.scripts]
-check = "mypy --install-types --non-interactive --warn-unused-ignores {args:async-durable-execution/src/async_durable_execution async-durable-execution/test_sdk async-durable-execution-lambda-layer/src/async_durable_execution_lambda_layer async-durable-execution-lambda-layer/test_layer async-durable-execution-runner/src/async_durable_execution_runner async-durable-execution-runner/test_runner}"
-
-[tool.hatch.envs.dev-core]
-workspace.members = [
-  "async-durable-execution",
-  "async-durable-execution-lambda-layer",
-  "async-durable-execution-runner",
-]
-dependencies = [
-  "pytest",
-  "pytest-asyncio",
-  "pytest-cov",
-  "coverage[toml]",
-  "mypy>=1.0.0",
-  "botocore-stubs>=1.42.40,<1.43.0",
-]
-
-[tool.hatch.envs.dev-core.scripts]
-test = "pytest async-durable-execution/test_sdk {args}"
-cov = "pytest --cov-report=term-missing --cov-config=async-durable-execution/pyproject.toml --cov=async-durable-execution/src/async_durable_execution --cov-fail-under=98 async-durable-execution/test_sdk {args}"
-typecheck = "mypy --install-types --non-interactive async-durable-execution/src/async_durable_execution async-durable-execution/test_sdk"
-
-[tool.hatch.envs.dev-testing]
-workspace.members = [
-  "async-durable-execution",
-  "async-durable-execution-lambda-layer",
-  "async-durable-execution-runner",
-]
-dependencies = [
-  "pytest",
-  "pytest-asyncio",
-  "pytest-cov",
-  "coverage[toml]",
-  "mypy>=1.0.0",
-]
-
-[tool.hatch.envs.dev-testing.scripts]
-test = "pytest async-durable-execution-runner/test_runner {args}"
-cov = "pytest --cov-report=term-missing --cov-config=async-durable-execution-runner/pyproject.toml --cov=async-durable-execution-runner/src/async_durable_execution_runner --cov-fail-under=95 async-durable-execution-runner/test_runner {args}"
-typecheck = "mypy --install-types --non-interactive async-durable-execution-runner/src/async_durable_execution_runner async-durable-execution-runner/test_runner"
-
-[tool.hatch.envs.dev-examples]
-workspace.members = [
-  "async-durable-execution",
-  "async-durable-execution-examples",
-  "async-durable-execution-lambda-layer",
-  "async-durable-execution-runner",
-]
-dependencies = [
-  "pytest",
-  "pytest-asyncio",
-]
-
-[tool.hatch.envs.dev-examples.scripts]
-test = "pytest async-durable-execution-examples/test_examples {args}"
 
 [tool.hatch.envs.test-pypi-examples]
 dependencies = [
@@ -134,16 +70,15 @@ test = "pytest async-durable-execution-examples/test_examples {args}"
 workspace.members = [
   "async-durable-execution",
   "async-durable-execution-examples",
-  "async-durable-execution-lambda-layer",
   "async-durable-execution-runner",
 ]
 
 [tool.hatch.envs.examples.scripts]
 pip = "python -m pip {args}"
-generate-sam-template = "python async-durable-execution-examples/scripts/generate_sam_template.py {args}"
-build = "python async-durable-execution-examples/scripts/build_examples.py"
-build-layer = "python -m async_durable_execution_lambda_layer.builder --sdk-source './async-durable-execution[aioboto]' --output async-durable-execution-lambda-layer/dist/async-durable-execution-layer.zip"
-clean = "rm -rf async-durable-execution-examples/build async-durable-execution-examples/.aws-sam async-durable-execution-examples/*.zip async-durable-execution-examples/template.generated.json async-durable-execution-lambda-layer/dist"
+generate-sam-template = "python scripts/generate_sam_template.py {args}"
+build = "python scripts/build_examples.py"
+build-layer = "python scripts/build_layer.py --sdk-source './async-durable-execution[aioboto]' --output dist/async-durable-execution-layer.zip {args}"
+clean = "rm -rf async-durable-execution-examples/build async-durable-execution-examples/.aws-sam async-durable-execution-examples/*.zip async-durable-execution-examples/template.generated.json dist"
 
 [tool.hatch.envs.docs]
 workspace.members = ["async-durable-execution"]
@@ -166,7 +101,6 @@ select = []
 known-first-party = [
   "async_durable_execution",
   "async_durable_execution_examples",
-  "async_durable_execution_lambda_layer",
   "async_durable_execution_runner",
 ]
 force-single-line = false

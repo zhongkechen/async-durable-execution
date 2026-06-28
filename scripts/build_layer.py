@@ -141,9 +141,9 @@ def _read_packaged_version() -> str:
             return _load_version_from_path(version_path)
 
     try:
-        return version("async-durable-execution-lambda-layer")
+        return version("async-durable-execution")
     except PackageNotFoundError as error:
-        msg = "Unable to resolve async-durable-execution layer package version"
+        msg = "Unable to resolve async-durable-execution version"
         raise RuntimeError(msg) from error
 
 

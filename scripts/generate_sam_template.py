@@ -3,11 +3,15 @@
 import argparse
 import ast
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
-from function_naming import to_function_name_suffix, to_logical_id
-from test_handlers import load_test_handlers
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from scripts.function_naming import to_function_name_suffix, to_logical_id
+from scripts.test_handlers import load_test_handlers
 
 PACKAGE_NAME = "DurableExecutionsPythonExamples-1.0"
 PACKAGE_PREFIX = "async_durable_execution_examples"
@@ -15,9 +19,7 @@ DEFAULT_AWS_REGION = "eu-south-1"
 DEFAULT_LAMBDA_ENDPOINT = f"https://lambda.{DEFAULT_AWS_REGION}.amazonaws.com"
 DEFAULT_RUNTIME = "python3.13"
 SDK_LAYER_LOGICAL_ID = "AsyncDurableExecutionSdkLayer"
-SDK_LAYER_CONTENT_URI = (
-    "../async-durable-execution-lambda-layer/dist/async-durable-execution-layer.zip"
-)
+SDK_LAYER_CONTENT_URI = "../dist/async-durable-execution-layer.zip"
 DEFAULT_DURABLE_CONFIG = {
     "RetentionPeriodInDays": 7,
     "ExecutionTimeout": 300,
@@ -36,7 +38,8 @@ SPECIAL_LOGGING_CONFIG = {
 
 def build_examples_catalog() -> dict[str, Any]:
     """Build the examples catalog by scanning example handlers."""
-    source_root = Path(__file__).resolve().parent.parent / "src" / PACKAGE_PREFIX
+    repo_dir = Path(__file__).resolve().parent.parent
+    source_root = repo_dir / "async-durable-execution-examples" / "src" / PACKAGE_PREFIX
     examples = []
     for path in sorted(source_root.rglob("*.py")):
         if path.name in {"__init__.py", "__about__.py"}:
@@ -246,7 +249,8 @@ def build_template(
 def validate_catalog_test_coverage(catalog: dict[str, Any]) -> None:
     """Ensure every example test handler is represented in the examples catalog."""
     catalog_handlers = {example["handler"] for example in catalog["examples"]}
-    test_root = Path(__file__).resolve().parent.parent / "test"
+    repo_dir = Path(__file__).resolve().parent.parent
+    test_root = repo_dir / "async-durable-execution-examples" / "test_examples"
     missing_handlers = sorted(
         handler
         for handler in load_test_handlers(test_root)
@@ -277,8 +281,9 @@ def generate_sam_template(
         runtime=runtime,
     )
 
+    repo_dir = Path(__file__).resolve().parent.parent
     template_path = output_path or (
-        Path(__file__).resolve().parent.parent / "template.generated.json"
+        repo_dir / "async-durable-execution-examples" / "template.generated.json"
     )
     template_path.parent.mkdir(parents=True, exist_ok=True)
     with template_path.open("w") as file:
