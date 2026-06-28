@@ -1,13 +1,13 @@
 from unittest.mock import Mock
 
 from async_durable_execution import DurableContext, durable_callable
-from async_durable_execution.context import get_current_context, invoke_user_callable
+from async_durable_execution.context import bind_current_context, get_current_context
 from async_durable_execution.models import OperationIdentifier, OperationSubType
 from async_durable_execution.primitive.step import StepContext
 from async_durable_execution.state import ExecutionState
 
 
-async def test_invoke_user_callable_sets_context_for_invocation():
+async def test_bind_current_context_sets_context_for_invocation():
     state = Mock(spec=ExecutionState)
     state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
@@ -23,10 +23,11 @@ async def test_invoke_user_callable_sets_context_for_invocation():
     async def async_callable() -> DurableContext:
         return get_current_context()
 
-    assert await invoke_user_callable(context, async_callable) is context
+    with bind_current_context(context):
+        assert await async_callable() is context
 
 
-async def test_invoke_user_callable_accepts_step_context():
+async def test_bind_current_context_accepts_step_context():
     state = Mock(spec=ExecutionState)
     state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
@@ -43,7 +44,8 @@ async def test_invoke_user_callable_accepts_step_context():
     async def async_callable() -> StepContext:
         return get_current_context()
 
-    assert await invoke_user_callable(context, async_callable) is context
+    with bind_current_context(context):
+        assert await async_callable() is context
 
 
 async def test_durable_callable_supports_instance_methods():

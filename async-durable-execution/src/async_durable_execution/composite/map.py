@@ -23,7 +23,7 @@ from .concurrency import (
     Executable,
     NestingType,
 )
-from ..context import invoke_user_callable
+from ..context import bind_current_context
 from ..execution import durable_callable
 from ..models import OperationIdentifier, OperationSubType
 from ..primitive.child import (
@@ -117,11 +117,8 @@ class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI0
             index=executable.index,
             items=self.items,
         )
-        result: R = await invoke_user_callable(
-            map_item_context,
-            executable.func,
-            item,
-        )
+        with bind_current_context(map_item_context):
+            result: R = await executable.func(item)
         logger.debug("✅ Processed map item: %s", executable.index)
         return result
 

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ..config import Duration, RetryDecision
-from ..context import get_current_context, invoke_user_callable
+from ..context import bind_current_context, get_current_context
 from ..execution import durable_callable
 from ..primitive.base import OperationContext
 from ..primitive.callback import Callback, create_callback
@@ -48,7 +48,8 @@ async def wait_for_callback_handler(
             execution_state=step_context.execution_state,
             operation_identifier=step_context.operation_identifier,
         )
-        return await invoke_user_callable(callback_context, submitter)
+        with bind_current_context(callback_context):
+            return await submitter()
 
     await step(
         func=submitter_step,

@@ -14,7 +14,7 @@ from .base import (
     OperationExecutor,
     OperationContext,
 )
-from ..context import get_current_context, invoke_user_callable
+from ..context import bind_current_context, get_current_context
 from ..exceptions import (
     CallableRuntimeError,
     InvocationError,
@@ -444,10 +444,8 @@ async def run_in_child_context(
         )
 
         async def callable_with_child_context():
-            return await invoke_user_callable(
-                child_context,
-                func,
-            )
+            with bind_current_context(child_context):
+                return await func()
 
         executor: ChildOperationExecutor[T] = ChildOperationExecutor(
             callable_with_child_context,

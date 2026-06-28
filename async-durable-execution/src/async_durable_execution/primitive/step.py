@@ -13,7 +13,7 @@ from .base import (
 )
 from .child import get_durable_context
 from ..config import RetryDecision, RetryPresets
-from ..context import get_current_context, invoke_user_callable
+from ..context import bind_current_context, get_current_context
 from ..exceptions import (
     CallableRuntimeError,
     ExecutionError,
@@ -180,7 +180,8 @@ class StepOperationExecutor(OperationExecutor[T]):
 
         try:
             # This is the actual code provided by the caller to execute durably inside the step
-            raw_result = await invoke_user_callable(step_context, self.func)
+            with bind_current_context(step_context):
+                raw_result = await self.func()
 
             serialized_result: str = await self.serialize_value(
                 value=raw_result,

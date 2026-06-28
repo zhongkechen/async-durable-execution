@@ -32,7 +32,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar, cast
 
-from .context import invoke_user_callable
+from .context import bind_current_context
 from .exceptions import (
     DurableExecutionsError,
     ExecutionError,
@@ -489,7 +489,8 @@ async def serialize(
         return await active_serdes.serialize(value)
 
     try:
-        return await invoke_user_callable(serdes_context, serialize_value)
+        with bind_current_context(serdes_context):
+            return await serialize_value()
     except Exception as e:
         logger.exception(
             "⚠️ Serialization failed for id: %s",
@@ -523,7 +524,8 @@ async def deserialize(
         return await active_serdes.deserialize(data)
 
     try:
-        return await invoke_user_callable(serdes_context, deserialize_value)
+        with bind_current_context(serdes_context):
+            return await deserialize_value()
     except Exception as e:
         logger.exception("⚠️ Deserialization failed for id: %s", operation_id)
         msg = f"Deserialization failed for id: {operation_id}"
