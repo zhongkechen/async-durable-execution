@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
 from ..config import Duration, JitterStrategy, duration_to_seconds
 from ..context import (
-    invoke_user_callable,
+    bind_current_context,
 )
 from ..exceptions import (
     CallableRuntimeError,
@@ -290,13 +290,8 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 execution_state=self.state,
                 operation_identifier=self.operation_identifier,
             )
-            condition_result = await invoke_user_callable(
-                check_context,
-                self.check,
-                current_state,
-            )
-
-            new_state, decision = self._resolve_condition_result(condition_result)
+            with bind_current_context(check_context):
+                new_state, decision = await self.check(current_state)
 
             serialized_state = await self.serialize_value(
                 value=new_state,
@@ -385,20 +380,6 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             "wait_for_condition should never reach this point"  # pragma: no cover
         )
         raise ExecutionError(msg)  # pragma: no cover
-
-    def _resolve_condition_result(
-        self,
-        condition_result: object,
-    ) -> tuple[T, WaitForConditionDecision]:
-        if (
-            isinstance(condition_result, tuple)
-            and len(condition_result) == 2
-            and isinstance(condition_result[1], WaitForConditionDecision)
-        ):
-            return cast(T, condition_result[0]), condition_result[1]
-
-        msg = "wait_for_condition check must return (state, WaitForConditionDecision)"
-        raise ValidationError(msg)
 
     def _resolve_delay_seconds(self, new_state: T, attempt: int) -> int:
         wait_strategy = self.wait_strategy or self.default_wait_strategy

@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
 
-from .context import invoke_user_callable
+from .context import bind_current_context
 from .primitive.child import DurableContext
 from .exceptions import (
     CheckpointError,
@@ -260,11 +260,8 @@ async def _wrapper_async(
 
         logger.debug("execution arn: %s", invocation_input.durable_execution_arn)
 
-        result = await invoke_user_callable(
-            root_context,
-            user_func,
-            input_event,
-        )
+        with bind_current_context(root_context):
+            result = await user_func(input_event)
         return await handle_user_function_result(execution_state, result)
 
     except SuspendExecution:

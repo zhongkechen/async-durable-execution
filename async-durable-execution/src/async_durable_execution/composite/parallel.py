@@ -15,7 +15,7 @@ from typing import (
 
 from ..primitive.child import ChildOperationExecutor, get_durable_context
 
-from ..context import invoke_user_callable
+from ..context import bind_current_context
 from ..execution import durable_callable
 from .concurrency import (
     CompletionConfig,
@@ -77,13 +77,8 @@ class ParallelExecutor(ConcurrentExecutor[Callable, R]):
 
     async def execute_item(self, child_context, executable: Executable[Callable]):  # noqa: PLR6301
         logger.debug("🔀 Processing parallel branch: %s", executable.index)
-        if getattr(child_context, "execution_state", None) is not None:
-            result: R = await invoke_user_callable(
-                child_context,
-                executable.func,
-            )
-        else:
-            result = await executable.func()
+        with bind_current_context(child_context):
+            result: R = await executable.func()
         logger.debug("✅ Processed parallel branch: %s", executable.index)
         return result
 
