@@ -26,7 +26,7 @@ from .primitive.child import OrphanedChildException
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
-    from .types import LambdaContext
+    from .models import LambdaContext
 
 logger = logging.getLogger(__name__)
 

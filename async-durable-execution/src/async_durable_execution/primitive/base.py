@@ -13,9 +13,9 @@ from ..models import (
 from ..serdes import SerDes, deserialize, serialize
 
 if TYPE_CHECKING:
+    from ..models import LambdaContext
     from ..models import OperationUpdate
     from ..state import ExecutionState
-    from ..types import LambdaContext
 
 T = TypeVar("T")
 S = TypeVar("S")

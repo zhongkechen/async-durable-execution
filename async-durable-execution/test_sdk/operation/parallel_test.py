@@ -33,6 +33,7 @@ from async_durable_execution.primitive import child
 from async_durable_execution.composite.concurrency import CompletionConfig, NestingType
 from async_durable_execution.composite.parallel import (
     ParallelExecutor,
+    ParallelSummaryGenerator,
     parallel_handler,
 )
 from async_durable_execution.serdes import serialize
@@ -154,7 +155,10 @@ def test_parallel_signature_accepts_config_fields_directly():
     assert "item_serdes" in parameters
     assert "summary_generator" in parameters
     assert "nesting_type" in parameters
-    assert parameters["summary_generator"].default is None
+    assert isinstance(
+        parameters["summary_generator"].default,
+        ParallelSummaryGenerator,
+    )
 
 
 def test_parallel_signature_requires_keyword_only_options():
@@ -217,10 +221,10 @@ async def test_parallel_passes_config_fields_to_handler(
 
 
 @patch("async_durable_execution.composite.parallel.parallel_handler")
-async def test_parallel_passes_explicit_none_summary_generator(
+async def test_parallel_passes_default_summary_generator(
     mock_parallel_handler,
 ):
-    """summary_generator defaults to None in the public wrapper."""
+    """summary_generator defaults to ParallelSummaryGenerator in the public wrapper."""
 
     async def branch_a():
         return "a"
@@ -239,7 +243,10 @@ async def test_parallel_passes_explicit_none_summary_generator(
 
     assert result == "parallel_result"
     mock_parallel_handler.assert_called_once()
-    assert mock_parallel_handler.call_args.kwargs["summary_generator"] is None
+    assert isinstance(
+        mock_parallel_handler.call_args.kwargs["summary_generator"],
+        ParallelSummaryGenerator,
+    )
 
 
 @patch("async_durable_execution.composite.parallel.parallel_handler")

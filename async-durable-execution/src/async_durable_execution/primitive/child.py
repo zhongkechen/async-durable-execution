@@ -33,9 +33,9 @@ from ..serdes import deserialize, serialize
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from ..composite.concurrency import SummaryGenerator
     from ..serdes import SerDes
     from ..state import ExecutionState
-    from ..types import SummaryGenerator
 
 logger = logging.getLogger(__name__)
 

@@ -40,12 +40,8 @@ from .state import ExecutionState
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    from .client import DurableServiceClient
-    from .types import (
-        AsyncLambdaApiClient,
-        LambdaContext,
-        LambdaApiClient,
-    )
+    from .client import AsyncLambdaApiClient, DurableServiceClient, LambdaApiClient
+    from .models import LambdaContext
 
 configure_durable_logger(logging.getLogger())
 logger = logging.getLogger(__name__)

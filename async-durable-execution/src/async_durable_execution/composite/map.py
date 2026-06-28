@@ -33,9 +33,9 @@ from ..primitive.child import (
 )
 
 if TYPE_CHECKING:
+    from .concurrency import SummaryGenerator
     from ..serdes import SerDes
     from ..state import ExecutionState
-    from ..types import SummaryGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +150,7 @@ async def map_handler(
     completion_config: CompletionConfig | None = None,
     serdes: SerDes | None = None,
     item_serdes: SerDes | None = None,
-    summary_generator: SummaryGenerator | None = None,
+    summary_generator: SummaryGenerator | None = MapSummaryGenerator(),
     nesting_type: NestingType = NestingType.NESTED,
     item_namer: Callable[[T, int], str] | None = None,
 ):
@@ -185,7 +185,7 @@ async def map(
     completion_config: CompletionConfig | None = None,
     serdes: SerDes | None = None,
     item_serdes: SerDes | None = None,
-    summary_generator: SummaryGenerator | None = None,
+    summary_generator: SummaryGenerator | None = MapSummaryGenerator(),
     nesting_type: NestingType = NestingType.NESTED,
     item_namer: Callable[[U, int], str] | None = None,
 ):

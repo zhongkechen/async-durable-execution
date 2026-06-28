@@ -2,6 +2,7 @@
 
 import asyncio
 import importlib
+import inspect
 import json
 from collections.abc import Mapping
 from typing import Any
@@ -37,6 +38,7 @@ from async_durable_execution.composite.map import (
     BatchedInput,
     MapExecutor,
     MapItemContext,
+    MapSummaryGenerator,
     map_handler,
 )
 from async_durable_execution.serdes import serialize
@@ -574,7 +576,7 @@ async def test_map_handler_passes_default_fields():
         assert call_args.kwargs["max_concurrency"] is None
         assert isinstance(call_args.kwargs["completion_config"], CompletionConfig)
         assert call_args.kwargs["serdes"] is None
-        assert call_args.kwargs["summary_generator"] is None
+        assert isinstance(call_args.kwargs["summary_generator"], MapSummaryGenerator)
         assert call_args.kwargs["item_serdes"] is None
         assert call_args.kwargs["nesting_type"] is NestingType.NESTED
         assert call_args.kwargs["item_namer"] is None
@@ -997,6 +999,52 @@ async def test_map_iterates_items_iterable_once(mock_handler):
 
     assert result == "map_result"
     assert items.iterations == 1
+
+
+def test_map_signature_defaults_to_map_summary_generator():
+    """The public map operation defaults to MapSummaryGenerator."""
+    parameters = inspect.signature(map_operation).parameters
+
+    assert isinstance(
+        parameters["summary_generator"].default,
+        MapSummaryGenerator,
+    )
+
+
+@patch("async_durable_execution.composite.map.map_handler")
+@patch("async_durable_execution.composite.map._run_in_child_context")
+async def test_map_passes_default_summary_generator_to_handler(
+    mock_run_in_child_context,
+    mock_map_handler,
+):
+    """The public wrapper passes the default map summary generator to the handler."""
+
+    async def test_function(item):
+        return item
+
+    async def handler_result():
+        return "map_result"
+
+    context = create_test_context(state=create_mock_execution_state())
+
+    async def run_child_func(func, *_args, **_kwargs):
+        token = set_current_context(context.create_child_context("map-op"))
+        try:
+            return await func()
+        finally:
+            reset_current_context(token)
+
+    mock_run_in_child_context.side_effect = run_child_func
+    mock_map_handler.return_value = handler_result
+
+    result = await run_with_context(context, map_operation(test_function, [1]))
+
+    assert result == "map_result"
+    mock_map_handler.assert_called_once()
+    assert isinstance(
+        mock_map_handler.call_args.kwargs["summary_generator"],
+        MapSummaryGenerator,
+    )
 
 
 async def test_map_name_is_keyword_only():

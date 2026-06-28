@@ -33,7 +33,7 @@ from async_durable_execution.primitive.child import (
     run_in_child_context,
 )
 from async_durable_execution.state import ExecutionState
-from async_durable_execution.types import SummaryGenerator
+from async_durable_execution.composite.concurrency import SummaryGenerator
 
 from ..serdes_test import CustomDictSerDes
 

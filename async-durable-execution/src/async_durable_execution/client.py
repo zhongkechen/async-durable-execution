@@ -5,6 +5,7 @@ import inspect
 import importlib
 import importlib.util
 import logging
+from collections.abc import Awaitable, Mapping
 from typing import Any, Protocol, cast
 
 from botocore.config import Config
@@ -17,9 +18,32 @@ from .models import (
     OperationUpdate,
     StateOutput,
 )
-from .types import AsyncLambdaApiClient, LambdaApiClient
 
 logger = logging.getLogger(__name__)
+
+
+class LambdaApiClient(Protocol):
+    """Minimal Lambda client surface needed by durable execution."""
+
+    def checkpoint_durable_execution(
+        self, **kwargs: Any
+    ) -> Mapping[str, Any]: ...  # pragma: no cover
+
+    def get_durable_execution_state(
+        self, **kwargs: Any
+    ) -> Mapping[str, Any]: ...  # pragma: no cover
+
+
+class AsyncLambdaApiClient(Protocol):
+    """Minimal async Lambda client surface needed by durable execution."""
+
+    def checkpoint_durable_execution(
+        self, **kwargs: Any
+    ) -> Awaitable[Mapping[str, Any]]: ...  # pragma: no cover
+
+    def get_durable_execution_state(
+        self, **kwargs: Any
+    ) -> Awaitable[Mapping[str, Any]]: ...  # pragma: no cover
 
 
 class DurableServiceClient(Protocol):

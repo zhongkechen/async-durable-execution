@@ -1,6 +1,8 @@
 """Tests for the types module."""
 
+from collections.abc import Callable
 from datetime import timedelta
+from typing import get_origin
 from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
 from async_durable_execution import (
@@ -13,12 +15,16 @@ from async_durable_execution import (
     map as map_operation,
 )
 from async_durable_execution.context import reset_current_context, set_current_context
-from async_durable_execution.models import OperationIdentifier, OperationSubType
+from async_durable_execution.models import (
+    LambdaContext,
+    OperationIdentifier,
+    OperationSubType,
+)
 from async_durable_execution.primitive import child
 from async_durable_execution.config import JitterStrategy
+from async_durable_execution.composite.concurrency import SummaryGenerator
 from async_durable_execution.serdes import ExtendedTypeSerDes
 from async_durable_execution.client import DurableServiceClient
-from async_durable_execution.types import SummaryGenerator
 
 
 def make_async_executor(result):
@@ -35,6 +41,7 @@ def test_additional_public_types_importable_from_package_root():
         "DurableServiceClient": DurableServiceClient,
         "ExtendedTypeSerDes": ExtendedTypeSerDes,
         "JitterStrategy": JitterStrategy,
+        "LambdaContext": LambdaContext,
         "OperationSubType": OperationSubType,
         "SummaryGenerator": SummaryGenerator,
     }
@@ -42,6 +49,11 @@ def test_additional_public_types_importable_from_package_root():
     for name, public_type in expected_exports.items():
         assert getattr(ade, name) is public_type
         assert name in ade.__all__
+
+
+def test_summary_generator_is_callable_type_alias():
+    """SummaryGenerator is a callable interface, not a protocol class."""
+    assert get_origin(SummaryGenerator) is Callable
 
 
 def test_internal_model_types_not_exported_from_package_root():

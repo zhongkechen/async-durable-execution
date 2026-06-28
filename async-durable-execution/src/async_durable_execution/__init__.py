@@ -8,6 +8,7 @@ from .__about__ import __version__
 # Concurrency
 from .models import (
     InvocationStatus,
+    LambdaContext,
     OperationSubType,
     OperationType,
     OperationStatus,
@@ -25,6 +26,7 @@ from .composite.concurrency import (
     CompletionConfig,
     CompletionReason,
     NestingType,
+    SummaryGenerator,
 )
 from .composite.wait_for_condition import (
     WaitStrategyBuilder,
@@ -75,7 +77,6 @@ from .execution import durable_callable, durable_execution
 from .primitive.wait import wait
 from .serdes import ExtendedTypeSerDes, JsonSerDes, SerDes, SerDesContext
 from .client import DurableServiceClient
-from .types import LambdaContext, SummaryGenerator
 
 __all__ = [
     "__version__",
