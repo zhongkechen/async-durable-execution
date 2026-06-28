@@ -6,11 +6,9 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from ..config import Duration
-from ..context import get_current_context
-from ..context import invoke_user_callable
+from ..config import Duration, RetryDecision
+from ..context import get_current_context, invoke_user_callable
 from ..execution import durable_callable
-from ..config import RetryDecision
 from ..primitive.base import OperationContext
 from ..primitive.callback import Callback, create_callback
 from ..primitive.child import run_in_child_context

@@ -16,11 +16,13 @@ from ..exceptions import SuspendExecution, TimedSuspendExecution
 from ..exceptions import InvalidStateError
 from ..models import (
     ErrorObject,
+    Operation,
     OperationIdentifier,
     OperationStatus,
     SerializableModel,
     _metadata,
 )
+from ..primitive.base import OperationExecutor
 from ..primitive.child import ChildOperationExecutor, OrphanedChildException
 from ..serdes import deserialize
 
@@ -501,11 +503,18 @@ class TimerScheduler:
         self._resume_tasks.clear()
 
 
-class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
+class ConcurrentExecutor(
+    OperationExecutor[BatchResult[ResultType]],
+    ABC,
+    Generic[CallableType, ResultType],
+):
     """Execute durable operations concurrently using asyncio tasks."""
 
     def __init__(
         self,
+        execution_state: ExecutionState,
+        operation_identifier: OperationIdentifier,
+        executor_context: DurableContext,
         executables: list[Executable[CallableType]],
         max_concurrency: int | None,
         completion_config: CompletionConfig,
@@ -517,6 +526,11 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
         summary_generator: SummaryGenerator | None = None,
         nesting_type: NestingType = NestingType.NESTED,
     ):
+        super().__init__(
+            state=execution_state,
+            operation_identifier=operation_identifier,
+        )
+        self.executor_context = executor_context
         self.executables = executables
         self.max_concurrency = max_concurrency
         self.completion_config = completion_config
@@ -539,6 +553,14 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
         self.serdes = serdes
         self.item_serdes = item_serdes
 
+    def _require_process_context(self) -> tuple[ExecutionState, DurableContext]:
+        if not hasattr(self, "state") or self.executor_context is None:
+            raise InvalidStateError(
+                "ConcurrentExecutor.process() requires execution state, operation "
+                "identifier, and executor context."
+            )
+        return self.state, self.executor_context
+
     @abstractmethod
     async def execute_item(
         self,
@@ -550,9 +572,35 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
     def get_iteration_name(self, index: int) -> str:
         return f"{self.name_prefix}{index}"
 
+    async def start(self) -> BatchResult[ResultType]:
+        execution_state, executor_context = self._require_process_context()
+        return await self.execute(execution_state, executor_context=executor_context)
+
+    async def replay(self, operation: Operation) -> BatchResult[ResultType]:
+        execution_state, executor_context = self._require_process_context()
+        if operation.status is OperationStatus.SUCCEEDED:
+            return await self.replay_completed(execution_state, executor_context)
+        return await self.execute(execution_state, executor_context=executor_context)
+
     async def execute(
-        self, execution_state: ExecutionState, executor_context: DurableContext
+        self,
+        execution_state: object | None = None,
+        executor_context: DurableContext | None = None,
     ) -> BatchResult[ResultType]:
+        if (
+            execution_state is None
+            or isinstance(execution_state, Operation)
+            or executor_context is None
+        ):
+            stored_execution_state, stored_executor_context = (
+                self._require_process_context()
+            )
+            if execution_state is None or isinstance(execution_state, Operation):
+                execution_state = stored_execution_state
+            if executor_context is None:
+                executor_context = stored_executor_context
+
+        execution_state = cast("ExecutionState", execution_state)
         logger.debug(
             "▶️ Executing concurrent operation, items: %d", len(self.executables)
         )
@@ -761,7 +809,7 @@ class ConcurrentExecutor(ABC, Generic[CallableType, ResultType]):
         )
         return await executor.process()
 
-    async def replay(
+    async def replay_completed(
         self, execution_state: ExecutionState, executor_context: DurableContext
     ) -> BatchResult[ResultType]:
         items: list[BatchItem[ResultType]] = []

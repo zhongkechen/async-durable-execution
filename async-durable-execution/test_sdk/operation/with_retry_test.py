@@ -348,11 +348,11 @@ async def test_default_retry_strategy_is_used_when_not_provided():
     assert call_count == 2
     assert len(ctx.wait_calls) == 1
     assert ctx.wait_calls[0].duration > 0
-    assert ctx.wait_calls[0].name is None
+    assert ctx.wait_calls[0].name == "backoff-1"
 
 
-async def test_no_name_creates_anonymous_child_context_and_anonymous_waits():
-    """Missing name preserves anonymous child/wait operations."""
+async def test_no_name_creates_default_child_context_and_backoff_waits():
+    """Missing name uses stable default child and wait operation names."""
     ctx = MockDurableContext()
     retry_strategy = _make_retry_strategy(max_attempts=3)
 
@@ -373,8 +373,10 @@ async def test_no_name_creates_anonymous_child_context_and_anonymous_waits():
     )
 
     assert result == "ok"
-    assert ctx.child_context_calls == [RunInChildContextCall(name=None, result="ok")]
-    assert ctx.wait_calls == [WaitCall(duration=1, name=None)]
+    assert ctx.child_context_calls == [
+        RunInChildContextCall(name="with-retry", result="ok")
+    ]
+    assert ctx.wait_calls == [WaitCall(duration=1, name="backoff-1")]
 
 
 async def test_name_is_forwarded_to_child_context_and_backoff_waits():
@@ -500,9 +502,9 @@ async def test_integration_with_retry_strategy_builder():
 
     assert result == "done"
     assert ctx.wait_calls == [
-        WaitCall(duration=2, name=None),
-        WaitCall(duration=4, name=None),
-        WaitCall(duration=8, name=None),
+        WaitCall(duration=2, name="backoff-1"),
+        WaitCall(duration=4, name="backoff-2"),
+        WaitCall(duration=8, name="backoff-3"),
     ]
 
 
@@ -527,6 +529,6 @@ async def test_integration_retries_exhausted_raises_last_exception():
         )
 
     assert ctx.wait_calls == [
-        WaitCall(duration=1, name=None),
-        WaitCall(duration=2, name=None),
+        WaitCall(duration=1, name="backoff-1"),
+        WaitCall(duration=2, name="backoff-2"),
     ]
