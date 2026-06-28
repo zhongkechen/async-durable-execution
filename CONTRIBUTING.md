@@ -137,7 +137,10 @@ hatch run test:all --pdb
 ### Test layout
 
 - Put tests in the package `tests/` or `test/` directory that matches the code
-  you are changing.
+  you are changing. For the SDK package, mirror the source layout under
+  `async-durable-execution/test_sdk/`: primitive operation tests live in
+  `primitive/`, composite operation tests live in `composite/`, and shared model
+  or package-level behavior stays at the `test_sdk/` root.
 - Use filenames ending in `_test.py`.
 - Prefer adding focused unit tests near the affected area, and add integration
   coverage when behavior spans multiple components.

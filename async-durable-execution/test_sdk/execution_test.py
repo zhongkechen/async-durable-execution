@@ -6,13 +6,24 @@ import json
 import logging
 import os
 import time
+from datetime import timedelta
+from functools import partial
 from typing import Any, cast
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
 from async_durable_execution.context import get_current_context
-from async_durable_execution import DurableContext, step
+from async_durable_execution import (
+    DurableContext,
+    create_callback,
+    durable_callable,
+    invoke,
+    run_in_child_context,
+    step,
+    wait,
+    wait_for_callback,
+)
 from async_durable_execution.exceptions import (
     BotoClientError,
     CheckpointError,
@@ -50,6 +61,7 @@ from async_durable_execution.models import (
     WaitDetails,
 )
 from async_durable_execution.client import DurableServiceClient
+from .test_helpers import operation_id_sequence
 
 
 LARGE_RESULT = "large_success" * 1024 * 1024
@@ -3172,3 +3184,1351 @@ async def test_durable_execution_supports_async_steps_inside_async_handler():
 
     assert result["Status"] == InvocationStatus.SUCCEEDED.value
     assert json.loads(result["Result"]) == {"step_result": "async-step-success"}
+
+
+def create_mock_checkpoint_with_operations():
+    """Create a mock checkpoint function that properly tracks operations.
+
+    Returns a tuple of (mock_checkpoint_function, checkpoint_calls_list).
+    The mock properly maintains an operations list that gets updated with each checkpoint.
+    """
+    checkpoint_calls = []
+    operations = [
+        Operation(
+            operation_id="execution-1",
+            operation_type=OperationType.EXECUTION,
+            status=OperationStatus.STARTED,
+        )
+    ]
+
+    async def mock_checkpoint(
+        durable_execution_arn,
+        checkpoint_token,
+        updates,
+        client_token="token",  # noqa: S107
+    ):
+        checkpoint_calls.append(updates)
+
+        # Convert updates to Operation objects and add to operations list
+        for update in updates:
+            op = Operation(
+                operation_id=update.operation_id,
+                operation_type=update.operation_type,
+                status=OperationStatus.STARTED,  # New operations start as STARTED
+                parent_id=update.parent_id,
+            )
+            operations.append(op)
+
+        return CheckpointOutput(
+            checkpoint_token="new_token",  # noqa: S106
+            new_execution_state=CheckpointUpdatedExecutionState(
+                operations=operations.copy()
+            ),
+        )
+
+    return mock_checkpoint, checkpoint_calls
+
+
+async def test_step_different_ways_to_pass_args():
+    async def step_plain() -> str:
+        return "from step plain"
+
+    async def step_no_args() -> str:
+        return "from step no args"
+
+    async def step_with_args(a: int, b: str) -> str:
+        return f"from step {a} {b}"
+
+    @durable_execution
+    async def my_handler(event) -> list[str]:
+        del event
+        results: list[str] = []
+        result: str = await step(partial(step_with_args, a=123, b="str"))
+        assert result == "from step 123 str"
+        results.append(result)
+
+        result = await step(step_no_args)
+        assert result == "from step no args"
+        results.append(result)
+
+        # note this won't work:
+        # result: str = step(step_no_args)
+
+        result = await step(step_plain)
+        assert result == "from step plain"
+        results.append(result)
+
+        return results
+
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        # Mock the checkpoint method to track calls
+        checkpoint_calls = []
+
+        async def mock_checkpoint(
+            durable_execution_arn,
+            checkpoint_token,
+            updates,
+            client_token="token",  # noqa: S107
+        ):
+            checkpoint_calls.append(updates)
+
+            return CheckpointOutput(
+                checkpoint_token="new_token",  # noqa: S106
+                new_execution_state=CheckpointUpdatedExecutionState(),
+            )
+
+        mock_client.checkpoint = mock_checkpoint
+
+        # Create test event
+        event = {
+            "DurableExecutionArn": "test-arn/execution-1",
+            "CheckpointToken": "test-token",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "execution-1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+            "LocalRunner": True,
+        }
+
+        # Create mock lambda context
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request-id"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 0  # noqa: SLF001
+        lambda_context.invoked_function_arn = "test-arn"
+        lambda_context.tenant_id = None
+
+        # Execute the handler
+        result = await run_handler(my_handler, event, lambda_context)
+
+        assert result["Status"] == InvocationStatus.SUCCEEDED.value
+        assert (
+            result["Result"]
+            == '["from step 123 str", "from step no args", "from step plain"]'
+        )
+
+        # 3 START checkpoint, 3 SUCCEED checkpoint (batched together)
+        # Flatten all operations from all batches
+        all_operations = [op for batch in checkpoint_calls for op in batch]
+        assert len(all_operations) == 6
+
+        # Check the last operation
+        last_checkpoint = all_operations[-1]
+        assert last_checkpoint.operation_type is OperationType.STEP
+        assert last_checkpoint.action is OperationAction.SUCCEED
+        assert last_checkpoint.payload == '"from step plain"'
+
+
+async def test_durable_callable_decorator_creates_step_operation():
+    @durable_callable
+    async def decorated_step(status_code: int) -> str:
+        assert get_current_context() is not None
+        logging.getLogger(__name__).info("status=%s", status_code)
+        return f"status:{status_code}"
+
+    @durable_execution
+    async def my_handler(event) -> str:
+        del event
+        return await step(decorated_step(200))
+
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        checkpoint_calls = []
+
+        async def mock_checkpoint(
+            durable_execution_arn,
+            checkpoint_token,
+            updates,
+            client_token="token",  # noqa: S107
+        ):
+            checkpoint_calls.append(updates)
+
+            return CheckpointOutput(
+                checkpoint_token="new_token",  # noqa: S106
+                new_execution_state=CheckpointUpdatedExecutionState(),
+            )
+
+        mock_client.checkpoint = mock_checkpoint
+
+        event = {
+            "DurableExecutionArn": "test-arn/execution-1",
+            "CheckpointToken": "test-token",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "execution-1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+            "LocalRunner": True,
+        }
+
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request-id"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 0  # noqa: SLF001
+        lambda_context.invoked_function_arn = "test-arn"
+        lambda_context.tenant_id = None
+
+        result = await run_handler(my_handler, event, lambda_context)
+
+        assert result["Status"] == InvocationStatus.SUCCEEDED.value
+        assert result["Result"] == '"status:200"'
+
+        all_operations = [op for batch in checkpoint_calls for op in batch]
+        assert len(all_operations) == 2
+        assert all_operations[0].name == "decorated_step"
+        assert all_operations[1].name == "decorated_step"
+
+
+async def test_step_with_logger():
+    async def mystep(a: int, b: str) -> str:
+        assert get_current_context() is not None
+        logging.getLogger(__name__).info("from step %s %s", a, b)
+        return "result"
+
+    @durable_execution
+    async def my_handler(event):
+        del event
+        result: str = await step(partial(mystep, a=123, b="str"))
+        assert result == "result"
+
+    with (
+        patch(
+            "async_durable_execution.execution.ThreadedSyncLambdaClient"
+        ) as mock_client_class,
+        patch.object(logging.getLogger(__name__), "info") as mock_info,
+    ):
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        # Mock the checkpoint method to track calls
+        checkpoint_calls = []
+
+        async def mock_checkpoint(
+            durable_execution_arn,
+            checkpoint_token,
+            updates,
+            client_token="token",  # noqa: S107
+        ):
+            checkpoint_calls.append(updates)
+
+            return CheckpointOutput(
+                checkpoint_token="new_token",  # noqa: S106
+                new_execution_state=CheckpointUpdatedExecutionState(),
+            )
+
+        mock_client.checkpoint = mock_checkpoint
+
+        # Create test event
+        event = {
+            "DurableExecutionArn": "test-arn/execution-1",
+            "CheckpointToken": "test-token",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "execution-1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+            "LocalRunner": True,
+        }
+
+        # Create mock lambda context
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request-id"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 0  # noqa: SLF001
+        lambda_context.invoked_function_arn = "test-arn"
+        lambda_context.tenant_id = None
+
+        # Execute the handler
+        result = await run_handler(my_handler, event, lambda_context)
+
+        assert result["Status"] == InvocationStatus.SUCCEEDED.value
+
+        # 1 START checkpoint, 1 SUCCEED checkpoint (batched together)
+        # Flatten all operations from all batches
+        all_operations = [op for batch in checkpoint_calls for op in batch]
+        assert len(all_operations) == 2
+
+        mock_info.assert_called_once_with("from step %s %s", 123, "str")
+
+        # Check the START operation
+        start_op = all_operations[0]
+        assert start_op.operation_type == OperationType.STEP
+        assert start_op.action == OperationAction.START
+        # Check the SUCCEED operation
+        succeed_op = all_operations[1]
+        assert succeed_op.operation_type == OperationType.STEP
+        assert succeed_op.action == OperationAction.SUCCEED
+        assert succeed_op.operation_id == start_op.operation_id
+
+
+async def test_wait_inside_run_in_childcontext():
+    """A wait inside a child context should suspend the execution."""
+
+    mock_inside_child = Mock()
+
+    async def func(a: int, b: int):
+        child_context = cast(DurableContext, get_current_context())
+        mock_inside_child(a, b)
+        await wait(timedelta(seconds=1))
+
+    @durable_execution
+    async def my_handler(event):
+        del event
+        await run_in_child_context(partial(func, 10, 20), name="func")
+
+    # Mock the lambda client
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        # Use helper to create mock that properly tracks operations
+        mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
+        mock_client.checkpoint = mock_checkpoint
+
+        # Create test event
+        event = {
+            "DurableExecutionArn": "test-arn/execution-1",
+            "CheckpointToken": "test-token",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "execution-1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+            "LocalRunner": True,
+        }
+
+        # Create mock lambda context
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request-id"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 0  # noqa: SLF001
+        lambda_context.invoked_function_arn = "test-arn"
+        lambda_context.tenant_id = None
+
+        # Execute the handler
+        result = await run_handler(my_handler, event, lambda_context)
+
+        # Assert the execution returns PENDING status
+        assert result["Status"] == InvocationStatus.PENDING.value
+
+        # Assert that checkpoints were created (may be batched together)
+        # Flatten all operations from all batches
+        all_operations = [op for batch in checkpoint_calls for op in batch]
+        assert len(all_operations) == 2  # One for child context start, one for wait
+
+        expected_parent_id = next(operation_id_sequence())
+        expected_child_id = next(operation_id_sequence(expected_parent_id))
+
+        # Check first operation (child context start)
+        first_checkpoint = all_operations[0]
+        assert first_checkpoint.operation_type is OperationType.CONTEXT
+        assert first_checkpoint.action is OperationAction.START
+        assert first_checkpoint.operation_id == expected_parent_id
+
+        # Check second operation (wait operation)
+        second_checkpoint = all_operations[1]
+        assert second_checkpoint.operation_type is OperationType.WAIT
+        assert second_checkpoint.action is OperationAction.START
+        assert second_checkpoint.operation_id == expected_child_id
+        assert second_checkpoint.wait_options.wait_seconds == 1
+
+        assert second_checkpoint.operation_id != first_checkpoint.operation_id
+
+        mock_inside_child.assert_called_once_with(10, 20)
+
+
+class CustomError(Exception):
+    """Custom exception for testing."""
+
+
+async def test_step_checkpoint_failure_propagates_error():
+    """Test that errors during checkpoint invocation propagate correctly from background thread.
+
+    This test demonstrates a bug: when a checkpoint fails in the background thread,
+    the user code thread is blocked waiting on completion_event.wait() with no timeout.
+    The background thread exception is raised, but the user thread never completes,
+    causing the execution to hang indefinitely.
+    """
+
+    async def failing_step() -> str:
+        return "this should checkpoint but fail"
+
+    @durable_execution
+    async def my_handler(event):
+        del event
+        # This step will trigger a checkpoint that fails
+        result: str = await step(failing_step)
+        return result
+
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        # Mock the checkpoint method to raise an error (using RuntimeError as a generic exception)
+        async def mock_checkpoint_failure(
+            durable_execution_arn,
+            checkpoint_token,
+            updates,
+            client_token="token",  # noqa: S107
+        ):
+            # Simulate a failure during checkpoint invocation
+            msg = "Checkpoint service unavailable"
+            raise RuntimeError(msg)
+
+        mock_client.checkpoint = mock_checkpoint_failure
+
+        # Create test event
+        event = {
+            "DurableExecutionArn": "test-arn/execution-1",
+            "CheckpointToken": "test-token",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "execution-1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+            "LocalRunner": True,
+        }
+
+        # Create mock lambda context
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request-id"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 0  # noqa: SLF001
+        lambda_context.invoked_function_arn = "test-arn"
+        lambda_context.tenant_id = None
+
+        # Execute the handler - local runner surfaces execution failure in the
+        # invocation payload rather than re-raising to the caller.
+        result = await run_handler(my_handler, event, lambda_context)
+        assert result["Status"] == InvocationStatus.FAILED.value
+        assert result["Error"]["ErrorMessage"] == "Checkpoint service unavailable"
+
+
+async def test_wait_not_caught_by_exception():
+    """Do not catch Suspend exceptions."""
+
+    @durable_execution
+    async def my_handler(event: Any):
+        del event
+        try:
+            await wait(timedelta(seconds=1))
+        except Exception as err:
+            msg = "This should not be caught"
+            raise CustomError(msg) from err
+
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        # Use helper to create mock that properly tracks operations
+        mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
+        mock_client.checkpoint = mock_checkpoint
+
+        # Create test event
+        event = {
+            "DurableExecutionArn": "test-arn/execution-1",
+            "CheckpointToken": "test-token",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "execution-1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+            "LocalRunner": True,
+        }
+
+        # Create mock lambda context
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request-id"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 0  # noqa: SLF001
+        lambda_context.invoked_function_arn = "test-arn"
+        lambda_context.tenant_id = None
+
+        # Execute the handler
+        result = await run_handler(my_handler, event, lambda_context)
+        operation_ids = operation_id_sequence()
+
+        # Assert the execution returns PENDING status
+        assert result["Status"] == InvocationStatus.PENDING.value
+
+        # Assert that only 1 checkpoint was created for the wait operation
+        assert len(checkpoint_calls) == 1
+
+        # Check the wait checkpoint
+        checkpoint = checkpoint_calls[0][0]
+        assert checkpoint.operation_type is OperationType.WAIT
+        assert checkpoint.action is OperationAction.START
+        assert checkpoint.operation_id == next(operation_ids)
+        assert checkpoint.wait_options.wait_seconds == 1
+
+
+async def test_durable_callable_wait_for_callback_submitter():
+    """Test durable_callable submitter uses callback_id from current context."""
+
+    mock_submitter = Mock()
+
+    @durable_callable
+    async def submit_to_external_system(task_name, priority):
+        callback_context = get_current_context()
+        callback_id = callback_context.callback_id
+        mock_submitter(callback_id, task_name, priority)
+        logging.getLogger(__name__).info(
+            "Submitting %s with callback %s", task_name, callback_id
+        )
+
+    @durable_execution
+    async def my_handler(event):
+        del event
+        await wait_for_callback(submit_to_external_system("my_task", priority=5))
+
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        checkpoint_calls = []
+
+        async def mock_checkpoint(
+            durable_execution_arn,
+            checkpoint_token,
+            updates,
+            client_token="token",  # noqa: S107
+        ):
+            checkpoint_calls.append(updates)
+
+            # For CALLBACK operations, return the operation with callback details
+            operations = [
+                Operation(
+                    operation_id=update.operation_id,
+                    operation_type=OperationType.CALLBACK,
+                    status=OperationStatus.STARTED,
+                    callback_details=CallbackDetails(
+                        callback_id=f"callback-{update.operation_id[:8]}"
+                    ),
+                )
+                for update in updates
+                if update.operation_type == OperationType.CALLBACK
+            ]
+
+            return CheckpointOutput(
+                checkpoint_token="new_token",  # noqa: S106
+                new_execution_state=CheckpointUpdatedExecutionState(
+                    operations=operations, next_marker=None
+                ),
+            )
+
+        mock_client.checkpoint = mock_checkpoint
+
+        event = {
+            "DurableExecutionArn": "test-arn/execution-1",
+            "CheckpointToken": "test-token",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "execution-1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+            "LocalRunner": True,
+        }
+
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request-id"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 0  # noqa: SLF001
+        lambda_context.invoked_function_arn = "test-arn"
+        lambda_context.tenant_id = None
+
+        result = await run_handler(my_handler, event, lambda_context)
+
+        assert result["Status"] == InvocationStatus.PENDING.value
+
+        all_operations = [op for batch in checkpoint_calls for op in batch]
+        assert len(all_operations) == 4
+
+        # First: CONTEXT START
+        first_checkpoint = all_operations[0]
+        assert first_checkpoint.operation_type is OperationType.CONTEXT
+        assert first_checkpoint.action is OperationAction.START
+        assert first_checkpoint.name == "submit_to_external_system"
+
+        # Second: CALLBACK START
+        second_checkpoint = all_operations[1]
+        assert second_checkpoint.operation_type is OperationType.CALLBACK
+        assert second_checkpoint.action is OperationAction.START
+        assert second_checkpoint.parent_id == first_checkpoint.operation_id
+        assert second_checkpoint.name == "submit_to_external_system-callback"
+
+        # Third: STEP START
+        third_checkpoint = all_operations[2]
+        assert third_checkpoint.operation_type is OperationType.STEP
+        assert third_checkpoint.action is OperationAction.START
+        assert third_checkpoint.parent_id == first_checkpoint.operation_id
+        assert third_checkpoint.name == "submit_to_external_system-submitter"
+
+        # Fourth: STEP SUCCEED
+        fourth_checkpoint = all_operations[3]
+        assert fourth_checkpoint.operation_type is OperationType.STEP
+        assert fourth_checkpoint.action is OperationAction.SUCCEED
+        assert fourth_checkpoint.operation_id == third_checkpoint.operation_id
+
+        mock_submitter.assert_called_once()
+        call_args = mock_submitter.call_args[0]
+        assert call_args[1] == "my_task"
+        assert call_args[2] == 5
+
+
+async def test_end_to_end_step_operation_with_double_check():
+    """Test end-to-end step operation execution with double-check pattern.
+
+    Verifies that the step executor re-checks state after creating a synchronous
+    START checkpoint, enabling immediate response handling.
+    """
+
+    async def my_step() -> str:
+        return "step_result"
+
+    @durable_execution
+    async def my_handler(event) -> str:
+        result: str = await step(my_step)
+        return result
+
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
+        mock_client.checkpoint = mock_checkpoint
+
+        event = {
+            "DurableExecutionArn": "test-arn/execution-1",
+            "CheckpointToken": "test-token",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "execution-1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+            "LocalRunner": True,
+        }
+
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request-id"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 0  # noqa: SLF001
+        lambda_context.invoked_function_arn = "test-arn"
+        lambda_context.tenant_id = None
+
+        result = await run_handler(my_handler, event, lambda_context)
+
+        assert result["Status"] == InvocationStatus.SUCCEEDED.value
+        assert result["Result"] == '"step_result"'
+
+        # Verify checkpoints were created (START + SUCCEED)
+        all_operations = [op for batch in checkpoint_calls for op in batch]
+        assert len(all_operations) == 2
+
+
+async def test_end_to_end_multiple_operations_execute_sequentially():
+    """Test end-to-end execution with multiple operations.
+
+    Verifies that multiple operations in a workflow execute correctly
+    with the immediate response handling pattern.
+    """
+
+    async def step1() -> str:
+        return "result1"
+
+    async def step2() -> str:
+        return "result2"
+
+    @durable_execution
+    async def my_handler(event) -> list[str]:
+        return [await step(step1), await step(step2)]
+
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
+        mock_client.checkpoint = mock_checkpoint
+
+        event = {
+            "DurableExecutionArn": "test-arn/execution-1",
+            "CheckpointToken": "test-token",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "execution-1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+            "LocalRunner": True,
+        }
+
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request-id"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 0  # noqa: SLF001
+        lambda_context.invoked_function_arn = "test-arn"
+        lambda_context.tenant_id = None
+
+        result = await run_handler(my_handler, event, lambda_context)
+
+        assert result["Status"] == InvocationStatus.SUCCEEDED.value
+        assert result["Result"] == '["result1", "result2"]'
+
+        # Verify all checkpoints were created (2 START + 2 SUCCEED)
+        all_operations = [op for batch in checkpoint_calls for op in batch]
+        assert len(all_operations) == 4
+
+
+async def test_end_to_end_wait_operation_with_double_check():
+    """Test end-to-end wait operation execution with double-check pattern.
+
+    Verifies that wait operations properly use the double-check pattern
+    for immediate response handling.
+    """
+
+    @durable_execution
+    async def my_handler(event) -> str:
+        await wait(timedelta(seconds=5))
+        return "completed"
+
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
+        mock_client.checkpoint = mock_checkpoint
+
+        event = {
+            "DurableExecutionArn": "test-arn/execution-1",
+            "CheckpointToken": "test-token",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "execution-1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+            "LocalRunner": True,
+        }
+
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request-id"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 0  # noqa: SLF001
+        lambda_context.invoked_function_arn = "test-arn"
+        lambda_context.tenant_id = None
+
+        # Wait will suspend, so we expect PENDING status
+        result = await run_handler(my_handler, event, lambda_context)
+
+        assert result["Status"] == InvocationStatus.PENDING.value
+
+        # Verify wait checkpoint was created
+        all_operations = [op for batch in checkpoint_calls for op in batch]
+        assert len(all_operations) >= 1
+
+
+async def test_end_to_end_checkpoint_synchronization_with_operations_list():
+    """Test that synchronous checkpoints properly update operations list.
+
+    Verifies that when is_sync=True, the operations list is updated
+    before the second status check occurs.
+    """
+
+    async def my_step() -> str:
+        return "result"
+
+    @durable_execution
+    async def my_handler(event) -> str:
+        return await step(my_step)
+
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
+        mock_client.checkpoint = mock_checkpoint
+
+        event = {
+            "DurableExecutionArn": "test-arn/execution-1",
+            "CheckpointToken": "test-token",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "execution-1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+            "LocalRunner": True,
+        }
+
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request-id"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 0  # noqa: SLF001
+        lambda_context.invoked_function_arn = "test-arn"
+        lambda_context.tenant_id = None
+
+        result = await run_handler(my_handler, event, lambda_context)
+
+        assert result["Status"] == InvocationStatus.SUCCEEDED.value
+
+        # Verify operations list was properly maintained
+        all_operations = [op for batch in checkpoint_calls for op in batch]
+        assert len(all_operations) >= 2  # At least START and SUCCEED
+
+
+async def test_callback_deferred_error_handling_to_result():
+    """Test callback deferred error handling pattern.
+
+    Verifies that callback operations properly return callback_id through
+    the immediate response handling pattern, enabling deferred error handling.
+    """
+
+    async def step_after_callback() -> str:
+        return "code_executed_after_callback"
+
+    @durable_execution
+    async def my_handler(event) -> str:
+        # Create callback
+        callback = await create_callback(name="test_callback")
+
+        # This code executes even if callback will eventually fail
+        # This is the deferred error handling pattern
+        result = await step(step_after_callback)
+
+        return f"{callback.callback_id}:{result}"
+
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        checkpoint_calls = []
+        operations = [
+            Operation(
+                operation_id="execution-1",
+                operation_type=OperationType.EXECUTION,
+                status=OperationStatus.STARTED,
+            )
+        ]
+
+        async def mock_checkpoint(
+            durable_execution_arn,
+            checkpoint_token,
+            updates,
+            client_token="token",  # noqa: S107
+        ):
+            checkpoint_calls.append(updates)
+
+            # Add operations with proper details
+            for update in updates:
+                if update.operation_type == OperationType.CALLBACK:
+                    op = Operation(
+                        operation_id=update.operation_id,
+                        operation_type=update.operation_type,
+                        status=OperationStatus.STARTED,
+                        parent_id=update.parent_id,
+                        callback_details=CallbackDetails(
+                            callback_id=f"cb-{update.operation_id[:8]}"
+                        ),
+                    )
+                else:
+                    op = Operation(
+                        operation_id=update.operation_id,
+                        operation_type=update.operation_type,
+                        status=OperationStatus.STARTED,
+                        parent_id=update.parent_id,
+                    )
+                operations.append(op)
+
+            return CheckpointOutput(
+                checkpoint_token="new_token",  # noqa: S106
+                new_execution_state=CheckpointUpdatedExecutionState(
+                    operations=operations.copy()
+                ),
+            )
+
+        mock_client.checkpoint = mock_checkpoint
+
+        event = {
+            "DurableExecutionArn": "test-arn/execution-1",
+            "CheckpointToken": "test-token",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "execution-1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+            "LocalRunner": True,
+        }
+
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request-id"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 0  # noqa: SLF001
+        lambda_context.invoked_function_arn = "test-arn"
+        lambda_context.tenant_id = None
+
+        result = await run_handler(my_handler, event, lambda_context)
+
+        # Verify execution succeeded and code after callback executed
+        assert result["Status"] == InvocationStatus.SUCCEEDED.value
+        assert "code_executed_after_callback" in result["Result"]
+
+
+async def test_end_to_end_invoke_operation_with_double_check():
+    """Test end-to-end invoke operation execution with double-check pattern.
+
+    Verifies that invoke operations properly use the double-check pattern
+    for immediate response handling.
+    """
+
+    @durable_execution
+    async def my_handler(event):
+        await invoke("my-function", {"data": "test"})
+
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
+        mock_client.checkpoint = mock_checkpoint
+
+        event = {
+            "DurableExecutionArn": "test-arn/execution-1",
+            "CheckpointToken": "test-token",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "execution-1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+            "LocalRunner": True,
+        }
+
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request-id"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 0  # noqa: SLF001
+        lambda_context.invoked_function_arn = "test-arn"
+        lambda_context.tenant_id = None
+
+        # Invoke will suspend, so we expect PENDING status
+        result = await run_handler(my_handler, event, lambda_context)
+
+        assert result["Status"] == InvocationStatus.PENDING.value
+
+        # Verify invoke checkpoint was created
+        all_operations = [op for batch in checkpoint_calls for op in batch]
+        assert len(all_operations) >= 1
+
+
+async def test_end_to_end_child_context_with_async_checkpoint():
+    """Test end-to-end child context execution with async checkpoint.
+
+    Verifies that child context operations use async checkpoint (is_sync=False)
+    and execute correctly without waiting for immediate response.
+    """
+
+    async def child_function() -> str:
+        _ = cast(DurableContext, get_current_context())
+        return "child_result"
+
+    @durable_execution
+    async def my_handler(event) -> str:
+        result: str = await run_in_child_context(child_function)
+        return result
+
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
+        mock_client.checkpoint = mock_checkpoint
+
+        event = {
+            "DurableExecutionArn": "test-arn/execution-1",
+            "CheckpointToken": "test-token",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "execution-1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+            "LocalRunner": True,
+        }
+
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request-id"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 0  # noqa: SLF001
+        lambda_context.invoked_function_arn = "test-arn"
+        lambda_context.tenant_id = None
+
+        result = await run_handler(my_handler, event, lambda_context)
+
+        assert result["Status"] == InvocationStatus.SUCCEEDED.value
+        assert result["Result"] == '"child_result"'
+
+        # Verify checkpoints were created (START + SUCCEED)
+        all_operations = [op for batch in checkpoint_calls for op in batch]
+        assert len(all_operations) == 2
+
+
+async def test_end_to_end_child_context_replay_children_mode():
+    """Test end-to-end child context with large payload and ReplayChildren mode.
+
+    Verifies that child context with large result (>256KB) triggers replay_children mode,
+    uses summary generator if provided, and re-executes function on replay.
+    """
+    execution_count = {"count": 0}
+
+    async def child_function_with_large_result() -> str:
+        _ = cast(DurableContext, get_current_context())
+        execution_count["count"] += 1
+        return "large" * 256 * 1024
+
+    def summary_generator(result: str) -> str:
+        return f"summary_of_{len(result)}_bytes"
+
+    @durable_execution
+    async def my_handler(event) -> str:
+        await run_in_child_context(
+            child_function_with_large_result,
+            summary_generator=summary_generator,
+        )
+        return f"executed_{execution_count['count']}_times"
+
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        checkpoint_calls = []
+        operations = [
+            Operation(
+                operation_id="execution-1",
+                operation_type=OperationType.EXECUTION,
+                status=OperationStatus.STARTED,
+            )
+        ]
+
+        async def mock_checkpoint(
+            durable_execution_arn,
+            checkpoint_token,
+            updates,
+            client_token="token",  # noqa: S107
+        ):
+            checkpoint_calls.append(updates)
+
+            for update in updates:
+                op = Operation(
+                    operation_id=update.operation_id,
+                    operation_type=update.operation_type,
+                    status=OperationStatus.STARTED,
+                    parent_id=update.parent_id,
+                )
+                operations.append(op)
+
+            return CheckpointOutput(
+                checkpoint_token="new_token",  # noqa: S106
+                new_execution_state=CheckpointUpdatedExecutionState(
+                    operations=operations.copy()
+                ),
+            )
+
+        mock_client.checkpoint = mock_checkpoint
+
+        event = {
+            "DurableExecutionArn": "test-arn/execution-1",
+            "CheckpointToken": "test-token",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "execution-1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+            "LocalRunner": True,
+        }
+
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request-id"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 0  # noqa: SLF001
+        lambda_context.invoked_function_arn = "test-arn"
+        lambda_context.tenant_id = None
+
+        result = await run_handler(my_handler, event, lambda_context)
+
+        assert result["Status"] == InvocationStatus.SUCCEEDED.value
+        # Function executed once during initial execution
+        assert execution_count["count"] == 1
+
+        # Verify replay_children was set in SUCCEED checkpoint
+        all_operations = [op for batch in checkpoint_calls for op in batch]
+        succeed_updates = [
+            op
+            for op in all_operations
+            if hasattr(op, "action") and op.action.value == "SUCCEED"
+        ]
+        assert len(succeed_updates) == 1
+        assert succeed_updates[0].context_options.replay_children is True
+
+
+async def test_end_to_end_child_context_error_handling():
+    """Test end-to-end child context error handling.
+
+    Verifies that child context that raises exception creates FAIL checkpoint
+    and error is wrapped as CallableRuntimeError.
+    """
+
+    async def child_function_that_fails() -> str:
+        _ = cast(DurableContext, get_current_context())
+        msg = "Child function error"
+        raise ValueError(msg)
+
+    @durable_execution
+    async def my_handler(event) -> str:
+        result: str = await run_in_child_context(child_function_that_fails)
+        return result
+
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
+        mock_client.checkpoint = mock_checkpoint
+
+        event = {
+            "DurableExecutionArn": "test-arn/execution-1",
+            "CheckpointToken": "test-token",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "execution-1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+            "LocalRunner": True,
+        }
+
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request-id"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 0  # noqa: SLF001
+        lambda_context.invoked_function_arn = "test-arn"
+        lambda_context.tenant_id = None
+
+        result = await run_handler(my_handler, event, lambda_context)
+
+        # Verify execution failed
+        assert result["Status"] == InvocationStatus.FAILED.value
+
+        # Verify FAIL checkpoint was created
+        all_operations = [op for batch in checkpoint_calls for op in batch]
+        fail_updates = [
+            op
+            for op in all_operations
+            if hasattr(op, "action") and op.action.value == "FAIL"
+        ]
+        assert len(fail_updates) == 1
+
+
+async def test_end_to_end_child_context_invocation_error_reraised():
+    """Test end-to-end child context InvocationError re-raising.
+
+    Verifies that child context that raises InvocationError creates FAIL checkpoint
+    and re-raises InvocationError (not wrapped) to enable retry at execution handler level.
+    """
+
+    async def child_function_with_invocation_error() -> str:
+        _ = cast(DurableContext, get_current_context())
+        msg = "Invocation failed in child"
+        raise InvocationError(msg)
+
+    @durable_execution
+    async def my_handler(event) -> str:
+        result: str = await run_in_child_context(child_function_with_invocation_error)
+        return result
+
+    with patch(
+        "async_durable_execution.execution.ThreadedSyncLambdaClient"
+    ) as mock_client_class:
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        mock_checkpoint, checkpoint_calls = create_mock_checkpoint_with_operations()
+        mock_client.checkpoint = mock_checkpoint
+
+        event = {
+            "DurableExecutionArn": "test-arn/execution-1",
+            "CheckpointToken": "test-token",
+            "InitialExecutionState": {
+                "Operations": [
+                    {
+                        "Id": "execution-1",
+                        "Type": "EXECUTION",
+                        "Status": "STARTED",
+                        "ExecutionDetails": {"InputPayload": "{}"},
+                    }
+                ],
+                "NextMarker": "",
+            },
+            "LocalRunner": True,
+        }
+
+        lambda_context = Mock()
+        lambda_context.aws_request_id = "test-request-id"
+        lambda_context.client_context = None
+        lambda_context.identity = None
+        lambda_context._epoch_deadline_time_in_ms = 0  # noqa: SLF001
+        lambda_context.invoked_function_arn = "test-arn"
+        lambda_context.tenant_id = None
+
+        # InvocationError should be re-raised (not wrapped) to trigger Lambda retry
+        with pytest.raises(InvocationError, match="Invocation failed in child"):
+            await run_handler(my_handler, event, lambda_context)
+
+        # Verify FAIL checkpoint was created before re-raising
+        all_operations = [op for batch in checkpoint_calls for op in batch]
+        fail_updates = [
+            op
+            for op in all_operations
+            if hasattr(op, "action") and op.action.value == "FAIL"
+        ]
+        assert len(fail_updates) == 1

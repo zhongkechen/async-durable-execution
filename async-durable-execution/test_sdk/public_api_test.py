@@ -1,4 +1,4 @@
-"""Tests for the types module."""
+"""Tests for public package exports and module-level operation helpers."""
 
 from collections.abc import Callable
 from datetime import timedelta
