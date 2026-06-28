@@ -9,12 +9,11 @@ from typing import Any
 from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
-from async_durable_execution.composite.concurrency import (
+from async_durable_execution.composite.parallel import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
     CompletionReason,
-    ConcurrentExecutor,
     Executable,
 )
 
@@ -30,7 +29,7 @@ from async_durable_execution import durable_callable, parallel, DurableContext
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import OperationSubType
 from async_durable_execution.primitive import child
-from async_durable_execution.composite.concurrency import CompletionConfig, NestingType
+from async_durable_execution.composite.parallel import CompletionConfig, NestingType
 from async_durable_execution.composite.parallel import (
     ParallelExecutor,
     ParallelSummaryGenerator,
@@ -529,6 +528,7 @@ async def test_parallel_handler_creates_executor_with_correct_config():
             summary_generator=ANY,
             item_serdes=None,
             nesting_type=NestingType.NESTED,
+            branch_namer=None,
             execution_state=execution_state,
             operation_identifier=operation_identifier,
             executor_context=executor_context,
@@ -587,6 +587,7 @@ async def test_parallel_handler_creates_executor_with_default_fields():
             summary_generator=ANY,
             item_serdes=None,
             nesting_type=NestingType.NESTED,
+            branch_namer=None,
             execution_state=execution_state,
             operation_identifier=operation_identifier,
             executor_context=executor_context,
@@ -595,7 +596,7 @@ async def test_parallel_handler_creates_executor_with_default_fields():
 
 
 async def test_parallel_executor_inheritance():
-    """Test that ParallelExecutor properly inherits from ConcurrentExecutor."""
+    """Test that ParallelExecutor properly inherits from ParallelExecutor."""
     executables = [Executable(index=0, func=lambda x: x)]
     executor = create_parallel_executor(
         executables=executables,
@@ -607,7 +608,7 @@ async def test_parallel_executor_inheritance():
         serdes=None,
     )
 
-    assert isinstance(executor, ConcurrentExecutor)
+    assert isinstance(executor, ParallelExecutor)
 
 
 async def test_parallel_executor_init_empty_list():

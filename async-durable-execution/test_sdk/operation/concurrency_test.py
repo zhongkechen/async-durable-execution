@@ -1,4 +1,4 @@
-"""Tests for the concurrency module."""
+"""Tests for the parallel executor support types."""
 
 import asyncio
 import json
@@ -11,14 +11,14 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from async_durable_execution.composite.concurrency import (
+from async_durable_execution.composite.parallel import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
     BranchStatus,
     CompletionConfig,
     CompletionReason,
-    ConcurrentExecutor,
+    ParallelExecutor,
     Executable,
     ExecutableWithState,
     ExecutionCounters,
@@ -41,7 +41,7 @@ from async_durable_execution.models import (
     OperationSubType,
     OperationType,
 )
-from async_durable_execution.composite.map import MapExecutor
+from async_durable_execution.composite.map import _bind_map_item_to_branch
 from async_durable_execution.primitive.base import OperationExecutor
 
 
@@ -74,7 +74,20 @@ def create_map_executor(**kwargs):
     executor_context = kwargs.pop("executor_context", None)
     if executor_context is None:
         executor_context = create_executor_context(execution_state)
-    return MapExecutor(
+    executables = kwargs.pop("executables")
+    items = kwargs.pop("items")
+    return ParallelExecutor(
+        executables=[
+            Executable(
+                index=executable.index,
+                func=_bind_map_item_to_branch(
+                    items=items,
+                    index=executable.index,
+                    func=executable.func,
+                ),
+            )
+            for executable in executables
+        ],
         execution_state=execution_state,
         operation_identifier=operation_identifier,
         executor_context=executor_context,
@@ -444,7 +457,7 @@ async def test_batch_result_from_dict_default_completion_reason():
         # No completionReason provided
     }
 
-    with patch("async_durable_execution.composite.concurrency.logger") as mock_logger:
+    with patch("async_durable_execution.composite.parallel.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.ALL_COMPLETED
         # Verify warning was logged
@@ -462,7 +475,7 @@ async def test_batch_result_from_dict_infer_all_completed_all_succeeded():
         # No completionReason provided
     }
 
-    with patch("async_durable_execution.composite.concurrency.logger") as mock_logger:
+    with patch("async_durable_execution.composite.parallel.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.ALL_COMPLETED
         mock_logger.warning.assert_called_once()
@@ -485,7 +498,7 @@ async def test_batch_result_from_dict_infer_failure_tolerance_exceeded_all_faile
     }
 
     # With no completion config and failures, should fail-fast
-    with patch("async_durable_execution.composite.concurrency.logger") as mock_logger:
+    with patch("async_durable_execution.composite.parallel.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
         mock_logger.warning.assert_called_once()
@@ -509,7 +522,7 @@ async def test_batch_result_from_dict_infer_all_completed_mixed_success_failure(
     }
 
     # With no config and with failures, fail-fast
-    with patch("async_durable_execution.composite.concurrency.logger") as mock_logger:
+    with patch("async_durable_execution.composite.parallel.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
         mock_logger.warning.assert_called_once()
@@ -526,7 +539,7 @@ async def test_batch_result_from_dict_infer_min_successful_reached_has_started()
         # No completionReason provided
     }
 
-    with patch("async_durable_execution.composite.concurrency.logger") as mock_logger:
+    with patch("async_durable_execution.composite.parallel.logger") as mock_logger:
         result = BatchResult.from_dict(data, CompletionConfig(1))
         assert result.completion_reason == CompletionReason.MIN_SUCCESSFUL_REACHED
         mock_logger.warning.assert_called_once()
@@ -539,7 +552,7 @@ async def test_batch_result_from_dict_infer_empty_items():
         # No completionReason provided
     }
 
-    with patch("async_durable_execution.composite.concurrency.logger") as mock_logger:
+    with patch("async_durable_execution.composite.parallel.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.ALL_COMPLETED
         mock_logger.warning.assert_called_once()
@@ -554,7 +567,7 @@ async def test_batch_result_from_dict_with_explicit_completion_reason():
         "completionReason": "MIN_SUCCESSFUL_REACHED",
     }
 
-    with patch("async_durable_execution.composite.concurrency.logger") as mock_logger:
+    with patch("async_durable_execution.composite.parallel.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.MIN_SUCCESSFUL_REACHED
         # No warning should be logged when completionReason is provided
@@ -941,9 +954,9 @@ async def test_batch_result_failed_with_none_error():
 
 
 async def test_concurrent_executor_nesting_type_parameter():
-    """Test ConcurrentExecutor nesting_type parameter."""
+    """Test ParallelExecutor nesting_type parameter."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -956,8 +969,8 @@ async def test_concurrent_executor_nesting_type_parameter():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
         nesting_type=NestingType.NESTED,
@@ -970,8 +983,8 @@ async def test_concurrent_executor_nesting_type_parameter():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
         nesting_type=NestingType.FLAT,
@@ -980,9 +993,9 @@ async def test_concurrent_executor_nesting_type_parameter():
 
 
 async def test_concurrent_executor_default_nesting_type():
-    """Test ConcurrentExecutor uses NESTED as default nesting_type."""
+    """Test ParallelExecutor uses NESTED as default nesting_type."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -994,8 +1007,8 @@ async def test_concurrent_executor_default_nesting_type():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1003,9 +1016,9 @@ async def test_concurrent_executor_default_nesting_type():
 
 
 async def test_concurrent_executor_full_execution_path():
-    """Test ConcurrentExecutor full execution."""
+    """Test ParallelExecutor full execution."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -1019,8 +1032,8 @@ async def test_concurrent_executor_full_execution_path():
         executables=executables,
         max_concurrency=2,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1058,9 +1071,9 @@ async def test_timer_scheduler_double_check_resume_queue():
 
 
 async def test_concurrent_executor_on_task_complete_timed_suspend():
-    """Test ConcurrentExecutor _on_task_complete with TimedSuspendExecution."""
+    """Test ParallelExecutor _on_task_complete with TimedSuspendExecution."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -1075,8 +1088,8 @@ async def test_concurrent_executor_on_task_complete_timed_suspend():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1096,9 +1109,9 @@ async def test_concurrent_executor_on_task_complete_timed_suspend():
 
 
 async def test_concurrent_executor_on_task_complete_suspend():
-    """Test ConcurrentExecutor _on_task_complete with SuspendExecution."""
+    """Test ParallelExecutor _on_task_complete with SuspendExecution."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -1113,8 +1126,8 @@ async def test_concurrent_executor_on_task_complete_suspend():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1131,9 +1144,9 @@ async def test_concurrent_executor_on_task_complete_suspend():
 
 
 async def test_concurrent_executor_on_task_complete_exception():
-    """Test ConcurrentExecutor _on_task_complete with general exception."""
+    """Test ParallelExecutor _on_task_complete with general exception."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -1148,8 +1161,8 @@ async def test_concurrent_executor_on_task_complete_exception():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1168,9 +1181,9 @@ async def test_concurrent_executor_on_task_complete_exception():
 
 
 async def test_concurrent_executor_create_result_with_early_exit():
-    """Test ConcurrentExecutor with failed branches using public execute method."""
+    """Test ParallelExecutor with failed branches using public execute method."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             if executable.index == 0:
                 return f"result_{executable.index}"
@@ -1197,8 +1210,8 @@ async def test_concurrent_executor_create_result_with_early_exit():
         executables=executables,
         max_concurrency=2,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1217,9 +1230,9 @@ async def test_concurrent_executor_create_result_with_early_exit():
 
 
 async def test_concurrent_executor_execute_item_in_child_context():
-    """Test ConcurrentExecutor _execute_item_in_child_context."""
+    """Test ParallelExecutor _execute_item_in_child_context."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -1234,8 +1247,8 @@ async def test_concurrent_executor_execute_item_in_child_context():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1262,9 +1275,9 @@ async def test_execution_counters_impossible_to_succeed():
 
 
 async def test_concurrent_executor_create_result_failure_tolerance_exceeded():
-    """Test ConcurrentExecutor with failure tolerance exceeded using public execute method."""
+    """Test ParallelExecutor with failure tolerance exceeded using public execute method."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             msg = "Task failed"
             raise ValueError(msg)
@@ -1283,8 +1296,8 @@ async def test_concurrent_executor_create_result_failure_tolerance_exceeded():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1301,7 +1314,7 @@ async def test_concurrent_executor_create_result_failure_tolerance_exceeded():
 async def test_single_task_suspend_bubbles_up():
     """Test that single task suspend bubbles up the exception."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             msg = "test"
             raise TimedSuspendExecution(msg, time.time() + 1)  # Future time
@@ -1317,8 +1330,8 @@ async def test_single_task_suspend_bubbles_up():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1334,7 +1347,7 @@ async def test_single_task_suspend_bubbles_up():
 async def test_multiple_tasks_one_suspends_execution_continues():
     """Test that when one task suspends but others are running, execution continues."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self.task_a_suspended = asyncio.Event()
@@ -1360,8 +1373,8 @@ async def test_multiple_tasks_one_suspends_execution_continues():
         executables=executables,
         max_concurrency=2,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1380,7 +1393,7 @@ async def test_multiple_tasks_one_suspends_execution_continues():
 async def test_concurrent_executor_with_single_task_resubmit():
     """Test single task suspend bubbles up immediately."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self.call_count = 0
@@ -1401,8 +1414,8 @@ async def test_concurrent_executor_with_single_task_resubmit():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1418,7 +1431,7 @@ async def test_concurrent_executor_with_single_task_resubmit():
 async def test_concurrent_executor_with_timed_resubmit_while_other_task_running():
     """Test timed resubmission while other tasks are still running."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self.call_counts = {}
@@ -1470,8 +1483,8 @@ async def test_concurrent_executor_with_timed_resubmit_while_other_task_running(
         executables=executables,
         max_concurrency=2,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1511,7 +1524,7 @@ async def test_timer_scheduler_double_check_condition():
 async def test_concurrent_executor_should_execution_suspend_with_timeout():
     """Test should_execution_suspend with SUSPENDED_WITH_TIMEOUT state."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -1526,8 +1539,8 @@ async def test_concurrent_executor_should_execution_suspend_with_timeout():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1549,7 +1562,7 @@ async def test_concurrent_executor_should_execution_suspend_with_timeout():
 async def test_concurrent_executor_should_execution_suspend_indefinite():
     """Test should_execution_suspend with indefinite SUSPENDED state."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -1564,8 +1577,8 @@ async def test_concurrent_executor_should_execution_suspend_indefinite():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1586,7 +1599,7 @@ async def test_concurrent_executor_should_execution_suspend_indefinite():
 async def test_concurrent_executor_create_result_with_failed_status():
     """Test with failed executable status using public execute method."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             msg = "Test error"
             raise ValueError(msg)
@@ -1605,8 +1618,8 @@ async def test_concurrent_executor_create_result_with_failed_status():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1640,7 +1653,7 @@ async def test_timer_scheduler_can_resume_false():
 async def test_concurrent_executor_mixed_suspend_states():
     """Test should_execution_suspend with mixed suspend states."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -1655,8 +1668,8 @@ async def test_concurrent_executor_mixed_suspend_states():
         executables=executables,
         max_concurrency=2,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1681,7 +1694,7 @@ async def test_concurrent_executor_mixed_suspend_states():
 async def test_concurrent_executor_multiple_timed_suspends():
     """Test should_execution_suspend with multiple timed suspends to find earliest."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -1696,8 +1709,8 @@ async def test_concurrent_executor_multiple_timed_suspends():
         executables=executables,
         max_concurrency=2,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1744,7 +1757,7 @@ async def test_timer_scheduler_double_check_condition_race():
 async def test_should_execution_suspend_earliest_timestamp_comparison():
     """Test should_execution_suspend timestamp comparison logic (line 554)."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -1763,8 +1776,8 @@ async def test_should_execution_suspend_earliest_timestamp_comparison():
         executables=executables,
         max_concurrency=3,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1794,7 +1807,7 @@ async def test_should_execution_suspend_earliest_timestamp_comparison():
 async def test_concurrent_executor_execute_with_failing_task():
     """Test execute() with a task that fails using public execute method."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             msg = "Task failed"
             raise ValueError(msg)
@@ -1810,8 +1823,8 @@ async def test_concurrent_executor_execute_with_failing_task():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1844,7 +1857,7 @@ async def test_timer_scheduler_cannot_resume_branch():
 async def test_create_result_no_failed_executables():
     """Test when no executables are failed using public execute method."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -1862,8 +1875,8 @@ async def test_create_result_no_failed_executables():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1881,7 +1894,7 @@ async def test_create_result_no_failed_executables():
 async def test_create_result_with_suspended_executable():
     """Test with suspended executable using public execute method."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             msg = "Test suspend"
             raise SuspendExecution(msg)
@@ -1900,8 +1913,8 @@ async def test_create_result_with_suspended_executable():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1918,7 +1931,7 @@ async def test_create_result_with_suspended_executable():
 async def test_create_result_completed_branch():
     """Test _create_result with COMPLETED status branch."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -1930,8 +1943,8 @@ async def test_create_result_completed_branch():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1953,7 +1966,7 @@ async def test_create_result_completed_branch():
 async def test_create_result_failed_branch():
     """Test _create_result with FAILED status branch."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -1965,8 +1978,8 @@ async def test_create_result_failed_branch():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -1991,7 +2004,7 @@ async def test_create_result_failed_branch():
 async def test_create_result_pending_branch():
     """Test _create_result with PENDING status branch."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -2003,8 +2016,8 @@ async def test_create_result_pending_branch():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -2029,7 +2042,7 @@ async def test_create_result_pending_branch():
 async def test_create_result_running_branch():
     """Test _create_result with RUNNING status branch."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -2041,8 +2054,8 @@ async def test_create_result_running_branch():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -2067,7 +2080,7 @@ async def test_create_result_running_branch():
 async def test_create_result_suspended_branch():
     """Test _create_result with SUSPENDED status branch."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -2079,8 +2092,8 @@ async def test_create_result_suspended_branch():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -2104,7 +2117,7 @@ async def test_create_result_suspended_branch():
 async def test_create_result_suspended_with_timeout_branch():
     """Test _create_result with SUSPENDED_WITH_TIMEOUT status branch."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -2116,8 +2129,8 @@ async def test_create_result_suspended_with_timeout_branch():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -2142,7 +2155,7 @@ async def test_create_result_suspended_with_timeout_branch():
 async def test_create_result_mixed_statuses():
     """Test _create_result with mixed executable statuses covering all branches."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -2161,8 +2174,8 @@ async def test_create_result_mixed_statuses():
         executables=executables,
         max_concurrency=6,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -2232,7 +2245,7 @@ async def test_create_result_mixed_statuses():
 async def test_create_result_multiple_completed():
     """Test _create_result with multiple COMPLETED executables."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -2248,8 +2261,8 @@ async def test_create_result_multiple_completed():
         executables=executables,
         max_concurrency=3,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -2275,7 +2288,7 @@ async def test_create_result_multiple_completed():
 async def test_create_result_multiple_failed():
     """Test _create_result with multiple FAILED executables."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -2291,8 +2304,8 @@ async def test_create_result_multiple_failed():
         executables=executables,
         max_concurrency=3,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -2318,7 +2331,7 @@ async def test_create_result_multiple_failed():
 async def test_create_result_multiple_started_states():
     """Test _create_result with multiple executables in STARTED states."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -2335,8 +2348,8 @@ async def test_create_result_multiple_started_states():
         executables=executables,
         max_concurrency=4,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -2371,7 +2384,7 @@ async def test_create_result_multiple_started_states():
 async def test_create_result_empty_executables():
     """Test _create_result with no executables."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return f"result_{executable.index}"
 
@@ -2383,8 +2396,8 @@ async def test_create_result_empty_executables():
         executables=executables,
         max_concurrency=1,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -2425,7 +2438,7 @@ async def test_batch_result_from_dict_with_completion_config():
     # With started items, should infer MIN_SUCCESSFUL_REACHED
     completion_config = CompletionConfig(min_successful=1)
 
-    with patch("async_durable_execution.composite.concurrency.logger") as mock_logger:
+    with patch("async_durable_execution.composite.parallel.logger") as mock_logger:
         result = BatchResult.from_dict(data, completion_config)
         assert result.completion_reason == CompletionReason.MIN_SUCCESSFUL_REACHED
         mock_logger.warning.assert_called_once()
@@ -2452,7 +2465,7 @@ async def test_batch_result_from_dict_all_completed():
     }
 
     # With no config and failures, fail-fast
-    with patch("async_durable_execution.composite.concurrency.logger") as mock_logger:
+    with patch("async_durable_execution.composite.parallel.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
         mock_logger.warning.assert_called_once()
@@ -2511,7 +2524,7 @@ async def test_operation_id_determinism_across_shuffles():
         """Function that returns a result based on the executable index."""
         return f"result_for_index_{index}"
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         """Custom executor for testing operation_id determinism."""
 
         async def execute_item(self, child_context, executable):
@@ -2565,8 +2578,8 @@ async def test_operation_id_determinism_across_shuffles():
             executables=executables,
             max_concurrency=2,
             completion_config=completion_config,
-            sub_type_top="TEST",
-            sub_type_iteration="TEST_ITER",
+            top_level_sub_type="TEST",
+            iteration_sub_type="TEST_ITER",
             name_prefix="test_",
             serdes=None,
             nesting_type=NestingType.FLAT,
@@ -2593,7 +2606,7 @@ async def test_operation_id_determinism_across_shuffles():
         executor_context.create_child_context = create_child_context
 
         with patch(
-            "async_durable_execution.composite.concurrency.ChildOperationExecutor",
+            "async_durable_execution.composite.parallel.ChildOperationExecutor",
             patched_child_handler,
         ):
             await run_async(executor.execute())
@@ -2612,12 +2625,12 @@ async def test_operation_id_determinism_across_shuffles():
 
 
 def test_concurrent_executor_is_operation_executor():
-    """ConcurrentExecutor subclasses the shared operation executor base."""
-    assert issubclass(ConcurrentExecutor, OperationExecutor)
+    """ParallelExecutor subclasses the shared operation executor base."""
+    assert issubclass(ParallelExecutor, OperationExecutor)
 
 
 async def test_concurrent_executor_start_calls_execute():
-    """ConcurrentExecutor.start delegates first execution to execute."""
+    """ParallelExecutor.start delegates first execution to execute."""
     items = ["a"]
     execution_state = create_execution_state()
     operation_identifier = OperationIdentifier(
@@ -2651,7 +2664,7 @@ async def test_concurrent_executor_start_calls_execute():
 
 
 async def test_concurrent_executor_replay_completed_operation_calls_replay_completed():
-    """ConcurrentExecutor.replay delegates succeeded checkpoints to replay_completed."""
+    """ParallelExecutor.replay delegates succeeded checkpoints to replay_completed."""
     items = ["a"]
     execution_state = create_execution_state()
     operation_identifier = OperationIdentifier(
@@ -2694,7 +2707,7 @@ async def test_concurrent_executor_replay_completed_operation_calls_replay_compl
 
 
 async def test_concurrent_executor_replay_incomplete_operation_calls_execute():
-    """ConcurrentExecutor.replay executes again when the checkpoint is incomplete."""
+    """ParallelExecutor.replay executes again when the checkpoint is incomplete."""
     items = ["a"]
     execution_state = create_execution_state()
     operation_identifier = OperationIdentifier(
@@ -2737,7 +2750,7 @@ async def test_concurrent_executor_replay_incomplete_operation_calls_execute():
 
 
 async def test_concurrent_executor_replay_completed_with_succeeded_operations():
-    """Test ConcurrentExecutor replay_completed method with succeeded operations."""
+    """Test ParallelExecutor replay_completed method with succeeded operations."""
 
     def func1(item, idx, items):
         return f"result_{item}"
@@ -2807,7 +2820,7 @@ async def test_concurrent_executor_replay_completed_with_succeeded_operations():
 
 
 async def test_concurrent_executor_replay_completed_with_failed_operations():
-    """Test ConcurrentExecutor replay_completed method with failed operations."""
+    """Test ParallelExecutor replay_completed method with failed operations."""
 
     def func1(item, idx, items):
         return f"result_{item}"
@@ -2863,7 +2876,7 @@ async def test_concurrent_executor_replay_completed_with_failed_operations():
 
 
 async def test_concurrent_executor_replay_completed_with_replay_children():
-    """Test ConcurrentExecutor replay_completed method when children need re-execution."""
+    """Test ParallelExecutor replay_completed method when children need re-execution."""
 
     def func1(item, idx, items):
         return f"result_{item}"
@@ -2996,7 +3009,7 @@ async def test_batch_result_complex_nested_data():
 async def test_executor_does_not_deadlock_when_all_tasks_terminal_but_completion_config_allows_failures():
     """Ensure executor returns when all tasks are terminal even if completion rules are confusing."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             if executable.index == 0:
                 # fail one task
@@ -3018,8 +3031,8 @@ async def test_executor_does_not_deadlock_when_all_tasks_terminal_but_completion
         executables=executables,
         max_concurrency=2,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -3081,7 +3094,7 @@ async def test_executor_terminates_quickly_when_impossible_to_succeed():
 async def test_executor_exits_early_with_min_successful():
     """Test that parallel exits immediately when min_successful is reached without waiting for other branches."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return await executable.func()
 
@@ -3109,8 +3122,8 @@ async def test_executor_exits_early_with_min_successful():
         executables=executables,
         max_concurrency=2,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -3150,7 +3163,7 @@ async def test_executor_exits_early_with_min_successful():
 async def test_executor_returns_with_incomplete_branches():
     """Test that executor returns when min_successful is reached, leaving other branches incomplete."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return await executable.func()
 
@@ -3178,8 +3191,8 @@ async def test_executor_returns_with_incomplete_branches():
         executables=executables,
         max_concurrency=2,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -3216,7 +3229,7 @@ async def test_executor_returns_with_incomplete_branches():
 async def test_executor_returns_before_slow_branch_completes():
     """Test that executor returns immediately when min_successful is reached, not waiting for slow branches."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             return await executable.func()
 
@@ -3238,8 +3251,8 @@ async def test_executor_returns_before_slow_branch_completes():
         executables=executables,
         max_concurrency=2,
         completion_config=completion_config,
-        sub_type_top="TOP",
-        sub_type_iteration="ITER",
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
         name_prefix="test_",
         serdes=None,
     )
@@ -3519,7 +3532,7 @@ async def test_flat_mode_stamps_grandparent_as_inner_op_parent_id():
     `_parent_id` equals the executor_context's own `_parent_id`.
     """
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             # Record the child context we receive so the assertions below can
             # inspect its identity fields.
@@ -3547,8 +3560,8 @@ async def test_flat_mode_stamps_grandparent_as_inner_op_parent_id():
         executables=executables,
         max_concurrency=1,
         completion_config=CompletionConfig(min_successful=1),
-        sub_type_top="MAP",
-        sub_type_iteration="MAP_ITER",
+        top_level_sub_type="MAP",
+        iteration_sub_type="MAP_ITER",
         name_prefix="branch-",
         serdes=None,
         nesting_type=NestingType.FLAT,
@@ -3571,7 +3584,7 @@ async def test_flat_mode_stamps_grandparent_as_inner_op_parent_id():
 async def test_nested_mode_stamps_branch_op_as_inner_op_parent_id():
     """In NESTED mode, inner operations in a branch stamp the branch's own operation id as parent_id."""
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
             self.last_child_context = child_context
             return executable.func(child_context)
@@ -3596,8 +3609,8 @@ async def test_nested_mode_stamps_branch_op_as_inner_op_parent_id():
         executables=executables,
         max_concurrency=1,
         completion_config=CompletionConfig(min_successful=1),
-        sub_type_top="MAP",
-        sub_type_iteration="MAP_ITER",
+        top_level_sub_type="MAP",
+        iteration_sub_type="MAP_ITER",
         name_prefix="branch-",
         serdes=None,
         nesting_type=NestingType.NESTED,
@@ -3628,7 +3641,7 @@ async def test_flat_mode_produces_deterministic_step_ids_across_runs():
     `NonDeterministicExecutionException` at replay time in production.
     """
 
-    class TestExecutor(ConcurrentExecutor):
+    class TestExecutor(ParallelExecutor):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self.captured = []
@@ -3666,8 +3679,8 @@ async def test_flat_mode_produces_deterministic_step_ids_across_runs():
             executables=executables,
             max_concurrency=3,
             completion_config=CompletionConfig(min_successful=3),
-            sub_type_top="MAP",
-            sub_type_iteration="MAP_ITER",
+            top_level_sub_type="MAP",
+            iteration_sub_type="MAP_ITER",
             name_prefix="branch-",
             serdes=None,
             nesting_type=NestingType.FLAT,

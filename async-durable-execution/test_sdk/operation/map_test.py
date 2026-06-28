@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 # Mock the executor.execute method
-from async_durable_execution.composite.concurrency import (
+from async_durable_execution.composite.parallel import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
@@ -33,14 +33,16 @@ from async_durable_execution import map as map_operation, DurableContext
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import OperationSubType
 from async_durable_execution.primitive import child  # PLC0415
-from async_durable_execution.composite.concurrency import CompletionConfig, NestingType
+from async_durable_execution.composite.parallel import CompletionConfig, NestingType
 from async_durable_execution.composite.map import (
     BatchedInput,
-    MapExecutor,
     MapItemContext,
     MapSummaryGenerator,
+    _bind_map_item_to_branch,
+    _create_map_branch_namer,
     map_handler,
 )
+from async_durable_execution.composite.parallel import ParallelExecutor
 from async_durable_execution.serdes import serialize
 from async_durable_execution.state import ExecutionState
 
@@ -100,6 +102,9 @@ def create_mock_child_context(state):
 
 
 def create_map_executor(**kwargs):
+    executables = kwargs.pop("executables")
+    items = kwargs.pop("items")
+    item_namer = kwargs.pop("item_namer", None)
     execution_state = kwargs.pop("execution_state", None)
     if execution_state is None:
         execution_state = create_mock_execution_state()
@@ -114,12 +119,27 @@ def create_map_executor(**kwargs):
     executor_context = kwargs.pop("executor_context", None)
     if executor_context is None:
         executor_context = create_test_context(execution_state)
-    return MapExecutor(
+    executor = ParallelExecutor(
+        executables=[
+            Executable(
+                index=executable.index,
+                func=_bind_map_item_to_branch(
+                    items=items,
+                    index=executable.index,
+                    func=executable.func,
+                ),
+            )
+            for executable in executables
+        ],
         execution_state=execution_state,
         operation_identifier=operation_identifier,
         executor_context=executor_context,
+        branch_namer=_create_map_branch_namer(items, item_namer),
         **kwargs,
     )
+    executor.items = items
+    executor._item_namer = item_namer
+    return executor
 
 
 async def run_with_context(context: DurableContext, awaitable):
@@ -135,7 +155,7 @@ async def invoke_map_handler(*args, **kwargs):
 
 
 async def test_map_executor_init():
-    """Test MapExecutor initialization."""
+    """Test map branch executor initialization."""
     executables = [Executable(index=0, func=lambda: None)]
     items = ["item1"]
 
@@ -152,7 +172,8 @@ async def test_map_executor_init():
     )
 
     assert executor.items == items
-    assert executor.executables == executables
+    assert [exe.index for exe in executor.executables] == [0]
+    assert all(callable(exe.func) for exe in executor.executables)
     assert executor.nesting_type is NestingType.FLAT
 
 
@@ -165,7 +186,7 @@ def test_batched_input():
 
 
 async def test_map_executor_init_from_items():
-    """Test MapExecutor initialization with item executables."""
+    """Test map branch executor initialization with item executables."""
     items = ["a", "b", "c"]
 
     async def callable_func(item):
@@ -187,13 +208,14 @@ async def test_map_executor_init_from_items():
 
     assert len(executor.executables) == 3
     assert executor.items == items
-    assert all(exe.func == callable_func for exe in executor.executables)
+    assert all(exe.func != callable_func for exe in executor.executables)
+    assert all(callable(exe.func) for exe in executor.executables)
     assert [exe.index for exe in executor.executables] == [0, 1, 2]
     assert executor.nesting_type is NestingType.FLAT
 
 
 async def test_map_executor_init_default_config():
-    """Test MapExecutor initialization with default map config."""
+    """Test map branch executor initialization with default map config."""
     items = ["x"]
 
     async def callable_func(item):
@@ -219,7 +241,7 @@ async def test_map_executor_init_default_config():
 
 @patch("async_durable_execution.composite.map.logger")
 async def test_map_executor_execute_item(mock_logger):
-    """Test MapExecutor.execute_item method with logging."""
+    """Test map branch executor execute_item method with logging."""
     items = ["hello", "world"]
 
     async def callable_func(item):
@@ -249,7 +271,7 @@ async def test_map_executor_execute_item(mock_logger):
 
 
 async def test_map_executor_execute_item_with_context():
-    """Test MapExecutor.execute_item with context usage."""
+    """Test map branch executor execute_item with context usage."""
     items = [1, 2, 3]
 
     async def callable_func(item):
@@ -402,7 +424,7 @@ async def test_map_executor_execute_item_accesses_all_parameters():
 
 
 async def test_map_executor_init_empty_list():
-    """Test MapExecutor initialization with empty items list."""
+    """Test map branch executor initialization with empty items list."""
     items = []
 
     async def callable_func(item):
@@ -426,7 +448,7 @@ async def test_map_executor_init_empty_list():
 
 
 async def test_map_executor_init_single_item():
-    """Test MapExecutor initialization with single item."""
+    """Test map branch executor initialization with single item."""
     items = ["only"]
 
     async def callable_func(item):
@@ -451,7 +473,7 @@ async def test_map_executor_init_single_item():
 
 
 async def test_map_executor_inheritance():
-    """Test that MapExecutor properly inherits from ConcurrentExecutor."""
+    """Test that the map branch executor uses concurrent execution."""
     items = ["test"]
 
     async def callable_func(item):
@@ -470,7 +492,7 @@ async def test_map_executor_inheritance():
         serdes=None,
     )
 
-    # Verify it has inherited attributes from ConcurrentExecutor
+    # Verify it has inherited attributes from ParallelExecutor
     assert hasattr(executor, "executables")
     assert hasattr(executor, "execute")
     assert executor.items == items
@@ -495,7 +517,7 @@ async def test_map_handler_calls_executor_execute():
     executor_context.create_child_context = lambda *args, **kwargs: Mock()
 
     with patch.object(
-        MapExecutor, "execute", return_value=mock_batch_result
+        ParallelExecutor, "execute", return_value=mock_batch_result
     ) as mock_execute:
 
         class MockExecutionState:
@@ -524,24 +546,24 @@ async def test_map_handler_calls_executor_execute():
 
 
 async def test_map_handler_passes_default_fields():
-    """Test that map_handler passes default field values to MapExecutor."""
+    """Test that map_handler passes default field values to parallel_handler."""
     items = ["test"]
 
     async def callable_func(item):
         return item
 
-    # Mock MapExecutor to verify it's called with default fields.
-    with patch(
-        "async_durable_execution.composite.map.MapExecutor"
-    ) as mock_executor_class:
-        mock_executor = Mock()
-        mock_batch_result = BatchResult(
-            all=[BatchItem(index=0, status=BatchItemStatus.SUCCEEDED, result="test")],
-            completion_reason=CompletionReason.ALL_COMPLETED,
-        )
-        mock_executor.process = AsyncMock(return_value=mock_batch_result)
-        mock_executor_class.return_value = mock_executor
+    mock_batch_result = BatchResult(
+        all=[BatchItem(index=0, status=BatchItemStatus.SUCCEEDED, result="test")],
+        completion_reason=CompletionReason.ALL_COMPLETED,
+    )
 
+    async def handler_result():
+        return mock_batch_result
+
+    with patch(
+        "async_durable_execution.composite.map.parallel_handler",
+        return_value=handler_result,
+    ) as mock_parallel_handler:
         executor_context = Mock()
         executor_context._step_counter._create_step_id_for_logical_step = (  # noqa: SLF001
             lambda *args: "1"
@@ -568,21 +590,23 @@ async def test_map_handler_passes_default_fields():
             operation_identifier,
         )
 
-        mock_executor_class.assert_called_once()
-        call_args = mock_executor_class.call_args
-        assert call_args.kwargs["items"] == items
-        assert [exe.index for exe in call_args.kwargs["executables"]] == [0]
-        assert all(exe.func == callable_func for exe in call_args.kwargs["executables"])
+        mock_parallel_handler.assert_called_once()
+        call_args = mock_parallel_handler.call_args
+        assert len(call_args.kwargs["callables"]) == 1
+        assert callable(call_args.kwargs["callables"][0])
         assert call_args.kwargs["max_concurrency"] is None
         assert isinstance(call_args.kwargs["completion_config"], CompletionConfig)
         assert call_args.kwargs["serdes"] is None
         assert isinstance(call_args.kwargs["summary_generator"], MapSummaryGenerator)
         assert call_args.kwargs["item_serdes"] is None
         assert call_args.kwargs["nesting_type"] is NestingType.NESTED
-        assert call_args.kwargs["item_namer"] is None
         assert call_args.kwargs["execution_state"] is execution_state
         assert call_args.kwargs["operation_identifier"] is operation_identifier
-        assert call_args.kwargs["executor_context"] is executor_context
+        assert call_args.kwargs["parallel_context"] is executor_context
+        assert call_args.kwargs["top_level_sub_type"] is OperationSubType.MAP
+        assert call_args.kwargs["iteration_sub_type"] is OperationSubType.MAP_ITERATION
+        assert call_args.kwargs["name_prefix"] == "map-item-"
+        assert call_args.kwargs["branch_namer"] is None
 
         assert result == mock_batch_result
 
@@ -686,7 +710,7 @@ async def test_map_handler_with_summary_generator():
 
 
 async def test_map_executor_init_with_summary_generator_preserves_it():
-    """Test MapExecutor initialization preserves summary_generator."""
+    """Test map branch executor initialization preserves summary_generator."""
     items = ["item1"]
 
     async def callable_func(item):
@@ -761,7 +785,7 @@ async def test_map_handler_default_summary_generator():
 
 
 async def test_map_executor_init_with_summary_generator():
-    """Test MapExecutor initialization with summary_generator."""
+    """Test map branch executor initialization with summary_generator."""
     items = ["item1"]
     executables = [Executable(index=0, func=lambda: None)]
 
@@ -782,7 +806,8 @@ async def test_map_executor_init_with_summary_generator():
 
     assert executor.summary_generator is mock_summary_generator
     assert executor.items == items
-    assert executor.executables == executables
+    assert [exe.index for exe in executor.executables] == [0]
+    assert all(callable(exe.func) for exe in executor.executables)
 
 
 async def test_map_handler_with_explicit_none_summary_generator():
@@ -875,7 +900,7 @@ async def test_map_handler_replay_mechanism():
     )
 
     # Mock the executor's replay_completed method
-    with patch.object(MapExecutor, "replay_completed") as mock_replay:
+    with patch.object(ParallelExecutor, "replay_completed") as mock_replay:
         expected_batch_result = BatchResult(
             all=[
                 BatchItem(
@@ -940,9 +965,9 @@ async def test_map_handler_replay_with_replay_children():
 
     # Mock the executor's replay_completed method and _execute_item_in_child_context
     with (
-        patch.object(MapExecutor, "replay_completed") as mock_replay,
+        patch.object(ParallelExecutor, "replay_completed") as mock_replay,
         patch.object(
-            MapExecutor, "_execute_item_in_child_context"
+            ParallelExecutor, "_execute_item_in_child_context"
         ) as mock_execute_item,
     ):
         mock_execute_item.return_value = "re_executed_result"
@@ -1101,10 +1126,10 @@ async def test_map_handler_first_execution_then_replay_integration():
 
     with (
         patch(
-            "async_durable_execution.composite.map.MapExecutor.execute"
+            "async_durable_execution.composite.parallel.ParallelExecutor.execute"
         ) as mock_execute,
         patch(
-            "async_durable_execution.composite.map.MapExecutor.replay_completed"
+            "async_durable_execution.composite.parallel.ParallelExecutor.replay_completed"
         ) as mock_replay,
     ):
         mock_execute.return_value = Mock()  # Mock BatchResult
@@ -1690,7 +1715,7 @@ async def test_map_executor_item_namer_none_falls_back_to_default():
 
 
 async def test_map_executor_init_passes_item_namer():
-    """MapExecutor initialization correctly passes item_namer."""
+    """Map branch executor initialization correctly passes item_namer."""
     namer = lambda item, index: f"custom-{index}"  # noqa: E731
     func = lambda item: item  # noqa: E731
 

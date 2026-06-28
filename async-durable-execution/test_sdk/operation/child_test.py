@@ -33,7 +33,7 @@ from async_durable_execution.primitive.child import (
     run_in_child_context,
 )
 from async_durable_execution.state import ExecutionState
-from async_durable_execution.composite.concurrency import SummaryGenerator
+from async_durable_execution.composite.parallel import SummaryGenerator
 
 from ..serdes_test import CustomDictSerDes
 
@@ -994,7 +994,7 @@ async def test_child_handler_is_virtual_no_succeed():
 
     A virtual branch is not represented in the execution history; its
     successful completion is observable only via the values returned
-    to the calling concurrency executor.
+    to the calling parallel executor.
     """
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -1070,7 +1070,7 @@ async def test_child_handler_is_virtual_with_exception():
     history, so a failure inside the branch does not get its own FAIL
     checkpoint. The exception still propagates (wrapped as
     CallableRuntimeError for non-InvocationError exceptions) so the
-    concurrency executor records the failure in the BatchResult and
+    parallel executor records the failure in the BatchResult and
     its completion-tolerance logic still applies.
     """
     mock_state = Mock(spec=ExecutionState)

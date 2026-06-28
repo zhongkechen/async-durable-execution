@@ -10,7 +10,7 @@ from ..primitive.child import (
 from ..primitive.wait import wait
 
 if TYPE_CHECKING:
-    from .concurrency import SummaryGenerator
+    from .parallel import SummaryGenerator
     from ..serdes import SerDes
 
 T = TypeVar("T")

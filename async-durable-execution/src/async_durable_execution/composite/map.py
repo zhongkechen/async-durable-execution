@@ -16,13 +16,12 @@ from typing import (
     Awaitable,
 )
 
-from .concurrency import (
+from .parallel import (
     BatchResult,
     CompletionConfig,
-    ConcurrentExecutor,
-    Executable,
     NestingType,
 )
+from .parallel import parallel_handler
 from ..context import bind_current_context
 from ..execution import durable_callable
 from ..models import OperationIdentifier, OperationSubType
@@ -33,7 +32,7 @@ from ..primitive.child import (
 )
 
 if TYPE_CHECKING:
-    from .concurrency import SummaryGenerator
+    from .parallel import SummaryGenerator
     from ..serdes import SerDes
     from ..state import ExecutionState
 
@@ -62,65 +61,52 @@ class MapItemContext(DurableContext, Generic[T]):
     items: Sequence[T] = field(default_factory=tuple)
 
 
-class MapExecutor(Generic[T, R], ConcurrentExecutor[Callable, R]):  # noqa: PYI059
-    """Concurrent executor used by the public `map()` helper."""
-
-    def __init__(
-        self,
-        execution_state: ExecutionState,
-        operation_identifier: OperationIdentifier,
-        executor_context: DurableContext,
-        executables: list[Executable[Callable]],
-        items: Sequence[T],
-        max_concurrency: int | None,
-        completion_config,
-        top_level_sub_type: OperationSubType,
-        iteration_sub_type: OperationSubType,
-        name_prefix: str,
-        serdes: SerDes | None,
-        summary_generator: SummaryGenerator | None = None,
-        item_serdes: SerDes | None = None,
-        nesting_type: NestingType = NestingType.NESTED,
-        item_namer: Callable[[T, int], str] | None = None,
-    ):
-        super().__init__(
-            executables=executables,
-            max_concurrency=max_concurrency,
-            completion_config=completion_config,
-            sub_type_top=top_level_sub_type,
-            sub_type_iteration=iteration_sub_type,
-            name_prefix=name_prefix,
-            serdes=serdes,
-            summary_generator=summary_generator,
-            item_serdes=item_serdes,
-            nesting_type=nesting_type,
-            execution_state=execution_state,
-            operation_identifier=operation_identifier,
-            executor_context=executor_context,
-        )
-        self.items = items
-        self._item_namer = item_namer
-
-    def get_iteration_name(self, index: int) -> str:
-        """Return custom item name if item_namer is provided, otherwise default."""
-        if self._item_namer is not None:
-            return self._item_namer(self.items[index], index)
-        return super().get_iteration_name(index)
-
-    async def execute_item(self, child_context, executable: Executable[Callable]):
-        logger.debug("🗺️ Processing map item: %s", executable.index)
-        item = self.items[executable.index]
+def _bind_map_item_to_branch(
+    items: Sequence[T],
+    index: int,
+    func: Callable[[T], Awaitable[R]],
+) -> Callable[[], Awaitable[R]]:
+    async def run_branch() -> R:
+        logger.debug("🗺️ Processing map item: %s", index)
+        item = items[index]
+        child_context = get_durable_context("map")
         map_item_context = MapItemContext(
             execution_state=child_context.execution_state,
             operation_identifier=child_context.operation_identifier,
             step_id_prefix=child_context.step_id_prefix,
-            index=executable.index,
-            items=self.items,
+            replaying=child_context.is_replaying(),
+            index=index,
+            items=items,
         )
         with bind_current_context(map_item_context):
-            result: R = await executable.func(item)
-        logger.debug("✅ Processed map item: %s", executable.index)
+            result: R = await func(item)
+        logger.debug("✅ Processed map item: %s", index)
         return result
+
+    return run_branch
+
+
+def _create_map_branches(
+    items: Sequence[T],
+    func: Callable[[T], Awaitable[R]],
+) -> list[Callable[[], Awaitable[R]]]:
+    return [
+        _bind_map_item_to_branch(items=items, index=index, func=func)
+        for index in range(len(items))
+    ]
+
+
+def _create_map_branch_namer(
+    items: Sequence[T],
+    item_namer: Callable[[T, int], str] | None,
+) -> Callable[[int], str] | None:
+    if item_namer is None:
+        return None
+
+    def name_branch(index: int) -> str:
+        return item_namer(items[index], index)
+
+    return name_branch
 
 
 class MapSummaryGenerator:
@@ -154,26 +140,25 @@ async def map_handler(
     nesting_type: NestingType = NestingType.NESTED,
     item_namer: Callable[[T, int], str] | None = None,
 ):
-    """Execute a callable for each item in parallel."""
-    executor: MapExecutor[T, R] = MapExecutor(
-        executables=[Executable(index=i, func=func) for i in range(len(items))],
-        items=items,
+    """Execute a callable for each item through the parallel handler."""
+    handler = parallel_handler(
+        callables=_create_map_branches(items, func),
         max_concurrency=max_concurrency,
         completion_config=completion_config or CompletionConfig(),
-        top_level_sub_type=OperationSubType.MAP,
-        iteration_sub_type=OperationSubType.MAP_ITERATION,
-        name_prefix="map-item-",
         serdes=serdes,
         summary_generator=summary_generator,
         item_serdes=item_serdes,
         nesting_type=nesting_type,
-        item_namer=item_namer,
         execution_state=execution_state,
+        parallel_context=map_context,
         operation_identifier=operation_identifier,
-        executor_context=map_context,
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        branch_namer=_create_map_branch_namer(items, item_namer),
     )
 
-    return await executor.process()
+    return await handler()
 
 
 async def map(
