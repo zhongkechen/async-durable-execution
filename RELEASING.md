@@ -10,7 +10,6 @@ This monorepo contains the following packages:
 |---------|------|------------|
 | `async-durable-execution` | `async-durable-execution` | `v` |
 | `async-durable-execution-runner` | `async-durable-execution-runner` | `v` |
-| `async-durable-execution-lambda-layer` | `async-durable-execution-lambda-layer` | `v` |
 | `async-durable-execution-examples` | `async-durable-execution-examples` | `v` |
 
 ## Versioning
@@ -19,7 +18,7 @@ All packages share a single version number defined in the repository root:
 
 - Shared version source: `VERSION.py`
 
-Package metadata reads from `VERSION.py`, so bumping that file updates the SDK, runner, Lambda layer builder, and examples package together.
+Package metadata reads from `VERSION.py`, so bumping that file updates the SDK, runner, and examples package together. Repository helper scripts also read this shared version where needed.
 
 ## Cutting a Release
 
@@ -58,7 +57,7 @@ Creating a GitHub Release triggers the [`pypi-publish.yml`](.github/workflows/py
 
 The workflow runs on the `release: [published]` event, so it fires whenever a release is published on GitHub — no manual intervention is needed beyond creating the release.
 
-> **Note:** The current workflow publishes `async-durable-execution` and `async-durable-execution-runner` to PyPI. The Lambda layer builder and examples package still share the same repo version in `VERSION.py`, but they are not part of the current PyPI publish matrix.
+> **Note:** The current workflow publishes `async-durable-execution` and `async-durable-execution-runner` to PyPI. The examples package shares the same repo version in `VERSION.py`, but it is not part of the current PyPI publish matrix.
 
 After creating a GitHub Release, run the [`lambda-layer-publish.yml`](.github/workflows/lambda-layer-publish.yml) workflow manually from the `main` branch. Set `sdk-ref` to the release tag, such as `v2.0.0a2`. The workflow:
 

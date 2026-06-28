@@ -16,7 +16,7 @@ from async_durable_execution_runner import create_runner
 examples_src = Path(__file__).parent.parent / "src"
 if str(examples_src) not in sys.path:
     sys.path.insert(0, str(examples_src))
-examples_scripts = Path(__file__).parent.parent / "scripts"
+examples_scripts = Path(__file__).parent.parent.parent / "scripts"
 if str(examples_scripts) not in sys.path:
     sys.path.insert(0, str(examples_scripts))
 

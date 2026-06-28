@@ -39,7 +39,7 @@ env:
   LAYER_DESCRIPTION: ${{ inputs.description }}
   SHARE_PRINCIPALS: ${{ inputs['share-principals'] || secrets.AWS_ACCOUNT_ID || vars.LAMBDA_LAYER_SHARE_PRINCIPALS }}
   ROLE_TO_ASSUME: ${{ secrets.ACTIONS_LAYER_PUBLISH_ROLE_ARN || secrets.ACTIONS_INTEGRATION_ROLE_NAME }}
-  LAYER_ZIP: async-durable-execution-lambda-layer/dist/async-durable-execution-layer.zip
+  LAYER_ZIP: dist/async-durable-execution-layer.zip
 
 jobs:
   publish-layer:
@@ -73,11 +73,10 @@ jobs:
         run: python -m pip install --upgrade hatch==1.16.5
 
       - name: Build Lambda layer zip
-        working-directory: async-durable-execution-lambda-layer
         run: |
-          hatch run python -m async_durable_execution_lambda_layer.builder \
-            --sdk-source ../async-durable-execution \
-            --output dist/async-durable-execution-layer.zip \
+          hatch run python scripts/build_layer.py \
+            --sdk-source ./async-durable-execution \
+            --output "$LAYER_ZIP" \
             --verbose
 
       - name: Upload layer zip artifact

@@ -17,12 +17,12 @@ def build_examples() -> None:
     The SDK is deployed as a Lambda layer by the e2e workflow, so the function
     artifact only needs the example handlers.
     """
-    examples_dir = Path(__file__).resolve().parent.parent
+    repo_dir = Path(__file__).resolve().parent.parent
+    examples_dir = repo_dir / "async-durable-execution-examples"
     build_dir = examples_dir / "build"
-    repo_dir = examples_dir.parent
 
     runtime_packages = [
-        repo_dir / "async-durable-execution-examples",
+        examples_dir,
     ]
 
     if build_dir.exists():
