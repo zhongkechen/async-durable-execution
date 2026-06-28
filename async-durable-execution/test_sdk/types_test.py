@@ -1,6 +1,8 @@
 """Tests for the types module."""
 
+from collections.abc import Callable
 from datetime import timedelta
+from typing import get_origin
 from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
 from async_durable_execution import (
@@ -42,6 +44,11 @@ def test_additional_public_types_importable_from_package_root():
     for name, public_type in expected_exports.items():
         assert getattr(ade, name) is public_type
         assert name in ade.__all__
+
+
+def test_summary_generator_is_callable_type_alias():
+    """SummaryGenerator is a callable interface, not a protocol class."""
+    assert get_origin(SummaryGenerator) is Callable
 
 
 def test_internal_model_types_not_exported_from_package_root():

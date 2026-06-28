@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Awaitable, Protocol, TypeVar
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Awaitable, Protocol, TypeAlias, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -32,10 +33,8 @@ class LambdaContext(Protocol):  # pragma: no cover
     def log(self, msg) -> None: ...
 
 
-class SummaryGenerator(Protocol[C_contra]):
-    """Create a compact JSON summary for oversized checkpoint payloads."""
-
-    def __call__(self, result: C_contra) -> str: ...  # pragma: no cover
+SummaryGenerator: TypeAlias = Callable[[C_contra], str]
+"""Create a compact JSON summary for oversized checkpoint payloads."""
 
 
 class LambdaApiClient(Protocol):
