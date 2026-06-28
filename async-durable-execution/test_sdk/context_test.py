@@ -22,6 +22,7 @@ from async_durable_execution.primitive.callback import (
 from async_durable_execution.composite.wait_for_condition import (
     WaitForConditionDecision,
 )
+from async_durable_execution.composite.map import MapSummaryGenerator
 from async_durable_execution import (
     durable_callable,
     create_callback,
@@ -2169,7 +2170,10 @@ async def test_context_map_handler_call():
 
         assert result == "map_result"
         mock_map_handler.assert_called_once()
-        assert mock_map_handler.call_args.kwargs["summary_generator"] is None
+        assert isinstance(
+            mock_map_handler.call_args.kwargs["summary_generator"],
+            MapSummaryGenerator,
+        )
 
 
 async def test_context_parallel_handler_call():
