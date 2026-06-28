@@ -153,7 +153,7 @@ async def parallel(
     completion_config: CompletionConfig | None = None,
     serdes: SerDes | None = None,
     item_serdes: SerDes | None = None,
-    summary_generator: SummaryGenerator | None = None,
+    summary_generator: SummaryGenerator | None = ParallelSummaryGenerator(),
     nesting_type: NestingType = NestingType.NESTED,
 ):
     """Run multiple bound durable callables concurrently and return a `BatchResult`."""
