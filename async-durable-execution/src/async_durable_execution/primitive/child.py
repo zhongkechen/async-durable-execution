@@ -18,7 +18,6 @@ from ..context import get_current_context, invoke_user_callable
 from ..exceptions import (
     CallableRuntimeError,
     InvocationError,
-    SuspendExecution,
 )
 from ..models import (
     ContextOptions,
@@ -259,9 +258,6 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 self.operation_identifier.name,
             )
             return raw_result  # noqa: TRY300
-        except SuspendExecution:
-            # Don't checkpoint SuspendExecution - let it bubble up
-            raise
         except Exception as e:
             error_object = ErrorObject.from_exception(e)
             # Virtual deliberately does not write checkpoints, but exception still propagates below
@@ -283,7 +279,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
             # very top, which will then make the backend retry.
             if isinstance(e, InvocationError):
                 raise
-            raise error_object.to_callable_runtime_error() from e
+            raise CallableRuntimeError.from_error_object(error_object) from e
 
     @staticmethod
     def _is_replay_children(operation: Operation | None) -> bool:
@@ -309,7 +305,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 stack_trace=None,
             )
 
-        raise error.to_callable_runtime_error()
+        raise CallableRuntimeError.from_error_object(error)
 
 
 @dataclass(frozen=True)

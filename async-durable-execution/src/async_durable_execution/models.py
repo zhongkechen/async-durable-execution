@@ -12,8 +12,6 @@ from typing import (
     get_type_hints,
 )
 
-from .exceptions import CallableRuntimeError
-
 # Replace with `type` it when dropping support to Python 3.11
 ReplayChildren: TypeAlias = bool
 OperationPayload: TypeAlias = str
@@ -378,14 +376,6 @@ class ErrorObject(SerializableModel):
             type=None,
             data=None,
             stack_trace=None,
-        )
-
-    def to_callable_runtime_error(self) -> CallableRuntimeError:
-        return CallableRuntimeError(
-            message=self.message,
-            error_type=self.type,
-            data=self.data,
-            stack_trace=self.stack_trace,
         )
 
 

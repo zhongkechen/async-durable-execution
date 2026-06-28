@@ -12,7 +12,12 @@ from dataclasses import dataclass, field as dataclass_field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
-from ..exceptions import SuspendExecution, TimedSuspendExecution, InvalidStateError
+from ..exceptions import (
+    CallableRuntimeError,
+    InvalidStateError,
+    SuspendExecution,
+    TimedSuspendExecution,
+)
 from ..models import (
     ErrorObject,
     Operation,
@@ -251,7 +256,7 @@ class BatchResult(SerializableModel, Generic[R]):  # noqa: PYI059
             None,
         )
         if first_error:
-            raise first_error.to_callable_runtime_error()
+            raise CallableRuntimeError.from_error_object(first_error)
 
     def get_results(self) -> list[R]:
         return [
@@ -261,11 +266,7 @@ class BatchResult(SerializableModel, Generic[R]):  # noqa: PYI059
         ]
 
     def get_errors(self) -> list[ErrorObject]:
-        return [
-            item.error
-            for item in self.all
-            if item.status is BatchItemStatus.FAILED and item.error is not None
-        ]
+        return [item.error for item in self.failed() if item.error is not None]
 
     @property
     def success_count(self) -> int:
@@ -654,7 +655,7 @@ class ConcurrentExecutor(
                     exe_state.suspend_until
                     and exe_state.suspend_until < earliest_timestamp
                 ):
-                    earliest_timestamp = exe_state.suspend_until
+                    earliest_timestamp = cast(float, exe_state.suspend_until)
             elif exe_state.status is BranchStatus.SUSPENDED:
                 indefinite_suspend_task = exe_state
 

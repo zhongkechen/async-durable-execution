@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, Awaitable, Callable, TypeVar
 
 from ..config import RetryStrategyBuilder
 from ..config import RetryDecision
-from ..exceptions import SuspendExecution
 from ..primitive.child import (
     run_in_child_context,
 )
@@ -44,8 +43,6 @@ async def with_retry(
             attempt += 1
             try:
                 return await func(attempt)
-            except SuspendExecution:
-                raise
             except Exception as err:
                 decision = retry(err, attempt)
                 if not decision.should_retry:

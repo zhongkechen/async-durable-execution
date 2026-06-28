@@ -118,7 +118,7 @@ class InvokeOperationExecutor(OperationExecutor[R]):
                     stack_trace=None,
                 )
 
-            raise error.to_callable_runtime_error()
+            raise CallableRuntimeError.from_error_object(error)
 
         if operation.status is OperationStatus.STARTED:
             logger.debug(
