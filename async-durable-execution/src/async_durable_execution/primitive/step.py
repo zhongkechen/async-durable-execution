@@ -313,7 +313,7 @@ class StepOperationExecutor(OperationExecutor[T]):
         if isinstance(error, StepInterruptedError):
             raise error
 
-        raise error_object.to_callable_runtime_error()
+        raise CallableRuntimeError.from_error_object(error_object)
 
     @staticmethod
     def _raise_callable_error(operation: Operation) -> None:
@@ -327,7 +327,7 @@ class StepOperationExecutor(OperationExecutor[T]):
                 stack_trace=None,
             )
 
-        raise error.to_callable_runtime_error()
+        raise CallableRuntimeError.from_error_object(error)
 
 
 async def step(

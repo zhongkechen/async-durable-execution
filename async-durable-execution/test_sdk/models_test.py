@@ -207,15 +207,15 @@ async def test_error_object_to_dict_all_none():
     assert result == {}
 
 
-async def test_error_object_to_callable_runtime_error():
-    """Test ErrorObject.to_callable_runtime_error method."""
+async def test_callable_runtime_error_from_error_object():
+    """Test CallableRuntimeError.from_error_object method."""
     error = ErrorObject(
         message="Test error",
         type="TestError",
         data="test_data",
         stack_trace=["line1"],
     )
-    runtime_error = error.to_callable_runtime_error()
+    runtime_error = CallableRuntimeError.from_error_object(error)
     assert isinstance(runtime_error, CallableRuntimeError)
     assert runtime_error.message == "Test error"
     assert runtime_error.error_type == "TestError"

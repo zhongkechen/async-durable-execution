@@ -9,8 +9,7 @@ import datetime
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import NoReturn, TypedDict
-
+from typing import Any, NoReturn, TypedDict
 
 BAD_REQUEST_ERROR: int = 400
 TOO_MANY_REQUESTS_ERROR: int = 429
@@ -173,13 +172,14 @@ class BotoClientError(InvocationError):
             (stale token from a concurrent checkpoint; next invocation gets a fresh token)
         - 5xx, network errors → INVOCATION
         """
-        error_code: str | None = (error and error.get("Code")) or None
+        error_code: str | None = error.get("Code") if error else None
         if error_code and error_code in _NON_RETRYABLE_CUSTOMER_ERROR_CODES:
             return DurableApiErrorCategory.EXECUTION
 
         status_code: int | None = (
-            response_metadata and response_metadata.get("HTTPStatusCode")
-        ) or None
+            response_metadata.get("HTTPStatusCode") if response_metadata else None
+        )
+
         if (
             status_code
             and BAD_REQUEST_ERROR <= status_code < SERVICE_ERROR
@@ -286,6 +286,15 @@ class CallableRuntimeError(UserlandError):
         self.error_type = error_type
         self.data = data
         self.stack_trace = stack_trace
+
+    @classmethod
+    def from_error_object(cls, error_object: Any) -> CallableRuntimeError:
+        return cls(
+            message=error_object.message,
+            error_type=error_object.type,
+            data=error_object.data,
+            stack_trace=error_object.stack_trace,
+        )
 
 
 class BackgroundThreadError(BaseException):

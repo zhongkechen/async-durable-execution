@@ -221,7 +221,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                     data=None,
                     stack_trace=None,
                 )
-            raise error.to_callable_runtime_error()
+            raise CallableRuntimeError.from_error_object(error)
 
         if operation.status is OperationStatus.PENDING:
             scheduled_timestamp = (

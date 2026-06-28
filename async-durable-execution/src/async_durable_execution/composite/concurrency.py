@@ -12,7 +12,12 @@ from dataclasses import dataclass, field as dataclass_field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
-from ..exceptions import SuspendExecution, TimedSuspendExecution, InvalidStateError
+from ..exceptions import (
+    CallableRuntimeError,
+    InvalidStateError,
+    SuspendExecution,
+    TimedSuspendExecution,
+)
 from ..models import (
     ErrorObject,
     Operation,
@@ -251,7 +256,7 @@ class BatchResult(SerializableModel, Generic[R]):  # noqa: PYI059
             None,
         )
         if first_error:
-            raise first_error.to_callable_runtime_error()
+            raise CallableRuntimeError.from_error_object(first_error)
 
     def get_results(self) -> list[R]:
         return [
