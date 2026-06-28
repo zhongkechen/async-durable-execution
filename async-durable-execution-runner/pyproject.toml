@@ -55,31 +55,6 @@ allow-direct-references = true
 [tool.hatch.version]
 path = "../VERSION.py"
 
-# [tool.hatch.envs.default]
-# dependencies=["pytest"]
-
-# [tool.hatch.envs.default.scripts]
-# test="pytest"
-
-[tool.hatch.envs.test]
-dependencies = [
-  "coverage[toml]",
-  "pytest",
-  "pytest-asyncio",
-  "pytest-cov",
-  "ruff",
-  "async-durable-execution>=2.0.0b1",
-]
-
-[tool.hatch.envs.test.scripts]
-test = "pytest test_runner/ -v"
-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/async_durable_execution_runner --cov-fail-under=95"
-
-[tool.hatch.envs.types]
-extra-dependencies = ["mypy>=1.0.0", "pytest", "pytest-asyncio"]
-[tool.hatch.envs.types.scripts]
-check = "mypy --install-types --non-interactive {args:src/async_durable_execution_runner test_runner}"
-
 [tool.coverage.run]
 source_pkgs = ["async_durable_execution_runner"]
 branch = true
