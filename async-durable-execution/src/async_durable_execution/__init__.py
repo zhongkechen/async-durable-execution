@@ -8,6 +8,7 @@ from .__about__ import __version__
 # Concurrency
 from .models import (
     InvocationStatus,
+    LambdaContext,
     OperationSubType,
     OperationType,
     OperationStatus,
@@ -76,7 +77,6 @@ from .execution import durable_callable, durable_execution
 from .primitive.wait import wait
 from .serdes import ExtendedTypeSerDes, JsonSerDes, SerDes, SerDesContext
 from .client import DurableServiceClient
-from .types import LambdaContext
 
 __all__ = [
     "__version__",

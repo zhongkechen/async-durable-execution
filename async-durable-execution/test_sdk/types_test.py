@@ -15,7 +15,11 @@ from async_durable_execution import (
     map as map_operation,
 )
 from async_durable_execution.context import reset_current_context, set_current_context
-from async_durable_execution.models import OperationIdentifier, OperationSubType
+from async_durable_execution.models import (
+    LambdaContext,
+    OperationIdentifier,
+    OperationSubType,
+)
 from async_durable_execution.primitive import child
 from async_durable_execution.config import JitterStrategy
 from async_durable_execution.composite.concurrency import SummaryGenerator
@@ -37,6 +41,7 @@ def test_additional_public_types_importable_from_package_root():
         "DurableServiceClient": DurableServiceClient,
         "ExtendedTypeSerDes": ExtendedTypeSerDes,
         "JitterStrategy": JitterStrategy,
+        "LambdaContext": LambdaContext,
         "OperationSubType": OperationSubType,
         "SummaryGenerator": SummaryGenerator,
     }

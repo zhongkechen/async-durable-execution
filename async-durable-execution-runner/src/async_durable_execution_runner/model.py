@@ -33,7 +33,7 @@ from async_durable_execution.models import (
     WaitDetails,
     WaitOptions,
 )
-from async_durable_execution.types import (
+from async_durable_execution.models import (
     LambdaContext as LambdaContextProtocol,
 )
 from .exceptions import (
