@@ -12,8 +12,7 @@ from dataclasses import dataclass, field as dataclass_field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
-from ..exceptions import SuspendExecution, TimedSuspendExecution
-from ..exceptions import InvalidStateError
+from ..exceptions import SuspendExecution, TimedSuspendExecution, InvalidStateError
 from ..models import (
     ErrorObject,
     Operation,
@@ -25,7 +24,6 @@ from ..models import (
 from ..primitive.base import OperationExecutor
 from ..primitive.child import ChildOperationExecutor, OrphanedChildException
 from ..serdes import deserialize
-
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

@@ -12,7 +12,6 @@ from ..models import (
 )
 from ..serdes import SerDes, deserialize, serialize
 
-
 if TYPE_CHECKING:
     from ..models import OperationUpdate
     from ..state import ExecutionState

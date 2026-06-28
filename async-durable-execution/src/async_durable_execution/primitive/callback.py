@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
+from .base import OperationExecutor
 from .child import get_durable_context
 from ..config import Duration, duration_to_seconds
 from ..exceptions import ExecutionError, SuspendExecution, TerminationReason
@@ -17,7 +18,6 @@ from ..models import (
     OperationUpdate,
     OperationSubType,
 )
-from .base import OperationExecutor
 from ..serdes import deserialize, PassThroughSerDes
 
 if TYPE_CHECKING:
