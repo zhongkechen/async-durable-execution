@@ -15,7 +15,7 @@ Local execution flows through these major components:
 6. `Executor` observes those events and updates execution state until completion.
 7. `DurableFunctionTestResult` exposes status, result payloads, and named operation lookup helpers.
 
-Architecture diagrams live with the runner package:
+Architecture diagrams:
 
-- [Durable Functions Python Test Framework Architecture](../async-durable-execution-runner/assets/dar-python-test-framework-architecture.svg)
-- [Event Flow Sequence Diagram](../async-durable-execution-runner/assets/dar-python-test-framework-event-flow.svg)
+- [Durable Functions Python Test Framework Architecture](assets/dar-python-test-framework-architecture.svg)
+- [Event Flow Sequence Diagram](assets/dar-python-test-framework-event-flow.svg)
