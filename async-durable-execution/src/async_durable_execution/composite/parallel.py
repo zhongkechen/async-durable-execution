@@ -31,10 +31,9 @@ from ..models import OperationIdentifier, OperationSubType
 
 
 if TYPE_CHECKING:
-    from .concurrency import BatchResult
+    from .concurrency import BatchResult, SummaryGenerator
     from ..serdes import SerDes
     from ..state import ExecutionState
-    from ..types import SummaryGenerator
 
 logger = logging.getLogger(__name__)
 

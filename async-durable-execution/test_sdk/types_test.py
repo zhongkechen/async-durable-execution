@@ -18,9 +18,9 @@ from async_durable_execution.context import reset_current_context, set_current_c
 from async_durable_execution.models import OperationIdentifier, OperationSubType
 from async_durable_execution.primitive import child
 from async_durable_execution.config import JitterStrategy
+from async_durable_execution.composite.concurrency import SummaryGenerator
 from async_durable_execution.serdes import ExtendedTypeSerDes
 from async_durable_execution.client import DurableServiceClient
-from async_durable_execution.types import SummaryGenerator
 
 
 def make_async_executor(result):

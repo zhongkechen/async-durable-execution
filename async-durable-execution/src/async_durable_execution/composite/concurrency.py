@@ -7,10 +7,10 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field as dataclass_field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar, cast
 
 from ..exceptions import (
     CallableRuntimeError,
@@ -31,13 +31,12 @@ from ..primitive.child import ChildOperationExecutor, OrphanedChildException
 from ..serdes import deserialize
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable
 
     from ..primitive.child import DurableContext
     from ..models import OperationSubType
     from ..serdes import SerDes
     from ..state import ExecutionState
-    from ..types import SummaryGenerator
 
 
 logger = logging.getLogger(__name__)
@@ -45,6 +44,10 @@ logger = logging.getLogger(__name__)
 CallableType = TypeVar("CallableType")
 ResultType = TypeVar("ResultType")
 R = TypeVar("R")
+C_contra = TypeVar("C_contra", contravariant=True)
+
+SummaryGenerator: TypeAlias = Callable[[C_contra], str]
+"""Create a compact JSON summary for oversized checkpoint payloads."""
 
 
 class NestingType(Enum):

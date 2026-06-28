@@ -33,9 +33,9 @@ from ..primitive.child import (
 )
 
 if TYPE_CHECKING:
+    from .concurrency import SummaryGenerator
     from ..serdes import SerDes
     from ..state import ExecutionState
-    from ..types import SummaryGenerator
 
 logger = logging.getLogger(__name__)
 

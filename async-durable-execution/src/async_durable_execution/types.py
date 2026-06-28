@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Awaitable, Protocol, TypeAlias, TypeVar
+from typing import TYPE_CHECKING, Any, Awaitable, Protocol, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -12,7 +11,6 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 U = TypeVar("U")
 C_co = TypeVar("C_co", covariant=True)
-C_contra = TypeVar("C_contra", contravariant=True)
 
 
 class LambdaContext(Protocol):  # pragma: no cover
@@ -31,10 +29,6 @@ class LambdaContext(Protocol):  # pragma: no cover
 
     def get_remaining_time_in_millis(self) -> int: ...
     def log(self, msg) -> None: ...
-
-
-SummaryGenerator: TypeAlias = Callable[[C_contra], str]
-"""Create a compact JSON summary for oversized checkpoint payloads."""
 
 
 class LambdaApiClient(Protocol):
