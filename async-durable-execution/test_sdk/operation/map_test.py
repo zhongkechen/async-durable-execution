@@ -1012,17 +1012,12 @@ def test_map_signature_defaults_to_map_summary_generator():
 
 
 @patch("async_durable_execution.composite.map.map_handler")
-@patch("async_durable_execution.composite.map.ChildOperationExecutor")
+@patch("async_durable_execution.composite.map._run_in_child_context")
 async def test_map_passes_default_summary_generator_to_handler(
-    mock_child_handler,
+    mock_run_in_child_context,
     mock_map_handler,
 ):
     """The public wrapper passes the default map summary generator to the handler."""
-
-    def call_child_func(func, *_args, **_kwargs):
-        mock_executor = Mock()
-        mock_executor.process = AsyncMock(side_effect=func)
-        return mock_executor
 
     async def test_function(item):
         return item
@@ -1032,7 +1027,14 @@ async def test_map_passes_default_summary_generator_to_handler(
 
     context = create_test_context(state=create_mock_execution_state())
 
-    mock_child_handler.side_effect = call_child_func
+    async def run_child_func(func, *_args, **_kwargs):
+        token = set_current_context(context.create_child_context("map-op"))
+        try:
+            return await func()
+        finally:
+            reset_current_context(token)
+
+    mock_run_in_child_context.side_effect = run_child_func
     mock_map_handler.return_value = handler_result
 
     result = await run_with_context(context, map_operation(test_function, [1]))
