@@ -11,8 +11,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
 from ..config import Duration, JitterStrategy, duration_to_seconds
 from ..context import (
-    reset_current_context,
-    set_current_context,
+    invoke_user_callable,
 )
 from ..exceptions import (
     CallableRuntimeError,
@@ -286,22 +285,16 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             attempt = operation_details.attempt + 1
 
         try:
-            step_context = StepContext(
+            check_context = WaitForConditionCheckContext(
                 attempt=attempt,
                 execution_state=self.state,
                 operation_identifier=self.operation_identifier,
             )
-            token = set_current_context(
-                WaitForConditionCheckContext(
-                    attempt=attempt,
-                    execution_state=step_context.execution_state,
-                    operation_identifier=self.operation_identifier,
-                )
+            condition_result = await invoke_user_callable(
+                check_context,
+                self.check,
+                current_state,
             )
-            try:
-                condition_result = await self.check(current_state)
-            finally:
-                reset_current_context(token)
 
             new_state, decision = self._resolve_condition_result(condition_result)
 

@@ -266,11 +266,7 @@ class BatchResult(SerializableModel, Generic[R]):  # noqa: PYI059
         ]
 
     def get_errors(self) -> list[ErrorObject]:
-        return [
-            item.error
-            for item in self.all
-            if item.status is BatchItemStatus.FAILED and item.error is not None
-        ]
+        return [item.error for item in self.failed() if item.error is not None]
 
     @property
     def success_count(self) -> int:
@@ -659,7 +655,7 @@ class ConcurrentExecutor(
                     exe_state.suspend_until
                     and exe_state.suspend_until < earliest_timestamp
                 ):
-                    earliest_timestamp = exe_state.suspend_until
+                    earliest_timestamp = cast(float, exe_state.suspend_until)
             elif exe_state.status is BranchStatus.SUSPENDED:
                 indefinite_suspend_task = exe_state
 
