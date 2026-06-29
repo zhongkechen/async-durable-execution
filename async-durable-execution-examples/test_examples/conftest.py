@@ -36,54 +36,6 @@ class RunnerMode(str, Enum):
     CLOUD = "cloud"
 
 
-class AsyncRunnerAdapter:
-    """Expose an async test-friendly facade over the runner API."""
-
-    def __init__(self, runner: Any) -> None:
-        self._runner = runner
-
-    def __enter__(self) -> "AsyncRunnerAdapter":
-        self._runner.__enter__()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        self._runner.__exit__(exc_type, exc_val, exc_tb)
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._runner, name)
-
-    async def run(self):
-        return await self._runner.run()
-
-    async def run_async(self):
-        return await self._runner.run_async()
-
-    async def wait_for_result(self, execution_arn: str, timeout: int = 60):
-        return await self._runner.wait_for_result(execution_arn, timeout)
-
-    async def wait_for_callback(
-        self, execution_arn: str, name: str | None = None, timeout: int = 60
-    ):
-        return await self._runner.wait_for_callback(
-            execution_arn,
-            name=name,
-            timeout=timeout,
-        )
-
-    async def send_callback_success(
-        self, callback_id: str, result: bytes | None = None
-    ) -> None:
-        await self._runner.send_callback_success(callback_id, result)
-
-    async def send_callback_failure(
-        self, callback_id: str, error: Any | None = None
-    ) -> None:
-        await self._runner.send_callback_failure(callback_id, error)
-
-    async def send_callback_heartbeat(self, callback_id: str) -> None:
-        await self._runner.send_callback_heartbeat(callback_id)
-
-
 def pytest_addoption(parser):
     """Add custom command line options for test execution."""
     parser.addoption(
@@ -116,13 +68,13 @@ def durable_runner(request):
             pytest --runner-mode=cloud -k test_hello_world
 
     Usage in tests:
-        def test_hello_world(durable_runner):
+        async def test_hello_world(durable_runner):
             with durable_runner(
                 handler=hello_world.handler,
                 input="test",
                 timeout=10,
             ) as runner:
-                result = runner.run()
+                result = await runner.run()
             assert result.status == InvocationStatus.SUCCEEDED
     """
     # Get runner mode from CLI option
@@ -146,24 +98,20 @@ def durable_runner(request):
 
             logger.info("Using AWS region: %s", region)
 
-            return AsyncRunnerAdapter(
-                create_runner(
-                    mode=runner_mode,
-                    handler=handler,
-                    function_name=deployed_name,
-                    region=region,
-                    lambda_endpoint=lambda_endpoint,
-                    input=input,
-                    timeout=timeout,
-                )
-            )
-        return AsyncRunnerAdapter(
-            create_runner(
+            return create_runner(
                 mode=runner_mode,
                 handler=handler,
+                function_name=deployed_name,
+                region=region,
+                lambda_endpoint=lambda_endpoint,
                 input=input,
                 timeout=timeout,
             )
+        return create_runner(
+            mode=runner_mode,
+            handler=handler,
+            input=input,
+            timeout=timeout,
         )
 
     return build_runner
