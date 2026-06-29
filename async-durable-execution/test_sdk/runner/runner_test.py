@@ -13,7 +13,7 @@ from async_durable_execution.models import (
     OperationType,
     StepDetails,
 )
-from async_durable_execution.models import Operation as SvcOperation
+from async_durable_execution.models import Operation
 from async_durable_execution.runner.exceptions import (
     DurableFunctionsTestError,
     InvalidParameterValueException,
@@ -39,13 +39,13 @@ async def test_durable_function_test_result_create():
     execution = Mock(spec=Execution)
 
     # Create operations - one EXECUTION (should be filtered) and one STEP
-    exec_op = SvcOperation(
+    exec_op = Operation(
         operation_id="exec-id",
         operation_type=OperationType.EXECUTION,
         status=OperationStatus.STARTED,
     )
 
-    step_op = SvcOperation(
+    step_op = Operation(
         operation_id="step-id",
         operation_type=OperationType.STEP,
         status=OperationStatus.SUCCEEDED,
@@ -67,12 +67,12 @@ async def test_durable_function_test_result_create():
     assert result.result == json.dumps("test-result")
     assert result.error is None
     assert len(result.operations) == 1  # EXECUTION operation filtered out
-    assert isinstance(result.operations[0], SvcOperation)
+    assert isinstance(result.operations[0], Operation)
 
 
 async def test_durable_function_test_result_get_operation_by_name():
     """Test DurableFunctionTestResult get_operation_by_name method."""
-    step_op = SvcOperation(
+    step_op = Operation(
         operation_id="step-id",
         operation_type=OperationType.STEP,
         status=OperationStatus.SUCCEEDED,
@@ -103,7 +103,7 @@ async def test_durable_function_test_result_get_operation_by_name_not_found():
 
 async def test_durable_function_test_result_get_step():
     """Test DurableFunctionTestResult get_step method."""
-    step_op = SvcOperation(
+    step_op = Operation(
         operation_id="step-id",
         operation_type=OperationType.STEP,
         status=OperationStatus.SUCCEEDED,
@@ -122,7 +122,7 @@ async def test_durable_function_test_result_get_step():
 
 async def test_durable_function_test_result_get_wait():
     """Test DurableFunctionTestResult get_wait method."""
-    wait_op = SvcOperation(
+    wait_op = Operation(
         operation_id="wait-id",
         operation_type=OperationType.WAIT,
         status=OperationStatus.SUCCEEDED,
@@ -141,7 +141,7 @@ async def test_durable_function_test_result_get_wait():
 
 async def test_durable_function_test_result_get_context():
     """Test DurableFunctionTestResult get_context method."""
-    ctx_op = SvcOperation(
+    ctx_op = Operation(
         operation_id="ctx-id",
         operation_type=OperationType.CONTEXT,
         status=OperationStatus.SUCCEEDED,
@@ -160,7 +160,7 @@ async def test_durable_function_test_result_get_context():
 
 async def test_durable_function_test_result_get_callback():
     """Test DurableFunctionTestResult get_callback method."""
-    callback_op = SvcOperation(
+    callback_op = Operation(
         operation_id="callback-id",
         operation_type=OperationType.CALLBACK,
         status=OperationStatus.SUCCEEDED,
@@ -179,7 +179,7 @@ async def test_durable_function_test_result_get_callback():
 
 async def test_durable_function_test_result_get_invoke():
     """Test DurableFunctionTestResult get_invoke method."""
-    invoke_op = SvcOperation(
+    invoke_op = Operation(
         operation_id="invoke-id",
         operation_type=OperationType.CHAINED_INVOKE,
         status=OperationStatus.SUCCEEDED,
@@ -198,7 +198,7 @@ async def test_durable_function_test_result_get_invoke():
 
 async def test_durable_function_test_result_get_execution():
     """Test DurableFunctionTestResult get_execution method."""
-    exec_op = SvcOperation(
+    exec_op = Operation(
         operation_id="exec-id",
         operation_type=OperationType.EXECUTION,
         status=OperationStatus.SUCCEEDED,
@@ -519,7 +519,7 @@ async def test_durable_function_test_result_create_with_parent_operations():
     execution = Mock(spec=Execution)
 
     # Create operation with parent_id (should be filtered out)
-    child_op = SvcOperation(
+    child_op = Operation(
         operation_id="child-id",
         operation_type=OperationType.STEP,
         status=OperationStatus.SUCCEEDED,
@@ -528,7 +528,7 @@ async def test_durable_function_test_result_create_with_parent_operations():
     )
 
     # Create operation without parent_id (should be included)
-    root_op = SvcOperation(
+    root_op = Operation(
         operation_id="root-id",
         operation_type=OperationType.STEP,
         status=OperationStatus.SUCCEEDED,
@@ -619,7 +619,7 @@ async def test_durable_function_test_result_from_execution_history():
     assert result.result == "test-result"
     assert result.error is None
     assert len(result.operations) == 1
-    assert isinstance(result.operations[0], SvcOperation)
+    assert isinstance(result.operations[0], Operation)
     assert result.operations[0].name == "test-step"
 
 

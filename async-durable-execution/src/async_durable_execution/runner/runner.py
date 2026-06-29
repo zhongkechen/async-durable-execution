@@ -21,7 +21,7 @@ from async_durable_execution.models import (
     OperationPayload,
     OperationType,
 )
-from async_durable_execution.models import Operation as SvcOperation
+from async_durable_execution.models import Operation
 from async_durable_execution.serdes import ExtendedTypeSerDes
 from .checkpoint.processor import (
     CheckpointProcessor,
@@ -138,10 +138,10 @@ def _get_callback_id_from_events(
 @dataclass(frozen=True)
 class DurableFunctionTestResult:
     status: InvocationStatus
-    operations: list[SvcOperation]
+    operations: list[Operation]
     result: OperationPayload | None = None
     error: ErrorObject | None = None
-    _all_operations: list[SvcOperation] = field(
+    _all_operations: list[Operation] = field(
         default_factory=list,
         repr=False,
         compare=False,
@@ -213,29 +213,29 @@ class DurableFunctionTestResult:
             _all_operations=svc_operations,
         )
 
-    def get_operation_by_name(self, name: str) -> SvcOperation:
+    def get_operation_by_name(self, name: str) -> Operation:
         for operation in self.operations:
             if operation.name == name:
                 return operation
         msg: str = f"Operation with name '{name}' not found"
         raise DurableFunctionsTestError(msg)
 
-    def get_step(self, name: str) -> SvcOperation:
+    def get_step(self, name: str) -> Operation:
         return self._get_operation_by_name_and_type(name, OperationType.STEP)
 
-    def get_wait(self, name: str) -> SvcOperation:
+    def get_wait(self, name: str) -> Operation:
         return self._get_operation_by_name_and_type(name, OperationType.WAIT)
 
-    def get_context(self, name: str) -> SvcOperation:
+    def get_context(self, name: str) -> Operation:
         return self._get_operation_by_name_and_type(name, OperationType.CONTEXT)
 
-    def get_callback(self, name: str) -> SvcOperation:
+    def get_callback(self, name: str) -> Operation:
         return self._get_operation_by_name_and_type(name, OperationType.CALLBACK)
 
-    def get_invoke(self, name: str) -> SvcOperation:
+    def get_invoke(self, name: str) -> Operation:
         return self._get_operation_by_name_and_type(name, OperationType.CHAINED_INVOKE)
 
-    def get_execution(self, name: str) -> SvcOperation:
+    def get_execution(self, name: str) -> Operation:
         return self._get_operation_by_name_and_type(name, OperationType.EXECUTION)
 
     def get_deserialized_result(self, serdes: ExtendedTypeSerDes | None = None) -> Any:
@@ -244,7 +244,7 @@ class DurableFunctionTestResult:
 
     def get_operation_deserialized_result(
         self,
-        operation: SvcOperation,
+        operation: Operation,
         serdes: ExtendedTypeSerDes | None = None,
     ) -> Any:
         """Return the deserialized result payload for a service operation."""
@@ -252,7 +252,7 @@ class DurableFunctionTestResult:
             _get_operation_result_payload(operation), serdes
         )
 
-    def get_child_operations(self, operation: SvcOperation) -> list[SvcOperation]:
+    def get_child_operations(self, operation: Operation) -> list[Operation]:
         """Return direct child operations for a service operation."""
         return [
             candidate
@@ -260,7 +260,7 @@ class DurableFunctionTestResult:
             if candidate.parent_id == operation.operation_id
         ]
 
-    def get_all_operations(self) -> list[SvcOperation]:
+    def get_all_operations(self) -> list[Operation]:
         """Return all non-execution operations, including nested operations."""
         return [
             operation
@@ -268,12 +268,12 @@ class DurableFunctionTestResult:
             if operation.operation_type != OperationType.EXECUTION
         ]
 
-    def _operation_source(self) -> list[SvcOperation]:
+    def _operation_source(self) -> list[Operation]:
         return self._all_operations or self.operations
 
     def _get_operation_by_name_and_type(
         self, name: str, operation_type: OperationType
-    ) -> SvcOperation:
+    ) -> Operation:
         operation = self.get_operation_by_name(name)
         if operation.operation_type != operation_type:
             msg = (
@@ -284,7 +284,7 @@ class DurableFunctionTestResult:
         return operation
 
 
-def _get_operation_result_payload(operation: SvcOperation) -> OperationPayload | None:
+def _get_operation_result_payload(operation: Operation) -> OperationPayload | None:
     match operation.operation_type:
         case OperationType.CONTEXT:
             return (
