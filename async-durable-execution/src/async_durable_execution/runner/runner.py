@@ -18,12 +18,12 @@ from botocore.session import get_session
 from async_durable_execution import InvocationStatus
 from async_durable_execution.models import (
     ErrorObject,
+    Operation,
     OperationPayload,
     OperationType,
 )
-from async_durable_execution.models import Operation
 from async_durable_execution.serdes import ExtendedTypeSerDes
-from .checkpoint.processor import (
+from .processor import (
     CheckpointProcessor,
 )
 from .client import InMemoryServiceClient
@@ -42,7 +42,7 @@ from .model import (
     events_to_operations,
 )
 from .scheduler import Scheduler
-from .stores.memory import InMemoryExecutionStore
+from .memory import InMemoryExecutionStore
 
 
 if TYPE_CHECKING:

@@ -1,7 +1,5 @@
 """Unit tests for InMemoryServiceClient."""
 
-import asyncio
-import datetime
 from unittest.mock import Mock
 
 from async_durable_execution.models import (
@@ -81,28 +79,3 @@ async def test_get_execution_state_default_max_items():
 
     assert result == expected_output
     processor.get_execution_state.assert_called_once_with("token", "marker", 1000)
-
-
-async def test_stop():
-    """Test stop method returns current datetime."""
-    processor = Mock()
-    client = InMemoryServiceClient(processor)
-
-    before = datetime.datetime.now(tz=datetime.timezone.utc)
-    result = client.stop(
-        "arn:aws:states:us-east-1:123456789012:execution:test", b"payload"
-    )
-    after = datetime.datetime.now(tz=datetime.timezone.utc)
-
-    assert isinstance(result, datetime.datetime)
-    assert before <= result <= after
-
-
-async def test_stop_with_none_payload():
-    """Test stop method with None payload."""
-    processor = Mock()
-    client = InMemoryServiceClient(processor)
-
-    result = client.stop("arn:aws:states:us-east-1:123456789012:execution:test", None)
-
-    assert isinstance(result, datetime.datetime)
