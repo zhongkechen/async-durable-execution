@@ -14,11 +14,10 @@ commands in this repository are run through Hatch from the repository root.
 
 ## Repository Structure
 
-This repository is a monorepo with three Python packages at the repository root:
+This repository is a monorepo with two active Python packages at the repository root:
 
 ```text
-async-durable-execution/           # Core SDK
-async-durable-execution-runner/    # Local/cloud runner and pytest helpers
+async-durable-execution/           # Core SDK plus local/cloud runner helpers
 async-durable-execution-examples/  # Example functions and tests
 ```
 
@@ -47,18 +46,12 @@ hatch run types:check
 ### Focused package development
 
 ```bash
-# Core SDK
-hatch run dev-core:test
-hatch run dev-core:cov
-hatch run dev-core:typecheck
-
-# Runner
-hatch run dev-testing:test
-hatch run dev-testing:cov
-hatch run dev-testing:typecheck
+# SDK and runner
+hatch run test:sdk
+hatch run test:runner
 
 # Examples
-hatch run dev-examples:test
+hatch run test:examples
 ```
 
 ### Formatting and linting
@@ -76,8 +69,7 @@ hatch fmt
 
 ### Testing examples against PyPI
 
-To verify the examples package against the published SDK while still using the
-local runner package:
+To verify the examples package against the published SDK:
 
 ```bash
 hatch run test-pypi-examples:test
@@ -130,9 +122,9 @@ hatch run test:all --pdb
 
 - `TimeoutError: Execution did not complete within 60s` - Increase the runner
   timeout, for example `timeout=120`.
-- `ModuleNotFoundError: No module named 'async_durable_execution_runner'` - Run
-  through Hatch, such as `hatch run dev-examples:test`, so workspace
-  dependencies are installed automatically.
+- `ModuleNotFoundError: No module named 'async_durable_execution.runner'` - Run
+  through Hatch, such as `hatch run test:examples`, so workspace dependencies
+  are installed automatically.
 
 ### Test layout
 
@@ -140,7 +132,8 @@ hatch run test:all --pdb
   you are changing. For the SDK package, mirror the source layout under
   `async-durable-execution/test_sdk/`: primitive operation tests live in
   `primitive/`, composite operation tests live in `composite/`, and shared model
-  or package-level behavior stays at the `test_sdk/` root.
+  or package-level behavior stays at the `test_sdk/` root. Runner tests live
+  under `async-durable-execution/test_sdk/runner/`.
 - Use filenames ending in `_test.py`.
 - Prefer adding focused unit tests near the affected area, and add integration
   coverage when behavior spans multiple components.
@@ -151,11 +144,10 @@ Run example-related commands from the repository root:
 
 ```bash
 # Run example tests
-hatch run dev-examples:test
+hatch run test:examples
 
 # Refresh editable installs in the examples environment when needed
 hatch run -- examples:pip install -e async-durable-execution
-hatch run -- examples:pip install -e async-durable-execution-runner
 hatch run -- examples:pip install -e async-durable-execution-examples
 
 # Build the shared example bundle

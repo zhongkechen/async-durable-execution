@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 [project]
 name = "async-durable-execution-runner"
 dynamic = ["version"]
-description = "Community-maintained durable execution local and cloud test runner for Python"
+description = "Deprecated compatibility package; runner helpers now ship in async-durable-execution"
 readme = "../README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
@@ -24,8 +24,7 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-  "botocore>=1.42.90,<1.43.1",
-  "async-durable-execution>=2.0.0b1",
+  "async-durable-execution>=2.0.0b2",
 ]
 
 [project.urls]

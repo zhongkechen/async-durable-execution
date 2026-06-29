@@ -3,7 +3,6 @@
 [![Build](https://github.com/zhongkechen/async-durable-execution/actions/workflows/build.yml/badge.svg)](https://github.com/zhongkechen/async-durable-execution/actions/workflows/build.yml)
 [![API Docs](https://img.shields.io/badge/API%20Docs-GitHub%20Pages-0A7BBB)](https://zhongkechen.github.io/async-durable-execution/)
 [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
-[![Runner PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution-runner.svg)](https://pypi.org/project/async-durable-execution-runner)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/zhongkechen/async-durable-execution/badge)](https://scorecard.dev/viewer/?uri=github.com/zhongkechen/async-durable-execution)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -23,16 +22,19 @@ This fork is specifically focused on making async Python work naturally with dur
 - **Ergonomic async call-site helpers** - Use `@durable_callable` together with top-level awaitable operations like `step(...)`, `wait(...)`, and `run_in_child_context(...)` to keep durable workflow code explicit and natural in async Python
 - **Same durable primitives, adapted for async Python** - Checkpointed steps, waits, callbacks, parallel branches, maps, retries, and child contexts are all preserved, but tuned for an async execution style
 - **Replay-safe logging with stdlib logging** - Use standard `logging` loggers enriched by the durable context filter instead of relying on ad hoc logging patterns
-- **Monorepo with SDK, runner, and examples together** - This fork ships the execution SDK, local/cloud runner, and example workflows in one repository so development and verification stay aligned
-- **Stronger local and cloud validation workflow** - The repo includes a dedicated runner package, integration examples, and GitHub Actions automation for build, test, and generated API docs
+- **SDK and runner shipped together** - The execution SDK now includes the local/cloud runner under `async_durable_execution.runner`
+- **Stronger local and cloud validation workflow** - The repo includes runner integration examples and GitHub Actions automation for build, test, and generated API docs
 
 ## 📦 Packages
 
 | Package | Description | Version |
 | --- | --- | --- |
-| `async-durable-execution` | Execution SDK for Lambda durable functions | [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution) |
-| `async-durable-execution-runner` | Local/cloud test runner and pytest helpers | [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution-runner.svg)](https://pypi.org/project/async-durable-execution-runner) |
+| `async-durable-execution` | Execution SDK, local/cloud test runner, and pytest helpers for Lambda durable functions | [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution) |
 | `async-durable-execution-examples` | Example durable functions and integration tests for local and cloud workflows | Shared repo version |
+
+The former `async-durable-execution-runner` distribution is deprecated. Install
+`async-durable-execution` and import runner helpers from
+`async_durable_execution.runner`.
 
 ## 🚀 Quick Start
 
@@ -141,10 +143,10 @@ Handler input is deserialized from the durable execution payload before your cod
 
 ## 🧪 Testing Durable Functions
 
-Install the runner package to test durable functions locally or against deployed Lambda functions:
+The SDK includes runner helpers for testing durable functions locally or against deployed Lambda functions:
 
 ```console
-pip install async-durable-execution-runner
+pip install async-durable-execution
 ```
 
 The local runner executes the durable handler in process, intercepts checkpoint operations with an in-memory service client, and returns a `DurableFunctionTestResult` that can be inspected by operation name.
@@ -155,7 +157,7 @@ Assuming the Quick Start handler above is saved in `order_workflow.py`, a local 
 import json
 
 from async_durable_execution import InvocationStatus
-from async_durable_execution_runner import (
+from async_durable_execution.runner import (
     DurableFunctionTestResult,
     StepOperation,
     create_runner,
@@ -192,7 +194,7 @@ async def test_my_durable_function() -> None:
 The `create_runner()` factory selects local or cloud mode from one call shape:
 
 ```python
-from async_durable_execution_runner import create_runner
+from async_durable_execution.runner import create_runner
 
 from order_workflow import handler
 
