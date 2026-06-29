@@ -9,16 +9,11 @@ import pytest
 
 from async_durable_execution import InvocationStatus
 from async_durable_execution.models import (
-    CallbackDetails,
-    ChainedInvokeDetails,
-    ContextDetails,
-    ExecutionDetails,
     OperationStatus,
     OperationType,
     StepDetails,
-    WaitDetails,
 )
-from async_durable_execution.models import Operation as SvcOperation
+from async_durable_execution.models import Operation
 from async_durable_execution.runner.exceptions import (
     DurableFunctionsTestError,
     InvalidParameterValueException,
@@ -31,456 +26,11 @@ from async_durable_execution.runner.model import (
     StartDurableExecutionOutput,
 )
 from async_durable_execution.runner.runner import (
-    OPERATION_FACTORIES,
-    CallbackOperation,
-    ContextOperation,
     DurableFunctionCloudTestRunner,
     DurableFunctionLocalTestRunner,
     DurableFunctionTestResult,
-    ExecutionOperation,
-    InvokeOperation,
-    Operation,
-    StepOperation,
-    WaitOperation,
-    create_operation,
     create_runner,
 )
-
-
-async def test_operation_creation():
-    """Test basic Operation creation."""
-    op = Operation(
-        operation_id="test-id",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-        parent_id="parent-id",
-        name="test-name",
-        sub_type="test-subtype",
-        start_timestamp=datetime.datetime.now(tz=datetime.timezone.utc),
-        end_timestamp=datetime.datetime.now(tz=datetime.timezone.utc),
-    )
-
-    assert op.operation_id == "test-id"
-    assert op.operation_type is OperationType.STEP
-    assert op.status is OperationStatus.SUCCEEDED
-    assert op.parent_id == "parent-id"
-    assert op.name == "test-name"
-    assert op.sub_type == "test-subtype"
-
-
-async def test_execution_operation_from_svc_operation():
-    """Test ExecutionOperation creation from service operation."""
-    execution_details = ExecutionDetails(input_payload="test-input")
-    svc_op = SvcOperation(
-        operation_id="exec-id",
-        operation_type=OperationType.EXECUTION,
-        status=OperationStatus.SUCCEEDED,
-        execution_details=execution_details,
-    )
-
-    exec_op = ExecutionOperation.from_svc_operation(svc_op)
-
-    assert exec_op.operation_id == "exec-id"
-    assert exec_op.operation_type is OperationType.EXECUTION
-    assert exec_op.input_payload == "test-input"
-
-
-async def test_execution_operation_wrong_type():
-    """Test ExecutionOperation raises error for wrong operation type."""
-    svc_op = SvcOperation(
-        operation_id="test-id",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-    )
-
-    with pytest.raises(
-        InvalidParameterValueException,
-        match="Expected EXECUTION operation, got OperationType.STEP",
-    ):
-        ExecutionOperation.from_svc_operation(svc_op)
-
-
-async def test_context_operation_from_svc_operation():
-    """Test ContextOperation creation from service operation."""
-    context_details = ContextDetails(result=json.dumps("test-result"), error=None)
-    svc_op = SvcOperation(
-        operation_id="ctx-id",
-        operation_type=OperationType.CONTEXT,
-        status=OperationStatus.SUCCEEDED,
-        context_details=context_details,
-    )
-
-    ctx_op = ContextOperation.from_svc_operation(svc_op)
-
-    assert ctx_op.operation_id == "ctx-id"
-    assert ctx_op.operation_type is OperationType.CONTEXT
-    assert ctx_op.result == json.dumps("test-result")
-    assert ctx_op.child_operations == []
-
-
-async def test_context_operation_with_children():
-    """Test ContextOperation with child operations."""
-    parent_op = SvcOperation(
-        operation_id="parent-id",
-        operation_type=OperationType.CONTEXT,
-        status=OperationStatus.SUCCEEDED,
-        context_details=ContextDetails(result=json.dumps("parent-result")),
-    )
-
-    child_op = SvcOperation(
-        operation_id="child-id",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-        parent_id="parent-id",
-        name="child-step",
-        step_details=StepDetails(result=json.dumps("child-result")),
-    )
-
-    all_ops = [parent_op, child_op]
-    ctx_op = ContextOperation.from_svc_operation(parent_op, all_ops)
-
-    assert len(ctx_op.child_operations) == 1
-    assert ctx_op.child_operations[0].name == "child-step"
-
-
-async def test_context_operation_get_operation_by_name():
-    """Test ContextOperation get_operation_by_name method."""
-    child_op = Operation(
-        operation_id="child-id",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-        name="test-child",
-    )
-
-    ctx_op = ContextOperation(
-        operation_id="ctx-id",
-        operation_type=OperationType.CONTEXT,
-        status=OperationStatus.SUCCEEDED,
-        child_operations=[child_op],
-    )
-
-    found_op = ctx_op.get_operation_by_name("test-child")
-    assert found_op == child_op
-
-
-async def test_context_operation_get_operation_by_name_not_found():
-    """Test ContextOperation get_operation_by_name raises error when not found."""
-    ctx_op = ContextOperation(
-        operation_id="ctx-id",
-        operation_type=OperationType.CONTEXT,
-        status=OperationStatus.SUCCEEDED,
-        child_operations=[],
-    )
-
-    with pytest.raises(
-        DurableFunctionsTestError, match="Child Operation with name 'missing' not found"
-    ):
-        ctx_op.get_operation_by_name("missing")
-
-
-async def test_context_operation_get_step():
-    """Test ContextOperation get_step method."""
-    step_op = StepOperation(
-        operation_id="step-id",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-        name="test-step",
-        child_operations=[],
-    )
-
-    ctx_op = ContextOperation(
-        operation_id="ctx-id",
-        operation_type=OperationType.CONTEXT,
-        status=OperationStatus.SUCCEEDED,
-        child_operations=[step_op],
-    )
-
-    found_step = ctx_op.get_step("test-step")
-    assert isinstance(found_step, StepOperation)
-    assert found_step.name == "test-step"
-
-
-async def test_context_operation_get_wait():
-    """Test ContextOperation get_wait method."""
-    wait_op = WaitOperation(
-        operation_id="wait-id",
-        operation_type=OperationType.WAIT,
-        status=OperationStatus.SUCCEEDED,
-        name="test-wait",
-    )
-
-    ctx_op = ContextOperation(
-        operation_id="ctx-id",
-        operation_type=OperationType.CONTEXT,
-        status=OperationStatus.SUCCEEDED,
-        child_operations=[wait_op],
-    )
-
-    found_wait = ctx_op.get_wait("test-wait")
-    assert isinstance(found_wait, WaitOperation)
-    assert found_wait.name == "test-wait"
-
-
-async def test_context_operation_get_context():
-    """Test ContextOperation get_context method."""
-    nested_ctx_op = ContextOperation(
-        operation_id="nested-ctx-id",
-        operation_type=OperationType.CONTEXT,
-        status=OperationStatus.SUCCEEDED,
-        name="nested-context",
-        child_operations=[],
-    )
-
-    ctx_op = ContextOperation(
-        operation_id="ctx-id",
-        operation_type=OperationType.CONTEXT,
-        status=OperationStatus.SUCCEEDED,
-        child_operations=[nested_ctx_op],
-    )
-
-    found_ctx = ctx_op.get_context("nested-context")
-    assert isinstance(found_ctx, ContextOperation)
-    assert found_ctx.name == "nested-context"
-
-
-async def test_context_operation_get_callback():
-    """Test ContextOperation get_callback method."""
-    callback_op = CallbackOperation(
-        operation_id="callback-id",
-        operation_type=OperationType.CALLBACK,
-        status=OperationStatus.SUCCEEDED,
-        name="test-callback",
-        child_operations=[],
-    )
-
-    ctx_op = ContextOperation(
-        operation_id="ctx-id",
-        operation_type=OperationType.CONTEXT,
-        status=OperationStatus.SUCCEEDED,
-        child_operations=[callback_op],
-    )
-
-    found_callback = ctx_op.get_callback("test-callback")
-    assert isinstance(found_callback, CallbackOperation)
-    assert found_callback.name == "test-callback"
-
-
-async def test_context_operation_get_invoke():
-    """Test ContextOperation get_invoke method."""
-    invoke_op = InvokeOperation(
-        operation_id="invoke-id",
-        operation_type=OperationType.CHAINED_INVOKE,
-        status=OperationStatus.SUCCEEDED,
-        name="test-invoke",
-    )
-
-    ctx_op = ContextOperation(
-        operation_id="ctx-id",
-        operation_type=OperationType.CONTEXT,
-        status=OperationStatus.SUCCEEDED,
-        child_operations=[invoke_op],
-    )
-
-    found_invoke = ctx_op.get_invoke("test-invoke")
-    assert isinstance(found_invoke, InvokeOperation)
-    assert found_invoke.name == "test-invoke"
-
-
-async def test_context_operation_get_execution():
-    """Test ContextOperation get_execution method."""
-    exec_op = ExecutionOperation(
-        operation_id="exec-id",
-        operation_type=OperationType.EXECUTION,
-        status=OperationStatus.SUCCEEDED,
-        name="test-execution",
-    )
-
-    ctx_op = ContextOperation(
-        operation_id="ctx-id",
-        operation_type=OperationType.CONTEXT,
-        status=OperationStatus.SUCCEEDED,
-        child_operations=[exec_op],
-    )
-
-    found_exec = ctx_op.get_execution("test-execution")
-    assert isinstance(found_exec, ExecutionOperation)
-    assert found_exec.name == "test-execution"
-
-
-async def test_step_operation_from_svc_operation():
-    """Test StepOperation creation from service operation."""
-    step_details = StepDetails(attempt=2, result=json.dumps("step-result"), error=None)
-    svc_op = SvcOperation(
-        operation_id="step-id",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-        step_details=step_details,
-    )
-
-    step_op = StepOperation.from_svc_operation(svc_op)
-
-    assert step_op.operation_id == "step-id"
-    assert step_op.operation_type is OperationType.STEP
-    assert step_op.attempt == 2
-    assert step_op.result == json.dumps("step-result")
-
-
-async def test_step_operation_wrong_type():
-    """Test StepOperation raises error for wrong operation type."""
-    svc_op = SvcOperation(
-        operation_id="test-id",
-        operation_type=OperationType.CONTEXT,
-        status=OperationStatus.SUCCEEDED,
-    )
-
-    with pytest.raises(
-        InvalidParameterValueException,
-        match="Expected STEP operation, got OperationType.CONTEXT",
-    ):
-        StepOperation.from_svc_operation(svc_op)
-
-
-async def test_wait_operation_from_svc_operation():
-    """Test WaitOperation creation from service operation."""
-    scheduled_time = datetime.datetime.now(tz=datetime.timezone.utc)
-    wait_details = WaitDetails(scheduled_end_timestamp=scheduled_time)
-    svc_op = SvcOperation(
-        operation_id="wait-id",
-        operation_type=OperationType.WAIT,
-        status=OperationStatus.SUCCEEDED,
-        wait_details=wait_details,
-    )
-
-    wait_op = WaitOperation.from_svc_operation(svc_op)
-
-    assert wait_op.operation_id == "wait-id"
-    assert wait_op.operation_type is OperationType.WAIT
-    assert wait_op.scheduled_end_timestamp == scheduled_time
-
-
-async def test_wait_operation_wrong_type():
-    """Test WaitOperation raises error for wrong operation type."""
-    svc_op = SvcOperation(
-        operation_id="test-id",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-    )
-
-    with pytest.raises(
-        InvalidParameterValueException,
-        match="Expected WAIT operation, got OperationType.STEP",
-    ):
-        WaitOperation.from_svc_operation(svc_op)
-
-
-async def test_callback_operation_from_svc_operation():
-    """Test CallbackOperation creation from service operation."""
-    callback_details = CallbackDetails(
-        callback_id="cb-123", result=json.dumps("callback-result")
-    )
-    svc_op = SvcOperation(
-        operation_id="callback-id",
-        operation_type=OperationType.CALLBACK,
-        status=OperationStatus.SUCCEEDED,
-        callback_details=callback_details,
-    )
-
-    callback_op = CallbackOperation.from_svc_operation(svc_op)
-
-    assert callback_op.operation_id == "callback-id"
-    assert callback_op.operation_type is OperationType.CALLBACK
-    assert callback_op.callback_id == "cb-123"
-    assert callback_op.result == json.dumps("callback-result")
-
-
-async def test_callback_operation_wrong_type():
-    """Test CallbackOperation raises error for wrong operation type."""
-    svc_op = SvcOperation(
-        operation_id="test-id",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-    )
-
-    with pytest.raises(
-        InvalidParameterValueException,
-        match="Expected CALLBACK operation, got OperationType.STEP",
-    ):
-        CallbackOperation.from_svc_operation(svc_op)
-
-
-async def test_invoke_operation_from_svc_operation():
-    """Test InvokeOperation creation from service operation."""
-    invoke_details = ChainedInvokeDetails(
-        result=json.dumps("invoke-result"),
-    )
-    svc_op = SvcOperation(
-        operation_id="invoke-id",
-        operation_type=OperationType.CHAINED_INVOKE,
-        status=OperationStatus.SUCCEEDED,
-        chained_invoke_details=invoke_details,
-    )
-
-    invoke_op = InvokeOperation.from_svc_operation(svc_op)
-
-    assert invoke_op.operation_id == "invoke-id"
-    assert invoke_op.operation_type is OperationType.CHAINED_INVOKE
-    assert invoke_op.result == json.dumps("invoke-result")
-
-
-async def test_invoke_operation_wrong_type():
-    """Test InvokeOperation raises error for wrong operation type."""
-    svc_op = SvcOperation(
-        operation_id="test-id",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-    )
-
-    with pytest.raises(
-        InvalidParameterValueException,
-        match="Expected INVOKE operation, got OperationType.STEP",
-    ):
-        InvokeOperation.from_svc_operation(svc_op)
-
-
-async def test_operation_factories_mapping():
-    """Test OPERATION_FACTORIES contains all expected mappings."""
-    expected_types = {
-        OperationType.EXECUTION: ExecutionOperation,
-        OperationType.CONTEXT: ContextOperation,
-        OperationType.STEP: StepOperation,
-        OperationType.WAIT: WaitOperation,
-        OperationType.CHAINED_INVOKE: InvokeOperation,
-        OperationType.CALLBACK: CallbackOperation,
-    }
-
-    assert expected_types == OPERATION_FACTORIES
-
-
-async def test_create_operation_step():
-    """Test create_operation function with STEP operation."""
-    svc_op = SvcOperation(
-        operation_id="step-id",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-        step_details=StepDetails(result=json.dumps("test-result")),
-    )
-
-    operation = create_operation(svc_op)
-
-    assert isinstance(operation, StepOperation)
-    assert operation.operation_id == "step-id"
-
-
-async def test_create_operation_unknown_type():
-    """Test create_operation raises error for unknown operation type."""
-    # Create a mock operation with an invalid type
-    svc_op = Mock()
-    svc_op.operation_type = "UNKNOWN_TYPE"
-
-    with pytest.raises(
-        DurableFunctionsTestError, match="Unknown operation type: UNKNOWN_TYPE"
-    ):
-        create_operation(svc_op)
 
 
 async def test_durable_function_test_result_create():
@@ -488,18 +38,20 @@ async def test_durable_function_test_result_create():
     # Create mock execution with operations
     execution = Mock(spec=Execution)
 
-    # Create mock operations - one EXECUTION (should be filtered) and one STEP
-    exec_op = Mock()
-    exec_op.operation_type = OperationType.EXECUTION
-    exec_op.parent_id = None
+    # Create operations - one EXECUTION (should be filtered) and one STEP
+    exec_op = Operation(
+        operation_id="exec-id",
+        operation_type=OperationType.EXECUTION,
+        status=OperationStatus.STARTED,
+    )
 
-    step_op = Mock()
-    step_op.operation_type = OperationType.STEP
-    step_op.parent_id = None
-    step_op.operation_id = "step-id"
-    step_op.status = OperationStatus.SUCCEEDED
-    step_op.name = "test-step"
-    step_op.step_details = StepDetails(result=json.dumps("step-result"))
+    step_op = Operation(
+        operation_id="step-id",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.SUCCEEDED,
+        name="test-step",
+        step_details=StepDetails(result=json.dumps("step-result")),
+    )
 
     execution.operations = [exec_op, step_op]
 
@@ -515,16 +67,16 @@ async def test_durable_function_test_result_create():
     assert result.result == json.dumps("test-result")
     assert result.error is None
     assert len(result.operations) == 1  # EXECUTION operation filtered out
+    assert isinstance(result.operations[0], Operation)
 
 
 async def test_durable_function_test_result_get_operation_by_name():
     """Test DurableFunctionTestResult get_operation_by_name method."""
-    step_op = StepOperation(
+    step_op = Operation(
         operation_id="step-id",
         operation_type=OperationType.STEP,
         status=OperationStatus.SUCCEEDED,
         name="test-step",
-        child_operations=[],
     )
 
     result = DurableFunctionTestResult(
@@ -533,7 +85,7 @@ async def test_durable_function_test_result_get_operation_by_name():
     )
 
     found_op = result.get_operation_by_name("test-step")
-    assert found_op == step_op
+    assert found_op is step_op
 
 
 async def test_durable_function_test_result_get_operation_by_name_not_found():
@@ -551,12 +103,11 @@ async def test_durable_function_test_result_get_operation_by_name_not_found():
 
 async def test_durable_function_test_result_get_step():
     """Test DurableFunctionTestResult get_step method."""
-    step_op = StepOperation(
+    step_op = Operation(
         operation_id="step-id",
         operation_type=OperationType.STEP,
         status=OperationStatus.SUCCEEDED,
         name="test-step",
-        child_operations=[],
     )
 
     result = DurableFunctionTestResult(
@@ -565,13 +116,13 @@ async def test_durable_function_test_result_get_step():
     )
 
     found_step = result.get_step("test-step")
-    assert isinstance(found_step, StepOperation)
+    assert found_step is step_op
     assert found_step.name == "test-step"
 
 
 async def test_durable_function_test_result_get_wait():
     """Test DurableFunctionTestResult get_wait method."""
-    wait_op = WaitOperation(
+    wait_op = Operation(
         operation_id="wait-id",
         operation_type=OperationType.WAIT,
         status=OperationStatus.SUCCEEDED,
@@ -584,18 +135,17 @@ async def test_durable_function_test_result_get_wait():
     )
 
     found_wait = result.get_wait("test-wait")
-    assert isinstance(found_wait, WaitOperation)
+    assert found_wait is wait_op
     assert found_wait.name == "test-wait"
 
 
 async def test_durable_function_test_result_get_context():
     """Test DurableFunctionTestResult get_context method."""
-    ctx_op = ContextOperation(
+    ctx_op = Operation(
         operation_id="ctx-id",
         operation_type=OperationType.CONTEXT,
         status=OperationStatus.SUCCEEDED,
         name="test-context",
-        child_operations=[],
     )
 
     result = DurableFunctionTestResult(
@@ -604,18 +154,17 @@ async def test_durable_function_test_result_get_context():
     )
 
     found_ctx = result.get_context("test-context")
-    assert isinstance(found_ctx, ContextOperation)
+    assert found_ctx is ctx_op
     assert found_ctx.name == "test-context"
 
 
 async def test_durable_function_test_result_get_callback():
     """Test DurableFunctionTestResult get_callback method."""
-    callback_op = CallbackOperation(
+    callback_op = Operation(
         operation_id="callback-id",
         operation_type=OperationType.CALLBACK,
         status=OperationStatus.SUCCEEDED,
         name="test-callback",
-        child_operations=[],
     )
 
     result = DurableFunctionTestResult(
@@ -624,13 +173,13 @@ async def test_durable_function_test_result_get_callback():
     )
 
     found_callback = result.get_callback("test-callback")
-    assert isinstance(found_callback, CallbackOperation)
+    assert found_callback is callback_op
     assert found_callback.name == "test-callback"
 
 
 async def test_durable_function_test_result_get_invoke():
     """Test DurableFunctionTestResult get_invoke method."""
-    invoke_op = InvokeOperation(
+    invoke_op = Operation(
         operation_id="invoke-id",
         operation_type=OperationType.CHAINED_INVOKE,
         status=OperationStatus.SUCCEEDED,
@@ -643,13 +192,13 @@ async def test_durable_function_test_result_get_invoke():
     )
 
     found_invoke = result.get_invoke("test-invoke")
-    assert isinstance(found_invoke, InvokeOperation)
+    assert found_invoke is invoke_op
     assert found_invoke.name == "test-invoke"
 
 
 async def test_durable_function_test_result_get_execution():
     """Test DurableFunctionTestResult get_execution method."""
-    exec_op = ExecutionOperation(
+    exec_op = Operation(
         operation_id="exec-id",
         operation_type=OperationType.EXECUTION,
         status=OperationStatus.SUCCEEDED,
@@ -662,7 +211,7 @@ async def test_durable_function_test_result_get_execution():
     )
 
     found_exec = result.get_execution("test-execution")
-    assert isinstance(found_exec, ExecutionOperation)
+    assert found_exec is exec_op
     assert found_exec.name == "test-execution"
 
 
@@ -675,19 +224,6 @@ async def test_durable_function_test_result_get_deserialized_result():
     )
 
     assert result.get_deserialized_result() == {"status": "ok"}
-
-
-async def test_context_operation_get_deserialized_result():
-    """Test ContextOperation deserializes its result payload."""
-    op = ContextOperation(
-        operation_id="ctx-id",
-        operation_type=OperationType.CONTEXT,
-        status=OperationStatus.SUCCEEDED,
-        child_operations=[],
-        result=json.dumps("child-result"),
-    )
-
-    assert op.get_deserialized_result() == "child-result"
 
 
 @patch("async_durable_execution.runner.runner.Scheduler")
@@ -978,80 +514,27 @@ async def test_runner_run_methods_do_not_accept_call_time_overrides():
         cloud_runner.run_async(timeout=10)
 
 
-async def test_context_operation_wrong_type():
-    """Test ContextOperation raises error for wrong operation type."""
-    svc_op = SvcOperation(
-        operation_id="test-id",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-    )
-
-    with pytest.raises(
-        InvalidParameterValueException,
-        match="Expected CONTEXT operation, got OperationType.STEP",
-    ):
-        ContextOperation.from_svc_operation(svc_op)
-
-
-async def test_context_operation_with_child_operations_none():
-    """Test ContextOperation with None child operations."""
-    svc_op = SvcOperation(
-        operation_id="ctx-id",
-        operation_type=OperationType.CONTEXT,
-        status=OperationStatus.SUCCEEDED,
-        context_details=ContextDetails(result=json.dumps("test-result")),
-    )
-
-    ctx_op = ContextOperation.from_svc_operation(svc_op, None)
-
-    assert ctx_op.child_operations == []
-
-
-async def test_callback_operation_with_child_operations_none():
-    """Test CallbackOperation with None child operations."""
-    svc_op = SvcOperation(
-        operation_id="callback-id",
-        operation_type=OperationType.CALLBACK,
-        status=OperationStatus.SUCCEEDED,
-        callback_details=CallbackDetails(callback_id="cb-123"),
-    )
-
-    callback_op = CallbackOperation.from_svc_operation(svc_op, None)
-
-    assert callback_op.child_operations == []
-
-
-async def test_step_operation_with_child_operations_none():
-    """Test StepOperation with None child operations."""
-    svc_op = SvcOperation(
-        operation_id="step-id",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.SUCCEEDED,
-        step_details=StepDetails(result=json.dumps("step-result")),
-    )
-
-    step_op = StepOperation.from_svc_operation(svc_op, None)
-
-    assert step_op.child_operations == []
-
-
 async def test_durable_function_test_result_create_with_parent_operations():
     """Test DurableFunctionTestResult.create with operations that have parent_id."""
     execution = Mock(spec=Execution)
 
     # Create operation with parent_id (should be filtered out)
-    child_op = Mock()
-    child_op.operation_type = OperationType.STEP
-    child_op.parent_id = "parent-id"
+    child_op = Operation(
+        operation_id="child-id",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.SUCCEEDED,
+        parent_id="parent-id",
+        step_details=StepDetails(result=json.dumps("child-result")),
+    )
 
     # Create operation without parent_id (should be included)
-    root_op = Mock()
-    root_op.operation_type = OperationType.STEP
-    root_op.parent_id = None
-    root_op.operation_id = "root-id"
-    root_op.status = OperationStatus.SUCCEEDED
-    root_op.name = "root-step"
-    root_op.step_details = StepDetails(result=json.dumps("root-result"))
+    root_op = Operation(
+        operation_id="root-id",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.SUCCEEDED,
+        name="root-step",
+        step_details=StepDetails(result=json.dumps("root-result")),
+    )
 
     execution.operations = [child_op, root_op]
     execution.result = Mock()
@@ -1136,6 +619,7 @@ async def test_durable_function_test_result_from_execution_history():
     assert result.result == "test-result"
     assert result.error is None
     assert len(result.operations) == 1
+    assert isinstance(result.operations[0], Operation)
     assert result.operations[0].name == "test-step"
 
 

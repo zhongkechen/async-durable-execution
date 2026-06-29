@@ -30,12 +30,12 @@ async def test_parallel_first_successful(durable_runner):
     assert parallel_op.status is OperationStatus.SUCCEEDED
 
     # Verify child operations exist (3 branches)
-    assert len(parallel_op.child_operations) == 3
+    assert len(result.get_child_operations(parallel_op)) == 3
 
     # At least one child should have succeeded
     succeeded = [
         op
-        for op in parallel_op.child_operations
+        for op in result.get_child_operations(parallel_op)
         if op.status is OperationStatus.SUCCEEDED
     ]
     assert len(succeeded) >= 1

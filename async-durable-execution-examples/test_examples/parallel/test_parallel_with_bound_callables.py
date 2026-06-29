@@ -29,9 +29,9 @@ async def test_parallel_with_bound_callables(durable_runner):
     parallel_op = result.get_context("load_all_data")
     assert parallel_op is not None
     assert parallel_op.status is OperationStatus.SUCCEEDED
-    assert len(parallel_op.child_operations) == 5
+    assert len(result.get_child_operations(parallel_op)) == 5
 
-    child_names = [op.name for op in parallel_op.child_operations]
+    child_names = [op.name for op in result.get_child_operations(parallel_op)]
     assert child_names == [
         "parallel-branch-0",
         "parallel-branch-1",
@@ -40,6 +40,6 @@ async def test_parallel_with_bound_callables(durable_runner):
         "parallel-branch-4",
     ]
 
-    for child in parallel_op.child_operations:
+    for child in result.get_child_operations(parallel_op):
         assert child.operation_type == OperationType.CONTEXT
         assert child.status is OperationStatus.SUCCEEDED

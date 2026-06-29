@@ -21,24 +21,12 @@ async def test_handle_step_operations_with_undefined_result_after_replay(
     assert len(operations) == 3  # step + context + wait
 
     # Verify step operation with undefined result
-    step_ops = [
-        op
-        for op in operations
-        if op.operation_type.value == "STEP" and op.name == "fetch-user"
-    ]
-    assert len(step_ops) == 1
-    step_op = step_ops[0]
-    assert step_op.get_deserialized_result() is None
+    step_op = result.get_step("fetch-user")
+    assert result.get_operation_deserialized_result(step_op) is None
 
     # Verify child context operation with undefined result
-    context_ops = [
-        op
-        for op in operations
-        if op.operation_type.value == "CONTEXT" and op.name == "parent"
-    ]
-    assert len(context_ops) == 1
-    context_op = context_ops[0]
-    assert context_op.get_deserialized_result() is None
+    context_op = result.get_context("parent")
+    assert result.get_operation_deserialized_result(context_op) is None
 
     # Verify wait operation completed normally
     wait_op = operations[2]

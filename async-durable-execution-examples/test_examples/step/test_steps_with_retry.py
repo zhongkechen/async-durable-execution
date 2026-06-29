@@ -38,10 +38,12 @@ async def test_steps_with_retry(durable_runner):
     assert len(step_ops) == 2
 
     # Poll 1: succeeded after 1 retry (returned None)
-    assert step_ops[0].name == "get_item_poll_1"
-    assert step_ops[0].result == "null"
-    assert step_ops[0].attempt == 2  # 1 retry occurred (1-indexed: 2=first retry)
+    poll_1 = result.get_step("get_item_poll_1")
+    assert poll_1.step_details.result == "null"
+    assert (
+        poll_1.step_details.attempt == 2
+    )  # 1 retry occurred (1-indexed: 2=first retry)
 
     # Poll 2: succeeded immediately (returned item)
-    assert step_ops[1].name == "get_item_poll_2"
-    assert step_ops[1].attempt == 1  # No retries needed (1-indexed: 1=initial)
+    poll_2 = result.get_step("get_item_poll_2")
+    assert poll_2.step_details.attempt == 1  # No retries needed (1-indexed: 1=initial)

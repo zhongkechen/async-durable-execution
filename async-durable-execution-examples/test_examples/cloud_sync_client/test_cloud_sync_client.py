@@ -27,4 +27,4 @@ async def test_cloud_sync_client_example(durable_runner):
     }
 
     step_result = result.get_step("format-message")
-    assert step_result.get_deserialized_result() == "hello sync-cloud"
+    assert result.get_operation_deserialized_result(step_result) == "hello sync-cloud"

@@ -158,7 +158,6 @@ import json
 from async_durable_execution import InvocationStatus
 from async_durable_execution.runner import (
     DurableFunctionTestResult,
-    StepOperation,
     create_runner,
 )
 
@@ -181,13 +180,15 @@ async def test_my_durable_function() -> None:
         {"status": "approved", "order_id": "order-123", "receipt": receipt}
     )
 
-    validation_result: StepOperation = result.get_step("validate_order")
-    assert validation_result.result == json.dumps(
+    validation_result = result.get_step("validate_order")
+    assert validation_result.step_details is not None
+    assert validation_result.step_details.result == json.dumps(
         {"order_id": "order-123", "valid": True}
     )
 
-    receipt_result: StepOperation = result.get_step("create_receipt")
-    assert receipt_result.result == json.dumps(receipt)
+    receipt_result = result.get_step("create_receipt")
+    assert receipt_result.step_details is not None
+    assert receipt_result.step_details.result == json.dumps(receipt)
 ```
 
 The `create_runner()` factory selects local or cloud mode from one call shape:

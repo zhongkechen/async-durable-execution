@@ -19,6 +19,6 @@ async def test_step_with_class_methods(durable_runner):
         "discount": 2.5,
         "total": 27.0,
     }
-    assert result.get_step("subtotal").get_deserialized_result() == 25.0
-    assert result.get_step("discount").get_deserialized_result() == 2.5
-    assert result.get_step("total").get_deserialized_result() == 27.0
+    assert result.get_operation_deserialized_result(result.get_step("subtotal")) == 25.0
+    assert result.get_operation_deserialized_result(result.get_step("discount")) == 2.5
+    assert result.get_operation_deserialized_result(result.get_step("total")) == 27.0

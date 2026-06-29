@@ -12,10 +12,8 @@ from async_durable_execution import (
 )
 from async_durable_execution import step, wait
 from async_durable_execution.runner import (
-    ContextOperation,
     DurableFunctionLocalTestRunner,
     DurableFunctionTestResult,
-    StepOperation,
 )
 
 
@@ -71,18 +69,21 @@ async def test_basic_durable_function() -> None:
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.result == json.dumps(["1 2", "3 4 4 3", "5 6"])
 
-    one_result: StepOperation = result.get_step("one")
-    assert one_result.result == json.dumps("1 2")
+    one_result = result.get_step("one")
+    assert one_result.step_details is not None
+    assert one_result.step_details.result == json.dumps("1 2")
 
-    two_result: ContextOperation = result.get_context("two")
-    assert two_result.result == json.dumps("3 4 4 3")
+    two_result = result.get_context("two")
+    assert two_result.context_details is not None
+    assert two_result.context_details.result == json.dumps("3 4 4 3")
 
-    three_result: StepOperation = result.get_step("three")
-    assert three_result.result == json.dumps("5 6")
+    three_result = result.get_step("three")
+    assert three_result.step_details is not None
+    assert three_result.step_details.result == json.dumps("5 6")
 
     # currently has the optimization where it's not saving child checkpoints after parent done
     # prob should unpick that for test
-    # two_one_op = cast(StepOperation, two_result_op.get_operation_by_name("two_1"))
-    # assert two_one_op.result == '"3 4"'
+    # two_one_op = next(op for op in result.get_child_operations(two_result) if op.name == "two_1")
+    # assert two_one_op.step_details.result == '"3 4"'
 
     # print("done")

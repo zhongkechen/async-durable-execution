@@ -44,17 +44,10 @@ async def test_handle_wait_for_callback_within_child_contexts(durable_runner):
     }
 
     # Find the child context operation
-    child_context_ops = [
-        op
-        for op in result.operations
-        if op.operation_type.value == "CONTEXT"
-        and op.name == "child-context-with-callback"
-    ]
-    assert len(child_context_ops) == 1
-    child_context_op = child_context_ops[0]
+    child_context_op = result.get_context("child-context-with-callback")
 
     # Verify child operations are accessible
-    child_operations = child_context_op.child_operations
+    child_operations = result.get_child_operations(child_context_op)
     assert child_operations is not None
     assert len(child_operations) == 2  # wait + waitForCallback
 

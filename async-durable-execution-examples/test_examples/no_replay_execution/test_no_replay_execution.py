@@ -17,30 +17,17 @@ async def test_handle_step_operations_when_no_replay_occurs(durable_runner):
     assert result.get_deserialized_result() == {"completed": True}
 
     # Get step operations
-    user1_step_ops = [
-        op
-        for op in result.operations
-        if op.operation_type.value == "STEP" and op.name == "fetch-user-1"
-    ]
-    assert len(user1_step_ops) == 1
-    user1_step = user1_step_ops[0]
-
-    user2_step_ops = [
-        op
-        for op in result.operations
-        if op.operation_type.value == "STEP" and op.name == "fetch-user-2"
-    ]
-    assert len(user2_step_ops) == 1
-    user2_step = user2_step_ops[0]
+    user1_step = result.get_step("fetch-user-1")
+    user2_step = result.get_step("fetch-user-2")
 
     # Verify first-time execution tracking (no replay)
     assert user1_step.operation_type.value == "STEP"
     assert user1_step.status.value == "SUCCEEDED"
-    assert user1_step.get_deserialized_result() == "user-1"
+    assert result.get_operation_deserialized_result(user1_step) == "user-1"
 
     assert user2_step.operation_type.value == "STEP"
     assert user2_step.status.value == "SUCCEEDED"
-    assert user2_step.get_deserialized_result() == "user-2"
+    assert result.get_operation_deserialized_result(user2_step) == "user-2"
 
     # Verify both operations tracked
     assert len(result.operations) == 2

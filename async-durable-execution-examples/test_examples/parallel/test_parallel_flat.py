@@ -28,9 +28,9 @@ async def test_parallel_flat(durable_runner):
     assert parallel_op.status is OperationStatus.SUCCEEDED
 
     # Verify all three child operations exist
-    assert len(parallel_op.child_operations) == 3
+    assert len(result.get_child_operations(parallel_op)) == 3
 
     # Verify all children succeeded
-    for child in parallel_op.child_operations:
+    for child in result.get_child_operations(parallel_op):
         assert child.operation_type != OperationType.CONTEXT
         assert child.status is OperationStatus.SUCCEEDED

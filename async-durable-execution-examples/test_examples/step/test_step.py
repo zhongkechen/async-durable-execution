@@ -13,4 +13,4 @@ async def test_step(durable_runner):
     assert result.get_deserialized_result() == 8
 
     step_result = result.get_step("add_numbers")
-    assert step_result.get_deserialized_result() == 8
+    assert result.get_operation_deserialized_result(step_result) == 8

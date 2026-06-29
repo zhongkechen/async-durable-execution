@@ -8,8 +8,6 @@ from dataclasses import dataclass, field
 from typing import (
     TYPE_CHECKING,
     Any,
-    Protocol,
-    TypeVar,
     cast,
 )
 
@@ -21,11 +19,9 @@ from async_durable_execution import InvocationStatus
 from async_durable_execution.models import (
     ErrorObject,
     OperationPayload,
-    OperationStatus,
-    OperationSubType,
     OperationType,
 )
-from async_durable_execution.models import Operation as SvcOperation
+from async_durable_execution.models import Operation
 from async_durable_execution.serdes import ExtendedTypeSerDes
 from .checkpoint.processor import (
     CheckpointProcessor,
@@ -50,8 +46,7 @@ from .stores.memory import InMemoryExecutionStore
 
 
 if TYPE_CHECKING:
-    import datetime
-    from collections.abc import Callable, MutableMapping
+    from collections.abc import Callable
 
     from .execution import Execution
     from .model import Event
@@ -75,303 +70,6 @@ def _deserialize_operation_payload(
         return serdes.deserialize_sync(payload)
     except Exception:
         return json.loads(payload)
-
-
-@dataclass(frozen=True)
-class Operation:
-    operation_id: str
-    operation_type: OperationType
-    status: OperationStatus
-    parent_id: str | None = field(default=None, kw_only=True)
-    name: str | None = field(default=None, kw_only=True)
-    sub_type: OperationSubType | None = field(default=None, kw_only=True)
-    start_timestamp: datetime.datetime | None = field(default=None, kw_only=True)
-    end_timestamp: datetime.datetime | None = field(default=None, kw_only=True)
-
-
-T = TypeVar("T", bound=Operation)
-
-
-class OperationFactory(Protocol):
-    @staticmethod
-    def from_svc_operation(
-        operation: SvcOperation, all_operations: list[SvcOperation] | None = None
-    ) -> Operation: ...
-
-
-@dataclass(frozen=True)
-class ExecutionOperation(Operation):
-    input_payload: str | None = None
-
-    @staticmethod
-    def from_svc_operation(
-        operation: SvcOperation,
-        all_operations: list[SvcOperation] | None = None,  # noqa: ARG004
-    ) -> ExecutionOperation:
-        if operation.operation_type != OperationType.EXECUTION:
-            msg: str = f"Expected EXECUTION operation, got {operation.operation_type}"
-            raise InvalidParameterValueException(msg)
-        return ExecutionOperation(
-            operation_id=operation.operation_id,
-            operation_type=operation.operation_type,
-            status=operation.status,
-            parent_id=operation.parent_id,
-            name=operation.name,
-            sub_type=operation.sub_type,
-            start_timestamp=operation.start_timestamp,
-            end_timestamp=operation.end_timestamp,
-            input_payload=(
-                operation.execution_details.input_payload
-                if operation.execution_details
-                else None
-            ),
-        )
-
-
-@dataclass(frozen=True)
-class ContextOperation(Operation):
-    child_operations: list[Operation]
-    result: OperationPayload | None = None
-    error: ErrorObject | None = None
-
-    @staticmethod
-    def from_svc_operation(
-        operation: SvcOperation, all_operations: list[SvcOperation] | None = None
-    ) -> ContextOperation:
-        if operation.operation_type != OperationType.CONTEXT:
-            msg: str = f"Expected CONTEXT operation, got {operation.operation_type}"
-            raise InvalidParameterValueException(msg)
-
-        child_operations = []
-        if all_operations:
-            child_operations = [
-                create_operation(op, all_operations)
-                for op in all_operations
-                if op.parent_id == operation.operation_id
-            ]
-
-        return ContextOperation(
-            operation_id=operation.operation_id,
-            operation_type=operation.operation_type,
-            status=operation.status,
-            parent_id=operation.parent_id,
-            name=operation.name,
-            sub_type=operation.sub_type,
-            start_timestamp=operation.start_timestamp,
-            end_timestamp=operation.end_timestamp,
-            child_operations=child_operations,
-            result=operation.context_details.result
-            if operation.context_details
-            else None,
-            error=operation.context_details.error
-            if operation.context_details
-            else None,
-        )
-
-    def get_operation_by_name(self, name: str) -> Operation:
-        for operation in self.child_operations:
-            if operation.name == name:
-                return operation
-        msg: str = f"Child Operation with name '{name}' not found"
-        raise DurableFunctionsTestError(msg)
-
-    def get_step(self, name: str) -> StepOperation:
-        return cast("StepOperation", self.get_operation_by_name(name))
-
-    def get_wait(self, name: str) -> WaitOperation:
-        return cast("WaitOperation", self.get_operation_by_name(name))
-
-    def get_context(self, name: str) -> ContextOperation:
-        return cast("ContextOperation", self.get_operation_by_name(name))
-
-    def get_callback(self, name: str) -> CallbackOperation:
-        return cast("CallbackOperation", self.get_operation_by_name(name))
-
-    def get_invoke(self, name: str) -> InvokeOperation:
-        return cast("InvokeOperation", self.get_operation_by_name(name))
-
-    def get_execution(self, name: str) -> ExecutionOperation:
-        return cast("ExecutionOperation", self.get_operation_by_name(name))
-
-    def get_deserialized_result(self, serdes: ExtendedTypeSerDes | None = None) -> Any:
-        """Return the deserialized operation result."""
-        return _deserialize_operation_payload(self.result, serdes)
-
-
-@dataclass(frozen=True)
-class StepOperation(ContextOperation):
-    attempt: int = 0
-    next_attempt_timestamp: datetime.datetime | None = None
-    result: OperationPayload | None = None
-    error: ErrorObject | None = None
-
-    @staticmethod
-    def from_svc_operation(
-        operation: SvcOperation, all_operations: list[SvcOperation] | None = None
-    ) -> StepOperation:
-        if operation.operation_type != OperationType.STEP:
-            msg: str = f"Expected STEP operation, got {operation.operation_type}"
-            raise InvalidParameterValueException(msg)
-
-        child_operations = []
-        if all_operations:
-            child_operations = [
-                create_operation(op, all_operations)
-                for op in all_operations
-                if op.parent_id == operation.operation_id
-            ]
-
-        return StepOperation(
-            operation_id=operation.operation_id,
-            operation_type=operation.operation_type,
-            status=operation.status,
-            parent_id=operation.parent_id,
-            name=operation.name,
-            sub_type=operation.sub_type,
-            start_timestamp=operation.start_timestamp,
-            end_timestamp=operation.end_timestamp,
-            child_operations=child_operations,
-            attempt=operation.step_details.attempt if operation.step_details else 0,
-            next_attempt_timestamp=(
-                operation.step_details.next_attempt_timestamp
-                if operation.step_details
-                else None
-            ),
-            result=operation.step_details.result if operation.step_details else None,
-            error=operation.step_details.error if operation.step_details else None,
-        )
-
-
-@dataclass(frozen=True)
-class WaitOperation(Operation):
-    scheduled_end_timestamp: datetime.datetime | None = None
-
-    @staticmethod
-    def from_svc_operation(
-        operation: SvcOperation,
-        all_operations: list[SvcOperation] | None = None,  # noqa: ARG004
-    ) -> WaitOperation:
-        if operation.operation_type != OperationType.WAIT:
-            msg: str = f"Expected WAIT operation, got {operation.operation_type}"
-            raise InvalidParameterValueException(msg)
-        return WaitOperation(
-            operation_id=operation.operation_id,
-            operation_type=operation.operation_type,
-            status=operation.status,
-            parent_id=operation.parent_id,
-            name=operation.name,
-            sub_type=operation.sub_type,
-            start_timestamp=operation.start_timestamp,
-            end_timestamp=operation.end_timestamp,
-            scheduled_end_timestamp=(
-                operation.wait_details.scheduled_end_timestamp
-                if operation.wait_details
-                else None
-            ),
-        )
-
-
-@dataclass(frozen=True)
-class CallbackOperation(ContextOperation):
-    callback_id: str | None = None
-    result: OperationPayload | None = None
-    error: ErrorObject | None = None
-
-    @staticmethod
-    def from_svc_operation(
-        operation: SvcOperation, all_operations: list[SvcOperation] | None = None
-    ) -> CallbackOperation:
-        if operation.operation_type != OperationType.CALLBACK:
-            msg: str = f"Expected CALLBACK operation, got {operation.operation_type}"
-            raise InvalidParameterValueException(msg)
-
-        child_operations = []
-        if all_operations:
-            child_operations = [
-                create_operation(op, all_operations)
-                for op in all_operations
-                if op.parent_id == operation.operation_id
-            ]
-
-        return CallbackOperation(
-            operation_id=operation.operation_id,
-            operation_type=operation.operation_type,
-            status=operation.status,
-            parent_id=operation.parent_id,
-            name=operation.name,
-            sub_type=operation.sub_type,
-            start_timestamp=operation.start_timestamp,
-            end_timestamp=operation.end_timestamp,
-            child_operations=child_operations,
-            callback_id=(
-                operation.callback_details.callback_id
-                if operation.callback_details
-                else None
-            ),
-            result=operation.callback_details.result
-            if operation.callback_details
-            else None,
-            error=operation.callback_details.error
-            if operation.callback_details
-            else None,
-        )
-
-
-@dataclass(frozen=True)
-class InvokeOperation(Operation):
-    result: OperationPayload | None = None
-    error: ErrorObject | None = None
-
-    @staticmethod
-    def from_svc_operation(
-        operation: SvcOperation,
-        all_operations: list[SvcOperation] | None = None,  # noqa: ARG004
-    ) -> InvokeOperation:
-        if operation.operation_type != OperationType.CHAINED_INVOKE:
-            msg: str = f"Expected INVOKE operation, got {operation.operation_type}"
-            raise InvalidParameterValueException(msg)
-        return InvokeOperation(
-            operation_id=operation.operation_id,
-            operation_type=operation.operation_type,
-            status=operation.status,
-            parent_id=operation.parent_id,
-            name=operation.name,
-            sub_type=operation.sub_type,
-            start_timestamp=operation.start_timestamp,
-            end_timestamp=operation.end_timestamp,
-            result=operation.chained_invoke_details.result
-            if operation.chained_invoke_details
-            else None,
-            error=operation.chained_invoke_details.error
-            if operation.chained_invoke_details
-            else None,
-        )
-
-    def get_deserialized_result(self, serdes: ExtendedTypeSerDes | None = None) -> Any:
-        """Return the deserialized operation result."""
-        return _deserialize_operation_payload(self.result, serdes)
-
-
-OPERATION_FACTORIES: MutableMapping[OperationType, type[OperationFactory]] = {
-    OperationType.EXECUTION: ExecutionOperation,
-    OperationType.CONTEXT: ContextOperation,
-    OperationType.STEP: StepOperation,
-    OperationType.WAIT: WaitOperation,
-    OperationType.CHAINED_INVOKE: InvokeOperation,
-    OperationType.CALLBACK: CallbackOperation,
-}
-
-
-def create_operation(
-    svc_operation: SvcOperation, all_operations: list[SvcOperation] | None = None
-) -> Operation:
-    operation_class: type[OperationFactory] | None = OPERATION_FACTORIES.get(
-        svc_operation.operation_type
-    )
-    if not operation_class:
-        msg: str = f"Unknown operation type: {svc_operation.operation_type}"
-        raise DurableFunctionsTestError(msg)
-    return operation_class.from_svc_operation(svc_operation, all_operations)
 
 
 def _get_callback_id_from_events(
@@ -443,6 +141,11 @@ class DurableFunctionTestResult:
     operations: list[Operation]
     result: OperationPayload | None = None
     error: ErrorObject | None = None
+    _all_operations: list[Operation] = field(
+        default_factory=list,
+        repr=False,
+        compare=False,
+    )
 
     @classmethod
     def create(cls, execution: Execution) -> DurableFunctionTestResult:
@@ -453,7 +156,7 @@ class DurableFunctionTestResult:
                 continue
 
             if operation.parent_id is None:
-                operations.append(create_operation(operation, execution.operations))
+                operations.append(operation)
 
         if execution.result is None:
             msg: str = "Execution result must exist to create test result."
@@ -464,6 +167,7 @@ class DurableFunctionTestResult:
             operations=operations,
             result=execution.result.result,
             error=execution.result.error,
+            _all_operations=execution.operations,
         )
 
     @classmethod
@@ -493,19 +197,20 @@ class DurableFunctionTestResult:
             logger.warning("Failed to convert events to operations: %s", e)
             svc_operations = []
 
-        # Build operation tree (exclude EXECUTION type from top level)
+        # Build top-level operation list (exclude EXECUTION type)
         operations = []
         for svc_op in svc_operations:
             if svc_op.operation_type == OperationType.EXECUTION:
                 continue
             if svc_op.parent_id is None:
-                operations.append(create_operation(svc_op, svc_operations))
+                operations.append(svc_op)
 
         return cls(
             status=status,
             operations=operations,
             result=execution_response.result,
             error=execution_response.error,
+            _all_operations=svc_operations,
         )
 
     def get_operation_by_name(self, name: str) -> Operation:
@@ -515,39 +220,92 @@ class DurableFunctionTestResult:
         msg: str = f"Operation with name '{name}' not found"
         raise DurableFunctionsTestError(msg)
 
-    def get_step(self, name: str) -> StepOperation:
-        return cast("StepOperation", self.get_operation_by_name(name))
+    def get_step(self, name: str) -> Operation:
+        return self._get_operation_by_name_and_type(name, OperationType.STEP)
 
-    def get_wait(self, name: str) -> WaitOperation:
-        return cast("WaitOperation", self.get_operation_by_name(name))
+    def get_wait(self, name: str) -> Operation:
+        return self._get_operation_by_name_and_type(name, OperationType.WAIT)
 
-    def get_context(self, name: str) -> ContextOperation:
-        return cast("ContextOperation", self.get_operation_by_name(name))
+    def get_context(self, name: str) -> Operation:
+        return self._get_operation_by_name_and_type(name, OperationType.CONTEXT)
 
-    def get_callback(self, name: str) -> CallbackOperation:
-        return cast("CallbackOperation", self.get_operation_by_name(name))
+    def get_callback(self, name: str) -> Operation:
+        return self._get_operation_by_name_and_type(name, OperationType.CALLBACK)
 
-    def get_invoke(self, name: str) -> InvokeOperation:
-        return cast("InvokeOperation", self.get_operation_by_name(name))
+    def get_invoke(self, name: str) -> Operation:
+        return self._get_operation_by_name_and_type(name, OperationType.CHAINED_INVOKE)
 
-    def get_execution(self, name: str) -> ExecutionOperation:
-        return cast("ExecutionOperation", self.get_operation_by_name(name))
+    def get_execution(self, name: str) -> Operation:
+        return self._get_operation_by_name_and_type(name, OperationType.EXECUTION)
 
     def get_deserialized_result(self, serdes: ExtendedTypeSerDes | None = None) -> Any:
         """Return the deserialized execution result."""
         return _deserialize_operation_payload(self.result, serdes)
 
+    def get_operation_deserialized_result(
+        self,
+        operation: Operation,
+        serdes: ExtendedTypeSerDes | None = None,
+    ) -> Any:
+        """Return the deserialized result payload for a service operation."""
+        return _deserialize_operation_payload(
+            _get_operation_result_payload(operation), serdes
+        )
+
+    def get_child_operations(self, operation: Operation) -> list[Operation]:
+        """Return direct child operations for a service operation."""
+        return [
+            candidate
+            for candidate in self._operation_source()
+            if candidate.parent_id == operation.operation_id
+        ]
+
     def get_all_operations(self) -> list[Operation]:
-        """Recursively get all operations including nested ones."""
-        all_ops = []
-        stack = list(self.operations)
-        while stack:
-            op = stack.pop()
-            all_ops.append(op)
-            # Add child operations to stack (if they exist)
-            if hasattr(op, "child_operations") and op.child_operations:
-                stack.extend(op.child_operations)
-        return all_ops
+        """Return all non-execution operations, including nested operations."""
+        return [
+            operation
+            for operation in self._operation_source()
+            if operation.operation_type != OperationType.EXECUTION
+        ]
+
+    def _operation_source(self) -> list[Operation]:
+        return self._all_operations or self.operations
+
+    def _get_operation_by_name_and_type(
+        self, name: str, operation_type: OperationType
+    ) -> Operation:
+        operation = self.get_operation_by_name(name)
+        if operation.operation_type != operation_type:
+            msg = (
+                f"Operation with name '{name}' has type "
+                f"{operation.operation_type}, expected {operation_type}"
+            )
+            raise DurableFunctionsTestError(msg)
+        return operation
+
+
+def _get_operation_result_payload(operation: Operation) -> OperationPayload | None:
+    match operation.operation_type:
+        case OperationType.CONTEXT:
+            return (
+                operation.context_details.result if operation.context_details else None
+            )
+        case OperationType.STEP:
+            return operation.step_details.result if operation.step_details else None
+        case OperationType.CALLBACK:
+            return (
+                operation.callback_details.result
+                if operation.callback_details
+                else None
+            )
+        case OperationType.CHAINED_INVOKE:
+            return (
+                operation.chained_invoke_details.result
+                if operation.chained_invoke_details
+                else None
+            )
+        case _:
+            return None
 
 
 class DurableFunctionLocalTestRunner:
