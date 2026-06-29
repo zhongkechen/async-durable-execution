@@ -37,10 +37,14 @@ async def test_map_with_failure_tolerance(durable_runner):
 
     # Count successes and failures
     succeeded = [
-        op for op in result.get_child_operations(map_op) if op.status is OperationStatus.SUCCEEDED
+        op
+        for op in result.get_child_operations(map_op)
+        if op.status is OperationStatus.SUCCEEDED
     ]
     failed = [
-        op for op in result.get_child_operations(map_op) if op.status is OperationStatus.FAILED
+        op
+        for op in result.get_child_operations(map_op)
+        if op.status is OperationStatus.FAILED
     ]
 
     assert len(succeeded) == 7

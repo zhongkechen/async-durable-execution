@@ -45,7 +45,10 @@ async def test_execute_all_operations_successfully(durable_runner):
     ]
     assert len(step1_ops) == 1
     step1_op = step1_ops[0]
-    assert result.get_operation_deserialized_result(step1_op) == "Step 1 completed successfully"
+    assert (
+        result.get_operation_deserialized_result(step1_op)
+        == "Step 1 completed successfully"
+    )
 
     # Verify wait operation (should be at index 1)
     wait_op = result.operations[1]

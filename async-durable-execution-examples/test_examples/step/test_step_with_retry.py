@@ -25,4 +25,6 @@ async def test_step_with_retry(durable_runner):
     # The step should have succeeded on attempt 2 (after 1 failure)
     # Attempt numbering: 1 (initial attempt), 2 (first retry)
     step_op = result.get_step("unreliable_operation")
-    assert step_op.step_details.attempt == 2  # Succeeded on first retry (1-indexed: 2=first retry)
+    assert (
+        step_op.step_details.attempt == 2
+    )  # Succeeded on first retry (1-indexed: 2=first retry)

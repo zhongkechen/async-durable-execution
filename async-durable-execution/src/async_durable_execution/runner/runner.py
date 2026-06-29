@@ -233,9 +233,7 @@ class DurableFunctionTestResult:
         return self._get_operation_by_name_and_type(name, OperationType.CALLBACK)
 
     def get_invoke(self, name: str) -> SvcOperation:
-        return self._get_operation_by_name_and_type(
-            name, OperationType.CHAINED_INVOKE
-        )
+        return self._get_operation_by_name_and_type(name, OperationType.CHAINED_INVOKE)
 
     def get_execution(self, name: str) -> SvcOperation:
         return self._get_operation_by_name_and_type(name, OperationType.EXECUTION)
@@ -289,11 +287,17 @@ class DurableFunctionTestResult:
 def _get_operation_result_payload(operation: SvcOperation) -> OperationPayload | None:
     match operation.operation_type:
         case OperationType.CONTEXT:
-            return operation.context_details.result if operation.context_details else None
+            return (
+                operation.context_details.result if operation.context_details else None
+            )
         case OperationType.STEP:
             return operation.step_details.result if operation.step_details else None
         case OperationType.CALLBACK:
-            return operation.callback_details.result if operation.callback_details else None
+            return (
+                operation.callback_details.result
+                if operation.callback_details
+                else None
+            )
         case OperationType.CHAINED_INVOKE:
             return (
                 operation.chained_invoke_details.result

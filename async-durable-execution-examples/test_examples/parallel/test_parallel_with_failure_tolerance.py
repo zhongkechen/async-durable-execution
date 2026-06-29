@@ -37,7 +37,9 @@ async def test_parallel_with_failure_tolerance(durable_runner):
         if op.status is OperationStatus.SUCCEEDED
     ]
     failed = [
-        op for op in result.get_child_operations(parallel_op) if op.status is OperationStatus.FAILED
+        op
+        for op in result.get_child_operations(parallel_op)
+        if op.status is OperationStatus.FAILED
     ]
 
     assert len(succeeded) == 3

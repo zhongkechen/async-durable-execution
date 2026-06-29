@@ -34,11 +34,17 @@ async def test_block_example(durable_runner):
 
     # First child should be a STEP with result "nested step result"
     assert child_operations[0].operation_type.value == "STEP"
-    assert result.get_operation_deserialized_result(child_operations[0]) == "nested step result"
+    assert (
+        result.get_operation_deserialized_result(child_operations[0])
+        == "nested step result"
+    )
 
     # Second child should be a CONTEXT with result "nested block result"
     assert child_operations[1].operation_type.value == "CONTEXT"
-    assert result.get_operation_deserialized_result(child_operations[1]) == "nested block result"
+    assert (
+        result.get_operation_deserialized_result(child_operations[1])
+        == "nested block result"
+    )
 
     # Check for nested step operation by name
     nested_step_ops = [
@@ -55,7 +61,10 @@ async def test_block_example(durable_runner):
         if op.operation_type.value == "STEP" and op.name == "nested_step"
     ]
     assert len(nested_step_ops) == 1
-    assert result.get_operation_deserialized_result(nested_step_ops[0]) == "nested step result"
+    assert (
+        result.get_operation_deserialized_result(nested_step_ops[0])
+        == "nested step result"
+    )
 
     # Check for nested block operation by name
     nested_block_ops = [
@@ -64,7 +73,10 @@ async def test_block_example(durable_runner):
         if op.operation_type.value == "CONTEXT" and op.name == "nested_block"
     ]
     assert len(nested_block_ops) == 1
-    assert result.get_operation_deserialized_result(nested_block_ops[0]) == "nested block result"
+    assert (
+        result.get_operation_deserialized_result(nested_block_ops[0])
+        == "nested block result"
+    )
 
     # Verify wait operation exists within nested context
     wait_ops = [op for op in all_ops if op.operation_type.value == "WAIT"]
