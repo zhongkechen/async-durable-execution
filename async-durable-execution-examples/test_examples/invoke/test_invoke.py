@@ -41,7 +41,7 @@ async def test_invoke_uses_mocked_child_result(durable_runner, request):
 
     invoke_operation = result.get_invoke("price-order")
     assert invoke_operation.status is OperationStatus.SUCCEEDED
-    assert invoke_operation.get_deserialized_result() == child_result
+    assert result.get_operation_deserialized_result(invoke_operation) == child_result
 
 
 def _get_child_function_name(runner_mode: str) -> str:

@@ -45,7 +45,7 @@ async def test_execute_all_operations_successfully(durable_runner):
     ]
     assert len(step1_ops) == 1
     step1_op = step1_ops[0]
-    assert step1_op.get_deserialized_result() == "Step 1 completed successfully"
+    assert result.get_operation_deserialized_result(step1_op) == "Step 1 completed successfully"
 
     # Verify wait operation (should be at index 1)
     wait_op = result.operations[1]
@@ -59,7 +59,7 @@ async def test_execute_all_operations_successfully(durable_runner):
             if op.operation_type.value == "STEP" and op.name == f"map-step-{i}"
         ]
         assert len(map_step_ops) == 1
-        assert map_step_ops[0].get_deserialized_result() == i + 1
+        assert result.get_operation_deserialized_result(map_step_ops[0]) == i + 1
 
     # Verify individual parallel step operations exist
     fruit_step_1_ops = [
@@ -68,7 +68,7 @@ async def test_execute_all_operations_successfully(durable_runner):
         if op.operation_type.value == "STEP" and op.name == "fruit-step-1"
     ]
     assert len(fruit_step_1_ops) == 1
-    assert fruit_step_1_ops[0].get_deserialized_result() == "apple"
+    assert result.get_operation_deserialized_result(fruit_step_1_ops[0]) == "apple"
 
     fruit_step_2_ops = [
         op
@@ -76,7 +76,7 @@ async def test_execute_all_operations_successfully(durable_runner):
         if op.operation_type.value == "STEP" and op.name == "fruit-step-2"
     ]
     assert len(fruit_step_2_ops) == 1
-    assert fruit_step_2_ops[0].get_deserialized_result() == "banana"
+    assert result.get_operation_deserialized_result(fruit_step_2_ops[0]) == "banana"
 
     fruit_step_3_ops = [
         op
@@ -84,4 +84,4 @@ async def test_execute_all_operations_successfully(durable_runner):
         if op.operation_type.value == "STEP" and op.name == "fruit-step-3"
     ]
     assert len(fruit_step_3_ops) == 1
-    assert fruit_step_3_ops[0].get_deserialized_result() == "orange"
+    assert result.get_operation_deserialized_result(fruit_step_3_ops[0]) == "orange"

@@ -24,8 +24,8 @@ async def test_parallel_with_max_concurrency(durable_runner):
     assert parallel_op.status is OperationStatus.SUCCEEDED
 
     # Verify all 5 child operations exist
-    assert len(parallel_op.child_operations) == 5
+    assert len(result.get_child_operations(parallel_op)) == 5
 
     # Verify all children succeeded
-    for child in parallel_op.child_operations:
+    for child in result.get_child_operations(parallel_op):
         assert child.status is OperationStatus.SUCCEEDED

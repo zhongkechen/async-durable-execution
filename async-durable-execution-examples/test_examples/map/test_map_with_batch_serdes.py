@@ -33,6 +33,6 @@ async def test_map_with_batch_serdes(durable_runner):
     assert map_op.status is OperationStatus.SUCCEEDED
 
     # Verify all 4 child operations exist and succeeded
-    assert len(map_op.child_operations) == 4
-    for child in map_op.child_operations:
+    assert len(result.get_child_operations(map_op)) == 4
+    for child in result.get_child_operations(map_op):
         assert child.status is OperationStatus.SUCCEEDED

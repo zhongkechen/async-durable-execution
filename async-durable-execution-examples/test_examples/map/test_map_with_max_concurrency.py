@@ -25,8 +25,8 @@ async def test_map_with_max_concurrency(durable_runner):
     assert map_op.status is OperationStatus.SUCCEEDED
 
     # Verify all 10 child operations exist
-    assert len(map_op.child_operations) == 10
+    assert len(result.get_child_operations(map_op)) == 10
 
     # Verify all children succeeded
-    for child in map_op.child_operations:
+    for child in result.get_child_operations(map_op):
         assert child.status is OperationStatus.SUCCEEDED

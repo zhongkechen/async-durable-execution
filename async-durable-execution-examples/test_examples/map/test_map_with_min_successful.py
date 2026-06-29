@@ -47,21 +47,21 @@ async def test_map_with_min_successful(durable_runner):
 
     # The map exits early once min_successful is reached, so we only observe the
     # branches that were started before the parent context returned.
-    assert len(map_op.child_operations) >= result_data["success_count"]
-    assert len(map_op.child_operations) <= 10
+    assert len(result.get_child_operations(map_op)) >= result_data["success_count"]
+    assert len(result.get_child_operations(map_op)) <= 10
 
     # Count operations by status
     succeeded = [
-        op for op in map_op.child_operations if op.status is OperationStatus.SUCCEEDED
+        op for op in result.get_child_operations(map_op) if op.status is OperationStatus.SUCCEEDED
     ]
     failed = [
-        op for op in map_op.child_operations if op.status is OperationStatus.FAILED
+        op for op in result.get_child_operations(map_op) if op.status is OperationStatus.FAILED
     ]
     started = [
-        op for op in map_op.child_operations if op.status is OperationStatus.STARTED
+        op for op in result.get_child_operations(map_op) if op.status is OperationStatus.STARTED
     ]
 
     # Should have 6-7 successes, 0 failures, and any in-flight branches left STARTED.
     assert len(succeeded) == result_data["success_count"]
     assert len(failed) == 0
-    assert len(started) == len(map_op.child_operations) - result_data["success_count"]
+    assert len(started) == len(result.get_child_operations(map_op)) - result_data["success_count"]

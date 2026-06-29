@@ -36,6 +36,6 @@ async def test_parallel_with_custom_serdes(durable_runner):
     assert parallel_op.status is OperationStatus.SUCCEEDED
 
     # Verify all 3 child operations exist and succeeded
-    assert len(parallel_op.child_operations) == 3
-    for child in parallel_op.child_operations:
+    assert len(result.get_child_operations(parallel_op)) == 3
+    for child in result.get_child_operations(parallel_op):
         assert child.status is OperationStatus.SUCCEEDED

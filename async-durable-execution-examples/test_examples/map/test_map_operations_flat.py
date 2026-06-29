@@ -21,13 +21,13 @@ async def test_map_operations_flat(durable_runner):
     assert map_op.status is OperationStatus.SUCCEEDED
 
     # Verify all five child operations exist
-    assert len(map_op.child_operations) == 5
+    assert len(result.get_child_operations(map_op)) == 5
 
     # Verify child step operation names
-    child_names = {op.name for op in map_op.child_operations}
+    child_names = {op.name for op in result.get_child_operations(map_op)}
     expected_names = {f"map_item_{i}" for i in range(5)}
     assert child_names == expected_names
 
     # Verify all children succeeded
-    for child in map_op.child_operations:
+    for child in result.get_child_operations(map_op):
         assert child.status is OperationStatus.SUCCEEDED

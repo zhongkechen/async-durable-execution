@@ -27,7 +27,7 @@ async def test_map_with_item_namer(durable_runner):
     assert map_op.status is OperationStatus.SUCCEEDED
 
     # Verify custom iteration names from item_namer
-    assert len(map_op.child_operations) == 3
-    child_names = {op.name for op in map_op.child_operations}
+    assert len(result.get_child_operations(map_op)) == 3
+    child_names = {op.name for op in result.get_child_operations(map_op)}
     expected_names = {"order-order-101", "order-order-102", "order-order-103"}
     assert child_names == expected_names

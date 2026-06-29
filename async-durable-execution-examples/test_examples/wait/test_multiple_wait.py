@@ -24,21 +24,8 @@ async def test_multiple_sequential_wait_operations(durable_runner):
     assert len(operations) == 2
 
     # Find the wait operations by name
-    wait_1_ops = [
-        op
-        for op in operations
-        if op.operation_type.value == "WAIT" and op.name == "wait-1"
-    ]
-    assert len(wait_1_ops) == 1
-    first_wait = wait_1_ops[0]
-
-    wait_2_ops = [
-        op
-        for op in operations
-        if op.operation_type.value == "WAIT" and op.name == "wait-2"
-    ]
-    assert len(wait_2_ops) == 1
-    second_wait = wait_2_ops[0]
+    first_wait = result.get_wait("wait-1")
+    second_wait = result.get_wait("wait-2")
 
     # Verify operation types and status
     assert first_wait.operation_type.value == "WAIT"
@@ -47,5 +34,5 @@ async def test_multiple_sequential_wait_operations(durable_runner):
     assert second_wait.status.value == "SUCCEEDED"
 
     # Verify wait details
-    assert first_wait.scheduled_end_timestamp is not None
-    assert second_wait.scheduled_end_timestamp is not None
+    assert first_wait.wait_details.scheduled_end_timestamp is not None
+    assert second_wait.wait_details.scheduled_end_timestamp is not None

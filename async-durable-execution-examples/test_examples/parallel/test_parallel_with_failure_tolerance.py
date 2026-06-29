@@ -28,16 +28,16 @@ async def test_parallel_with_failure_tolerance(durable_runner):
     assert parallel_op.status is OperationStatus.SUCCEEDED
 
     # Verify all 5 child operations exist
-    assert len(parallel_op.child_operations) == 5
+    assert len(result.get_child_operations(parallel_op)) == 5
 
     # Count successes and failures
     succeeded = [
         op
-        for op in parallel_op.child_operations
+        for op in result.get_child_operations(parallel_op)
         if op.status is OperationStatus.SUCCEEDED
     ]
     failed = [
-        op for op in parallel_op.child_operations if op.status is OperationStatus.FAILED
+        op for op in result.get_child_operations(parallel_op) if op.status is OperationStatus.FAILED
     ]
 
     assert len(succeeded) == 3

@@ -5,8 +5,6 @@ from .runner import (
     DurableFunctionLocalTestRunner,
     DurableFunctionTestResult,
     create_runner,
-    ContextOperation,
-    StepOperation,
 )
 
 
@@ -15,6 +13,4 @@ __all__ = [
     "DurableFunctionLocalTestRunner",
     "DurableFunctionTestResult",
     "create_runner",
-    "ContextOperation",
-    "StepOperation",
 ]

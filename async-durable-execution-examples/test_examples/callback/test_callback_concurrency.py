@@ -68,10 +68,10 @@ async def test_handle_multiple_concurrent_callback_operations(durable_runner):
     # Verify all callback operations were tracked
     operations = result.get_context("parallel_callbacks")
 
-    assert len(operations.child_operations) == 3
+    assert len(result.get_child_operations(operations)) == 3
 
     # Verify all operations are CALLBACK type
-    for op in operations.child_operations:
+    for op in result.get_child_operations(operations):
         assert op.operation_type.value == "CONTEXT"
-        assert len(op.child_operations) == 1
-        assert op.child_operations[0].operation_type.value == "CALLBACK"
+        assert len(result.get_child_operations(op)) == 1
+        assert result.get_child_operations(op)[0].operation_type.value == "CALLBACK"

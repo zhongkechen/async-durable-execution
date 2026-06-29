@@ -24,15 +24,15 @@ async def test_parallel_with_wait(durable_runner):
     assert parallel_op.status is OperationStatus.SUCCEEDED
 
     # Verify all 3 child operations exist
-    assert len(parallel_op.child_operations) == 3
+    assert len(result.get_child_operations(parallel_op)) == 3
 
     # Each child should have a wait operation
     wait_names = set()
-    for child in parallel_op.child_operations:
+    for child in result.get_child_operations(parallel_op):
         # Find wait operations in child
         wait_ops = [
             op
-            for op in child.child_operations
+            for op in result.get_child_operations(child)
             if op.operation_type == OperationType.WAIT
         ]
         assert len(wait_ops) == 1

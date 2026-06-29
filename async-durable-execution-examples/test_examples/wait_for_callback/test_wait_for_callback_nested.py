@@ -64,16 +64,10 @@ async def test_handle_nested_wait_for_callback_operations_in_child_contexts(
     all_ops = result.get_all_operations()
 
     # Find the outer context operation
-    outer_context_ops = [
-        op
-        for op in result.operations
-        if op.operation_type.value == "CONTEXT" and op.name == "outer-child-context"
-    ]
-    assert len(outer_context_ops) == 1
-    outer_context_op = outer_context_ops[0]
+    outer_context_op = result.get_context("outer-child-context")
 
     # Verify outer child operations hierarchy
-    outer_children = outer_context_op.child_operations
+    outer_children = result.get_child_operations(outer_context_op)
     assert outer_children is not None
     assert len(outer_children) == 2  # inner callback + inner context
 
@@ -87,7 +81,7 @@ async def test_handle_nested_wait_for_callback_operations_in_child_contexts(
     inner_context_op = inner_context_ops[0]
 
     # Verify inner child operations hierarchy
-    inner_children = inner_context_op.child_operations
+    inner_children = result.get_child_operations(inner_context_op)
     assert inner_children is not None
     assert len(inner_children) == 2  # deep wait + nested callback
 
