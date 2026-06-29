@@ -8,7 +8,7 @@ import logging
 from collections import deque
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from .exceptions import (
     DurableExecutionsError,
@@ -78,13 +78,10 @@ def _completion_set_exception(completion, error: Exception) -> None:
 class ExecutionState:
     """Get, set and maintain execution state. This is mutable. Create and check checkpoints."""
 
-    @property
-    def operations(self) -> MutableMapping[str, Operation]:
-        return self._operations
-
-    @operations.setter
-    def operations(self, value: MutableMapping[str, Operation]) -> None:
-        self._operations = value
+    # Keep operations visible on the class for Mock(spec=ExecutionState).
+    operations: MutableMapping[str, Operation] = cast(
+        "MutableMapping[str, Operation]", None
+    )
 
     def __init__(
         self,
