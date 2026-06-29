@@ -10,14 +10,12 @@ path = "VERSION.py"
 workspace.members = [
   "async-durable-execution",
   "async-durable-execution-examples",
-  "async-durable-execution-runner",
 ]
 
 [tool.hatch.envs.test]
 workspace.members = [
   "async-durable-execution",
   "async-durable-execution-examples",
-  "async-durable-execution-runner",
 ]
 dependencies = [
   "coverage[toml]",
@@ -34,18 +32,17 @@ all = "pytest {args}"
 cov = "pytest --cov-report=term-missing --cov {args}"
 sdk = "pytest async-durable-execution/test_sdk {args}"
 sdk-cov = "pytest --cov-report=term-missing --cov-config=async-durable-execution/pyproject.toml --cov=async-durable-execution/src/async_durable_execution --cov-fail-under=98 async-durable-execution/test_sdk {args}"
-runner = "pytest async-durable-execution-runner/test_runner {args}"
-runner-cov = "pytest --cov-report=term-missing --cov-config=async-durable-execution-runner/pyproject.toml --cov=async-durable-execution-runner/src/async_durable_execution_runner --cov-fail-under=95 async-durable-execution-runner/test_runner {args}"
+runner = "pytest async-durable-execution/test_sdk/runner {args}"
+runner-cov = "pytest --cov-report=term-missing --cov-config=async-durable-execution/pyproject.toml --cov=async-durable-execution/src/async_durable_execution/runner --cov-fail-under=95 async-durable-execution/test_sdk/runner {args}"
 examples = "pytest async-durable-execution-examples/test_examples {args}"
 examples-integration = "pytest --runner-mode=cloud async-durable-execution-examples/test_examples/ -v {args}"
-typecheck = "mypy --install-types --non-interactive --warn-unused-ignores {args:async-durable-execution/src/async_durable_execution async-durable-execution/test_sdk async-durable-execution-runner/src/async_durable_execution_runner async-durable-execution-runner/test_runner scripts}"
+typecheck = "mypy --install-types --non-interactive --warn-unused-ignores {args:async-durable-execution/src/async_durable_execution async-durable-execution/test_sdk scripts}"
 
 [tool.pytest.ini_options]
 # Declare custom markers to avoid warnings with --strict-markers
 addopts = "-v --strict-markers --import-mode=importlib"
 testpaths = [
     "async-durable-execution/test_sdk",
-    "async-durable-execution-runner/test_runner",
     "async-durable-execution-examples/test_examples",
     "scripts/test_scripts",
 ]
@@ -59,7 +56,6 @@ dependencies = [
   "pytest-asyncio",
 ]
 pre-install-commands = [
-  "pip install -e async-durable-execution-runner",
   "pip install -e async-durable-execution-examples",
 ]
 
@@ -70,7 +66,6 @@ test = "pytest async-durable-execution-examples/test_examples {args}"
 workspace.members = [
   "async-durable-execution",
   "async-durable-execution-examples",
-  "async-durable-execution-runner",
 ]
 
 [tool.hatch.envs.examples.scripts]
@@ -83,12 +78,11 @@ clean = "rm -rf async-durable-execution-examples/build async-durable-execution-e
 [tool.hatch.envs.docs]
 workspace.members = [
   "async-durable-execution",
-  "async-durable-execution-runner",
 ]
 dependencies = ["pdoc>=15,<16"]
 
 [tool.hatch.envs.docs.scripts]
-build = "pdoc async_durable_execution async_durable_execution_runner -o site/api"
+build = "pdoc async_durable_execution async_durable_execution.runner -o site/api"
 clean = "rm -rf site/api"
 
 [tool.ruff]
@@ -104,7 +98,6 @@ select = []
 known-first-party = [
   "async_durable_execution",
   "async_durable_execution_examples",
-  "async_durable_execution_runner",
 ]
 force-single-line = false
 lines-after-imports = 2

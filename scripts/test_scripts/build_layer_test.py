@@ -10,7 +10,11 @@ from scripts.build_layer import default_sdk_spec
 
 
 def test_default_sdk_spec_uses_shared_version() -> None:
-    assert default_sdk_spec() == "async-durable-execution==2.0.0b1"
+    namespace: dict[str, str] = {}
+    version_file = Path(__file__).resolve().parents[2] / "VERSION.py"
+    exec(version_file.read_text(encoding="utf-8"), namespace)
+
+    assert default_sdk_spec() == f"async-durable-execution=={namespace['__version__']}"
 
 
 def test_create_layer_archive_zips_python_directory(tmp_path: Path) -> None:
