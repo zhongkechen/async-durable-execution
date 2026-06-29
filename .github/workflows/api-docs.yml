@@ -5,14 +5,12 @@ on:
     branches: [main]
     paths:
       - "async-durable-execution/src/**"
-      - "async-durable-execution-runner/src/**"
       - "pyproject.toml"
       - ".github/workflows/api-docs.yml"
   pull_request:
     branches: [main]
     paths:
       - "async-durable-execution/src/**"
-      - "async-durable-execution-runner/src/**"
       - "pyproject.toml"
       - ".github/workflows/api-docs.yml"
   workflow_dispatch:

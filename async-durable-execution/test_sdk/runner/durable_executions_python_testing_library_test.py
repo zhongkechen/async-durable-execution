@@ -3,5 +3,5 @@
 import async_durable_execution.runner  # noqa: F401
 
 
-def test_async_durable_execution_runner_importable():
+def test_runner_package_importable():
     """Test async_durable_execution.runner is importable."""

@@ -35,7 +35,7 @@ jobs:
         echo "=== Checking format: repository ==="
         hatch fmt --check
 
-        for pkg in async-durable-execution async-durable-execution-examples async-durable-execution-runner; do
+        for pkg in async-durable-execution async-durable-execution-examples; do
           if [ -f "$pkg/pyproject.toml" ]; then
             echo "=== Checking format: $pkg ==="
             cd "$pkg"
@@ -49,7 +49,7 @@ jobs:
       run: hatch run test:cov
     - name: Build distribution
       run: |
-        for pkg in async-durable-execution async-durable-execution-examples async-durable-execution-runner; do
+        for pkg in async-durable-execution async-durable-execution-examples; do
           if [ -f "$pkg/pyproject.toml" ]; then
             echo "=== Building: $pkg ==="
             cd "$pkg"
