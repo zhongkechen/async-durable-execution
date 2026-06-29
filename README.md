@@ -32,8 +32,7 @@ This fork is specifically focused on making async Python work naturally with dur
 | `async-durable-execution` | Execution SDK, local/cloud test runner, and pytest helpers for Lambda durable functions | [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution) |
 | `async-durable-execution-examples` | Example durable functions and integration tests for local and cloud workflows | Shared repo version |
 
-The former `async-durable-execution-runner` distribution is deprecated. Install
-`async-durable-execution` and import runner helpers from
+Install `async-durable-execution` and import runner helpers from
 `async_durable_execution.runner`.
 
 ## 🚀 Quick Start

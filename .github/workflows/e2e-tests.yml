@@ -9,7 +9,6 @@ on:
     paths:
       - 'async-durable-execution/src/**'
       - 'async-durable-execution-examples/**'
-      - 'async-durable-execution-runner/src/**'
       - 'scripts/**'
       - '.github/workflows/e2e-tests.yml'
   workflow_dispatch:
