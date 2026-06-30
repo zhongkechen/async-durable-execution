@@ -325,6 +325,34 @@ async def test_create_callback_handler_new_operation_missing_callback_details_af
         )
 
 
+async def test_create_callback_handler_new_operation_missing_checkpoint_result():
+    """Test create_callback_handler raises when checkpoint creation returns no operation."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.operations.get.return_value = None
+    mock_state.create_checkpoint.return_value = None
+
+    with pytest.raises(CallbackError, match="Missing callback details"):
+        await create_callback_handler(
+            state=mock_state,
+            operation_identifier=OperationIdentifier(
+                "callback_missing", OperationSubType.CALLBACK, None
+            ),
+        )
+
+
+async def test_callback_executor_execute_without_operation_raises():
+    mock_state = Mock(spec=ExecutionState)
+    executor = CallbackOperationExecutor(
+        state=mock_state,
+        operation_identifier=OperationIdentifier(
+            "callback_execute_missing", OperationSubType.CALLBACK, None
+        ),
+    )
+
+    with pytest.raises(CallbackError, match="Missing callback details"):
+        await executor.execute(None)
+
+
 async def test_create_callback_handler_existing_timed_out_operation():
     """Test create_callback_handler returns existing callback_id for timed out operation."""
     mock_state = Mock(spec=ExecutionState)
@@ -1312,6 +1340,27 @@ async def test_callback_result_raises_error_for_failed_callbacks():
 
     # Verify that result() raises CallbackError
     with pytest.raises(CallbackError, match="Callback failed"):
+        await callback.result()
+
+
+async def test_callback_result_failed_without_error_details_uses_default_message():
+    mock_state = Mock(spec=ExecutionState)
+    failed_op = Operation(
+        operation_id="callback_failed_no_details",
+        operation_type=OperationType.CALLBACK,
+        status=OperationStatus.FAILED,
+        callback_details=None,
+    )
+    mock_state.operations.get.return_value = failed_op
+
+    callback = Callback(
+        callback_id="cb_failed_no_details",
+        operation_id="callback_failed_no_details",
+        state=mock_state,
+        serdes=None,
+    )
+
+    with pytest.raises(CallbackError, match="^Callback failed$"):
         await callback.result()
 
 
