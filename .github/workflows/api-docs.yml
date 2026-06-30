@@ -1,16 +1,24 @@
-name: API Docs
+name: GitHub Pages
 
 on:
   push:
     branches: [main]
     paths:
       - "async-durable-execution/src/**"
+      - "async-durable-execution/test_sdk/**"
+      - "async-durable-execution/pyproject.toml"
+      - "async-durable-execution-examples/**"
+      - "scripts/**"
       - "pyproject.toml"
       - ".github/workflows/api-docs.yml"
   pull_request:
     branches: [main]
     paths:
       - "async-durable-execution/src/**"
+      - "async-durable-execution/test_sdk/**"
+      - "async-durable-execution/pyproject.toml"
+      - "async-durable-execution-examples/**"
+      - "scripts/**"
       - "pyproject.toml"
       - ".github/workflows/api-docs.yml"
   workflow_dispatch:
@@ -21,11 +29,11 @@ permissions:
   id-token: write
 
 concurrency:
-  group: api-docs-${{ github.ref }}
+  group: github-pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-docs:
+  build-site:
     runs-on: ubuntu-latest
 
     steps:
@@ -42,23 +50,31 @@ jobs:
       - name: Build API docs from docstrings
         run: hatch run docs:build
 
-      - name: Upload API docs artifact
+      - name: Preserve API docs at site root
+        run: |
+          cp -R site/api/. site/
+          rm -rf site/api
+
+      - name: Build HTML coverage report
+        run: hatch run test:cov-html
+
+      - name: Upload GitHub Pages preview artifact
         if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@v7
         with:
-          name: api-docs-html
-          path: site/api
+          name: github-pages-html
+          path: site
           if-no-files-found: error
 
       - name: Upload GitHub Pages artifact
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v5
         with:
-          path: site/api
+          path: site
 
-  deploy-docs:
+  deploy-site:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: build-docs
+    needs: build-site
     runs-on: ubuntu-latest
 
     environment:
