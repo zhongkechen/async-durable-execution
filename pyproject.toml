@@ -29,8 +29,8 @@ dependencies = [
 
 [tool.hatch.envs.test.scripts]
 all = "pytest {args}"
-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=async-durable-execution/src/async_durable_execution --cov=async-durable-execution-examples/src/async_durable_execution_examples --cov=scripts {args}"
-cov-html = "pytest --cov-report=term-missing --cov-report=html:site/coverage --cov-report=json:site/coverage/coverage.json --cov-config=pyproject.toml --cov=async-durable-execution/src/async_durable_execution --cov=async-durable-execution-examples/src/async_durable_execution_examples --cov=scripts {args}"
+cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=async-durable-execution/src/async_durable_execution --cov=scripts {args}"
+cov-html = "pytest --cov-report=term-missing --cov-report=html:site/coverage --cov-report=json:site/coverage/coverage.json --cov-config=pyproject.toml --cov=async-durable-execution/src/async_durable_execution --cov=scripts {args}"
 sdk = "pytest async-durable-execution/test_sdk {args}"
 sdk-cov = "pytest --cov-report=term-missing --cov-config=async-durable-execution/pyproject.toml --cov=async-durable-execution/src/async_durable_execution --cov-fail-under=98 async-durable-execution/test_sdk {args}"
 runner = "pytest async-durable-execution/test_sdk/runner {args}"
