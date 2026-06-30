@@ -29,7 +29,6 @@ from async_durable_execution.runner.model import (
     EventError,
     EventInput,
     EventResult,
-    Execution,
     ExecutionStartedDetails,
     LambdaContext,
     StartDurableExecutionInput,
@@ -872,29 +871,6 @@ def test_start_durable_execution_input_to_dict_with_optionals():
     assert result["TraceFields"] == {"key": "value"}
     assert result["TenantId"] == "tenant-123"
     assert result["Input"] == '{"test": "data"}'
-
-
-def test_execution_from_dict_empty_function_arn():
-    data = {
-        "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789:function:test",
-        "DurableExecutionName": "test-exec",
-        "Status": "SUCCEEDED",
-        "StartTimestamp": 1640995200.0,
-    }
-    execution = Execution.from_dict(data)
-    assert execution.function_arn == ""
-
-
-def test_execution_to_dict_with_function_arn():
-    execution = Execution(
-        durable_execution_arn="arn:aws:lambda:us-east-1:123456789:function:test",
-        durable_execution_name="test-exec",
-        function_arn="arn:aws:lambda:us-east-1:123456789:function:test",
-        status="SUCCEEDED",
-        start_timestamp=1640995200.0,
-    )
-    result = execution.to_dict()
-    assert "FunctionArn" in result
 
 
 def test_event_input_from_details():

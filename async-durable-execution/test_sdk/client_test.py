@@ -42,10 +42,12 @@ from async_durable_execution.client import (
     AsyncLambdaClient,
     ThreadedSyncLambdaClient,
     _AiobotocoreLambdaApiClient,
+    aioboto_is_installed,
     create_default_async_client,
     create_default_client,
     create_default_service_client,
     create_default_sync_client,
+    lambda_api_client_is_async,
 )
 from async_durable_execution.client import DurableServiceClient
 
@@ -481,6 +483,34 @@ async def test_aiobotocore_lambda_api_client_closes_entered_context():
     assert client._client is None  # noqa: SLF001
 
 
+async def test_aiobotocore_lambda_api_client_reuses_context_for_state_requests():
+    entered_client = Mock()
+    entered_client.get_durable_execution_state = AsyncMock(
+        return_value={"Operations": []}
+    )
+    client_context = Mock()
+    client_context.__aenter__ = AsyncMock(return_value=entered_client)
+    client = _AiobotocoreLambdaApiClient(client_context)
+
+    result = await client.get_durable_execution_state(CheckpointToken="token")
+
+    assert result == {"Operations": []}
+    entered_client.get_durable_execution_state.assert_awaited_once_with(
+        CheckpointToken="token"
+    )
+    client_context.__aenter__.assert_awaited_once_with()
+
+
+async def test_aiobotocore_lambda_api_client_close_before_enter_is_noop():
+    client_context = Mock()
+    client_context.__aexit__ = AsyncMock()
+    client = _AiobotocoreLambdaApiClient(client_context)
+
+    await client.aclose()
+
+    client_context.__aexit__.assert_not_called()
+
+
 async def test_async_lambda_client_closes_wrapped_client():
     """Test AsyncLambdaClient closes wrapped SDK-owned async clients."""
     wrapped_client = Mock()
@@ -490,6 +520,91 @@ async def test_async_lambda_client_closes_wrapped_client():
     await client.aclose()
 
     wrapped_client.aclose.assert_awaited_once_with()
+
+
+async def test_async_lambda_client_aclose_without_close_method_is_noop():
+    wrapped_client = Mock(spec=[])
+    client = AsyncLambdaClient(wrapped_client)
+
+    await client.aclose()
+
+
+async def test_async_lambda_client_checkpoint_passes_client_token():
+    mock_client = Mock()
+    mock_client.checkpoint_durable_execution = AsyncMock(
+        return_value={
+            "CheckpointToken": "new_token",
+            "NewExecutionState": {"Operations": []},
+        }
+    )
+    lambda_client = AsyncLambdaClient(mock_client)
+    update = OperationUpdate(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        action=OperationAction.START,
+    )
+
+    result = await lambda_client.checkpoint(
+        "arn123", "token123", [update], "client-token-123"
+    )
+
+    mock_client.checkpoint_durable_execution.assert_awaited_once_with(
+        DurableExecutionArn="arn123",
+        CheckpointToken="token123",
+        Updates=[update.to_dict()],
+        ClientToken="client-token-123",
+    )
+    assert result.checkpoint_token == "new_token"  # noqa: S105
+
+
+async def test_async_lambda_client_checkpoint_wraps_errors():
+    mock_client = Mock()
+    mock_client.checkpoint_durable_execution = AsyncMock(
+        side_effect=RuntimeError("bad")
+    )
+    lambda_client = AsyncLambdaClient(mock_client)
+    update = OperationUpdate(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        action=OperationAction.START,
+    )
+
+    with pytest.raises(CheckpointError):
+        await lambda_client.checkpoint("arn123", "token123", [update], None)
+
+
+async def test_async_lambda_client_get_execution_state_wraps_errors():
+    mock_client = Mock()
+    mock_client.get_durable_execution_state = AsyncMock(side_effect=RuntimeError("bad"))
+    lambda_client = AsyncLambdaClient(mock_client)
+
+    with pytest.raises(GetExecutionStateError):
+        await lambda_client.get_execution_state("arn123", "token123", "marker")
+
+
+def test_lambda_api_client_is_async_detects_sync_and_async_methods():
+    sync_client = Mock()
+
+    async_client = Mock()
+    async_client.checkpoint_durable_execution = AsyncMock()
+
+    assert lambda_api_client_is_async(sync_client) is False
+    assert lambda_api_client_is_async(async_client) is True
+
+
+@pytest.mark.parametrize(
+    ("find_spec_result", "expected"), [(object(), True), (None, False)]
+)
+@patch("async_durable_execution.client.importlib.util.find_spec")
+def test_aioboto_is_installed_checks_for_aiobotocore(
+    mock_find_spec,
+    find_spec_result,
+    expected,
+):
+    mock_find_spec.return_value = find_spec_result
+
+    assert aioboto_is_installed() is expected
+    mock_find_spec.assert_called_once_with("aiobotocore")
 
 
 @patch("async_durable_execution.client.create_default_client")
