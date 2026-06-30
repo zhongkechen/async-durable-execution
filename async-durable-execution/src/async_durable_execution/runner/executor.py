@@ -36,8 +36,6 @@ from .model import (
     GetDurableExecutionHistoryResponse,
     GetDurableExecutionResponse,
     GetDurableExecutionStateResponse,
-    ListDurableExecutionsByFunctionResponse,
-    ListDurableExecutionsResponse,
     SendDurableExecutionCallbackFailureResponse,
     SendDurableExecutionCallbackHeartbeatResponse,
     SendDurableExecutionCallbackSuccessResponse,
@@ -47,9 +45,6 @@ from .model import (
 )
 from .model import (
     Event as HistoryEvent,
-)
-from .model import (
-    Execution as ExecutionSummary,
 )
 from .observer import ExecutionObserver
 from .token import CallbackToken
@@ -201,109 +196,6 @@ class Executor(ExecutionObserver):
             error=error,
             end_timestamp=execution_op.end_timestamp or None,
             version="1.0",
-        )
-
-    def list_executions(
-        self,
-        function_name: str | None = None,
-        function_version: str | None = None,  # noqa: ARG002
-        execution_name: str | None = None,
-        status_filter: str | None = None,
-        started_after: str | None = None,
-        started_before: str | None = None,
-        marker: str | None = None,
-        max_items: int | None = None,
-        reverse_order: bool = False,  # noqa: FBT001, FBT002
-    ) -> ListDurableExecutionsResponse:
-        """List executions with filtering and pagination.
-
-        Args:
-            function_name: Filter by function name
-            function_version: Filter by function version
-            execution_name: Filter by execution name
-            status_filter: Filter by status (RUNNING, SUCCEEDED, FAILED)
-            started_after: Filter executions started after this time
-            started_before: Filter executions started before this time
-            marker: Pagination marker
-            max_items: Maximum items to return (default 50)
-            reverse_order: Return results in reverse chronological order
-
-        Returns:
-            ListDurableExecutionsResponse: List of executions with pagination
-        """
-        # Convert marker to offset
-        offset: int = 0
-        if marker:
-            try:
-                offset = int(marker)
-            except ValueError:
-                offset = 0
-
-        # Query store directly with parameters
-        executions, next_marker = self._store.query(
-            function_name=function_name,
-            execution_name=execution_name,
-            status_filter=status_filter,
-            started_after=started_after,
-            started_before=started_before,
-            limit=max_items or 50,
-            offset=offset,
-            reverse_order=reverse_order,
-        )
-
-        # Convert to ExecutionSummary objects
-        execution_summaries: list[ExecutionSummary] = [
-            ExecutionSummary.from_execution(execution, execution.current_status().value)
-            for execution in executions
-        ]
-
-        return ListDurableExecutionsResponse(
-            durable_executions=execution_summaries, next_marker=next_marker
-        )
-
-    def list_executions_by_function(
-        self,
-        function_name: str,
-        qualifier: str | None = None,  # noqa: ARG002
-        execution_name: str | None = None,
-        status_filter: str | None = None,
-        started_after: str | None = None,
-        started_before: str | None = None,
-        marker: str | None = None,
-        max_items: int | None = None,
-        reverse_order: bool = False,  # noqa: FBT001, FBT002
-    ) -> ListDurableExecutionsByFunctionResponse:
-        """List executions for a specific function.
-
-        Args:
-            function_name: The function name to filter by
-            qualifier: Function qualifier/version
-            execution_name: Filter by execution name
-            status_filter: Filter by status (RUNNING, SUCCEEDED, FAILED)
-            started_after: Filter executions started after this time
-            started_before: Filter executions started before this time
-            marker: Pagination marker
-            max_items: Maximum items to return (default 50)
-            reverse_order: Return results in reverse chronological order
-
-        Returns:
-            ListDurableExecutionsByFunctionResponse: List of executions for the function
-        """
-        # Use the general list_executions method with function_name filter
-        list_response = self.list_executions(
-            function_name=function_name,
-            execution_name=execution_name,
-            status_filter=status_filter,
-            started_after=started_after,
-            started_before=started_before,
-            marker=marker,
-            max_items=max_items,
-            reverse_order=reverse_order,
-        )
-
-        return ListDurableExecutionsByFunctionResponse(
-            durable_executions=list_response.durable_executions,
-            next_marker=list_response.next_marker,
         )
 
     def stop_execution(
