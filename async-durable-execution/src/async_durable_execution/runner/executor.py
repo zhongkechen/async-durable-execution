@@ -59,12 +59,12 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
     from concurrent.futures import Future
 
-    from .checkpoint.processor import (
+    from .processor import (
         CheckpointProcessor,
     )
     from .invoker import Invoker
     from .scheduler import Event, Scheduler
-    from .stores.base import ExecutionStore
+    from .memory import InMemoryExecutionStore
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ class Executor(ExecutionObserver):
 
     def __init__(
         self,
-        store: ExecutionStore,
+        store: InMemoryExecutionStore,
         scheduler: Scheduler,
         invoker: Invoker,
         checkpoint_processor: CheckpointProcessor,

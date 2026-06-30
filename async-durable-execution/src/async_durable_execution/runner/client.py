@@ -1,14 +1,12 @@
 """An in-memory service client, that can replace the boto lambda service client."""
 
-import datetime
-
 from async_durable_execution.models import (
     CheckpointOutput,
     OperationUpdate,
     StateOutput,
 )
 from async_durable_execution.client import DurableServiceClient
-from .checkpoint.processor import (
+from .processor import (
     CheckpointProcessor,
 )
 
@@ -42,8 +40,3 @@ class InMemoryServiceClient(DurableServiceClient):
         return self._checkpoint_processor.get_execution_state(
             checkpoint_token, next_marker, max_items
         )
-
-    def stop(self, execution_arn: str, payload: bytes | None) -> datetime.datetime:  # noqa: ARG002
-        # TODO: implement
-        # Return current time for in-memory testing
-        return datetime.datetime.now(tz=datetime.timezone.utc)
