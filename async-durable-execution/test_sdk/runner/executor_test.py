@@ -2706,9 +2706,7 @@ async def test_get_execution_history_reverse_pagination_next_marker(
     mock_execution.result = None
     mock_store.load.return_value = mock_execution
 
-    result = executor.get_execution_history(
-        "test-arn", reverse_order=True, max_items=2
-    )
+    result = executor.get_execution_history("test-arn", reverse_order=True, max_items=2)
 
     assert len(result.events) == 2
     assert result.next_marker == str(result.events[-1].event_id)
@@ -2863,7 +2861,9 @@ async def test_on_callback_created_schedules_timeouts(executor):
     )
 
 
-async def test_schedule_callback_timeouts_none_options_returns(executor, mock_scheduler):
+async def test_schedule_callback_timeouts_none_options_returns(
+    executor, mock_scheduler
+):
     executor._schedule_callback_timeouts("test-arn", None, "callback-id")
 
     mock_scheduler.call_later.assert_not_called()
