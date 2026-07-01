@@ -48,7 +48,7 @@ def pytest_addoption(parser):
 
 
 @pytest.fixture
-def durable_runner(request):
+def durable_runner(request, monkeypatch):
     """Pytest fixture that provides a test runner based on configuration.
 
     Configuration for cloud mode:
@@ -85,6 +85,7 @@ def durable_runner(request):
         handler: Any,
         input: Any = None,  # noqa: A002
         timeout: int = 60,
+        time_scale: str | None = None,
     ):
         """Create a configured runner for a durable handler."""
         handler_identifier = _get_handler_identifier(handler)
@@ -107,11 +108,21 @@ def durable_runner(request):
                 input=input,
                 timeout=timeout,
             )
+        configured_time_scale = time_scale or os.environ.get(
+            "DURABLE_EXECUTION_TIME_SCALE", "0.05"
+        )
+        monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", configured_time_scale)
+        try:
+            poll_interval = min(0.05, max(0.001, float(configured_time_scale)))
+        except ValueError:
+            poll_interval = 0.05
+
         return create_runner(
             mode=runner_mode,
             handler=handler,
             input=input,
             timeout=timeout,
+            poll_interval=poll_interval,
         )
 
     return build_runner

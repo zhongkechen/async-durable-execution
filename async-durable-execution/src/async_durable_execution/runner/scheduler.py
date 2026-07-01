@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from concurrent.futures import Future
+import inspect
 import logging
 import threading
 from typing import TYPE_CHECKING, Any
@@ -133,7 +134,7 @@ class Scheduler:
                 return
 
             try:
-                if asyncio.iscoroutinefunction(func):
+                if inspect.iscoroutinefunction(func):
                     result = asyncio.run(func())
                 else:
                     result = func()

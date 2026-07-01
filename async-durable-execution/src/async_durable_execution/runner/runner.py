@@ -83,7 +83,8 @@ def _get_callback_id_from_events(
         name: Optional callback name to search for. If not provided, returns the latest callback.
 
     Returns:
-        The callback ID string for a non-completed callback, or None if not found.
+        The callback ID string for a non-completed callback whose creating
+        invocation has completed, or None if not found.
 
     Raises:
         DurableFunctionsTestError: If the named callback has already succeeded/failed/timed out.
@@ -102,6 +103,12 @@ def _get_callback_id_from_events(
         in ["CallbackSucceeded", "CallbackFailed", "CallbackTimedOut"]
     }
 
+    def is_callback_ready(callback_started_event: Event) -> bool:
+        for event in events[events.index(callback_started_event) + 1 :]:
+            if event.event_type == "InvocationCompleted":
+                return True
+        return False
+
     if name is not None:
         for event in callback_started_events:
             if event.name == name:
@@ -110,6 +117,8 @@ def _get_callback_id_from_events(
                     raise DurableFunctionsTestError(
                         f"Callback {name} has already completed (succeeded/failed/timed out)"
                     )
+                if not is_callback_ready(event):
+                    return None
                 return (
                     event.callback_started_details.callback_id
                     if event.callback_started_details
@@ -121,7 +130,7 @@ def _get_callback_id_from_events(
     active_callbacks = [
         event
         for event in callback_started_events
-        if event.event_id not in completed_callback_ids
+        if event.event_id not in completed_callback_ids and is_callback_ready(event)
     ]
 
     if not active_callbacks:

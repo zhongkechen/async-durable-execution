@@ -2446,6 +2446,36 @@ async def test_callback_timeout_scheduling(executor, mock_store, mock_scheduler)
     assert mock_scheduler.call_later.call_count == 2  # main timeout + heartbeat timeout
 
 
+async def test_callback_timeout_scheduling_scales_long_delays(
+    executor, mock_store, mock_scheduler, monkeypatch
+):
+    """Test that local callback timers are scaled with the long-delay floor."""
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.1")
+    callback_options = CallbackOptions(timeout_seconds=60, heartbeat_timeout_seconds=30)
+
+    executor._completion_events["test-arn"] = Mock()
+
+    executor._schedule_callback_timeouts("test-arn", callback_options, "callback-id")
+
+    assert mock_scheduler.call_later.call_args_list[0].kwargs["delay"] == 6.0
+    assert mock_scheduler.call_later.call_args_list[1].kwargs["delay"] == 5.0
+
+
+async def test_callback_timeout_scheduling_preserves_short_delays(
+    executor, mock_store, mock_scheduler, monkeypatch
+):
+    """Test that callback timers shorter than the floor are not lengthened."""
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.1")
+    callback_options = CallbackOptions(timeout_seconds=3, heartbeat_timeout_seconds=2)
+
+    executor._completion_events["test-arn"] = Mock()
+
+    executor._schedule_callback_timeouts("test-arn", callback_options, "callback-id")
+
+    assert mock_scheduler.call_later.call_args_list[0].kwargs["delay"] == 3.0
+    assert mock_scheduler.call_later.call_args_list[1].kwargs["delay"] == 2.0
+
+
 async def test_callback_timeout_cleanup(executor, mock_store):
     """Test that callback timeouts are cleaned up when callback completes."""
     # Create mock timeout events
