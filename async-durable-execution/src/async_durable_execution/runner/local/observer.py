@@ -6,7 +6,7 @@ import threading
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from .model import CallbackToken
+from ..model import CallbackToken
 
 if TYPE_CHECKING:
     from collections.abc import Callable

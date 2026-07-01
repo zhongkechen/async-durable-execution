@@ -27,7 +27,7 @@ from async_durable_execution.runner.exceptions import (
     ResourceNotFoundException,
 )
 from async_durable_execution.runner.execution import Execution
-from async_durable_execution.runner.executor import Executor
+from async_durable_execution.runner.local.executor import Executor
 from async_durable_execution.runner.model import (
     CheckpointToken,
     DurableFunctionTestResult,
@@ -38,12 +38,12 @@ from async_durable_execution.runner.model import (
     StartDurableExecutionOutput,
     _get_callback_id_from_events,
 )
-from async_durable_execution.runner.observer import ExecutionNotifier
-from async_durable_execution.runner.processor import (
+from async_durable_execution.runner.local.observer import ExecutionNotifier
+from async_durable_execution.runner.local.processor import (
     CheckpointValidator,
     OperationTransformer,
 )
-from async_durable_execution.runner.scheduler import Event, Scheduler
+from async_durable_execution.runner.local.scheduler import Event, Scheduler
 
 __all__ = [
     "DurableFunctionLocalTestRunner",
@@ -196,7 +196,7 @@ class DurableFunctionLocalTestRunner:
 
         # Timeout reached
         elapsed = time.time() - start_time
-        msg = f"Callback did not available within {timeout}s (elapsed: {elapsed:.1f}s."
+        msg = f"Callback was not available within {timeout}s (elapsed: {elapsed:.1f}s)."
         raise TimeoutError(msg)
 
 

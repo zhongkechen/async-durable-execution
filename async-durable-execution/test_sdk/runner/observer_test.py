@@ -7,7 +7,7 @@ from unittest.mock import Mock
 import pytest
 
 from async_durable_execution.models import CallbackOptions, ErrorObject
-from async_durable_execution.runner.observer import (
+from async_durable_execution.runner.local.observer import (
     ExecutionNotifier,
     ExecutionObserver,
 )

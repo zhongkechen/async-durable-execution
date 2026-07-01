@@ -12,7 +12,7 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from .exceptions import (
+from ..exceptions import (
     InvalidParameterValueException,
 )
 from .processors import (
@@ -26,7 +26,7 @@ from .processors.invoke import ChainedInvokeProcessor
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    from .execution import Execution
+    from ..execution import Execution
 
 MAX_ERROR_PAYLOAD_SIZE_BYTES = 32768
 

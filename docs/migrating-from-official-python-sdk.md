@@ -17,7 +17,7 @@ durable code `async def`.
 | Official SDK | This SDK |
 | --- | --- |
 | `aws-durable-execution-sdk-python` | `async-durable-execution` |
-| `aws-durable-execution-sdk-python-testing` | `async_durable_execution.runner` in `async-durable-execution` |
+| `aws-durable-execution-sdk-python-testing` | `async_durable_execution` runner exports in `async-durable-execution` |
 | `aws_durable_execution_sdk_python` imports | `async_durable_execution` imports |
 | Python 3.13+ in the official quickstart | Python 3.10+ |
 
@@ -28,7 +28,7 @@ pip install async-durable-execution
 ```
 
 The local/cloud test runner is included in `async-durable-execution`; import it
-from `async_durable_execution.runner`.
+from `async_durable_execution`.
 
 ## API Mapping
 
@@ -285,11 +285,10 @@ replay.
 
 ## Testing
 
-Replace the official testing package with `async_durable_execution.runner`.
+Replace the official testing package with `async_durable_execution`.
 
 ```python
-from async_durable_execution import InvocationStatus
-from async_durable_execution.runner import create_runner
+from async_durable_execution import InvocationStatus, create_runner
 
 from my_workflow import lambda_handler
 
@@ -322,6 +321,6 @@ assertions can use `result.get_step("my-step")` instead of depending on operatio
 6. Replace `Duration` with `datetime.timedelta`.
 7. Move all nondeterministic work and side effects into steps.
 8. Replace context loggers with standard `logging` loggers.
-9. Name operations and update tests to use `async_durable_execution.runner`.
+9. Name operations and update tests to use `async_durable_execution`.
 10. Keep Lambda deployment settings, IAM durable execution permissions, and qualified
     function invocation practices from the official SDK.

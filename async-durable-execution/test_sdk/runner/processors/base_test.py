@@ -23,7 +23,7 @@ from async_durable_execution.models import (
     WaitDetails,
     WaitOptions,
 )
-from async_durable_execution.runner.processors.base import (
+from async_durable_execution.runner.local.processors.base import (
     OperationProcessor,
 )
 

@@ -6,7 +6,11 @@ from typing import get_origin
 from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
 from async_durable_execution import (
+    DurableFunctionCloudTestRunner,
+    DurableFunctionLocalTestRunner,
+    DurableFunctionTestResult,
     create_callback,
+    create_runner,
     step,
     wait,
     parallel,
@@ -39,11 +43,15 @@ def test_additional_public_types_importable_from_package_root():
 
     expected_exports = {
         "DurableServiceClient": DurableServiceClient,
+        "DurableFunctionCloudTestRunner": DurableFunctionCloudTestRunner,
+        "DurableFunctionLocalTestRunner": DurableFunctionLocalTestRunner,
+        "DurableFunctionTestResult": DurableFunctionTestResult,
         "ExtendedTypeSerDes": ExtendedTypeSerDes,
         "JitterStrategy": JitterStrategy,
         "LambdaContext": LambdaContext,
         "OperationSubType": OperationSubType,
         "SummaryGenerator": SummaryGenerator,
+        "create_runner": create_runner,
     }
 
     for name, public_type in expected_exports.items():

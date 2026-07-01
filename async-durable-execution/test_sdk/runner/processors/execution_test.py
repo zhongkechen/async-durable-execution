@@ -8,10 +8,10 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.runner.processors.execution import (
+from async_durable_execution.runner.local.processors.execution import (
     ExecutionProcessor,
 )
-from async_durable_execution.runner.observer import ExecutionNotifier
+from async_durable_execution.runner.local.observer import ExecutionNotifier
 
 
 class MockNotifier(ExecutionNotifier):
@@ -253,7 +253,7 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.runner.processors.execution import (
+from async_durable_execution.runner.local.processors.execution import (
     ExecutionProcessor,
 )
 from async_durable_execution.runner.exceptions import (

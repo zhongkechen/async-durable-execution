@@ -278,8 +278,6 @@ class GetDurableExecutionResponse:
             result["Error"] = self.error.to_dict()
         if self.end_timestamp is not None:
             result["EndTimestamp"] = self.end_timestamp
-        if self.end_timestamp is not None:
-            result["EndTimestamp"] = self.end_timestamp
         if self.version is not None:
             result["Version"] = self.version
         return result

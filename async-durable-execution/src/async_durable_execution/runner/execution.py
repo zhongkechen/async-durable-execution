@@ -206,10 +206,10 @@ class Execution:
         # TODO: this excludes EXECUTION at start, but can there be an EXECUTION at the end if there was a checkpoint with large payload?
         return self.operations[1:]
 
-    def has_pending_operations(self, execution: Execution) -> bool:
+    def has_pending_operations(self) -> bool:
         """True if execution has pending operations."""
 
-        for operation in execution.operations:
+        for operation in self.operations:
             if (
                 operation.operation_type == OperationType.STEP
                 and operation.status == OperationStatus.PENDING
