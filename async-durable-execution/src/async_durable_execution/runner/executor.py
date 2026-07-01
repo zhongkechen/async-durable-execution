@@ -47,6 +47,7 @@ from .model import (
     Event as HistoryEvent,
 )
 from .observer import ExecutionObserver
+from .time_scale import scale_delay
 from .token import CallbackToken
 
 
@@ -62,6 +63,8 @@ if TYPE_CHECKING:
     from .memory import InMemoryExecutionStore
 
 logger = logging.getLogger(__name__)
+
+_CALLBACK_TIMEOUT_MINIMUM_DELAY_SECONDS = 5.0
 
 
 class Executor(ExecutionObserver):
@@ -1012,26 +1015,34 @@ class Executor(ExecutionObserver):
 
             # Schedule main timeout if configured
             if callback_options.timeout_seconds > 0:
+                timeout_delay = scale_delay(
+                    callback_options.timeout_seconds,
+                    minimum=_CALLBACK_TIMEOUT_MINIMUM_DELAY_SECONDS,
+                )
 
                 def timeout_handler():
                     self._on_callback_timeout(execution_arn, callback_id)
 
                 timeout_future = self._scheduler.call_later(
                     timeout_handler,
-                    delay=callback_options.timeout_seconds,
+                    delay=timeout_delay,
                     completion_event=completion_event,
                 )
                 self._callback_timeouts[callback_id] = timeout_future
 
             # Schedule heartbeat timeout if configured
             if callback_options.heartbeat_timeout_seconds > 0:
+                heartbeat_delay = scale_delay(
+                    callback_options.heartbeat_timeout_seconds,
+                    minimum=_CALLBACK_TIMEOUT_MINIMUM_DELAY_SECONDS,
+                )
 
                 def heartbeat_timeout_handler():
                     self._on_callback_heartbeat_timeout(execution_arn, callback_id)
 
                 heartbeat_future = self._scheduler.call_later(
                     heartbeat_timeout_handler,
-                    delay=callback_options.heartbeat_timeout_seconds,
+                    delay=heartbeat_delay,
                     completion_event=completion_event,
                 )
                 self._callback_heartbeats[callback_id] = heartbeat_future
@@ -1067,6 +1078,10 @@ class Executor(ExecutionObserver):
                     break
 
             if callback_options and callback_options.heartbeat_timeout_seconds > 0:
+                heartbeat_delay = scale_delay(
+                    callback_options.heartbeat_timeout_seconds,
+                    minimum=_CALLBACK_TIMEOUT_MINIMUM_DELAY_SECONDS,
+                )
 
                 def heartbeat_timeout_handler():
                     self._on_callback_heartbeat_timeout(execution_arn, callback_id)
@@ -1075,7 +1090,7 @@ class Executor(ExecutionObserver):
 
                 heartbeat_future = self._scheduler.call_later(
                     heartbeat_timeout_handler,
-                    delay=callback_options.heartbeat_timeout_seconds,
+                    delay=heartbeat_delay,
                     completion_event=completion_event,
                 )
                 self._callback_heartbeats[callback_id] = heartbeat_future

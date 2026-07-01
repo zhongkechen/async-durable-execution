@@ -1340,7 +1340,11 @@ async def test_cloud_runner_wait_for_callback_success(mock_boto3):
                 "Id": "callback-event-1",
                 "Name": "test-callback",
                 "CallbackStartedDetails": {"CallbackId": "callback-123"},
-            }
+            },
+            {
+                "EventType": "InvocationCompleted",
+                "EventTimestamp": "2023-01-01T00:00:01Z",
+            },
         ]
     }
 
@@ -1372,7 +1376,11 @@ async def test_cloud_runner_wait_for_callback_none(mock_boto3):
                 "Id": "callback-event-1",
                 "Name": "test-callback",
                 "CallbackStartedDetails": {"CallbackId": "callback-123"},
-            }
+            },
+            {
+                "EventType": "InvocationCompleted",
+                "EventTimestamp": "2023-01-01T00:00:01Z",
+            },
         ]
     }
 
@@ -1402,7 +1410,11 @@ async def test_cloud_runner_wait_for_callback_success_without_name(mock_boto3):
                 "Id": "callback-event-1",
                 "Name": "test-callback",
                 "CallbackStartedDetails": {"CallbackId": "callback-123"},
-            }
+            },
+            {
+                "EventType": "InvocationCompleted",
+                "EventTimestamp": "2023-01-01T00:00:01Z",
+            },
         ]
     }
 
@@ -1412,6 +1424,49 @@ async def test_cloud_runner_wait_for_callback_success_without_name(mock_boto3):
     callback_id = await runner.wait_for_callback("test-arn")
 
     assert callback_id == "callback-123"
+
+
+@patch("async_durable_execution.runner.runner.get_session")
+async def test_cloud_runner_wait_for_callback_waits_for_creator_completion(
+    mock_boto3,
+):
+    """Test that wait_for_callback waits until the callback creator settles."""
+    from async_durable_execution.runner.runner import (
+        DurableFunctionCloudTestRunner,
+    )
+
+    mock_client = Mock()
+    mock_boto3.return_value.create_client.return_value = mock_client
+
+    callback_started_event = {
+        "EventType": "CallbackStarted",
+        "EventTimestamp": "2023-01-01T00:00:00Z",
+        "Id": "callback-event-1",
+        "Name": "test-callback",
+        "CallbackStartedDetails": {"CallbackId": "callback-123"},
+    }
+    mock_client.get_durable_execution_history.side_effect = [
+        {"Events": [callback_started_event]},
+        {
+            "Events": [
+                callback_started_event,
+                {
+                    "EventType": "InvocationCompleted",
+                    "EventTimestamp": "2023-01-01T00:00:01Z",
+                },
+            ]
+        },
+    ]
+
+    runner = DurableFunctionCloudTestRunner(
+        function_name="test-function", poll_interval=0.01
+    )
+    callback_id = await runner.wait_for_callback(
+        "test-arn", name="test-callback", timeout=10
+    )
+
+    assert callback_id == "callback-123"
+    assert mock_client.get_durable_execution_history.call_count == 2
 
 
 @patch("async_durable_execution.runner.runner.get_session")
@@ -1600,7 +1655,11 @@ async def test_cloud_runner_wait_for_callback_client_error_retryable(mock_boto3)
                     "Id": "callback-event-1",
                     "Name": "test-callback",
                     "CallbackStartedDetails": {"CallbackId": "callback-123"},
-                }
+                },
+                {
+                    "EventType": "InvocationCompleted",
+                    "EventTimestamp": "2023-01-01T00:00:01Z",
+                },
             ]
         },
     ]

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-import os
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
@@ -20,6 +18,7 @@ from .base import (
 from ..exceptions import (
     InvalidParameterValueException,
 )
+from ..time_scale import scale_delay
 
 
 if TYPE_CHECKING:
@@ -75,9 +74,7 @@ class WaitProcessor(OperationProcessor):
                 wait_seconds = (
                     update.wait_options.wait_seconds if update.wait_options else 0
                 )
-                time_scale = float(os.getenv("DURABLE_EXECUTION_TIME_SCALE", "1.0"))
-                logging.info("Using DURABLE_EXECUTION_TIME_SCALE: %f", time_scale)
-                scaled_wait_seconds = wait_seconds * time_scale
+                scaled_wait_seconds = scale_delay(wait_seconds)
 
                 scheduled_end_timestamp = datetime.now(timezone.utc) + timedelta(
                     seconds=scaled_wait_seconds

@@ -18,6 +18,7 @@ from .base import (
 from ..exceptions import (
     InvalidParameterValueException,
 )
+from ..time_scale import scale_delay
 
 
 if TYPE_CHECKING:
@@ -118,8 +119,9 @@ class StepProcessor(OperationProcessor):
                     if update.step_options
                     else 0
                 )
+                scaled_delay = scale_delay(delay)
                 next_attempt_time = datetime.now(timezone.utc) + timedelta(
-                    seconds=delay
+                    seconds=scaled_delay
                 )
 
                 # Build new step_details with incremented attempt
@@ -175,7 +177,7 @@ class StepProcessor(OperationProcessor):
                 notifier.notify_step_retry_scheduled(
                     execution_arn=execution_arn,
                     operation_id=update.operation_id,
-                    delay=delay,
+                    delay=scaled_delay,
                 )
                 return retry_operation
             case OperationAction.SUCCEED:

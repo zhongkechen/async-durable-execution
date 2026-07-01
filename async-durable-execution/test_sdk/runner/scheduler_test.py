@@ -181,6 +181,32 @@ def test_scheduler_call_later_multiple_count():
     scheduler.stop()
 
 
+def test_scheduler_call_later_serializes_sync_functions():
+    """Test scheduled sync functions run one at a time."""
+    scheduler = Scheduler()
+    scheduler.start()
+
+    active_count = 0
+    max_active_count = 0
+    lock = threading.Lock()
+
+    def func():
+        nonlocal active_count, max_active_count
+        with lock:
+            active_count += 1
+            max_active_count = max(max_active_count, active_count)
+        time.sleep(0.02)
+        with lock:
+            active_count -= 1
+
+    futures = [scheduler.call_later(func, delay=0) for _ in range(3)]
+    wait_for_condition(lambda: all(future.done() for future in futures))
+
+    assert max_active_count == 1
+
+    scheduler.stop()
+
+
 def test_scheduler_call_later_infinite_count():
     """Test call_later with infinite count."""
     scheduler = Scheduler()

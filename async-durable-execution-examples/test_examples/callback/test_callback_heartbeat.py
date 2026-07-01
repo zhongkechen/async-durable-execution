@@ -15,7 +15,10 @@ async def test_handle_callback_operations_with_failure_uncaught(durable_runner):
     num_heartbeats = 4
 
     with durable_runner(
-        handler=callback_heartbeat.handler, input=test_payload, timeout=30
+        handler=callback_heartbeat.handler,
+        input=test_payload,
+        timeout=30,
+        time_scale="1.0",
     ) as runner:
         execution_arn = await runner.run_async()
 
