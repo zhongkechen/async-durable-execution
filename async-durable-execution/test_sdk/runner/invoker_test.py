@@ -24,7 +24,7 @@ from async_durable_execution.models import (
     OperationStatus,
     OperationType,
 )
-from async_durable_execution.runner.execution import Execution
+from async_durable_execution.runner.local.execution import Execution
 from async_durable_execution.runner.cloud import (
     _LAMBDA_CLIENT_CONFIG,
     LambdaInvoker,
@@ -38,6 +38,15 @@ from async_durable_execution.runner.model import (
     LambdaContext,
     StartDurableExecutionInput,
 )
+
+
+def create_invocation_input(invoker, execution: Execution):
+    return invoker.create_invocation_input(
+        start_input=execution.start_input,
+        durable_execution_arn=execution.durable_execution_arn,
+        checkpoint_token=execution.get_new_checkpoint_token(),
+        operations=execution.operations,
+    )
 
 
 def test_create_test_lambda_context():
@@ -80,7 +89,7 @@ def test_in_process_invoker_create_invocation_input():
     )
     execution = Execution.new(input_data)
 
-    invocation_input = invoker.create_invocation_input(execution)
+    invocation_input = create_invocation_input(invoker, execution)
 
     assert isinstance(invocation_input, DurableExecutionInvocationInput)
     assert invocation_input.durable_execution_arn == execution.durable_execution_arn
@@ -142,7 +151,7 @@ async def test_in_process_invoker_binds_service_client_to_decorated_handler():
     )
     execution = Execution.new(start_input)
     execution.start()
-    input_data = invoker.create_invocation_input(execution)
+    input_data = create_invocation_input(invoker, execution)
 
     response = await invoker.invoke("test-function", input_data)
 
@@ -175,30 +184,6 @@ def test_lambda_invoker_create():
             region_name="us-west-2",
             config=_LAMBDA_CLIENT_CONFIG,
         )
-
-
-def test_lambda_invoker_create_invocation_input():
-    """Test creating invocation input for lambda invoker."""
-    lambda_client = Mock()
-    invoker = LambdaInvoker(lambda_client)
-
-    input_data = StartDurableExecutionInput(
-        account_id="123456789012",
-        function_name="test-function",
-        function_qualifier="$LATEST",
-        execution_name="test-execution",
-        execution_timeout_seconds=300,
-        execution_retention_period_days=7,
-        invocation_id="test-invocation",
-    )
-    execution = Execution.new(input_data)
-
-    invocation_input = invoker.create_invocation_input(execution)
-
-    assert isinstance(invocation_input, DurableExecutionInvocationInput)
-    assert invocation_input.durable_execution_arn == execution.durable_execution_arn
-    assert invocation_input.checkpoint_token is not None
-    assert isinstance(invocation_input.initial_execution_state, InitialExecutionState)
 
 
 async def test_lambda_invoker_invoke_success():
@@ -303,37 +288,13 @@ async def test_in_process_invoker_invoke_with_execution_operations():
     execution = Execution.new(input_data)
     execution.start()  # This adds operations
 
-    invocation_input = invoker.create_invocation_input(execution)
+    invocation_input = create_invocation_input(invoker, execution)
     response = await invoker.invoke("test-function", invocation_input)
 
     assert isinstance(response.invocation_output, DurableExecutionInvocationOutput)
     assert isinstance(response.request_id, str)
     assert response.invocation_output.status == InvocationStatus.SUCCEEDED
     assert len(invocation_input.initial_execution_state.operations) > 0
-
-
-def test_lambda_invoker_create_invocation_input_with_operations():
-    """Test lambda invoker creating input with execution operations."""
-    lambda_client = Mock()
-    invoker = LambdaInvoker(lambda_client)
-
-    input_data = StartDurableExecutionInput(
-        account_id="123456789012",
-        function_name="test-function",
-        function_qualifier="$LATEST",
-        execution_name="test-execution",
-        execution_timeout_seconds=300,
-        execution_retention_period_days=7,
-        invocation_id="test-invocation",
-    )
-    execution = Execution.new(input_data)
-    execution.start()  # This adds operations
-
-    invocation_input = invoker.create_invocation_input(execution)
-
-    assert isinstance(invocation_input, DurableExecutionInvocationInput)
-    assert len(invocation_input.initial_execution_state.operations) > 0
-    assert invocation_input.initial_execution_state.next_marker == ""
 
 
 async def test_lambda_invoker_invoke_empty_function_name():

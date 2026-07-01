@@ -19,13 +19,13 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from .exceptions import (
+from ..exceptions import (
     IllegalStateException,
     InvalidParameterValueException,
 )
 
 # Import AWS exceptions
-from .model import (
+from ..model import (
     InvocationCompletedDetails,
     StartDurableExecutionInput,
     CheckpointToken,

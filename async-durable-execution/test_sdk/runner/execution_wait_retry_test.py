@@ -9,7 +9,7 @@ from async_durable_execution.models import (
     OperationType,
     StepDetails,
 )
-from async_durable_execution.runner.execution import Execution
+from async_durable_execution.runner.local.execution import Execution
 from async_durable_execution.runner.model import StartDurableExecutionInput
 
 

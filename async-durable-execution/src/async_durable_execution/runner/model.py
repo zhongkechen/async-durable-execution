@@ -9,7 +9,7 @@ import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, replace, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import Any, Protocol
 
 from async_durable_execution.execution import (
     DurableExecutionInvocationInput,
@@ -45,9 +45,6 @@ from .exceptions import (
     DurableFunctionsTestError,
 )
 from .. import InvocationStatus, ErrorObject, OperationType, ExtendedTypeSerDes
-
-if TYPE_CHECKING:
-    from .execution import Execution
 
 
 logger = logging.getLogger(__name__)
@@ -2944,6 +2941,11 @@ class ErrorResponse:
         return {"error": error_data}
 
 
+class _ExecutionResultSource(Protocol):
+    operations: list[Operation]
+    result: DurableExecutionInvocationOutput | None
+
+
 @dataclass(frozen=True)
 class DurableFunctionTestResult:
     status: InvocationStatus
@@ -2957,7 +2959,7 @@ class DurableFunctionTestResult:
     )
 
     @classmethod
-    def create(cls, execution: Execution) -> DurableFunctionTestResult:
+    def create(cls, execution: _ExecutionResultSource) -> DurableFunctionTestResult:
         operations = []
         for operation in execution.operations:
             if operation.operation_type is OperationType.EXECUTION:
@@ -3215,7 +3217,12 @@ class InvokeResponse:
 
 class Invoker(Protocol):
     def create_invocation_input(
-        self, execution: Execution
+        self,
+        *,
+        start_input: StartDurableExecutionInput,
+        durable_execution_arn: str,
+        checkpoint_token: str,
+        operations: list[Operation],
     ) -> DurableExecutionInvocationInput: ...  # pragma: no cover
 
     async def invoke(
