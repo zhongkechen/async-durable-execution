@@ -7,7 +7,7 @@ import datetime
 import json
 import time
 import unittest.mock
-from unittest.mock import Mock, call, create_autospec, patch
+from unittest.mock import AsyncMock, Mock, call, create_autospec, patch
 
 import pytest
 
@@ -21,6 +21,7 @@ from async_durable_execution.models import (
     CheckpointUpdatedExecutionState,
     ContextDetails,
     ErrorObject,
+    ExecutionDetails,
     Operation,
     OperationAction,
     OperationStatus,
@@ -2987,3 +2988,277 @@ async def test_map_with_concurrent_waits_api_call_count_scales_with_real_ops_not
                 await batcher_task
 
     await run_test()
+
+
+async def test_execution_state_initialize_fetches_initial_pages():
+    """Test initialize forwards the invocation-provided state page metadata."""
+    state = ExecutionState(
+        durable_execution_arn="test-arn",
+        initial_checkpoint_token="token-0",  # noqa: S106
+        service_client=Mock(spec=ThreadedSyncLambdaClient),
+    )
+    state.fetch_paginated_operations = AsyncMock()
+
+    invocation_input = Mock()
+    invocation_input.initial_execution_state.operations = [
+        Operation(
+            operation_id="op-1",
+            operation_type=OperationType.STEP,
+            status=OperationStatus.STARTED,
+        )
+    ]
+    invocation_input.initial_execution_state.next_marker = "next-page"
+    invocation_input.checkpoint_token = "token-1"  # noqa: S105
+
+    await state.initialize(invocation_input)
+
+    state.fetch_paginated_operations.assert_awaited_once_with(
+        invocation_input.initial_execution_state.operations,
+        "token-1",  # noqa: S106
+        "next-page",
+    )
+
+
+async def test_execution_state_get_raw_input_payload_and_event():
+    """Test root execution input payload lookup and JSON event parsing."""
+    state = ExecutionState(
+        durable_execution_arn="test-arn/exec-1",
+        initial_checkpoint_token="token-0",  # noqa: S106
+        service_client=Mock(spec=ThreadedSyncLambdaClient),
+        operations={
+            "exec-1": Operation(
+                operation_id="exec-1",
+                operation_type=OperationType.EXECUTION,
+                status=OperationStatus.STARTED,
+                execution_details=ExecutionDetails(input_payload='{"value": 7}'),
+            )
+        },
+    )
+
+    assert state.get_raw_input_payload() == '{"value": 7}'
+    assert state.get_input_event() == {"value": 7}
+
+
+async def test_execution_state_get_input_event_defaults_for_blank_payload():
+    state = ExecutionState(
+        durable_execution_arn="test-arn/exec-1",
+        initial_checkpoint_token="token-0",  # noqa: S106
+        service_client=Mock(spec=ThreadedSyncLambdaClient),
+        operations={
+            "exec-1": Operation(
+                operation_id="exec-1",
+                operation_type=OperationType.EXECUTION,
+                status=OperationStatus.STARTED,
+                execution_details=ExecutionDetails(input_payload="  "),
+            )
+        },
+    )
+
+    assert state.get_input_event() == {}
+
+
+async def test_execution_state_get_input_event_raises_for_invalid_json():
+    state = ExecutionState(
+        durable_execution_arn="test-arn/exec-1",
+        initial_checkpoint_token="token-0",  # noqa: S106
+        service_client=Mock(spec=ThreadedSyncLambdaClient),
+        operations={
+            "exec-1": Operation(
+                operation_id="exec-1",
+                operation_type=OperationType.EXECUTION,
+                status=OperationStatus.STARTED,
+                execution_details=ExecutionDetails(input_payload="{not-json"),
+            )
+        },
+    )
+
+    with pytest.raises(json.JSONDecodeError):
+        state.get_input_event()
+
+
+async def test_execution_state_get_raw_input_payload_none_when_details_missing():
+    state = ExecutionState(
+        durable_execution_arn="test-arn/exec-1",
+        initial_checkpoint_token="token-0",  # noqa: S106
+        service_client=Mock(spec=ThreadedSyncLambdaClient),
+        operations={
+            "exec-1": Operation(
+                operation_id="exec-1",
+                operation_type=OperationType.EXECUTION,
+                status=OperationStatus.STARTED,
+                execution_details=None,
+            )
+        },
+    )
+
+    assert state.get_raw_input_payload() is None
+
+
+async def test_create_checkpoint_raises_stored_checkpointing_failure():
+    state = ExecutionState(
+        durable_execution_arn="test-arn",
+        initial_checkpoint_token="token-0",  # noqa: S106
+        service_client=Mock(spec=ThreadedSyncLambdaClient),
+    )
+    state._checkpointing_failure = RuntimeError("previous checkpoint failed")
+
+    with pytest.raises(RuntimeError, match="previous checkpoint failed"):
+        await state.create_checkpoint(is_sync=False)
+
+
+async def test_checkpoint_failure_signals_overflow_and_queued_waiters():
+    """Test batch failures unblock sync futures outside the active batch too."""
+    mock_client = Mock(spec=ThreadedSyncLambdaClient)
+    mock_client.checkpoint.side_effect = RuntimeError("checkpoint failed")
+    state = ExecutionState(
+        durable_execution_arn="test-arn",
+        initial_checkpoint_token="token-0",  # noqa: S106
+        service_client=mock_client,
+    )
+
+    batch_future = asyncio.get_running_loop().create_future()
+    overflow_future = asyncio.get_running_loop().create_future()
+    queued_future = asyncio.get_running_loop().create_future()
+
+    batch_op = QueuedOperation(
+        OperationUpdate(
+            operation_id="batch-op",
+            operation_type=OperationType.STEP,
+            action=OperationAction.START,
+        ),
+        batch_future,
+    )
+    overflow_op = QueuedOperation(
+        OperationUpdate(
+            operation_id="overflow-op",
+            operation_type=OperationType.STEP,
+            action=OperationAction.START,
+        ),
+        overflow_future,
+    )
+    queued_op = QueuedOperation(
+        OperationUpdate(
+            operation_id="queued-op",
+            operation_type=OperationType.STEP,
+            action=OperationAction.START,
+        ),
+        queued_future,
+    )
+    state._overflow_queue.append(overflow_op)
+    await state._checkpoint_queue.put(queued_op)
+    state._collect_checkpoint_batch = AsyncMock(return_value=[batch_op])
+
+    await state.checkpoint_batches_forever()
+
+    for future in (batch_future, overflow_future, queued_future):
+        assert future.done()
+        with pytest.raises(RuntimeError, match="checkpoint failed"):
+            future.result()
+
+
+async def test_collect_checkpoint_batch_waits_until_stopped_when_empty():
+    state = ExecutionState(
+        durable_execution_arn="test-arn",
+        initial_checkpoint_token="token-0",  # noqa: S106
+        service_client=Mock(spec=ThreadedSyncLambdaClient),
+    )
+
+    collect_task = asyncio.create_task(state._collect_checkpoint_batch())
+    await asyncio.sleep(0.12)
+    state.stop_checkpointing()
+
+    assert await collect_task == []
+
+
+async def test_collect_checkpoint_batch_ignores_sentinel_during_time_window():
+    config = CheckpointBatcherConfig(
+        max_batch_size_bytes=10 * 1024 * 1024,
+        max_batch_time_seconds=0.01,
+        max_batch_operations=10,
+    )
+    state = ExecutionState(
+        durable_execution_arn="test-arn",
+        initial_checkpoint_token="token-0",  # noqa: S106
+        service_client=Mock(spec=ThreadedSyncLambdaClient),
+        batcher_config=config,
+    )
+    first = OperationUpdate(
+        operation_id="first",
+        operation_type=OperationType.STEP,
+        action=OperationAction.START,
+    )
+    second = OperationUpdate(
+        operation_id="second",
+        operation_type=OperationType.STEP,
+        action=OperationAction.START,
+    )
+    state._checkpoint_queue.put(QueuedOperation(first, None))
+    state._checkpoint_queue.put(None)
+    state._checkpoint_queue.put(QueuedOperation(second, None))
+
+    batch = await state._collect_checkpoint_batch()
+
+    assert [q.operation_update.operation_id for q in batch] == ["first", "second"]
+
+
+async def test_collect_checkpoint_batch_additional_empty_counts_once():
+    config = CheckpointBatcherConfig(
+        max_batch_size_bytes=10 * 1024 * 1024,
+        max_batch_time_seconds=0.01,
+        max_batch_operations=2,
+    )
+    state = ExecutionState(
+        durable_execution_arn="test-arn",
+        initial_checkpoint_token="token-0",  # noqa: S106
+        service_client=Mock(spec=ThreadedSyncLambdaClient),
+        batcher_config=config,
+    )
+    first = OperationUpdate(
+        operation_id="first",
+        operation_type=OperationType.STEP,
+        action=OperationAction.START,
+    )
+    overflowed = OperationUpdate(
+        operation_id="overflowed",
+        operation_type=OperationType.STEP,
+        action=OperationAction.START,
+    )
+    state._checkpoint_queue.put(QueuedOperation(first, None))
+    state._checkpoint_queue.put(QueuedOperation(None, None))
+    state._checkpoint_queue.put(QueuedOperation(overflowed, None))
+
+    batch = await state._collect_checkpoint_batch()
+
+    assert [q.operation_update.operation_id for q in batch if q.operation_update] == [
+        "first"
+    ]
+    assert any(q.operation_update is None for q in batch)
+    assert state._overflow_queue[0].operation_update.operation_id == "overflowed"
+
+
+async def test_execution_state_aclose_stops_running_batcher():
+    mock_client = Mock(spec=ThreadedSyncLambdaClient)
+    state = ExecutionState(
+        durable_execution_arn="test-arn",
+        initial_checkpoint_token="token-0",  # noqa: S106
+        service_client=mock_client,
+    )
+
+    state.start_checkpointing()
+    await asyncio.sleep(0)
+    await state.aclose()
+
+    assert state._checkpointing_stopped.is_set()
+    assert state._checkpointing_task.done()
+
+
+async def test_execution_state_close_signals_stop():
+    state = ExecutionState(
+        durable_execution_arn="test-arn",
+        initial_checkpoint_token="token-0",  # noqa: S106
+        service_client=Mock(spec=ThreadedSyncLambdaClient),
+    )
+
+    state.close()
+
+    assert state._checkpointing_stopped.is_set()
