@@ -794,8 +794,8 @@ async def test_durable_execution_client_selection_default():
         mock_lambda_client.assert_called_once_with(client=mock_lambda_api_client)
 
 
-async def test_durable_execution_default_async_client_is_invocation_scoped():
-    """Test default async clients are not cached across asyncio.run event loops."""
+async def test_durable_execution_reuses_default_async_client_on_warm_invocations():
+    """Test default async clients are cached with the warm handler event loop."""
 
     class StubAsyncLambdaApiClient:
         async def checkpoint_durable_execution(self, **_kwargs):
@@ -804,18 +804,24 @@ async def test_durable_execution_default_async_client_is_invocation_scoped():
         async def get_durable_execution_state(self, **_kwargs):
             return {}
 
-    class ClosingServiceClient:
+    class LoopTrackingServiceClient:
         def __init__(self, checkpoint_token: str) -> None:
             self.checkpoint_token = checkpoint_token
+            self.checkpoint_loops: list[asyncio.AbstractEventLoop] = []
             self.closed = False
 
         async def checkpoint(
             self,
-            _durable_execution_arn: str,
-            _checkpoint_token: str,
-            _updates: list[OperationUpdate],
-            _client_token: str | None,
+            durable_execution_arn: str,
+            checkpoint_token: str,
+            updates: list[OperationUpdate],
+            client_token: str | None,
         ) -> CheckpointOutput:
+            assert durable_execution_arn == "arn:test:execution/exec1"
+            assert checkpoint_token in {"token123", self.checkpoint_token}
+            assert updates
+            assert client_token is None
+            self.checkpoint_loops.append(asyncio.get_running_loop())
             return CheckpointOutput(
                 checkpoint_token=self.checkpoint_token,
                 new_execution_state=CheckpointUpdatedExecutionState(),
@@ -833,25 +839,23 @@ async def test_durable_execution_default_async_client_is_invocation_scoped():
         async def aclose(self) -> None:
             self.closed = True
 
-    lambda_api_client_1 = StubAsyncLambdaApiClient()
-    lambda_api_client_2 = StubAsyncLambdaApiClient()
-    service_client_1 = ClosingServiceClient("new_token_1")  # noqa: S106
-    service_client_2 = ClosingServiceClient("new_token_2")  # noqa: S106
+    lambda_api_client = StubAsyncLambdaApiClient()
+    service_client = LoopTrackingServiceClient("new_token")  # noqa: S106
 
     with (
         patch(
             "async_durable_execution.execution.AsyncLambdaClient",
-            side_effect=[service_client_1, service_client_2],
+            return_value=service_client,
         ) as mock_async_lambda_client,
         patch(
             "async_durable_execution.execution.create_default_client",
-            side_effect=[lambda_api_client_1, lambda_api_client_2],
+            return_value=lambda_api_client,
         ) as mock_create_default_client,
     ):
 
         @durable_execution
         async def test_handler(event: Any) -> dict:
-            return {"result": "success"}
+            return {"result": LARGE_RESULT}
 
         lambda_context = Mock()
         lambda_context.aws_request_id = "test-request"
@@ -877,15 +881,16 @@ async def test_durable_execution_default_async_client_is_invocation_scoped():
             },
         }
 
-        result_1 = await test_handler._async_handler(event, lambda_context)  # noqa: SLF001
-        result_2 = await test_handler._async_handler(event, lambda_context)  # noqa: SLF001
+        result_1 = await asyncio.to_thread(test_handler, event, lambda_context)
+        result_2 = await asyncio.to_thread(test_handler, event, lambda_context)
 
         assert result_1["Status"] == InvocationStatus.SUCCEEDED.value
         assert result_2["Status"] == InvocationStatus.SUCCEEDED.value
-        assert mock_create_default_client.call_count == 2
-        assert mock_async_lambda_client.call_count == 2
-        assert service_client_1.closed
-        assert service_client_2.closed
+        assert mock_create_default_client.call_count == 1
+        mock_async_lambda_client.assert_called_once_with(lambda_api_client)
+        assert len(service_client.checkpoint_loops) == 2
+        assert service_client.checkpoint_loops[0] is service_client.checkpoint_loops[1]
+        assert not service_client.closed
 
 
 async def test_durable_handler_empty_input_payload():

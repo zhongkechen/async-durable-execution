@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import functools
-import inspect
 import json
 import logging
-from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import asynccontextmanager
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
 
@@ -157,13 +155,29 @@ def durable_execution(
     # Lambda API client construction until invocation so importing decorated handlers
     # does not require AWS environment configuration.
     active_service_client = config.service_client
+    active_service_client_loop: asyncio.AbstractEventLoop | None = None
+    handler_loop: asyncio.AbstractEventLoop | None = None
 
-    @asynccontextmanager
-    async def active_service_client_context() -> AsyncIterator[DurableServiceClient]:
-        nonlocal active_service_client
+    def get_or_create_handler_loop() -> asyncio.AbstractEventLoop:
+        nonlocal handler_loop
+        if handler_loop is None or handler_loop.is_closed():
+            handler_loop = asyncio.new_event_loop()
+        return handler_loop
+
+    async def get_active_service_client() -> DurableServiceClient:
+        nonlocal active_service_client, active_service_client_loop
+        current_loop = asyncio.get_running_loop()
         if active_service_client is not None:
-            yield active_service_client
-            return
+            if (
+                active_service_client_loop is None
+                or active_service_client_loop is current_loop
+            ):
+                return active_service_client
+
+            # The SDK-owned async client is bound to the loop that first used it.
+            # If test code calls the async handler on another loop, rebuild it there.
+            active_service_client = None
+            active_service_client_loop = None
 
         if config.boto3_client is not None:
             if lambda_api_client_is_async(config.boto3_client):
@@ -174,42 +188,68 @@ def durable_execution(
                 active_service_client = ThreadedSyncLambdaClient(
                     client=cast("LambdaApiClient", config.boto3_client)
                 )
-            yield active_service_client
-            return
+            return active_service_client
 
         lambda_client = create_default_client()
         if lambda_api_client_is_async(lambda_client):
-            service_client = AsyncLambdaClient(
+            active_service_client = AsyncLambdaClient(
                 cast("AsyncLambdaApiClient", lambda_client)
             )
-            try:
-                yield service_client
-            finally:
-                await _close_service_client(service_client)
-            return
+            active_service_client_loop = current_loop
+            return active_service_client
 
         active_service_client = ThreadedSyncLambdaClient(
             client=cast("LambdaApiClient", lambda_client)
         )
-        yield active_service_client
+        return active_service_client
 
     async def async_wrapper(
         event: Any, context: LambdaContext
     ) -> MutableMapping[str, Any]:
-        async with active_service_client_context() as service_client:
-            return (
-                await _wrapper_async(func, event, context, service_client)
-            ).to_dict()
+        service_client = await get_active_service_client()
+        return (await _wrapper_async(func, event, context, service_client)).to_dict()
 
     @functools.wraps(func)
     def wrapper(event: Any, context: LambdaContext) -> MutableMapping[str, Any]:
-        return asyncio.run(async_wrapper(event, context))
+        return _run_on_event_loop(
+            get_or_create_handler_loop(), async_wrapper, event, context
+        )
 
     setattr(wrapper, "_async_handler", async_wrapper)
     setattr(wrapper, "_durable_execution_original", func)
     setattr(wrapper, "_durable_execution_boto3_client", config.boto3_client)
 
     return wrapper
+
+
+def _run_on_event_loop(
+    loop: asyncio.AbstractEventLoop,
+    async_func: Callable[..., Awaitable[MutableMapping[str, Any]]],
+    *args: Any,
+) -> MutableMapping[str, Any]:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        pass
+    else:
+        msg = (
+            "durable_execution sync handlers cannot be called from a running "
+            "event loop. Use the handler's _async_handler attribute instead."
+        )
+        raise RuntimeError(msg)
+
+    previous_loop: asyncio.AbstractEventLoop | None = None
+    had_previous_loop = True
+    try:
+        previous_loop = asyncio.get_event_loop()
+    except RuntimeError:
+        had_previous_loop = False
+
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(async_func(*args))
+    finally:
+        asyncio.set_event_loop(previous_loop if had_previous_loop else None)
 
 
 def deserialize_input(event: Any) -> DurableExecutionInvocationInput:
@@ -267,15 +307,6 @@ async def _wrapper_async(
         return await handle_user_function_exception(execution_state, e)
     finally:
         await execution_state.aclose()
-
-
-async def _close_service_client(service_client: DurableServiceClient) -> None:
-    close = getattr(service_client, "aclose", None)
-    if close is None:
-        return
-    result = close()
-    if inspect.isawaitable(result):
-        await result
 
 
 async def handle_user_function_result(
