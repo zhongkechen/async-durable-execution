@@ -10,7 +10,7 @@ from async_durable_execution.models import (
     StepDetails,
 )
 from async_durable_execution.runner.local.execution import Execution
-from async_durable_execution.runner.model import StartDurableExecutionInput
+from async_durable_execution.runner.local.model import StartDurableExecutionInput
 
 
 def test_concurrent_wait_and_retry_completion():

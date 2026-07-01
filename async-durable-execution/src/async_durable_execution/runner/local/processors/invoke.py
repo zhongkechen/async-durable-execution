@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from async_durable_execution.models import (
     Operation,
@@ -13,10 +13,6 @@ from async_durable_execution.models import (
 )
 from .base import OperationProcessor
 from ...exceptions import InvalidParameterValueException
-
-if TYPE_CHECKING:
-    from ..observer import ExecutionNotifier
-
 
 VALID_ACTIONS_FOR_INVOKE = frozenset(
     [
@@ -47,7 +43,7 @@ class ChainedInvokeProcessor(OperationProcessor):
         self,
         update: OperationUpdate,
         current_op: Operation | None,
-        notifier: ExecutionNotifier,  # noqa: ARG002
+        notifier: Any,  # noqa: ARG002
         execution_arn: str,  # noqa: ARG002
     ) -> Operation:
         """Process CHAINED_INVOKE updates for local execution."""

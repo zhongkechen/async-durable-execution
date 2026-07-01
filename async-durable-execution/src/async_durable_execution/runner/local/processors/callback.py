@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING
+from typing import Any
 
 from async_durable_execution.models import (
     CallbackDetails,
@@ -16,10 +16,7 @@ from async_durable_execution.models import (
 )
 from .base import OperationProcessor
 from ...exceptions import InvalidParameterValueException
-from ...model import CallbackToken
-
-if TYPE_CHECKING:
-    from ..observer import ExecutionNotifier
+from ..model import CallbackToken
 
 
 VALID_ACTIONS_FOR_CALLBACK = frozenset(
@@ -46,7 +43,7 @@ class CallbackProcessor(OperationProcessor):
         self,
         update: OperationUpdate,
         current_op: Operation | None,
-        notifier: ExecutionNotifier,
+        notifier: Any,
         execution_arn: str,
     ) -> Operation:
         """Process CALLBACK operation update with scheduler integration for activities."""
@@ -90,11 +87,8 @@ class CallbackProcessor(OperationProcessor):
                 )
                 callback_options: CallbackOptions | None = update.callback_options
 
-                notifier.notify_callback_created(
-                    execution_arn=execution_arn,
-                    operation_id=update.operation_id,
-                    callback_options=callback_options,
-                    callback_token=callback_token,
+                notifier.schedule_callback_timeouts(
+                    execution_arn, callback_options, callback_id
                 )
                 return operation
             case _:

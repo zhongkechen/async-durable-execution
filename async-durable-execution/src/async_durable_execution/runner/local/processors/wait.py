@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING
+from typing import Any
 
 from async_durable_execution.models import (
     Operation,
@@ -19,10 +19,6 @@ from ...exceptions import (
     InvalidParameterValueException,
 )
 from ..time_scale import scale_delay
-
-if TYPE_CHECKING:
-    from ..observer import ExecutionNotifier
-
 
 VALID_ACTIONS_FOR_WAIT = frozenset(
     [
@@ -64,7 +60,7 @@ class WaitProcessor(OperationProcessor):
         self,
         update: OperationUpdate,
         current_op: Operation | None,
-        notifier: ExecutionNotifier,
+        notifier: Any,
         execution_arn: str,
     ) -> Operation:
         """Process WAIT operation update with scheduler integration for timers."""
@@ -103,10 +99,8 @@ class WaitProcessor(OperationProcessor):
                 )
 
                 # Schedule wait timer to complete after delay
-                notifier.notify_wait_timer_scheduled(
-                    execution_arn=execution_arn,
-                    operation_id=update.operation_id,
-                    delay=scaled_wait_seconds,
+                notifier.schedule_wait_timer(
+                    execution_arn, update.operation_id, scaled_wait_seconds
                 )
                 return wait_operation
             case OperationAction.CANCEL:

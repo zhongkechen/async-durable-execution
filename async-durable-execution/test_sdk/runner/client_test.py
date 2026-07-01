@@ -10,7 +10,7 @@ from async_durable_execution.models import (
     StateOutput,
 )
 from async_durable_execution.runner.local import InMemoryServiceClient
-from async_durable_execution.runner.model import CheckpointToken
+from async_durable_execution.runner.local.model import CheckpointToken
 
 
 async def test_checkpoint():

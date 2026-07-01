@@ -17,30 +17,34 @@ from async_durable_execution.runner.local.processors.callback import (
 from async_durable_execution.runner.exceptions import (
     InvalidParameterValueException,
 )
-from async_durable_execution.runner.local.observer import ExecutionNotifier
 
 
-class MockNotifier(ExecutionNotifier):
+class MockNotifier:
     """Mock notifier for testing."""
 
     def __init__(self):
-        super().__init__()
         self.completed_calls = []
         self.failed_calls = []
         self.wait_timer_calls = []
         self.step_retry_calls = []
+        self.callback_timeout_calls = []
 
-    def notify_completed(self, execution_arn, result=None):
+    def complete_execution(self, execution_arn, result=None):
         self.completed_calls.append((execution_arn, result))
 
-    def notify_failed(self, execution_arn, error):
+    def fail_execution(self, execution_arn, error):
         self.failed_calls.append((execution_arn, error))
 
-    def notify_wait_timer_scheduled(self, execution_arn, operation_id, delay):
+    def schedule_wait_timer(self, execution_arn, operation_id, delay):
         self.wait_timer_calls.append((execution_arn, operation_id, delay))
 
-    def notify_step_retry_scheduled(self, execution_arn, operation_id, delay):
+    def schedule_step_retry(self, execution_arn, operation_id, delay):
         self.step_retry_calls.append((execution_arn, operation_id, delay))
+
+    def schedule_callback_timeouts(self, execution_arn, callback_options, callback_id):
+        self.callback_timeout_calls.append(
+            (execution_arn, callback_options, callback_id)
+        )
 
 
 def test_process_start_action():

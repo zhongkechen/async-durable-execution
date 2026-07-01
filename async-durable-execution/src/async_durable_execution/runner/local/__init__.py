@@ -29,16 +29,17 @@ from async_durable_execution.runner.exceptions import (
 from async_durable_execution.runner.local.execution import Execution
 from async_durable_execution.runner.local.executor import Executor
 from async_durable_execution.runner.model import (
-    CheckpointToken,
     DurableFunctionTestResult,
-    Invoker,
     InvokeResponse,
+    _get_callback_id_from_events,
+)
+from async_durable_execution.runner.local.model import (
+    CheckpointToken,
+    Invoker,
     LambdaContext,
     StartDurableExecutionInput,
     StartDurableExecutionOutput,
-    _get_callback_id_from_events,
 )
-from async_durable_execution.runner.local.observer import ExecutionNotifier
 from async_durable_execution.runner.local.processor import (
     CheckpointValidator,
     OperationTransformer,
@@ -106,8 +107,7 @@ class DurableFunctionLocalTestRunner:
             service_client=self._service_client,
         )
 
-        # Wire up observer pattern - the service client notifies executor of state changes.
-        self._service_client.add_execution_observer(self._executor)
+        self._service_client.bind_executor(self._executor)
 
     def __enter__(self):
         return self
@@ -417,12 +417,12 @@ class InMemoryServiceClient(DurableServiceClient):
     def __init__(self, store: InMemoryExecutionStore, scheduler: Scheduler):
         self._store = store
         self._scheduler = scheduler
-        self._notifier = ExecutionNotifier()
+        self._executor = None
         self._transformer = OperationTransformer()
 
-    def add_execution_observer(self, observer) -> None:
-        """Add observer for execution events."""
-        self._notifier.add_observer(observer)
+    def bind_executor(self, executor) -> None:
+        """Bind the local executor that handles checkpoint side effects."""
+        self._executor = executor
 
     def mock_invoke_result(self, function_name: str, result: object) -> None:
         """Register a local mock result for a chained invoke function."""
@@ -446,10 +446,14 @@ class InMemoryServiceClient(DurableServiceClient):
             updates, execution, processors=self._transformer.processors
         )
 
+        if self._executor is None:
+            msg = "Local executor is not bound to the service client."
+            raise InvalidParameterValueException(msg)
+
         updated_operations, all_updates = self._transformer.process_updates(
             updates=updates,
             current_operations=execution.operations,
-            notifier=self._notifier,
+            runner=self._executor,
             execution_arn=token.execution_arn,
         )
 

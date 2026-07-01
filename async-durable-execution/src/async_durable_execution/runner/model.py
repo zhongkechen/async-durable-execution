@@ -1,28 +1,21 @@
-"""Model classes for the web API."""
+"""Shared runner models."""
 
 from __future__ import annotations
 
-import base64
 import datetime
 import json
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, replace, field
 from enum import Enum
-from typing import Any, Protocol
-
-from async_durable_execution.execution import (
-    DurableExecutionInvocationInput,
-)
+from typing import Any, Protocol, TYPE_CHECKING
 
 # Import existing types from the main SDK - REUSE EVERYTHING POSSIBLE
 from async_durable_execution.models import (
     CallbackDetails,
     CallbackOptions,
     ChainedInvokeDetails,
-    ChainedInvokeOptions,
     ContextDetails,
-    ContextOptions,
     ExecutionDetails,
     Operation,
     OperationAction,
@@ -30,21 +23,19 @@ from async_durable_execution.models import (
     OperationSubType,
     OperationUpdate,
     StepDetails,
-    StepOptions,
     TimestampConverter,
     WaitDetails,
-    WaitOptions,
     OperationPayload,
     DurableExecutionInvocationOutput,
-)
-from async_durable_execution.models import (
-    LambdaContext as LambdaContextProtocol,
 )
 from .exceptions import (
     InvalidParameterValueException,
     DurableFunctionsTestError,
 )
 from .. import InvocationStatus, ErrorObject, OperationType, ExtendedTypeSerDes
+
+if TYPE_CHECKING:
+    from async_durable_execution.runner.local.model import StartDurableExecutionInput
 
 
 logger = logging.getLogger(__name__)
@@ -86,143 +77,6 @@ TERMINAL_STATUSES: set[OperationStatus] = {
     OperationStatus.STOPPED,
     OperationStatus.CANCELLED,
 }
-
-
-@dataclass(frozen=True)
-class LambdaContext(LambdaContextProtocol):
-    """Lambda context for testing."""
-
-    aws_request_id: str
-    log_group_name: str | None = None
-    log_stream_name: str | None = None
-    function_name: str | None = None
-    memory_limit_in_mb: str | None = None
-    function_version: str | None = None
-    invoked_function_arn: str | None = None
-    tenant_id: str | None = None
-    client_context: dict | None = None
-    identity: dict | None = None
-
-    def get_remaining_time_in_millis(self) -> int:
-        return 900000  # 15 minutes default
-
-    def log(self, msg) -> None:
-        pass  # No-op for testing
-
-
-# Web API specific models (not in Smithy but needed for web interface)
-@dataclass(frozen=True)
-class StartDurableExecutionInput:
-    """Input for starting a durable execution via web API."""
-
-    account_id: str
-    function_name: str
-    function_qualifier: str
-    execution_name: str
-    execution_timeout_seconds: int
-    execution_retention_period_days: int
-    invocation_id: str | None = None
-    trace_fields: dict | None = None
-    tenant_id: str | None = None
-    input: str | None = None
-    lambda_endpoint: str | None = None  # Endpoint for this specific execution
-
-    @classmethod
-    def from_dict(cls, data: dict) -> StartDurableExecutionInput:
-        # Validate required fields and raise AWS-compliant exceptions
-        required_fields = [
-            "AccountId",
-            "FunctionName",
-            "FunctionQualifier",
-            "ExecutionName",
-            "ExecutionTimeoutSeconds",
-            "ExecutionRetentionPeriodDays",
-        ]
-
-        for field in required_fields:
-            if field not in data:
-                msg: str = f"Missing required field: {field}"
-                raise InvalidParameterValueException(msg)
-
-        return cls(
-            account_id=data["AccountId"],
-            function_name=data["FunctionName"],
-            function_qualifier=data["FunctionQualifier"],
-            execution_name=data["ExecutionName"],
-            execution_timeout_seconds=data["ExecutionTimeoutSeconds"],
-            execution_retention_period_days=data["ExecutionRetentionPeriodDays"],
-            invocation_id=data.get("InvocationId"),
-            trace_fields=data.get("TraceFields"),
-            tenant_id=data.get("TenantId"),
-            input=data.get("Input"),
-            lambda_endpoint=data.get("LambdaEndpoint"),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result = {
-            "AccountId": self.account_id,
-            "FunctionName": self.function_name,
-            "FunctionQualifier": self.function_qualifier,
-            "ExecutionName": self.execution_name,
-            "ExecutionTimeoutSeconds": self.execution_timeout_seconds,
-            "ExecutionRetentionPeriodDays": self.execution_retention_period_days,
-        }
-        if self.invocation_id is not None:
-            result["InvocationId"] = self.invocation_id
-        if self.trace_fields is not None:
-            result["TraceFields"] = self.trace_fields
-        if self.tenant_id is not None:
-            result["TenantId"] = self.tenant_id
-        if self.input is not None:
-            result["Input"] = self.input
-        if self.lambda_endpoint is not None:
-            result["LambdaEndpoint"] = self.lambda_endpoint
-        return result
-
-    def get_normalized_input(self):
-        """
-        Normalize input string to be JSON deserializable.
-        Avoid double coding json input.
-        """
-        # Try to parse once
-        try:
-            _ = json.loads(self.input)
-            return self.input
-        except (json.JSONDecodeError, TypeError):
-            # Not valid JSON, treat as plain string and encode it
-            return json.dumps(self.input)
-
-
-@dataclass(frozen=True)
-class StartDurableExecutionOutput:
-    """Output from starting a durable execution via web API."""
-
-    execution_arn: str | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> StartDurableExecutionOutput:
-        return cls(execution_arn=data.get("ExecutionArn"))
-
-    def to_dict(self) -> dict[str, Any]:
-        result = {}
-        if self.execution_arn is not None:
-            result["ExecutionArn"] = self.execution_arn
-        return result
-
-
-# Smithy-based API models
-@dataclass(frozen=True)
-class GetDurableExecutionRequest:
-    """Request to get durable execution details."""
-
-    durable_execution_arn: str
-
-    @classmethod
-    def from_dict(cls, data: dict) -> GetDurableExecutionRequest:
-        return cls(durable_execution_arn=data["DurableExecutionArn"])
-
-    def to_dict(self) -> dict[str, Any]:
-        return {"DurableExecutionArn": self.durable_execution_arn}
 
 
 @dataclass(frozen=True)
@@ -277,101 +131,6 @@ class GetDurableExecutionResponse:
             result["EndTimestamp"] = self.end_timestamp
         if self.version is not None:
             result["Version"] = self.version
-        return result
-
-
-@dataclass(frozen=True)
-class StopDurableExecutionRequest:
-    """Request to stop a durable execution."""
-
-    durable_execution_arn: str
-    error: ErrorObject | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> StopDurableExecutionRequest:
-        error = None
-        if error_data := data.get("Error"):
-            error = ErrorObject.from_dict(error_data)
-
-        return cls(
-            durable_execution_arn=data["DurableExecutionArn"],
-            error=error,
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {"DurableExecutionArn": self.durable_execution_arn}
-        if self.error is not None:
-            result["Error"] = self.error.to_dict()
-        return result
-
-
-@dataclass(frozen=True)
-class StopDurableExecutionResponse:
-    """Response from stopping a durable execution."""
-
-    stop_timestamp: datetime.datetime
-
-    @classmethod
-    def from_dict(cls, data: dict) -> StopDurableExecutionResponse:
-        return cls(stop_timestamp=data["StopTimestamp"])
-
-    def to_dict(self) -> dict[str, Any]:
-        return {"StopTimestamp": self.stop_timestamp}
-
-
-@dataclass(frozen=True)
-class GetDurableExecutionStateRequest:
-    """Request to get durable execution state."""
-
-    durable_execution_arn: str
-    checkpoint_token: str
-    marker: str | None = None
-    max_items: int = 0
-
-    @classmethod
-    def from_dict(cls, data: dict) -> GetDurableExecutionStateRequest:
-        return cls(
-            durable_execution_arn=data["DurableExecutionArn"],
-            checkpoint_token=data["CheckpointToken"],
-            marker=data.get("Marker"),
-            max_items=data.get("MaxItems", 0),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {
-            "DurableExecutionArn": self.durable_execution_arn,
-            "CheckpointToken": self.checkpoint_token,
-        }
-        if self.marker is not None:
-            result["Marker"] = self.marker
-        if self.max_items is not None:
-            result["MaxItems"] = self.max_items
-        return result
-
-
-@dataclass(frozen=True)
-class GetDurableExecutionStateResponse:
-    """Response containing durable execution state operations."""
-
-    operations: list[Operation]
-    next_marker: str | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> GetDurableExecutionStateResponse:
-        operations = [
-            Operation.from_dict(op_data) for op_data in data.get("Operations", [])
-        ]
-        return cls(
-            operations=operations,
-            next_marker=data.get("NextMarker"),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {
-            "Operations": [op.to_dict() for op in self.operations]
-        }
-        if self.next_marker is not None:
-            result["NextMarker"] = self.next_marker
         return result
 
 
@@ -2638,39 +2397,6 @@ def events_to_operations(events: list[Event]) -> list[Operation]:
 
 
 @dataclass(frozen=True)
-class GetDurableExecutionHistoryRequest:
-    """Request to get durable execution history."""
-
-    durable_execution_arn: str
-    include_execution_data: bool | None = None
-    reverse_order: bool | None = None
-    marker: str | None = None
-    max_items: int = 0
-
-    @classmethod
-    def from_dict(cls, data: dict) -> GetDurableExecutionHistoryRequest:
-        return cls(
-            durable_execution_arn=data["DurableExecutionArn"],
-            include_execution_data=data.get("IncludeExecutionData"),
-            reverse_order=data.get("ReverseOrder"),
-            marker=data.get("Marker"),
-            max_items=data.get("MaxItems", 0),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {"DurableExecutionArn": self.durable_execution_arn}
-        if self.include_execution_data is not None:
-            result["IncludeExecutionData"] = self.include_execution_data
-        if self.reverse_order is not None:
-            result["ReverseOrder"] = self.reverse_order
-        if self.marker is not None:
-            result["Marker"] = self.marker
-        if self.max_items is not None:
-            result["MaxItems"] = self.max_items
-        return result
-
-
-@dataclass(frozen=True)
 class GetDurableExecutionHistoryResponse:
     """Response containing durable execution history events."""
 
@@ -2690,255 +2416,6 @@ class GetDurableExecutionHistoryResponse:
         if self.next_marker is not None:
             result["NextMarker"] = self.next_marker
         return result
-
-
-# Callback-related models
-@dataclass(frozen=True)
-class SendDurableExecutionCallbackSuccessRequest:
-    """Request to send callback success."""
-
-    callback_id: str
-    result: bytes | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> SendDurableExecutionCallbackSuccessRequest:
-        return cls(
-            callback_id=data["CallbackId"],
-            result=data.get("Result"),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {"CallbackId": self.callback_id}
-        if self.result is not None:
-            result["Result"] = self.result
-        return result
-
-
-@dataclass(frozen=True)
-class SendDurableExecutionCallbackSuccessResponse:
-    """Response from sending callback success."""
-
-
-@dataclass(frozen=True)
-class SendDurableExecutionCallbackFailureRequest:
-    """Request to send callback failure."""
-
-    callback_id: str
-    error: ErrorObject | None = None
-
-    @classmethod
-    def from_dict(
-        cls, data: dict, callback_id: str
-    ) -> SendDurableExecutionCallbackFailureRequest:
-        error = ErrorObject.from_dict(data) if data else None
-
-        return cls(
-            callback_id=callback_id,
-            error=error,
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {"CallbackId": self.callback_id}
-        if self.error is not None:
-            result["Error"] = self.error.to_dict()
-        return result
-
-
-@dataclass(frozen=True)
-class SendDurableExecutionCallbackFailureResponse:
-    """Response from sending callback failure."""
-
-
-@dataclass(frozen=True)
-class SendDurableExecutionCallbackHeartbeatRequest:
-    """Request to send callback heartbeat."""
-
-    callback_id: str
-
-    @classmethod
-    def from_dict(cls, data: dict) -> SendDurableExecutionCallbackHeartbeatRequest:
-        return cls(callback_id=data["CallbackId"])
-
-    def to_dict(self) -> dict[str, Any]:
-        return {"CallbackId": self.callback_id}
-
-
-@dataclass(frozen=True)
-class SendDurableExecutionCallbackHeartbeatResponse:
-    """Response from sending callback heartbeat."""
-
-
-# Checkpoint-related models
-@dataclass(frozen=True)
-class CheckpointUpdatedExecutionState:
-    """Updated execution state from checkpoint."""
-
-    operations: list[Operation]
-    next_marker: str | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> CheckpointUpdatedExecutionState:
-        operations = [
-            Operation.from_dict(op_data) for op_data in data.get("Operations", [])
-        ]
-        return cls(
-            operations=operations,
-            next_marker=data.get("NextMarker"),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {
-            "Operations": [op.to_dict() for op in self.operations]
-        }
-        if self.next_marker is not None:
-            result["NextMarker"] = self.next_marker
-        return result
-
-
-@dataclass(frozen=True)
-class CheckpointDurableExecutionRequest:
-    """Request to checkpoint a durable execution."""
-
-    durable_execution_arn: str
-    checkpoint_token: str
-    updates: list[OperationUpdate] | None = None
-    client_token: str | None = None
-
-    @classmethod
-    def from_dict(
-        cls, data: dict, durable_execution_arn: str
-    ) -> CheckpointDurableExecutionRequest:
-        updates = None
-        if updates_data := data.get("Updates"):
-            updates = []
-            for update_data in updates_data:
-                # Map dictionary fields to OperationUpdate constructor parameters
-                operation_update = OperationUpdate(
-                    operation_id=update_data["Id"],
-                    operation_type=OperationType(update_data["Type"]),
-                    action=OperationAction(update_data["Action"]),
-                    parent_id=update_data.get("ParentId"),
-                    name=update_data.get("Name"),
-                    sub_type=OperationSubType(update_data["SubType"])
-                    if update_data.get("SubType")
-                    else None,
-                    payload=update_data.get("Payload"),
-                    error=ErrorObject.from_dict(update_data["Error"])
-                    if update_data.get("Error")
-                    else None,
-                    context_options=ContextOptions.from_dict(
-                        update_data["ContextOptions"]
-                    )
-                    if update_data.get("ContextOptions")
-                    else None,
-                    step_options=StepOptions.from_dict(update_data["StepOptions"])
-                    if update_data.get("StepOptions")
-                    else None,
-                    wait_options=WaitOptions.from_dict(update_data["WaitOptions"])
-                    if update_data.get("WaitOptions")
-                    else None,
-                    callback_options=CallbackOptions.from_dict(
-                        update_data["CallbackOptions"]
-                    )
-                    if update_data.get("CallbackOptions")
-                    else None,
-                    chained_invoke_options=ChainedInvokeOptions.from_dict(
-                        update_data["ChainedInvokeOptions"]
-                    )
-                    if update_data.get("ChainedInvokeOptions")
-                    else None,
-                )
-                updates.append(operation_update)
-
-        return cls(
-            durable_execution_arn=durable_execution_arn,
-            checkpoint_token=data["CheckpointToken"],
-            updates=updates,
-            client_token=data.get("ClientToken"),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {
-            "DurableExecutionArn": self.durable_execution_arn,
-            "CheckpointToken": self.checkpoint_token,
-        }
-        if self.updates is not None:
-            result["Updates"] = [update.to_dict() for update in self.updates]
-        if self.client_token is not None:
-            result["ClientToken"] = self.client_token
-        return result
-
-
-@dataclass(frozen=True)
-class CheckpointDurableExecutionResponse:
-    """Response from checkpointing a durable execution."""
-
-    checkpoint_token: str
-    new_execution_state: CheckpointUpdatedExecutionState | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> CheckpointDurableExecutionResponse:
-        new_execution_state = None
-        if state_data := data.get("NewExecutionState"):
-            new_execution_state = CheckpointUpdatedExecutionState.from_dict(state_data)
-
-        return cls(
-            checkpoint_token=data["CheckpointToken"],
-            new_execution_state=new_execution_state,
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {"CheckpointToken": self.checkpoint_token}
-        if self.new_execution_state is not None:
-            result["NewExecutionState"] = self.new_execution_state.to_dict()
-        return result
-
-
-# Error response structure for consistent error handling
-@dataclass(frozen=True)
-class ErrorResponse:
-    """Structured error response for web service operations."""
-
-    error_type: str
-    error_message: str
-    error_code: str | None = None
-    request_id: str | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> ErrorResponse:
-        """Create ErrorResponse from dictionary.
-
-        Args:
-            data: Dictionary containing error data
-
-        Returns:
-            ErrorResponse: The error response object
-        """
-        error_data = data.get("error", data)  # Support both nested and flat structures
-        return cls(
-            error_type=error_data["type"],
-            error_message=error_data["message"],
-            error_code=error_data.get("code"),
-            request_id=error_data.get("requestId"),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert ErrorResponse to dictionary.
-
-        Returns:
-            dict: Dictionary representation of the error response
-        """
-        error_data: dict[str, Any] = {
-            "type": self.error_type,
-            "message": self.error_message,
-        }
-
-        if self.error_code is not None:
-            error_data["code"] = self.error_code
-        if self.request_id is not None:
-            error_data["requestId"] = self.request_id
-
-        return {"error": error_data}
 
 
 class _ExecutionResultSource(Protocol):
@@ -3213,67 +2690,3 @@ class InvokeResponse:
 
     invocation_output: DurableExecutionInvocationOutput
     request_id: str
-
-
-class Invoker(Protocol):
-    def create_invocation_input(
-        self,
-        *,
-        start_input: StartDurableExecutionInput,
-        durable_execution_arn: str,
-        checkpoint_token: str,
-        operations: list[Operation],
-    ) -> DurableExecutionInvocationInput: ...  # pragma: no cover
-
-    async def invoke(
-        self,
-        function_name: str,
-        input: DurableExecutionInvocationInput,
-        endpoint_url: str | None = None,
-    ) -> InvokeResponse: ...  # pragma: no cover
-
-    def update_endpoint(
-        self, endpoint_url: str, region_name: str
-    ) -> None: ...  # pragma: no cover
-
-
-@dataclass(frozen=True)
-class CheckpointToken:
-    """Model a checkpoint token. This isn't exactly the same format as the actual svc, but it will do for testing purposes."""
-
-    execution_arn: str
-    token_sequence: int
-
-    def to_str(self) -> str:
-        data = {"arn": self.execution_arn, "seq": self.token_sequence}
-        json_str = json.dumps(data, separators=(",", ":"))
-        # str -> bytes -> base64 bytes -> str
-        return base64.b64encode(json_str.encode()).decode()
-
-    @classmethod
-    def from_str(cls, token: str) -> CheckpointToken:
-        # str -> base64 bytes -> str
-        decoded = base64.b64decode(token).decode()
-        data = json.loads(decoded)
-        return cls(execution_arn=data["arn"], token_sequence=data["seq"])
-
-
-@dataclass(frozen=True)
-class CallbackToken:
-    """Model a callback token."""
-
-    execution_arn: str
-    operation_id: str
-
-    def to_str(self) -> str:
-        data = {"arn": self.execution_arn, "op": self.operation_id}
-        json_str = json.dumps(data, separators=(",", ":"))
-        # str -> bytes -> base64 bytes -> str
-        return base64.b64encode(json_str.encode()).decode()
-
-    @classmethod
-    def from_str(cls, token: str) -> CallbackToken:
-        # str -> base64 bytes -> str
-        decoded = base64.b64decode(token).decode()
-        data = json.loads(decoded)
-        return cls(execution_arn=data["arn"], operation_id=data["op"])

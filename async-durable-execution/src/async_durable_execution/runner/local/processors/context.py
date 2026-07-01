@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Any
 
 from async_durable_execution.models import (
     Operation,
@@ -16,10 +16,6 @@ from .base import (
 from ...exceptions import (
     InvalidParameterValueException,
 )
-
-
-if TYPE_CHECKING:
-    from ..observer import ExecutionNotifier
 
 
 VALID_ACTIONS_FOR_CONTEXT = frozenset(
@@ -78,7 +74,7 @@ class ContextProcessor(OperationProcessor):
         self,
         update: OperationUpdate,
         current_op: Operation | None,
-        notifier: ExecutionNotifier,  # noqa: ARG002
+        notifier: Any,  # noqa: ARG002
         execution_arn: str,  # noqa: ARG002
     ) -> Operation:
         """Process CONTEXT operation update for context state transitions."""

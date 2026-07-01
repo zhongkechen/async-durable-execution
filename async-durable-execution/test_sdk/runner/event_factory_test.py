@@ -22,14 +22,14 @@ from async_durable_execution.runner.exceptions import (
     InvalidParameterValueException,
 )
 from async_durable_execution.runner.model import (
-    CheckpointDurableExecutionRequest,
-    ErrorResponse,
     Event,
     EventCreationContext,
     EventError,
     EventInput,
     EventResult,
     ExecutionStartedDetails,
+)
+from async_durable_execution.runner.local.model import (
     LambdaContext,
     StartDurableExecutionInput,
 )
@@ -941,43 +941,6 @@ def test_event_to_dict_with_all_details():
     assert result["SubType"] == "test-subtype"
     assert result["ParentId"] == "parent-1"
     assert result["ExecutionStartedDetails"]["ExecutionTimeout"] == 300
-
-
-def test_error_response_from_dict_nested():
-    data = {
-        "error": {
-            "type": "ValidationError",
-            "message": "Invalid input",
-            "code": "400",
-            "requestId": "req-123",
-        }
-    }
-    error_response = ErrorResponse.from_dict(data)
-    assert error_response.error_type == "ValidationError"
-    assert error_response.error_message == "Invalid input"
-    assert error_response.error_code == "400"
-    assert error_response.request_id == "req-123"
-
-
-def test_error_response_from_dict_flat():
-    data = {"type": "ValidationError", "message": "Invalid input"}
-    error_response = ErrorResponse.from_dict(data)
-    assert error_response.error_type == "ValidationError"
-    assert error_response.error_message == "Invalid input"
-
-
-def test_checkpoint_durable_execution_request_from_dict():
-    token: str = "token-123"
-    data = {
-        "CheckpointToken": token,
-        "Updates": [
-            {"Id": "op-1", "Type": "STEP", "Action": "START", "SubType": "Step"}
-        ],
-    }
-    request = CheckpointDurableExecutionRequest.from_dict(data, "arn:test")
-    assert request.checkpoint_token == token
-    assert len(request.updates) == 1
-    assert request.updates[0].operation_id == "op-1"
 
 
 class TestFromOperationStarted:

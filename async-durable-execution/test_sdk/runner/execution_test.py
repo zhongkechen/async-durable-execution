@@ -22,7 +22,7 @@ from async_durable_execution.runner.exceptions import (
     InvalidParameterValueException,
 )
 from async_durable_execution.runner.local.execution import Execution
-from async_durable_execution.runner.model import StartDurableExecutionInput
+from async_durable_execution.runner.local.model import StartDurableExecutionInput
 
 
 def test_execution_init():
@@ -839,7 +839,7 @@ def test_from_dict_with_none_result():
     }
 
     with patch(
-        "async_durable_execution.runner.model.StartDurableExecutionInput.from_dict"
+        "async_durable_execution.runner.local.model.StartDurableExecutionInput.from_dict"
     ) as mock_from_dict:
         mock_from_dict.return_value = Mock()
         execution = Execution.from_json_dict(data)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 from datetime import timedelta
-from typing import TYPE_CHECKING, ClassVar
+from typing import Any, ClassVar
 
 from async_durable_execution.models import (
     CallbackDetails,
@@ -22,10 +22,6 @@ from async_durable_execution.models import (
 from ...exceptions import (
     InvalidParameterValueException,
 )
-
-
-if TYPE_CHECKING:
-    from ..observer import ExecutionNotifier
 
 
 class OperationProcessor:
@@ -49,7 +45,7 @@ class OperationProcessor:
         self,
         update: OperationUpdate,
         current_op: Operation | None,
-        notifier: ExecutionNotifier,
+        notifier: Any,
         execution_arn: str,
     ) -> Operation | None:
         """Process an operation update and return the transformed operation."""
