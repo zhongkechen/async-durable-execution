@@ -284,6 +284,34 @@ async def test_child_handler_already_succeeded_none_result():
     mock_callable.assert_not_called()
 
 
+async def test_child_handler_already_succeeded_missing_context_details():
+    """A succeeded child checkpoint without details replays as a None result."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "test_arn"
+    operation = Operation(
+        operation_id="op3_missing_details",
+        operation_type=OperationType.CONTEXT,
+        status=OperationStatus.SUCCEEDED,
+        context_details=None,
+    )
+    mock_state.operations.get.return_value = operation
+    mock_callable = Mock()
+
+    result = await child_handler(
+        mock_callable,
+        mock_state,
+        OperationIdentifier(
+            "op3_missing_details",
+            OperationSubType.RUN_IN_CHILD_CONTEXT,
+            None,
+            "test_name",
+        ),
+    )
+
+    assert result is None
+    mock_callable.assert_not_called()
+
+
 async def test_child_handler_already_failed():
     """Test child_handler when operation already failed.
 
@@ -317,6 +345,33 @@ async def test_child_handler_already_failed():
                 "op4", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
             ),
         )
+
+
+async def test_child_handler_already_failed_missing_error_details():
+    """A failed child checkpoint without an ErrorObject raises an unknown error."""
+    mock_state = Mock(spec=ExecutionState)
+    operation = Operation(
+        operation_id="op4_missing_error",
+        operation_type=OperationType.CONTEXT,
+        status=OperationStatus.FAILED,
+        context_details=None,
+    )
+    mock_state.operations.get.return_value = operation
+    mock_callable = Mock()
+
+    with pytest.raises(CallableRuntimeError, match="Unknown error"):
+        await child_handler(
+            mock_callable,
+            mock_state,
+            OperationIdentifier(
+                "op4_missing_error",
+                OperationSubType.RUN_IN_CHILD_CONTEXT,
+                None,
+                "test_name",
+            ),
+        )
+
+    mock_callable.assert_not_called()
 
 
 async def test_should_use_step_id_prefix_when_generating_step_ids():
@@ -422,6 +477,15 @@ async def test_should_create_virtual_child_with_none_parent_when_parent_is_root(
 
     expected = hashlib.blake2b(b"child-op-1").hexdigest()[:64]
     assert child.step_counter._create_step_id_for_logical_step(1) == expected  # noqa: SLF001
+
+
+async def test_next_operation_is_terminal_checkpoint_returns_false_when_missing():
+    """Replay lookahead treats a missing next operation as non-terminal."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.operations.get.return_value = None
+    context = create_test_context(state=mock_state, parent_id="parent-op")
+
+    assert context._next_operation_is_terminal_checkpoint() is False  # noqa: SLF001
 
 
 async def test_should_propagate_outer_parent_id_when_virtual_is_nested_in_virtual():

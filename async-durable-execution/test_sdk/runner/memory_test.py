@@ -1,5 +1,6 @@
 """Tests for InMemoryExecutionStore."""
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import timezone
 from unittest.mock import Mock
 
@@ -495,18 +496,6 @@ def test_time_filtering_logic():
 
 
 # Concurrent memory tests
-
-"""Concurrent access tests for execution stores."""
-
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
-from async_durable_execution.runner.execution import Execution
-from async_durable_execution.runner.model import StartDurableExecutionInput
-from async_durable_execution.runner.memory import (
-    InMemoryExecutionStore,
-)
-
-
 def test_concurrent_save_load():
     """Test concurrent save and load operations."""
     store = InMemoryExecutionStore()
@@ -575,7 +564,7 @@ def test_concurrent_update_list():
         store.update(execution)
         return f"updated-{i}"
 
-    def list_executions():
+    def list_stored_executions():
         executions = store.list_all()
         return f"listed-{len(executions)}"
 
@@ -583,7 +572,7 @@ def test_concurrent_update_list():
         # Submit update operations
         futures = [executor.submit(update_execution, i) for i in range(3)]
         # Submit list operations
-        futures.extend([executor.submit(list_executions) for _ in range(3)])
+        futures.extend([executor.submit(list_stored_executions) for _ in range(3)])
 
         # Wait for all operations to complete
         results = [future.result() for future in as_completed(futures)]

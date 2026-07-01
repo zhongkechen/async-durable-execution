@@ -203,6 +203,33 @@ async def test_invoke_handler_already_timed_out():
         )
 
 
+async def test_invoke_handler_terminal_without_error_object():
+    """Terminal invoke checkpoints without an ErrorObject surface an unknown error."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "test_arn"
+
+    operation = Operation(
+        operation_id="invoke_missing_error",
+        operation_type=OperationType.CHAINED_INVOKE,
+        status=OperationStatus.FAILED,
+        chained_invoke_details=None,
+    )
+    mock_state.operations.get.return_value = operation
+
+    with pytest.raises(CallableRuntimeError, match="Unknown error"):
+        await invoke_handler(
+            function_name="test_function",
+            payload="test_input",
+            state=mock_state,
+            operation_identifier=OperationIdentifier(
+                "invoke_missing_error",
+                OperationSubType.CHAINED_INVOKE,
+                None,
+                "test_invoke",
+            ),
+        )
+
+
 @pytest.mark.parametrize("status", [OperationStatus.STARTED])
 async def test_invoke_handler_already_started(status):
     """Test invoke_handler when operation is already started."""

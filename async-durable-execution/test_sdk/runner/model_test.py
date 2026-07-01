@@ -20,6 +20,7 @@ from async_durable_execution.runner.model import (
     CallbackSucceededDetails,
     CallbackTimedOutDetails,
     ChainedInvokeFailedDetails,
+    ChainedInvokePendingDetails,
     ChainedInvokeStartedDetails,
     ChainedInvokeStoppedDetails,
     ChainedInvokeSucceededDetails,
@@ -35,7 +36,6 @@ from async_durable_execution.runner.model import (
     EventError,
     EventInput,
     EventResult,
-    Execution,
     ExecutionFailedDetails,
     ExecutionStartedDetails,
     ExecutionStoppedDetails,
@@ -48,10 +48,6 @@ from async_durable_execution.runner.model import (
     GetDurableExecutionStateRequest,
     GetDurableExecutionStateResponse,
     InvocationCompletedDetails,
-    ListDurableExecutionsByFunctionRequest,
-    ListDurableExecutionsByFunctionResponse,
-    ListDurableExecutionsRequest,
-    ListDurableExecutionsResponse,
     RetryDetails,
     SendDurableExecutionCallbackFailureRequest,
     SendDurableExecutionCallbackFailureResponse,
@@ -295,155 +291,6 @@ def test_get_durable_execution_response_minimal():
 
     result_data = response_obj.to_dict()
     assert result_data == data
-
-
-def test_list_durable_executions_request_serialization():
-    """Test ListDurableExecutionsRequest from_dict/to_dict round-trip."""
-    data = {
-        "FunctionName": "my-function",
-        "FunctionVersion": "$LATEST",
-        "DurableExecutionName": "test-execution",
-        "StatusFilter": ["RUNNING", "SUCCEEDED"],
-        "StartedAfter": TIMESTAMP_2023_01_01_00_00,
-        "StartedBefore": TIMESTAMP_2023_01_02_00_00,
-        "Marker": "marker-123",
-        "MaxItems": 10,
-        "ReverseOrder": True,
-    }
-
-    request_obj = ListDurableExecutionsRequest.from_dict(data)
-    assert request_obj.function_name == "my-function"
-    assert request_obj.function_version == "$LATEST"
-    assert request_obj.durable_execution_name == "test-execution"
-    assert request_obj.status_filter == ["RUNNING", "SUCCEEDED"]
-    assert request_obj.started_after == TIMESTAMP_2023_01_01_00_00
-    assert request_obj.started_before == TIMESTAMP_2023_01_02_00_00
-    assert request_obj.marker == "marker-123"
-    assert request_obj.max_items == 10
-    assert request_obj.reverse_order is True
-
-    result_data = request_obj.to_dict()
-    assert result_data == data
-
-    # Test round-trip
-    round_trip = ListDurableExecutionsRequest.from_dict(result_data)
-    assert round_trip == request_obj
-
-
-def test_list_durable_executions_request_empty():
-    """Test ListDurableExecutionsRequest with empty data."""
-    data = {}
-
-    request_obj = ListDurableExecutionsRequest.from_dict(data)
-    assert request_obj.function_name is None
-    assert request_obj.function_version is None
-    assert request_obj.durable_execution_name is None
-    assert request_obj.status_filter is None
-    assert request_obj.started_after is None
-    assert request_obj.started_before is None
-    assert request_obj.marker is None
-    assert request_obj.max_items == 0  # Default value from Smithy
-    assert request_obj.reverse_order is None
-
-    result_data = request_obj.to_dict()
-    # The result should include the default MaxItems
-    expected_data = {"MaxItems": 0}
-    assert result_data == expected_data
-
-
-def test_durable_execution_summary_serialization():
-    """Test Execution from_dict/to_dict round-trip."""
-    data = {
-        "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
-        "DurableExecutionName": "test-execution",
-        "Status": "SUCCEEDED",
-        "StartTimestamp": TIMESTAMP_2023_01_01_00_00,
-        "EndTimestamp": TIMESTAMP_2023_01_01_00_01,
-    }
-
-    summary_obj = Execution.from_dict(data)
-    assert (
-        summary_obj.durable_execution_arn
-        == "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test"
-    )
-    assert summary_obj.durable_execution_name == "test-execution"
-    assert summary_obj.status == "SUCCEEDED"
-    assert summary_obj.start_timestamp == TIMESTAMP_2023_01_01_00_00
-    assert summary_obj.end_timestamp == TIMESTAMP_2023_01_01_00_01
-
-    result_data = summary_obj.to_dict()
-    assert result_data == data
-
-    # Test round-trip
-    round_trip = Execution.from_dict(result_data)
-    assert round_trip == summary_obj
-
-
-def test_durable_execution_summary_no_end_timestamp():
-    """Test Execution without end timestamp."""
-    data = {
-        "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
-        "DurableExecutionName": "test-execution",
-        "Status": "RUNNING",
-        "StartTimestamp": TIMESTAMP_2023_01_01_00_00,
-    }
-
-    summary_obj = Execution.from_dict(data)
-    assert summary_obj.end_timestamp is None
-
-    result_data = summary_obj.to_dict()
-    assert result_data == data
-
-
-def test_list_durable_executions_response_serialization():
-    """Test ListDurableExecutionsResponse from_dict/to_dict round-trip."""
-    data = {
-        "DurableExecutions": [
-            {
-                "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test1",
-                "DurableExecutionName": "test-execution-1",
-                "Status": "SUCCEEDED",
-                "StartTimestamp": TIMESTAMP_2023_01_01_00_00,
-                "EndTimestamp": TIMESTAMP_2023_01_01_00_01,
-            },
-            {
-                "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test2",
-                "DurableExecutionName": "test-execution-2",
-                "Status": "RUNNING",
-                "StartTimestamp": TIMESTAMP_2023_01_01_00_02,
-            },
-        ],
-        "NextMarker": "next-marker-123",
-    }
-
-    response_obj = ListDurableExecutionsResponse.from_dict(data)
-    assert len(response_obj.durable_executions) == 2
-    assert (
-        response_obj.durable_executions[0].durable_execution_name == "test-execution-1"
-    )
-    assert (
-        response_obj.durable_executions[1].durable_execution_name == "test-execution-2"
-    )
-    assert response_obj.next_marker == "next-marker-123"
-
-    result_data = response_obj.to_dict()
-    assert result_data == data
-
-    # Test round-trip
-    round_trip = ListDurableExecutionsResponse.from_dict(result_data)
-    assert round_trip == response_obj
-
-
-def test_list_durable_executions_response_empty():
-    """Test ListDurableExecutionsResponse with empty executions."""
-    data = {"DurableExecutions": []}
-
-    response_obj = ListDurableExecutionsResponse.from_dict(data)
-    assert len(response_obj.durable_executions) == 0
-    assert response_obj.next_marker is None
-
-    result_data = response_obj.to_dict()
-    assert result_data == {"DurableExecutions": []}
 
 
 def test_stop_durable_execution_request_serialization():
@@ -740,86 +587,6 @@ def test_get_durable_execution_history_response_empty():
 
     result_data = response_obj.to_dict()
     assert result_data == {"Events": []}
-
-
-def test_list_durable_executions_by_function_request_serialization():
-    """Test ListDurableExecutionsByFunctionRequest from_dict/to_dict round-trip."""
-    data = {
-        "FunctionName": "my-function",
-        "Qualifier": "$LATEST",
-        "StatusFilter": ["RUNNING", "SUCCEEDED"],
-        "StartedAfter": TIMESTAMP_2023_01_01_00_00,
-        "StartedBefore": TIMESTAMP_2023_01_02_00_00,
-        "Marker": "marker-123",
-        "MaxItems": 10,
-        "ReverseOrder": True,
-    }
-
-    request_obj = ListDurableExecutionsByFunctionRequest.from_dict(data)
-    assert request_obj.function_name == "my-function"
-    assert request_obj.qualifier == "$LATEST"
-    assert request_obj.status_filter == ["RUNNING", "SUCCEEDED"]
-    assert request_obj.started_after == TIMESTAMP_2023_01_01_00_00
-    assert request_obj.started_before == TIMESTAMP_2023_01_02_00_00
-    assert request_obj.marker == "marker-123"
-    assert request_obj.max_items == 10
-    assert request_obj.reverse_order is True
-
-    result_data = request_obj.to_dict()
-    assert result_data == data
-
-    # Test round-trip
-    round_trip = ListDurableExecutionsByFunctionRequest.from_dict(result_data)
-    assert round_trip == request_obj
-
-
-def test_list_durable_executions_by_function_request_minimal():
-    """Test ListDurableExecutionsByFunctionRequest with only required fields."""
-    data = {"FunctionName": "my-function"}
-
-    request_obj = ListDurableExecutionsByFunctionRequest.from_dict(data)
-    assert request_obj.qualifier is None
-    assert request_obj.status_filter is None
-    assert request_obj.started_after is None
-    assert request_obj.started_before is None
-    assert request_obj.marker is None
-    assert request_obj.max_items == 0  # Default value from Smithy
-    assert request_obj.reverse_order is None
-
-    result_data = request_obj.to_dict()
-    # The result should include the default MaxItems
-    expected_data = {"FunctionName": "my-function", "MaxItems": 0}
-    assert result_data == expected_data
-
-
-def test_list_durable_executions_by_function_response_serialization():
-    """Test ListDurableExecutionsByFunctionResponse from_dict/to_dict round-trip."""
-    data = {
-        "DurableExecutions": [
-            {
-                "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test1",
-                "DurableExecutionName": "test-execution-1",
-                "Status": "SUCCEEDED",
-                "StartTimestamp": TIMESTAMP_2023_01_01_00_00,
-                "EndTimestamp": TIMESTAMP_2023_01_01_00_01,
-            }
-        ],
-        "NextMarker": "next-marker-123",
-    }
-
-    response_obj = ListDurableExecutionsByFunctionResponse.from_dict(data)
-    assert len(response_obj.durable_executions) == 1
-    assert (
-        response_obj.durable_executions[0].durable_execution_name == "test-execution-1"
-    )
-    assert response_obj.next_marker == "next-marker-123"
-
-    result_data = response_obj.to_dict()
-    assert result_data == data
-
-    # Test round-trip
-    round_trip = ListDurableExecutionsByFunctionResponse.from_dict(result_data)
-    assert round_trip == response_obj
 
 
 def test_send_durable_execution_callback_success_request_serialization():
@@ -1242,101 +1009,6 @@ def test_start_durable_execution_input_missing_required_fields():
     with pytest.raises(InvalidParameterValueException) as exc_info:
         StartDurableExecutionInput.from_dict(data)
     assert "Missing required field: ExecutionRetentionPeriodDays" in str(exc_info.value)
-
-
-# Tests for Execution backward compatibility
-def test_execution_backward_compatibility_empty_function_arn():
-    """Test Execution with empty FunctionArn for backward compatibility."""
-    data = {
-        "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
-        "DurableExecutionName": "test-execution",
-        "Status": "SUCCEEDED",
-        "StartTimestamp": TIMESTAMP_2023_01_01_00_00,
-        "EndTimestamp": TIMESTAMP_2023_01_01_00_01,
-    }
-
-    execution_obj = Execution.from_dict(data)
-    assert (
-        execution_obj.function_arn == ""
-    )  # Default empty string for backward compatibility
-
-    result_data = execution_obj.to_dict()
-    # Empty function_arn should not be included in output
-    expected_data = {
-        "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
-        "DurableExecutionName": "test-execution",
-        "Status": "SUCCEEDED",
-        "StartTimestamp": TIMESTAMP_2023_01_01_00_00,
-        "EndTimestamp": TIMESTAMP_2023_01_01_00_01,
-    }
-    assert result_data == expected_data
-
-
-def test_execution_with_function_arn():
-    """Test Execution with non-empty FunctionArn."""
-    data = {
-        "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
-        "DurableExecutionName": "test-execution",
-        "FunctionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function",
-        "Status": "SUCCEEDED",
-        "StartTimestamp": TIMESTAMP_2023_01_01_00_00,
-        "EndTimestamp": TIMESTAMP_2023_01_01_00_01,
-    }
-
-    execution_obj = Execution.from_dict(data)
-    assert (
-        execution_obj.function_arn
-        == "arn:aws:lambda:us-east-1:123456789012:function:my-function"
-    )
-
-    result_data = execution_obj.to_dict()
-    assert result_data == data
-
-
-# Tests for ListDurableExecutionsRequest with all optional fields
-def test_list_durable_executions_request_all_optional_fields():
-    """Test ListDurableExecutionsRequest to_dict with all optional fields as None."""
-    request_obj = ListDurableExecutionsRequest(
-        function_name=None,
-        function_version=None,
-        durable_execution_name=None,
-        status_filter=None,
-        started_after=None,
-        started_before=None,
-        marker=None,
-        max_items=None,
-        reverse_order=None,
-    )
-
-    result_data = request_obj.to_dict()
-    # Only non-None fields should be included
-    expected_data = {}
-    assert result_data == expected_data
-
-
-def test_list_durable_executions_request_partial_fields():
-    """Test ListDurableExecutionsRequest to_dict with some optional fields."""
-    request_obj = ListDurableExecutionsRequest(
-        function_name="my-function",
-        function_version=None,
-        durable_execution_name="test-execution",
-        status_filter=None,
-        started_after=TIMESTAMP_2023_01_01_00_00,
-        started_before=None,
-        marker="marker-123",
-        max_items=10,
-        reverse_order=None,
-    )
-
-    result_data = request_obj.to_dict()
-    expected_data = {
-        "FunctionName": "my-function",
-        "DurableExecutionName": "test-execution",
-        "StartedAfter": TIMESTAMP_2023_01_01_00_00,
-        "Marker": "marker-123",
-        "MaxItems": 10,
-    }
-    assert result_data == expected_data
 
 
 # Tests for GetDurableExecutionStateRequest with all optional fields
@@ -1930,6 +1602,18 @@ def test_invoke_started_details_partial():
     data = {}
     details = ChainedInvokeStartedDetails.from_dict(data)
     assert details.durable_execution_arn is None
+
+
+def test_chained_invoke_pending_details_to_dict_with_all_fields():
+    details = ChainedInvokePendingDetails(
+        input=EventInput(payload="test-input", truncated=False),
+        function_name="child-function:prod",
+    )
+
+    assert details.to_dict() == {
+        "Input": {"Payload": "test-input", "Truncated": False},
+        "FunctionName": "child-function:prod",
+    }
 
 
 # Tests for ChainedInvokeSucceededDetails
@@ -2843,52 +2527,6 @@ def test_get_durable_execution_history_request_partial_fields():
     assert result_data == expected_data
 
 
-# Tests for ListDurableExecutionsByFunctionRequest with all optional fields
-def test_list_durable_executions_by_function_request_all_optional_fields():
-    """Test ListDurableExecutionsByFunctionRequest to_dict with all optional fields as None."""
-    request_obj = ListDurableExecutionsByFunctionRequest(
-        function_name="my-function",
-        qualifier=None,
-        status_filter=None,
-        started_after=None,
-        started_before=None,
-        marker=None,
-        max_items=None,
-        reverse_order=None,
-    )
-
-    result_data = request_obj.to_dict()
-    expected_data = {
-        "FunctionName": "my-function",
-    }
-    assert result_data == expected_data
-
-
-def test_list_durable_executions_by_function_request_partial_fields():
-    """Test ListDurableExecutionsByFunctionRequest to_dict with some optional fields."""
-    request_obj = ListDurableExecutionsByFunctionRequest(
-        function_name="my-function",
-        qualifier="$LATEST",
-        status_filter=["RUNNING"],
-        started_after=None,
-        started_before=TIMESTAMP_2023_01_02_00_00,
-        marker=None,
-        max_items=15,
-        reverse_order=True,
-    )
-
-    result_data = request_obj.to_dict()
-    expected_data = {
-        "FunctionName": "my-function",
-        "Qualifier": "$LATEST",
-        "StatusFilter": ["RUNNING"],
-        "StartedBefore": TIMESTAMP_2023_01_02_00_00,
-        "MaxItems": 15,
-        "ReverseOrder": True,
-    }
-    assert result_data == expected_data
-
-
 # Tests for SendDurableExecutionCallbackSuccessRequest with optional result
 def test_send_durable_execution_callback_success_request_with_result():
     """Test SendDurableExecutionCallbackSuccessRequest to_dict with result."""
@@ -2916,29 +2554,6 @@ def test_send_durable_execution_callback_failure_request_with_error():
     result_data = request_obj.to_dict()
     expected_data = {
         "CallbackId": "callback-123",
-    }
-    assert result_data == expected_data
-
-
-# Test for missing coverage in ListDurableExecutionsByFunctionRequest
-def test_list_durable_executions_by_function_request_with_durable_execution_name():
-    """Test ListDurableExecutionsByFunctionRequest to_dict with durable_execution_name."""
-    request_obj = ListDurableExecutionsByFunctionRequest(
-        function_name="my-function",
-        qualifier=None,
-        durable_execution_name="specific-execution",
-        status_filter=None,
-        started_after=None,
-        started_before=None,
-        marker=None,
-        max_items=None,
-        reverse_order=None,
-    )
-
-    result_data = request_obj.to_dict()
-    expected_data = {
-        "FunctionName": "my-function",
-        "DurableExecutionName": "specific-execution",
     }
     assert result_data == expected_data
 
