@@ -248,6 +248,52 @@ async def test_parallel_passes_default_summary_generator(
     )
 
 
+def test_parallel_summary_generator_returns_compact_json_payload():
+    """ParallelSummaryGenerator summarizes counts without embedding branch payloads."""
+    result = BatchResult(
+        all=[
+            BatchItem(index=0, status=BatchItemStatus.SUCCEEDED, result="ok"),
+            BatchItem(index=1, status=BatchItemStatus.FAILED, error=Mock()),
+            BatchItem(index=2, status=BatchItemStatus.STARTED),
+        ],
+        completion_reason=CompletionReason.FAILURE_TOLERANCE_EXCEEDED,
+    )
+
+    summary = json.loads(ParallelSummaryGenerator()(result))
+
+    assert summary == {
+        "totalCount": 3,
+        "successCount": 1,
+        "failureCount": 1,
+        "completionReason": "FAILURE_TOLERANCE_EXCEEDED",
+        "status": "FAILED",
+        "startedCount": 1,
+        "type": "ParallelResult",
+    }
+
+
+@patch("async_durable_execution.composite.parallel._run_in_child_context")
+async def test_parallel_raises_when_child_operation_id_is_missing(
+    mock_run_in_child_context,
+):
+    """The public wrapper fails clearly if no child operation id is available."""
+
+    async def branch_a():
+        return "a"
+
+    async def run_child_func(func, *_args, **_kwargs):
+        return await func()
+
+    context = create_test_context(state=create_mock_execution_state())
+    mock_run_in_child_context.side_effect = run_child_func
+
+    with pytest.raises(
+        RuntimeError,
+        match="parallel operation id is not available in the current context",
+    ):
+        await run_with_context(context, parallel([branch_a]))
+
+
 @patch("async_durable_execution.composite.parallel.parallel_handler")
 async def test_parallel_accepts_one_shot_branch_iterable(
     mock_parallel_handler,

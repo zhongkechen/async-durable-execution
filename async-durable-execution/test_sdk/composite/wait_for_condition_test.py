@@ -4,6 +4,7 @@ import asyncio
 import datetime
 import inspect
 import json
+from contextlib import nullcontext
 from datetime import timedelta
 from unittest.mock import Mock, patch
 
@@ -15,6 +16,7 @@ from async_durable_execution.exceptions import (
     CallableRuntimeError,
     InvocationError,
     SuspendExecution,
+    ValidationError,
 )
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
@@ -59,6 +61,89 @@ def test_wait_for_condition_signature_requires_keyword_only_options():
     assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
     assert parameters["wait_strategy"].kind is inspect.Parameter.KEYWORD_ONLY
     assert parameters["serdes"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+def test_wait_for_condition_decision_converts_delay_to_seconds():
+    """Decision delay_seconds stays available after post-init conversion."""
+    decision = WaitForConditionDecision.continue_waiting(
+        delay=timedelta(seconds=3),
+    )
+
+    assert decision.delay == 3
+    assert decision.delay_seconds == 3
+
+
+def test_wait_for_condition_decision_rejects_invalid_delay():
+    """Invalid decision delays surface as ValueError for callers."""
+    with pytest.raises(ValueError, match="delay"):
+        WaitForConditionDecision.continue_waiting(delay="later")
+
+
+async def test_wait_for_condition_requires_check_callable():
+    """The public wrapper validates a missing check before creating an executor."""
+    context = Mock()
+
+    with (
+        patch(
+            "async_durable_execution.composite.wait_for_condition.get_durable_context",
+            return_value=context,
+        ),
+        pytest.raises(ValidationError, match="`check` is required"),
+    ):
+        await wait_for_condition()
+
+
+async def test_wait_for_condition_public_wrapper_builds_executor_from_context():
+    """The public wrapper derives operation identity from the durable context."""
+
+    async def check(state):
+        return state, WaitForConditionDecision.stop_polling()
+
+    context = Mock()
+    context._replay_aware.return_value = nullcontext()
+    context.step_counter.create_step_id.return_value = "wait-op"
+    context.parent_id = "parent-op"
+    context.execution_state = Mock(spec=ExecutionState)
+    wait_strategy = Mock()
+    serdes = Mock()
+    captured_executor = None
+
+    async def fake_process(self):
+        nonlocal captured_executor
+        captured_executor = self
+        return "done"
+
+    with (
+        patch(
+            "async_durable_execution.composite.wait_for_condition.get_durable_context",
+            return_value=context,
+        ),
+        patch.object(
+            WaitForConditionOperationExecutor,
+            "process",
+            fake_process,
+        ),
+    ):
+        result = await wait_for_condition(
+            check,
+            initial_state={"status": "pending"},
+            name="poll-job",
+            wait_strategy=wait_strategy,
+            serdes=serdes,
+        )
+
+    assert result == "done"
+    assert captured_executor is not None
+    executor = captured_executor
+    assert executor.initial_state == {"status": "pending"}
+    assert executor.wait_strategy is wait_strategy
+    assert executor.serdes is serdes
+    assert executor.operation_identifier == OperationIdentifier(
+        operation_id="wait-op",
+        sub_type=OperationSubType.WAIT_FOR_CONDITION,
+        parent_id="parent-op",
+        name="poll-job",
+    )
 
 
 async def _invoke_maybe_async(result):
@@ -298,6 +383,35 @@ async def test_wait_for_condition_already_failed():
             operation_identifier=op_id,
             check=check_func,
             wait_strategy=wait_strategy,
+        )
+
+
+async def test_wait_for_condition_already_failed_without_error_object():
+    """Failed checkpoints without error details raise an unknown CallableRuntimeError."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "test_arn"
+    mock_state.operations.get.return_value = Operation(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.FAILED,
+        step_details=None,
+    )
+
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+
+    def check_func(state):
+        return state + 1, WaitForConditionDecision.stop_polling()
+
+    with pytest.raises(
+        CallableRuntimeError,
+        match="Unknown error. No ErrorObject exists",
+    ):
+        await wait_for_condition_handler(
+            state=mock_state,
+            operation_identifier=op_id,
+            check=check_func,
         )
 
 
@@ -553,6 +667,35 @@ async def test_wait_for_condition_operation_no_step_details():
     assert result == 6  # Falls back to initial_state and uses attempt=1
 
 
+async def test_wait_for_condition_ready_checkpoint_restarts_before_check():
+    """READY checkpoints are restarted before the condition is evaluated."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "arn:aws:test"
+    mock_state.operations.get.return_value = Operation(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.READY,
+        step_details=None,
+    )
+
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+
+    def check_func(state):
+        return state + 1, WaitForConditionDecision.stop_polling()
+
+    result = await wait_for_condition_handler(
+        state=mock_state,
+        operation_identifier=op_id,
+        check=check_func,
+    )
+
+    assert result == 6
+    assert mock_state.create_checkpoint.call_count == 2
+    assert mock_state.create_checkpoint.call_args_list[0].kwargs["is_sync"] is False
+
+
 async def test_wait_for_condition_custom_delay_seconds():
     """Test wait_for_condition with custom delay_seconds."""
     mock_state = Mock(spec=ExecutionState)
@@ -603,6 +746,36 @@ async def test_wait_for_condition_custom_delay_accepts_int_seconds():
             check=check_func,
             wait_strategy=wait_strategy,
         )
+
+
+async def test_wait_for_condition_custom_delay_rejects_invalid_return_type():
+    """Custom wait strategies must return int seconds or timedelta."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "arn:aws:test"
+    mock_state.operations.get.return_value = None
+
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+
+    def check_func(state):
+        return state + 1, WaitForConditionDecision.continue_waiting()
+
+    def wait_strategy(state, attempt):
+        return "later"
+
+    with pytest.raises(
+        ValidationError,
+        match="wait_strategy must return int seconds or timedelta",
+    ):
+        await wait_for_condition_handler(
+            state=mock_state,
+            operation_identifier=op_id,
+            check=check_func,
+            wait_strategy=wait_strategy,
+        )
+
+    assert mock_state.create_checkpoint.call_count == 2
 
 
 async def test_wait_for_condition_attempt_number_passed_to_strategy():

@@ -1036,6 +1036,28 @@ def test_map_signature_defaults_to_map_summary_generator():
     )
 
 
+def test_map_summary_generator_returns_compact_json_payload():
+    """MapSummaryGenerator summarizes counts without embedding item payloads."""
+    result = BatchResult(
+        all=[
+            BatchItem(index=0, status=BatchItemStatus.SUCCEEDED, result="ok"),
+            BatchItem(index=1, status=BatchItemStatus.FAILED, error=Mock()),
+        ],
+        completion_reason=CompletionReason.FAILURE_TOLERANCE_EXCEEDED,
+    )
+
+    summary = json.loads(MapSummaryGenerator()(result))
+
+    assert summary == {
+        "totalCount": 2,
+        "successCount": 1,
+        "failureCount": 1,
+        "completionReason": "FAILURE_TOLERANCE_EXCEEDED",
+        "status": "FAILED",
+        "type": "MapResult",
+    }
+
+
 @patch("async_durable_execution.composite.map.map_handler")
 @patch("async_durable_execution.composite.map._run_in_child_context")
 async def test_map_passes_default_summary_generator_to_handler(
@@ -1070,6 +1092,26 @@ async def test_map_passes_default_summary_generator_to_handler(
         mock_map_handler.call_args.kwargs["summary_generator"],
         MapSummaryGenerator,
     )
+
+
+@patch("async_durable_execution.composite.map._run_in_child_context")
+async def test_map_raises_when_child_operation_id_is_missing(mock_run_in_child_context):
+    """The public wrapper fails clearly if no child operation id is available."""
+
+    async def test_function(item):
+        return item
+
+    async def run_child_func(func, *_args, **_kwargs):
+        return await func()
+
+    context = create_test_context(state=create_mock_execution_state())
+    mock_run_in_child_context.side_effect = run_child_func
+
+    with pytest.raises(
+        RuntimeError,
+        match="map operation id is not available in the current context",
+    ):
+        await run_with_context(context, map_operation(test_function, [1]))
 
 
 async def test_map_name_is_keyword_only():
