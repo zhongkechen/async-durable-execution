@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from async_durable_execution.runner import create_runner
+from async_durable_execution import create_runner
 
 
 # Add the source root so package imports resolve in source checkouts.

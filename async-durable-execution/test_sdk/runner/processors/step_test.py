@@ -15,13 +15,13 @@ from async_durable_execution.models import (
     StepDetails,
     StepOptions,
 )
-from async_durable_execution.runner.processors.step import (
+from async_durable_execution.runner.local.processors.step import (
     StepProcessor,
 )
 from async_durable_execution.runner.exceptions import (
     InvalidParameterValueException,
 )
-from async_durable_execution.runner.observer import ExecutionNotifier
+from async_durable_execution.runner.local.observer import ExecutionNotifier
 
 
 class MockNotifier(ExecutionNotifier):
@@ -466,7 +466,7 @@ from async_durable_execution.models import (
     OperationUpdate,
     StepOptions,
 )
-from async_durable_execution.runner.processors.step import (
+from async_durable_execution.runner.local.processors.step import (
     StepProcessor,
 )
 from async_durable_execution.runner.exceptions import (

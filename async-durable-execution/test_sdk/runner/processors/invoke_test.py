@@ -10,7 +10,7 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.runner.processors.invoke import (
+from async_durable_execution.runner.local.processors.invoke import (
     ChainedInvokeProcessor,
 )
 from async_durable_execution.runner.exceptions import (

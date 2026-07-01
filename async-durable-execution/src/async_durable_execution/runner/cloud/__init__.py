@@ -308,7 +308,7 @@ class DurableFunctionCloudTestRunner:
         self, execution_arn: str, name: str | None = None, timeout: int = 60
     ) -> str:
         """
-        Wait for and retrieve a callback ID from a Step Functions execution.
+        Wait for and retrieve a callback ID from a durable execution.
 
         Polls the execution history at regular intervals until a callback ID is found
         or the timeout is reached.
@@ -346,8 +346,8 @@ class DurableFunctionCloudTestRunner:
                 else:
                     msg = f"Failed to fetch execution history: {e}"
                     raise DurableFunctionsTestError(msg) from e
-            except DurableFunctionsTestError as e:
-                raise e
+            except DurableFunctionsTestError:
+                raise
             except Exception as e:
                 msg = f"Failed to fetch execution history: {e}"
                 raise DurableFunctionsTestError(msg) from e
@@ -356,7 +356,7 @@ class DurableFunctionCloudTestRunner:
 
         # Timeout reached
         elapsed = time.time() - start_time
-        msg = f"Callback did not available within {timeout}s (elapsed: {elapsed:.1f}s."
+        msg = f"Callback was not available within {timeout}s (elapsed: {elapsed:.1f}s)."
         raise TimeoutError(msg)
 
     def _fetch_execution_history(

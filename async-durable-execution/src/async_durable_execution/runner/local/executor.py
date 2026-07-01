@@ -22,13 +22,13 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from .exceptions import (
+from ..exceptions import (
     IllegalStateException,
     InvalidParameterValueException,
     ResourceNotFoundException,
 )
-from .execution import Execution
-from .model import (
+from ..execution import Execution
+from ..model import (
     TERMINAL_STATUSES,
     CallbackToken,
     CheckpointDurableExecutionResponse,
@@ -43,7 +43,7 @@ from .model import (
     StartDurableExecutionInput,
     StartDurableExecutionOutput,
 )
-from .model import (
+from ..model import (
     Event as HistoryEvent,
 )
 from .observer import ExecutionObserver
@@ -53,8 +53,8 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
     from concurrent.futures import Future
 
-    from .local import InMemoryExecutionStore
-    from .local import InMemoryServiceClient
+    from . import InMemoryExecutionStore
+    from . import InMemoryServiceClient
     from .scheduler import Event, Scheduler
 
 logger = logging.getLogger(__name__)
@@ -80,7 +80,7 @@ class Executor(ExecutionObserver):
         self._completion_events: dict[str, Event] = {}
         self._callback_timeouts: dict[str, Future] = {}
         self._callback_heartbeats: dict[str, Future] = {}
-        self._execution_timeout: Future | None = None
+        self._execution_timeouts: dict[str, Future] = {}
         self._invocation_state_lock = Lock()
         self._active_invocations: set[str] = set()
         self._scheduled_callback_resumes: set[str] = set()
@@ -123,10 +123,12 @@ class Executor(ExecutionObserver):
                 )
                 self.on_timed_out(execution.durable_execution_arn, error)
 
-            self._execution_timeout = self._scheduler.call_later(
-                timeout_handler,
-                delay=input.execution_timeout_seconds,
-                completion_event=completion_event,
+            self._execution_timeouts[execution.durable_execution_arn] = (
+                self._scheduler.call_later(
+                    timeout_handler,
+                    delay=input.execution_timeout_seconds,
+                    completion_event=completion_event,
+                )
             )
 
         # Schedule initial invocation to run immediately
@@ -573,7 +575,7 @@ class Executor(ExecutionObserver):
                 )
 
             case InvocationStatus.PENDING:
-                if not execution.has_pending_operations(execution):
+                if not execution.has_pending_operations():
                     msg_pending_ops: str = (
                         "Cannot return PENDING status with no pending operations."
                     )
@@ -757,9 +759,8 @@ class Executor(ExecutionObserver):
         # complete doesn't actually checkpoint explicitly
         if event := self._completion_events.get(execution_arn):
             event.set()
-        if self._execution_timeout:
-            self._execution_timeout.cancel()
-            self._execution_timeout = None
+        if execution_timeout := self._execution_timeouts.pop(execution_arn, None):
+            execution_timeout.cancel()
 
     def wait_until_complete(
         self, execution_arn: str, timeout: float | None = None

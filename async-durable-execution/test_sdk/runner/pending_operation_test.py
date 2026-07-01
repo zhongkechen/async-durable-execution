@@ -8,7 +8,7 @@
 #     OperationType,
 # )
 #
-# from async_durable_execution.runner.executor import Executor
+# from async_durable_execution.runner.local.executor import Executor
 # from async_durable_execution.runner.model import StartDurableExecutionInput
 #
 #

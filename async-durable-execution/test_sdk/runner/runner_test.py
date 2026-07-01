@@ -7,7 +7,13 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from async_durable_execution import InvocationStatus
+from async_durable_execution import (
+    DurableFunctionCloudTestRunner,
+    DurableFunctionLocalTestRunner,
+    DurableFunctionTestResult,
+    InvocationStatus,
+    create_runner,
+)
 from async_durable_execution.models import (
     CallbackDetails,
     ChainedInvokeDetails,
@@ -27,14 +33,6 @@ from async_durable_execution.runner.model import (
     GetDurableExecutionHistoryResponse,
     StartDurableExecutionInput,
     StartDurableExecutionOutput,
-)
-from async_durable_execution.runner.runner import (
-    create_runner,
-)
-from async_durable_execution.runner import (
-    DurableFunctionCloudTestRunner,
-    DurableFunctionLocalTestRunner,
-    DurableFunctionTestResult,
 )
 
 
@@ -1399,7 +1397,7 @@ async def test_cloud_runner_wait_for_callback_none(mock_boto3):
         function_name="test-function", poll_interval=0.01
     )
 
-    with pytest.raises(TimeoutError, match="Callback did not available within"):
+    with pytest.raises(TimeoutError, match="Callback was not available within"):
         await runner.wait_for_callback("test-arn", name="test-callback1", timeout=2)
 
 
@@ -1511,7 +1509,7 @@ async def test_cloud_runner_wait_for_callback_all_done_without_name(mock_boto3):
     runner = DurableFunctionCloudTestRunner(
         function_name="test-function", poll_interval=0.01
     )
-    with pytest.raises(TimeoutError, match="Callback did not available within"):
+    with pytest.raises(TimeoutError, match="Callback was not available within"):
         await runner.wait_for_callback("test-arn", timeout=2)
 
 
@@ -1546,7 +1544,7 @@ async def test_local_runner_wait_for_callback_all_done_without_name(
     )
 
     runner = DurableFunctionLocalTestRunner(handler)
-    with pytest.raises(TimeoutError, match="Callback did not available within"):
+    with pytest.raises(TimeoutError, match="Callback was not available within"):
         await runner.wait_for_callback("test-arn", timeout=2)
 
 
@@ -1576,7 +1574,7 @@ async def test_local_runner_wait_for_callback_with_resource_not_found_exception(
     mock_executor.get_execution_history.side_effect = ResourceNotFoundException("error")
 
     runner = DurableFunctionLocalTestRunner(handler)
-    with pytest.raises(TimeoutError, match="Callback did not available within"):
+    with pytest.raises(TimeoutError, match="Callback was not available within"):
         await runner.wait_for_callback("test-arn", timeout=2)
 
 
@@ -1598,7 +1596,7 @@ async def test_cloud_runner_wait_for_callback_timeout(mock_time, mock_boto3):
         function_name="test-function", poll_interval=0.01
     )
 
-    with pytest.raises(TimeoutError, match="Callback did not available within"):
+    with pytest.raises(TimeoutError, match="Callback was not available within"):
         await runner.wait_for_callback("test-arn", timeout=2)
 
 

@@ -253,7 +253,7 @@ def test_has_pending_operations_with_pending_step():
     ]
     execution = Execution("test-arn", start_input, operations)
 
-    result = execution.has_pending_operations(execution)
+    result = execution.has_pending_operations()
 
     assert result is True
 
@@ -281,7 +281,7 @@ def test_has_pending_operations_with_started_wait():
     ]
     execution = Execution("test-arn", start_input, operations)
 
-    result = execution.has_pending_operations(execution)
+    result = execution.has_pending_operations()
 
     assert result is True
 
@@ -309,7 +309,7 @@ def test_has_pending_operations_with_started_callback():
     ]
     execution = Execution("test-arn", start_input, operations)
 
-    result = execution.has_pending_operations(execution)
+    result = execution.has_pending_operations()
 
     assert result is True
 
@@ -337,7 +337,7 @@ def test_has_pending_operations_with_started_invoke():
     ]
     execution = Execution("test-arn", start_input, operations)
 
-    result = execution.has_pending_operations(execution)
+    result = execution.has_pending_operations()
 
     assert result is True
 
@@ -365,7 +365,7 @@ def test_has_pending_operations_no_pending():
     ]
     execution = Execution("test-arn", start_input, operations)
 
-    result = execution.has_pending_operations(execution)
+    result = execution.has_pending_operations()
 
     assert result is False
 

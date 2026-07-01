@@ -77,10 +77,17 @@ from .execution import durable_callable, durable_execution
 from .primitive.wait import wait
 from .serdes import ExtendedTypeSerDes, JsonSerDes, SerDes, SerDesContext
 from .client import DurableServiceClient
+from .runner import (
+    DurableFunctionCloudTestRunner,
+    DurableFunctionLocalTestRunner,
+    DurableFunctionTestResult,
+    create_runner,
+)
 
 __all__ = [
     "__version__",
     "create_callback",
+    "create_runner",
     "durable_callable",
     "durable_execution",
     "get_attempt",
@@ -103,6 +110,9 @@ __all__ = [
     "CompletionConfig",
     "CompletionReason",
     "DurableContext",
+    "DurableFunctionCloudTestRunner",
+    "DurableFunctionLocalTestRunner",
+    "DurableFunctionTestResult",
     "DurableServiceClient",
     "DurableExecutionsError",
     "ErrorObject",

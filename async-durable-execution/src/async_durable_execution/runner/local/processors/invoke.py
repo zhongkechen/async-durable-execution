@@ -12,7 +12,7 @@ from async_durable_execution.models import (
     OperationUpdate,
 )
 from .base import OperationProcessor
-from ..exceptions import InvalidParameterValueException
+from ...exceptions import InvalidParameterValueException
 
 if TYPE_CHECKING:
     from ..observer import ExecutionNotifier

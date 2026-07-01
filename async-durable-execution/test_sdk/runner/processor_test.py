@@ -20,7 +20,7 @@ from async_durable_execution.runner.exceptions import (
     InvalidParameterValueException,
 )
 from async_durable_execution.runner.execution import Execution
-from async_durable_execution.runner.scheduler import Scheduler
+from async_durable_execution.runner.local.scheduler import Scheduler
 
 
 def test_init():
@@ -304,7 +304,7 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.runner.processor import (
+from async_durable_execution.runner.local.processor import (
     MAX_ERROR_PAYLOAD_SIZE_BYTES,
     CheckpointValidator,
 )
@@ -996,10 +996,10 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.runner.processors.base import (
+from async_durable_execution.runner.local.processors.base import (
     OperationProcessor,
 )
-from async_durable_execution.runner.processor import (
+from async_durable_execution.runner.local.processor import (
     OperationTransformer,
 )
 from async_durable_execution.runner.exceptions import (

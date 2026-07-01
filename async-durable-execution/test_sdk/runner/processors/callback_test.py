@@ -11,13 +11,13 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.runner.processors.callback import (
+from async_durable_execution.runner.local.processors.callback import (
     CallbackProcessor,
 )
 from async_durable_execution.runner.exceptions import (
     InvalidParameterValueException,
 )
-from async_durable_execution.runner.observer import ExecutionNotifier
+from async_durable_execution.runner.local.observer import ExecutionNotifier
 
 
 class MockNotifier(ExecutionNotifier):
@@ -272,7 +272,7 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.runner.processors.callback import (
+from async_durable_execution.runner.local.processors.callback import (
     CallbackProcessor,
 )
 from async_durable_execution.runner.exceptions import (

@@ -23,7 +23,7 @@ This fork is specifically focused on making async Python work naturally with dur
 - **Ergonomic async call-site helpers** - Use `@durable_callable` together with top-level awaitable operations like `step(...)`, `wait(...)`, and `run_in_child_context(...)` to keep durable workflow code explicit and natural in async Python
 - **Same durable primitives, adapted for async Python** - Checkpointed steps, waits, callbacks, parallel branches, maps, retries, and child contexts are all preserved, but tuned for an async execution style
 - **Replay-safe logging with stdlib logging** - Use standard `logging` loggers enriched by the durable context filter instead of relying on ad hoc logging patterns
-- **SDK and runner shipped together** - The execution SDK now includes the local/cloud runner under `async_durable_execution.runner`
+- **SDK and runner shipped together** - The execution SDK now includes the local/cloud runner through the `async_durable_execution` public API
 - **Stronger local and cloud validation workflow** - The repo includes runner integration examples and GitHub Actions automation for build, test, and generated API docs
 
 ## 📦 Packages
@@ -34,7 +34,7 @@ This fork is specifically focused on making async Python work naturally with dur
 | `async-durable-execution-examples` | Example durable functions and integration tests for local and cloud workflows | Shared repo version |
 
 Install `async-durable-execution` and import runner helpers from
-`async_durable_execution.runner`.
+`async_durable_execution`.
 
 ## 🚀 Quick Start
 
@@ -156,9 +156,9 @@ Assuming the Quick Start handler above is saved in `order_workflow.py`, a local 
 ```python
 import json
 
-from async_durable_execution import InvocationStatus
-from async_durable_execution.runner import (
+from async_durable_execution import (
     DurableFunctionTestResult,
+    InvocationStatus,
     create_runner,
 )
 
@@ -195,7 +195,7 @@ async def test_my_durable_function() -> None:
 The `create_runner()` factory selects local or cloud mode from one call shape:
 
 ```python
-from async_durable_execution.runner import create_runner
+from async_durable_execution import create_runner
 
 from order_workflow import handler
 

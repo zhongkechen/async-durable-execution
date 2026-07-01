@@ -6,15 +6,13 @@ from functools import partial
 from typing import Any
 
 from async_durable_execution import (
+    DurableFunctionLocalTestRunner,
+    DurableFunctionTestResult,
     InvocationStatus,
     durable_execution,
     run_in_child_context,
 )
 from async_durable_execution import step, wait
-from async_durable_execution.runner import (
-    DurableFunctionLocalTestRunner,
-    DurableFunctionTestResult,
-)
 
 
 # brazil-test-exec pytest test/runner_int_test.py

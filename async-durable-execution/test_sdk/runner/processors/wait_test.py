@@ -13,13 +13,13 @@ from async_durable_execution.models import (
     OperationUpdate,
     WaitOptions,
 )
-from async_durable_execution.runner.processors.wait import (
+from async_durable_execution.runner.local.processors.wait import (
     WaitProcessor,
 )
 from async_durable_execution.runner.exceptions import (
     InvalidParameterValueException,
 )
-from async_durable_execution.runner.observer import ExecutionNotifier
+from async_durable_execution.runner.local.observer import ExecutionNotifier
 
 
 class MockNotifier(ExecutionNotifier):
@@ -346,7 +346,7 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.runner.processors.wait import (
+from async_durable_execution.runner.local.processors.wait import (
     WaitProcessor,
 )
 from async_durable_execution.runner.exceptions import (
