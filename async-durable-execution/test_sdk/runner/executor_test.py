@@ -38,6 +38,7 @@ from async_durable_execution.runner.model import (
     StartDurableExecutionInput,
     InvokeResponse,
     CallbackToken,
+    InvocationCompletedDetails,
 )
 from async_durable_execution.runner.observer import (
     ExecutionNotifier,
@@ -2596,3 +2597,329 @@ async def test_notify_stopped():
     notifier.notify_stopped("test-arn", error)
 
     observer.on_stopped.assert_called_once_with(execution_arn="test-arn", error=error)
+
+
+@patch("async_durable_execution.runner.executor.Execution")
+async def test_start_execution_timeout_handler_notifies_timed_out(
+    mock_execution_class, executor, start_input, mock_scheduler
+):
+    mock_execution = Mock()
+    mock_execution.durable_execution_arn = "test-arn"
+    mock_execution_class.new.return_value = mock_execution
+    mock_scheduler.create_event.return_value = Mock()
+
+    with patch.object(executor, "_invoke_execution"):
+        with patch.object(executor, "on_timed_out") as mock_timed_out:
+            executor.start_execution(start_input)
+            timeout_handler = mock_scheduler.call_later.call_args_list[0][0][0]
+            timeout_handler()
+
+    mock_timed_out.assert_called_once()
+    assert mock_timed_out.call_args.args[0] == "test-arn"
+    assert "Execution timed out after 300 seconds" in (
+        mock_timed_out.call_args.args[1].message
+    )
+
+
+async def test_get_execution_state_paginates_and_ignores_invalid_marker(
+    executor, mock_store
+):
+    operations = [
+        Operation(
+            operation_id=f"op-{i}",
+            operation_type=OperationType.STEP,
+            status=OperationStatus.STARTED,
+        )
+        for i in range(3)
+    ]
+    mock_execution = Mock()
+    mock_execution.used_tokens = {"token"}
+    mock_execution.get_assertable_operations.return_value = operations
+    mock_store.load.return_value = mock_execution
+
+    result = executor.get_execution_state(
+        "test-arn",
+        checkpoint_token="token",  # noqa: S106
+        marker="not-an-int",
+        max_items=2,
+    )
+
+    assert [operation.operation_id for operation in result.operations] == [
+        "op-0",
+        "op-1",
+    ]
+    assert result.next_marker == "2"
+
+
+async def test_get_execution_history_includes_invocation_and_pending_chained_invoke(
+    executor, mock_store, start_input
+):
+    now = datetime.now(timezone.utc)
+    pending_invoke = Operation(
+        operation_id="invoke-op",
+        operation_type=OperationType.CHAINED_INVOKE,
+        status=OperationStatus.PENDING,
+        start_timestamp=now,
+        name="invoke-child",
+    )
+    mock_execution = Mock()
+    mock_execution.operations = [pending_invoke]
+    mock_execution.updates = []
+    mock_execution.invocation_completions = [
+        InvocationCompletedDetails(
+            start_timestamp=now,
+            end_timestamp=now,
+            request_id="request-1",
+        )
+    ]
+    mock_execution.durable_execution_arn = "test-arn"
+    mock_execution.start_input = start_input
+    mock_execution.result = None
+    mock_store.load.return_value = mock_execution
+
+    result = executor.get_execution_history("test-arn")
+
+    event_types = [event.event_type for event in result.events]
+    assert event_types[0] == "InvocationCompleted"
+    assert event_types.count("ChainedInvokeStarted") == 2
+
+
+async def test_get_execution_history_reverse_pagination_next_marker(
+    executor, mock_store
+):
+    operations = [
+        Operation(
+            operation_id=f"op-{i}",
+            operation_type=OperationType.STEP,
+            status=OperationStatus.SUCCEEDED,
+            start_timestamp=datetime(2026, 1, 1, i, tzinfo=timezone.utc),
+            end_timestamp=datetime(2026, 1, 1, i, 1, tzinfo=timezone.utc),
+        )
+        for i in range(3)
+    ]
+    mock_execution = Mock()
+    mock_execution.operations = operations
+    mock_execution.updates = []
+    mock_execution.invocation_completions = []
+    mock_execution.durable_execution_arn = "test-arn"
+    mock_execution.start_input = Mock()
+    mock_execution.result = None
+    mock_store.load.return_value = mock_execution
+
+    result = executor.get_execution_history(
+        "test-arn", reverse_order=True, max_items=2
+    )
+
+    assert len(result.events) == 2
+    assert result.next_marker == str(result.events[-1].event_id)
+
+
+async def test_checkpoint_execution_with_updates_returns_new_state(
+    executor, mock_store, mock_service_client
+):
+    operation = Operation(
+        operation_id="op-1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.STARTED,
+    )
+    update = OperationUpdate(
+        operation_id="op-1",
+        operation_type=OperationType.STEP,
+        action=OperationAction.START,
+    )
+    checkpoint_output = Mock()
+    checkpoint_output.checkpoint_token = "token-2"  # noqa: S105
+    checkpoint_output.new_execution_state.operations = [operation]
+    checkpoint_output.new_execution_state.next_marker = "next"
+    mock_service_client.process_checkpoint.return_value = checkpoint_output
+    mock_execution = Mock()
+    mock_execution.used_tokens = {"token-1"}
+    mock_store.load.return_value = mock_execution
+
+    result = executor.checkpoint_execution(
+        "test-arn",
+        "token-1",  # noqa: S106
+        updates=[update],
+        client_token="client-token",  # noqa: S106
+    )
+
+    mock_service_client.process_checkpoint.assert_called_once_with(
+        checkpoint_token="token-1",  # noqa: S106
+        updates=[update],
+        client_token="client-token",  # noqa: S106
+    )
+    assert result.checkpoint_token == "token-2"  # noqa: S105
+    assert result.new_execution_state.operations == [operation]
+    assert result.new_execution_state.next_marker == "next"
+
+
+async def test_validate_invocation_response_rejects_completed_execution(
+    executor, mock_execution
+):
+    mock_execution.is_complete = True
+    response = DurableExecutionInvocationOutput(status=InvocationStatus.SUCCEEDED)
+
+    with pytest.raises(
+        IllegalStateException, match="Execution already completed, ignoring result"
+    ):
+        executor._validate_invocation_response_and_store(
+            "test-arn", response, mock_execution
+        )
+
+
+async def test_callback_resume_is_coalesced_while_invocation_active(
+    executor, mock_store
+):
+    execution = Mock()
+    execution.is_complete = False
+    mock_store.load.return_value = execution
+
+    with patch.object(executor, "_invoke_execution") as mock_invoke:
+        executor._mark_invocation_started("test-arn")
+        executor._schedule_callback_resume("test-arn")
+
+        assert "test-arn" in executor._pending_callback_resumes
+        mock_invoke.assert_not_called()
+
+        executor._mark_invocation_finished("test-arn")
+
+    mock_invoke.assert_called_once_with("test-arn")
+
+
+async def test_callback_resume_not_invoked_after_completion(executor, mock_store):
+    execution = Mock()
+    execution.is_complete = True
+    mock_store.load.return_value = execution
+    executor._active_invocations.add("test-arn")
+    executor._pending_callback_resumes.add("test-arn")
+
+    with patch.object(executor, "_invoke_execution") as mock_invoke:
+        executor._mark_invocation_finished("test-arn")
+
+    mock_invoke.assert_not_called()
+
+
+async def test_complete_workflow_rejects_already_completed_execution(
+    executor, mock_store
+):
+    execution = Mock()
+    execution.is_complete = True
+    mock_store.load.return_value = execution
+
+    with pytest.raises(
+        IllegalStateException, match="Cannot make multiple close workflow decisions"
+    ):
+        executor._complete_workflow("test-arn", result="result", error=None)
+
+
+async def test_on_wait_succeeded_updates_execution(executor, mock_store):
+    execution = Mock()
+    execution.is_complete = False
+    mock_store.load.return_value = execution
+
+    executor._on_wait_succeeded("test-arn", "wait-op")
+
+    execution.complete_wait.assert_called_once_with(operation_id="wait-op")
+    mock_store.update.assert_called_once_with(execution)
+
+
+async def test_on_wait_succeeded_ignores_completed_execution(executor, mock_store):
+    execution = Mock()
+    execution.is_complete = True
+    mock_store.load.return_value = execution
+
+    executor._on_wait_succeeded("test-arn", "wait-op")
+
+    execution.complete_wait.assert_not_called()
+    mock_store.update.assert_not_called()
+
+
+async def test_on_wait_succeeded_logs_exceptions(executor, mock_store):
+    execution = Mock()
+    execution.is_complete = False
+    execution.complete_wait.side_effect = RuntimeError("wait failed")
+    mock_store.load.return_value = execution
+
+    executor._on_wait_succeeded("test-arn", "wait-op")
+
+    execution.complete_wait.assert_called_once_with(operation_id="wait-op")
+    mock_store.update.assert_not_called()
+
+
+async def test_on_callback_created_schedules_timeouts(executor):
+    callback_token = CallbackToken(execution_arn="test-arn", operation_id="callback-op")
+    callback_options = CallbackOptions(timeout_seconds=10)
+
+    with patch.object(executor, "_schedule_callback_timeouts") as mock_schedule:
+        executor.on_callback_created(
+            "test-arn",
+            "callback-op",
+            callback_options,
+            callback_token,
+        )
+
+    mock_schedule.assert_called_once_with(
+        "test-arn", callback_options, callback_token.to_str()
+    )
+
+
+async def test_schedule_callback_timeouts_none_options_returns(executor, mock_scheduler):
+    executor._schedule_callback_timeouts("test-arn", None, "callback-id")
+
+    mock_scheduler.call_later.assert_not_called()
+
+
+async def test_callback_timeout_scheduled_handlers_call_timeout_methods(
+    executor, mock_scheduler
+):
+    callback_options = CallbackOptions(timeout_seconds=10, heartbeat_timeout_seconds=20)
+
+    executor._schedule_callback_timeouts("test-arn", callback_options, "callback-id")
+
+    timeout_handler = mock_scheduler.call_later.call_args_list[0][0][0]
+    heartbeat_handler = mock_scheduler.call_later.call_args_list[1][0][0]
+    with patch.object(executor, "_on_callback_timeout") as mock_timeout:
+        timeout_handler()
+    with patch.object(
+        executor, "_on_callback_heartbeat_timeout"
+    ) as mock_heartbeat_timeout:
+        heartbeat_handler()
+
+    mock_timeout.assert_called_once_with("test-arn", "callback-id")
+    mock_heartbeat_timeout.assert_called_once_with("test-arn", "callback-id")
+
+
+async def test_reset_callback_heartbeat_scheduled_handler_calls_timeout(
+    executor, mock_store, mock_scheduler
+):
+    callback_token = CallbackToken(execution_arn="test-arn", operation_id="op-123")
+    callback_id = callback_token.to_str()
+    execution = Mock()
+    execution.updates = [
+        OperationUpdate(
+            operation_id="op-123",
+            operation_type=OperationType.CALLBACK,
+            action=OperationAction.START,
+            callback_options=CallbackOptions(heartbeat_timeout_seconds=10),
+        )
+    ]
+    mock_store.load.return_value = execution
+
+    executor._reset_callback_heartbeat_timeout(callback_id, "test-arn")
+
+    heartbeat_handler = mock_scheduler.call_later.call_args.args[0]
+    with patch.object(
+        executor, "_on_callback_heartbeat_timeout"
+    ) as mock_heartbeat_timeout:
+        heartbeat_handler()
+
+    mock_heartbeat_timeout.assert_called_once_with("test-arn", callback_id)
+
+
+async def test_reset_callback_heartbeat_timeout_handles_invalid_token(executor):
+    executor._reset_callback_heartbeat_timeout("invalid-token", "test-arn")
+
+
+async def test_callback_timeout_handlers_swallow_invalid_token(executor):
+    executor._on_callback_timeout("test-arn", "invalid-token")
+    executor._on_callback_heartbeat_timeout("test-arn", "invalid-token")
