@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Any
 
 from async_durable_execution.models import (
     ErrorObject,
@@ -16,10 +16,6 @@ from .base import (
 from ...exceptions import (
     InvalidParameterValueException,
 )
-
-
-if TYPE_CHECKING:
-    from ..observer import ExecutionNotifier
 
 
 VALID_ACTIONS_FOR_EXECUTION = frozenset(
@@ -58,15 +54,13 @@ class ExecutionProcessor(OperationProcessor):
         self,
         update: OperationUpdate,
         current_op: Operation | None,  # noqa: ARG002
-        notifier: ExecutionNotifier,
+        notifier: Any,
         execution_arn: str,
     ) -> Operation | None:
         """Process EXECUTION operation update for workflow completion/failure."""
         match update.action:
             case OperationAction.SUCCEED:
-                notifier.notify_completed(
-                    execution_arn=execution_arn, result=update.payload
-                )
+                notifier.complete_execution(execution_arn, update.payload)
             case _:
                 # intentional. actual service will fail any EXECUTION update that is not SUCCEED.
                 error = update.error or ErrorObject.from_message(
@@ -74,6 +68,6 @@ class ExecutionProcessor(OperationProcessor):
                 )
                 # All EXECUTION failures go through normal fail path
                 # Timeout/Stop status is set by executor based on the operation that caused it
-                notifier.notify_failed(execution_arn=execution_arn, error=error)
+                notifier.fail_execution(execution_arn, error)
         # TODO: Svc doesn't actually create checkpoint for EXECUTION. might have to for localrunner though.
         return None

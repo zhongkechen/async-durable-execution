@@ -32,84 +32,16 @@ from async_durable_execution.runner.local.execution import (
 )
 from async_durable_execution.runner.local import Executor
 from async_durable_execution.runner.model import (
+    InvokeResponse,
+    InvocationCompletedDetails,
+)
+from async_durable_execution.runner.local.model import (
+    CallbackToken,
     SendDurableExecutionCallbackFailureResponse,
     SendDurableExecutionCallbackHeartbeatResponse,
     SendDurableExecutionCallbackSuccessResponse,
     StartDurableExecutionInput,
-    InvokeResponse,
-    CallbackToken,
-    InvocationCompletedDetails,
 )
-from async_durable_execution.runner.local.observer import (
-    ExecutionNotifier,
-    ExecutionObserver,
-)
-
-
-class MockExecutionObserver(ExecutionObserver):
-    """Mock observer to capture execution events through public callbacks."""
-
-    def __init__(self):
-        self.completed_executions = {}
-        self.failed_executions = {}
-        self.wait_timers = {}
-        self.retry_schedules = {}
-        self.callback_creations = {}
-
-    def on_completed(self, execution_arn: str, result: str | None = None) -> None:
-        """Capture completion events."""
-        self.completed_executions[execution_arn] = result
-
-    def on_failed(self, execution_arn: str, error: ErrorObject) -> None:
-        """Capture failure events."""
-        self.failed_executions[execution_arn] = error
-
-    def on_wait_timer_scheduled(
-        self, execution_arn: str, operation_id: str, delay: float
-    ) -> None:
-        """Capture wait timer scheduling events."""
-        self.wait_timers[execution_arn] = {"operation_id": operation_id, "delay": delay}
-
-    def on_step_retry_scheduled(
-        self, execution_arn: str, operation_id: str, delay: float
-    ) -> None:
-        """Capture retry scheduling events."""
-        self.retry_schedules[execution_arn] = {
-            "operation_id": operation_id,
-            "delay": delay,
-        }
-
-    def on_callback_created(
-        self,
-        execution_arn: str,
-        operation_id: str,
-        callback_options: CallbackOptions | None,
-        callback_token: CallbackToken,
-    ) -> None:
-        """Capture callback creation events."""
-        self.callback_creations[execution_arn] = {
-            "operation_id": operation_id,
-            "callback_id": callback_token.to_str(),
-        }
-
-    def on_callback_completed(
-        self, execution_arn: str, operation_id: str, callback_id: str
-    ) -> None:
-        """Capture callback completion events."""
-        # Not needed for current tests
-
-    def on_timed_out(self, execution_arn: str, error: ErrorObject) -> None:
-        """Capture timeout events."""
-        # Not needed for current tests
-
-    def on_stopped(self, execution_arn: str, error: ErrorObject) -> None:
-        """Capture stop events."""
-        # Not needed for current tests
-
-
-@pytest.fixture
-async def test_observer():
-    return MockExecutionObserver()
 
 
 @pytest.fixture
@@ -1298,7 +1230,7 @@ async def test_should_schedule_wait_timer_correctly(executor, mock_scheduler):
         executor.start_execution(start_input)
 
     # Act - schedule wait timer through public method
-    executor.on_wait_timer_scheduled("test-arn", "op-123", delay=5.0)
+    executor.schedule_wait_timer("test-arn", "op-123", delay=5.0)
 
     # Assert - verify scheduler was called correctly
     assert mock_scheduler.call_later.call_count == 2  # start_execution + wait timer
@@ -1362,7 +1294,7 @@ async def test_should_complete_retry_when_retry_scheduled(
     # Mock _invoke_execution to prevent async warnings
     with patch.object(executor, "_invoke_execution"):
         # Act - trigger retry through public API
-        executor.on_step_retry_scheduled("test-arn", "op-123", 10.0)
+        executor.schedule_step_retry("test-arn", "op-123", 10.0)
 
     # Assert - verify observable behavior
     mock_store.load.assert_called_with("test-arn")
@@ -1388,7 +1320,7 @@ async def test_should_ignore_retry_when_execution_complete(
     # Mock _invoke_execution to prevent async warnings
     with patch.object(executor, "_invoke_execution"):
         # Act - trigger retry through public API
-        executor.on_step_retry_scheduled("test-arn", "op-123", 10.0)
+        executor.schedule_step_retry("test-arn", "op-123", 10.0)
 
     # Assert - verify no retry processing occurs
     mock_execution.complete_retry.assert_not_called()
@@ -1413,29 +1345,13 @@ async def test_should_handle_retry_exception_gracefully(
     # Mock _invoke_execution to prevent async warnings
     with patch.object(executor, "_invoke_execution"):
         # Act - should not raise exception
-        executor.on_step_retry_scheduled("test-arn", "op-123", 10.0)
+        executor.schedule_step_retry("test-arn", "op-123", 10.0)
 
     # Assert - verify the retry was attempted but exception was caught
     mock_execution.complete_retry.assert_called_once_with(operation_id="op-123")
 
 
-async def test_on_completed(executor):
-    with patch.object(executor, "complete_execution") as mock_complete:
-        executor.on_completed("test-arn", "result")
-
-    mock_complete.assert_called_once_with("test-arn", "result")
-
-
-async def test_on_failed(executor):
-    error = ErrorObject.from_message("test error")
-
-    with patch.object(executor, "fail_execution") as mock_fail:
-        executor.on_failed("test-arn", error)
-
-    mock_fail.assert_called_once_with("test-arn", error)
-
-
-async def test_on_wait_timer_scheduled(executor, mock_scheduler):
+async def test_schedule_wait_timer(executor, mock_scheduler):
     """Test wait timer scheduling through public observer method."""
     mock_event = Mock()
     mock_scheduler.create_event.return_value = mock_event
@@ -1454,7 +1370,7 @@ async def test_on_wait_timer_scheduled(executor, mock_scheduler):
 
     with patch.object(executor, "_on_wait_succeeded"):
         with patch.object(executor, "_invoke_execution"):
-            executor.on_wait_timer_scheduled("test-arn", "op-123", 10.0)
+            executor.schedule_wait_timer("test-arn", "op-123", 10.0)
 
     # Verify scheduler was called with correct parameters
     assert (
@@ -1667,7 +1583,7 @@ async def test_invoke_execution_with_delay_through_wait_timer(executor, mock_sch
 
     # Test delay behavior through wait timer scheduling
     with patch.object(executor, "_on_wait_succeeded"):
-        executor.on_wait_timer_scheduled("test-arn", "op-123", 10.0)
+        executor.schedule_wait_timer("test-arn", "op-123", 10.0)
 
     # Verify scheduler was called with delay for wait timer
     wait_timer_call = mock_scheduler.call_later.call_args_list[
@@ -1702,7 +1618,7 @@ async def test_invoke_execution_no_delay_through_start_execution(
     assert initial_call[1]["delay"] == 0
 
 
-async def test_on_step_retry_scheduled(executor, mock_scheduler):
+async def test_schedule_step_retry(executor, mock_scheduler):
     """Test step retry scheduling through public observer method."""
     mock_event = Mock()
     mock_scheduler.create_event.return_value = mock_event
@@ -1721,7 +1637,7 @@ async def test_on_step_retry_scheduled(executor, mock_scheduler):
 
     with patch.object(executor, "_on_retry_ready"):
         with patch.object(executor, "_invoke_execution"):
-            executor.on_step_retry_scheduled("test-arn", "op-123", 10.0)
+            executor.schedule_step_retry("test-arn", "op-123", 10.0)
 
     # Verify scheduler was called with correct parameters
     assert (
@@ -1751,7 +1667,7 @@ async def test_wait_handler_execution(executor, mock_scheduler):
 
     with patch.object(executor, "_on_wait_succeeded") as mock_wait:
         with patch.object(executor, "_invoke_execution") as mock_invoke:
-            executor.on_wait_timer_scheduled("test-arn", "op-123", 10.0)
+            executor.schedule_wait_timer("test-arn", "op-123", 10.0)
 
             # Get the handler that was passed to call_later (second call for wait timer)
             wait_timer_call = mock_scheduler.call_later.call_args_list[1]
@@ -1783,7 +1699,7 @@ async def test_retry_handler_execution(executor, mock_scheduler):
 
     with patch.object(executor, "_on_retry_ready") as mock_retry:
         with patch.object(executor, "_invoke_execution") as mock_invoke:
-            executor.on_step_retry_scheduled("test-arn", "op-123", 10.0)
+            executor.schedule_step_retry("test-arn", "op-123", 10.0)
 
             # Get the handler that was passed to call_later (second call for retry)
             retry_call = mock_scheduler.call_later.call_args_list[1]
@@ -2035,7 +1951,7 @@ async def test_checkpoint_execution_invalid_token(executor, mock_store):
 
 async def test_send_callback_success(executor, mock_store):
     """Test send_callback_success method."""
-    from async_durable_execution.runner.model import CallbackToken
+    from async_durable_execution.runner.local.model import CallbackToken
 
     # Create valid callback token
     callback_token = CallbackToken(execution_arn="test-arn", operation_id="op-123")
@@ -2074,7 +1990,7 @@ async def test_send_callback_success_none_callback_id(executor):
 
 async def test_send_callback_success_with_result(executor, mock_store):
     """Test send_callback_success with result data."""
-    from async_durable_execution.runner.model import CallbackToken
+    from async_durable_execution.runner.local.model import CallbackToken
 
     # Create valid callback token
     callback_token = CallbackToken(execution_arn="test-arn", operation_id="op-123")
@@ -2099,7 +2015,7 @@ async def test_send_callback_success_with_result(executor, mock_store):
 
 async def test_send_callback_failure(executor, mock_store):
     """Test send_callback_failure method."""
-    from async_durable_execution.runner.model import CallbackToken
+    from async_durable_execution.runner.local.model import CallbackToken
 
     # Create valid callback token
     callback_token = CallbackToken(execution_arn="test-arn", operation_id="op-123")
@@ -2414,22 +2330,10 @@ async def test_callback_timeout_completed_execution(executor, mock_store):
 
 
 async def test_schedule_callback_timeouts_no_callback_details(executor, mock_store):
-    """Test _schedule_callback_timeouts when operation has no callback details."""
-
-    # Create operation without callback details
-    operation = Operation(
-        operation_id="op-123",
-        operation_type=OperationType.CALLBACK,
-        status=OperationStatus.STARTED,
-        callback_details=None,
-    )
-
-    mock_execution = Mock()
-    mock_execution.find_operation.return_value = (0, operation)
-    mock_store.load.return_value = mock_execution
+    """Test _schedule_callback_timeouts when no callback options are provided."""
 
     # Should return early without scheduling
-    executor._schedule_callback_timeouts("test-arn", "op-123", "callback-id")
+    executor._schedule_callback_timeouts("test-arn", None, "callback-id")
 
     # No scheduler calls should be made
     assert len(executor._callback_timeouts) == 0
@@ -2437,24 +2341,10 @@ async def test_schedule_callback_timeouts_no_callback_details(executor, mock_sto
 
 
 async def test_schedule_callback_timeouts_no_callback_options(executor, mock_store):
-    """Test _schedule_callback_timeouts when no callback options are found."""
-
-    # Create operation with callback details but no matching updates
-    operation = Operation(
-        operation_id="op-123",
-        operation_type=OperationType.CALLBACK,
-        status=OperationStatus.STARTED,
-        callback_details=CallbackDetails(callback_id="callback-id"),
-    )
-
-    mock_execution = Mock()
-    mock_execution.find_operation.return_value = (0, operation)
-    mock_execution.updates = []  # No updates with callback options
-    mock_execution.invocation_completions = []
-    mock_store.load.return_value = mock_execution
+    """Test _schedule_callback_timeouts when callback options are None."""
 
     # Should return early without scheduling
-    executor._schedule_callback_timeouts("test-arn", "op-123", "callback-id")
+    executor._schedule_callback_timeouts("test-arn", None, "callback-id")
 
     # No scheduler calls should be made
     assert len(executor._callback_timeouts) == 0
@@ -2490,7 +2380,7 @@ async def test_schedule_callback_timeouts_zero_timeouts(
     executor._completion_events["test-arn"] = Mock()
 
     # Should not schedule any timeouts
-    executor._schedule_callback_timeouts("test-arn", "op-123", "callback-id")
+    executor._schedule_callback_timeouts("test-arn", callback_options, "callback-id")
 
     # No scheduler calls should be made
     mock_scheduler.call_later.assert_not_called()
@@ -2535,19 +2425,19 @@ async def test_schedule_callback_timeouts_only_heartbeat_timeout(
 
 async def test_schedule_callback_timeouts_exception_handling(executor, mock_store):
     """Test _schedule_callback_timeouts handles exceptions gracefully."""
-    # Make get_execution raise an exception
-    mock_store.load.side_effect = Exception("Test error")
+    callback_options = CallbackOptions(timeout_seconds=60, heartbeat_timeout_seconds=0)
+    executor._scheduler.call_later.side_effect = Exception("Test error")
 
     # Should not raise exception
-    executor._schedule_callback_timeouts("test-arn", "op-123", "callback-id")
+    executor._schedule_callback_timeouts("test-arn", callback_options, "callback-id")
 
     # No timeouts should be scheduled
     assert len(executor._callback_timeouts) == 0
     assert len(executor._callback_heartbeats) == 0
 
 
-async def test_on_timed_out(executor, mock_store):
-    """Test on_timed_out method."""
+async def test_timeout_execution(executor, mock_store):
+    """Test timeout_execution method."""
     # Create real execution instance
     mock_start_input = Mock()
     mock_start_input.execution_name = "test-execution"
@@ -2564,7 +2454,7 @@ async def test_on_timed_out(executor, mock_store):
     error = ErrorObject.from_message("Execution timeout")
 
     with patch.object(executor, "_complete_events") as mock_complete_events:
-        executor.on_timed_out("test-arn", error)
+        executor.timeout_execution("test-arn", error)
 
     mock_store.load.assert_called_once_with(execution_arn="test-arn")
     mock_store.update.assert_called_once_with(execution)
@@ -2574,38 +2464,14 @@ async def test_on_timed_out(executor, mock_store):
     assert execution.result.error == error
 
 
-async def test_on_stopped(executor):
-    """Test on_stopped method."""
+async def test_stop_execution(executor):
+    """Test stop_execution method."""
     error = ErrorObject.from_message("Execution stopped")
 
     with patch.object(executor, "fail_execution") as mock_fail:
-        executor.on_stopped("test-arn", error)
+        executor.stop_execution("test-arn", error)
 
     mock_fail.assert_called_once_with("test-arn", error)
-
-
-async def test_notify_timed_out():
-    """Test notify_timed_out method."""
-    notifier = ExecutionNotifier()
-    observer = Mock()
-    notifier.add_observer(observer)
-
-    error = ErrorObject.from_message("Timeout error")
-    notifier.notify_timed_out("test-arn", error)
-
-    observer.on_timed_out.assert_called_once_with(execution_arn="test-arn", error=error)
-
-
-async def test_notify_stopped():
-    """Test notify_stopped method."""
-    notifier = ExecutionNotifier()
-    observer = Mock()
-    notifier.add_observer(observer)
-
-    error = ErrorObject.from_message("Stop error")
-    notifier.notify_stopped("test-arn", error)
-
-    observer.on_stopped.assert_called_once_with(execution_arn="test-arn", error=error)
 
 
 @patch("async_durable_execution.runner.local.executor.Execution")
@@ -2618,7 +2484,7 @@ async def test_start_execution_timeout_handler_notifies_timed_out(
     mock_scheduler.create_event.return_value = Mock()
 
     with patch.object(executor, "_invoke_execution"):
-        with patch.object(executor, "on_timed_out") as mock_timed_out:
+        with patch.object(executor, "timeout_execution") as mock_timed_out:
             executor.start_execution(start_input)
             timeout_handler = mock_scheduler.call_later.call_args_list[0][0][0]
             timeout_handler()
@@ -2853,16 +2719,15 @@ async def test_on_wait_succeeded_logs_exceptions(executor, mock_store):
     mock_store.update.assert_not_called()
 
 
-async def test_on_callback_created_schedules_timeouts(executor):
+async def test_schedule_callback_timeouts_schedules_timeouts(executor):
     callback_token = CallbackToken(execution_arn="test-arn", operation_id="callback-op")
     callback_options = CallbackOptions(timeout_seconds=10)
 
     with patch.object(executor, "_schedule_callback_timeouts") as mock_schedule:
-        executor.on_callback_created(
+        executor.schedule_callback_timeouts(
             "test-arn",
-            "callback-op",
             callback_options,
-            callback_token,
+            callback_token.to_str(),
         )
 
     mock_schedule.assert_called_once_with(

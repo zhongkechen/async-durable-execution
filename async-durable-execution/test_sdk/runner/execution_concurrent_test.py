@@ -3,7 +3,7 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from async_durable_execution.runner.local.execution import Execution
-from async_durable_execution.runner.model import StartDurableExecutionInput
+from async_durable_execution.runner.local.model import StartDurableExecutionInput
 
 
 def test_concurrent_token_generation():

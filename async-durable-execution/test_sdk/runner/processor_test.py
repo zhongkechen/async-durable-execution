@@ -34,26 +34,22 @@ def test_init():
     # This indirectly verifies that internal components were initialized
     assert client is not None
 
-    # Test that we can add observers (verifies notifier is initialized)
-    observer = Mock()
-    client.add_execution_observer(observer)  # Should not raise an exception
+    executor = Mock()
+    client.bind_executor(executor)
+    assert client._executor is executor  # noqa: SLF001
 
 
-@patch("async_durable_execution.runner.local.ExecutionNotifier")
-def test_add_execution_observer(mock_notifier_class):
-    """Test adding execution observer."""
+def test_bind_executor():
+    """Test binding the local executor."""
     store = Mock(spec=InMemoryExecutionStore)
     scheduler = Mock(spec=Scheduler)
-    mock_notifier_instance = Mock()
-    mock_notifier_class.return_value = mock_notifier_instance
 
     client = InMemoryServiceClient(store, scheduler)
-    observer = Mock()
+    executor = Mock()
 
-    client.add_execution_observer(observer)
+    client.bind_executor(executor)
 
-    # Verify observer was added through the notifier's public method
-    mock_notifier_instance.add_observer.assert_called_once_with(observer)
+    assert client._executor is executor  # noqa: SLF001
 
 
 @patch("async_durable_execution.runner.local.CheckpointValidator")
@@ -67,6 +63,8 @@ def test_process_checkpoint_success(mock_transformer_class, mock_validator):
     mock_transformer_class.return_value = mock_transformer_instance
 
     client = InMemoryServiceClient(store, scheduler)
+    executor = Mock()
+    client.bind_executor(executor)
 
     # Mock execution
     execution = Mock(spec=Execution)
@@ -187,6 +185,8 @@ def test_process_checkpoint_updates_execution_state(
     mock_transformer_class.return_value = mock_transformer_instance
 
     client = InMemoryServiceClient(store, scheduler)
+    executor = Mock()
+    client.bind_executor(executor)
 
     # Mock execution
     execution = Mock(spec=Execution)
@@ -312,7 +312,7 @@ from async_durable_execution.runner.exceptions import (
     InvalidParameterValueException,
 )
 from async_durable_execution.runner.local.execution import Execution
-from async_durable_execution.runner.model import (
+from async_durable_execution.runner.local.model import (
     StartDurableExecutionInput,
     CheckpointToken,
 )

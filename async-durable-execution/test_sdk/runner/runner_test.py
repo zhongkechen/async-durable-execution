@@ -31,6 +31,8 @@ from async_durable_execution.runner.exceptions import (
 from async_durable_execution.runner.local.execution import Execution
 from async_durable_execution.runner.model import (
     GetDurableExecutionHistoryResponse,
+)
+from async_durable_execution.runner.local.model import (
     StartDurableExecutionInput,
     StartDurableExecutionOutput,
 )
@@ -258,8 +260,8 @@ async def test_durable_function_test_runner_init(
         service_client=mock_client.return_value,
     )
 
-    # Verify observer pattern setup
-    mock_client.return_value.add_execution_observer.assert_called_once_with(
+    # Verify service client binds directly to the single local executor.
+    mock_client.return_value.bind_executor.assert_called_once_with(
         mock_executor.return_value
     )
 

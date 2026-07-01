@@ -34,7 +34,7 @@ from async_durable_execution.runner.local import (
     InProcessInvoker,
     create_test_lambda_context,
 )
-from async_durable_execution.runner.model import (
+from async_durable_execution.runner.local.model import (
     LambdaContext,
     StartDurableExecutionInput,
 )

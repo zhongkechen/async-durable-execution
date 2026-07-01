@@ -8,6 +8,7 @@ import json
 import pytest
 
 from async_durable_execution.models import (
+    CheckpointUpdatedExecutionState,
     OperationStatus,
     OperationType,
 )
@@ -25,13 +26,9 @@ from async_durable_execution.runner.model import (
     ChainedInvokeStoppedDetails,
     ChainedInvokeSucceededDetails,
     ChainedInvokeTimedOutDetails,
-    CheckpointDurableExecutionRequest,
-    CheckpointDurableExecutionResponse,
-    CheckpointUpdatedExecutionState,
     ContextFailedDetails,
     ContextStartedDetails,
     ContextSucceededDetails,
-    ErrorResponse,
     Event,
     EventError,
     EventInput,
@@ -41,31 +38,26 @@ from async_durable_execution.runner.model import (
     ExecutionStoppedDetails,
     ExecutionSucceededDetails,
     ExecutionTimedOutDetails,
-    GetDurableExecutionHistoryRequest,
     GetDurableExecutionHistoryResponse,
-    GetDurableExecutionRequest,
     GetDurableExecutionResponse,
-    GetDurableExecutionStateRequest,
-    GetDurableExecutionStateResponse,
     InvocationCompletedDetails,
     RetryDetails,
-    SendDurableExecutionCallbackFailureRequest,
-    SendDurableExecutionCallbackFailureResponse,
-    SendDurableExecutionCallbackHeartbeatRequest,
-    SendDurableExecutionCallbackHeartbeatResponse,
-    SendDurableExecutionCallbackSuccessRequest,
-    SendDurableExecutionCallbackSuccessResponse,
-    StartDurableExecutionInput,
-    StartDurableExecutionOutput,
     StepFailedDetails,
     StepStartedDetails,
     StepSucceededDetails,
-    StopDurableExecutionRequest,
-    StopDurableExecutionResponse,
     WaitCancelledDetails,
     WaitStartedDetails,
     WaitSucceededDetails,
     events_to_operations,
+)
+from async_durable_execution.runner.local.model import (
+    CheckpointDurableExecutionResponse,
+    GetDurableExecutionStateResponse,
+    SendDurableExecutionCallbackFailureResponse,
+    SendDurableExecutionCallbackHeartbeatResponse,
+    SendDurableExecutionCallbackSuccessResponse,
+    StartDurableExecutionInput,
+    StartDurableExecutionOutput,
 )
 
 
@@ -211,26 +203,6 @@ def test_start_durable_execution_output_empty():
     assert result_data == {}
 
 
-def test_get_durable_execution_request_serialization():
-    """Test GetDurableExecutionRequest from_dict/to_dict round-trip."""
-    data = {
-        "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test"
-    }
-
-    request_obj = GetDurableExecutionRequest.from_dict(data)
-    assert (
-        request_obj.durable_execution_arn
-        == "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test"
-    )
-
-    result_data = request_obj.to_dict()
-    assert result_data == data
-
-    # Test round-trip
-    round_trip = GetDurableExecutionRequest.from_dict(result_data)
-    assert round_trip == request_obj
-
-
 def test_get_durable_execution_response_serialization():
     """Test GetDurableExecutionResponse from_dict/to_dict round-trip."""
     data = {
@@ -293,103 +265,6 @@ def test_get_durable_execution_response_minimal():
     assert result_data == data
 
 
-def test_stop_durable_execution_request_serialization():
-    """Test StopDurableExecutionRequest from_dict/to_dict round-trip."""
-    data = {
-        "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
-        "Error": {"ErrorMessage": "Stopped by user"},
-    }
-
-    request_obj = StopDurableExecutionRequest.from_dict(data)
-    assert (
-        request_obj.durable_execution_arn
-        == "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test"
-    )
-    assert request_obj.error.message == "Stopped by user"
-
-    result_data = request_obj.to_dict()
-    assert result_data == data
-
-    # Test round-trip
-    round_trip = StopDurableExecutionRequest.from_dict(result_data)
-    assert round_trip == request_obj
-
-
-def test_stop_durable_execution_request_minimal():
-    """Test StopDurableExecutionRequest with only required fields."""
-    data = {
-        "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test"
-    }
-
-    request_obj = StopDurableExecutionRequest.from_dict(data)
-    assert request_obj.error is None
-
-    result_data = request_obj.to_dict()
-    assert result_data == data
-
-
-def test_stop_durable_execution_response_serialization():
-    """Test StopDurableExecutionResponse from_dict/to_dict round-trip."""
-    data = {"StopTimestamp": "2023-01-01T00:01:00Z"}
-
-    response_obj = StopDurableExecutionResponse.from_dict(data)
-    assert response_obj.stop_timestamp == "2023-01-01T00:01:00Z"
-
-    result_data = response_obj.to_dict()
-    assert result_data == data
-
-    # Test round-trip
-    round_trip = StopDurableExecutionResponse.from_dict(result_data)
-    assert round_trip == response_obj
-
-
-def test_get_durable_execution_state_request_serialization():
-    """Test GetDurableExecutionStateRequest from_dict/to_dict round-trip."""
-    data = {
-        "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
-        "CheckpointToken": "checkpoint-123",
-        "Marker": "marker-123",
-        "MaxItems": 10,
-    }
-
-    request_obj = GetDurableExecutionStateRequest.from_dict(data)
-    assert (
-        request_obj.durable_execution_arn
-        == "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test"
-    )
-    assert request_obj.checkpoint_token == "checkpoint-123"  # noqa: S105
-    assert request_obj.marker == "marker-123"
-    assert request_obj.max_items == 10
-
-    result_data = request_obj.to_dict()
-    assert result_data == data
-
-    # Test round-trip
-    round_trip = GetDurableExecutionStateRequest.from_dict(result_data)
-    assert round_trip == request_obj
-
-
-def test_get_durable_execution_state_request_minimal():
-    """Test GetDurableExecutionStateRequest with only required fields."""
-    data = {
-        "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
-        "CheckpointToken": "checkpoint-123",
-    }
-
-    request_obj = GetDurableExecutionStateRequest.from_dict(data)
-    assert request_obj.marker is None
-    assert request_obj.max_items == 0  # Default value from Smithy
-
-    result_data = request_obj.to_dict()
-    # The result should include the default MaxItems
-    expected_data = {
-        "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
-        "CheckpointToken": "checkpoint-123",
-        "MaxItems": 0,
-    }
-    assert result_data == expected_data
-
-
 def test_get_durable_execution_state_response_serialization():
     """Test GetDurableExecutionStateResponse from_dict/to_dict round-trip."""
     data = {
@@ -426,55 +301,6 @@ def test_get_durable_execution_state_response_empty():
 
     result_data = response_obj.to_dict()
     assert result_data == {"Operations": []}
-
-
-def test_get_durable_execution_history_request_serialization():
-    """Test GetDurableExecutionHistoryRequest from_dict/to_dict round-trip."""
-    data = {
-        "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
-        "IncludeExecutionData": True,
-        "ReverseOrder": False,
-        "Marker": "marker-123",
-        "MaxItems": 20,
-    }
-
-    request_obj = GetDurableExecutionHistoryRequest.from_dict(data)
-    assert (
-        request_obj.durable_execution_arn
-        == "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test"
-    )
-    assert request_obj.include_execution_data is True
-    assert request_obj.reverse_order is False
-    assert request_obj.marker == "marker-123"
-    assert request_obj.max_items == 20
-
-    result_data = request_obj.to_dict()
-    assert result_data == data
-
-    # Test round-trip
-    round_trip = GetDurableExecutionHistoryRequest.from_dict(result_data)
-    assert round_trip == request_obj
-
-
-def test_get_durable_execution_history_request_minimal():
-    """Test GetDurableExecutionHistoryRequest with only required fields."""
-    data = {
-        "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test"
-    }
-
-    request_obj = GetDurableExecutionHistoryRequest.from_dict(data)
-    assert request_obj.include_execution_data is None
-    assert request_obj.reverse_order is None
-    assert request_obj.marker is None
-    assert request_obj.max_items == 0  # Default value from Smithy
-
-    result_data = request_obj.to_dict()
-    # The result should include the default MaxItems
-    expected_data = {
-        "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
-        "MaxItems": 0,
-    }
-    assert result_data == expected_data
 
 
 def test_execution_event_serialization():
@@ -589,76 +415,10 @@ def test_get_durable_execution_history_response_empty():
     assert result_data == {"Events": []}
 
 
-def test_send_durable_execution_callback_success_request_serialization():
-    """Test SendDurableExecutionCallbackSuccessRequest from_dict/to_dict round-trip."""
-    data = {
-        "CallbackId": "callback-123",
-        "Result": "success-result",
-    }
-
-    request_obj = SendDurableExecutionCallbackSuccessRequest.from_dict(data)
-    assert request_obj.callback_id == "callback-123"
-    assert request_obj.result == "success-result"
-
-    result_data = request_obj.to_dict()
-    assert result_data == data
-
-    # Test round-trip
-    round_trip = SendDurableExecutionCallbackSuccessRequest.from_dict(result_data)
-    assert round_trip == request_obj
-
-
-def test_send_durable_execution_callback_success_request_minimal():
-    """Test SendDurableExecutionCallbackSuccessRequest with only required fields."""
-    data = {"CallbackId": "callback-123"}
-
-    request_obj = SendDurableExecutionCallbackSuccessRequest.from_dict(data)
-    assert request_obj.result is None
-
-    result_data = request_obj.to_dict()
-    assert result_data == data
-
-
 def test_send_durable_execution_callback_success_response_creation():
     """Test SendDurableExecutionCallbackSuccessResponse creation."""
     response_obj = SendDurableExecutionCallbackSuccessResponse()
     assert isinstance(response_obj, SendDurableExecutionCallbackSuccessResponse)
-
-
-def test_send_durable_execution_callback_failure_request_serialization():
-    """Test SendDurableExecutionCallbackFailureRequest from_dict/to_dict round-trip."""
-    data = {"ErrorMessage": "callback failed"}
-
-    request_obj = SendDurableExecutionCallbackFailureRequest.from_dict(
-        data, "callback-123"
-    )
-    assert request_obj.callback_id == "callback-123"
-    assert request_obj.error.message == "callback failed"
-
-    result_data = request_obj.to_dict()
-    expected_data = {
-        "CallbackId": "callback-123",
-        "Error": {"ErrorMessage": "callback failed"},
-    }
-    assert result_data == expected_data
-
-    # Test round-trip
-    round_trip = SendDurableExecutionCallbackFailureRequest.from_dict(
-        result_data.get("Error", {}), result_data["CallbackId"]
-    )
-    assert round_trip == request_obj
-
-
-def test_send_durable_execution_callback_failure_request_minimal():
-    """Test SendDurableExecutionCallbackFailureRequest with only required fields."""
-
-    request_obj = SendDurableExecutionCallbackFailureRequest.from_dict(
-        {}, "callback-123"
-    )
-    assert request_obj.error is None
-
-    result_data = request_obj.to_dict()
-    assert result_data == {"CallbackId": "callback-123"}
 
 
 def test_send_durable_execution_callback_failure_response_creation():
@@ -667,78 +427,10 @@ def test_send_durable_execution_callback_failure_response_creation():
     assert isinstance(response_obj, SendDurableExecutionCallbackFailureResponse)
 
 
-def test_send_durable_execution_callback_heartbeat_request_serialization():
-    """Test SendDurableExecutionCallbackHeartbeatRequest from_dict/to_dict round-trip."""
-    data = {"CallbackId": "callback-123"}
-
-    request_obj = SendDurableExecutionCallbackHeartbeatRequest.from_dict(data)
-    assert request_obj.callback_id == "callback-123"
-
-    result_data = request_obj.to_dict()
-    assert result_data == data
-
-    # Test round-trip
-    round_trip = SendDurableExecutionCallbackHeartbeatRequest.from_dict(result_data)
-    assert round_trip == request_obj
-
-
 def test_send_durable_execution_callback_heartbeat_response_creation():
     """Test SendDurableExecutionCallbackHeartbeatResponse creation."""
     response_obj = SendDurableExecutionCallbackHeartbeatResponse()
     assert isinstance(response_obj, SendDurableExecutionCallbackHeartbeatResponse)
-
-
-def test_checkpoint_durable_execution_request_serialization():
-    """Test CheckpointDurableExecutionRequest from_dict/to_dict round-trip."""
-    execution_arn = (
-        "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test"
-    )
-    data = {
-        "CheckpointToken": "checkpoint-123",
-        "Updates": [
-            {"Id": "op-1", "Type": "STEP", "Action": "SUCCEED"},
-            {"Id": "op-2", "Type": "CONTEXT", "Action": "START"},
-        ],
-        "ClientToken": "client-token-123",
-    }
-
-    request_obj = CheckpointDurableExecutionRequest.from_dict(data, execution_arn)
-    assert request_obj.durable_execution_arn == execution_arn
-    assert request_obj.checkpoint_token == "checkpoint-123"  # noqa: S105
-    assert len(request_obj.updates) == 2
-    assert request_obj.updates[0].operation_id == "op-1"
-    assert request_obj.updates[0].operation_type.value == "STEP"
-    assert request_obj.updates[0].action.value == "SUCCEED"
-    assert request_obj.updates[1].operation_id == "op-2"
-    assert request_obj.updates[1].operation_type.value == "CONTEXT"
-    assert request_obj.updates[1].action.value == "START"
-    assert request_obj.client_token == "client-token-123"  # noqa: S105
-
-    result_data = request_obj.to_dict()
-    expected_data = {"DurableExecutionArn": execution_arn, **data}
-    assert result_data == expected_data
-
-    # Test round-trip
-    round_trip = CheckpointDurableExecutionRequest.from_dict(result_data, execution_arn)
-    assert round_trip == request_obj
-
-
-def test_checkpoint_durable_execution_request_minimal():
-    """Test CheckpointDurableExecutionRequest with only required fields."""
-    execution_arn = (
-        "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test"
-    )
-    data = {
-        "CheckpointToken": "checkpoint-123",
-    }
-
-    request_obj = CheckpointDurableExecutionRequest.from_dict(data, execution_arn)
-    assert request_obj.updates is None
-    assert request_obj.client_token is None
-
-    result_data = request_obj.to_dict()
-    expected_data = {"DurableExecutionArn": execution_arn, **data}
-    assert result_data == expected_data
 
 
 def test_checkpoint_durable_execution_response_serialization():
@@ -775,158 +467,6 @@ def test_checkpoint_durable_execution_response_minimal():
 
     result_data = response_obj.to_dict()
     assert result_data == data
-
-
-def test_error_response_creation():
-    """Test ErrorResponse creation with all fields."""
-    error_response = ErrorResponse(
-        error_type="InvalidParameterValueException",
-        error_message="Invalid parameter value",
-        error_code="INVALID_PARAMETER",
-        request_id="req-123",
-    )
-
-    assert error_response.error_type == "InvalidParameterValueException"
-    assert error_response.error_message == "Invalid parameter value"
-    assert error_response.error_code == "INVALID_PARAMETER"
-    assert error_response.request_id == "req-123"
-
-
-def test_error_response_creation_minimal():
-    """Test ErrorResponse creation with minimal fields."""
-    error_response = ErrorResponse(
-        error_type="ServiceException",
-        error_message="Internal server error",
-    )
-
-    assert error_response.error_type == "ServiceException"
-    assert error_response.error_message == "Internal server error"
-    assert error_response.error_code is None
-    assert error_response.request_id is None
-
-
-def test_error_response_to_dict_complete():
-    """Test ErrorResponse.to_dict() with all fields."""
-    error_response = ErrorResponse(
-        error_type="ResourceNotFoundException",
-        error_message="Resource not found",
-        error_code="RESOURCE_NOT_FOUND",
-        request_id="req-456",
-    )
-
-    result = error_response.to_dict()
-
-    expected = {
-        "error": {
-            "type": "ResourceNotFoundException",
-            "message": "Resource not found",
-            "code": "RESOURCE_NOT_FOUND",
-            "requestId": "req-456",
-        }
-    }
-
-    assert result == expected
-
-
-def test_error_response_to_dict_minimal():
-    """Test ErrorResponse.to_dict() with minimal fields."""
-    error_response = ErrorResponse(
-        error_type="ConflictException",
-        error_message="Resource conflict",
-    )
-
-    result = error_response.to_dict()
-
-    expected = {
-        "error": {
-            "type": "ConflictException",
-            "message": "Resource conflict",
-        }
-    }
-
-    assert result == expected
-
-
-def test_error_response_from_dict_nested():
-    """Test ErrorResponse.from_dict() with nested error structure."""
-    data = {
-        "error": {
-            "type": "InvalidParameterValueException",
-            "message": "Invalid input",
-            "code": "INVALID_INPUT",
-            "requestId": "req-789",
-        }
-    }
-
-    error_response = ErrorResponse.from_dict(data)
-
-    assert error_response.error_type == "InvalidParameterValueException"
-    assert error_response.error_message == "Invalid input"
-    assert error_response.error_code == "INVALID_INPUT"
-    assert error_response.request_id == "req-789"
-
-
-def test_error_response_from_dict_flat():
-    """Test ErrorResponse.from_dict() with flat error structure."""
-    data = {
-        "type": "ServiceException",
-        "message": "Internal error",
-        "code": "INTERNAL_ERROR",
-    }
-
-    error_response = ErrorResponse.from_dict(data)
-
-    assert error_response.error_type == "ServiceException"
-    assert error_response.error_message == "Internal error"
-    assert error_response.error_code == "INTERNAL_ERROR"
-    assert error_response.request_id is None
-
-
-def test_error_response_from_dict_minimal():
-    """Test ErrorResponse.from_dict() with minimal fields."""
-    data = {
-        "error": {
-            "type": "TooManyRequestsException",
-            "message": "Rate limit exceeded",
-        }
-    }
-
-    error_response = ErrorResponse.from_dict(data)
-
-    assert error_response.error_type == "TooManyRequestsException"
-    assert error_response.error_message == "Rate limit exceeded"
-    assert error_response.error_code is None
-    assert error_response.request_id is None
-
-
-def test_error_response_round_trip():
-    """Test ErrorResponse round-trip serialization."""
-    original = ErrorResponse(
-        error_type="ExecutionAlreadyStartedException",
-        error_message="Execution already exists",
-        error_code="EXECUTION_ALREADY_STARTED",
-        request_id="req-round-trip",
-    )
-
-    # Convert to dict and back
-    data = original.to_dict()
-    restored = ErrorResponse.from_dict(data)
-
-    assert restored.error_type == original.error_type
-    assert restored.error_message == original.error_message
-    assert restored.error_code == original.error_code
-    assert restored.request_id == original.request_id
-
-
-def test_error_response_immutable():
-    """Test that ErrorResponse is immutable (frozen dataclass)."""
-    error_response = ErrorResponse(
-        error_type="TestException",
-        error_message="Test message",
-    )
-
-    with pytest.raises(AttributeError):
-        error_response.error_type = "ModifiedException"
 
 
 # Tests for missing coverage in StartDurableExecutionInput
@@ -1009,24 +549,6 @@ def test_start_durable_execution_input_missing_required_fields():
     with pytest.raises(InvalidParameterValueException) as exc_info:
         StartDurableExecutionInput.from_dict(data)
     assert "Missing required field: ExecutionRetentionPeriodDays" in str(exc_info.value)
-
-
-# Tests for GetDurableExecutionStateRequest with all optional fields
-def test_get_durable_execution_state_request_all_optional_fields():
-    """Test GetDurableExecutionStateRequest to_dict with all optional fields as None."""
-    request_obj = GetDurableExecutionStateRequest(
-        durable_execution_arn="arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
-        checkpoint_token="checkpoint-123",  # noqa: S106
-        marker=None,
-        max_items=None,
-    )
-
-    result_data = request_obj.to_dict()
-    expected_data = {
-        "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
-        "CheckpointToken": "checkpoint-123",
-    }
-    assert result_data == expected_data
 
 
 # Tests for EventInput
@@ -2485,75 +2007,6 @@ def test_event_with_callback_timed_out_details():
                 "Truncated": False,
             }
         },
-    }
-    assert result_data == expected_data
-
-
-# Tests for GetDurableExecutionHistoryRequest with all optional fields
-def test_get_durable_execution_history_request_all_optional_fields():
-    """Test GetDurableExecutionHistoryRequest to_dict with all optional fields as None."""
-    request_obj = GetDurableExecutionHistoryRequest(
-        durable_execution_arn="arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
-        include_execution_data=None,
-        reverse_order=None,
-        marker=None,
-        max_items=None,
-    )
-
-    result_data = request_obj.to_dict()
-    expected_data = {
-        "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
-    }
-    assert result_data == expected_data
-
-
-def test_get_durable_execution_history_request_partial_fields():
-    """Test GetDurableExecutionHistoryRequest to_dict with some optional fields."""
-    request_obj = GetDurableExecutionHistoryRequest(
-        durable_execution_arn="arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
-        include_execution_data=True,
-        reverse_order=None,
-        marker="marker-123",
-        max_items=20,
-    )
-
-    result_data = request_obj.to_dict()
-    expected_data = {
-        "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
-        "IncludeExecutionData": True,
-        "Marker": "marker-123",
-        "MaxItems": 20,
-    }
-    assert result_data == expected_data
-
-
-# Tests for SendDurableExecutionCallbackSuccessRequest with optional result
-def test_send_durable_execution_callback_success_request_with_result():
-    """Test SendDurableExecutionCallbackSuccessRequest to_dict with result."""
-    request_obj = SendDurableExecutionCallbackSuccessRequest(
-        callback_id="callback-123",
-        result="success-result",
-    )
-
-    result_data = request_obj.to_dict()
-    expected_data = {
-        "CallbackId": "callback-123",
-        "Result": "success-result",
-    }
-    assert result_data == expected_data
-
-
-# Tests for SendDurableExecutionCallbackFailureRequest with optional error
-def test_send_durable_execution_callback_failure_request_with_error():
-    """Test SendDurableExecutionCallbackFailureRequest to_dict with error."""
-    request_obj = SendDurableExecutionCallbackFailureRequest(
-        callback_id="callback-123",
-        error=None,
-    )
-
-    result_data = request_obj.to_dict()
-    expected_data = {
-        "CallbackId": "callback-123",
     }
     assert result_data == expected_data
 

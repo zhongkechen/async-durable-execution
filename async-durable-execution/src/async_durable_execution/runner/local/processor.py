@@ -50,7 +50,7 @@ class OperationTransformer:
         self,
         updates: list[OperationUpdate],
         current_operations: list[Operation],
-        notifier,
+        runner,
         execution_arn: str,
     ) -> tuple[list[Operation], list[OperationUpdate]]:
         """Transform updates maintaining operation order and return (operations, updates)."""
@@ -66,7 +66,7 @@ class OperationTransformer:
                 updated_op = processor.process(
                     update=update,
                     current_op=current_op,
-                    notifier=notifier,
+                    notifier=runner,
                     execution_arn=execution_arn,
                 )
 

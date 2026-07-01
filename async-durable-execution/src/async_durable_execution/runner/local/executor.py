@@ -16,6 +16,7 @@ from async_durable_execution.execution import (
 from async_durable_execution.models import (
     CallbackOptions,
     CallbackTimeoutType,
+    CheckpointUpdatedExecutionState,
     ErrorObject,
     Operation,
     OperationStatus,
@@ -29,11 +30,15 @@ from ..exceptions import (
 )
 from ..model import (
     TERMINAL_STATUSES,
-    CallbackToken,
-    CheckpointDurableExecutionResponse,
-    CheckpointUpdatedExecutionState,
     EventCreationContext,
     GetDurableExecutionHistoryResponse,
+)
+from ..model import (
+    Event as HistoryEvent,
+)
+from .model import (
+    CallbackToken,
+    CheckpointDurableExecutionResponse,
     GetDurableExecutionStateResponse,
     Invoker,
     SendDurableExecutionCallbackFailureResponse,
@@ -42,10 +47,6 @@ from ..model import (
     StartDurableExecutionInput,
     StartDurableExecutionOutput,
 )
-from ..model import (
-    Event as HistoryEvent,
-)
-from .observer import ExecutionObserver
 from .time_scale import scale_delay
 from .execution import Execution
 
@@ -62,7 +63,7 @@ logger = logging.getLogger(__name__)
 _CALLBACK_TIMEOUT_MINIMUM_DELAY_SECONDS = 5.0
 
 
-class Executor(ExecutionObserver):
+class Executor:
     MAX_CONSECUTIVE_FAILED_ATTEMPTS: int = 5
     RETRY_BACKOFF_SECONDS: int = 5
 
@@ -121,7 +122,7 @@ class Executor(ExecutionObserver):
                 error = ErrorObject.from_message(
                     f"Execution timed out after {input.execution_timeout_seconds} seconds."
                 )
-                self.on_timed_out(execution.durable_execution_arn, error)
+                self.timeout_execution(execution.durable_execution_arn, error)
 
             self._execution_timeouts[execution.durable_execution_arn] = (
                 self._scheduler.call_later(
@@ -849,30 +850,22 @@ class Executor(ExecutionObserver):
         except Exception:
             logger.exception("[%s] Error processing retry ready.", execution_arn)
 
-    def on_completed(self, execution_arn: str, result: str | None = None) -> None:
-        """Complete execution successfully. Observer method triggered by notifier."""
-        self.complete_execution(execution_arn, result)
-
-    def on_failed(self, execution_arn: str, error: ErrorObject) -> None:
-        """Fail execution. Observer method triggered by notifier."""
-        self.fail_execution(execution_arn, error)
-
-    def on_timed_out(self, execution_arn: str, error: ErrorObject) -> None:
-        """Handle execution timeout (workflow timeout). Observer method triggered by notifier."""
+    def timeout_execution(self, execution_arn: str, error: ErrorObject) -> None:
+        """Handle execution timeout."""
         logger.exception("[%s] Execution timed out.", execution_arn)
         execution: Execution = self._store.load(execution_arn=execution_arn)
         execution.complete_timeout(error=error)  # Sets CloseStatus.TIMED_OUT
         self._store.update(execution)
         self._complete_events(execution_arn=execution_arn)
 
-    def on_stopped(self, execution_arn: str, error: ErrorObject) -> None:
-        """Handle execution stop. Observer method triggered by notifier."""
+    def stop_execution(self, execution_arn: str, error: ErrorObject) -> None:
+        """Handle execution stop."""
         self.fail_execution(execution_arn, error)
 
-    def on_wait_timer_scheduled(
+    def schedule_wait_timer(
         self, execution_arn: str, operation_id: str, delay: float
     ) -> None:
-        """Schedule a wait operation. Observer method triggered by notifier."""
+        """Schedule a wait operation."""
         logger.debug("[%s] scheduling wait with delay: %d", execution_arn, delay)
 
         def wait_handler() -> None:
@@ -884,10 +877,10 @@ class Executor(ExecutionObserver):
             wait_handler, delay=delay, completion_event=completion_event
         )
 
-    def on_step_retry_scheduled(
+    def schedule_step_retry(
         self, execution_arn: str, operation_id: str, delay: float
     ) -> None:
-        """Schedule a retry a step. Observer method triggered by notifier."""
+        """Schedule a step retry."""
         logger.debug(
             "[%s] scheduling retry for %s with delay: %d",
             execution_arn,
@@ -904,23 +897,13 @@ class Executor(ExecutionObserver):
             retry_handler, delay=delay, completion_event=completion_event
         )
 
-    def on_callback_created(
+    def schedule_callback_timeouts(
         self,
         execution_arn: str,
-        operation_id: str,
         callback_options: CallbackOptions | None,
-        callback_token: CallbackToken,
+        callback_id: str,
     ) -> None:
-        """Handle callback creation. Observer method triggered by notifier."""
-        callback_id = callback_token.to_str()
-        logger.debug(
-            "[%s] Callback created for operation %s with callback_id: %s",
-            execution_arn,
-            operation_id,
-            callback_id,
-        )
-
-        # Schedule callback timeouts if configured
+        """Schedule callback timeout and heartbeat timeout if configured."""
         self._schedule_callback_timeouts(execution_arn, callback_options, callback_id)
 
     def _schedule_callback_timeouts(

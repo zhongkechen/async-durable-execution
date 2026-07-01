@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING
+from typing import Any
 
 from async_durable_execution.models import (
     Operation,
@@ -19,10 +19,6 @@ from ...exceptions import (
     InvalidParameterValueException,
 )
 from ..time_scale import scale_delay
-
-if TYPE_CHECKING:
-    from ..observer import ExecutionNotifier
-
 
 VALID_ACTIONS_FOR_STEP = frozenset(
     [
@@ -100,7 +96,7 @@ class StepProcessor(OperationProcessor):
         self,
         update: OperationUpdate,
         current_op: Operation | None,
-        notifier: ExecutionNotifier,
+        notifier: Any,
         execution_arn: str,
     ) -> Operation:
         """Process STEP operation update with scheduler integration for retries."""
@@ -173,10 +169,8 @@ class StepProcessor(OperationProcessor):
                 )
 
                 # Schedule step retry timer to fire after delay
-                notifier.notify_step_retry_scheduled(
-                    execution_arn=execution_arn,
-                    operation_id=update.operation_id,
-                    delay=scaled_delay,
+                notifier.schedule_step_retry(
+                    execution_arn, update.operation_id, scaled_delay
                 )
                 return retry_operation
             case OperationAction.SUCCEED:

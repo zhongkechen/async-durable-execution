@@ -27,6 +27,8 @@ from ..exceptions import (
 # Import AWS exceptions
 from ..model import (
     InvocationCompletedDetails,
+)
+from .model import (
     StartDurableExecutionInput,
     CheckpointToken,
 )
