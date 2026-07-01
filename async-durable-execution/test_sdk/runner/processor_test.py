@@ -19,7 +19,7 @@ from async_durable_execution.runner.local import (
 from async_durable_execution.runner.exceptions import (
     InvalidParameterValueException,
 )
-from async_durable_execution.runner.execution import Execution
+from async_durable_execution.runner.local.execution import Execution
 from async_durable_execution.runner.local.scheduler import Scheduler
 
 
@@ -311,7 +311,7 @@ from async_durable_execution.runner.local.processor import (
 from async_durable_execution.runner.exceptions import (
     InvalidParameterValueException,
 )
-from async_durable_execution.runner.execution import Execution
+from async_durable_execution.runner.local.execution import Execution
 from async_durable_execution.runner.model import (
     StartDurableExecutionInput,
     CheckpointToken,

@@ -81,13 +81,15 @@ from .runner import (
     DurableFunctionCloudTestRunner,
     DurableFunctionLocalTestRunner,
     DurableFunctionTestResult,
-    create_runner,
+    create_cloud_runner,
+    create_local_runner,
 )
 
 __all__ = [
     "__version__",
     "create_callback",
-    "create_runner",
+    "create_cloud_runner",
+    "create_local_runner",
     "durable_callable",
     "durable_execution",
     "get_attempt",

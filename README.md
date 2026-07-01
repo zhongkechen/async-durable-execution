@@ -159,15 +159,14 @@ import json
 from async_durable_execution import (
     DurableFunctionTestResult,
     InvocationStatus,
-    create_runner,
+    create_local_runner,
 )
 
 from order_workflow import handler
 
 
 async def test_my_durable_function() -> None:
-    with create_runner(
-        mode="local",
+    with create_local_runner(
         handler=handler,
         input={"order_id": "order-123"},
         timeout=10,
@@ -192,25 +191,23 @@ async def test_my_durable_function() -> None:
     assert receipt_result.step_details.result == json.dumps(receipt)
 ```
 
-The `create_runner()` factory selects local or cloud mode from one call shape:
+Use the runner-specific factory for the environment you want to test:
 
 ```python
-from async_durable_execution import create_runner
+from async_durable_execution import create_cloud_runner, create_local_runner
 
 from order_workflow import handler
 
 
 async def test_with_factory() -> None:
-    with create_runner(
-        mode="local",
+    with create_local_runner(
         handler=handler,
         input={"order_id": "order-123"},
         timeout=12,
     ) as runner:
         local_result = await runner.run()
 
-    with create_runner(
-        mode="cloud",
+    with create_cloud_runner(
         function_name="order-workflow:$LATEST",
         region="us-east-1",
         input={"order_id": "order-123"},

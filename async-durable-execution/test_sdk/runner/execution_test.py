@@ -21,7 +21,7 @@ from async_durable_execution.runner.exceptions import (
     IllegalStateException,
     InvalidParameterValueException,
 )
-from async_durable_execution.runner.execution import Execution
+from async_durable_execution.runner.local.execution import Execution
 from async_durable_execution.runner.model import StartDurableExecutionInput
 
 
@@ -51,7 +51,7 @@ def test_execution_init():
     assert execution.consecutive_failed_invocation_attempts == 0
 
 
-@patch("async_durable_execution.runner.execution.uuid4")
+@patch("async_durable_execution.runner.local.execution.uuid4")
 def test_execution_new(mock_uuid4):
     """Test Execution.new static method."""
     mock_uuid = "test-uuid-123"
@@ -76,7 +76,7 @@ def test_execution_new(mock_uuid4):
     assert execution.operations == []
 
 
-@patch("async_durable_execution.runner.execution.datetime")
+@patch("async_durable_execution.runner.local.execution.datetime")
 def test_execution_start(mock_datetime):
     """Test Execution.start method."""
     mock_now = datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
@@ -477,7 +477,7 @@ def test_find_operation_not_exists():
         execution.find_operation("non-existent-id")
 
 
-@patch("async_durable_execution.runner.execution.datetime")
+@patch("async_durable_execution.runner.local.execution.datetime")
 def test_complete_wait_success(mock_datetime):
     """Test complete_wait method successful completion."""
     mock_now = datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)

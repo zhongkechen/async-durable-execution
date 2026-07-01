@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.runner.execution import Execution
+from async_durable_execution.runner.local.execution import Execution
 from async_durable_execution.runner.model import StartDurableExecutionInput
 from async_durable_execution.runner.local import InMemoryExecutionStore
 

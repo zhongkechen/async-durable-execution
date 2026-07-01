@@ -26,7 +26,7 @@ from async_durable_execution.runner.exceptions import (
     InvalidParameterValueException,
     ResourceNotFoundException,
 )
-from async_durable_execution.runner.execution import (
+from async_durable_execution.runner.local.execution import (
     Execution,
     ExecutionStatus,
 )
@@ -280,6 +280,8 @@ async def test_should_complete_workflow_with_error_when_invocation_fails(
     mock_execution.durable_execution_arn = "test-arn"
     mock_execution.is_complete = False
     mock_execution.start_input = start_input
+    mock_execution.operations = []
+    mock_execution.get_new_checkpoint_token.return_value = "checkpoint-token"
     mock_execution.consecutive_failed_invocation_attempts = 0
 
     # Mock invoker to return failed response
@@ -634,6 +636,8 @@ async def test_invoke_handler_success(
     mock_execution.durable_execution_arn = "test-arn"
     mock_execution.is_complete = False
     mock_execution.start_input = start_input
+    mock_execution.operations = []
+    mock_execution.get_new_checkpoint_token.return_value = "checkpoint-token"
 
     mock_invocation_input = Mock()
     mock_invoker.create_invocation_input.return_value = mock_invocation_input
@@ -663,7 +667,10 @@ async def test_invoke_handler_success(
 
     # Verify the invocation process was executed
     mock_invoker.create_invocation_input.assert_called_once_with(
-        execution=mock_execution
+        start_input=start_input,
+        durable_execution_arn="test-arn",
+        checkpoint_token="checkpoint-token",
+        operations=[],
     )
     mock_invoker.invoke.assert_called_once_with(
         "test-function", mock_invocation_input, None
@@ -1514,6 +1521,8 @@ async def test_invoke_handler_execution_completed_during_invocation_async(
     incomplete_execution.start_input = start_input
     incomplete_execution.consecutive_failed_invocation_attempts = 0
     incomplete_execution.durable_execution_arn = "test-arn"
+    incomplete_execution.operations = []
+    incomplete_execution.get_new_checkpoint_token.return_value = "checkpoint-token"
 
     completed_execution = Mock(spec=Execution)
     completed_execution.is_complete = True

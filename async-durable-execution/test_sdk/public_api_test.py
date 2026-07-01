@@ -10,7 +10,8 @@ from async_durable_execution import (
     DurableFunctionLocalTestRunner,
     DurableFunctionTestResult,
     create_callback,
-    create_runner,
+    create_cloud_runner,
+    create_local_runner,
     step,
     wait,
     parallel,
@@ -51,7 +52,8 @@ def test_additional_public_types_importable_from_package_root():
         "LambdaContext": LambdaContext,
         "OperationSubType": OperationSubType,
         "SummaryGenerator": SummaryGenerator,
-        "create_runner": create_runner,
+        "create_cloud_runner": create_cloud_runner,
+        "create_local_runner": create_local_runner,
     }
 
     for name, public_type in expected_exports.items():

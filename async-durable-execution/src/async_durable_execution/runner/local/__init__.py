@@ -26,7 +26,7 @@ from async_durable_execution.runner.exceptions import (
     InvalidParameterValueException,
     ResourceNotFoundException,
 )
-from async_durable_execution.runner.execution import Execution
+from async_durable_execution.runner.local.execution import Execution
 from async_durable_execution.runner.local.executor import Executor
 from async_durable_execution.runner.model import (
     CheckpointToken,
@@ -53,8 +53,25 @@ __all__ = [
     "InMemoryServiceClient",
     "InProcessInvoker",
     "Scheduler",
+    "create_local_runner",
     "create_test_lambda_context",
 ]
+
+
+def create_local_runner(
+    *,
+    handler: Callable,
+    poll_interval: float = 1.0,
+    input: Any = None,  # noqa: A002
+    timeout: int = 60,
+) -> DurableFunctionLocalTestRunner:
+    """Create a configured local durable function runner."""
+    return DurableFunctionLocalTestRunner(
+        handler=handler,
+        poll_interval=poll_interval,
+        input=input,
+        timeout=timeout,
+    )
 
 
 class DurableFunctionLocalTestRunner:
@@ -206,14 +223,18 @@ class InProcessInvoker(Invoker):
         self.service_client = service_client
 
     def create_invocation_input(
-        self, execution: Execution
+        self,
+        *,
+        start_input: StartDurableExecutionInput,  # noqa: ARG002
+        durable_execution_arn: str,
+        checkpoint_token: str,
+        operations: list[Operation],
     ) -> DurableExecutionInvocationInput:
         return DurableExecutionInvocationInput(
-            durable_execution_arn=execution.durable_execution_arn,
-            # TODO: this needs better logic - use existing if not used yet, vs create new
-            checkpoint_token=execution.get_new_checkpoint_token(),
+            durable_execution_arn=durable_execution_arn,
+            checkpoint_token=checkpoint_token,
             initial_execution_state=InitialExecutionState(
-                operations=execution.operations,
+                operations=operations,
                 next_marker="",
             ),
         )

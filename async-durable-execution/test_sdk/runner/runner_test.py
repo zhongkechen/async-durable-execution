@@ -12,7 +12,8 @@ from async_durable_execution import (
     DurableFunctionLocalTestRunner,
     DurableFunctionTestResult,
     InvocationStatus,
-    create_runner,
+    create_cloud_runner,
+    create_local_runner,
 )
 from async_durable_execution.models import (
     CallbackDetails,
@@ -25,10 +26,9 @@ from async_durable_execution.models import (
 from async_durable_execution.models import Operation
 from async_durable_execution.runner.exceptions import (
     DurableFunctionsTestError,
-    InvalidParameterValueException,
     ResourceNotFoundException,
 )
-from async_durable_execution.runner.execution import Execution
+from async_durable_execution.runner.local.execution import Execution
 from async_durable_execution.runner.model import (
     GetDurableExecutionHistoryResponse,
     StartDurableExecutionInput,
@@ -290,15 +290,14 @@ async def test_durable_function_cloud_test_runner_context_manager():
             mock_close.assert_called_once()
 
 
-@patch("async_durable_execution.runner.runner.DurableFunctionLocalTestRunner")
-async def test_create_runner_local_uses_configured_defaults(mock_local_runner_class):
-    """Test create_runner builds a local runner with default run values."""
+@patch("async_durable_execution.runner.local.DurableFunctionLocalTestRunner")
+async def test_create_local_runner_uses_configured_defaults(mock_local_runner_class):
+    """Test create_local_runner builds a local runner with default run values."""
     handler = Mock()
     mock_local_runner = Mock()
     mock_local_runner_class.return_value = mock_local_runner
 
-    runner = create_runner(
-        mode="local",
+    runner = create_local_runner(
         handler=handler,
         input={"hello": "world"},
         timeout=12,
@@ -314,14 +313,13 @@ async def test_create_runner_local_uses_configured_defaults(mock_local_runner_cl
     )
 
 
-@patch("async_durable_execution.runner.runner.DurableFunctionCloudTestRunner")
-async def test_create_runner_cloud_uses_configured_defaults(mock_cloud_runner_class):
-    """Test create_runner builds a cloud runner with default async values."""
+@patch("async_durable_execution.runner.cloud.DurableFunctionCloudTestRunner")
+async def test_create_cloud_runner_uses_configured_defaults(mock_cloud_runner_class):
+    """Test create_cloud_runner builds a cloud runner with default async values."""
     mock_cloud_runner = Mock()
     mock_cloud_runner_class.return_value = mock_cloud_runner
 
-    runner = create_runner(
-        mode="cloud",
+    runner = create_cloud_runner(
         function_name="hello-world:$LATEST",
         region="us-east-1",
         lambda_endpoint="https://example.com",
@@ -339,33 +337,6 @@ async def test_create_runner_cloud_uses_configured_defaults(mock_cloud_runner_cl
         input="payload",
         timeout=45,
     )
-
-
-async def test_create_runner_requires_handler_for_local_mode():
-    """Test local mode validation for create_runner."""
-    with pytest.raises(
-        InvalidParameterValueException,
-        match="handler is required when mode='local'",
-    ):
-        create_runner(mode="local")
-
-
-async def test_create_runner_requires_function_name_for_cloud_mode():
-    """Test cloud mode validation for create_runner."""
-    with pytest.raises(
-        InvalidParameterValueException,
-        match="function_name is required when mode='cloud'",
-    ):
-        create_runner(mode="cloud")
-
-
-async def test_create_runner_rejects_unknown_mode():
-    """Test mode validation for create_runner."""
-    with pytest.raises(
-        InvalidParameterValueException,
-        match="Unsupported runner mode: unsupported",
-    ):
-        create_runner(mode="unsupported")
 
 
 @patch("async_durable_execution.runner.local.Scheduler")

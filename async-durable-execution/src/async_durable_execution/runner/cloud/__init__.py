@@ -15,7 +15,6 @@ from botocore.session import get_session
 from async_durable_execution import ErrorObject
 from async_durable_execution.execution import (
     DurableExecutionInvocationInput,
-    InitialExecutionState,
 )
 from async_durable_execution.models import DurableExecutionInvocationOutput
 from async_durable_execution.runner.exceptions import (
@@ -23,18 +22,36 @@ from async_durable_execution.runner.exceptions import (
     InvalidParameterValueException,
     ResourceNotFoundException,
 )
-from async_durable_execution.runner.execution import Execution
 from async_durable_execution.runner.model import (
     GetDurableExecutionResponse,
     GetDurableExecutionHistoryResponse,
     _get_callback_id_from_events,
     InvokeResponse,
-    Invoker,
     DurableFunctionTestResult,
 )
 
 
 logger = logging.getLogger(__name__)
+
+
+def create_cloud_runner(
+    *,
+    function_name: str,
+    region: str = "us-west-2",
+    lambda_endpoint: str | None = None,
+    poll_interval: float = 1.0,
+    input: Any = None,  # noqa: A002
+    timeout: int = 60,
+) -> DurableFunctionCloudTestRunner:
+    """Create a configured cloud durable function runner."""
+    return DurableFunctionCloudTestRunner(
+        function_name=function_name,
+        region=region,
+        lambda_endpoint=lambda_endpoint,
+        poll_interval=poll_interval,
+        input=input,
+        timeout=timeout,
+    )
 
 
 class DurableFunctionCloudTestRunner:
@@ -384,7 +401,7 @@ class DurableFunctionCloudTestRunner:
         return history_response
 
 
-class LambdaInvoker(Invoker):
+class LambdaInvoker:
     def __init__(self, lambda_client: Any) -> None:
         self.lambda_client = lambda_client
         # Maps execution_arn -> endpoint for that execution
@@ -443,18 +460,6 @@ class LambdaInvoker(Invoker):
             return self.lambda_client
 
         return self._endpoint_clients[endpoint]
-
-    def create_invocation_input(
-        self, execution: Execution
-    ) -> DurableExecutionInvocationInput:
-        return DurableExecutionInvocationInput(
-            durable_execution_arn=execution.durable_execution_arn,
-            checkpoint_token=execution.get_new_checkpoint_token(),
-            initial_execution_state=InitialExecutionState(
-                operations=execution.operations,
-                next_marker="",
-            ),
-        )
 
     async def invoke(
         self,

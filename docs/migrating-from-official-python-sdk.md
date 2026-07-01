@@ -288,14 +288,13 @@ replay.
 Replace the official testing package with `async_durable_execution`.
 
 ```python
-from async_durable_execution import InvocationStatus, create_runner
+from async_durable_execution import InvocationStatus, create_local_runner
 
 from my_workflow import lambda_handler
 
 
 async def test_workflow() -> None:
-    with create_runner(
-        mode="local",
+    with create_local_runner(
         handler=lambda_handler,
         input={"order_id": "order-123"},
         timeout=10,

@@ -27,7 +27,6 @@ from ..exceptions import (
     InvalidParameterValueException,
     ResourceNotFoundException,
 )
-from ..execution import Execution
 from ..model import (
     TERMINAL_STATUSES,
     CallbackToken,
@@ -48,6 +47,7 @@ from ..model import (
 )
 from .observer import ExecutionObserver
 from .time_scale import scale_delay
+from .execution import Execution
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -603,8 +603,14 @@ class Executor(ExecutionObserver):
                 return
 
             try:
+                checkpoint_token = execution.get_new_checkpoint_token()
                 invocation_input: DurableExecutionInvocationInput = (
-                    self._invoker.create_invocation_input(execution=execution)
+                    self._invoker.create_invocation_input(
+                        start_input=execution.start_input,
+                        durable_execution_arn=execution.durable_execution_arn,
+                        checkpoint_token=checkpoint_token,
+                        operations=execution.operations,
+                    )
                 )
 
                 self._store.save(execution)

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from async_durable_execution import create_runner
+from async_durable_execution import create_cloud_runner, create_local_runner
 
 
 # Add the source root so package imports resolve in source checkouts.
@@ -99,9 +99,7 @@ def durable_runner(request, monkeypatch):
 
             logger.info("Using AWS region: %s", region)
 
-            return create_runner(
-                mode=runner_mode,
-                handler=handler,
+            return create_cloud_runner(
                 function_name=deployed_name,
                 region=region,
                 lambda_endpoint=lambda_endpoint,
@@ -117,8 +115,7 @@ def durable_runner(request, monkeypatch):
         except ValueError:
             poll_interval = 0.05
 
-        return create_runner(
-            mode=runner_mode,
+        return create_local_runner(
             handler=handler,
             input=input,
             timeout=timeout,
