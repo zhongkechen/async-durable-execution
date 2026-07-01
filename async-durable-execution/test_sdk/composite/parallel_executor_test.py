@@ -43,6 +43,7 @@ from async_durable_execution.models import (
 )
 from async_durable_execution.composite.map import _bind_map_item_to_branch
 from async_durable_execution.primitive.base import OperationExecutor
+from async_durable_execution.primitive.child import OrphanedChildException
 
 
 async def run_async(awaitable):
@@ -1178,6 +1179,38 @@ async def test_concurrent_executor_on_task_complete_exception():
 
     assert exe_state.status == BranchStatus.FAILED
     assert isinstance(exe_state.error, ValueError)
+
+
+async def test_concurrent_executor_on_task_complete_orphaned_child_is_ignored():
+    """Orphaned child completion exits without marking the branch failed."""
+
+    class TestExecutor(ParallelExecutor):
+        async def execute_item(self, child_context, executable):
+            return f"result_{executable.index}"
+
+    executables = [Executable(0, lambda: "test")]
+    executor = create_concurrent_executor(
+        TestExecutor,
+        executables=executables,
+        max_concurrency=1,
+        completion_config=CompletionConfig(),
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
+        name_prefix="test_",
+        serdes=None,
+    )
+
+    exe_state = ExecutableWithState(executables[0])
+    future = Mock()
+    future.result.side_effect = OrphanedChildException("orphaned", "child-1")
+    future.cancelled.return_value = False
+    exe_state.run(future)
+
+    await run_async(executor._on_task_complete(exe_state, future, Mock()))  # noqa: SLF001
+
+    assert exe_state.status == BranchStatus.RUNNING
+    assert executor.counters.success_count == 0
+    assert executor.counters.failure_count == 0
 
 
 async def test_concurrent_executor_create_result_with_early_exit():
@@ -2873,6 +2906,71 @@ async def test_concurrent_executor_replay_completed_with_failed_operations():
     assert len(result.all) == 1
     assert result.all[0].status == BatchItemStatus.FAILED
     assert result.all[0].error is not None
+
+
+async def test_concurrent_executor_replay_completed_with_missing_operation_started():
+    """Missing child checkpoints are preserved as STARTED batch items."""
+
+    async def func1():
+        return "result"
+
+    executor = create_concurrent_executor(
+        ParallelExecutor,
+        executables=[Executable(index=0, func=func1)],
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.PARALLEL,
+        iteration_sub_type=OperationSubType.PARALLEL_BRANCH,
+        name_prefix="parallel-branch-",
+        serdes=None,
+    )
+
+    execution_state = create_execution_state()
+    execution_state.operations.get.return_value = None
+    executor_context = create_executor_context(execution_state, step_id="child")
+
+    result = await run_async(
+        executor.replay_completed(execution_state, executor_context)
+    )
+
+    assert result.all == [
+        BatchItem(index=0, status=BatchItemStatus.STARTED),
+    ]
+
+
+async def test_concurrent_executor_replay_completed_succeeded_without_details():
+    """Succeeded child checkpoints without a payload still produce succeeded items."""
+
+    async def func1():
+        return "result"
+
+    executor = create_concurrent_executor(
+        ParallelExecutor,
+        executables=[Executable(index=0, func=func1)],
+        max_concurrency=None,
+        completion_config=CompletionConfig(),
+        top_level_sub_type=OperationSubType.PARALLEL,
+        iteration_sub_type=OperationSubType.PARALLEL_BRANCH,
+        name_prefix="parallel-branch-",
+        serdes=None,
+    )
+
+    execution_state = create_execution_state()
+    execution_state.operations.get.return_value = Operation(
+        operation_id="child_0",
+        operation_type=OperationType.CONTEXT,
+        status=OperationStatus.SUCCEEDED,
+        context_details=None,
+    )
+    executor_context = create_executor_context(execution_state, step_id="child")
+
+    result = await run_async(
+        executor.replay_completed(execution_state, executor_context)
+    )
+
+    assert result.all == [
+        BatchItem(index=0, status=BatchItemStatus.SUCCEEDED, result=None),
+    ]
 
 
 async def test_concurrent_executor_replay_completed_with_replay_children():
