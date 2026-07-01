@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from async_durable_execution.runner.scheduler import Event, Scheduler
+from async_durable_execution.runner.local import Scheduler, Event
 
 
 def wait_for_condition(condition_func, timeout_iterations=100):

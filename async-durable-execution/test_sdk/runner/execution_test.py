@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from async_durable_execution.execution import (
+    DurableExecutionInvocationOutput,
     InvocationStatus,
 )
 from async_durable_execution.models import (
@@ -18,6 +19,7 @@ from async_durable_execution.models import (
 )
 from async_durable_execution.runner.exceptions import (
     IllegalStateException,
+    InvalidParameterValueException,
 )
 from async_durable_execution.runner.execution import Execution
 from async_durable_execution.runner.model import StartDurableExecutionInput
@@ -1000,3 +1002,98 @@ def test_complete_callback_success_with_none_result():
     result = execution.complete_callback_success("test-id", None)
     assert result.status == OperationStatus.SUCCEEDED
     assert result.callback_details.result is None
+
+
+def test_start_requires_invocation_id():
+    """Test start rejects input without an invocation id."""
+    start_input = StartDurableExecutionInput(
+        account_id="123456789012",
+        function_name="test-function",
+        function_qualifier="$LATEST",
+        execution_name="test-execution",
+        execution_timeout_seconds=300,
+        execution_retention_period_days=7,
+        invocation_id=None,
+    )
+    execution = Execution("test-arn", start_input, [])
+
+    with pytest.raises(
+        InvalidParameterValueException, match="invocation_id is required"
+    ):
+        execution.start()
+
+
+def test_execution_to_json_dict_and_from_json_dict_round_trip_completed_execution():
+    """Test completed executions serialize and hydrate runner-only fields."""
+    start_input = StartDurableExecutionInput(
+        account_id="123456789012",
+        function_name="test-function",
+        function_qualifier="$LATEST",
+        execution_name="test-execution",
+        execution_timeout_seconds=300,
+        execution_retention_period_days=7,
+        invocation_id="test-invocation-id",
+        input='{"hello": "world"}',
+    )
+    execution = Execution("test-arn", start_input, [])
+    execution.start()
+    token = execution.get_new_checkpoint_token()
+    execution.record_invocation_completion(
+        start_timestamp=datetime(2023, 1, 1, 0, 0, tzinfo=timezone.utc),
+        end_timestamp=datetime(2023, 1, 1, 0, 1, tzinfo=timezone.utc),
+        request_id="request-1",
+    )
+    execution.complete_success('{"ok": true}')
+
+    restored = Execution.from_json_dict(execution.to_json_dict())
+
+    assert restored.durable_execution_arn == "test-arn"
+    assert restored.used_tokens == {token}
+    assert restored.token_sequence == 1
+    assert restored.is_complete is True
+    assert restored.close_status.value == "SUCCEEDED"
+    assert restored.result == DurableExecutionInvocationOutput(
+        status=InvocationStatus.SUCCEEDED,
+        result='{"ok": true}',
+    )
+    assert len(restored.invocation_completions) == 1
+    assert restored.invocation_completions[0].request_id == "request-1"
+
+
+def test_complete_callback_timeout_success():
+    """Test callback timeout updates operation details and token sequence."""
+    callback_details = CallbackDetails(callback_id="test-id")
+    callback_op = Operation(
+        operation_id="op-1",
+        operation_type=OperationType.CALLBACK,
+        status=OperationStatus.STARTED,
+        callback_details=callback_details,
+    )
+    execution = Execution("test-arn", Mock(), [callback_op])
+    error = ErrorObject.from_message("timed out")
+
+    result = execution.complete_callback_timeout("test-id", error)
+
+    assert result.status == OperationStatus.TIMED_OUT
+    assert result.callback_details.error == error
+    assert result.end_timestamp is not None
+    assert execution.token_sequence == 1
+
+
+def test_complete_callback_timeout_not_started():
+    """Test callback timeout rejects callbacks outside STARTED state."""
+    callback_op = Operation(
+        operation_id="op-1",
+        operation_type=OperationType.CALLBACK,
+        status=OperationStatus.SUCCEEDED,
+        callback_details=CallbackDetails(callback_id="test-id"),
+    )
+    execution = Execution("test-arn", Mock(), [callback_op])
+
+    with pytest.raises(
+        IllegalStateException,
+        match="Callback operation \\[test-id\\] is not in STARTED state",
+    ):
+        execution.complete_callback_timeout(
+            "test-id", ErrorObject.from_message("timed out")
+        )

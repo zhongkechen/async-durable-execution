@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import base64
 import datetime
 import json
+import logging
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, replace, field
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any, Protocol
 
-from async_durable_execution.execution import DurableExecutionInvocationOutput
+from async_durable_execution.execution import (
+    DurableExecutionInvocationInput,
+)
 
 # Import existing types from the main SDK - REUSE EVERYTHING POSSIBLE
 from async_durable_execution.models import (
@@ -19,26 +23,34 @@ from async_durable_execution.models import (
     ChainedInvokeOptions,
     ContextDetails,
     ContextOptions,
-    ErrorObject,
     ExecutionDetails,
     Operation,
     OperationAction,
     OperationStatus,
     OperationSubType,
-    OperationType,
     OperationUpdate,
     StepDetails,
     StepOptions,
     TimestampConverter,
     WaitDetails,
     WaitOptions,
+    OperationPayload,
+    DurableExecutionInvocationOutput,
 )
 from async_durable_execution.models import (
     LambdaContext as LambdaContextProtocol,
 )
 from .exceptions import (
     InvalidParameterValueException,
+    DurableFunctionsTestError,
 )
+from .. import InvocationStatus, ErrorObject, OperationType, ExtendedTypeSerDes
+
+if TYPE_CHECKING:
+    from .execution import Execution
+
+
+logger = logging.getLogger(__name__)
 
 
 class EventType(Enum):
@@ -2932,3 +2944,331 @@ class ErrorResponse:
             error_data["requestId"] = self.request_id
 
         return {"error": error_data}
+
+
+@dataclass(frozen=True)
+class DurableFunctionTestResult:
+    status: InvocationStatus
+    operations: list[Operation]
+    result: OperationPayload | None = None
+    error: ErrorObject | None = None
+    _all_operations: list[Operation] = field(
+        default_factory=list,
+        repr=False,
+        compare=False,
+    )
+
+    @classmethod
+    def create(cls, execution: Execution) -> DurableFunctionTestResult:
+        operations = []
+        for operation in execution.operations:
+            if operation.operation_type is OperationType.EXECUTION:
+                # don't want the EXECUTION operations in the list test code asserts against
+                continue
+
+            if operation.parent_id is None:
+                operations.append(operation)
+
+        if execution.result is None:
+            msg: str = "Execution result must exist to create test result."
+            raise DurableFunctionsTestError(msg)
+
+        return cls(
+            status=execution.result.status,
+            operations=operations,
+            result=execution.result.result,
+            error=execution.result.error,
+            _all_operations=execution.operations,
+        )
+
+    @classmethod
+    def from_execution_history(
+        cls,
+        execution_response: GetDurableExecutionResponse,
+        history_response: GetDurableExecutionHistoryResponse,
+    ) -> DurableFunctionTestResult:
+        """Create test result from execution history responses.
+
+        Factory method for cloud runner that builds DurableFunctionTestResult
+        from GetDurableExecution and GetDurableExecutionHistory API responses.
+        """
+        # Map status string to InvocationStatus enum
+        try:
+            status = InvocationStatus[execution_response.status]
+        except KeyError:
+            logger.warning(
+                "Unknown status: %s, defaulting to FAILED", execution_response.status
+            )
+            status = InvocationStatus.FAILED
+
+        # Convert Events to Operations - group by operation_id and merge
+        try:
+            svc_operations = events_to_operations(history_response.events)
+        except Exception as e:
+            logger.warning("Failed to convert events to operations: %s", e)
+            svc_operations = []
+
+        # Build top-level operation list (exclude EXECUTION type)
+        operations = []
+        for svc_op in svc_operations:
+            if svc_op.operation_type == OperationType.EXECUTION:
+                continue
+            if svc_op.parent_id is None:
+                operations.append(svc_op)
+
+        return cls(
+            status=status,
+            operations=operations,
+            result=execution_response.result,
+            error=execution_response.error,
+            _all_operations=svc_operations,
+        )
+
+    def get_operation_by_name(self, name: str) -> Operation:
+        for operation in self.operations:
+            if operation.name == name:
+                return operation
+        msg: str = f"Operation with name '{name}' not found"
+        raise DurableFunctionsTestError(msg)
+
+    def get_step(self, name: str) -> Operation:
+        return self._get_operation_by_name_and_type(name, OperationType.STEP)
+
+    def get_wait(self, name: str) -> Operation:
+        return self._get_operation_by_name_and_type(name, OperationType.WAIT)
+
+    def get_context(self, name: str) -> Operation:
+        return self._get_operation_by_name_and_type(name, OperationType.CONTEXT)
+
+    def get_callback(self, name: str) -> Operation:
+        return self._get_operation_by_name_and_type(name, OperationType.CALLBACK)
+
+    def get_invoke(self, name: str) -> Operation:
+        return self._get_operation_by_name_and_type(name, OperationType.CHAINED_INVOKE)
+
+    def get_execution(self, name: str) -> Operation:
+        return self._get_operation_by_name_and_type(name, OperationType.EXECUTION)
+
+    def get_deserialized_result(self, serdes: ExtendedTypeSerDes | None = None) -> Any:
+        """Return the deserialized execution result."""
+        return _deserialize_operation_payload(self.result, serdes)
+
+    def get_operation_deserialized_result(
+        self,
+        operation: Operation,
+        serdes: ExtendedTypeSerDes | None = None,
+    ) -> Any:
+        """Return the deserialized result payload for a service operation."""
+        match operation.operation_type:
+            case OperationType.CONTEXT:
+                result = (
+                    operation.context_details.result
+                    if operation.context_details
+                    else None
+                )
+            case OperationType.STEP:
+                result = (
+                    operation.step_details.result if operation.step_details else None
+                )
+            case OperationType.CALLBACK:
+                result = (
+                    operation.callback_details.result
+                    if operation.callback_details
+                    else None
+                )
+            case OperationType.CHAINED_INVOKE:
+                result = (
+                    operation.chained_invoke_details.result
+                    if operation.chained_invoke_details
+                    else None
+                )
+            case _:
+                result = None
+        return _deserialize_operation_payload(result, serdes)
+
+    def get_child_operations(self, operation: Operation) -> list[Operation]:
+        """Return direct child operations for a service operation."""
+        return [
+            candidate
+            for candidate in self._operation_source()
+            if candidate.parent_id == operation.operation_id
+        ]
+
+    def get_all_operations(self) -> list[Operation]:
+        """Return all non-execution operations, including nested operations."""
+        return [
+            operation
+            for operation in self._operation_source()
+            if operation.operation_type != OperationType.EXECUTION
+        ]
+
+    def _operation_source(self) -> list[Operation]:
+        return self._all_operations or self.operations
+
+    def _get_operation_by_name_and_type(
+        self, name: str, operation_type: OperationType
+    ) -> Operation:
+        operation = self.get_operation_by_name(name)
+        if operation.operation_type != operation_type:
+            msg = (
+                f"Operation with name '{name}' has type "
+                f"{operation.operation_type}, expected {operation_type}"
+            )
+            raise DurableFunctionsTestError(msg)
+        return operation
+
+
+def _deserialize_operation_payload(
+    payload: OperationPayload | None,
+    serdes: ExtendedTypeSerDes | None = None,
+) -> Any:
+    """Deserialize an operation payload using the provided or default serializer."""
+    if not payload:
+        return None
+
+    if serdes is None:
+        serdes = ExtendedTypeSerDes()
+
+    try:
+        return serdes.deserialize_sync(payload)
+    except Exception:
+        return json.loads(payload)
+
+
+def _get_callback_id_from_events(
+    events: list[Event], name: str | None = None
+) -> str | None:
+    """
+    Get callback ID from execution history for callbacks that haven't completed.
+
+    Args:
+        execution_arn: The ARN of the execution to query.
+        name: Optional callback name to search for. If not provided, returns the latest callback.
+
+    Returns:
+        The callback ID string for a non-completed callback whose creating
+        invocation has completed, or None if not found.
+
+    Raises:
+        DurableFunctionsTestError: If the named callback has already succeeded/failed/timed out.
+    """
+    callback_started_events = [
+        event for event in events if event.event_type == "CallbackStarted"
+    ]
+
+    if not callback_started_events:
+        return None
+
+    completed_callback_ids = {
+        event.event_id
+        for event in events
+        if event.event_type
+        in ["CallbackSucceeded", "CallbackFailed", "CallbackTimedOut"]
+    }
+
+    def is_callback_ready(callback_started_event: Event) -> bool:
+        for event in events[events.index(callback_started_event) + 1 :]:
+            if event.event_type == "InvocationCompleted":
+                return True
+        return False
+
+    if name is not None:
+        for event in callback_started_events:
+            if event.name == name:
+                callback_id = event.event_id
+                if callback_id in completed_callback_ids:
+                    raise DurableFunctionsTestError(
+                        f"Callback {name} has already completed (succeeded/failed/timed out)"
+                    )
+                if not is_callback_ready(event):
+                    return None
+                return (
+                    event.callback_started_details.callback_id
+                    if event.callback_started_details
+                    else None
+                )
+        return None
+
+    # If name is not provided, find the latest non-completed callback event
+    active_callbacks = [
+        event
+        for event in callback_started_events
+        if event.event_id not in completed_callback_ids and is_callback_ready(event)
+    ]
+
+    if not active_callbacks:
+        return None
+
+    latest_event = active_callbacks[-1]
+    return (
+        latest_event.callback_started_details.callback_id
+        if latest_event.callback_started_details
+        else None
+    )
+
+
+@dataclass(frozen=True)
+class InvokeResponse:
+    """Response from invoking a durable function."""
+
+    invocation_output: DurableExecutionInvocationOutput
+    request_id: str
+
+
+class Invoker(Protocol):
+    def create_invocation_input(
+        self, execution: Execution
+    ) -> DurableExecutionInvocationInput: ...  # pragma: no cover
+
+    async def invoke(
+        self,
+        function_name: str,
+        input: DurableExecutionInvocationInput,
+        endpoint_url: str | None = None,
+    ) -> InvokeResponse: ...  # pragma: no cover
+
+    def update_endpoint(
+        self, endpoint_url: str, region_name: str
+    ) -> None: ...  # pragma: no cover
+
+
+@dataclass(frozen=True)
+class CheckpointToken:
+    """Model a checkpoint token. This isn't exactly the same format as the actual svc, but it will do for testing purposes."""
+
+    execution_arn: str
+    token_sequence: int
+
+    def to_str(self) -> str:
+        data = {"arn": self.execution_arn, "seq": self.token_sequence}
+        json_str = json.dumps(data, separators=(",", ":"))
+        # str -> bytes -> base64 bytes -> str
+        return base64.b64encode(json_str.encode()).decode()
+
+    @classmethod
+    def from_str(cls, token: str) -> CheckpointToken:
+        # str -> base64 bytes -> str
+        decoded = base64.b64decode(token).decode()
+        data = json.loads(decoded)
+        return cls(execution_arn=data["arn"], token_sequence=data["seq"])
+
+
+@dataclass(frozen=True)
+class CallbackToken:
+    """Model a callback token."""
+
+    execution_arn: str
+    operation_id: str
+
+    def to_str(self) -> str:
+        data = {"arn": self.execution_arn, "op": self.operation_id}
+        json_str = json.dumps(data, separators=(",", ":"))
+        # str -> bytes -> base64 bytes -> str
+        return base64.b64encode(json_str.encode()).decode()
+
+    @classmethod
+    def from_str(cls, token: str) -> CallbackToken:
+        # str -> base64 bytes -> str
+        decoded = base64.b64decode(token).decode()
+        data = json.loads(decoded)
+        return cls(execution_arn=data["arn"], operation_id=data["op"])

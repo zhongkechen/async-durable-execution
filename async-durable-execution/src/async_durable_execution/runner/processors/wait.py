@@ -20,7 +20,6 @@ from ..exceptions import (
 )
 from ..time_scale import scale_delay
 
-
 if TYPE_CHECKING:
     from ..observer import ExecutionNotifier
 

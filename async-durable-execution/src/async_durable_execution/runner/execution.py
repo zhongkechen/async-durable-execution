@@ -28,8 +28,6 @@ from .exceptions import (
 from .model import (
     InvocationCompletedDetails,
     StartDurableExecutionInput,
-)
-from .token import (
     CheckpointToken,
 )
 

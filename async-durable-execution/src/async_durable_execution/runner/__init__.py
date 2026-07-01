@@ -1,12 +1,11 @@
 """DurableExecutionsPythonTestingLibrary module."""
 
 from .runner import (
-    DurableFunctionCloudTestRunner,
-    DurableFunctionLocalTestRunner,
-    DurableFunctionTestResult,
     create_runner,
 )
-
+from .model import DurableFunctionTestResult
+from .cloud import DurableFunctionCloudTestRunner
+from .local import DurableFunctionLocalTestRunner
 
 __all__ = [
     "DurableFunctionCloudTestRunner",
