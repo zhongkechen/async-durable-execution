@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from concurrent.futures import Future
+from concurrent.futures import Future, ThreadPoolExecutor
 import inspect
 import logging
 import threading
@@ -56,6 +56,7 @@ class Scheduler:
         self._events: set[threading.Event] = set()
         self._tasks: set[Future[Any]] = set()
         self._timers: dict[Future[Any], threading.Timer] = {}
+        self._executor: ThreadPoolExecutor | None = None
         self._lock = threading.Lock()
 
     def __enter__(self):
@@ -69,6 +70,10 @@ class Scheduler:
         """Start the scheduler. Not thread-safe."""
         if self._running:
             return
+        if self._executor is None:
+            self._executor = ThreadPoolExecutor(
+                max_workers=1, thread_name_prefix="durable-scheduler"
+            )
         self._running = True
 
     def stop(self):
@@ -81,14 +86,18 @@ class Scheduler:
         with self._lock:
             timers = list(self._timers.values())
             tasks = list(self._tasks)
+            executor = self._executor
             self._events.clear()
             self._timers.clear()
             self._tasks.clear()
+            self._executor = None
 
         for timer in timers:
             timer.cancel()
         for task in tasks:
             task.cancel()
+        if executor is not None:
+            executor.shutdown(wait=False, cancel_futures=True)
 
         self._stopping = False
 
@@ -129,7 +138,7 @@ class Scheduler:
                 self._tasks.discard(_future)
                 self._timers.pop(_future, None)
 
-        def run() -> None:
+        def execute() -> None:
             if not future.set_running_or_notify_cancel():
                 return
 
@@ -146,6 +155,23 @@ class Scheduler:
                     msg: str = "error in scheduled task"
                     logger.exception(msg)
                 future.set_exception(err)
+
+        def run() -> None:
+            with self._lock:
+                executor = self._executor
+                if not (
+                    self._running
+                    and not self._stopping
+                    and not future.cancelled()
+                    and executor is not None
+                ):
+                    return
+
+            try:
+                executor.submit(execute)
+            except RuntimeError as err:
+                if not future.cancelled():
+                    future.set_exception(err)
 
         timer = threading.Timer(delay, run)
         timer.daemon = True
