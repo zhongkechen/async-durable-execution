@@ -18,9 +18,9 @@
 #     mock_store = Mock()
 #     mock_scheduler = Mock()
 #     mock_invoker = Mock()
-#     mock_checkpoint_processor = Mock()
+#     mock_service_client = Mock()
 #
-#     executor = Executor(mock_store, mock_scheduler, mock_invoker, mock_checkpoint_processor)
+#     executor = Executor(mock_store, mock_scheduler, mock_invoker, mock_service_client)
 #
 #     # Create mock execution
 #     mock_execution = Mock()
@@ -86,9 +86,9 @@
 #     mock_store = Mock()
 #     mock_scheduler = Mock()
 #     mock_invoker = Mock()
-#     mock_checkpoint_processor = Mock()
+#     mock_service_client = Mock()
 #
-#     executor = Executor(mock_store, mock_scheduler, mock_invoker, mock_checkpoint_processor)
+#     executor = Executor(mock_store, mock_scheduler, mock_invoker, mock_service_client)
 #
 #     # Create mock execution
 #     mock_execution = Mock()

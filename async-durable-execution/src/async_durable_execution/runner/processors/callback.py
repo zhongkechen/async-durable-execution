@@ -14,14 +14,9 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from .base import (
-    OperationProcessor,
-)
-from ..exceptions import (
-    InvalidParameterValueException,
-)
-from ..token import CallbackToken
-
+from .base import OperationProcessor
+from ..exceptions import InvalidParameterValueException
+from ..model import CallbackToken
 
 if TYPE_CHECKING:
     from ..observer import ExecutionNotifier

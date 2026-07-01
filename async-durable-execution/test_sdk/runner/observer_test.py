@@ -11,7 +11,7 @@ from async_durable_execution.runner.observer import (
     ExecutionNotifier,
     ExecutionObserver,
 )
-from async_durable_execution.runner.token import CallbackToken
+from async_durable_execution.runner.model import CallbackToken
 
 
 class MockExecutionObserver(ExecutionObserver):

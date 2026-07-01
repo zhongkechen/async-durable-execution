@@ -14,7 +14,6 @@ from async_durable_execution.models import (
     CallbackDetails,
     CallbackOptions,
     ErrorObject,
-    ExecutionDetails,
     Operation,
     OperationAction,
     OperationStatus,
@@ -31,21 +30,18 @@ from async_durable_execution.runner.execution import (
     Execution,
     ExecutionStatus,
 )
-from async_durable_execution.runner.executor import Executor
-from async_durable_execution.runner.invoker import InvokeResponse
+from async_durable_execution.runner.local import Executor
 from async_durable_execution.runner.model import (
     SendDurableExecutionCallbackFailureResponse,
     SendDurableExecutionCallbackHeartbeatResponse,
     SendDurableExecutionCallbackSuccessResponse,
     StartDurableExecutionInput,
-    StopDurableExecutionResponse,
+    InvokeResponse,
+    CallbackToken,
 )
 from async_durable_execution.runner.observer import (
     ExecutionNotifier,
     ExecutionObserver,
-)
-from async_durable_execution.runner.token import (
-    CallbackToken,
 )
 
 
@@ -133,13 +129,13 @@ def mock_invoker():
 
 
 @pytest.fixture
-def mock_checkpoint_processor():
+def mock_service_client():
     return Mock()
 
 
 @pytest.fixture
-def executor(mock_store, mock_scheduler, mock_invoker, mock_checkpoint_processor):
-    return Executor(mock_store, mock_scheduler, mock_invoker, mock_checkpoint_processor)
+def executor(mock_store, mock_scheduler, mock_invoker, mock_service_client):
+    return Executor(mock_store, mock_scheduler, mock_invoker, mock_service_client)
 
 
 @pytest.fixture
@@ -165,14 +161,10 @@ def mock_execution():
     return execution
 
 
-async def test_init(
-    mock_store, mock_scheduler, mock_invoker, mock_checkpoint_processor
-):
+async def test_init(mock_store, mock_scheduler, mock_invoker, mock_service_client):
     # Test that Executor can be constructed with dependencies
     # Dependency injection is implementation detail - test behavior instead
-    executor = Executor(
-        mock_store, mock_scheduler, mock_invoker, mock_checkpoint_processor
-    )
+    executor = Executor(mock_store, mock_scheduler, mock_invoker, mock_service_client)
 
     # Verify executor is properly initialized by testing it can perform basic operations
     assert executor is not None
@@ -1794,175 +1786,6 @@ async def test_retry_handler_execution(executor, mock_scheduler):
             mock_invoke.assert_called_once_with("test-arn", delay=0)
 
 
-# Tests for new web handler methods
-
-
-async def test_get_execution_details(executor, mock_store):
-    """Test get_execution_details method."""
-
-    # Create real execution instance with mocked start_input
-    mock_start_input = Mock()
-    mock_start_input.execution_name = "test-execution"
-    mock_start_input.function_name = "test-function"
-
-    execution = Execution(
-        durable_execution_arn="test-arn", start_input=mock_start_input, operations=[]
-    )
-    execution.is_complete = True
-
-    # Create mock result
-    mock_result = DurableExecutionInvocationOutput(
-        status=InvocationStatus.SUCCEEDED, result="test-result"
-    )
-    execution.result = mock_result
-    execution.close_status = ExecutionStatus.SUCCEEDED
-
-    # Create mock operation and add to execution
-    mock_operation = Operation(
-        operation_id="op-1",
-        parent_id=None,
-        name="test-execution",
-        start_timestamp=datetime.now(timezone.utc),
-        end_timestamp=datetime.now(timezone.utc),
-        operation_type=OperationType.EXECUTION,
-        status=OperationStatus.SUCCEEDED,
-        execution_details=ExecutionDetails(input_payload='{"test": "data"}'),
-    )
-    execution.operations = [mock_operation]
-
-    mock_store.load.return_value = execution
-
-    result = executor.get_execution_details("test-arn")
-
-    assert result.durable_execution_arn == "test-arn"
-    assert result.durable_execution_name == "test-execution"
-    assert result.status == "SUCCEEDED"
-    assert result.result == "test-result"
-    assert result.error is None
-    mock_store.load.assert_called_once_with("test-arn")
-
-
-async def test_get_execution_details_not_found(executor, mock_store):
-    """Test get_execution_details with non-existent execution."""
-    mock_store.load.side_effect = KeyError("Execution not found")
-
-    with pytest.raises(ResourceNotFoundException, match="Execution test-arn not found"):
-        executor.get_execution_details("test-arn")
-
-
-async def test_get_execution_details_failed_execution(executor, mock_store):
-    """Test get_execution_details with failed execution."""
-
-    # Create real execution instance with mocked start_input
-    mock_start_input = Mock()
-    mock_start_input.execution_name = "test-execution"
-    mock_start_input.function_name = "test-function"
-
-    execution = Execution(
-        durable_execution_arn="test-arn", start_input=mock_start_input, operations=[]
-    )
-    execution.is_complete = True
-
-    error = ErrorObject.from_message("Test error")
-    mock_result = DurableExecutionInvocationOutput(
-        status=InvocationStatus.FAILED, error=error
-    )
-    execution.result = mock_result
-
-    # Create mock operation and add to execution
-    mock_operation = Operation(
-        operation_id="op-1",
-        parent_id=None,
-        name="test-execution",
-        start_timestamp=datetime.now(timezone.utc),
-        operation_type=OperationType.EXECUTION,
-        status=OperationStatus.FAILED,
-        execution_details=ExecutionDetails(input_payload='{"test": "data"}'),
-    )
-    execution.operations = [mock_operation]
-
-    mock_store.load.return_value = execution
-    with pytest.raises(
-        IllegalStateException,
-        match="close_status must be set when execution is complete",
-    ):
-        executor.get_execution_details("test-arn")
-    execution.close_status = ExecutionStatus.FAILED
-    result = executor.get_execution_details("test-arn")
-    assert result.status == "FAILED"
-    assert result.result is None
-    assert result.error == error
-
-
-async def test_stop_execution(executor, mock_store):
-    """Test stop_execution method."""
-    # Create real execution instance with mocked start_input
-    mock_start_input = Mock()
-    mock_start_input.execution_name = "test-execution"
-    mock_start_input.function_name = "test-function"
-
-    execution = Execution(
-        durable_execution_arn="test-arn",
-        start_input=mock_start_input,
-        operations=[Mock()],
-    )
-    execution.is_complete = False
-    mock_store.load.return_value = execution
-
-    result = executor.stop_execution("test-arn")
-
-    mock_store.load.assert_called_once_with("test-arn")
-    mock_store.update.assert_called_once_with(execution)
-    assert result.stop_timestamp is not None
-    assert execution.is_complete is True
-    assert execution.close_status == ExecutionStatus.STOPPED
-
-
-async def test_stop_execution_already_complete(executor, mock_store):
-    """Test stop_execution with already completed execution returns idempotent response."""
-    mock_execution = Mock()
-    mock_execution.is_complete = True
-    mock_execution.durable_execution_arn = "test-arn"
-
-    # Mock the execution operation with end_timestamp
-    mock_execution_op = Mock()
-    mock_execution_op.end_timestamp = datetime(2023, 1, 1, 0, 1, 0, tzinfo=timezone.utc)
-    mock_execution.get_operation_execution_started.return_value = mock_execution_op
-
-    mock_store.load.return_value = mock_execution
-
-    result = executor.stop_execution("test-arn")
-
-    assert isinstance(result, StopDurableExecutionResponse)
-    assert result.stop_timestamp == datetime(2023, 1, 1, 0, 1, 0, tzinfo=timezone.utc)
-
-
-async def test_stop_execution_with_custom_error(executor, mock_store):
-    """Test stop_execution with custom error."""
-    # Create real execution instance with mocked start_input
-    mock_start_input = Mock()
-    mock_start_input.execution_name = "test-execution"
-    mock_start_input.function_name = "test-function"
-
-    execution = Execution(
-        durable_execution_arn="test-arn",
-        start_input=mock_start_input,
-        operations=[Mock()],
-    )
-    execution.is_complete = False
-    mock_store.load.return_value = execution
-
-    custom_error = ErrorObject.from_message("Custom stop error")
-
-    executor.stop_execution("test-arn", error=custom_error)
-
-    mock_store.load.assert_called_once_with("test-arn")
-    mock_store.update.assert_called_once_with(execution)
-    assert execution.is_complete is True
-    assert execution.close_status == ExecutionStatus.STOPPED
-    assert execution.result.error == custom_error
-
-
 async def test_get_execution_not_found(executor, mock_store):
     mock_store.load.side_effect = KeyError("not found")
 
@@ -2202,7 +2025,7 @@ async def test_checkpoint_execution_invalid_token(executor, mock_store):
 
 async def test_send_callback_success(executor, mock_store):
     """Test send_callback_success method."""
-    from async_durable_execution.runner.token import CallbackToken
+    from async_durable_execution.runner.model import CallbackToken
 
     # Create valid callback token
     callback_token = CallbackToken(execution_arn="test-arn", operation_id="op-123")
@@ -2241,7 +2064,7 @@ async def test_send_callback_success_none_callback_id(executor):
 
 async def test_send_callback_success_with_result(executor, mock_store):
     """Test send_callback_success with result data."""
-    from async_durable_execution.runner.token import CallbackToken
+    from async_durable_execution.runner.model import CallbackToken
 
     # Create valid callback token
     callback_token = CallbackToken(execution_arn="test-arn", operation_id="op-123")
@@ -2266,7 +2089,7 @@ async def test_send_callback_success_with_result(executor, mock_store):
 
 async def test_send_callback_failure(executor, mock_store):
     """Test send_callback_failure method."""
-    from async_durable_execution.runner.token import CallbackToken
+    from async_durable_execution.runner.model import CallbackToken
 
     # Create valid callback token
     callback_token = CallbackToken(execution_arn="test-arn", operation_id="op-123")

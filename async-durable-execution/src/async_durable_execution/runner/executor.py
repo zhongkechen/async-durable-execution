@@ -30,37 +30,32 @@ from .exceptions import (
 from .execution import Execution
 from .model import (
     TERMINAL_STATUSES,
+    CallbackToken,
     CheckpointDurableExecutionResponse,
     CheckpointUpdatedExecutionState,
     EventCreationContext,
     GetDurableExecutionHistoryResponse,
-    GetDurableExecutionResponse,
     GetDurableExecutionStateResponse,
+    Invoker,
     SendDurableExecutionCallbackFailureResponse,
     SendDurableExecutionCallbackHeartbeatResponse,
     SendDurableExecutionCallbackSuccessResponse,
     StartDurableExecutionInput,
     StartDurableExecutionOutput,
-    StopDurableExecutionResponse,
 )
 from .model import (
     Event as HistoryEvent,
 )
 from .observer import ExecutionObserver
 from .time_scale import scale_delay
-from .token import CallbackToken
-
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
     from concurrent.futures import Future
 
-    from .processor import (
-        CheckpointProcessor,
-    )
-    from .invoker import Invoker
+    from .local import InMemoryExecutionStore
+    from .local import InMemoryServiceClient
     from .scheduler import Event, Scheduler
-    from .memory import InMemoryExecutionStore
 
 logger = logging.getLogger(__name__)
 
@@ -76,12 +71,12 @@ class Executor(ExecutionObserver):
         store: InMemoryExecutionStore,
         scheduler: Scheduler,
         invoker: Invoker,
-        checkpoint_processor: CheckpointProcessor,
+        service_client: InMemoryServiceClient,
     ):
         self._store = store
         self._scheduler = scheduler
         self._invoker = invoker
-        self._checkpoint_processor = checkpoint_processor
+        self._service_client = service_client
         self._completion_events: dict[str, Event] = {}
         self._callback_timeouts: dict[str, Future] = {}
         self._callback_heartbeats: dict[str, Future] = {}
@@ -158,84 +153,6 @@ class Executor(ExecutionObserver):
         except KeyError as e:
             msg: str = f"Execution {execution_arn} not found"
             raise ResourceNotFoundException(msg) from e
-
-    def get_execution_details(self, execution_arn: str) -> GetDurableExecutionResponse:
-        """Get detailed execution information for web API response.
-
-        Args:
-            execution_arn: The execution ARN to retrieve
-
-        Returns:
-            GetDurableExecutionResponse: Detailed execution information
-
-        Raises:
-            ResourceNotFoundException: If execution does not exist
-        """
-        execution = self.get_execution(execution_arn)
-
-        # Extract execution details from the first operation (EXECUTION type)
-        execution_op = execution.get_operation_execution_started()
-        status = execution.current_status().value
-
-        # Extract result and error from execution result
-        result = None
-        error = None
-        if execution.result:
-            if execution.result.status == InvocationStatus.SUCCEEDED:
-                result = execution.result.result
-            elif execution.result.status == InvocationStatus.FAILED:
-                error = execution.result.error
-
-        return GetDurableExecutionResponse(
-            durable_execution_arn=execution.durable_execution_arn,
-            durable_execution_name=execution.start_input.execution_name,
-            function_arn=f"arn:aws:lambda:us-east-1:123456789012:function:{execution.start_input.function_name}",
-            status=status,
-            start_timestamp=execution_op.start_timestamp or datetime.now(timezone.utc),
-            input_payload=execution_op.execution_details.input_payload
-            if execution_op.execution_details
-            else None,
-            result=result,
-            error=error,
-            end_timestamp=execution_op.end_timestamp or None,
-            version="1.0",
-        )
-
-    def stop_execution(
-        self, execution_arn: str, error: ErrorObject | None = None
-    ) -> StopDurableExecutionResponse:
-        """Stop a running execution.
-
-        Args:
-            execution_arn: The execution ARN to stop
-            error: Optional error to use when stopping the execution
-
-        Returns:
-            StopDurableExecutionResponse: Response containing end timestamp
-
-        Raises:
-            ResourceNotFoundException: If execution does not exist
-        """
-        execution = self.get_execution(execution_arn)
-
-        if execution.is_complete:
-            # Idempotent: return the existing stop timestamp
-            execution_op = execution.get_operation_execution_started()
-            stop_timestamp = execution_op.end_timestamp or datetime.now(timezone.utc)
-            return StopDurableExecutionResponse(stop_timestamp=stop_timestamp)
-
-        # Use provided error or create a default one
-        stop_error = error or ErrorObject.from_message(
-            "Execution stopped by user request"
-        )
-
-        # Stop sets TERMINATED close status (different from fail)
-        logger.exception("[%s] Stopping execution.", execution_arn)
-        execution.complete_stopped(error=stop_error)  # Sets CloseStatus.TERMINATED
-        self._store.update(execution)
-        self._complete_events(execution_arn=execution_arn)
-
-        return StopDurableExecutionResponse(stop_timestamp=datetime.now(timezone.utc))
 
     def get_execution_state(
         self,
@@ -469,7 +386,7 @@ class Executor(ExecutionObserver):
             raise InvalidParameterValueException(msg)
 
         if updates:
-            checkpoint_output = self._checkpoint_processor.process_checkpoint(
+            checkpoint_output = self._service_client.process_checkpoint(
                 checkpoint_token=checkpoint_token,
                 updates=updates,
                 client_token=client_token,
@@ -943,7 +860,6 @@ class Executor(ExecutionObserver):
 
     def on_stopped(self, execution_arn: str, error: ErrorObject) -> None:
         """Handle execution stop. Observer method triggered by notifier."""
-        # This should not be called directly - stop_execution handles termination
         self.fail_execution(execution_arn, error)
 
     def on_wait_timer_scheduled(

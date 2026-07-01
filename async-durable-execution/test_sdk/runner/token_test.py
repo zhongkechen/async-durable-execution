@@ -5,10 +5,7 @@ import json
 
 import pytest
 
-from async_durable_execution.runner.token import (
-    CallbackToken,
-    CheckpointToken,
-)
+from async_durable_execution.runner.model import CheckpointToken, CallbackToken
 
 
 def test_checkpoint_token_init():

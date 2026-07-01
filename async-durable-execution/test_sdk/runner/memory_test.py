@@ -8,9 +8,7 @@ import pytest
 
 from async_durable_execution.runner.execution import Execution
 from async_durable_execution.runner.model import StartDurableExecutionInput
-from async_durable_execution.runner.memory import (
-    InMemoryExecutionStore,
-)
+from async_durable_execution.runner.local import InMemoryExecutionStore
 
 
 def test_in_memory_execution_store_save_and_load():

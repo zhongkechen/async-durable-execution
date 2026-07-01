@@ -25,10 +25,13 @@ from async_durable_execution.models import (
     OperationType,
 )
 from async_durable_execution.runner.execution import Execution
-from async_durable_execution.runner.invoker import (
+from async_durable_execution.runner.cloud import (
     _LAMBDA_CLIENT_CONFIG,
-    InProcessInvoker,
     LambdaInvoker,
+    create_lambda_client,
+)
+from async_durable_execution.runner.local import (
+    InProcessInvoker,
     create_test_lambda_context,
 )
 from async_durable_execution.runner.model import (
@@ -158,7 +161,7 @@ def test_lambda_invoker_init():
 
 def test_lambda_invoker_create():
     """Test creating LambdaInvoker with botocore client."""
-    with patch("async_durable_execution.runner.invoker.get_session") as mock_boto3:
+    with patch("async_durable_execution.runner.cloud.get_session") as mock_boto3:
         mock_client = Mock()
         mock_boto3.return_value.create_client.return_value = mock_client
 
@@ -684,3 +687,103 @@ async def test_lambda_invoker_invoke_unexpected_exception():
         DurableFunctionsTestError, match="Unexpected error during Lambda invocation"
     ):
         await invoker.invoke("test-function", input_data)
+
+
+def test_create_lambda_client_uses_configured_timeout():
+    """Test create_lambda_client passes the durable test runner config to botocore."""
+    with patch("async_durable_execution.runner.cloud.get_session") as mock_session:
+        mock_client = Mock()
+        mock_session.return_value.create_client.return_value = mock_client
+
+        result = create_lambda_client("http://localhost:3001", "us-west-2")
+
+    assert result is mock_client
+    mock_session.return_value.create_client.assert_called_once_with(
+        "lambda",
+        endpoint_url="http://localhost:3001",
+        region_name="us-west-2",
+        config=_LAMBDA_CLIENT_CONFIG,
+    )
+
+
+def test_lambda_invoker_update_endpoint_reuses_cached_client():
+    """Test update_endpoint creates a client once per endpoint."""
+    initial_client = Mock()
+    endpoint_client = Mock()
+    invoker = LambdaInvoker(initial_client)
+
+    with patch(
+        "async_durable_execution.runner.cloud.create_lambda_client",
+        return_value=endpoint_client,
+    ) as mock_create_client:
+        invoker.update_endpoint("http://localhost:3001", "us-west-2")
+        invoker.update_endpoint("http://localhost:3001", "us-west-2")
+
+    assert invoker.lambda_client is endpoint_client
+    assert invoker._current_endpoint == "http://localhost:3001"
+    mock_create_client.assert_called_once_with("http://localhost:3001", "us-west-2")
+
+
+def test_lambda_invoker_get_client_for_explicit_endpoint_creates_client():
+    """Test explicit per-invocation endpoint selection creates and caches a client."""
+    initial_client = Mock()
+    endpoint_client = Mock()
+    invoker = LambdaInvoker(initial_client)
+
+    with patch(
+        "async_durable_execution.runner.cloud.create_lambda_client",
+        return_value=endpoint_client,
+    ) as mock_create_client:
+        first = invoker._get_client_for_execution(
+            "execution-arn",
+            lambda_endpoint="http://localhost:3002",
+            region_name="us-west-2",
+        )
+        second = invoker._get_client_for_execution(
+            "execution-arn",
+            lambda_endpoint="http://localhost:3002",
+            region_name="us-west-2",
+        )
+
+    assert first is endpoint_client
+    assert second is endpoint_client
+    mock_create_client.assert_called_once_with("http://localhost:3002", "us-west-2")
+
+
+def test_lambda_invoker_get_client_for_execution_uses_current_endpoint():
+    """Test executions are pinned to the current cached endpoint."""
+    initial_client = Mock()
+    endpoint_client = Mock()
+    invoker = LambdaInvoker(initial_client)
+    invoker._current_endpoint = "http://localhost:3003"
+    invoker._endpoint_clients["http://localhost:3003"] = endpoint_client
+
+    result = invoker._get_client_for_execution("execution-arn")
+
+    assert result is endpoint_client
+    assert invoker._execution_endpoints["execution-arn"] == "http://localhost:3003"
+
+
+async def test_lambda_invoker_invoke_generates_request_id_when_header_missing():
+    """Test Lambda invoke falls back to a generated request id."""
+    lambda_client = Mock()
+    lambda_client.invoke.return_value = {
+        "StatusCode": 200,
+        "Payload": Mock(
+            read=lambda: json.dumps(
+                {"Status": "SUCCEEDED", "Result": "lambda-result"}
+            ).encode("utf-8")
+        ),
+        "ResponseMetadata": {"HTTPHeaders": {}},
+    }
+    invoker = LambdaInvoker(lambda_client)
+    input_data = DurableExecutionInvocationInput(
+        durable_execution_arn="test-arn",
+        checkpoint_token="test-token",
+        initial_execution_state=InitialExecutionState(operations=[], next_marker=""),
+    )
+
+    with patch("async_durable_execution.runner.cloud.uuid4", return_value="uuid-123"):
+        response = await invoker.invoke("test-function", input_data)
+
+    assert response.request_id == "local-uuid-123"

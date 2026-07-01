@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import os
 
-
 logger = logging.getLogger(__name__)
 
 _TIME_SCALE_ENV = "DURABLE_EXECUTION_TIME_SCALE"
