@@ -18,23 +18,14 @@ This fork is specifically focused on making async Python work naturally with dur
 
 ## ✨ Key Features
 
-- **Community-maintained fork of the official AWS SDK** - This repository builds on `aws/aws-durable-execution-sdk-python` and preserves the upstream Apache-2.0 notices while evolving the Python experience independently
-- **Async-first user programming model** - Unlike the official library, this fork requires user-provided durable code to use `async def` for handlers, steps, child contexts, callback submitters, and wait-for-condition checks
-- **Ergonomic async call-site helpers** - Use `@durable_callable` together with top-level awaitable operations like `step(...)`, `wait(...)`, and `run_in_child_context(...)` to keep durable workflow code explicit and natural in async Python
-- **Same durable primitives, adapted for async Python** - Checkpointed steps, waits, callbacks, parallel branches, maps, retries, and child contexts are all preserved, but tuned for an async execution style
-- **Replay-safe logging with stdlib logging** - Use standard `logging` loggers enriched by the durable context filter instead of relying on ad hoc logging patterns
-- **SDK and runner shipped together** - The execution SDK now includes the local/cloud runner through the `async_durable_execution` public API
-- **Stronger local and cloud validation workflow** - The repo includes runner integration examples and GitHub Actions automation for build, test, and generated API docs
-
-## 📦 Packages
-
-| Package | Description | Version |
-| --- | --- | --- |
-| `async-durable-execution` | Execution SDK, local/cloud test runner, and pytest helpers for Lambda durable functions | [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution) |
-| `async-durable-execution-examples` | Example durable functions and integration tests for local and cloud workflows | Shared repo version |
-
-Install `async-durable-execution` and import runner helpers from
-`async_durable_execution`.
+- **Async-first durable code** - Compared with the official AWS SDK, user-provided durable handlers, steps, child contexts, callback submitters, map item functions, parallel branches, and wait-for-condition checks are written with `async def`.
+- **Awaitable durable operations** - Workflow code now uses awaitable helpers such as `step(...)`, `wait(...)`, `invoke(...)`, `map(...)`, `parallel(...)`, and `run_in_child_context(...)`.
+- **Simplified operation APIs** - The `v2` API removes config wrapper objects in favor of direct keyword arguments and clearer call sites, including keyword-only operation names.
+- **Integrated local and cloud runner** - Runner functionality now ships through `async_durable_execution`, with separate local and cloud runner factories and typed test result helpers.
+- **Async Lambda client support** - Install the optional `aioboto` extra to use an async Lambda client; otherwise the SDK uses the bundled sync client through an async adapter.
+- **Replay-aware logging with stdlib logging** - Standard `logging` loggers are enriched by durable context filtering so workflow logs remain replay safe.
+- **Lambda layer packaging** - The repo includes tooling and workflows to build and publish an SDK Lambda layer for functions that do not vendor dependencies directly.
+- **Broader validation and docs** - The project now includes expanded local/cloud runner coverage, generated API docs, coverage publishing, and updated examples for async durable workflows.
 
 ## 🚀 Quick Start
 
