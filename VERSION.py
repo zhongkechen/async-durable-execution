@@ -2,4 +2,4 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # Modified for the async-durable-execution fork; shared version source for all packages.
-__version__ = "2.0.0b2"
+__version__ = "2.0.0rc1"
