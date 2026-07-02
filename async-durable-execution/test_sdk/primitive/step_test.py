@@ -40,6 +40,7 @@ from async_durable_execution.primitive.step import (
     get_attempt,
     step,
 )
+from async_durable_execution.serdes import SerDes
 from async_durable_execution.config import RetryDecision
 from async_durable_execution.state import ExecutionState
 from async_durable_execution import StepContext
@@ -59,6 +60,14 @@ def _asyncify(func):
         return func(*args, **kwargs)
 
     return wrapper
+
+
+class UppercaseSerDes(SerDes[str]):
+    async def serialize(self, value: str) -> str:
+        return value.upper()
+
+    async def deserialize(self, data: str) -> str:
+        return data
 
 
 # Test helper for StepOperationExecutor.
@@ -762,6 +771,24 @@ async def test_step_handler_custom_serdes_success():
     success_call = mock_state.create_checkpoint.call_args_list[1]
     success_operation = success_call[1]["operation_update"]
     assert success_operation.payload == expected_checkpoointed_result
+
+
+async def test_step_handler_returns_deserialized_serialized_custom_serdes_result():
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.operations.get.return_value = None
+    mock_state.durable_execution_arn = "test_arn"
+
+    result = await step_handler(
+        Mock(return_value="hello"),
+        mock_state,
+        OperationIdentifier("step_uppercase", OperationSubType.STEP, None, "uppercase"),
+        serdes=UppercaseSerDes(),
+    )
+
+    success_call = mock_state.create_checkpoint.call_args_list[1]
+    success_operation = success_call[1]["operation_update"]
+    assert success_operation.payload == "HELLO"
+    assert result == "HELLO"
 
 
 async def test_step_handler_custom_serdes_already_succeeded():

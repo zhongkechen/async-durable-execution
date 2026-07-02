@@ -203,7 +203,10 @@ class StepOperationExecutor(OperationExecutor[T]):
                 self.operation_identifier.operation_id,
                 self.operation_identifier.name,
             )
-            return raw_result  # noqa: TRY300
+            return await self.deserialize_value(  # noqa: TRY300
+                data=serialized_result,
+                serdes=self.serdes,
+            )
         except Exception as e:
             if isinstance(e, ExecutionError):
                 # No retry on fatal - e.g checkpoint exception
