@@ -109,7 +109,8 @@ jobs:
                 --all-regions \
                 --filters Name=opt-in-status,Values=opt-in-not-required,opted-in \
                 --query 'sort_by(Regions, &RegionName)[].RegionName' \
-                --output json
+                --output json |
+                jq -c .
             )"
           fi
 
