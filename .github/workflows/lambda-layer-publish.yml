@@ -10,7 +10,7 @@ on:
         required: true
         default: main
       aws-regions:
-        description: Optional comma, space, or newline-separated AWS Regions; empty publishes to all enabled commercial regions
+        description: Optional comma, space, or newline-separated AWS Regions; empty publishes to all enabled commercial and China regions
         required: false
         default: ""
       layer-name:
@@ -38,10 +38,13 @@ env:
   SDK_REF: ${{ inputs['sdk-ref'] || github.event.release.tag_name || github.ref_name }}
   REQUESTED_AWS_REGIONS: ${{ inputs['aws-regions'] || vars.LAMBDA_LAYER_AWS_REGIONS }}
   DEFAULT_AWS_REGION: us-east-1
+  DEFAULT_AWS_REGION_CN: cn-north-1
   LAYER_NAME: ${{ inputs['layer-name'] || vars.LAMBDA_LAYER_NAME || 'async-durable-execution' }}
   LAYER_DESCRIPTION: ${{ inputs.description }}
   SHARE_PRINCIPALS: ${{ inputs['share-principals'] || secrets.AWS_ACCOUNT_ID || vars.LAMBDA_LAYER_SHARE_PRINCIPALS }}
+  SHARE_PRINCIPALS_CN: ${{ inputs['share-principals'] || secrets.AWS_ACCOUNT_ID_CN }}
   ROLE_TO_ASSUME: ${{ secrets.ACTIONS_LAYER_PUBLISH_ROLE_ARN || secrets.ACTIONS_INTEGRATION_ROLE_NAME }}
+  ROLE_TO_ASSUME_CN: ${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME_CN }}
   LAYER_ZIP: dist/async-durable-execution-layer.zip
 
 jobs:
@@ -80,14 +83,38 @@ jobs:
       regions: ${{ steps.regions.outputs.regions }}
 
     steps:
-      - name: Verify AWS publish role is configured
+      - name: Resolve requested AWS Regions
+        id: requested-regions
+        run: |
+          set -euo pipefail
+
+          regions_json="$(
+            python3 -c 'import json, os, re; regions = [r for r in re.split(r"[\s,]+", os.environ.get("REQUESTED_AWS_REGIONS", "").strip()) if r]; print(json.dumps(regions))'
+          )"
+
+          if [ "$regions_json" = "[]" ]; then
+            echo "has-requested-regions=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-requested-regions=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "regions=${regions_json}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify AWS publish roles are configured for Region discovery
+        if: steps.requested-regions.outputs.has-requested-regions == 'false'
         run: |
           if [ -z "$ROLE_TO_ASSUME" ]; then
-            echo "Set ACTIONS_LAYER_PUBLISH_ROLE_ARN or ACTIONS_INTEGRATION_ROLE_NAME before publishing a layer." >&2
+            echo "Set ACTIONS_LAYER_PUBLISH_ROLE_ARN or ACTIONS_INTEGRATION_ROLE_NAME to discover commercial regions, or provide aws-regions explicitly." >&2
             exit 1
           fi
 
-      - name: Configure AWS credentials
+          if [ -z "$ROLE_TO_ASSUME_CN" ]; then
+            echo "Set ACTIONS_INTEGRATION_ROLE_NAME_CN to discover China regions, or provide aws-regions explicitly." >&2
+            exit 1
+          fi
+
+      - name: Configure commercial AWS credentials
+        if: steps.requested-regions.outputs.has-requested-regions == 'false'
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ env.ROLE_TO_ASSUME }}
@@ -95,22 +122,63 @@ jobs:
           aws-region: ${{ env.DEFAULT_AWS_REGION }}
 
       - name: Resolve commercial AWS Regions
+        id: commercial-regions
+        if: steps.requested-regions.outputs.has-requested-regions == 'false'
+        run: |
+          set -euo pipefail
+
+          regions_json="$(
+            aws ec2 describe-regions \
+              --all-regions \
+              --filters Name=opt-in-status,Values=opt-in-not-required,opted-in \
+              --query 'sort_by(Regions, &RegionName)[].RegionName' \
+              --output json |
+              jq -c .
+          )"
+
+          echo "regions=${regions_json}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure China AWS credentials
+        if: steps.requested-regions.outputs.has-requested-regions == 'false'
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME_CN }}
+          role-session-name: asyncDurableExecutionLayerChinaRegionDiscovery
+          aws-region: ${{ env.DEFAULT_AWS_REGION_CN }}
+          audience: sts.amazonaws.com.cn
+
+      - name: Resolve China AWS Regions
+        id: china-regions
+        if: steps.requested-regions.outputs.has-requested-regions == 'false'
+        run: |
+          set -euo pipefail
+
+          regions_json="$(
+            aws ec2 describe-regions \
+              --all-regions \
+              --filters Name=opt-in-status,Values=opt-in-not-required,opted-in \
+              --query 'sort_by(Regions, &RegionName)[].RegionName' \
+              --output json |
+              jq -c .
+          )"
+
+          echo "regions=${regions_json}" >> "$GITHUB_OUTPUT"
+
+      - name: Select publish Regions
         id: regions
         run: |
           set -euo pipefail
 
-          if [ -n "${REQUESTED_AWS_REGIONS:-}" ]; then
-            regions_json="$(
-              python3 -c 'import json, os, re; regions = [r for r in re.split(r"[\s,]+", os.environ.get("REQUESTED_AWS_REGIONS", "").strip()) if r]; print(json.dumps(regions))'
-            )"
+          if [ "${{ steps.requested-regions.outputs.has-requested-regions }}" = "true" ]; then
+            regions_json='${{ steps.requested-regions.outputs.regions }}'
           else
+            commercial_regions='${{ steps.commercial-regions.outputs.regions }}'
+            china_regions='${{ steps.china-regions.outputs.regions }}'
+            commercial_regions="${commercial_regions:-[]}"
+            china_regions="${china_regions:-[]}"
+
             regions_json="$(
-              aws ec2 describe-regions \
-                --all-regions \
-                --filters Name=opt-in-status,Values=opt-in-not-required,opted-in \
-                --query 'sort_by(Regions, &RegionName)[].RegionName' \
-                --output json |
-                jq -c .
+              COMMERCIAL_REGIONS="$commercial_regions" CHINA_REGIONS="$china_regions" python3 -c 'import json, os; regions = json.loads(os.environ["COMMERCIAL_REGIONS"]) + json.loads(os.environ["CHINA_REGIONS"]); print(json.dumps(regions))'
             )"
           fi
 
@@ -139,12 +207,42 @@ jobs:
           name: async-durable-execution-layer
           path: dist/
 
+      - name: Select AWS credentials for Region
+        id: aws-auth
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ matrix.aws-region }}" == cn-* ]]; then
+            role_to_assume="${ROLE_TO_ASSUME_CN:-}"
+            share_principals="${SHARE_PRINCIPALS_CN:-}"
+            audience="sts.amazonaws.com.cn"
+            role_secret_name="ACTIONS_INTEGRATION_ROLE_NAME_CN"
+          else
+            role_to_assume="${ROLE_TO_ASSUME:-}"
+            share_principals="${SHARE_PRINCIPALS:-}"
+            audience="sts.amazonaws.com"
+            role_secret_name="ACTIONS_LAYER_PUBLISH_ROLE_ARN or ACTIONS_INTEGRATION_ROLE_NAME"
+          fi
+
+          if [ -z "$role_to_assume" ]; then
+            echo "Set ${role_secret_name} before publishing a layer in ${{ matrix.aws-region }}." >&2
+            exit 1
+          fi
+
+          echo "audience=${audience}" >> "$GITHUB_OUTPUT"
+          {
+            echo "PUBLISH_SHARE_PRINCIPALS<<EOF"
+            printf '%s\n' "$share_principals"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          role-to-assume: ${{ startsWith(matrix.aws-region, 'cn-') && env.ROLE_TO_ASSUME_CN || env.ROLE_TO_ASSUME }}
           role-session-name: asyncDurableExecutionLayerPublish
           aws-region: ${{ matrix.aws-region }}
+          audience: ${{ steps.aws-auth.outputs.audience }}
 
       - name: Publish Lambda layer version
         id: publish
@@ -170,11 +268,15 @@ jobs:
           echo "Published ${layer_version_arn}"
 
       - name: Share Lambda layer version
-        if: env.SHARE_PRINCIPALS != ''
         run: |
           set -euo pipefail
 
-          normalized_principals="${SHARE_PRINCIPALS//,/ }"
+          if [ -z "${PUBLISH_SHARE_PRINCIPALS:-}" ]; then
+            echo "No share principals configured for ${{ matrix.aws-region }}; skipping layer sharing."
+            exit 0
+          fi
+
+          normalized_principals="${PUBLISH_SHARE_PRINCIPALS//,/ }"
           normalized_principals="${normalized_principals//$'\n'/ }"
           read -r -a principals <<< "$normalized_principals"
 
@@ -210,5 +312,5 @@ jobs:
             echo "- Version: \`${{ steps.publish.outputs.version }}\`"
             echo "- Source ref: \`${SDK_REF}\`"
             echo "- Region: \`${{ matrix.aws-region }}\`"
-            echo "- Shared with: \`${SHARE_PRINCIPALS:-not shared}\`"
+            echo "- Shared with: \`${PUBLISH_SHARE_PRINCIPALS:-not shared}\`"
           } >> "$GITHUB_STEP_SUMMARY"
