@@ -321,7 +321,10 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                     self.operation_identifier.operation_id,
                     self.operation_name,
                 )
-                return new_state
+                return await self.deserialize_value(  # noqa: TRY300
+                    data=serialized_state,
+                    serdes=self.serdes,
+                )
 
             # Condition not met - schedule retry. The check decides whether
             # to keep polling; the wait strategy only supplies the retry delay.

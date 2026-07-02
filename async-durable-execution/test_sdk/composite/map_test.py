@@ -150,6 +150,24 @@ async def run_with_context(context: DurableContext, awaitable):
         reset_current_context(token)
 
 
+def configure_mock_child_serdes_roundtrip(mock_serialize, mock_deserialize):
+    parent_value = None
+
+    async def serialize_side_effect(*, value, operation_id, **kwargs):
+        nonlocal parent_value
+        if operation_id == "parent":
+            parent_value = value
+        return '"serialized"'
+
+    async def deserialize_side_effect(*, operation_id, **kwargs):
+        if operation_id == "parent" and parent_value is not None:
+            return parent_value
+        return "deserialized"
+
+    mock_serialize.side_effect = serialize_side_effect
+    mock_deserialize.side_effect = deserialize_side_effect
+
+
 async def invoke_map_handler(*args, **kwargs):
     return await map_handler(*args, **kwargs)()
 
@@ -627,12 +645,7 @@ async def test_map_handler_with_serdes():
         lambda *args: "1"
     )
     execution_state = create_mock_execution_state()
-    execution_state.operations.get.return_value = Mock(
-        is_succeeded=Mock(return_value=False),
-        is_failed=Mock(return_value=False),
-        is_existent=Mock(return_value=False),
-        is_replay_children=Mock(return_value=False),
-    )
+    execution_state.operations.get.return_value = None
     child_context = create_mock_child_context(execution_state)
     executor_context.create_child_context = lambda *args, **kwargs: child_context
     serdes = CustomStrSerDes()
@@ -650,7 +663,7 @@ async def test_map_handler_with_serdes():
     )
 
     # Verify execute was called
-    assert result.all[0].result == "RESULT_TEST_ITEM"
+    assert result.all[0].result == "result_test_item"
 
 
 async def test_map_handler_with_summary_generator():
@@ -1210,10 +1223,14 @@ async def test_map_handler_first_execution_then_replay_integration():
         (Mock(), None),
     ],
 )
+@patch("async_durable_execution.primitive.child.deserialize")
 @patch("async_durable_execution.primitive.child.serialize")
-async def test_map_item_serialize(mock_serialize, item_serdes, batch_serdes):
+async def test_map_item_serialize(
+    mock_serialize, mock_deserialize, item_serdes, batch_serdes
+):
     """Test map serializes items with item_serdes or fallback."""
     mock_serialize.return_value = '"serialized"'
+    mock_deserialize.return_value = "deserialized"
 
     parent_checkpoint = Operation(
         operation_id="parent",
@@ -1345,7 +1362,13 @@ async def test_map_item_deserialize(mock_deserialize, item_serdes, batch_serdes)
         )
 
     expected = item_serdes or batch_serdes
-    call_kwargs = _mock_call_kwargs_by_operation_id(mock_deserialize)
+    call_kwargs = {
+        operation_id: kwargs
+        for operation_id, kwargs in _mock_call_kwargs_by_operation_id(
+            mock_deserialize
+        ).items()
+        if operation_id.startswith("child-")
+    }
 
     assert call_kwargs["child-0"]["serdes"] is expected
     assert call_kwargs["child-1"]["serdes"] is expected
@@ -1405,8 +1428,13 @@ async def test_map_result_serialization_roundtrip():
 async def test_map_handler_serializes_batch_result():
     """Verify map_handler serializes BatchResult at parent level."""
     try:
-        with patch("async_durable_execution.serdes.serialize") as mock_serdes_serialize:
-            mock_serdes_serialize.return_value = '"serialized"'
+        with (
+            patch("async_durable_execution.serdes.serialize") as mock_serdes_serialize,
+            patch("async_durable_execution.serdes.deserialize") as mock_deserialize,
+        ):
+            configure_mock_child_serdes_roundtrip(
+                mock_serdes_serialize, mock_deserialize
+            )
             importlib.reload(child)
 
             parent_checkpoint = Mock()
@@ -1525,7 +1553,7 @@ async def test_map_default_serdes_serializes_batch_result():
             parent_call = mock_serialize.call_args_list[2]
             assert parent_call[1]["serdes"] is None
             assert isinstance(parent_call[1]["value"], BatchResult)
-            assert parent_call[1]["value"] is result
+            assert parent_call[1]["value"] == result
     finally:
         importlib.reload(child)
 
@@ -1536,8 +1564,11 @@ async def test_map_custom_serdes_serializes_batch_result():
     custom_serdes = CustomStrSerDes()
 
     try:
-        with patch("async_durable_execution.serdes.serialize") as mock_serialize:
-            mock_serialize.return_value = '"serialized"'
+        with (
+            patch("async_durable_execution.serdes.serialize") as mock_serialize,
+            patch("async_durable_execution.serdes.deserialize") as mock_deserialize,
+        ):
+            configure_mock_child_serdes_roundtrip(mock_serialize, mock_deserialize)
             importlib.reload(child)
 
             parent_checkpoint = Mock()

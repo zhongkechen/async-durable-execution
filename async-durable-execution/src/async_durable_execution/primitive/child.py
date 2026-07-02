@@ -257,7 +257,15 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 self.operation_identifier.operation_id,
                 self.operation_identifier.name,
             )
-            return raw_result  # noqa: TRY300
+            if replay_children:
+                return raw_result
+
+            return await deserialize(  # noqa: TRY300
+                serdes=self.serdes,
+                data=serialized_result,
+                operation_id=self.operation_id,
+                durable_execution_arn=self.durable_execution_arn,
+            )
         except Exception as e:
             error_object = ErrorObject.from_exception(e)
             # Virtual deliberately does not write checkpoints, but exception still propagates below
