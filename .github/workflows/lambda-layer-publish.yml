@@ -146,6 +146,7 @@ jobs:
           role-session-name: asyncDurableExecutionLayerChinaRegionDiscovery
           aws-region: ${{ env.DEFAULT_AWS_REGION_CN }}
           audience: sts.amazonaws.com.cn
+          unset-current-credentials: true
 
       - name: Resolve China AWS Regions
         id: china-regions
