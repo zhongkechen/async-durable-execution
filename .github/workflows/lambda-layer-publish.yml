@@ -1,16 +1,18 @@
 name: Publish Lambda Layer
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       sdk-ref:
         description: Git ref to build into the layer, such as main or v2.0.0a2
         required: true
         default: main
-      aws-region:
-        description: AWS Region where the Lambda layer version is published
-        required: true
-        default: eu-south-1
+      aws-regions:
+        description: Optional comma, space, or newline-separated AWS Regions; empty publishes to all enabled commercial regions
+        required: false
+        default: ""
       layer-name:
         description: Lambda layer name
         required: true
@@ -29,12 +31,13 @@ permissions:
   id-token: write
 
 concurrency:
-  group: lambda-layer-publish-${{ github.ref }}
+  group: lambda-layer-publish-${{ github.event.release.tag_name || inputs['sdk-ref'] || github.ref }}
   cancel-in-progress: false
 
 env:
-  SDK_REF: ${{ inputs['sdk-ref'] }}
-  AWS_REGION: ${{ inputs['aws-region'] || vars.LAMBDA_LAYER_AWS_REGION || 'eu-south-1' }}
+  SDK_REF: ${{ inputs['sdk-ref'] || github.event.release.tag_name || github.ref_name }}
+  REQUESTED_AWS_REGIONS: ${{ inputs['aws-regions'] || vars.LAMBDA_LAYER_AWS_REGIONS }}
+  DEFAULT_AWS_REGION: us-east-1
   LAYER_NAME: ${{ inputs['layer-name'] || vars.LAMBDA_LAYER_NAME || 'async-durable-execution' }}
   LAYER_DESCRIPTION: ${{ inputs.description }}
   SHARE_PRINCIPALS: ${{ inputs['share-principals'] || secrets.AWS_ACCOUNT_ID || vars.LAMBDA_LAYER_SHARE_PRINCIPALS }}
@@ -42,7 +45,7 @@ env:
   LAYER_ZIP: dist/async-durable-execution-layer.zip
 
 jobs:
-  publish-layer:
+  build-layer:
     runs-on: ubuntu-latest
 
     steps:
@@ -50,24 +53,10 @@ jobs:
         with:
           ref: ${{ env.SDK_REF }}
 
-      - name: Verify AWS publish role is configured
-        run: |
-          if [ -z "$ROLE_TO_ASSUME" ]; then
-            echo "Set ACTIONS_LAYER_PUBLISH_ROLE_ARN or ACTIONS_INTEGRATION_ROLE_NAME before publishing a layer." >&2
-            exit 1
-          fi
-
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
-          role-session-name: asyncDurableExecutionLayerPublish
-          aws-region: ${{ env.AWS_REGION }}
 
       - name: Install Hatch
         run: python -m pip install --upgrade hatch==1.16.5
@@ -84,6 +73,77 @@ jobs:
         with:
           name: async-durable-execution-layer
           path: ${{ env.LAYER_ZIP }}
+
+  resolve-regions:
+    runs-on: ubuntu-latest
+    outputs:
+      regions: ${{ steps.regions.outputs.regions }}
+
+    steps:
+      - name: Verify AWS publish role is configured
+        run: |
+          if [ -z "$ROLE_TO_ASSUME" ]; then
+            echo "Set ACTIONS_LAYER_PUBLISH_ROLE_ARN or ACTIONS_INTEGRATION_ROLE_NAME before publishing a layer." >&2
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          role-session-name: asyncDurableExecutionLayerRegionDiscovery
+          aws-region: ${{ env.DEFAULT_AWS_REGION }}
+
+      - name: Resolve commercial AWS Regions
+        id: regions
+        run: |
+          set -euo pipefail
+
+          if [ -n "${REQUESTED_AWS_REGIONS:-}" ]; then
+            regions_json="$(
+              python3 -c 'import json, os, re; regions = [r for r in re.split(r"[\s,]+", os.environ.get("REQUESTED_AWS_REGIONS", "").strip()) if r]; print(json.dumps(regions))'
+            )"
+          else
+            regions_json="$(
+              aws ec2 describe-regions \
+                --all-regions \
+                --filters Name=opt-in-status,Values=opt-in-not-required,opted-in \
+                --query 'sort_by(Regions, &RegionName)[].RegionName' \
+                --output json
+            )"
+          fi
+
+          if [ "$regions_json" = "[]" ]; then
+            echo "No AWS Regions resolved for Lambda layer publishing." >&2
+            exit 1
+          fi
+
+          echo "regions=${regions_json}" >> "$GITHUB_OUTPUT"
+          echo "Publishing to regions: ${regions_json}"
+
+  publish-layer:
+    runs-on: ubuntu-latest
+    needs:
+      - build-layer
+      - resolve-regions
+    strategy:
+      fail-fast: false
+      matrix:
+        aws-region: ${{ fromJson(needs.resolve-regions.outputs.regions) }}
+
+    steps:
+      - name: Download layer zip artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: async-durable-execution-layer
+          path: dist/
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          role-session-name: asyncDurableExecutionLayerPublish
+          aws-region: ${{ matrix.aws-region }}
 
       - name: Publish Lambda layer version
         id: publish
@@ -148,6 +208,6 @@ jobs:
             echo "- Layer ARN: \`${{ steps.publish.outputs.layer-version-arn }}\`"
             echo "- Version: \`${{ steps.publish.outputs.version }}\`"
             echo "- Source ref: \`${SDK_REF}\`"
-            echo "- Region: \`${AWS_REGION}\`"
+            echo "- Region: \`${{ matrix.aws-region }}\`"
             echo "- Shared with: \`${SHARE_PRINCIPALS:-not shared}\`"
           } >> "$GITHUB_STEP_SUMMARY"
