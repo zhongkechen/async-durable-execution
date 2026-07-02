@@ -58,18 +58,19 @@ The workflow runs on the `release: [published]` event, so it fires whenever a re
 
 > **Note:** The current workflow publishes `async-durable-execution` to PyPI. The examples package shares the same repo version in `VERSION.py`, but it is not part of the current PyPI publish matrix.
 
-After creating a GitHub Release, run the [`lambda-layer-publish.yml`](.github/workflows/lambda-layer-publish.yml) workflow manually from the `main` branch. Set `sdk-ref` to the release tag, such as `v2.0.0a2`. The workflow:
+Creating a GitHub Release also triggers the [`lambda-layer-publish.yml`](.github/workflows/lambda-layer-publish.yml) workflow automatically. The workflow:
 
-1. **Builds** a Lambda layer zip from `sdk-ref` using the local `async-durable-execution` package.
-2. **Publishes** a new Lambda layer version with compatible runtimes `python3.10` through `python3.14`.
-3. **Shares** the layer version with the account ID configured in the `AWS_ACCOUNT_ID` secret, with principals entered in the manual workflow dispatch form, or with principals configured in `LAMBDA_LAYER_SHARE_PRINCIPALS`.
+1. **Builds** a Lambda layer zip from the release tag using the local `async-durable-execution` package.
+2. **Discovers** all enabled commercial AWS Regions in the publishing account.
+3. **Publishes** a new Lambda layer version in each Region with compatible runtimes `python3.10` through `python3.14`.
+4. **Shares** each layer version with the account ID configured in the `AWS_ACCOUNT_ID` secret, with principals entered in the manual workflow dispatch form, or with principals configured in `LAMBDA_LAYER_SHARE_PRINCIPALS`.
 
-Set the repository secret `ACTIONS_LAYER_PUBLISH_ROLE_ARN` to the AWS role used for publishing the layer. The role needs `lambda:PublishLayerVersion` and `lambda:AddLayerVersionPermission` for the target layer. If `ACTIONS_LAYER_PUBLISH_ROLE_ARN` is not set, the workflow falls back to `ACTIONS_INTEGRATION_ROLE_NAME`.
+Set the repository secret `ACTIONS_LAYER_PUBLISH_ROLE_ARN` to the AWS role used for publishing the layer. The role needs `ec2:DescribeRegions`, `lambda:PublishLayerVersion`, and `lambda:AddLayerVersionPermission` for the target layer. If `ACTIONS_LAYER_PUBLISH_ROLE_ARN` is not set, the workflow falls back to `ACTIONS_INTEGRATION_ROLE_NAME`.
 Set the repository secret `AWS_ACCOUNT_ID` to the AWS account ID that should receive `lambda:GetLayerVersion` permission by default.
 
 Optional repository variables:
 
-- `LAMBDA_LAYER_AWS_REGION`: AWS Region for publishing. Defaults to `eu-south-1`.
+- `LAMBDA_LAYER_AWS_REGIONS`: Comma, space, or newline-separated AWS Regions for publishing. Leave unset to publish to all enabled commercial Regions in the publishing account.
 - `LAMBDA_LAYER_NAME`: Lambda layer name. Defaults to `async-durable-execution`.
 - `LAMBDA_LAYER_SHARE_PRINCIPALS`: Comma, space, or newline-separated AWS account IDs, AWS organization IDs such as `o-abc123`, or `*` for public sharing. Used only when neither the manual `share-principals` input nor `AWS_ACCOUNT_ID` is set.
 
