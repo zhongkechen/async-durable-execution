@@ -113,6 +113,24 @@ async def run_with_context(context: DurableContext, awaitable):
         reset_current_context(token)
 
 
+def configure_mock_child_serdes_roundtrip(mock_serialize, mock_deserialize):
+    parent_value = None
+
+    async def serialize_side_effect(*, value, operation_id, **kwargs):
+        nonlocal parent_value
+        if operation_id == "parent":
+            parent_value = value
+        return '"serialized"'
+
+    async def deserialize_side_effect(*, operation_id, **kwargs):
+        if operation_id == "parent" and parent_value is not None:
+            return parent_value
+        return "deserialized"
+
+    mock_serialize.side_effect = serialize_side_effect
+    mock_deserialize.side_effect = deserialize_side_effect
+
+
 def _mock_call_kwargs_by_operation_id(mock: Mock) -> dict[str, Mapping[str, Any]]:
     """Return mock call keyword arguments keyed by operation_id."""
     return {call.kwargs["operation_id"]: call.kwargs for call in mock.call_args_list}
@@ -189,6 +207,7 @@ async def test_parallel_passes_config_fields_to_handler(
     completion_config = CompletionConfig.first_successful()
     serdes = Mock()
     serdes.serialize = AsyncMock(return_value='"parallel_result"')
+    serdes.deserialize = AsyncMock(return_value="parallel_result")
     item_serdes = Mock()
     summary_generator = Mock()
     context = create_test_context(state=create_mock_execution_state())
@@ -714,12 +733,7 @@ async def test_parallel_handler_with_serdes():
     callables = [func1]
 
     execution_state = create_mock_execution_state()
-    execution_state.operations.get.return_value = Mock(
-        is_succeeded=Mock(return_value=False),
-        is_failed=Mock(return_value=False),
-        is_existent=Mock(return_value=False),
-        is_replay_children=Mock(return_value=False),
-    )
+    execution_state.operations.get.return_value = None
     operation_identifier = OperationIdentifier(
         "test_op", OperationSubType.PARALLEL, "parent", "test_parallel"
     )
@@ -741,7 +755,7 @@ async def test_parallel_handler_with_serdes():
         serdes=CustomStrSerDes(),
     )()
 
-    assert result.all[0].result == "RESULT1"
+    assert result.all[0].result == "result1"
 
 
 async def test_parallel_handler_with_summary_generator():
@@ -1142,10 +1156,14 @@ async def test_parallel_handler_first_execution_then_replay():
         (Mock(), None),
     ],
 )
+@patch("async_durable_execution.primitive.child.deserialize")
 @patch("async_durable_execution.primitive.child.serialize")
-async def test_parallel_item_serialize(mock_serialize, item_serdes, batch_serdes):
+async def test_parallel_item_serialize(
+    mock_serialize, mock_deserialize, item_serdes, batch_serdes
+):
     """Test parallel serializes branches with item_serdes or fallback."""
     mock_serialize.return_value = '"serialized"'
+    mock_deserialize.return_value = "deserialized"
 
     parent_checkpoint = Operation(
         operation_id="parent",
@@ -1282,7 +1300,13 @@ async def test_parallel_item_deserialize(mock_deserialize, item_serdes, batch_se
         )
 
     expected = item_serdes or batch_serdes
-    calls_by_operation_id = _mock_call_kwargs_by_operation_id(mock_deserialize)
+    calls_by_operation_id = {
+        operation_id: kwargs
+        for operation_id, kwargs in _mock_call_kwargs_by_operation_id(
+            mock_deserialize
+        ).items()
+        if operation_id.startswith("child-")
+    }
 
     assert set(calls_by_operation_id) == {"child-0", "child-1"}
     assert calls_by_operation_id["child-0"]["serdes"] is expected
@@ -1351,8 +1375,13 @@ async def test_parallel_result_serialization_roundtrip():
 async def test_parallel_handler_serializes_batch_result():
     """Verify parallel_handler serializes BatchResult at parent level."""
     try:
-        with patch("async_durable_execution.serdes.serialize") as mock_serdes_serialize:
-            mock_serdes_serialize.return_value = '"serialized"'
+        with (
+            patch("async_durable_execution.serdes.serialize") as mock_serdes_serialize,
+            patch("async_durable_execution.serdes.deserialize") as mock_deserialize,
+        ):
+            configure_mock_child_serdes_roundtrip(
+                mock_serdes_serialize, mock_deserialize
+            )
             importlib.reload(child)
 
             parent_checkpoint = Mock()
@@ -1473,7 +1502,7 @@ async def test_parallel_default_serdes_serializes_batch_result():
             parent_call = mock_serialize.call_args_list[2]
             assert parent_call[1]["serdes"] is None
             assert isinstance(parent_call[1]["value"], BatchResult)
-            assert parent_call[1]["value"] is result
+            assert parent_call[1]["value"] == result
     finally:
         importlib.reload(child)
 
@@ -1484,8 +1513,11 @@ async def test_parallel_custom_serdes_serializes_batch_result():
     custom_serdes = CustomStrSerDes()
 
     try:
-        with patch("async_durable_execution.serdes.serialize") as mock_serialize:
-            mock_serialize.return_value = '"serialized"'
+        with (
+            patch("async_durable_execution.serdes.serialize") as mock_serialize,
+            patch("async_durable_execution.serdes.deserialize") as mock_deserialize,
+        ):
+            configure_mock_child_serdes_roundtrip(mock_serialize, mock_deserialize)
             importlib.reload(child)
 
             parent_checkpoint = Mock()

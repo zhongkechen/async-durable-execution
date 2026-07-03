@@ -32,6 +32,7 @@ from async_durable_execution.primitive.child import (
     _run_in_child_context,
     run_in_child_context,
 )
+from async_durable_execution.serdes import SerDes
 from async_durable_execution.state import ExecutionState
 from async_durable_execution.composite.parallel import SummaryGenerator
 
@@ -46,6 +47,14 @@ def _asyncify(func):
         return func(*args, **kwargs)
 
     return wrapper
+
+
+class UppercaseSerDes(SerDes[str]):
+    async def serialize(self, value: str) -> str:
+        return value.upper()
+
+    async def deserialize(self, data: str) -> str:
+        return data
 
 
 async def child_handler(*args, **kwargs):
@@ -780,6 +789,28 @@ async def test_child_handler_custom_serdes_not_start() -> None:
     success_call = mock_state.create_checkpoint.call_args_list[1]
     success_operation = success_call[1]["operation_update"]
     assert success_operation.payload == expected_checkpoointed_result
+
+
+async def test_child_handler_returns_deserialized_serialized_custom_serdes_result() -> (
+    None
+):
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "test_arn"
+    mock_state.operations.get.return_value = None
+
+    result = await child_handler(
+        Mock(return_value="hello"),
+        mock_state,
+        OperationIdentifier(
+            "op_uppercase", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "uppercase"
+        ),
+        serdes=UppercaseSerDes(),
+    )
+
+    success_call = mock_state.create_checkpoint.call_args_list[1]
+    success_operation = success_call[1]["operation_update"]
+    assert success_operation.payload == "HELLO"
+    assert result == "HELLO"
 
 
 async def test_child_handler_custom_serdes_already_succeeded() -> None:

@@ -39,8 +39,17 @@ from async_durable_execution.composite.wait_for_condition import (
 )
 from async_durable_execution.config import JitterStrategy
 from async_durable_execution.composite.wait_for_condition import WaitStrategyBuilder
+from async_durable_execution.serdes import SerDes
 
 from ..serdes_test import CustomDictSerDes
+
+
+class UppercaseSerDes(SerDes[str]):
+    async def serialize(self, value: str) -> str:
+        return value.upper()
+
+    async def deserialize(self, data: str) -> str:
+        return data
 
 
 def test_wait_for_condition_signature_accepts_config_fields_directly():
@@ -228,6 +237,32 @@ async def test_wait_for_condition_new_condition_result_with_optional_config():
 
     assert result == {"status": "done"}
     assert mock_state.create_checkpoint.call_count == 2
+
+
+async def test_wait_for_condition_returns_deserialized_serialized_custom_serdes_result():
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "arn:aws:test"
+    mock_state.operations.get.return_value = None
+
+    op_id = OperationIdentifier(
+        "op_uppercase", OperationSubType.WAIT_FOR_CONDITION, None, "uppercase"
+    )
+
+    def condition(state):
+        return "hello", WaitForConditionDecision.stop_polling()
+
+    result = await wait_for_condition_handler(
+        state=mock_state,
+        operation_identifier=op_id,
+        check=condition,
+        initial_state=None,
+        serdes=UppercaseSerDes(),
+    )
+
+    success_call = mock_state.create_checkpoint.call_args_list[1]
+    success_operation = success_call[1]["operation_update"]
+    assert success_operation.payload == "HELLO"
+    assert result == "HELLO"
 
 
 async def test_wait_for_condition_new_condition_uses_delay_only_strategy():
