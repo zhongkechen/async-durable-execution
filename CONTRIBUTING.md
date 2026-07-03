@@ -138,26 +138,107 @@ hatch run test:all --pdb
 - Prefer adding focused unit tests near the affected area, and add integration
   coverage when behavior spans multiple components.
 
-## Examples and Deployment
+## Example Integration Tests and Deployment
 
-Run example-related commands from the repository root:
+Run example-related commands from the repository root.
+
+The examples package includes pytest coverage that can run against either the local in-memory runner or deployed AWS Lambda durable functions. Local mode is the default and does not require AWS credentials:
 
 ```bash
-# Run example tests
+# Run all example tests locally.
 hatch run test:examples
 
-# Refresh editable installs in the examples environment when needed
+# Or run pytest directly with an explicit mode.
+pytest --runner-mode=local async-durable-execution-examples/test_examples/
+
+# Run a specific example test.
+pytest --runner-mode=local -k test_hello_world async-durable-execution-examples/test_examples/
+```
+
+Refresh editable installs in the examples environment when needed:
+
+```bash
 hatch run -- examples:pip install -e async-durable-execution
 hatch run -- examples:pip install -e async-durable-execution-examples
+```
 
-# Build the shared example bundle
+Cloud mode exercises deployed Lambda functions with `DurableFunctionCloudTestRunner`:
+
+```bash
+# Build the example bundle.
 hatch run examples:build
 
+# Generate a one-example SAM template.
+hatch run examples:generate-sam-template -- --example-name "Hello World"
+
+# Deploy the function with SAM.
+sam build --template-file async-durable-execution-examples/template.generated.json
+sam deploy \
+  --template-file .aws-sam/build/template.yaml \
+  --stack-name hello-world-test \
+  --resolve-s3 \
+  --capabilities CAPABILITY_IAM \
+  --no-confirm-changeset \
+  --parameter-overrides \
+    FunctionName=HelloWorld-Test \
+    LambdaEndpoint=https://lambda.eu-south-1.amazonaws.com
+
+# Configure cloud test discovery.
+export AWS_REGION=eu-south-1
+export LAMBDA_ENDPOINT=https://lambda.eu-south-1.amazonaws.com
+export QUALIFIED_FUNCTION_NAME="HelloWorld-Test:$LATEST"
+
+# Run one cloud-backed example test.
+pytest --runner-mode=cloud -k test_hello_world async-durable-execution-examples/test_examples/
+
+# Or run via hatch.
+hatch run test:examples-integration -k test_hello_world
+```
+
+For full-suite cloud runs where functions share a deployment prefix:
+
+```bash
+export PYTEST_FUNCTION_NAME_PREFIX="py313-"
+hatch run test:examples-integration
+```
+
+Example tests use the `durable_runner` pytest fixture as a factory context manager:
+
+```python
+from async_durable_execution import InvocationStatus
+from async_durable_execution_examples import hello_world
+
+
+async def test_hello_world(durable_runner):
+    with durable_runner(
+        handler=hello_world.handler,
+        input="test",
+        timeout=30,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert result.get_deserialized_result() == {
+        "statusCode": 200,
+        "body": "Hello from Durable Lambda! (status: 200)",
+    }
+```
+
+Cloud test configuration:
+
+| Setting | Description |
+| --- | --- |
+| `AWS_REGION` | AWS region for Lambda invocation. Defaults to `eu-south-1`. |
+| `LAMBDA_ENDPOINT` | Optional Lambda endpoint URL for testing. |
+| `PYTEST_FUNCTION_NAME_PREFIX` | Prefix used to derive deployed qualified function names for all examples. |
+| `QUALIFIED_FUNCTION_NAME` | Optional fallback for single-function cloud runs. |
+| `--runner-mode` | Pytest mode: `local` or `cloud`. |
+
+Additional deployment helpers:
+
+```bash
 # Generate a SAM template for all examples
 hatch run examples:generate-sam-template
-
-# Generate a SAM template for one example
-hatch run examples:generate-sam-template -- --example-name "Hello World"
 
 # Clean generated artifacts
 hatch run examples:clean

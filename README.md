@@ -29,8 +29,7 @@ This fork is specifically focused on making async Python work naturally with dur
 
 ## 🚀 Quick Start
 
-This fork now requires async callables for all user-provided durable code.
-Requires Python 3.10 or newer.
+Requires Python 3.10 or newer. User-provided durable handlers, steps, child contexts, callback submitters, and condition checks must be async callables.
 
 Install the execution SDK:
 
@@ -44,26 +43,7 @@ For an async Lambda service client, install the optional `aioboto` extra:
 pip install "async-durable-execution[aioboto]"
 ```
 
-The `aioboto` extra installs the published `aiobotocore` package. When it is
-installed, the SDK creates an async Lambda client by default for durable
-checkpoint and state APIs. Without the extra, it continues to use the bundled
-`botocore` dependency through a threaded async adapter. Explicitly provided Lambda
-API clients are detected as sync or async and wrapped accordingly. Code that must
-force the sync `botocore` client can use
-`async_durable_execution.client.create_default_sync_client()`.
-
-To share the SDK through a Lambda layer instead of vendoring it in each function
-zip, publish the repository-built layer from GitHub Actions or build a local
-layer archive from this checkout:
-
-```console
-hatch run python scripts/build_layer.py \
-  --sdk-source async-durable-execution \
-  --output dist/async-durable-execution-layer.zip
-```
-
-Publish the zip as an `AWS::Serverless::LayerVersion` or
-`AWS::Lambda::LayerVersion`, then add the layer ARN to Python durable functions.
+The `aioboto` extra installs `aiobotocore`, which lets the SDK create an async Lambda client for durable checkpoint and state APIs. Without it, the SDK uses the bundled `botocore` dependency through a threaded async adapter. Explicitly provided Lambda API clients are detected as sync or async and wrapped accordingly. Code that must force the sync `botocore` client can use `async_durable_execution.client.create_default_sync_client()`.
 
 Create a durable Lambda handler:
 
@@ -134,13 +114,7 @@ Handler input is deserialized from the durable execution payload before your cod
 
 ## 🧪 Testing Durable Functions
 
-The SDK includes runner helpers for testing durable functions locally or against deployed Lambda functions:
-
-```console
-pip install async-durable-execution
-```
-
-The local runner executes the durable handler in process, intercepts checkpoint operations with an in-memory service client, and returns a `DurableFunctionTestResult` that can be inspected by operation name.
+The SDK includes runner helpers for testing durable functions locally or against deployed Lambda functions. The local runner executes the durable handler in process, intercepts checkpoint operations with an in-memory service client, and returns a `DurableFunctionTestResult` that can be inspected by operation name.
 
 Assuming the Quick Start handler above is saved in `order_workflow.py`, a local test can run the same durable function:
 
@@ -207,106 +181,31 @@ async def test_with_factory() -> None:
         cloud_result = await runner.run()
 ```
 
-## 🧩 Example Integration Tests
+## 🧩 Examples
 
-The examples package includes pytest coverage that can run against either the local in-memory runner or deployed AWS Lambda durable functions.
+Example durable functions live in `async-durable-execution-examples/src/async_durable_execution_examples/`. Start with `hello_world.py` for the smallest complete handler.
 
-Local mode is the default and does not require AWS credentials:
+The example tests in `async-durable-execution-examples/test_examples/` are also useful as executable recipes. Browse them by operation or pattern:
 
-```console
-# Run all example tests locally from the repo root.
-hatch run test:examples
+- `step/`, `wait/`, `wait_for_callback/`, and `wait_for_condition/` for core durable operations
+- `map/`, `parallel/`, and `run_in_child_context/` for composition patterns
+- `invoke/`, `with_retry/`, `callback/`, and `logger_example/` for integrations and operational behavior
 
-# Or run pytest directly with an explicit mode.
-pytest --runner-mode=local async-durable-execution-examples/test_examples/
-
-# Run a specific example test.
-pytest --runner-mode=local -k test_hello_world async-durable-execution-examples/test_examples/
-```
-
-Cloud mode exercises deployed Lambda functions with `DurableFunctionCloudTestRunner`:
-
-```console
-# Build the example bundle from the repo root.
-hatch run examples:build
-
-# Generate a one-example SAM template.
-hatch run examples:generate-sam-template -- --example-name "Hello World"
-
-# Deploy the function with SAM.
-sam build --template-file async-durable-execution-examples/template.generated.json
-sam deploy \
-  --template-file .aws-sam/build/template.yaml \
-  --stack-name hello-world-test \
-  --resolve-s3 \
-  --capabilities CAPABILITY_IAM \
-  --no-confirm-changeset \
-  --parameter-overrides \
-    FunctionName=HelloWorld-Test \
-    LambdaEndpoint=https://lambda.eu-south-1.amazonaws.com
-
-# Configure cloud test discovery.
-export AWS_REGION=eu-south-1
-export LAMBDA_ENDPOINT=https://lambda.eu-south-1.amazonaws.com
-export QUALIFIED_FUNCTION_NAME="HelloWorld-Test:$LATEST"
-
-# Run one cloud-backed example test.
-pytest --runner-mode=cloud -k test_hello_world async-durable-execution-examples/test_examples/
-
-# Or run via hatch.
-hatch run test:examples-integration -k test_hello_world
-```
-
-For full-suite cloud runs where functions share a deployment prefix:
-
-```console
-export PYTEST_FUNCTION_NAME_PREFIX="py313-"
-hatch run test:examples-integration
-```
-
-Example tests use the `durable_runner` pytest fixture as a factory context manager:
-
-```python
-from async_durable_execution import InvocationStatus
-from async_durable_execution_examples import hello_world
-
-
-async def test_hello_world(durable_runner):
-    with durable_runner(
-        handler=hello_world.handler,
-        input="test",
-        timeout=30,
-    ) as runner:
-        result = await runner.run()
-
-    assert result.status is InvocationStatus.SUCCEEDED
-    assert result.get_deserialized_result() == {
-        "statusCode": 200,
-        "body": "Hello from Durable Lambda! (status: 200)",
-    }
-```
-
-Cloud test configuration:
-
-| Setting | Description |
-| --- | --- |
-| `AWS_REGION` | AWS region for Lambda invocation. Defaults to `eu-south-1`. |
-| `LAMBDA_ENDPOINT` | Optional Lambda endpoint URL for testing. |
-| `PYTEST_FUNCTION_NAME_PREFIX` | Prefix used to derive deployed qualified function names for all examples. |
-| `QUALIFIED_FUNCTION_NAME` | Optional fallback for single-function cloud runs. |
-| `--runner-mode` | Pytest mode: `local` or `cloud`. |
+For the developer workflow to run or deploy example integration tests, see the [Contributing Guide](CONTRIBUTING.md#example-integration-tests-and-deployment).
 
 ## 📚 Documentation
 
-The complete documentation for the AWS Durable Execution SDK for Python lives on the AWS Documentation site:
-
 - **[Generated API Reference](https://zhongkechen.github.io/async-durable-execution/)** - Auto-generated from Python docstrings and published with GitHub Pages
-- **[AWS Durable Execution Documentation](https://docs.aws.amazon.com/durable-execution/)** - Concepts, getting started, core operations, advanced topics, and API reference
-- **[AWS Lambda Durable Functions Guide](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html)** - How durable functions work on Lambda
 - **[Migration Guide](docs/migrating-from-official-python-sdk.md)** - Move from the official synchronous Python SDK to this async-first SDK
 - **[Using Synchronous Code](docs/using-synchronous-code.md)** - Wrap existing synchronous business logic and blocking clients safely
+- **[Advanced Usage: Lambda Layer Packaging](docs/lambda-layer-packaging.md)** - Share the SDK through an AWS Lambda layer
 - **[Runner Architecture](docs/runner-architecture.md)** - Local and cloud runner execution flow, components, and diagrams
 - **[Contributing Guide](CONTRIBUTING.md)** - Development workflow, Hatch commands, testing, and pull request guidance
+
+## References
+
+- **[AWS Durable Execution Documentation](https://docs.aws.amazon.com/durable-execution/)** - Concepts, getting started, core operations, advanced topics, and API reference
+- **[AWS Lambda Durable Functions Guide](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html)** - How durable functions work on Lambda
 
 ## 💬 Feedback & Support
 
