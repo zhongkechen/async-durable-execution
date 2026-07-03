@@ -7,14 +7,14 @@ import json
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from async_durable_execution.execution import DurableExecutionInvocationInput
-from async_durable_execution.models import (
+from ...execution import DurableExecutionInvocationInput
+from ...models import (
     CheckpointUpdatedExecutionState,
     LambdaContext as LambdaContextProtocol,
     Operation,
 )
-from async_durable_execution.runner.exceptions import InvalidParameterValueException
-from async_durable_execution.runner.model import InvokeResponse
+from ..exceptions import InvalidParameterValueException
+from ..model import InvokeResponse
 
 
 @dataclass(frozen=True)

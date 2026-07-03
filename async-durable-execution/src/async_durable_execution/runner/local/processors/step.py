@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from async_durable_execution.models import (
+from ....models import (
     Operation,
     OperationAction,
     OperationStatus,

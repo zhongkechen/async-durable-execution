@@ -6,36 +6,38 @@ import datetime
 import json
 import logging
 from collections.abc import Mapping
-from dataclasses import dataclass, replace, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Any, Protocol, TYPE_CHECKING
 
-# Import existing types from the main SDK - REUSE EVERYTHING POSSIBLE
-from async_durable_execution.models import (
+from ..models import (
     CallbackDetails,
     CallbackOptions,
     ChainedInvokeDetails,
     ContextDetails,
+    DurableExecutionInvocationOutput,
+    ErrorObject,
     ExecutionDetails,
+    InvocationStatus,
     Operation,
     OperationAction,
+    OperationPayload,
     OperationStatus,
     OperationSubType,
+    OperationType,
     OperationUpdate,
     StepDetails,
     TimestampConverter,
     WaitDetails,
-    OperationPayload,
-    DurableExecutionInvocationOutput,
 )
+from ..serdes import ExtendedTypeSerDes
 from .exceptions import (
-    InvalidParameterValueException,
     DurableFunctionsTestError,
+    InvalidParameterValueException,
 )
-from .. import InvocationStatus, ErrorObject, OperationType, ExtendedTypeSerDes
 
 if TYPE_CHECKING:
-    from async_durable_execution.runner.local.model import StartDurableExecutionInput
+    from .local.model import StartDurableExecutionInput
 
 
 logger = logging.getLogger(__name__)

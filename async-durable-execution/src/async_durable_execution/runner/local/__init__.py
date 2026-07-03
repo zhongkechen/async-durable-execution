@@ -7,44 +7,45 @@ from datetime import timezone
 from threading import Lock
 from typing import Any, Callable
 
-from async_durable_execution import DurableServiceClient, ErrorObject
-from async_durable_execution.execution import (
+from ...client import DurableServiceClient
+from ...execution import (
     DurableExecutionInvocationInput,
     InitialExecutionState,
     _bind_service_client_to_handler,
 )
-from async_durable_execution.models import (
+from ...models import (
     CheckpointOutput,
     CheckpointUpdatedExecutionState,
     DurableExecutionInvocationOutput,
+    ErrorObject,
     Operation,
     OperationUpdate,
     StateOutput,
 )
-from async_durable_execution.runner.exceptions import (
+from ..exceptions import (
     DurableFunctionsTestError,
     InvalidParameterValueException,
     ResourceNotFoundException,
 )
-from async_durable_execution.runner.local.execution import Execution
-from async_durable_execution.runner.local.executor import Executor
-from async_durable_execution.runner.model import (
+from .execution import Execution
+from .executor import Executor
+from ..model import (
     DurableFunctionTestResult,
     InvokeResponse,
     _get_callback_id_from_events,
 )
-from async_durable_execution.runner.local.model import (
+from .model import (
     CheckpointToken,
     Invoker,
     LambdaContext,
     StartDurableExecutionInput,
     StartDurableExecutionOutput,
 )
-from async_durable_execution.runner.local.processor import (
+from .processor import (
     CheckpointValidator,
     OperationTransformer,
 )
-from async_durable_execution.runner.local.scheduler import Event, Scheduler
+from .scheduler import Event, Scheduler
 
 __all__ = [
     "DurableFunctionLocalTestRunner",

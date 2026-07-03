@@ -8,12 +8,12 @@ from datetime import datetime, timezone
 from threading import Lock
 from typing import TYPE_CHECKING
 
-from async_durable_execution.execution import (
+from ...execution import (
     DurableExecutionInvocationInput,
     DurableExecutionInvocationOutput,
     InvocationStatus,
 )
-from async_durable_execution.models import (
+from ...models import (
     CallbackOptions,
     CallbackTimeoutType,
     CheckpointUpdatedExecutionState,

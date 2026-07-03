@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 from typing import Any
 
-from async_durable_execution.models import (
+from ....models import (
     CallbackDetails,
     CallbackOptions,
     Operation,
