@@ -156,29 +156,31 @@ async def test_my_durable_function() -> None:
     assert receipt_result.step_details.result == json.dumps(receipt)
 ```
 
-Use the runner-specific factory for the environment you want to test:
+After deploying the same handler to Lambda, use the cloud runner to test the deployed durable function. The function name must be qualified with a version or alias, for example `order-workflow:$LATEST` or `order-workflow:prod`.
 
 ```python
-from async_durable_execution import create_cloud_runner, create_local_runner
+import os
 
-from order_workflow import handler
+from async_durable_execution import InvocationStatus, create_cloud_runner
 
 
-async def test_with_factory() -> None:
-    with create_local_runner(
-        handler=handler,
-        input={"order_id": "order-123"},
-        timeout=12,
-    ) as runner:
-        local_result = await runner.run()
-
+async def test_order_workflow_in_cloud() -> None:
     with create_cloud_runner(
-        function_name="order-workflow:$LATEST",
-        region="us-east-1",
+        function_name=os.environ["ORDER_WORKFLOW_FUNCTION_NAME"],
+        region=os.environ.get("AWS_REGION", "us-east-1"),
         input={"order_id": "order-123"},
         timeout=45,
     ) as runner:
-        cloud_result = await runner.run()
+        result = await runner.run()
+
+    receipt = {"receipt_id": "receipt-order-123", "order_id": "order-123"}
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert result.get_deserialized_result() == {
+        "status": "approved",
+        "order_id": "order-123",
+        "receipt": receipt,
+    }
 ```
 
 ## 🧩 Examples
