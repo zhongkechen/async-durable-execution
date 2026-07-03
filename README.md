@@ -29,8 +29,6 @@ This fork is specifically focused on making async Python work naturally with dur
 
 ## 🚀 Quick Start
 
-Requires Python 3.10 or newer. User-provided durable handlers, steps, child contexts, callback submitters, and condition checks must be async callables.
-
 Install the execution SDK:
 
 ```console
@@ -43,7 +41,7 @@ For an async Lambda service client, install the optional `aioboto` extra:
 pip install "async-durable-execution[aioboto]"
 ```
 
-The `aioboto` extra installs `aiobotocore`, which lets the SDK create an async Lambda client for durable checkpoint and state APIs. Without it, the SDK uses the bundled `botocore` dependency through a threaded async adapter. Explicitly provided Lambda API clients are detected as sync or async and wrapped accordingly. Code that must force the sync `botocore` client can use `async_durable_execution.client.create_default_sync_client()`.
+The `aioboto` extra installs `aiobotocore`, which lets the SDK create an async Lambda client for durable checkpoint and state APIs. Without it, the SDK uses the bundled `botocore` dependency through a threaded async adapter.
 
 Create a durable Lambda handler:
 
@@ -93,22 +91,7 @@ async def handler(event: dict) -> dict:
     return {"status": "approved", "order_id": order_id, "receipt": receipt}
 ```
 
-Async callables are required anywhere the SDK accepts user code, including `map()` item functions, bound `parallel()` branch callables, child contexts, callback submitters, and wait-for-condition checks. Durable context operations are awaitable and run on the same event loop as your handler.
-
-When decorating class or static methods, `@durable_callable` can be used in either order with `@classmethod` or `@staticmethod`; both of these are valid:
-
-```python
-class Steps:
-    @durable_callable
-    @classmethod
-    async def from_class(cls) -> str:
-        return cls.__name__
-
-    @staticmethod
-    @durable_callable
-    async def from_static() -> str:
-        return "ok"
-```
+Async callables are required anywhere the SDK accepts user code, including `map()` item functions, bound `parallel()` branch callables, child contexts, callback submitters, and wait-for-condition checks. Those callables can be functions, instance methods, class methods, or static methods. Durable context operations are awaitable and run on the same event loop as your handler.
 
 Handler input is deserialized from the durable execution payload before your code runs. Empty or whitespace payloads are normalized to `{}`, and malformed JSON fails the invocation before user code executes.
 
@@ -200,7 +183,7 @@ For the developer workflow to run or deploy example integration tests, see the [
 - **[Generated API Reference](https://zhongkechen.github.io/async-durable-execution/)** - Auto-generated from Python docstrings and published with GitHub Pages
 - **[Migration Guide](docs/migrating-from-official-python-sdk.md)** - Move from the official synchronous Python SDK to this async-first SDK
 - **[Using Synchronous Code](docs/using-synchronous-code.md)** - Wrap existing synchronous business logic and blocking clients safely
-- **[Advanced Usage: Lambda Layer Packaging](docs/lambda-layer-packaging.md)** - Share the SDK through an AWS Lambda layer
+- **[Advanced Usage](docs/advanced-usage.md)** - Configure Lambda clients and share the SDK through an AWS Lambda layer
 - **[Runner Architecture](docs/runner-architecture.md)** - Local and cloud runner execution flow, components, and diagrams
 - **[Contributing Guide](CONTRIBUTING.md)** - Development workflow, Hatch commands, testing, and pull request guidance
 

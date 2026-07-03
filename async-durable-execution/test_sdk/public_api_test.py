@@ -11,6 +11,7 @@ from async_durable_execution import (
     DurableFunctionTestResult,
     create_callback,
     create_cloud_runner,
+    create_default_sync_client,
     create_local_runner,
     step,
     wait,
@@ -53,6 +54,7 @@ def test_additional_public_types_importable_from_package_root():
         "OperationSubType": OperationSubType,
         "SummaryGenerator": SummaryGenerator,
         "create_cloud_runner": create_cloud_runner,
+        "create_default_sync_client": create_default_sync_client,
         "create_local_runner": create_local_runner,
     }
 

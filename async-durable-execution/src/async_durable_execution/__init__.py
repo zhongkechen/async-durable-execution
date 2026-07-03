@@ -76,7 +76,7 @@ from .exceptions import (
 from .execution import durable_callable, durable_execution
 from .primitive.wait import wait
 from .serdes import ExtendedTypeSerDes, JsonSerDes, SerDes, SerDesContext
-from .client import DurableServiceClient
+from .client import DurableServiceClient, create_default_sync_client
 from .runner import (
     DurableFunctionCloudTestRunner,
     DurableFunctionLocalTestRunner,
@@ -89,6 +89,7 @@ __all__ = [
     "__version__",
     "create_callback",
     "create_cloud_runner",
+    "create_default_sync_client",
     "create_local_runner",
     "durable_callable",
     "durable_execution",
