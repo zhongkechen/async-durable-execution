@@ -6,7 +6,7 @@ import datetime
 from datetime import timedelta
 from typing import Any, ClassVar
 
-from async_durable_execution.models import (
+from ....models import (
     CallbackDetails,
     ChainedInvokeDetails,
     ContextDetails,

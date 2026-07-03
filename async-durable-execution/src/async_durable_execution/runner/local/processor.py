@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
-from async_durable_execution.models import (
+from ...models import (
     Operation,
     OperationAction,
     OperationType,

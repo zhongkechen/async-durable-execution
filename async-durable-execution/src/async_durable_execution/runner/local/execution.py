@@ -7,11 +7,11 @@ from threading import Lock
 from typing import Any
 from uuid import uuid4
 
-from async_durable_execution.execution import (
+from ...execution import (
     DurableExecutionInvocationOutput,
     InvocationStatus,
 )
-from async_durable_execution.models import (
+from ...models import (
     ErrorObject,
     ExecutionDetails,
     Operation,
