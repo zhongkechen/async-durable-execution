@@ -3,7 +3,7 @@
 import asyncio
 import datetime
 import json
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -246,7 +246,7 @@ async def test_durable_function_test_runner_init(
 
     # Verify all components are initialized
     mock_scheduler.assert_called_once()
-    mock_scheduler.return_value.start.assert_called_once()
+    mock_scheduler.return_value.start.assert_not_called()
     mock_store.assert_called_once()
     mock_client.assert_called_once_with(
         store=mock_store.return_value,
@@ -372,7 +372,7 @@ async def test_durable_function_test_runner_run(mock_store_class, mock_executor_
     # Mock execution output
     output = StartDurableExecutionOutput(execution_arn="test-arn")
     mock_executor.start_execution.return_value = output
-    mock_executor.wait_until_complete.return_value = True
+    mock_executor.wait_until_complete = AsyncMock(return_value=True)
 
     # Mock execution for result creation
     mock_execution = Mock(spec=Execution)
@@ -423,7 +423,7 @@ async def test_durable_function_test_runner_run_with_custom_params(
     # Mock execution output
     output = StartDurableExecutionOutput(execution_arn="test-arn")
     mock_executor.start_execution.return_value = output
-    mock_executor.wait_until_complete.return_value = True
+    mock_executor.wait_until_complete = AsyncMock(return_value=True)
 
     # Mock execution for result creation
     mock_execution = Mock(spec=Execution)
@@ -470,7 +470,7 @@ async def test_durable_function_test_runner_run_timeout(mock_executor_class):
     # Mock execution output
     output = StartDurableExecutionOutput(execution_arn="test-arn")
     mock_executor.start_execution.return_value = output
-    mock_executor.wait_until_complete.return_value = False  # Timeout
+    mock_executor.wait_until_complete = AsyncMock(return_value=False)  # Timeout
 
     runner = DurableFunctionLocalTestRunner(handler, input="test-input")
 

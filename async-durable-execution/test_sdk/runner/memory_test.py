@@ -1,6 +1,5 @@
 """Tests for InMemoryExecutionStore."""
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import timezone
 from unittest.mock import Mock
 
@@ -493,9 +492,8 @@ def test_time_filtering_logic():
     assert exec_error not in filtered
 
 
-# Concurrent memory tests
-def test_concurrent_save_load():
-    """Test concurrent save and load operations."""
+def test_save_load_multiple_executions():
+    """Test saving and loading multiple executions."""
     store = InMemoryExecutionStore()
 
     def save_execution(i: int):
@@ -521,23 +519,15 @@ def test_concurrent_save_load():
         except KeyError:
             return f"not-found-{i}"
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        # Submit save operations first
-        futures = [executor.submit(save_execution, i) for i in range(5)]
-        # Wait for saves to complete
-        save_results = [future.result() for future in as_completed(futures)]
-
-        # Then submit load operations
-        futures = [executor.submit(load_execution, i) for i in range(5)]
-        # Wait for loads to complete
-        load_results = [future.result() for future in as_completed(futures)]
+    save_results = [save_execution(i) for i in range(5)]
+    load_results = [load_execution(i) for i in range(5)]
 
     results = save_results + load_results
     assert len(results) == 10
 
 
-def test_concurrent_update_list():
-    """Test concurrent update and list operations."""
+def test_update_and_list_multiple_executions():
+    """Test update and list operations."""
     store = InMemoryExecutionStore()
 
     # Pre-populate store
@@ -566,22 +556,16 @@ def test_concurrent_update_list():
         executions = store.list_all()
         return f"listed-{len(executions)}"
 
-    with ThreadPoolExecutor(max_workers=6) as executor:
-        # Submit update operations
-        futures = [executor.submit(update_execution, i) for i in range(3)]
-        # Submit list operations
-        futures.extend([executor.submit(list_stored_executions) for _ in range(3)])
-
-        # Wait for all operations to complete
-        results = [future.result() for future in as_completed(futures)]
+    results = [update_execution(i) for i in range(3)]
+    results.extend(list_stored_executions() for _ in range(3))
 
     assert len(results) == 6
     final_list = store.list_all()
     assert len(final_list) == 3
 
 
-def test_concurrent_query_operations():
-    """Test concurrent query operations on memory store."""
+def test_query_operations():
+    """Test query operations on memory store."""
     store = InMemoryExecutionStore()
 
     # Pre-populate store with test data
@@ -614,13 +598,11 @@ def test_concurrent_query_operations():
 
         return f"{query_type}-{len(executions)}"
 
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        futures = [
-            executor.submit(query_store, "function"),
-            executor.submit(query_store, "status"),
-            executor.submit(query_store, "pagination"),
-            executor.submit(query_store, "all"),
-        ]
-        results = [future.result() for future in as_completed(futures)]
+    results = [
+        query_store("function"),
+        query_store("status"),
+        query_store("pagination"),
+        query_store("all"),
+    ]
 
     assert len(results) == 4

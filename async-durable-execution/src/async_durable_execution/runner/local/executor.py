@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
-from threading import Lock
 from typing import TYPE_CHECKING
 
 from async_durable_execution.execution import (
@@ -52,7 +51,7 @@ from .execution import Execution
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
-    from concurrent.futures import Future
+    from asyncio import Future
 
     from . import InMemoryExecutionStore
     from . import InMemoryServiceClient
@@ -82,7 +81,6 @@ class Executor:
         self._callback_timeouts: dict[str, Future] = {}
         self._callback_heartbeats: dict[str, Future] = {}
         self._execution_timeouts: dict[str, Future] = {}
-        self._invocation_state_lock = Lock()
         self._active_invocations: set[str] = set()
         self._scheduled_callback_resumes: set[str] = set()
         self._pending_callback_resumes: set[str] = set()
@@ -676,31 +674,28 @@ class Executor:
 
     def _schedule_callback_resume(self, execution_arn: str) -> None:
         """Coalesce callback-triggered resumes to avoid overlapping replays."""
-        with self._invocation_state_lock:
-            if (
-                execution_arn in self._active_invocations
-                or execution_arn in self._scheduled_callback_resumes
-            ):
-                self._pending_callback_resumes.add(execution_arn)
-                return
+        if (
+            execution_arn in self._active_invocations
+            or execution_arn in self._scheduled_callback_resumes
+        ):
+            self._pending_callback_resumes.add(execution_arn)
+            return
 
-            self._scheduled_callback_resumes.add(execution_arn)
+        self._scheduled_callback_resumes.add(execution_arn)
 
         self._invoke_execution(execution_arn)
 
     def _mark_invocation_started(self, execution_arn: str) -> None:
-        with self._invocation_state_lock:
-            self._scheduled_callback_resumes.discard(execution_arn)
-            self._active_invocations.add(execution_arn)
+        self._scheduled_callback_resumes.discard(execution_arn)
+        self._active_invocations.add(execution_arn)
 
     def _mark_invocation_finished(self, execution_arn: str) -> None:
         should_resume = False
-        with self._invocation_state_lock:
-            self._active_invocations.discard(execution_arn)
-            if execution_arn in self._pending_callback_resumes:
-                self._pending_callback_resumes.discard(execution_arn)
-                self._scheduled_callback_resumes.add(execution_arn)
-                should_resume = True
+        self._active_invocations.discard(execution_arn)
+        if execution_arn in self._pending_callback_resumes:
+            self._pending_callback_resumes.discard(execution_arn)
+            self._scheduled_callback_resumes.add(execution_arn)
+            should_resume = True
 
         if should_resume:
             execution = self._store.load(execution_arn)
@@ -769,10 +764,10 @@ class Executor:
         if execution_timeout := self._execution_timeouts.pop(execution_arn, None):
             execution_timeout.cancel()
 
-    def wait_until_complete(
+    async def wait_until_complete(
         self, execution_arn: str, timeout: float | None = None
     ) -> bool:
-        """Block until execution completion. Don't do this unless you actually want to block.
+        """Wait until execution completion.
 
         Args
             timeout (int|float|None): Wait for event to set until this timeout.
@@ -781,7 +776,7 @@ class Executor:
             True when set. False if the event timed out without being set.
         """
         if event := self._completion_events.get(execution_arn):
-            return event.wait(timeout)
+            return await event.wait_async(timeout)
 
         # this really shouldn't happen - implies execution timed out?
         msg: str = "execution does not exist."

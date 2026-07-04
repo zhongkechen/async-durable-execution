@@ -4,7 +4,6 @@ import asyncio
 import inspect
 import time
 from datetime import timezone
-from threading import Lock
 from typing import Any, Callable
 
 from async_durable_execution import DurableServiceClient, ErrorObject
@@ -87,7 +86,6 @@ class DurableFunctionLocalTestRunner:
         account_id: str = "123456789012",
     ):
         self._scheduler: Scheduler = Scheduler()
-        self._scheduler.start()
         self._store = InMemoryExecutionStore()
         self.mode = "local"
         self.poll_interval = poll_interval
@@ -116,6 +114,8 @@ class DurableFunctionLocalTestRunner:
         self.close()
 
     async def __aenter__(self) -> DurableFunctionLocalTestRunner:
+        if scheduler := getattr(self, "_scheduler", None):
+            scheduler.start()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -155,6 +155,7 @@ class DurableFunctionLocalTestRunner:
     async def run_async(
         self,
     ) -> str:
+        self._scheduler.start()
         start_input = StartDurableExecutionInput(
             account_id=self._account_id,
             function_name=self._function_name,
@@ -180,7 +181,7 @@ class DurableFunctionLocalTestRunner:
     async def wait_for_result(
         self, execution_arn: str, timeout: int = 60
     ) -> DurableFunctionTestResult:
-        completed = self._executor.wait_until_complete(execution_arn, timeout)
+        completed = await self._executor.wait_until_complete(execution_arn, timeout)
 
         if not completed:
             msg_timeout: str = "Execution did not complete within timeout"
@@ -298,23 +299,18 @@ class InMemoryExecutionStore:
 
     def __init__(self) -> None:
         self._store: dict[str, Execution] = {}
-        self._lock: Lock = Lock()
 
     def save(self, execution: Execution) -> None:
-        with self._lock:
-            self._store[execution.durable_execution_arn] = execution
+        self._store[execution.durable_execution_arn] = execution
 
     def load(self, execution_arn: str) -> Execution:
-        with self._lock:
-            return self._store[execution_arn]
+        return self._store[execution_arn]
 
     def update(self, execution: Execution) -> None:
-        with self._lock:
-            self._store[execution.durable_execution_arn] = execution
+        self._store[execution.durable_execution_arn] = execution
 
     def list_all(self) -> list[Execution]:
-        with self._lock:
-            return list(self._store.values())
+        return list(self._store.values())
 
     def query(
         self,

@@ -1,12 +1,10 @@
-"""A Scheduler that can run awaitables or standard sync callables on a schedule."""
+"""A single-threaded asyncio scheduler for local runner callbacks."""
 
 from __future__ import annotations
 
 import asyncio
-from concurrent.futures import Future, ThreadPoolExecutor
 import inspect
 import logging
-import threading
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -18,9 +16,9 @@ logger = logging.getLogger(__name__)
 class Event:
     """An event created by Scheduler that will block on wait until it's set."""
 
-    def __init__(self, scheduler: Scheduler, event: threading.Event) -> None:
+    def __init__(self, scheduler: Scheduler, event: asyncio.Event) -> None:
         self._scheduler: Scheduler = scheduler
-        self._event: threading.Event = event
+        self._event: asyncio.Event = event
         self._exception: Exception | None = None
 
     def set(self):
@@ -32,14 +30,26 @@ class Event:
         self._exception = exception
         self._scheduler.set_event(self._event)
 
-    def wait(self, timeout: float | None = None, *, clear_on_set: bool = True) -> bool:
+    async def wait_async(
+        self, timeout: float | None = None, *, clear_on_set: bool = True
+    ) -> bool:
         """Wait until the event is set."""
-        result = self._scheduler.wait_for_event(self._event, timeout)
+        result = await self._scheduler.wait_for_event(self._event, timeout)
         if clear_on_set:
             self._scheduler.remove_event(self._event)
         if result and self._exception:
             raise self._exception
         return result
+
+    def wait(self, timeout: float | None = None, *, clear_on_set: bool = True) -> bool:
+        """Synchronously wait for compatibility with scheduler unit tests."""
+        loop = self._scheduler.get_loop()
+        if loop.is_running():
+            msg = "Event.wait() cannot block a running event loop; use wait_async()."
+            raise RuntimeError(msg)
+        return loop.run_until_complete(
+            self.wait_async(timeout=timeout, clear_on_set=clear_on_set)
+        )
 
     def remove(self):
         """Remove the event from the Scheduler."""
@@ -47,16 +57,16 @@ class Event:
 
 
 class Scheduler:
-    """A Scheduler to run callables later and signal events across threads."""
+    """A Scheduler to run callables later on one asyncio event loop."""
 
     def __init__(self) -> None:
         self._running: bool = False
         self._stopping: bool = False
-        self._events: set[threading.Event] = set()
-        self._tasks: set[Future[Any]] = set()
-        self._timers: dict[Future[Any], threading.Timer] = {}
-        self._executor: ThreadPoolExecutor | None = None
-        self._lock = threading.Lock()
+        self._events: set[asyncio.Event] = set()
+        self._tasks: set[asyncio.Future[Any]] = set()
+        self._timer_handles: dict[asyncio.Future[Any], asyncio.TimerHandle] = {}
+        self._running_tasks: dict[asyncio.Future[Any], asyncio.Task[Any]] = {}
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     def __enter__(self):
         self.start()
@@ -69,10 +79,7 @@ class Scheduler:
         """Start the scheduler. Not thread-safe."""
         if self._running:
             return
-        if self._executor is None:
-            self._executor = ThreadPoolExecutor(
-                max_workers=1, thread_name_prefix="durable-scheduler"
-            )
+        self._loop = self._get_or_create_loop()
         self._running = True
 
     def stop(self):
@@ -82,23 +89,29 @@ class Scheduler:
 
         self._running = False
         self._stopping = True
-        with self._lock:
-            timers = list(self._timers.values())
-            tasks = list(self._tasks)
-            executor = self._executor
-            self._events.clear()
-            self._timers.clear()
-            self._tasks.clear()
-            self._executor = None
 
-        for timer in timers:
-            timer.cancel()
-        for task in tasks:
+        timer_handles = list(self._timer_handles.values())
+        running_tasks = list(self._running_tasks.values())
+        futures = list(self._tasks)
+        self._events.clear()
+        self._timer_handles.clear()
+        self._running_tasks.clear()
+        self._tasks.clear()
+
+        for timer_handle in timer_handles:
+            timer_handle.cancel()
+        for task in running_tasks:
             task.cancel()
-        if executor is not None:
-            executor.shutdown(wait=False, cancel_futures=True)
+        for future in futures:
+            future.cancel()
 
         self._stopping = False
+
+    def get_loop(self) -> asyncio.AbstractEventLoop:
+        """Return the scheduler event loop, creating one for sync compatibility."""
+        if self._loop is None or self._loop.is_closed():
+            self._loop = self._get_or_create_loop()
+        return self._loop
 
     def is_started(self) -> bool:
         """Return True if the scheduler is started."""
@@ -106,13 +119,11 @@ class Scheduler:
 
     def event_count(self) -> int:
         """Return the number of events in the scheduler."""
-        with self._lock:
-            return len(self._events)
+        return len(self._events)
 
     def task_count(self) -> int:
         """Return the number of scheduled tasks that are not done."""
-        with self._lock:
-            return sum(1 for task in self._tasks if not task.done())
+        return sum(1 for task in self._tasks if not task.done())
 
     def call_later(
         self,
@@ -120,93 +131,104 @@ class Scheduler:
         delay: float = 0,
         count: int | None = 1,  # noqa: ARG002
         completion_event: Event | None = None,
-    ) -> Future[Any]:
+    ) -> asyncio.Future[Any]:
         """Call func after the delay."""
+        loop = self.get_loop()
         if not self._running or self._stopping:
-            cancelled_future: Future[Any] = Future()
+            cancelled_future: asyncio.Future[Any] = loop.create_future()
             cancelled_future.cancel()
             return cancelled_future
 
-        future: Future[Any] = Future()
+        future: asyncio.Future[Any] = loop.create_future()
         if count == 0:
             future.set_result(None)
             return future
 
-        def cleanup(_future: Future[Any]) -> None:
-            with self._lock:
-                self._tasks.discard(_future)
-                self._timers.pop(_future, None)
+        def cleanup(_future: asyncio.Future[Any]) -> None:
+            self._tasks.discard(_future)
+            if timer_handle := self._timer_handles.pop(_future, None):
+                timer_handle.cancel()
+            if task := self._running_tasks.pop(_future, None):
+                task.cancel()
+            if _future.done() and not _future.cancelled():
+                _future.exception()
 
-        def execute() -> None:
-            if not future.set_running_or_notify_cancel():
+        async def execute() -> None:
+            if future.cancelled():
                 return
-
             try:
-                if inspect.iscoroutinefunction(func):
-                    result = asyncio.run(func())
-                else:
-                    result = func()
-                future.set_result(result)
+                result = func()
+                if inspect.isawaitable(result):
+                    result = await result
             except Exception as err:
                 if completion_event:
                     completion_event.set_exception(err)
                 else:
                     msg: str = "error in scheduled task"
                     logger.exception(msg)
-                future.set_exception(err)
+                if not future.done():
+                    future.set_exception(err)
+            else:
+                if not future.done():
+                    future.set_result(result)
 
         def run() -> None:
-            with self._lock:
-                executor = self._executor
-                if not (
-                    self._running
-                    and not self._stopping
-                    and not future.cancelled()
-                    and executor is not None
-                ):
-                    return
+            if not self._running or self._stopping or future.cancelled():
+                return
+            task = loop.create_task(execute())
+            self._running_tasks[future] = task
 
-            try:
-                executor.submit(execute)
-            except RuntimeError as err:
-                if not future.cancelled():
-                    future.set_exception(err)
+            def discard_task(_task: asyncio.Task[Any]) -> None:
+                self._running_tasks.pop(future, None)
 
-        timer = threading.Timer(delay, run)
-        timer.daemon = True
+            task.add_done_callback(discard_task)
+
         future.add_done_callback(cleanup)
+        timer_handle = loop.call_later(delay, run)
 
-        with self._lock:
-            self._tasks.add(future)
-            self._timers[future] = timer
-
-        timer.start()
+        self._tasks.add(future)
+        self._timer_handles[future] = timer_handle
         return future
 
     def create_event(self) -> Event:
         """Create an event controlled by the Scheduler."""
-        event = threading.Event()
-        with self._lock:
-            self._events.add(event)
+        event = asyncio.Event()
+        self._events.add(event)
         return Event(self, event)
 
-    def wait_for_event(
-        self, event: threading.Event, timeout: float | None = None
+    async def wait_for_event(
+        self, event: asyncio.Event, timeout: float | None = None
     ) -> bool:
         """Wait for an event if it is still tracked by the Scheduler."""
-        with self._lock:
-            if event not in self._events:
-                return False
-        return event.wait(timeout)
+        if event not in self._events:
+            return False
+        try:
+            await asyncio.wait_for(event.wait(), timeout=timeout)
+        except TimeoutError:
+            return False
+        return event in self._events
 
-    def set_event(self, event: threading.Event):
+    def set_event(self, event: asyncio.Event):
         """Set event if it is still tracked by the Scheduler."""
-        with self._lock:
-            should_set = event in self._events
+        should_set = event in self._events
         if should_set:
             event.set()
 
-    def remove_event(self, event: threading.Event):
+    def remove_event(self, event: asyncio.Event):
         """Remove event from Scheduler."""
-        with self._lock:
-            self._events.discard(event)
+        self._events.discard(event)
+        event.set()
+
+    @staticmethod
+    def _get_or_create_loop() -> asyncio.AbstractEventLoop:
+        try:
+            return asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        return loop

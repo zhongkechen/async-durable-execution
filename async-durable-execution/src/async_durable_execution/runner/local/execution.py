@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import datetime, timezone
 from enum import Enum
-from threading import Lock
 from typing import Any
 from uuid import uuid4
 
@@ -62,7 +61,6 @@ class Execution:
         self.used_tokens: set[str] = set()
         # TODO: this will need to persist/rehydrate depending on inmemory vs sqllite store
         self._token_sequence: int = 0
-        self._state_lock: Lock = Lock()
         self.is_complete: bool = False
         self.result: DurableExecutionInvocationOutput | None = None
         self.consecutive_failed_invocation_attempts: int = 0
@@ -163,20 +161,19 @@ class Execution:
         if self.start_input.invocation_id is None:
             msg: str = "invocation_id is required"
             raise InvalidParameterValueException(msg)
-        with self._state_lock:
-            self.operations.append(
-                Operation(
-                    operation_id=self.start_input.invocation_id,
-                    parent_id=None,
-                    name=self.start_input.execution_name,
-                    start_timestamp=datetime.now(timezone.utc),
-                    operation_type=OperationType.EXECUTION,
-                    status=OperationStatus.STARTED,
-                    execution_details=ExecutionDetails(
-                        input_payload=self.start_input.get_normalized_input()
-                    ),
-                )
+        self.operations.append(
+            Operation(
+                operation_id=self.start_input.invocation_id,
+                parent_id=None,
+                name=self.start_input.execution_name,
+                start_timestamp=datetime.now(timezone.utc),
+                operation_type=OperationType.EXECUTION,
+                status=OperationStatus.STARTED,
+                execution_details=ExecutionDetails(
+                    input_payload=self.start_input.get_normalized_input()
+                ),
             )
+        )
 
     def get_operation_execution_started(self) -> Operation:
         if not self.operations:
@@ -188,16 +185,15 @@ class Execution:
 
     def get_new_checkpoint_token(self) -> str:
         """Generate a new checkpoint token with incremented sequence"""
-        with self._state_lock:
-            self._token_sequence += 1
-            new_token_sequence = self._token_sequence
-            token = CheckpointToken(
-                execution_arn=self.durable_execution_arn,
-                token_sequence=new_token_sequence,
-            )
-            token_str = token.to_str()
-            self.used_tokens.add(token_str)
-            return token_str
+        self._token_sequence += 1
+        new_token_sequence = self._token_sequence
+        token = CheckpointToken(
+            execution_arn=self.durable_execution_arn,
+            token_sequence=new_token_sequence,
+        )
+        token_str = token.to_str()
+        self.used_tokens.add(token_str)
+        return token_str
 
     def get_navigable_operations(self) -> list[Operation]:
         """Get list of operations, but exclude child operations where the parent has already completed."""
@@ -309,16 +305,13 @@ class Execution:
             )
             raise IllegalStateException(msg_not_wait)
 
-        # Thread-safe increment sequence and operation update
-        with self._state_lock:
-            self._token_sequence += 1
-            # Build and assign updated operation
-            self.operations[index] = replace(
-                operation,
-                status=OperationStatus.SUCCEEDED,
-                end_timestamp=datetime.now(timezone.utc),
-            )
-            return self.operations[index]
+        self._token_sequence += 1
+        self.operations[index] = replace(
+            operation,
+            status=OperationStatus.SUCCEEDED,
+            end_timestamp=datetime.now(timezone.utc),
+        )
+        return self.operations[index]
 
     def complete_retry(self, operation_id: str) -> Operation:
         """Complete STEP retry when timer fires."""
@@ -334,24 +327,18 @@ class Execution:
             )
             raise IllegalStateException(msg_not_step)
 
-        # Thread-safe increment sequence and operation update
-        with self._state_lock:
-            self._token_sequence += 1
-            # Build updated step_details with cleared next_attempt_timestamp
-            new_step_details = None
-            if operation.step_details:
-                new_step_details = replace(
-                    operation.step_details, next_attempt_timestamp=None
-                )
-
-            # Build updated operation
-            updated_operation = replace(
-                operation, status=OperationStatus.READY, step_details=new_step_details
+        self._token_sequence += 1
+        new_step_details = None
+        if operation.step_details:
+            new_step_details = replace(
+                operation.step_details, next_attempt_timestamp=None
             )
 
-            # Assign
-            self.operations[index] = updated_operation
-            return updated_operation
+        updated_operation = replace(
+            operation, status=OperationStatus.READY, step_details=new_step_details
+        )
+        self.operations[index] = updated_operation
+        return updated_operation
 
     def complete_callback_success(
         self, callback_id: str, result: bytes | None = None
@@ -362,21 +349,20 @@ class Execution:
             msg: str = f"Callback operation [{callback_id}] is not in STARTED state"
             raise IllegalStateException(msg)
 
-        with self._state_lock:
-            updated_callback_details = None
-            if operation.callback_details:
-                updated_callback_details = replace(
-                    operation.callback_details,
-                    result=result.decode() if result else None,
-                )
-
-            self.operations[index] = replace(
-                operation,
-                status=OperationStatus.SUCCEEDED,
-                end_timestamp=datetime.now(timezone.utc),
-                callback_details=updated_callback_details,
+        updated_callback_details = None
+        if operation.callback_details:
+            updated_callback_details = replace(
+                operation.callback_details,
+                result=result.decode() if result else None,
             )
-            return self.operations[index]
+
+        self.operations[index] = replace(
+            operation,
+            status=OperationStatus.SUCCEEDED,
+            end_timestamp=datetime.now(timezone.utc),
+            callback_details=updated_callback_details,
+        )
+        return self.operations[index]
 
     def complete_callback_failure(
         self, callback_id: str, error: ErrorObject
@@ -388,20 +374,17 @@ class Execution:
             msg: str = f"Callback operation [{callback_id}] is not in STARTED state"
             raise IllegalStateException(msg)
 
-        with self._state_lock:
-            updated_callback_details = None
-            if operation.callback_details:
-                updated_callback_details = replace(
-                    operation.callback_details, error=error
-                )
+        updated_callback_details = None
+        if operation.callback_details:
+            updated_callback_details = replace(operation.callback_details, error=error)
 
-            self.operations[index] = replace(
-                operation,
-                status=OperationStatus.FAILED,
-                end_timestamp=datetime.now(timezone.utc),
-                callback_details=updated_callback_details,
-            )
-            return self.operations[index]
+        self.operations[index] = replace(
+            operation,
+            status=OperationStatus.FAILED,
+            end_timestamp=datetime.now(timezone.utc),
+            callback_details=updated_callback_details,
+        )
+        return self.operations[index]
 
     def complete_callback_timeout(
         self, callback_id: str, error: ErrorObject
@@ -413,29 +396,25 @@ class Execution:
             msg: str = f"Callback operation [{callback_id}] is not in STARTED state"
             raise IllegalStateException(msg)
 
-        with self._state_lock:
-            self._token_sequence += 1
-            updated_callback_details = None
-            if operation.callback_details:
-                updated_callback_details = replace(
-                    operation.callback_details, error=error
-                )
+        self._token_sequence += 1
+        updated_callback_details = None
+        if operation.callback_details:
+            updated_callback_details = replace(operation.callback_details, error=error)
 
-            self.operations[index] = replace(
-                operation,
-                status=OperationStatus.TIMED_OUT,
-                end_timestamp=datetime.now(timezone.utc),
-                callback_details=updated_callback_details,
-            )
-            return self.operations[index]
+        self.operations[index] = replace(
+            operation,
+            status=OperationStatus.TIMED_OUT,
+            end_timestamp=datetime.now(timezone.utc),
+            callback_details=updated_callback_details,
+        )
+        return self.operations[index]
 
     def _end_execution(self, status: OperationStatus) -> None:
         """Set the end_timestamp on the main EXECUTION operation when execution completes."""
         execution_op: Operation = self.get_operation_execution_started()
         if execution_op.operation_type == OperationType.EXECUTION:
-            with self._state_lock:
-                self.operations[0] = replace(
-                    execution_op,
-                    status=status,
-                    end_timestamp=datetime.now(timezone.utc),
-                )
+            self.operations[0] = replace(
+                execution_op,
+                status=status,
+                end_timestamp=datetime.now(timezone.utc),
+            )

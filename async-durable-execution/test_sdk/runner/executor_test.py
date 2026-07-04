@@ -155,10 +155,10 @@ async def test_start_execution(
 
     # Test that completion event was created by verifying wait_until_complete works
     # This tests the same functionality without accessing private members
-    mock_event.wait.return_value = True
-    wait_result = executor.wait_until_complete("test-arn", timeout=1)
+    mock_event.wait_async = AsyncMock(return_value=True)
+    wait_result = await executor.wait_until_complete("test-arn", timeout=1)
     assert wait_result is True
-    mock_event.wait.assert_called_once_with(1)
+    mock_event.wait_async.assert_called_once_with(1)
 
 
 @patch("async_durable_execution.runner.local.executor.Execution")
@@ -1135,7 +1135,7 @@ async def test_complete_events_no_event_through_public_api(executor, mock_store)
 async def test_wait_until_complete_success(executor, mock_scheduler):
     """Test wait until complete success through public API."""
     mock_event = Mock()
-    mock_event.wait.return_value = True
+    mock_event.wait_async = AsyncMock(return_value=True)
     mock_scheduler.create_event.return_value = mock_event
 
     # Set up completion event through start_execution
@@ -1150,16 +1150,16 @@ async def test_wait_until_complete_success(executor, mock_scheduler):
         start_input.execution_timeout_seconds = 0
         executor.start_execution(start_input)
 
-    result = executor.wait_until_complete("test-arn", timeout=10)
+    result = await executor.wait_until_complete("test-arn", timeout=10)
 
     assert result is True
-    mock_event.wait.assert_called_once_with(10)
+    mock_event.wait_async.assert_called_once_with(10)
 
 
 async def test_wait_until_complete_timeout(executor, mock_scheduler):
     """Test wait until complete timeout through public API."""
     mock_event = Mock()
-    mock_event.wait.return_value = False
+    mock_event.wait_async = AsyncMock(return_value=False)
     mock_scheduler.create_event.return_value = mock_event
 
     # Set up completion event through start_execution
@@ -1174,14 +1174,14 @@ async def test_wait_until_complete_timeout(executor, mock_scheduler):
         start_input.execution_timeout_seconds = 0
         executor.start_execution(start_input)
 
-    result = executor.wait_until_complete("test-arn", timeout=10)
+    result = await executor.wait_until_complete("test-arn", timeout=10)
 
     assert result is False
 
 
 async def test_wait_until_complete_no_event(executor):
     with pytest.raises(ResourceNotFoundException, match="execution does not exist"):
-        executor.wait_until_complete("nonexistent-arn")
+        await executor.wait_until_complete("nonexistent-arn")
 
 
 async def test_complete_execution(executor, mock_store, mock_execution):
