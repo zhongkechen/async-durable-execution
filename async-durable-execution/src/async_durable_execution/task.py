@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
+import sys
 from collections.abc import Callable, Coroutine
 from typing import Any, TypeVar
 
@@ -19,26 +21,30 @@ def create_eager_task(
     if eager_task_factory is not None:
         return eager_task_factory(loop, coro)
 
+    if sys.version_info < (3, 11):
+        return loop.create_task(coro)
+
+    task_context = contextvars.copy_context()
     try:
-        yielded = coro.send(None)
+        yielded = task_context.run(coro.send, None)
     except StopIteration as complete:
         result = complete.value
 
         async def completed_task() -> T:
             return result
 
-        return loop.create_task(completed_task())
+        return loop.create_task(completed_task(), context=task_context)
     except BaseException as error:
         captured_error = error
 
         async def failed_task() -> T:
             raise captured_error
 
-        return loop.create_task(failed_task())
+        return loop.create_task(failed_task(), context=task_context)
 
     if isinstance(yielded, asyncio.Future) and getattr(
         yielded, "_asyncio_future_blocking", False
     ):
         setattr(yielded, "_asyncio_future_blocking", False)
 
-    return loop.create_task(coro)
+    return loop.create_task(coro, context=task_context)

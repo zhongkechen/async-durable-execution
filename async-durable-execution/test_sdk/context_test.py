@@ -3,6 +3,7 @@
 import asyncio
 import json
 import random
+import sys
 from datetime import timedelta
 from functools import partial
 from itertools import islice
@@ -878,6 +879,10 @@ async def test_step_basic(mock_executor_class):
     mock_executor.process.assert_called_once()
 
 
+@pytest.mark.skipif(
+    sys.version_info < (3, 11),
+    reason="asyncio does not expose task context control before Python 3.11",
+)
 @patch("async_durable_execution.primitive.step.StepOperationExecutor")
 async def test_step_returns_eager_background_task(mock_executor_class):
     """Calling step schedules an eager Task before the result is awaited."""
