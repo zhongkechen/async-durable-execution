@@ -1,5 +1,7 @@
 # Async Durable Execution for Python
 
+[简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md)
+
 [![Build](https://github.com/zhongkechen/async-durable-execution/actions/workflows/build.yml/badge.svg)](https://github.com/zhongkechen/async-durable-execution/actions/workflows/build.yml)
 [![API Docs](https://img.shields.io/badge/API%20Docs-GitHub%20Pages-0A7BBB)](https://zhongkechen.github.io/async-durable-execution/)
 [![Coverage](https://zhongkechen.github.io/async-durable-execution/coverage/badge.svg)](https://zhongkechen.github.io/async-durable-execution/coverage/)
@@ -9,6 +11,12 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 -----
+
+## Why This Project Exists
+
+This project was created because the official Python SDK does not support `async`/`await`, which makes it hard to integrate cleanly with other `asyncio` libraries. The official Python SDK also lacks capabilities supported by other official SDKs, including background execution of operations and parallel execution.
+
+This SDK addresses those gaps and adds a broader set of improvements for building async-first durable workflows in Python. It also follows a more Pythonic style, with APIs that feel natural in modern Python code.
 
 Build reliable, long-running AWS Lambda workflows with checkpointed steps, waits, callbacks, and parallel execution.
 
