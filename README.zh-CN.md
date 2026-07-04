@@ -12,26 +12,26 @@
 
 -----
 
-使用带检查点的步骤、等待、回调与并行执行，构建可靠、长时间运行的 AWS Lambda 工作流。
+使用带检查点的步骤 (`step`)、等待 (`wait`)、回调与并行执行，构建可靠、长时间运行的 Lambda 持久性函数。
 
 本仓库是原 Apache-2.0 授权 [AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/) 的社区维护分支，并在保留上游声明的同时，继续以 Apache License 2.0 发布。
 
-创建此分支首先是因为官方 Python SDK 不支持 `async`/`await`，导致它很难与其他 `asyncio` 库良好协作。此分支专注于让异步 Python 更自然地搭配持久函数使用。其次，官方 Python SDK 也缺少其他官方 SDK 已支持的能力，例如 operation 的后台运行和并行运行。这个 SDK 解决了这些问题，公开 API 在持久操作边界仍保持同步接口，用户提供的持久可调用对象必须对处理程序、步骤、子上下文、回调提交器与条件检查使用 `async def`，并采用了更加 Pythonic 的风格，让 API 在现代 Python 代码中使用起来更自然。
+创建此分支首先是因为官方 Python SDK 不支持 `async`/`await`，导致它很难与其他 `asyncio` 库良好协作。此分支专注于让异步 Python 更自然地搭配 Lambda 持久性函数使用。其次，官方 Python SDK 也缺少其他官方 SDK 已支持的能力，例如持久操作的后台执行和并行执行。这个 SDK 解决了这些问题，公开 API 在持久操作边界仍保持同步接口，用户提供的持久可调用对象必须对事件处理程序、步骤、子上下文、回调提交器与条件检查使用 `async def`，并采用了更加 Pythonic 的风格，让 API 在现代 Python 代码中使用起来更自然。
 
 ## ✨ 主要功能
 
-- **异步优先的持久代码** - 与官方 AWS SDK 相比，用户提供的持久处理程序、步骤、子上下文、回调提交器、map 条目函数、parallel 分支与 wait-for-condition 检查都使用 `async def` 编写。
-- **可 await 的持久操作** - 工作流代码现在使用可 await 的辅助函数，例如 `step(...)`、`wait(...)`、`invoke(...)`、`map(...)`、`parallel(...)` 与 `run_in_child_context(...)`。
-- **简化的操作 API** - `v2` API 移除了配置包装对象，改用直接的关键字参数与更清晰的调用位置，包括仅限关键字的操作名称。
-- **集成本地与云端 runner** - Runner 功能现在通过 `async_durable_execution` 提供，包含独立的本地与云端 runner factory，以及带类型的测试结果辅助对象。
+- **异步优先的持久代码** - 与官方 AWS SDK 相比，用户提供的持久事件处理程序、步骤、子上下文、回调提交器、`map()` 项函数、`parallel()` 分支与等待条件检查都使用 `async def` 编写。
+- **可 await 的持久操作** - 工作流程代码现在使用可 await 的辅助函数，例如 `step(...)`、`wait(...)`、`invoke(...)`、`map(...)`、`parallel(...)` 与 `run_in_child_context(...)`。
+- **简化的持久操作 API** - `v2` API 移除了配置包装对象，改用直接的关键字参数与更清晰的调用位置，包括仅限关键字的操作名称。
+- **集成本地与云端运行器** - 运行器功能现在通过 `async_durable_execution` 提供，包含独立的本地与云端运行器工厂，以及带类型的测试结果辅助对象。
 - **支持异步 Lambda 客户端** - 安装可选的 `aioboto` extra 即可使用异步 Lambda 客户端；否则 SDK 会通过异步适配器使用内置的同步客户端。
-- **通过标准库 logging 提供重放感知日志** - 标准 `logging` logger 会由持久上下文过滤器增强，让工作流日志在重放时保持安全。
-- **Lambda layer 打包** - 仓库包含构建与发布 SDK Lambda layer 的工具和工作流，适用于不直接打包依赖项的函数。
-- **更完整的验证与文档** - 项目现在包含扩展后的本地/云端 runner 覆盖、生成的 API 文档、覆盖率发布，以及针对异步持久工作流更新的示例。
+- **通过标准库 logging 提供重放感知日志** - 标准 `logging` logger 会由持久上下文过滤器增强，让工作流程日志在重放时保持安全。
+- **Lambda 层打包** - 仓库包含构建与发布 SDK Lambda 层的工具和工作流程，适用于不直接打包依赖项的函数。
+- **更完整的验证与文档** - 项目现在包含扩展后的本地/云端运行器覆盖、生成的 API 文档、覆盖率发布，以及针对异步 Lambda 持久性函数更新的示例。
 
 ## 🚀 快速开始
 
-安装执行 SDK：
+安装 SDK：
 
 ```console
 pip install async-durable-execution
@@ -45,7 +45,7 @@ pip install "async-durable-execution[aioboto]"
 
 `aioboto` extra 会安装 `aiobotocore`，让 SDK 能为持久检查点与状态 API 创建异步 Lambda 客户端。若未安装，SDK 会通过线程化的异步适配器使用内置的 `botocore` 依赖项。
 
-创建持久 Lambda 处理程序：
+创建 Lambda 持久性函数的事件处理程序：
 
 ```python
 import asyncio
@@ -85,7 +85,7 @@ async def handler(event: dict) -> dict:
     if not validation["valid"]:
         return {"status": "rejected", "order_id": order_id}
 
-    # simulate approval (real world: use wait_for_callback)
+    # 模拟审批（实际场景请使用 wait_for_callback）
     await wait(duration=timedelta(seconds=5), name="await_confirmation")
 
     receipt = await step(create_receipt(order_id), name="create_receipt")
@@ -93,15 +93,15 @@ async def handler(event: dict) -> dict:
     return {"status": "approved", "order_id": order_id, "receipt": receipt}
 ```
 
-SDK 接受用户代码的所有位置都必须使用异步可调用对象，包括 `map()` 条目函数、绑定的 `parallel()` 分支可调用对象、子上下文、回调提交器与 wait-for-condition 检查。这些可调用对象可以是函数、实例方法、类方法或静态方法。持久上下文操作是可 await 的，并与处理程序运行在同一个事件循环上。
+SDK 接受用户代码的所有位置都必须使用异步可调用对象，包括 `map()` 项函数、绑定的 `parallel()` 分支可调用对象、子上下文、回调提交器与等待条件检查。这些可调用对象可以是函数、实例方法、类方法或静态方法。持久上下文操作是可 await 的，并与事件处理程序运行在同一个 event loop 上。
 
-处理程序输入会在你的代码运行前，先从持久执行载荷反序列化。空白或仅包含空白字符的载荷会规范化为 `{}`，格式错误的 JSON 则会在用户代码运行前让调用失败。
+事件处理程序输入会在你的代码运行前，先从持久执行有效载荷反序列化。空白或仅包含空白字符的有效载荷会规范化为 `{}`，格式错误的 JSON 则会在用户代码运行前让调用失败。
 
-## 🧪 测试持久函数
+## 🧪 测试 Lambda 持久性函数
 
-SDK 包含 runner 辅助函数，可用于在本地测试持久函数，或针对已部署的 Lambda 函数进行测试。本地 runner 会在进程内运行持久处理程序，使用内存内服务客户端拦截检查点操作，并返回可按操作名称检查的 `DurableFunctionTestResult`。
+SDK 包含运行器辅助函数，可用于在本地测试 Lambda 持久性函数，或针对已部署的 Lambda 函数进行测试。本地运行器会在进程内运行事件处理程序，使用内存内服务客户端拦截检查点操作，并返回可按操作名称检查的 `DurableFunctionTestResult`。
 
-假设上方快速开始的处理程序保存在 `order_workflow.py`，本地测试可以运行同一个持久函数：
+假设上方快速开始的事件处理程序保存在 `order_workflow.py`，本地测试可以运行同一个 Lambda 持久性函数：
 
 ```python
 import json
@@ -141,7 +141,7 @@ async def test_my_durable_function() -> None:
     assert receipt_result.step_details.result == json.dumps(receipt)
 ```
 
-将同一个处理程序部署到 Lambda 后，请使用云端 runner 测试已部署的持久函数。函数名称必须以版本或别名限定，例如 `order-workflow:$LATEST` 或 `order-workflow:prod`。
+将同一个事件处理程序部署到 Lambda 后，请使用云端运行器测试已部署的 Lambda 持久性函数。函数名称必须以版本或别名限定，例如 `order-workflow:$LATEST` 或 `order-workflow:prod`。
 
 ```python
 import os
@@ -170,7 +170,7 @@ async def test_order_workflow_in_cloud() -> None:
 
 ## 🧩 示例
 
-示例持久函数位于 `async-durable-execution-examples/src/async_durable_execution_examples/`。可以从 `hello_world.py` 开始，它是最小的完整处理程序。
+Lambda 持久性函数示例位于 `async-durable-execution-examples/src/async_durable_execution_examples/`。可以从 `hello_world.py` 开始，它是最小的完整事件处理程序。
 
 `async-durable-execution-examples/test_examples/` 中的示例测试也很适合作为可执行的模板参考。可按操作或模式浏览：
 
@@ -185,14 +185,14 @@ async def test_order_workflow_in_cloud() -> None:
 - **[生成的 API 参考](https://zhongkechen.github.io/async-durable-execution/)** - 从 Python docstring 自动生成，并通过 GitHub Pages 发布
 - **[迁移指南](docs/migrating-from-official-python-sdk.md)** - 从官方同步 Python SDK 迁移到这个异步优先 SDK
 - **[使用同步代码](docs/using-synchronous-code.md)** - 安全包装既有同步业务逻辑与阻塞式客户端
-- **[高级用法](docs/advanced-usage.md)** - 配置 Lambda 客户端，并通过 AWS Lambda layer 共享 SDK
-- **[Runner 架构](docs/runner-architecture.md)** - 本地与云端 runner 的执行流程、组件与图表
+- **[高级用法](docs/advanced-usage.md)** - 配置 Lambda 客户端，并通过 AWS Lambda 层共享 SDK
+- **[运行器架构](docs/runner-architecture.md)** - 本地与云端运行器的执行流程、组件与图表
 - **[贡献指南](CONTRIBUTING.md)** - 开发工作流、Hatch 命令、测试与 pull request 指南
 
 ## 参考资料
 
-- **[AWS Durable Execution 文档](https://docs.aws.amazon.com/durable-execution/)** - 概念、入门、核心操作、高级主题与 API 参考
-- **[AWS Lambda Durable Functions 指南](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html)** - Lambda 上持久函数的工作方式
+- **[AWS 耐用执行 SDK 开发人员指南](https://docs.aws.amazon.com/durable-execution/)** - 概念、入门、核心操作、高级主题与 API 参考
+- **[Lambda 持久性函数指南](https://docs.aws.amazon.com/zh_cn/lambda/latest/dg/durable-functions.html)** - Lambda 持久性函数的工作方式
 
 ## 💬 反馈与支持
 
