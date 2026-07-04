@@ -879,8 +879,8 @@ async def test_step_basic(mock_executor_class):
 
 
 @patch("async_durable_execution.primitive.step.StepOperationExecutor")
-async def test_step_returns_eager_background_task(mock_executor_class):
-    """Calling step schedules an eager Task before the result is awaited."""
+async def test_step_returns_background_task(mock_executor_class):
+    """Calling step schedules a Task before the result is awaited."""
     started = []
 
     async def process():
@@ -904,14 +904,23 @@ async def test_step_returns_eager_background_task(mock_executor_class):
         started.append("after-call")
 
         assert isinstance(task, asyncio.Task)
-        assert started == ["process", "after-call"]
-        assert mock_executor_class.call_count == 1
+        supports_eager_start = getattr(asyncio, "eager_task_factory", None) is not None
+        if supports_eager_start:
+            expected_started = ["process", "after-call"]
+            assert started == expected_started
+            assert mock_executor_class.call_count == 1
+        else:
+            expected_started = ["after-call", "process"]
+            assert started == ["after-call"]
+            assert mock_executor_class.call_count == 0
 
         result = await task
     finally:
         reset_current_context(token)
 
     assert result == "step_result"
+    assert started == expected_started
+    mock_executor_class.assert_called_once()
 
 
 @patch("async_durable_execution.primitive.step.StepOperationExecutor")
