@@ -204,7 +204,7 @@ class Scheduler:
             return False
         try:
             await asyncio.wait_for(event.wait(), timeout=timeout)
-        except TimeoutError:
+        except asyncio.TimeoutError:
             return False
         return event in self._events
 
