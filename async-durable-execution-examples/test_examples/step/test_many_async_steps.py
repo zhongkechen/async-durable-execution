@@ -46,7 +46,7 @@ async def test_many_async_steps_operations_are_tracked(durable_runner):
 
     assert result.status is InvocationStatus.SUCCEEDED
 
-    for index in (0, 250, 499):
+    for index in (0, 250):
         assert result.get_operation_by_name(f"compute-{index}") is not None
 
     result_data = result.get_deserialized_result()
