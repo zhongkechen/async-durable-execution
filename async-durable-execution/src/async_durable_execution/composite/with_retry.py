@@ -36,6 +36,7 @@ def with_retry(
         summary_generator: Optional summary generator for large child results.
         is_virtual: Whether the child context should skip lifecycle checkpoints.
     """
+
     async def run_loop() -> T:
         retry = retry_strategy or RetryStrategyBuilder().build()
         attempt = 0

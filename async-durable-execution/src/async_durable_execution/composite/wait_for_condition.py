@@ -447,15 +447,13 @@ async def _wait_for_condition(
     wait_strategy: WaitDelayStrategy[T] | None = None,
     serdes: SerDes | None = None,
 ) -> T:
-    executor: WaitForConditionOperationExecutor[T] = (
-        WaitForConditionOperationExecutor(
-            check=check,
-            initial_state=initial_state,
-            state=context.execution_state,
-            operation_identifier=operation_identifier,
-            wait_strategy=wait_strategy,
-            serdes=serdes,
-        )
+    executor: WaitForConditionOperationExecutor[T] = WaitForConditionOperationExecutor(
+        check=check,
+        initial_state=initial_state,
+        state=context.execution_state,
+        operation_identifier=operation_identifier,
+        wait_strategy=wait_strategy,
+        serdes=serdes,
     )
     return await executor.process()
 

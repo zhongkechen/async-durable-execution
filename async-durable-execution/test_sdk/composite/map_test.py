@@ -1037,7 +1037,9 @@ async def test_map_iterates_items_iterable_once(mock_handler):
     items = OneShotItems()
     context = create_test_context(state=mock_state)
 
-    result = await run_with_context(context, lambda: map_operation(test_function, items))
+    result = await run_with_context(
+        context, lambda: map_operation(test_function, items)
+    )
 
     assert result == "map_result"
     assert items.iterations == 1

@@ -19,4 +19,26 @@ def create_eager_task(
     if eager_task_factory is not None:
         return eager_task_factory(loop, coro)
 
+    try:
+        yielded = coro.send(None)
+    except StopIteration as complete:
+        result = complete.value
+
+        async def completed_task() -> T:
+            return result
+
+        return loop.create_task(completed_task())
+    except BaseException as error:
+        captured_error = error
+
+        async def failed_task() -> T:
+            raise captured_error
+
+        return loop.create_task(failed_task())
+
+    if isinstance(yielded, asyncio.Future) and getattr(
+        yielded, "_asyncio_future_blocking", False
+    ):
+        setattr(yielded, "_asyncio_future_blocking", False)
+
     return loop.create_task(coro)

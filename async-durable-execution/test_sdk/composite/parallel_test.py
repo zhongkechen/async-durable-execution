@@ -1435,7 +1435,9 @@ async def test_parallel_handler_serializes_batch_result():
                 async def branch_b():
                     return "b"
 
-                result = await run_with_context(context, lambda: parallel([branch_a, branch_b]))
+                result = await run_with_context(
+                    context, lambda: parallel([branch_a, branch_b])
+                )
 
             assert len(mock_serdes_serialize.call_args_list) == 3
             parent_call = mock_serdes_serialize.call_args_list[2]
@@ -1499,7 +1501,9 @@ async def test_parallel_default_serdes_serializes_batch_result():
                 async def branch_b():
                     return "b"
 
-                result = await run_with_context(context, lambda: parallel([branch_a, branch_b]))
+                result = await run_with_context(
+                    context, lambda: parallel([branch_a, branch_b])
+                )
 
             assert isinstance(result, BatchResult)
             assert len(mock_serialize.call_args_list) == 3
