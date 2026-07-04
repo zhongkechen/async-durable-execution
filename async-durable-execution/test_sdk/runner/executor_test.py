@@ -1677,7 +1677,7 @@ async def test_wait_handler_execution(executor, mock_scheduler):
             wait_handler()
 
             mock_wait.assert_called_once_with("test-arn", "op-123")
-            mock_invoke.assert_called_once_with("test-arn", delay=0)
+            mock_invoke.assert_called_once_with("test-arn")
 
 
 async def test_retry_handler_execution(executor, mock_scheduler):
@@ -1709,7 +1709,7 @@ async def test_retry_handler_execution(executor, mock_scheduler):
             retry_handler()
 
             mock_retry.assert_called_once_with("test-arn", "op-123")
-            mock_invoke.assert_called_once_with("test-arn", delay=0)
+            mock_invoke.assert_called_once_with("test-arn")
 
 
 async def test_get_execution_not_found(executor, mock_store):
@@ -2651,7 +2651,7 @@ async def test_callback_resume_is_coalesced_while_invocation_active(
         executor._mark_invocation_started("test-arn")
         executor._schedule_callback_resume("test-arn")
 
-        assert "test-arn" in executor._pending_callback_resumes
+        assert "test-arn" in executor._pending_resumes
         mock_invoke.assert_not_called()
 
         executor._mark_invocation_finished("test-arn")
@@ -2664,12 +2664,62 @@ async def test_callback_resume_not_invoked_after_completion(executor, mock_store
     execution.is_complete = True
     mock_store.load.return_value = execution
     executor._active_invocations.add("test-arn")
-    executor._pending_callback_resumes.add("test-arn")
+    executor._pending_resumes.add("test-arn")
 
     with patch.object(executor, "_invoke_execution") as mock_invoke:
         executor._mark_invocation_finished("test-arn")
 
     mock_invoke.assert_not_called()
+
+
+async def test_wait_resume_is_deferred_while_invocation_active(
+    executor, mock_store, mock_scheduler
+):
+    execution = Mock()
+    execution.is_complete = False
+    mock_store.load.return_value = execution
+
+    with patch.object(executor, "_invoke_execution") as mock_invoke:
+        executor._mark_invocation_started("test-arn")
+        executor.schedule_wait_timer("test-arn", "wait-op", 1.0)
+
+        wait_handler = mock_scheduler.call_later.call_args[0][0]
+        wait_handler()
+
+        assert ("test-arn", "wait-op") in executor._deferred_wait_resumes
+        execution.complete_wait.assert_not_called()
+        mock_invoke.assert_not_called()
+
+        executor._mark_invocation_finished("test-arn")
+
+    execution.complete_wait.assert_called_once_with(operation_id="wait-op")
+    mock_store.update.assert_called_once_with(execution)
+    mock_invoke.assert_called_once_with("test-arn")
+
+
+async def test_retry_resume_is_deferred_while_invocation_active(
+    executor, mock_store, mock_scheduler
+):
+    execution = Mock()
+    execution.is_complete = False
+    mock_store.load.return_value = execution
+
+    with patch.object(executor, "_invoke_execution") as mock_invoke:
+        executor._mark_invocation_started("test-arn")
+        executor.schedule_step_retry("test-arn", "retry-op", 1.0)
+
+        retry_handler = mock_scheduler.call_later.call_args[0][0]
+        retry_handler()
+
+        assert ("test-arn", "retry-op") in executor._deferred_retry_resumes
+        execution.complete_retry.assert_not_called()
+        mock_invoke.assert_not_called()
+
+        executor._mark_invocation_finished("test-arn")
+
+    execution.complete_retry.assert_called_once_with(operation_id="retry-op")
+    mock_store.update.assert_called_once_with(execution)
+    mock_invoke.assert_called_once_with("test-arn")
 
 
 async def test_complete_workflow_rejects_already_completed_execution(
