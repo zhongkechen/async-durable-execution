@@ -52,6 +52,15 @@ you need execution metadata, call `get_current_context()` and read fields such a
 `durable_execution_arn`, `operation_id`, `operation_name`, `lambda_context`, or
 `is_replaying()`.
 
+Durable operation helpers return `asyncio.Task` objects. You can keep the simple
+`await step(...)` style during migration, or start multiple independent operations
+first and await them later with `asyncio.gather`. This gives you background execution
+and direct concurrency without switching to `parallel()` or `map()`. On Python 3.12
+and newer, operation task creation uses `asyncio.eager_task_factory` so a task starts
+immediately and runs to its first suspension point. Python 3.10 and 3.11 do not
+support eager task start, so the SDK falls back to normal lazy `asyncio` task
+scheduling.
+
 ## Quickstart Migration
 
 Official SDK:
@@ -122,6 +131,27 @@ async def add_numbers(a: int, b: int) -> int:
 
 
 result = await step(add_numbers(5, 3), name="add-numbers")
+```
+
+To run independent steps concurrently, create their tasks first and await them
+together:
+
+```python
+import asyncio
+
+from async_durable_execution import durable_callable, step
+
+
+@durable_callable
+async def price_item(item_id: str) -> int:
+    return 100
+
+
+tasks = [
+    step(price_item(item_id), name=f"price-{item_id}")
+    for item_id in item_ids
+]
+prices = await asyncio.gather(*tasks)
 ```
 
 Put nondeterministic work and side effects inside steps just as you did with the
