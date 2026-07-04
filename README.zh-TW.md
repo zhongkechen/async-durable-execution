@@ -14,7 +14,7 @@
 
 使用具備檢查點的步驟、等待、回呼與平行執行，建置可靠、長時間執行的 AWS Lambda 工作流程。
 
-本儲存庫是原 Apache-2.0 授權 AWS Durable Execution Python SDK 的社群維護分支，並在保留上游聲明的同時，繼續以 Apache License 2.0 發布。
+本儲存庫是原 Apache-2.0 授權 [AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/) 的社群維護分支，並在保留上游聲明的同時，繼續以 Apache License 2.0 發布。
 
 建立這個分支首先是因為官方 Python SDK 不支援 `async`/`await`，導致它很難與其他 `asyncio` 函式庫良好協作。這個分支特別著重於讓非同步 Python 能自然地搭配持久函式使用。其次，官方 Python SDK 也缺少其他官方 SDK 已支援的能力，例如 operation 的背景執行和平行執行。這個 SDK 解決了這些問題，公開 API 在持久操作邊界仍維持同步介面，使用者提供的持久可呼叫物件必須對處理常式、步驟、子情境、回呼提交器與條件檢查使用 `async def`，並採用更 Pythonic 的風格，讓 API 在現代 Python 程式碼中用起來更自然。
 
