@@ -1,8 +1,8 @@
 """Unit tests for scheduler.py"""
 
+import asyncio
 import threading
 import time
-from concurrent.futures import Future
 from unittest.mock import patch
 
 import pytest
@@ -12,10 +12,11 @@ from async_durable_execution.runner.local import Scheduler, Event
 
 def wait_for_condition(condition_func, timeout_iterations=100):
     """Wait for a condition to become true with polling."""
+    loop = asyncio.get_event_loop()
     for _ in range(timeout_iterations):
         if condition_func():
             return True
-        time.sleep(0.001)
+        loop.run_until_complete(asyncio.sleep(0.001))
     return False
 
 
@@ -133,7 +134,7 @@ def test_scheduler_call_later_sync_function():
     future = scheduler.call_later(sync_func, delay=0.01)
     wait_for_condition(lambda: future.done())
 
-    assert isinstance(future, Future)
+    assert isinstance(future, asyncio.Future)
     assert result == ["executed"]
     assert future.done()
 
@@ -153,7 +154,7 @@ def test_scheduler_call_later_async_function():
     future = scheduler.call_later(async_func, delay=0.01)
     wait_for_condition(lambda: future.done())
 
-    assert isinstance(future, Future)
+    assert isinstance(future, asyncio.Future)
     assert result == ["async_executed"]
     assert future.done()
 
@@ -188,21 +189,37 @@ def test_scheduler_call_later_serializes_sync_functions():
 
     active_count = 0
     max_active_count = 0
-    lock = threading.Lock()
 
     def func():
         nonlocal active_count, max_active_count
-        with lock:
-            active_count += 1
-            max_active_count = max(max_active_count, active_count)
+        active_count += 1
+        max_active_count = max(max_active_count, active_count)
         time.sleep(0.02)
-        with lock:
-            active_count -= 1
+        active_count -= 1
 
     futures = [scheduler.call_later(func, delay=0) for _ in range(3)]
     wait_for_condition(lambda: all(future.done() for future in futures))
 
     assert max_active_count == 1
+
+    scheduler.stop()
+
+
+def test_scheduler_call_later_runs_on_caller_thread():
+    """Test scheduled callbacks run on the scheduler event loop thread."""
+    scheduler = Scheduler()
+    scheduler.start()
+
+    caller_thread_id = threading.get_ident()
+    callback_thread_ids = []
+
+    def func():
+        callback_thread_ids.append(threading.get_ident())
+
+    future = scheduler.call_later(func, delay=0)
+    wait_for_condition(lambda: future.done())
+
+    assert callback_thread_ids == [caller_thread_id]
 
     scheduler.stop()
 
@@ -369,34 +386,15 @@ def test_event_set_and_wait_timeout():
     scheduler.stop()
 
 
-def test_event_wait_set_by_thread():
-    """Test Event wait when set by another thread."""
+def test_event_wait_set_by_scheduled_callback():
+    """Test Event wait when set by a scheduled callback."""
     scheduler = Scheduler()
     scheduler.start()
 
     event = scheduler.create_event()
-    result_container = []
-    start_event = threading.Event()
+    scheduler.call_later(event.set, delay=0.01)
 
-    def set_event():
-        start_event.wait()  # Wait for signal to start
-        event.set()
-
-    def wait_for_event():
-        result = event.wait(timeout=1.0)
-        result_container.append(result)
-
-    set_thread = threading.Thread(target=set_event)
-    wait_thread = threading.Thread(target=wait_for_event)
-
-    set_thread.start()
-    wait_thread.start()
-    start_event.set()  # Signal to start setting event
-
-    set_thread.join()
-    wait_thread.join()
-
-    assert result_container[0] is True
+    assert event.wait(timeout=1.0) is True
 
     scheduler.stop()
 

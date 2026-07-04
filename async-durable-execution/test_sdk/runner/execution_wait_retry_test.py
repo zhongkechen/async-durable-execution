@@ -1,6 +1,5 @@
-"""Additional concurrent tests for wait and retry operations."""
+"""Additional single-threaded tests for wait and retry operations."""
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 from async_durable_execution.models import (
@@ -13,8 +12,8 @@ from async_durable_execution.runner.local.execution import Execution
 from async_durable_execution.runner.local.model import StartDurableExecutionInput
 
 
-def test_concurrent_wait_and_retry_completion():
-    """Test concurrent complete_wait and complete_retry operations."""
+def test_wait_and_retry_completion_sequence():
+    """Test complete_wait and complete_retry operations."""
     input_data = StartDurableExecutionInput(
         account_id="123456789012",
         function_name="test-function",
@@ -49,20 +48,12 @@ def test_concurrent_wait_and_retry_completion():
 
     execution.operations.extend([wait_op, step_op])
 
-    def complete_wait():
-        result = execution.complete_wait("wait-1")
-        return f"wait-completed-{result.status.value}"
-
-    def complete_retry():
-        result = execution.complete_retry("step-1")
-        return f"retry-completed-{result.status.value}"
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = []
-        futures.append(executor.submit(complete_wait))
-        futures.append(executor.submit(complete_retry))
-
-        results = [future.result() for future in as_completed(futures)]
+    wait_result = execution.complete_wait("wait-1")
+    retry_result = execution.complete_retry("step-1")
+    results = [
+        f"wait-completed-{wait_result.status.value}",
+        f"retry-completed-{retry_result.status.value}",
+    ]
 
     assert len(results) == 2
     assert "wait-completed-SUCCEEDED" in results

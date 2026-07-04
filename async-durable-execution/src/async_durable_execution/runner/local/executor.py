@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
-from threading import Lock
 from typing import TYPE_CHECKING
 
 from ...execution import (
@@ -52,7 +51,7 @@ from .execution import Execution
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
-    from concurrent.futures import Future
+    from asyncio import Future
 
     from . import InMemoryExecutionStore
     from . import InMemoryServiceClient
@@ -82,10 +81,14 @@ class Executor:
         self._callback_timeouts: dict[str, Future] = {}
         self._callback_heartbeats: dict[str, Future] = {}
         self._execution_timeouts: dict[str, Future] = {}
-        self._invocation_state_lock = Lock()
         self._active_invocations: set[str] = set()
-        self._scheduled_callback_resumes: set[str] = set()
-        self._pending_callback_resumes: set[str] = set()
+        self._scheduled_resumes: set[str] = set()
+        self._pending_resumes: set[str] = set()
+        self._deferred_wait_resumes: set[tuple[str, str]] = set()
+        self._deferred_retry_resumes: set[tuple[str, str]] = set()
+        self._deferred_callback_timeouts: set[tuple[str, str, CallbackTimeoutType]] = (
+            set()
+        )
 
     def start_execution(
         self,
@@ -444,7 +447,7 @@ class Executor:
             execution.complete_callback_success(callback_id, result)
             self._store.update(execution)
             self._cleanup_callback_timeouts(callback_id)
-            self._schedule_callback_resume(callback_token.execution_arn)
+            self._schedule_resume(callback_token.execution_arn)
             logger.info("Callback success completed for callback_id: %s", callback_id)
         except Exception as e:
             msg = f"Failed to process callback success: {e}"
@@ -482,7 +485,7 @@ class Executor:
             execution.complete_callback_failure(callback_id, callback_error)
             self._store.update(execution)
             self._cleanup_callback_timeouts(callback_id)
-            self._schedule_callback_resume(callback_token.execution_arn)
+            self._schedule_resume(callback_token.execution_arn)
             logger.info("Callback failure completed for callback_id: %s", callback_id)
         except Exception as e:
             msg = f"Failed to process callback failure: {e}"
@@ -675,36 +678,40 @@ class Executor:
         return invoke
 
     def _schedule_callback_resume(self, execution_arn: str) -> None:
-        """Coalesce callback-triggered resumes to avoid overlapping replays."""
-        with self._invocation_state_lock:
-            if (
-                execution_arn in self._active_invocations
-                or execution_arn in self._scheduled_callback_resumes
-            ):
-                self._pending_callback_resumes.add(execution_arn)
-                return
+        """Schedule a callback-triggered resume.
 
-            self._scheduled_callback_resumes.add(execution_arn)
+        Kept as a named wrapper for tests and callers that exercise callback behavior.
+        """
+        self._schedule_resume(execution_arn)
+
+    def _schedule_resume(self, execution_arn: str) -> None:
+        """Coalesce external resumes to avoid overlapping replays."""
+        if execution_arn in self._active_invocations:
+            self._pending_resumes.add(execution_arn)
+            return
+
+        if execution_arn in self._scheduled_resumes:
+            return
+
+        self._scheduled_resumes.add(execution_arn)
 
         self._invoke_execution(execution_arn)
 
     def _mark_invocation_started(self, execution_arn: str) -> None:
-        with self._invocation_state_lock:
-            self._scheduled_callback_resumes.discard(execution_arn)
-            self._active_invocations.add(execution_arn)
+        self._scheduled_resumes.discard(execution_arn)
+        self._active_invocations.add(execution_arn)
 
     def _mark_invocation_finished(self, execution_arn: str) -> None:
-        should_resume = False
-        with self._invocation_state_lock:
-            self._active_invocations.discard(execution_arn)
-            if execution_arn in self._pending_callback_resumes:
-                self._pending_callback_resumes.discard(execution_arn)
-                self._scheduled_callback_resumes.add(execution_arn)
-                should_resume = True
+        self._active_invocations.discard(execution_arn)
+        should_resume = self._apply_deferred_resume_events(execution_arn)
+        if execution_arn in self._pending_resumes:
+            self._pending_resumes.discard(execution_arn)
+            should_resume = True
 
         if should_resume:
             execution = self._store.load(execution_arn)
             if not execution.is_complete:
+                self._scheduled_resumes.add(execution_arn)
                 self._invoke_execution(execution_arn)
 
     def _invoke_execution(self, execution_arn: str, delay: float = 0) -> None:
@@ -769,10 +776,10 @@ class Executor:
         if execution_timeout := self._execution_timeouts.pop(execution_arn, None):
             execution_timeout.cancel()
 
-    def wait_until_complete(
+    async def wait_until_complete(
         self, execution_arn: str, timeout: float | None = None
     ) -> bool:
-        """Block until execution completion. Don't do this unless you actually want to block.
+        """Wait until execution completion.
 
         Args
             timeout (int|float|None): Wait for event to set until this timeout.
@@ -781,7 +788,7 @@ class Executor:
             True when set. False if the event timed out without being set.
         """
         if event := self._completion_events.get(execution_arn):
-            return event.wait(timeout)
+            return await event.wait_async(timeout)
 
         # this really shouldn't happen - implies execution timed out?
         msg: str = "execution does not exist."
@@ -811,7 +818,7 @@ class Executor:
             raise IllegalStateException(msg)
         self._complete_events(execution_arn=execution_arn)
 
-    def _on_wait_succeeded(self, execution_arn: str, operation_id: str) -> None:
+    def _on_wait_succeeded(self, execution_arn: str, operation_id: str) -> bool:
         """Private method - called when a wait operation completes successfully."""
         execution = self._store.load(execution_arn)
 
@@ -820,7 +827,7 @@ class Executor:
                 "[%s] Execution already completed, ignoring wait succeeded event",
                 execution_arn,
             )
-            return
+            return False
 
         try:
             execution.complete_wait(operation_id=operation_id)
@@ -828,10 +835,12 @@ class Executor:
             logger.debug(
                 "[%s] Wait succeeded for operation %s", execution_arn, operation_id
             )
+            return True
         except Exception:
             logger.exception("[%s] Error processing wait succeeded.", execution_arn)
+            return False
 
-    def _on_retry_ready(self, execution_arn: str, operation_id: str) -> None:
+    def _on_retry_ready(self, execution_arn: str, operation_id: str) -> bool:
         """Private method - called when a retry delay has elapsed and retry is ready."""
         execution = self._store.load(execution_arn)
 
@@ -839,7 +848,7 @@ class Executor:
             logger.info(
                 "[%s] Execution already completed, ignoring retry", execution_arn
             )
-            return
+            return False
 
         try:
             execution.complete_retry(operation_id=operation_id)
@@ -847,8 +856,69 @@ class Executor:
             logger.debug(
                 "[%s] Retry ready for operation %s", execution_arn, operation_id
             )
+            return True
         except Exception:
             logger.exception("[%s] Error processing retry ready.", execution_arn)
+            return False
+
+    def _defer_resume_event_if_active(
+        self,
+        execution_arn: str,
+        operation_id: str,
+        deferred_events: set[tuple[str, str]],
+    ) -> bool:
+        if execution_arn not in self._active_invocations:
+            return False
+
+        deferred_events.add((execution_arn, operation_id))
+        return True
+
+    def _defer_callback_timeout_if_active(
+        self,
+        execution_arn: str,
+        callback_id: str,
+        timeout_type: CallbackTimeoutType,
+    ) -> bool:
+        if execution_arn not in self._active_invocations:
+            return False
+
+        self._deferred_callback_timeouts.add((execution_arn, callback_id, timeout_type))
+        return True
+
+    def _apply_deferred_resume_events(self, execution_arn: str) -> bool:
+        should_resume = False
+
+        for wait_event in list(self._deferred_wait_resumes):
+            event_execution_arn, operation_id = wait_event
+            if event_execution_arn != execution_arn:
+                continue
+            self._deferred_wait_resumes.discard(wait_event)
+            should_resume = (
+                self._on_wait_succeeded(execution_arn, operation_id) or should_resume
+            )
+
+        for retry_event in list(self._deferred_retry_resumes):
+            event_execution_arn, operation_id = retry_event
+            if event_execution_arn != execution_arn:
+                continue
+            self._deferred_retry_resumes.discard(retry_event)
+            should_resume = (
+                self._on_retry_ready(execution_arn, operation_id) or should_resume
+            )
+
+        for callback_event in list(self._deferred_callback_timeouts):
+            event_execution_arn, callback_id, timeout_type = callback_event
+            if event_execution_arn != execution_arn:
+                continue
+            self._deferred_callback_timeouts.discard(callback_event)
+            should_resume = (
+                self._complete_callback_timeout(
+                    execution_arn, callback_id, timeout_type
+                )
+                or should_resume
+            )
+
+        return should_resume
 
     def timeout_execution(self, execution_arn: str, error: ErrorObject) -> None:
         """Handle execution timeout."""
@@ -869,8 +939,12 @@ class Executor:
         logger.debug("[%s] scheduling wait with delay: %d", execution_arn, delay)
 
         def wait_handler() -> None:
-            self._on_wait_succeeded(execution_arn, operation_id)
-            self._invoke_execution(execution_arn, delay=0)
+            if self._defer_resume_event_if_active(
+                execution_arn, operation_id, self._deferred_wait_resumes
+            ):
+                return
+            if self._on_wait_succeeded(execution_arn, operation_id):
+                self._schedule_resume(execution_arn)
 
         completion_event = self._completion_events.get(execution_arn)
         self._scheduler.call_later(
@@ -889,8 +963,12 @@ class Executor:
         )
 
         def retry_handler() -> None:
-            self._on_retry_ready(execution_arn, operation_id)
-            self._invoke_execution(execution_arn, delay=0)
+            if self._defer_resume_event_if_active(
+                execution_arn, operation_id, self._deferred_retry_resumes
+            ):
+                return
+            if self._on_retry_ready(execution_arn, operation_id):
+                self._schedule_resume(execution_arn)
 
         completion_event = self._completion_events.get(execution_arn)
         self._scheduler.call_later(
@@ -1018,55 +1096,60 @@ class Executor:
         if heartbeat_future := self._callback_heartbeats.pop(callback_id, None):
             heartbeat_future.cancel()
 
-    def _on_callback_timeout(self, execution_arn: str, callback_id: str) -> None:
-        """Handle callback timeout."""
+    def _complete_callback_timeout(
+        self,
+        execution_arn: str,
+        callback_id: str,
+        timeout_type: CallbackTimeoutType,
+    ) -> bool:
+        """Complete a callback with a timeout if the execution is still active."""
         try:
             callback_token = CallbackToken.from_str(callback_id)
             execution = self.get_execution(callback_token.execution_arn)
 
             if execution.is_complete:
-                return
+                return False
 
-            # Fail the callback with timeout error
+            timeout_label = (
+                "Callback heartbeat timed out"
+                if timeout_type is CallbackTimeoutType.HEARTBEAT
+                else "Callback timed out"
+            )
             timeout_error = ErrorObject.from_message(
-                f"Callback timed out: {CallbackTimeoutType.TIMEOUT.value}"
+                f"{timeout_label}: {timeout_type.value}"
             )
             execution.complete_callback_timeout(callback_id, timeout_error)
             self._store.update(execution)
-            logger.warning("[%s] Callback %s timed out", execution_arn, callback_id)
-            self._invoke_execution(callback_token.execution_arn)
+            logger.warning("[%s] %s %s", execution_arn, timeout_label, callback_id)
+            return True
         except Exception:
             logger.exception(
                 "[%s] Error processing callback timeout for %s",
                 execution_arn,
                 callback_id,
             )
+            return False
+
+    def _on_callback_timeout(self, execution_arn: str, callback_id: str) -> None:
+        """Handle callback timeout."""
+        if self._defer_callback_timeout_if_active(
+            execution_arn, callback_id, CallbackTimeoutType.TIMEOUT
+        ):
+            return
+        if self._complete_callback_timeout(
+            execution_arn, callback_id, CallbackTimeoutType.TIMEOUT
+        ):
+            self._schedule_resume(execution_arn)
 
     def _on_callback_heartbeat_timeout(
         self, execution_arn: str, callback_id: str
     ) -> None:
         """Handle callback heartbeat timeout."""
-        try:
-            callback_token = CallbackToken.from_str(callback_id)
-            execution = self.get_execution(callback_token.execution_arn)
-
-            if execution.is_complete:
-                return
-
-            # Fail the callback with heartbeat timeout error
-
-            heartbeat_error = ErrorObject.from_message(
-                f"Callback heartbeat timed out: {CallbackTimeoutType.HEARTBEAT.value}"
-            )
-            execution.complete_callback_timeout(callback_id, heartbeat_error)
-            self._store.update(execution)
-            logger.warning(
-                "[%s] Callback %s heartbeat timed out", execution_arn, callback_id
-            )
-            self._invoke_execution(callback_token.execution_arn)
-        except Exception:
-            logger.exception(
-                "[%s] Error processing callback heartbeat timeout for %s",
-                execution_arn,
-                callback_id,
-            )
+        if self._defer_callback_timeout_if_active(
+            execution_arn, callback_id, CallbackTimeoutType.HEARTBEAT
+        ):
+            return
+        if self._complete_callback_timeout(
+            execution_arn, callback_id, CallbackTimeoutType.HEARTBEAT
+        ):
+            self._schedule_resume(execution_arn)
