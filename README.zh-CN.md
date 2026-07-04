@@ -14,7 +14,7 @@
 
 使用带检查点的步骤、等待、回调与并行执行，构建可靠、长时间运行的 AWS Lambda 工作流。
 
-本仓库是原 Apache-2.0 授权 AWS 项目的社区维护分支，并在保留上游声明的同时，继续以 Apache License 2.0 发布。
+本仓库是原 Apache-2.0 授权 AWS Durable Execution Python SDK 的社区维护分支，并在保留上游声明的同时，继续以 Apache License 2.0 发布。
 
 创建此分支首先是因为官方 Python SDK 不支持 `async`/`await`，导致它很难与其他 `asyncio` 库良好协作。此分支专注于让异步 Python 更自然地搭配持久函数使用。其次，官方 Python SDK 也缺少其他官方 SDK 已支持的能力，例如 operation 的后台运行和并行运行。这个 SDK 解决了这些问题，公开 API 在持久操作边界仍保持同步接口，用户提供的持久可调用对象必须对处理程序、步骤、子上下文、回调提交器与条件检查使用 `async def`，并采用了更加 Pythonic 的风格，让 API 在现代 Python 代码中使用起来更自然。
 

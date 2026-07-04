@@ -14,7 +14,7 @@
 
 Build reliable, long-running AWS Lambda workflows with checkpointed steps, waits, callbacks, and parallel execution.
 
-This repository is a community-maintained fork of the original Apache-2.0 licensed AWS project and continues to ship under Apache License 2.0 with the upstream notices preserved.
+This repository is a community-maintained fork of the original Apache-2.0 licensed AWS Durable Execution Python SDK and continues to ship under Apache License 2.0 with the upstream notices preserved.
 
 This fork was created because the official Python SDK does not support `async`/`await`, which makes it hard to integrate cleanly with other `asyncio` libraries. It is specifically focused on making async Python work naturally with durable functions. The official Python SDK also lacks capabilities supported by other official SDKs, including background execution of operations and parallel execution. This SDK addresses those gaps, keeps the public API synchronous at the durable operation boundary, requires user-provided durable callables to use `async def` for handlers, steps, child contexts, callback submitters, and condition checks, and follows a more Pythonic style with APIs that feel natural in modern Python code.
 
