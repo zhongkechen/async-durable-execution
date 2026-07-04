@@ -31,7 +31,7 @@ from ..primitive.base import OperationExecutor
 from ..primitive.child import (
     ChildOperationExecutor,
     OrphanedChildException,
-    _run_in_child_context,
+    _create_child_context_task as _run_in_child_context,
     get_durable_context,
 )
 from ..context import bind_current_context
@@ -906,7 +906,7 @@ async def parallel_handler(
     return await executor.process()
 
 
-async def parallel(
+def parallel(
     branches: Iterable[Callable[[], Awaitable[T]]],
     *,
     name: str | None = None,
@@ -916,7 +916,7 @@ async def parallel(
     item_serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = ParallelSummaryGenerator(),
     nesting_type: NestingType = NestingType.NESTED,
-):
+) -> asyncio.Task[BatchResult[T]]:
     """Run multiple bound durable callables concurrently and return a `BatchResult`."""
     context = get_durable_context("parallel")
     validated_branches: list[Callable[[], Awaitable[T]]] = []
@@ -950,9 +950,10 @@ async def parallel(
         )
         return await handler()
 
-    return await _run_in_child_context(
+    return _run_in_child_context(
         run_parallel_handler,
         sub_type=OperationSubType.PARALLEL,
         name=name,
         serdes=serdes,
+        operation_name="parallel",
     )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, TypeVar, cast
 
@@ -24,8 +25,10 @@ from ..models import (
 from ..serdes import (
     DEFAULT_JSON_SERDES,
 )
+from ..task import create_eager_task
 
 if TYPE_CHECKING:
+    from .child import DurableContext
     from ..serdes import SerDes
     from ..state import ExecutionState
 
@@ -149,7 +152,7 @@ class InvokeOperationExecutor(OperationExecutor[R]):
         raise ExecutionError(error_msg) from None
 
 
-async def invoke(
+def invoke(
     function_name: str,
     payload: P,
     *,
@@ -157,7 +160,7 @@ async def invoke(
     serdes_payload: SerDes[P] | None = None,
     serdes_result: SerDes[R] | None = None,
     tenant_id: str | None = None,
-) -> R:
+) -> asyncio.Task[R]:
     """Invoke another durable Lambda function and wait for its durable result.
 
     Args:
@@ -169,21 +172,46 @@ async def invoke(
         tenant_id: Optional tenant identifier for the chained invocation.
     """
     context = get_durable_context("invoke")
+
     with context._replay_aware():
         operation_id = context.step_counter.create_step_id()
-
-        executor: InvokeOperationExecutor[R] = InvokeOperationExecutor(
-            function_name=function_name,
-            payload=payload,
-            state=context.execution_state,
-            operation_identifier=OperationIdentifier(
-                operation_id=operation_id,
-                sub_type=OperationSubType.CHAINED_INVOKE,
-                parent_id=context.parent_id,
-                name=name,
-            ),
-            serdes_payload=serdes_payload,
-            serdes_result=serdes_result,
-            tenant_id=tenant_id,
+        operation_identifier = OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=OperationSubType.CHAINED_INVOKE,
+            parent_id=context.parent_id,
+            name=name,
         )
-        return await executor.process()
+
+        return create_eager_task(
+            lambda: _invoke(
+                function_name=function_name,
+                payload=payload,
+                context=context,
+                operation_identifier=operation_identifier,
+                serdes_payload=serdes_payload,
+                serdes_result=serdes_result,
+                tenant_id=tenant_id,
+            ),
+        )
+
+
+async def _invoke(
+    function_name: str,
+    payload: P,
+    *,
+    context: DurableContext,
+    operation_identifier: OperationIdentifier,
+    serdes_payload: SerDes[P] | None = None,
+    serdes_result: SerDes[R] | None = None,
+    tenant_id: str | None = None,
+) -> R:
+    executor: InvokeOperationExecutor[R] = InvokeOperationExecutor(
+        function_name=function_name,
+        payload=payload,
+        state=context.execution_state,
+        operation_identifier=operation_identifier,
+        serdes_payload=serdes_payload,
+        serdes_result=serdes_result,
+        tenant_id=tenant_id,
+    )
+    return await executor.process()

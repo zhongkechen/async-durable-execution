@@ -108,7 +108,11 @@ def create_parallel_executor(**kwargs):
 async def run_with_context(context: DurableContext, awaitable):
     token = set_current_context(context)
     try:
-        return await awaitable
+        if callable(awaitable):
+            awaitable = awaitable()
+        if hasattr(awaitable, "__await__"):
+            return await awaitable
+        return awaitable
     finally:
         reset_current_context(token)
 
@@ -216,7 +220,7 @@ async def test_parallel_passes_config_fields_to_handler(
 
     result = await run_with_context(
         context,
-        parallel(
+        lambda: parallel(
             [branch_a],
             max_concurrency=7,
             completion_config=completion_config,
@@ -256,7 +260,7 @@ async def test_parallel_passes_default_summary_generator(
 
     result = await run_with_context(
         context,
-        parallel([branch_a]),
+        lambda: parallel([branch_a]),
     )
 
     assert result == "parallel_result"
@@ -310,7 +314,7 @@ async def test_parallel_raises_when_child_operation_id_is_missing(
         RuntimeError,
         match="parallel operation id is not available in the current context",
     ):
-        await run_with_context(context, parallel([branch_a]))
+        await run_with_context(context, lambda: parallel([branch_a]))
 
 
 @patch("async_durable_execution.composite.parallel.parallel_handler")
@@ -345,7 +349,7 @@ async def test_parallel_accepts_one_shot_branch_iterable(
 
     mock_parallel_handler.return_value = handler_result
 
-    result = await run_with_context(context, parallel(branches))
+    result = await run_with_context(context, lambda: parallel(branches))
 
     assert result == "parallel_result"
     assert branches.iteration_count == 1
@@ -1213,7 +1217,7 @@ async def test_parallel_item_serialize(
 
         await run_with_context(
             context,
-            parallel(
+            lambda: parallel(
                 [branch_a, branch_b],
                 serdes=batch_serdes,
                 item_serdes=item_serdes,
@@ -1292,7 +1296,7 @@ async def test_parallel_item_deserialize(mock_deserialize, item_serdes, batch_se
 
         await run_with_context(
             context,
-            parallel(
+            lambda: parallel(
                 [branch_a, branch_b],
                 serdes=batch_serdes,
                 item_serdes=item_serdes,
@@ -1431,7 +1435,7 @@ async def test_parallel_handler_serializes_batch_result():
                 async def branch_b():
                     return "b"
 
-                result = await run_with_context(context, parallel([branch_a, branch_b]))
+                result = await run_with_context(context, lambda: parallel([branch_a, branch_b]))
 
             assert len(mock_serdes_serialize.call_args_list) == 3
             parent_call = mock_serdes_serialize.call_args_list[2]
@@ -1495,7 +1499,7 @@ async def test_parallel_default_serdes_serializes_batch_result():
                 async def branch_b():
                     return "b"
 
-                result = await run_with_context(context, parallel([branch_a, branch_b]))
+                result = await run_with_context(context, lambda: parallel([branch_a, branch_b]))
 
             assert isinstance(result, BatchResult)
             assert len(mock_serialize.call_args_list) == 3
@@ -1569,7 +1573,7 @@ async def test_parallel_custom_serdes_serializes_batch_result():
 
                 result = await run_with_context(
                     context,
-                    parallel(
+                    lambda: parallel(
                         [branch_a, branch_b],
                         serdes=custom_serdes,
                     ),

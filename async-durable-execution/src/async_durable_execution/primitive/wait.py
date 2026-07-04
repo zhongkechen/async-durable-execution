@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -17,8 +18,10 @@ from ..models import (
     OperationUpdate,
     WaitOptions,
 )
+from ..task import create_eager_task
 
 if TYPE_CHECKING:
+    from .child import DurableContext
     from ..state import ExecutionState
 
 logger = logging.getLogger(__name__)
@@ -84,7 +87,7 @@ class WaitOperationExecutor(OperationExecutor[None]):
         suspend_with_optional_resume_delay(msg, self.seconds)  # throws suspend
 
 
-async def wait(duration: Duration, *, name: str | None = None) -> None:
+def wait(duration: Duration, *, name: str | None = None) -> asyncio.Task[None]:
     """Suspend the durable execution for at least the given duration.
 
     Args:
@@ -96,17 +99,34 @@ async def wait(duration: Duration, *, name: str | None = None) -> None:
     if seconds < 1:
         msg = "duration must be at least 1 second"
         raise ValidationError(msg)
+
     with context._replay_aware():
         operation_id = context.step_counter.create_step_id()
+        operation_identifier = OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=OperationSubType.WAIT,
+            parent_id=context.parent_id,
+            name=name,
+        )
 
-        executor: WaitOperationExecutor = WaitOperationExecutor(
-            seconds=seconds,
-            state=context.execution_state,
-            operation_identifier=OperationIdentifier(
-                operation_id=operation_id,
-                sub_type=OperationSubType.WAIT,
-                parent_id=context.parent_id,
-                name=name,
+        return create_eager_task(
+            lambda: _wait(
+                seconds=seconds,
+                context=context,
+                operation_identifier=operation_identifier,
             ),
         )
-        await executor.process()
+
+
+async def _wait(
+    *,
+    seconds: int,
+    context: DurableContext,
+    operation_identifier: OperationIdentifier,
+) -> None:
+    executor: WaitOperationExecutor = WaitOperationExecutor(
+        seconds=seconds,
+        state=context.execution_state,
+        operation_identifier=operation_identifier,
+    )
+    await executor.process()

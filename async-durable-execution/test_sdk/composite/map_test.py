@@ -145,7 +145,11 @@ def create_map_executor(**kwargs):
 async def run_with_context(context: DurableContext, awaitable):
     token = set_current_context(context)
     try:
-        return await awaitable
+        if callable(awaitable):
+            awaitable = awaitable()
+        if hasattr(awaitable, "__await__"):
+            return await awaitable
+        return awaitable
     finally:
         reset_current_context(token)
 
@@ -1033,7 +1037,7 @@ async def test_map_iterates_items_iterable_once(mock_handler):
     items = OneShotItems()
     context = create_test_context(state=mock_state)
 
-    result = await run_with_context(context, map_operation(test_function, items))
+    result = await run_with_context(context, lambda: map_operation(test_function, items))
 
     assert result == "map_result"
     assert items.iterations == 1
@@ -1097,7 +1101,7 @@ async def test_map_passes_default_summary_generator_to_handler(
     mock_run_in_child_context.side_effect = run_child_func
     mock_map_handler.return_value = handler_result
 
-    result = await run_with_context(context, map_operation(test_function, [1]))
+    result = await run_with_context(context, lambda: map_operation(test_function, [1]))
 
     assert result == "map_result"
     mock_map_handler.assert_called_once()
@@ -1124,7 +1128,7 @@ async def test_map_raises_when_child_operation_id_is_missing(mock_run_in_child_c
         RuntimeError,
         match="map operation id is not available in the current context",
     ):
-        await run_with_context(context, map_operation(test_function, [1]))
+        await run_with_context(context, lambda: map_operation(test_function, [1]))
 
 
 async def test_map_name_is_keyword_only():
@@ -1277,7 +1281,7 @@ async def test_map_item_serialize(
 
         await run_with_context(
             context,
-            map_operation(
+            lambda: map_operation(
                 map_item,
                 ["a", "b"],
                 serdes=batch_serdes,
@@ -1353,7 +1357,7 @@ async def test_map_item_deserialize(mock_deserialize, item_serdes, batch_serdes)
 
         await run_with_context(
             context,
-            map_operation(
+            lambda: map_operation(
                 map_item,
                 ["a", "b"],
                 serdes=batch_serdes,
@@ -1482,7 +1486,7 @@ async def test_map_handler_serializes_batch_result():
                     return item
 
                 result = await run_with_context(
-                    context, map_operation(map_item, ["a", "b"])
+                    context, lambda: map_operation(map_item, ["a", "b"])
                 )
 
             assert len(mock_serdes_serialize.call_args_list) == 3
@@ -1545,7 +1549,7 @@ async def test_map_default_serdes_serializes_batch_result():
                     return item
 
                 result = await run_with_context(
-                    context, map_operation(map_item, ["a", "b"])
+                    context, lambda: map_operation(map_item, ["a", "b"])
                 )
 
             assert isinstance(result, BatchResult)
@@ -1617,7 +1621,7 @@ async def test_map_custom_serdes_serializes_batch_result():
 
                 result = await run_with_context(
                     context,
-                    map_operation(
+                    lambda: map_operation(
                         map_item,
                         ["a", "b"],
                         serdes=custom_serdes,
@@ -1658,7 +1662,7 @@ async def test_map_with_empty_list_should_exit_early():
     # This should complete immediately without crashing
     result = await run_with_context(
         context,
-        map_operation(
+        lambda: map_operation(
             map_func,
             items,
             name="EmptyMap",

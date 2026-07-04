@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
@@ -19,8 +20,10 @@ from ..models import (
     OperationSubType,
 )
 from ..serdes import deserialize, PassThroughSerDes
+from ..task import create_eager_task
 
 if TYPE_CHECKING:
+    from .child import DurableContext
     from ..serdes import SerDes
     from ..state import ExecutionState
 
@@ -119,13 +122,13 @@ class CallbackOperationExecutor(OperationExecutor[str]):
         return operation.callback_details.callback_id
 
 
-async def create_callback(
+def create_callback(
     *,
     name: str | None = None,
     timeout: Duration | None = None,
     heartbeat_timeout: Duration | None = None,
     serdes: SerDes | None = None,
-) -> Callback:
+) -> asyncio.Task[Callback]:
     """Create a durable callback handle that external systems can complete later.
 
     Args:
@@ -135,27 +138,50 @@ async def create_callback(
         serdes: Optional serializer for callback results.
     """
     context = get_durable_context("create_callback")
+
     with context._replay_aware():
         operation_id: str = context.step_counter.create_step_id()
-
-        executor: CallbackOperationExecutor = CallbackOperationExecutor(
-            state=context.execution_state,
-            operation_identifier=OperationIdentifier(
-                operation_id=operation_id,
-                sub_type=OperationSubType.CALLBACK,
-                parent_id=context.parent_id,
-                name=name,
-            ),
-            timeout=timeout,
-            heartbeat_timeout=heartbeat_timeout,
-        )
-        callback_id: str = await executor.process()
-        return Callback(
-            callback_id=callback_id,
+        operation_identifier = OperationIdentifier(
             operation_id=operation_id,
-            state=context.execution_state,
-            serdes=serdes,
+            sub_type=OperationSubType.CALLBACK,
+            parent_id=context.parent_id,
+            name=name,
         )
+
+        return create_eager_task(
+            lambda: _create_callback(
+                context=context,
+                operation_identifier=operation_identifier,
+                operation_id=operation_id,
+                timeout=timeout,
+                heartbeat_timeout=heartbeat_timeout,
+                serdes=serdes,
+            ),
+        )
+
+
+async def _create_callback(
+    *,
+    context: DurableContext,
+    operation_identifier: OperationIdentifier,
+    operation_id: str,
+    timeout: Duration | None = None,
+    heartbeat_timeout: Duration | None = None,
+    serdes: SerDes | None = None,
+) -> Callback:
+    executor: CallbackOperationExecutor = CallbackOperationExecutor(
+        state=context.execution_state,
+        operation_identifier=operation_identifier,
+        timeout=timeout,
+        heartbeat_timeout=heartbeat_timeout,
+    )
+    callback_id: str = await executor.process()
+    return Callback(
+        callback_id=callback_id,
+        operation_id=operation_id,
+        state=context.execution_state,
+        serdes=serdes,
+    )
 
 
 class Callback(Generic[T]):  # noqa: PYI059
