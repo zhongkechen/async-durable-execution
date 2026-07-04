@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
@@ -27,7 +28,7 @@ from ..execution import durable_callable
 from ..models import OperationIdentifier, OperationSubType
 from ..primitive.child import (
     DurableContext,
-    _run_in_child_context,
+    _create_child_context_task as _run_in_child_context,
     get_durable_context,
 )
 
@@ -161,7 +162,7 @@ async def map_handler(
     return await handler()
 
 
-async def map(
+def map(
     func: Callable[[U | BatchedInput[Any, U]], Awaitable[T]],
     items: Iterable[U],
     *,
@@ -173,7 +174,7 @@ async def map(
     summary_generator: SummaryGenerator | None = MapSummaryGenerator(),
     nesting_type: NestingType = NestingType.NESTED,
     item_namer: Callable[[U, int], str] | None = None,
-):
+) -> asyncio.Task[BatchResult[T]]:
     """Process a collection durably with optional concurrency controls.
 
     Args:
@@ -221,9 +222,10 @@ async def map(
         )
         return await handler()
 
-    return await _run_in_child_context(
+    return _run_in_child_context(
         run_map_handler,
         sub_type=OperationSubType.MAP,
         name=map_name,
         serdes=serdes,
+        operation_name="map",
     )

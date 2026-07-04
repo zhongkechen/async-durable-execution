@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from enum import Enum
@@ -30,10 +31,12 @@ from ..models import (
     OperationUpdate,
     OperationSubType,
 )
+from ..task import create_eager_task
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from .child import DurableContext
     from ..serdes import SerDes
     from ..state import ExecutionState
 
@@ -334,14 +337,14 @@ class StepOperationExecutor(OperationExecutor[T]):
         raise CallableRuntimeError.from_error_object(error)
 
 
-async def step(
+def step(
     func: Callable[[], Awaitable[T]],
     *,
     name: str | None = None,
     retry_strategy: Callable[[Exception, int], RetryDecision] | None = None,
     step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
     serdes: SerDes | None = None,
-) -> T:
+) -> asyncio.Task[T]:
     """Run user code as a checkpointed durable step.
 
     Durable steps are the main way to isolate non-deterministic work such as API
@@ -350,24 +353,46 @@ async def step(
     context = get_durable_context()
     step_name = name if name is not None else getattr(func, "__name__", None)
     logger.debug("Step name: %s", step_name)
+
     with context._replay_aware(executes_user_code=True):
         operation_id = context.step_counter.create_step_id()
-
         operation_identifier = OperationIdentifier(
             operation_id=operation_id,
             sub_type=OperationSubType.STEP,
             parent_id=context.parent_id,
             name=step_name,
         )
-        executor: StepOperationExecutor[T] = StepOperationExecutor(
-            func=func,
-            state=context.execution_state,
-            operation_identifier=operation_identifier,
-            retry_strategy=retry_strategy,
-            step_semantics=step_semantics,
-            serdes=serdes,
+
+        return create_eager_task(
+            lambda: _step(
+                func=func,
+                context=context,
+                operation_identifier=operation_identifier,
+                retry_strategy=retry_strategy,
+                step_semantics=step_semantics,
+                serdes=serdes,
+            ),
         )
-        return await executor.process()
+
+
+async def _step(
+    func: Callable[[], Awaitable[T]],
+    *,
+    context: DurableContext,
+    operation_identifier: OperationIdentifier,
+    retry_strategy: Callable[[Exception, int], RetryDecision] | None = None,
+    step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+    serdes: SerDes | None = None,
+) -> T:
+    executor: StepOperationExecutor[T] = StepOperationExecutor(
+        func=func,
+        state=context.execution_state,
+        operation_identifier=operation_identifier,
+        retry_strategy=retry_strategy,
+        step_semantics=step_semantics,
+        serdes=serdes,
+    )
+    return await executor.process()
 
 
 @dataclass(frozen=True)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 from collections.abc import Callable
@@ -31,10 +32,12 @@ from ..models import (
 from ..primitive.base import OperationExecutor
 from ..primitive.child import get_durable_context
 from ..primitive.step import StepContext
+from ..task import create_eager_task
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
+    from ..primitive.child import DurableContext
     from ..serdes import SerDes
     from ..state import ExecutionState
 
@@ -395,14 +398,14 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         raise ValidationError(msg)
 
 
-async def wait_for_condition(
+def wait_for_condition(
     check: Callable[[T | None], Awaitable[ConditionResult[T]]] | None = None,
     *,
     initial_state: T | None = None,
     name: str | None = None,
     wait_strategy: WaitDelayStrategy[T] | None = None,
     serdes: SerDes | None = None,
-) -> T:
+) -> asyncio.Task[T]:
     """Poll durable state until the configured strategy decides to stop waiting.
 
     The check receives the current state, beginning with `initial_state`,
@@ -422,17 +425,37 @@ async def wait_for_condition(
             parent_id=context.parent_id,
             name=name,
         )
-        executor: WaitForConditionOperationExecutor[T] = (
-            WaitForConditionOperationExecutor(
+
+        return create_eager_task(
+            lambda: _wait_for_condition(
                 check=check,
-                initial_state=initial_state,
-                state=context.execution_state,
+                context=context,
                 operation_identifier=operation_identifier,
+                initial_state=initial_state,
                 wait_strategy=wait_strategy,
                 serdes=serdes,
-            )
+            ),
         )
-        return await executor.process()
+
+
+async def _wait_for_condition(
+    check: Callable[[T | None], Awaitable[ConditionResult[T]]],
+    *,
+    context: DurableContext,
+    operation_identifier: OperationIdentifier,
+    initial_state: T | None = None,
+    wait_strategy: WaitDelayStrategy[T] | None = None,
+    serdes: SerDes | None = None,
+) -> T:
+    executor: WaitForConditionOperationExecutor[T] = WaitForConditionOperationExecutor(
+        check=check,
+        initial_state=initial_state,
+        state=context.execution_state,
+        operation_identifier=operation_identifier,
+        wait_strategy=wait_strategy,
+        serdes=serdes,
+    )
+    return await executor.process()
 
 
 @dataclass(frozen=True)

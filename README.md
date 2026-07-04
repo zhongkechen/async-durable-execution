@@ -19,7 +19,7 @@ This fork is specifically focused on making async Python work naturally with dur
 ## ✨ Key Features
 
 - **Async-first durable code** - Compared with the official AWS SDK, user-provided durable handlers, steps, child contexts, callback submitters, map item functions, parallel branches, and wait-for-condition checks are written with `async def`.
-- **Awaitable durable operations** - Workflow code now uses awaitable helpers such as `step(...)`, `wait(...)`, `invoke(...)`, `map(...)`, `parallel(...)`, and `run_in_child_context(...)`.
+- **Background operation tasks** - Durable operations such as `step(...)`, `wait(...)`, `invoke(...)`, and `run_in_child_context(...)` return `asyncio.Task` objects, so independent operations can run in the background and be awaited together with `asyncio.gather` without using `parallel()` or `map()`.
 - **Simplified operation APIs** - The `v2` API removes config wrapper objects in favor of direct keyword arguments and clearer call sites, including keyword-only operation names.
 - **Integrated local and cloud runner** - Runner functionality now ships through `async_durable_execution`, with separate local and cloud runner factories and typed test result helpers.
 - **Async Lambda client support** - Install the optional `aioboto` extra to use an async Lambda client; otherwise the SDK uses the bundled sync client through an async adapter.
@@ -92,6 +92,18 @@ async def handler(event: dict) -> dict:
 ```
 
 Async callables are required anywhere the SDK accepts user code, including `map()` item functions, bound `parallel()` branch callables, child contexts, callback submitters, and wait-for-condition checks. Those callables can be functions, instance methods, class methods, or static methods. Durable context operations are awaitable and run on the same event loop as your handler.
+
+Durable operations return `asyncio.Task` objects. If you call an operation without immediately awaiting it, it is scheduled to run in the background and can be awaited later. This lets independent operations run concurrently with normal `asyncio` patterns:
+
+```python
+pricing_tasks = [
+    step(price_line_item(item), name=f"price-{item['sku']}")
+    for item in items
+]
+priced_items = await asyncio.gather(*pricing_tasks)
+```
+
+On Python 3.12 and newer, the SDK uses `asyncio.eager_task_factory` so newly created operation tasks start synchronously until their first suspension point. On Python 3.10 and 3.11, eager task start is not available, so operation tasks use normal lazy `asyncio` task scheduling; this is only an ordering and performance difference.
 
 Handler input is deserialized from the durable execution payload before your code runs. Empty or whitespace payloads are normalized to `{}`, and malformed JSON fails the invocation before user code executes.
 
@@ -173,6 +185,7 @@ Example durable functions live in `async-durable-execution-examples/src/async_du
 The example tests in `async-durable-execution-examples/test_examples/` are also useful as executable recipes. Browse them by operation or pattern:
 
 - `step/`, `wait/`, `wait_for_callback/`, and `wait_for_condition/` for core durable operations
+- `step/steps_with_gather.py` for starting multiple step tasks and awaiting them together with `asyncio.gather`
 - `map/`, `parallel/`, and `run_in_child_context/` for composition patterns
 - `invoke/`, `with_retry/`, `callback/`, and `logger_example/` for integrations and operational behavior
 

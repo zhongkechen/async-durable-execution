@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Awaitable, Callable, TypeVar
 
 from ..config import RetryStrategyBuilder
@@ -16,7 +17,7 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-async def with_retry(
+def with_retry(
     func: Callable[[int], Awaitable[T]],
     *,
     name: str | None = None,
@@ -24,7 +25,7 @@ async def with_retry(
     serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
-) -> T:
+) -> asyncio.Task[T]:
     """Retry a block of durable logic with configurable backoff.
 
     Args:
@@ -52,7 +53,7 @@ async def with_retry(
                 )
                 await wait(duration=decision.delay, name=wait_name)
 
-    return await run_in_child_context(
+    return run_in_child_context(
         run_loop,
         name=name or "with-retry",
         serdes=serdes,

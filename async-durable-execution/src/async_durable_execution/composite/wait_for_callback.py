@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -61,7 +62,7 @@ async def wait_for_callback_handler(
     return await callback.result()
 
 
-async def wait_for_callback(
+def wait_for_callback(
     submitter: Callable[[], Awaitable[Any]],
     *,
     name: str | None = None,
@@ -69,7 +70,7 @@ async def wait_for_callback(
     heartbeat_timeout: Duration | None = None,
     serdes: SerDes | None = None,
     retry_strategy: Callable[[Exception, int], RetryDecision] | None = None,
-) -> Any:
+) -> asyncio.Task[Any]:
     """Create a callback, run a submitter, then suspend until the callback resolves.
 
     Args:
@@ -84,7 +85,7 @@ async def wait_for_callback(
     context_name = name if name is not None else getattr(submitter, "__name__", None)
     logger.debug("wait_for_callback name: %s", context_name)
 
-    return await run_in_child_context(
+    return run_in_child_context(
         wait_for_callback_handler(
             submitter,
             name=context_name,

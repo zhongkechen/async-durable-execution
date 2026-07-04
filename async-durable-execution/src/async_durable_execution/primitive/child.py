@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import hashlib
 import logging
@@ -29,6 +30,7 @@ from ..models import (
     OperationUpdate,
 )
 from ..serdes import deserialize, serialize
+from ..task import create_eager_task
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -424,14 +426,14 @@ class DurableContext(OperationContext):
                 self._set_replay_status_new()
 
 
-async def run_in_child_context(
+def run_in_child_context(
     func: Callable[[], Awaitable[T]],
     *,
     name: str | None = None,
     serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
-) -> T:
+) -> asyncio.Task[T]:
     """Execute a durable sub-workflow inside its own child context.
 
     Args:
@@ -443,14 +445,54 @@ async def run_in_child_context(
     """
 
     step_name = name if name is not None else getattr(func, "__name__", None)
-    return await _run_in_child_context(
+    return _create_child_context_task(
         func,
         sub_type=OperationSubType.RUN_IN_CHILD_CONTEXT,
         name=step_name,
         serdes=serdes,
         summary_generator=summary_generator,
         is_virtual=is_virtual,
+        operation_name="run_in_child_context",
     )
+
+
+def _create_child_context_task(
+    func: Callable[[], Awaitable[T]],
+    *,
+    sub_type: OperationSubType,
+    name: str | None = None,
+    serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    is_virtual: bool = False,
+    operation_name: str | None = None,
+) -> asyncio.Task[T]:
+    context = get_durable_context(operation_name or "run_in_child_context")
+
+    operation_id = context.step_counter.create_step_id()
+    child_context = context.create_child_context(
+        operation_id=operation_id,
+        is_virtual=is_virtual,
+    )
+    operation_identifier = OperationIdentifier(
+        operation_id=operation_id,
+        sub_type=sub_type,
+        parent_id=context.parent_id,
+        name=name,
+    )
+
+    async def run_child_context() -> T:
+        with context._replay_aware():
+            return await _run_child_context(
+                func,
+                context=context,
+                child_context=child_context,
+                operation_identifier=operation_identifier,
+                serdes=serdes,
+                summary_generator=summary_generator,
+                is_virtual=is_virtual,
+            )
+
+    return create_eager_task(run_child_context)
 
 
 async def _run_in_child_context(
@@ -478,19 +520,40 @@ async def _run_in_child_context(
             name=name,
         )
 
-        async def callable_with_child_context():
-            with bind_current_context(child_context):
-                return await func()
-
-        executor: ChildOperationExecutor[T] = ChildOperationExecutor(
-            callable_with_child_context,
-            context.execution_state,
-            operation_identifier,
+        return await _run_child_context(
+            func,
+            context=context,
+            child_context=child_context,
+            operation_identifier=operation_identifier,
             serdes=serdes,
             summary_generator=summary_generator,
             is_virtual=is_virtual,
         )
-        return await executor.process()
+
+
+async def _run_child_context(
+    func: Callable[[], Awaitable[T]],
+    *,
+    context: DurableContext,
+    child_context: DurableContext,
+    operation_identifier: OperationIdentifier,
+    serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    is_virtual: bool = False,
+) -> T:
+    async def callable_with_child_context():
+        with bind_current_context(child_context):
+            return await func()
+
+    executor: ChildOperationExecutor[T] = ChildOperationExecutor(
+        callable_with_child_context,
+        context.execution_state,
+        operation_identifier,
+        serdes=serdes,
+        summary_generator=summary_generator,
+        is_virtual=is_virtual,
+    )
+    return await executor.process()
 
 
 def get_durable_context(operation_name: str | None = None) -> DurableContext:
