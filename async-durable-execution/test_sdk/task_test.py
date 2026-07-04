@@ -1,19 +1,9 @@
 import asyncio
 import contextvars
-import sys
-
-import pytest
 
 from async_durable_execution.task import create_eager_task
 
 
-requires_context_task = pytest.mark.skipif(
-    sys.version_info < (3, 11),
-    reason="asyncio does not expose task context control before Python 3.11",
-)
-
-
-@requires_context_task
 async def test_create_eager_task_fallback_starts_before_await(monkeypatch):
     monkeypatch.setattr(asyncio, "eager_task_factory", None, raising=False)
     started = []
@@ -31,7 +21,6 @@ async def test_create_eager_task_fallback_starts_before_await(monkeypatch):
     assert await task == "done"
 
 
-@requires_context_task
 async def test_create_eager_task_fallback_handles_first_suspension_future(monkeypatch):
     monkeypatch.setattr(asyncio, "eager_task_factory", None, raising=False)
     loop = asyncio.get_running_loop()
@@ -55,7 +44,6 @@ async def test_create_eager_task_fallback_handles_first_suspension_future(monkey
     assert started == ["operation", "after-call", "done"]
 
 
-@requires_context_task
 async def test_create_eager_task_fallback_uses_same_context_for_reset(monkeypatch):
     monkeypatch.setattr(asyncio, "eager_task_factory", None, raising=False)
     marker: contextvars.ContextVar[str] = contextvars.ContextVar("marker")
