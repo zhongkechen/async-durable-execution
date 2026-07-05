@@ -5,11 +5,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
-from ..config import Duration, JitterStrategy, calculate_delay, duration_to_seconds
+from ..config import _DelayStrategy, Duration, duration_to_seconds
 from ..context import (
     bind_current_context,
 )
@@ -50,31 +50,18 @@ WaitDelayStrategyFunction = Callable[[T, int], Duration | None]
 
 
 @dataclass
-class WaitDelayStrategy(Generic[T]):
+class WaitDelayStrategy(_DelayStrategy, Generic[T]):
     """Polling delay strategy for `wait_for_condition()`."""
 
     max_attempts: int = 60
-    initial_delay: Duration = 5
     max_delay: Duration = 300
     backoff_rate: int | float = 1.5
-    jitter_strategy: JitterStrategy = field(default=JitterStrategy.FULL)
     timeout: Duration | None = None
 
     def __post_init__(self):
-        self.initial_delay = duration_to_seconds(self.initial_delay, "initial_delay")
-        self.max_delay = duration_to_seconds(self.max_delay, "max_delay")
+        super().__post_init__()
         if self.timeout is not None:
             self.timeout = duration_to_seconds(self.timeout, "timeout")
-
-    @property
-    def initial_delay_seconds(self) -> int:
-        """Get initial delay in seconds."""
-        return duration_to_seconds(self.initial_delay, "initial_delay")
-
-    @property
-    def max_delay_seconds(self) -> int:
-        """Get max delay in seconds."""
-        return duration_to_seconds(self.max_delay, "max_delay")
 
     @property
     def timeout_seconds(self) -> int | None:
@@ -88,13 +75,7 @@ class WaitDelayStrategy(Generic[T]):
         if attempts_made >= self.max_attempts:
             return None
 
-        return calculate_delay(
-            attempts_made=attempts_made,
-            initial_delay_seconds=self.initial_delay_seconds,
-            max_delay_seconds=self.max_delay_seconds,
-            backoff_rate=self.backoff_rate,
-            jitter_strategy=self.jitter_strategy,
-        )
+        return self.calculate_delay(attempts_made)
 
 
 class WaitForConditionOperationExecutor(OperationExecutor[T]):

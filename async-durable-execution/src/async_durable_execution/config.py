@@ -74,44 +74,19 @@ class JitterStrategy(str, Enum):
         return max(1, math.ceil(self.apply_jitter(base_delay)))
 
 
-def calculate_delay(
-    *,
-    attempts_made: int,
-    initial_delay_seconds: int,
-    max_delay_seconds: int,
-    backoff_rate: int | float,
-    jitter_strategy: JitterStrategy,
-    increment_seconds: int | None = None,
-) -> int:
-    """Calculate a whole-second delay for exponential or linear strategies."""
-    if increment_seconds is None:
-        base_delay: float = initial_delay_seconds * (
-            backoff_rate ** (attempts_made - 1)
-        )
-    else:
-        base_delay = initial_delay_seconds + increment_seconds * (attempts_made - 1)
-
-    return jitter_strategy.finalize_delay(min(base_delay, max_delay_seconds))
-
-
 @dataclass
-class RetryStrategy:
-    """Exponential-backoff retry strategy for durable operations."""
+class _DelayStrategy:
+    """Common delay configuration for retry and polling strategies."""
 
     max_attempts: int = 6
     initial_delay: Duration = 5
     max_delay: Duration = 60
     backoff_rate: int | float = 2
     jitter_strategy: JitterStrategy = field(default=JitterStrategy.FULL)
-    retryable_errors: list[str | re.Pattern] | None = None
-    retryable_error_types: list[type[Exception]] | None = None
-    increment: Duration | None = None
 
     def __post_init__(self):
         self.initial_delay = duration_to_seconds(self.initial_delay, "initial_delay")
         self.max_delay = duration_to_seconds(self.max_delay, "max_delay")
-        if self.increment is not None:
-            self.increment = duration_to_seconds(self.increment, "increment")
 
     @property
     def initial_delay_seconds(self) -> int:
@@ -122,6 +97,37 @@ class RetryStrategy:
     def max_delay_seconds(self) -> int:
         """Get max delay in seconds."""
         return duration_to_seconds(self.max_delay, "max_delay")
+
+    def calculate_delay(
+        self, attempts_made: int, *, increment_seconds: int | None = None
+    ) -> int:
+        """Calculate a whole-second delay for exponential or linear strategies."""
+        if increment_seconds is None:
+            base_delay: float = self.initial_delay_seconds * (
+                self.backoff_rate ** (attempts_made - 1)
+            )
+        else:
+            base_delay = self.initial_delay_seconds + increment_seconds * (
+                attempts_made - 1
+            )
+
+        return self.jitter_strategy.finalize_delay(
+            min(base_delay, self.max_delay_seconds)
+        )
+
+
+@dataclass
+class RetryStrategy(_DelayStrategy):
+    """Exponential-backoff retry strategy for durable operations."""
+
+    retryable_errors: list[str | re.Pattern] | None = None
+    retryable_error_types: list[type[Exception]] | None = None
+    increment: Duration | None = None
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self.increment is not None:
+            self.increment = duration_to_seconds(self.increment, "increment")
 
     @property
     def increment_seconds(self) -> int | None:
@@ -162,13 +168,8 @@ class RetryStrategy:
         if not is_retryable_error_message and not is_retryable_error_type:
             raise error
 
-        return calculate_delay(
-            attempts_made=attempts_made,
-            initial_delay_seconds=self.initial_delay_seconds,
-            max_delay_seconds=self.max_delay_seconds,
-            backoff_rate=self.backoff_rate,
-            jitter_strategy=self.jitter_strategy,
-            increment_seconds=self.increment_seconds,
+        return self.calculate_delay(
+            attempts_made, increment_seconds=self.increment_seconds
         )
 
     @classmethod
