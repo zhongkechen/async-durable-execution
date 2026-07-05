@@ -5,7 +5,7 @@ from typing import Any
 
 from async_durable_execution import (
     CompletionConfig,
-    RetryStrategyBuilder,
+    RetryStrategy,
     durable_execution,
     durable_callable,
     get_current_context,
@@ -20,7 +20,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     items = list(range(1, 11))  # [1, 2, 3, ..., 10]
 
     # Disable retries so failures happen immediately
-    retry_strategy = RetryStrategyBuilder(max_attempts=1).build()
+    retry_strategy = RetryStrategy(max_attempts=1)
 
     async def process_item(item: int) -> int:
         await asyncio.sleep(0)

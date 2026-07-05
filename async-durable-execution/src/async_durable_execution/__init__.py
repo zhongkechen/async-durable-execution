@@ -13,7 +13,7 @@ from .models import (
     OperationType,
     OperationStatus,
 )
-from .config import JitterStrategy, RetryDecision, RetryPresets, RetryStrategyBuilder
+from .config import JitterStrategy, RetryStrategy
 from .context import (
     get_current_context,
 )
@@ -29,8 +29,7 @@ from .composite.parallel import (
     SummaryGenerator,
 )
 from .composite.wait_for_condition import (
-    WaitStrategyBuilder,
-    WaitForConditionDecision,
+    WaitDelayStrategy,
     wait_for_condition,
     WaitForConditionCheckContext,
 )
@@ -132,9 +131,7 @@ __all__ = [
     "OperationStatus",
     "OperationSubType",
     "OperationType",
-    "RetryDecision",
-    "RetryPresets",
-    "RetryStrategyBuilder",
+    "RetryStrategy",
     "SerDes",
     "SerDesContext",
     "SerDesError",
@@ -146,6 +143,5 @@ __all__ = [
     "ValidationError",
     "WaitForCallbackContext",
     "WaitForConditionCheckContext",
-    "WaitForConditionDecision",
-    "WaitStrategyBuilder",
+    "WaitDelayStrategy",
 ]

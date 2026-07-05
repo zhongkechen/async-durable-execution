@@ -5,14 +5,14 @@ from async_durable_execution import (
     durable_callable,
     step,
     durable_execution,
-    RetryStrategyBuilder,
+    RetryStrategy,
 )
 
 
 @durable_execution
 async def handler(_event: Any) -> str:
     # Step with exponential backoff retry strategy
-    retry_config = RetryStrategyBuilder(
+    retry_strategy = RetryStrategy(
         max_attempts=3,
         initial_delay=timedelta(seconds=1),
         max_delay=timedelta(seconds=10),
@@ -26,6 +26,6 @@ async def handler(_event: Any) -> str:
     result = await step(
         retry_step(),
         name="retry_step",
-        retry_strategy=retry_config.build(),
+        retry_strategy=retry_strategy,
     )
     return f"Result: {result}"

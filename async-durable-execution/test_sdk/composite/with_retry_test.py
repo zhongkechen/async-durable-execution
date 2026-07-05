@@ -15,8 +15,7 @@ from async_durable_execution import with_retry, with_retry as imported_with_retr
 from async_durable_execution.config import (
     Duration,
     JitterStrategy,
-    RetryDecision,
-    RetryStrategyBuilder,
+    RetryStrategy,
 )
 from async_durable_execution.context import (
     get_current_context,
@@ -154,11 +153,11 @@ def _make_retry_strategy(
     initial_delay: timedelta | None = None,
 ):
     """Create a retry strategy with no jitter for deterministic tests."""
-    return RetryStrategyBuilder(
+    return RetryStrategy(
         max_attempts=max_attempts,
         initial_delay=initial_delay or timedelta(seconds=1),
         jitter_strategy=JitterStrategy.NONE,
-    ).build()
+    )
 
 
 async def test_success_on_first_attempt_returns_result_without_retry():
@@ -230,8 +229,8 @@ async def test_async_function_fails_then_succeeds_returns_successful_result():
     assert len(ctx.wait_calls) == 2
 
 
-async def test_retry_strategy_returns_should_retry_false_reraises_exception():
-    """Retry strategy returns should_retry=False re-raises exception."""
+async def test_retry_strategy_raises_to_stop_retries():
+    """Retry strategy raises to stop retrying and surface the exception."""
     ctx = MockDurableContext()
     retry_strategy = _make_retry_strategy(max_attempts=1)
 
@@ -465,8 +464,8 @@ async def test_with_retry_importable_from_package():
     assert callable(with_retry)
 
 
-async def test_with_retry_config_is_not_positional_parameter():
-    """with_retry rejects retry configuration as a positional argument."""
+async def test_with_retry_strategy_is_not_positional_parameter():
+    """with_retry rejects retry strategies as positional arguments."""
 
     async def test_function(attempt: int) -> str:
         return f"attempt-{attempt}"
@@ -474,20 +473,20 @@ async def test_with_retry_config_is_not_positional_parameter():
     with pytest.raises(TypeError):
         await with_retry(
             test_function,
-            lambda _err, _attempt: RetryDecision(should_retry=False),
+            lambda _err, _attempt: 1,
         )
 
 
-async def test_integration_with_retry_strategy_builder():
-    """Integration test with the real RetryStrategyBuilder."""
+async def test_integration_with_retry_strategy():
+    """Integration test with the real RetryStrategy."""
     ctx = MockDurableContext()
 
-    retry_strategy = RetryStrategyBuilder(
+    retry_strategy = RetryStrategy(
         max_attempts=4,
         initial_delay=timedelta(seconds=2),
         backoff_rate=2.0,
         jitter_strategy=JitterStrategy.NONE,
-    ).build()
+    )
 
     async def fails_three_times(attempt: int) -> str:
         if attempt < 4:
@@ -512,11 +511,11 @@ async def test_integration_retries_exhausted_raises_last_exception():
     """Exhausting retries surfaces the final exception."""
     ctx = MockDurableContext()
 
-    retry_strategy = RetryStrategyBuilder(
+    retry_strategy = RetryStrategy(
         max_attempts=3,
         initial_delay=timedelta(seconds=1),
         jitter_strategy=JitterStrategy.NONE,
-    ).build()
+    )
 
     async def always_fails(attempt: int) -> None:
         raise RuntimeError(f"failure-{attempt}")

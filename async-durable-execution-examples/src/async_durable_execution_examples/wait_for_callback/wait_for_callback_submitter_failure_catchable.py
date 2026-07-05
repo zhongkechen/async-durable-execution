@@ -7,7 +7,7 @@ from typing import Any
 from async_durable_execution import (
     durable_callable,
     durable_execution,
-    RetryStrategyBuilder,
+    RetryStrategy,
     wait_for_callback,
 )
 
@@ -29,11 +29,11 @@ async def handler(_event: Any) -> dict[str, Any]:
             name="failing-submitter-callback",
             timeout=timedelta(seconds=3),
             heartbeat_timeout=timedelta(seconds=3),
-            retry_strategy=RetryStrategyBuilder(
+            retry_strategy=RetryStrategy(
                 max_attempts=3,
                 initial_delay=timedelta(seconds=1),
                 max_delay=timedelta(seconds=1),
-            ).build(),
+            ),
         )
 
         return {

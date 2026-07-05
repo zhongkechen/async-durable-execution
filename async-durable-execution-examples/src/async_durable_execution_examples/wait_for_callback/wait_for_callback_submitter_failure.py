@@ -7,7 +7,7 @@ from async_durable_execution import (
     durable_callable,
     durable_execution,
     get_current_context,
-    RetryStrategyBuilder,
+    RetryStrategy,
     wait_for_callback,
 )
 
@@ -28,9 +28,9 @@ async def handler(event: dict[str, Any]) -> dict[str, Any]:
         name="retry-submitter-callback",
         timeout=timedelta(seconds=3),
         heartbeat_timeout=timedelta(seconds=3),
-        retry_strategy=RetryStrategyBuilder(
+        retry_strategy=RetryStrategy(
             max_attempts=3,
             initial_delay=timedelta(seconds=1),
             max_delay=timedelta(seconds=1),
-        ).build(),
+        ),
     )

@@ -6,6 +6,7 @@ import random
 from datetime import timedelta
 from functools import partial
 from itertools import islice
+from typing import Any, cast
 from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -18,9 +19,6 @@ from async_durable_execution.context import (
 from async_durable_execution.primitive.callback import (
     Callback,
     CallbackError,
-)
-from async_durable_execution.composite.wait_for_condition import (
-    WaitForConditionDecision,
 )
 from async_durable_execution.composite.map import MapSummaryGenerator
 from async_durable_execution import (
@@ -2192,28 +2190,19 @@ async def test_parallel_calls_handler(mock_handler):
 
 
 async def test_wait_for_condition_validation_errors():
-    """Test wait_for_condition raises ValidationError for invalid inputs."""
+    """Test wait_for_condition requires a check callable."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
     context = create_test_context(state=mock_state)
 
-    def dummy_wait_strategy(state, attempt):
-        return None
+    with pytest.raises(TypeError, match="required positional argument: 'check'"):
+        await run_with_context(context, lambda: cast("Any", wait_for_condition)())
 
-    # Test None check function
-    with pytest.raises(
-        ValidationError, match="`check` is required for wait_for_condition"
-    ):
-        await run_with_context(
-            context,
-            lambda: wait_for_condition(None, wait_strategy=dummy_wait_strategy),
-        )
-
-    # None config is valid; check must return state and wait decision.
+    # None config is valid; check must return state.
     async def dummy_check(state):
-        return state, WaitForConditionDecision.stop_polling()
+        return state
 
     with patch(
         "async_durable_execution.composite.wait_for_condition.WaitForConditionOperationExecutor"

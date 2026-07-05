@@ -37,7 +37,6 @@ from async_durable_execution.composite.wait_for_callback import (
     wait_for_callback,
     wait_for_callback_handler,
 )
-from async_durable_execution.config import RetryDecision
 from async_durable_execution.serdes import SerDes
 from async_durable_execution.state import ExecutionState
 from async_durable_execution import WaitForCallbackContext, StepContext
@@ -867,7 +866,7 @@ async def test_wait_for_callback_handler_step_config_propagation():
     mock_submitter = AsyncMock(return_value=None)
 
     def test_retry_strategy(exception, attempt):
-        return RetryDecision.retry_after_delay(1)
+        return 1
 
     mock_serdes = Mock(spec=SerDes)
 

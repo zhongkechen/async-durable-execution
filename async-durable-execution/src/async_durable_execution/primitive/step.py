@@ -13,7 +13,7 @@ from .base import (
     OperationContext,
 )
 from .child import get_durable_context
-from ..config import RetryDecision, RetryPresets
+from ..config import Duration, RetryStrategy, duration_to_seconds
 from ..context import bind_current_context, get_current_context
 from ..exceptions import (
     CallableRuntimeError,
@@ -68,7 +68,7 @@ class StepOperationExecutor(OperationExecutor[T]):
         func: Callable[[], Awaitable[T]],
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
-        retry_strategy: Callable[[Exception, int], RetryDecision] | None = None,
+        retry_strategy: Callable[[Exception, int], Duration] | None = None,
         step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
         serdes: SerDes | None = None,
     ):
@@ -251,76 +251,72 @@ class StepOperationExecutor(OperationExecutor[T]):
         """
         error_object = ErrorObject.from_exception(error)
 
-        retry_strategy = self.retry_strategy or RetryPresets.default()
+        retry_strategy = self.retry_strategy or RetryStrategy.default()
 
         retry_attempt: int = (
             operation.step_details.attempt
             if operation and operation.step_details
             else 0
         )
-        retry_decision: RetryDecision = retry_strategy(error, retry_attempt + 1)
+        try:
+            retry_delay = retry_strategy(error, retry_attempt + 1)
+            delay_seconds = duration_to_seconds(retry_delay, "retry delay")
+        except Exception as retry_error:
+            fail_error_object = ErrorObject.from_exception(retry_error)
+            fail_operation: OperationUpdate = OperationUpdate.create_step_fail(
+                identifier=self.operation_identifier, error=fail_error_object
+            )
 
-        if retry_decision.should_retry:
-            logger.debug(
-                "Retrying step for id: %s, name: %s, attempt: %s",
+            # Checkpoint FAIL operation with blocking (is_sync=True, default).
+            # Must ensure the failure state is persisted before raising the exception.
+            # This guarantees the error is durable and the step won't be retried on replay.
+            await self.create_checkpoint(fail_operation)
+
+            if isinstance(retry_error, StepInterruptedError):
+                raise retry_error
+
+            raise CallableRuntimeError.from_error_object(fail_error_object)
+
+        logger.debug(
+            "Retrying step for id: %s, name: %s, attempt: %s",
+            self.operation_identifier.operation_id,
+            self.operation_identifier.name,
+            retry_attempt + 1,
+        )
+
+        # Because we are issuing a retry and create an OperationUpdate, enforce a
+        # minimum delay of one second here to match model behavior.
+        if delay_seconds < 1:
+            logger.warning(
+                (
+                    "Retry delay_seconds step for id: %s, name: %s,"
+                    "attempt: %s is %d < 1. Setting to minimum of 1 seconds."
+                ),
                 self.operation_identifier.operation_id,
                 self.operation_identifier.name,
                 retry_attempt + 1,
+                delay_seconds,
             )
+            delay_seconds = 1
 
-            # because we are issuing a retry and create an OperationUpdate
-            # we enforce a minimum delay second of 1, to match model behaviour.
-            # we localize enforcement and keep it outside suspension methods as:
-            # a) those are used throughout the codebase, e.g. in wait(..) <- enforcement is done in context
-            # b) they shouldn't know model specific details <- enforcement is done above
-            # and c) this "issue" arises from retry-decision and we shouldn't push it down
-            delay_seconds = retry_decision.delay_seconds
-            if delay_seconds < 1:
-                logger.warning(
-                    (
-                        "Retry delay_seconds step for id: %s, name: %s,"
-                        "attempt: %s is %d < 1. Setting to minimum of 1 seconds."
-                    ),
-                    self.operation_identifier.operation_id,
-                    self.operation_identifier.name,
-                    retry_attempt + 1,
-                    delay_seconds,
-                )
-                delay_seconds = 1
-
-            retry_operation: OperationUpdate = OperationUpdate.create_step_retry(
-                identifier=self.operation_identifier,
-                error=error_object,
-                next_attempt_delay_seconds=delay_seconds,
-            )
-
-            # Checkpoint RETRY operation with blocking (is_sync=True, default).
-            # Must ensure retry state is persisted before suspending execution.
-            # This guarantees the retry attempt count and next attempt timestamp are durable.
-            await self.create_checkpoint(retry_operation)
-
-            suspend_with_optional_resume_delay(
-                msg=(
-                    f"Retry scheduled for {self.operation_identifier.operation_id}"
-                    f"in {retry_decision.delay_seconds} seconds"
-                ),
-                delay_seconds=delay_seconds,
-            )
-
-        # no retry
-        fail_operation: OperationUpdate = OperationUpdate.create_step_fail(
-            identifier=self.operation_identifier, error=error_object
+        retry_operation: OperationUpdate = OperationUpdate.create_step_retry(
+            identifier=self.operation_identifier,
+            error=error_object,
+            next_attempt_delay_seconds=delay_seconds,
         )
 
-        # Checkpoint FAIL operation with blocking (is_sync=True, default).
-        # Must ensure the failure state is persisted before raising the exception.
-        # This guarantees the error is durable and the step won't be retried on replay.
-        await self.create_checkpoint(fail_operation)
+        # Checkpoint RETRY operation with blocking (is_sync=True, default).
+        # Must ensure retry state is persisted before suspending execution.
+        # This guarantees the retry attempt count and next attempt timestamp are durable.
+        await self.create_checkpoint(retry_operation)
 
-        if isinstance(error, StepInterruptedError):
-            raise error
-
-        raise CallableRuntimeError.from_error_object(error_object)
+        suspend_with_optional_resume_delay(
+            msg=(
+                f"Retry scheduled for {self.operation_identifier.operation_id} "
+                f"in {delay_seconds} seconds"
+            ),
+            delay_seconds=delay_seconds,
+        )
 
     @staticmethod
     def _raise_callable_error(operation: Operation) -> None:
@@ -341,7 +337,7 @@ def step(
     func: Callable[[], Awaitable[T]],
     *,
     name: str | None = None,
-    retry_strategy: Callable[[Exception, int], RetryDecision] | None = None,
+    retry_strategy: Callable[[Exception, int], Duration] | None = None,
     step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
     serdes: SerDes | None = None,
 ) -> asyncio.Task[T]:
@@ -380,7 +376,7 @@ async def _step(
     *,
     context: DurableContext,
     operation_identifier: OperationIdentifier,
-    retry_strategy: Callable[[Exception, int], RetryDecision] | None = None,
+    retry_strategy: Callable[[Exception, int], Duration] | None = None,
     step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
     serdes: SerDes | None = None,
 ) -> T:

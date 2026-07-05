@@ -48,6 +48,77 @@ a performance and ordering optimization only; the durable operation contract is 
 that the helper returns an `asyncio.Task` that can run in the background and be awaited
 later.
 
+## Wait For Condition Results
+
+`wait_for_condition()` completes when the result returned by `check` evaluates to
+`True`. A falsey result is checkpointed as the next state and polling continues after
+the configured wait delay. This lets custom result types decide completion with
+`__bool__()`.
+
+When the result is a custom type, provide a `SerDes` implementation so the SDK can
+checkpoint and replay it durably:
+
+```python
+import json
+from dataclasses import dataclass
+from datetime import timedelta
+from typing import Any
+
+from async_durable_execution import SerDes
+from async_durable_execution import WaitDelayStrategy
+from async_durable_execution import wait_for_condition
+
+
+@dataclass(frozen=True)
+class JobStatus:
+    job_id: str
+    attempts: int
+    status: str
+
+    def __bool__(self) -> bool:
+        return self.status == "completed"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "job_id": self.job_id,
+            "attempts": self.attempts,
+            "status": self.status,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "JobStatus":
+        return cls(
+            job_id=str(data["job_id"]),
+            attempts=int(data["attempts"]),
+            status=str(data["status"]),
+        )
+
+
+class JobStatusSerDes(SerDes[JobStatus]):
+    async def serialize(self, value: JobStatus) -> str:
+        return json.dumps(value.to_dict())
+
+    async def deserialize(self, payload: str) -> JobStatus:
+        return JobStatus.from_dict(json.loads(payload))
+
+
+async def check_job(state: JobStatus | None) -> JobStatus:
+    attempts = 1 if state is None else state.attempts + 1
+    status = get_job_status("job-123")
+    return JobStatus(job_id="job-123", attempts=attempts, status=status)
+
+
+result = await wait_for_condition(
+    check=check_job,
+    initial_state=None,
+    wait_strategy=WaitDelayStrategy[JobStatus](
+        initial_delay=timedelta(seconds=2),
+    ),
+    serdes=JobStatusSerDes(),
+    name="wait-for-job",
+)
+```
+
 ## Lambda Client Selection
 
 The SDK chooses a Lambda API client for durable checkpoint and state APIs based on the installed dependencies.

@@ -28,7 +28,9 @@ from async_durable_execution.models import (
 )
 from async_durable_execution.primitive import child
 from async_durable_execution.config import JitterStrategy
+from async_durable_execution.config import RetryStrategy
 from async_durable_execution.composite.parallel import SummaryGenerator
+from async_durable_execution.composite.wait_for_condition import WaitDelayStrategy
 from async_durable_execution.serdes import ExtendedTypeSerDes
 from async_durable_execution.client import DurableServiceClient
 
@@ -52,7 +54,9 @@ def test_additional_public_types_importable_from_package_root():
         "JitterStrategy": JitterStrategy,
         "LambdaContext": LambdaContext,
         "OperationSubType": OperationSubType,
+        "RetryStrategy": RetryStrategy,
         "SummaryGenerator": SummaryGenerator,
+        "WaitDelayStrategy": WaitDelayStrategy,
         "create_cloud_runner": create_cloud_runner,
         "create_default_sync_client": create_default_sync_client,
         "create_local_runner": create_local_runner,
@@ -74,6 +78,32 @@ def test_internal_model_types_not_exported_from_package_root():
 
     assert not hasattr(ade, "OperationIdentifier")
     assert "OperationIdentifier" not in ade.__all__
+
+
+def test_merged_retry_presets_not_exported_from_package_root():
+    """Retry preset factories live on RetryStrategy."""
+    import async_durable_execution as ade
+
+    assert hasattr(ade.RetryStrategy, "default")
+    assert hasattr(ade.RetryStrategy, "linear")
+    assert not hasattr(ade, "RetryPresets")
+    assert "RetryPresets" not in ade.__all__
+
+
+def test_wait_for_condition_decision_not_exported_from_package_root():
+    """wait_for_condition checks return state directly."""
+    import async_durable_execution as ade
+
+    assert not hasattr(ade, "WaitForConditionDecision")
+    assert "WaitForConditionDecision" not in ade.__all__
+
+
+def test_wait_strategy_builder_not_exported_from_package_root():
+    """WaitDelayStrategy is directly callable without a builder."""
+    import async_durable_execution as ade
+
+    assert not hasattr(ade, "WaitStrategyBuilder")
+    assert "WaitStrategyBuilder" not in ade.__all__
 
 
 async def test_module_level_operations_delegate_to_mock_context_methods():

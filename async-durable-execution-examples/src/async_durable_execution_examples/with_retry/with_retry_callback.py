@@ -9,7 +9,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    RetryStrategyBuilder,
+    RetryStrategy,
     durable_callable,
     durable_execution,
     get_current_context,
@@ -48,11 +48,11 @@ async def handler(_event: Any) -> dict[str, Any]:
     result = await with_retry(
         retryable_callback_flow,
         name="callback-with-retry",
-        retry_strategy=RetryStrategyBuilder(
+        retry_strategy=RetryStrategy(
             max_attempts=5,
             initial_delay=timedelta(seconds=1),
             backoff_rate=1.0,
-        ).build(),
+        ),
     )
 
     return {

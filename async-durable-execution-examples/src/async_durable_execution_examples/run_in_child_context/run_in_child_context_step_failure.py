@@ -7,7 +7,7 @@ from async_durable_execution import (
     durable_callable,
     step,
     durable_execution,
-    RetryStrategyBuilder,
+    RetryStrategy,
     run_in_child_context,
     wait,
     durable_callable,
@@ -24,7 +24,7 @@ async def failing_step() -> None:
 async def child_with_failure() -> None:
     """Child context with a failing step."""
 
-    retry_config = RetryStrategyBuilder(
+    retry_strategy = RetryStrategy(
         max_attempts=3,
         initial_delay=timedelta(seconds=1),
         max_delay=timedelta(seconds=1),
@@ -33,7 +33,7 @@ async def child_with_failure() -> None:
     await step(
         failing_step(),
         name="failing-step",
-        retry_strategy=retry_config.build(),
+        retry_strategy=retry_strategy,
     )
 
 
