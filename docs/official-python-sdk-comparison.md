@@ -114,7 +114,7 @@ written around that contract.
 | Context metadata | `DurableContext` and `StepContext` parameters | `get_current_context()` when metadata is needed |
 | Durations | SDK duration wrapper objects | Standard `datetime.timedelta` |
 | Operation names | Usually passed through operation config or context APIs | Keyword-only `name=...` arguments |
-| Retry configuration | SDK retry config objects | `RetryStrategyBuilder(...).build()` passed to operations |
+| Retry configuration | SDK retry config objects | `RetryStrategy(...)` passed to operations |
 | Imports | Longer official package path | Short top-level imports |
 | API shape | More context/config-object oriented | More direct keyword arguments and fewer wrapper objects |
 

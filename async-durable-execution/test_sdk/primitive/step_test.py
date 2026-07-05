@@ -41,7 +41,6 @@ from async_durable_execution.primitive.step import (
     step,
 )
 from async_durable_execution.serdes import SerDes
-from async_durable_execution.config import RetryDecision
 from async_durable_execution.state import ExecutionState
 from async_durable_execution import StepContext
 
@@ -521,9 +520,7 @@ async def test_step_handler_retry_success():
     mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
-    mock_retry_strategy = Mock(
-        return_value=RetryDecision(should_retry=True, delay=timedelta(seconds=5))
-    )
+    mock_retry_strategy = Mock(return_value=timedelta(seconds=5))
     mock_callable = Mock(side_effect=RuntimeError("Test error"))
     mock_logger = Mock(spec=logging.Logger)
 
@@ -555,12 +552,12 @@ async def test_step_handler_retry_success():
 
 
 async def test_step_handler_retry_delay_is_clamped_to_minimum():
-    """Retry decisions below one second are checkpointed with the minimum delay."""
+    """Retry delays below one second are checkpointed with the minimum delay."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.operations.get.return_value = None
     mock_state.durable_execution_arn = "test_arn"
 
-    retry_strategy = Mock(return_value=RetryDecision.retry_after_delay(0))
+    retry_strategy = Mock(return_value=0)
 
     with pytest.raises(SuspendExecution, match="Retry scheduled"):
         await step_handler(
@@ -582,10 +579,9 @@ async def test_step_handler_retry_exhausted():
     mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
-    mock_retry_strategy = Mock(
-        return_value=RetryDecision(should_retry=False, delay=timedelta(seconds=0))
-    )
-    mock_callable = Mock(side_effect=RuntimeError("Test error"))
+    error = RuntimeError("Test error")
+    mock_retry_strategy = Mock(side_effect=error)
+    mock_callable = Mock(side_effect=error)
     mock_logger = Mock(spec=logging.Logger)
 
     with pytest.raises(CallableRuntimeError):
@@ -622,10 +618,8 @@ async def test_step_handler_retry_interrupted_error():
     mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
-    mock_retry_strategy = Mock(
-        return_value=RetryDecision(should_retry=False, delay=timedelta(seconds=0))
-    )
     interrupted_error = StepInterruptedError("Step interrupted")
+    mock_retry_strategy = Mock(side_effect=interrupted_error)
     mock_callable = Mock(side_effect=interrupted_error)
     mock_logger = Mock(spec=logging.Logger)
 
@@ -658,9 +652,7 @@ async def test_step_handler_retry_with_existing_attempts():
     mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
-    mock_retry_strategy = Mock(
-        return_value=RetryDecision(should_retry=True, delay=timedelta(seconds=10))
-    )
+    mock_retry_strategy = Mock(return_value=timedelta(seconds=10))
     mock_callable = Mock(side_effect=RuntimeError("Test error"))
     mock_logger = Mock(spec=logging.Logger)
 
@@ -691,9 +683,7 @@ async def test_step_handler_pending_without_existing_attempts():
     mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
-    mock_retry_strategy = Mock(
-        return_value=RetryDecision(should_retry=True, delay=timedelta(seconds=10))
-    )
+    mock_retry_strategy = Mock(return_value=timedelta(seconds=10))
     mock_callable = Mock(side_effect=RuntimeError("Test error"))
     mock_logger = Mock(spec=logging.Logger)
 
@@ -958,13 +948,12 @@ async def test_step_immediate_response_immediate_failure():
     mock_state.operations.get.return_value = not_found
 
     # Make the step function raise an error
-    mock_callable = Mock(side_effect=RuntimeError("Step execution error"))
+    error = RuntimeError("Step execution error")
+    mock_callable = Mock(side_effect=error)
     mock_logger = Mock(spec=logging.Logger)
 
     # Configure retry strategy to not retry
-    mock_retry_strategy = Mock(
-        return_value=RetryDecision(should_retry=False, delay=timedelta(seconds=0))
-    )
+    mock_retry_strategy = Mock(side_effect=error)
     # Verify operation raises error after executing step function
     with pytest.raises(CallableRuntimeError, match="Step execution error"):
         await step_handler(

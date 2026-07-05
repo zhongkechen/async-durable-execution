@@ -10,7 +10,7 @@ from async_durable_execution import (
     get_current_context,
     step,
     durable_execution,
-    RetryStrategyBuilder,
+    RetryStrategy,
     map,
 )
 
@@ -47,7 +47,7 @@ async def handler(_event: Any) -> dict[str, Any]:
             f"Processing item {item['id']} (index {map_context.index}), shouldFail: {item['shouldFail']}"
         )
 
-        retry_config = RetryStrategyBuilder(
+        retry_strategy = RetryStrategy(
             max_attempts=2,
             initial_delay=timedelta(seconds=1),
             max_delay=timedelta(seconds=1),
@@ -67,7 +67,7 @@ async def handler(_event: Any) -> dict[str, Any]:
         return await step(
             step_function(),
             name=f"process-item-{map_context.index}",
-            retry_strategy=retry_config.build(),
+            retry_strategy=retry_strategy,
         )
 
     results = await map(

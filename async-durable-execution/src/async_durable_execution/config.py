@@ -8,12 +8,9 @@ import re
 from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TypeAlias
 
 from .exceptions import ValidationError
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 Duration: TypeAlias = int | timedelta
 
@@ -31,37 +28,6 @@ def duration_to_seconds(duration: Duration, field_name: str = "duration") -> int
         msg = f"{field_name} must be non-negative"
         raise ValidationError(msg)
     return seconds
-
-
-@dataclass(frozen=True)
-class RetryDecision:
-    """Decision about whether to retry an operation and with what delay."""
-
-    should_retry: bool
-    delay: Duration
-
-    def __post_init__(self):
-        object.__setattr__(self, "delay", duration_to_seconds(self.delay, "delay"))
-
-    @property
-    def delay_seconds(self) -> int:
-        """Get delay in seconds."""
-        return duration_to_seconds(self.delay, "delay")
-
-    @classmethod
-    def retry(cls, delay: Duration) -> "RetryDecision":
-        """Create a retry decision."""
-        return cls(should_retry=True, delay=delay)
-
-    @classmethod
-    def retry_after_delay(cls, delay_seconds: int) -> "RetryDecision":
-        """Create a retry decision from a delay in seconds."""
-        return cls.retry(delay_seconds)
-
-    @classmethod
-    def no_retry(cls) -> "RetryDecision":
-        """Create a no-retry decision."""
-        return cls(should_retry=False, delay=0)
 
 
 class JitterStrategy(str, Enum):
@@ -105,20 +71,23 @@ class JitterStrategy(str, Enum):
 
 
 @dataclass
-class RetryStrategyBuilder:
-    """Build exponential-backoff retry strategies for durable operations."""
+class RetryStrategy:
+    """Exponential-backoff retry strategy for durable operations."""
 
-    max_attempts: int = 3
+    max_attempts: int = 6
     initial_delay: Duration = 5
-    max_delay: Duration = 300
-    backoff_rate: int | float = 2.0
+    max_delay: Duration = 60
+    backoff_rate: int | float = 2
     jitter_strategy: JitterStrategy = field(default=JitterStrategy.FULL)
     retryable_errors: list[str | re.Pattern] | None = None
     retryable_error_types: list[type[Exception]] | None = None
+    increment: Duration | None = None
 
     def __post_init__(self):
         self.initial_delay = duration_to_seconds(self.initial_delay, "initial_delay")
         self.max_delay = duration_to_seconds(self.max_delay, "max_delay")
+        if self.increment is not None:
+            self.increment = duration_to_seconds(self.increment, "increment")
 
     @property
     def initial_delay_seconds(self) -> int:
@@ -130,8 +99,15 @@ class RetryStrategyBuilder:
         """Get max delay in seconds."""
         return duration_to_seconds(self.max_delay, "max_delay")
 
-    def build(self) -> Callable[[Exception, int], RetryDecision]:
-        """Build a retry strategy callable from this builder."""
+    @property
+    def increment_seconds(self) -> int | None:
+        """Get linear retry increment in seconds."""
+        if self.increment is None:
+            return None
+        return duration_to_seconds(self.increment, "increment")
+
+    def __call__(self, error: Exception, attempts_made: int) -> Duration:
+        """Return retry delay, or raise the error if it should not be retried."""
         default_retryable_error_pattern = re.compile(r".*")
         should_use_default_errors: bool = (
             self.retryable_errors is None and self.retryable_error_types is None
@@ -146,78 +122,85 @@ class RetryStrategyBuilder:
         )
         retryable_error_types: list[type[Exception]] = self.retryable_error_types or []
 
-        def retry_strategy(error: Exception, attempts_made: int) -> RetryDecision:
-            if attempts_made >= self.max_attempts:
-                return RetryDecision.no_retry()
+        if attempts_made >= self.max_attempts:
+            raise error
 
-            is_retryable_error_message: bool = any(
-                pattern.search(str(error))
-                if isinstance(pattern, re.Pattern)
-                else pattern in str(error)
-                for pattern in retryable_errors
+        is_retryable_error_message: bool = any(
+            pattern.search(str(error))
+            if isinstance(pattern, re.Pattern)
+            else pattern in str(error)
+            for pattern in retryable_errors
+        )
+        is_retryable_error_type: bool = any(
+            isinstance(error, error_type) for error_type in retryable_error_types
+        )
+
+        if not is_retryable_error_message and not is_retryable_error_type:
+            raise error
+
+        if self.increment_seconds is None:
+            base_delay: float = self.initial_delay_seconds * (
+                self.backoff_rate ** (attempts_made - 1)
             )
-            is_retryable_error_type: bool = any(
-                isinstance(error, error_type) for error_type in retryable_error_types
+        else:
+            base_delay = self.initial_delay_seconds + self.increment_seconds * (
+                attempts_made - 1
             )
+        base_delay = min(base_delay, self.max_delay_seconds)
+        delay_with_jitter: float = self.jitter_strategy.apply_jitter(base_delay)
+        final_delay: int = max(1, math.ceil(delay_with_jitter))
 
-            if not is_retryable_error_message and not is_retryable_error_type:
-                return RetryDecision.no_retry()
-
-            base_delay: float = min(
-                self.initial_delay_seconds * (self.backoff_rate ** (attempts_made - 1)),
-                self.max_delay_seconds,
-            )
-            delay_with_jitter: float = self.jitter_strategy.apply_jitter(base_delay)
-            final_delay: int = max(1, math.ceil(delay_with_jitter))
-
-            return RetryDecision.retry(final_delay)
-
-        return retry_strategy
-
-
-class RetryPresets:
-    """Default retry presets."""
+        return final_delay
 
     @classmethod
-    def none(cls) -> Callable[[Exception, int], RetryDecision]:
+    def none(cls) -> RetryStrategy:
         """No retries."""
-        return RetryStrategyBuilder(max_attempts=1).build()
+        return cls(max_attempts=1, max_delay=300, backoff_rate=2.0)
 
     @classmethod
-    def default(cls) -> Callable[[Exception, int], RetryDecision]:
-        """Default retries, will be used automatically if retryConfig is missing."""
-        return RetryStrategyBuilder(
-            max_attempts=6,
-            initial_delay=5,
-            max_delay=60,
-            backoff_rate=2,
-            jitter_strategy=JitterStrategy.FULL,
-        ).build()
+    def default(cls) -> RetryStrategy:
+        """Default retries, used automatically when no retry strategy is provided."""
+        return cls()
 
     @classmethod
-    def transient(cls) -> Callable[[Exception, int], RetryDecision]:
+    def transient(cls) -> RetryStrategy:
         """Quick retries for transient errors."""
-        return RetryStrategyBuilder(
-            max_attempts=3, backoff_rate=2, jitter_strategy=JitterStrategy.HALF
-        ).build()
+        return cls(
+            max_attempts=3,
+            max_delay=300,
+            backoff_rate=2,
+            jitter_strategy=JitterStrategy.HALF,
+        )
 
     @classmethod
-    def resource_availability(cls) -> Callable[[Exception, int], RetryDecision]:
+    def resource_availability(cls) -> RetryStrategy:
         """Longer retries for resource availability."""
-        return RetryStrategyBuilder(
+        return cls(
             max_attempts=5,
             initial_delay=5,
             max_delay=300,
             backoff_rate=2,
-        ).build()
+        )
 
     @classmethod
-    def critical(cls) -> Callable[[Exception, int], RetryDecision]:
+    def critical(cls) -> RetryStrategy:
         """Aggressive retries for critical operations."""
-        return RetryStrategyBuilder(
+        return cls(
             max_attempts=10,
             initial_delay=1,
             max_delay=60,
             backoff_rate=1.5,
             jitter_strategy=JitterStrategy.NONE,
-        ).build()
+        )
+
+    @classmethod
+    def linear(cls) -> RetryStrategy:
+        """Linearly increasing delay between retries: 1s, 2s, 3s, 4s, 5s."""
+        return cls(
+            max_attempts=6,
+            initial_delay=1,
+            increment=1,
+            max_delay=300,
+            backoff_rate=2,
+            jitter_strategy=JitterStrategy.NONE,
+        )

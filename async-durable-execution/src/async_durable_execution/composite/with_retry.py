@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Awaitable, Callable, TypeVar
 
-from ..config import RetryStrategyBuilder
-from ..config import RetryDecision
+from ..config import Duration
+from ..config import RetryStrategy
 from ..primitive.child import (
     run_in_child_context,
 )
@@ -21,7 +21,7 @@ def with_retry(
     func: Callable[[int], Awaitable[T]],
     *,
     name: str | None = None,
-    retry_strategy: Callable[[Exception, int], RetryDecision] | None = None,
+    retry_strategy: Callable[[Exception, int], Duration] | None = None,
     serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
@@ -31,27 +31,25 @@ def with_retry(
     Args:
         func: Async callable to retry. Receives the current attempt number.
         name: Optional durable operation name.
-        retry_strategy: Optional strategy that decides whether and when to retry.
+        retry_strategy: Optional strategy that returns a retry delay or raises to stop.
         serdes: Optional serializer for the child context result.
         summary_generator: Optional summary generator for large child results.
         is_virtual: Whether the child context should skip lifecycle checkpoints.
     """
 
     async def run_loop() -> T:
-        retry = retry_strategy or RetryStrategyBuilder().build()
+        retry = retry_strategy or RetryStrategy()
         attempt = 0
         while True:
             attempt += 1
             try:
                 return await func(attempt)
             except Exception as err:
-                decision = retry(err, attempt)
-                if not decision.should_retry:
-                    raise
+                delay = retry(err, attempt)
                 wait_name = (
                     f"{name}-backoff-{attempt}" if name else f"backoff-{attempt}"
                 )
-                await wait(duration=decision.delay, name=wait_name)
+                await wait(duration=delay, name=wait_name)
 
     return run_in_child_context(
         run_loop,

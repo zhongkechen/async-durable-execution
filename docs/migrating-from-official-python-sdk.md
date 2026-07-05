@@ -164,14 +164,14 @@ Step retry configuration is passed directly to `step()`:
 ```python
 from datetime import timedelta
 
-from async_durable_execution import RetryStrategyBuilder, step
+from async_durable_execution import RetryStrategy, step
 
 
-retry_strategy = RetryStrategyBuilder(
+retry_strategy = RetryStrategy(
     max_attempts=3,
     initial_delay=timedelta(seconds=1),
     backoff_rate=2.0,
-).build()
+)
 
 result = await step(
     add_numbers(5, 3),

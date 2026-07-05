@@ -230,7 +230,7 @@ async def handler(event: dict) -> dict:
 from datetime import timedelta
 
 from async_durable_execution import durable_callable
-from async_durable_execution import RetryStrategyBuilder
+from async_durable_execution import RetryStrategy
 from async_durable_execution import step
 
 
@@ -246,14 +246,14 @@ result = await step(fetch_user(user_id))
 result = await step(fetch_user(user_id), name="fetch-user")
 
 # With retry configuration
-retry_config = RetryStrategyBuilder(
+retry_strategy = RetryStrategy(
     max_attempts=3,
     initial_delay=timedelta(seconds=1),
     backoff_rate=2.0,
 )
 result = await step(
     fetch_user(user_id),
-    retry_strategy=retry_config.build(),
+    retry_strategy=retry_strategy,
 )
 ```
 
@@ -342,28 +342,62 @@ result = await wait_for_callback(
 ### Wait for Condition - Polling
 
 ```python
+import json
+from dataclasses import dataclass
 from datetime import timedelta
+from typing import Any
 
-from async_durable_execution import WaitStrategyBuilder
+from async_durable_execution import SerDes
+from async_durable_execution import WaitDelayStrategy
 from async_durable_execution import wait_for_condition
 
 
-async def check_job(state: dict, check_ctx) -> dict:
-    status = get_job_status(state["job_id"])
-    return {"job_id": state["job_id"], "status": status}
+@dataclass(frozen=True)
+class JobStatus:
+    job_id: str
+    attempts: int
+    status: str
+
+    def __bool__(self) -> bool:
+        return self.status == "completed"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "job_id": self.job_id,
+            "attempts": self.attempts,
+            "status": self.status,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "JobStatus":
+        return cls(
+            job_id=str(data["job_id"]),
+            attempts=int(data["attempts"]),
+            status=str(data["status"]),
+        )
 
 
-def should_continue_polling(state: dict) -> bool:
-    return state["status"] != "completed"
+class JobStatusSerDes(SerDes[JobStatus]):
+    async def serialize(self, value: JobStatus) -> str:
+        return json.dumps(value.to_dict())
+
+    async def deserialize(self, payload: str) -> JobStatus:
+        return JobStatus.from_dict(json.loads(payload))
+
+
+async def check_job(state: JobStatus | None) -> JobStatus:
+    attempts = 1 if state is None else state.attempts + 1
+    status = get_job_status("job-123")
+    return JobStatus(job_id="job-123", attempts=attempts, status=status)
 
 
 result = await wait_for_condition(
     check=check_job,
-    initial_state={"job_id": "job-123", "status": "pending"},
-    wait_strategy=WaitStrategyBuilder(
-        should_continue_polling=should_continue_polling,
+    initial_state=None,
+    wait_strategy=WaitDelayStrategy[JobStatus](
         initial_delay=timedelta(seconds=2),
-    ).build(),
+    ),
+    serdes=JobStatusSerDes(),
     name="wait-for-job"
 )
 ```

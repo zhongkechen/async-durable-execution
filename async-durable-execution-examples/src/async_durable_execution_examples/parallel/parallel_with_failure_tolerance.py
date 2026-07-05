@@ -7,7 +7,7 @@ from async_durable_execution import (
     step,
     CompletionConfig,
     durable_execution,
-    RetryStrategyBuilder,
+    RetryStrategy,
     parallel,
 )
 
@@ -20,7 +20,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     completion_config = CompletionConfig(tolerated_failure_count=2)
 
     # Disable retries so failures happen immediately
-    retry_strategy = RetryStrategyBuilder(max_attempts=1).build()
+    retry_strategy = RetryStrategy(max_attempts=1)
 
     async def task1() -> str:
         @durable_callable
