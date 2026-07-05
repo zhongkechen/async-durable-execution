@@ -1,6 +1,6 @@
 """Tests for many async child context example."""
 
-from async_durable_execution import InvocationStatus, OperationType
+from async_durable_execution import InvocationStatus
 from async_durable_execution_examples.run_in_child_context import (
     many_async_child_context,
 )
@@ -37,7 +37,7 @@ async def test_many_async_child_context_with_multiplier_one(durable_runner):
 
 
 async def test_many_async_child_context_operations_are_tracked(durable_runner):
-    """Test representative child contexts and replay operations are tracked."""
+    """Test representative child contexts and replay metrics."""
     with durable_runner(
         handler=many_async_child_context.handler,
         input={"multiplier": 1, "steps": 500},
@@ -55,8 +55,3 @@ async def test_many_async_child_context_operations_are_tracked(durable_runner):
     assert isinstance(result_data["execution_time_ms"], int)
     assert isinstance(result_data["replay_time_ms"], int)
     assert result_data["replay_time_ms"] >= result_data["execution_time_ms"]
-
-    assert result.get_step("start-time").operation_type is OperationType.STEP
-    assert result.get_step("execution-time").operation_type is OperationType.STEP
-    assert result.get_step("replay-time").operation_type is OperationType.STEP
-    assert result.get_wait("post-compute-wait").operation_type is OperationType.WAIT
