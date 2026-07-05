@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
-from ..config import Duration, JitterStrategy, duration_to_seconds
+from ..config import Duration, JitterStrategy, calculate_delay, duration_to_seconds
 from ..context import (
     bind_current_context,
 )
@@ -89,14 +88,13 @@ class WaitDelayStrategy(Generic[T]):
         if attempts_made >= self.max_attempts:
             return None
 
-        base_delay: float = min(
-            self.initial_delay_seconds * (self.backoff_rate ** (attempts_made - 1)),
-            self.max_delay_seconds,
+        return calculate_delay(
+            attempts_made=attempts_made,
+            initial_delay_seconds=self.initial_delay_seconds,
+            max_delay_seconds=self.max_delay_seconds,
+            backoff_rate=self.backoff_rate,
+            jitter_strategy=self.jitter_strategy,
         )
-        delay_with_jitter: float = self.jitter_strategy.apply_jitter(base_delay)
-        final_delay: int = max(1, math.ceil(delay_with_jitter))
-
-        return final_delay
 
 
 class WaitForConditionOperationExecutor(OperationExecutor[T]):

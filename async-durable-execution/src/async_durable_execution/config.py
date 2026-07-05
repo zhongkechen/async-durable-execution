@@ -69,6 +69,30 @@ class JitterStrategy(str, Enum):
                 # Full jitter: random(0, delay)
                 return random.random() * delay  # noqa: S311
 
+    def finalize_delay(self, base_delay: float) -> int:
+        """Apply jitter, round up, and clamp to a minimum of 1 second."""
+        return max(1, math.ceil(self.apply_jitter(base_delay)))
+
+
+def calculate_delay(
+    *,
+    attempts_made: int,
+    initial_delay_seconds: int,
+    max_delay_seconds: int,
+    backoff_rate: int | float,
+    jitter_strategy: JitterStrategy,
+    increment_seconds: int | None = None,
+) -> int:
+    """Calculate a whole-second delay for exponential or linear strategies."""
+    if increment_seconds is None:
+        base_delay: float = initial_delay_seconds * (
+            backoff_rate ** (attempts_made - 1)
+        )
+    else:
+        base_delay = initial_delay_seconds + increment_seconds * (attempts_made - 1)
+
+    return jitter_strategy.finalize_delay(min(base_delay, max_delay_seconds))
+
 
 @dataclass
 class RetryStrategy:
@@ -138,19 +162,14 @@ class RetryStrategy:
         if not is_retryable_error_message and not is_retryable_error_type:
             raise error
 
-        if self.increment_seconds is None:
-            base_delay: float = self.initial_delay_seconds * (
-                self.backoff_rate ** (attempts_made - 1)
-            )
-        else:
-            base_delay = self.initial_delay_seconds + self.increment_seconds * (
-                attempts_made - 1
-            )
-        base_delay = min(base_delay, self.max_delay_seconds)
-        delay_with_jitter: float = self.jitter_strategy.apply_jitter(base_delay)
-        final_delay: int = max(1, math.ceil(delay_with_jitter))
-
-        return final_delay
+        return calculate_delay(
+            attempts_made=attempts_made,
+            initial_delay_seconds=self.initial_delay_seconds,
+            max_delay_seconds=self.max_delay_seconds,
+            backoff_rate=self.backoff_rate,
+            jitter_strategy=self.jitter_strategy,
+            increment_seconds=self.increment_seconds,
+        )
 
     @classmethod
     def none(cls) -> RetryStrategy:
