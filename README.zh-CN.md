@@ -16,7 +16,7 @@
 
 本仓库是原 Apache-2.0 授权 [AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/) 的社区维护分支，并在保留上游声明的同时，继续以 Apache License 2.0 发布。
 
-创建此分支首先是因为官方 Python SDK 不支持 `async`/`await`，导致它很难与其他 `asyncio` 库良好协作。此分支专注于让异步 Python 更自然地搭配 Lambda 持久性函数使用。其次，官方 Python SDK 也缺少其他官方 SDK 已支持的能力，例如持久操作的后台执行和并行执行。这个 SDK 解决了这些问题，公开 API 在持久操作边界仍保持同步接口，用户提供的持久可调用对象必须对事件处理程序、步骤、子上下文、回调提交器与条件检查使用 `async def`，并采用了更加 Pythonic 的风格，让 API 在现代 Python 代码中使用起来更自然。
+创建此分支首先是因为官方 Python SDK 不支持 `async`/`await`，导致它很难与其他 `asyncio` 库良好协作。此分支专注于让异步 Python 更自然地搭配 Lambda 持久性函数使用。其次，官方 Python SDK 也缺少原生后台操作任务和直接的 `asyncio` 任务组合。这个 SDK 解决了这些问题，公开 API 在持久操作边界仍保持同步接口，用户提供的持久可调用对象必须对事件处理程序、步骤、子上下文、回调提交器与条件检查使用 `async def`，并采用了更加 Pythonic 的风格，让 API 在现代 Python 代码中使用起来更自然。
 
 ## ✨ 主要功能
 
@@ -183,6 +183,7 @@ Lambda 持久性函数示例位于 `async-durable-execution-examples/src/async_d
 ## 📚 文档
 
 - **[生成的 API 参考](https://zhongkechen.github.io/async-durable-execution/)** - 从 Python docstring 自动生成，并通过 GitHub Pages 发布
+- **[官方 Python SDK 对比](docs/official-python-sdk-comparison.md)** - 与官方 AWS Durable Execution Python SDK 的并排对比
 - **[迁移指南](docs/migrating-from-official-python-sdk.md)** - 从官方同步 Python SDK 迁移到这个异步优先 SDK
 - **[使用同步代码](docs/using-synchronous-code.md)** - 安全包装既有同步业务逻辑与阻塞式客户端
 - **[高级用法](docs/advanced-usage.md)** - 配置 Lambda 客户端，并通过 AWS Lambda 层共享 SDK
