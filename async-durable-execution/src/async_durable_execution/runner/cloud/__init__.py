@@ -378,7 +378,7 @@ class DurableFunctionCloudTestRunner:
     def _fetch_execution_history(
         self, execution_arn: str
     ) -> GetDurableExecutionHistoryResponse:
-        """Retrieve execution history from Lambda service.
+        """Retrieve the complete execution history from Lambda service.
 
         Args:
             execution_arn: ARN of the durable execution
@@ -389,15 +389,44 @@ class DurableFunctionCloudTestRunner:
         Raises:
             ClientError: If lambda client encounter error
         """
-        history_dict = self.lambda_client.get_durable_execution_history(
-            DurableExecutionArn=execution_arn,
-            IncludeExecutionData=True,
+        events = []
+        next_marker: str | None = None
+        seen_markers: set[str] = set()
+        page_count = 0
+
+        while True:
+            request: dict[str, Any] = {
+                "DurableExecutionArn": execution_arn,
+                "IncludeExecutionData": True,
+            }
+            if next_marker:
+                request["Marker"] = next_marker
+
+            history_dict = self.lambda_client.get_durable_execution_history(**request)
+            history_response = GetDurableExecutionHistoryResponse.from_dict(
+                history_dict
+            )
+            page_count += 1
+            events.extend(history_response.events)
+
+            next_marker = history_response.next_marker
+            if not next_marker:
+                break
+            if next_marker in seen_markers:
+                msg = (
+                    "Execution history pagination returned a repeated marker: "
+                    f"{next_marker}"
+                )
+                raise DurableFunctionsTestError(msg)
+            seen_markers.add(next_marker)
+
+        logger.info(
+            "Retrieved %d events from history across %d page(s)",
+            len(events),
+            page_count,
         )
-        history_response = GetDurableExecutionHistoryResponse.from_dict(history_dict)
 
-        logger.info("Retrieved %d events from history", len(history_response.events))
-
-        return history_response
+        return GetDurableExecutionHistoryResponse(events=events)
 
 
 class LambdaInvoker:

@@ -679,6 +679,66 @@ async def test_cloud_runner_run_success(mock_boto3):
 
 
 @patch("async_durable_execution.runner.cloud.get_session")
+def test_cloud_runner_fetch_execution_history_paginates(mock_boto3):
+    """Test cloud history fetching follows NextMarker until all events are loaded."""
+    mock_client = Mock()
+    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_client.get_durable_execution_history.side_effect = [
+        {
+            "Events": [
+                {
+                    "EventType": "StepStarted",
+                    "EventTimestamp": "2023-01-01T00:00:00Z",
+                    "Id": "step-1",
+                    "Name": "early-step",
+                }
+            ],
+            "NextMarker": "page-2",
+        },
+        {
+            "Events": [
+                {
+                    "EventType": "StepStarted",
+                    "EventTimestamp": "2023-01-01T00:00:01Z",
+                    "Id": "step-2",
+                    "Name": "late-step",
+                }
+            ],
+        },
+    ]
+
+    runner = DurableFunctionCloudTestRunner(function_name="test-function")
+    history = runner._fetch_execution_history("test-arn")
+
+    assert [event.name for event in history.events] == ["early-step", "late-step"]
+    assert mock_client.get_durable_execution_history.call_args_list[0].kwargs == {
+        "DurableExecutionArn": "test-arn",
+        "IncludeExecutionData": True,
+    }
+    assert mock_client.get_durable_execution_history.call_args_list[1].kwargs == {
+        "DurableExecutionArn": "test-arn",
+        "IncludeExecutionData": True,
+        "Marker": "page-2",
+    }
+
+
+@patch("async_durable_execution.runner.cloud.get_session")
+def test_cloud_runner_fetch_execution_history_rejects_repeated_marker(mock_boto3):
+    """Test cloud history fetching fails if pagination does not advance."""
+    mock_client = Mock()
+    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_client.get_durable_execution_history.return_value = {
+        "Events": [],
+        "NextMarker": "same-page",
+    }
+
+    runner = DurableFunctionCloudTestRunner(function_name="test-function")
+
+    with pytest.raises(DurableFunctionsTestError, match="repeated marker"):
+        runner._fetch_execution_history("test-arn")
+
+
+@patch("async_durable_execution.runner.cloud.get_session")
 async def test_cloud_runner_run_invoke_failure(mock_boto3):
     """Test DurableFunctionCloudTestRunner.run with invoke failure."""
     from async_durable_execution.runner.exceptions import (
