@@ -16,7 +16,7 @@
 
 本儲存庫是原 Apache-2.0 授權 [AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/) 的社群維護分支，並在保留上游聲明的同時，繼續以 Apache License 2.0 發布。
 
-建立這個分支首先是因為官方 Python SDK 不支援 `async`/`await`，導致它很難與其他 `asyncio` 函式庫良好協作。這個分支特別著重於讓非同步 Python 能自然地搭配 Lambda 耐用函數使用。其次，官方 Python SDK 也缺少其他官方 SDK 已支援的能力，例如耐用操作的背景執行和平行執行。這個 SDK 解決了這些問題，公開 API 在耐用操作邊界仍維持同步介面，使用者提供的耐用可呼叫物件必須對事件處理常式、步驟、子內容、回呼提交器與條件檢查使用 `async def`，並採用更 Pythonic 的風格，讓 API 在現代 Python 程式碼中用起來更自然。
+建立這個分支首先是因為官方 Python SDK 不支援 `async`/`await`，導致它很難與其他 `asyncio` 函式庫良好協作。這個分支特別著重於讓非同步 Python 能自然地搭配 Lambda 耐用函數使用。其次，官方 Python SDK 也缺少原生背景操作任務和直接的 `asyncio` 任務組合。這個 SDK 解決了這些問題，公開 API 在耐用操作邊界仍維持同步介面，使用者提供的耐用可呼叫物件必須對事件處理常式、步驟、子內容、回呼提交器與條件檢查使用 `async def`，並採用更 Pythonic 的風格，讓 API 在現代 Python 程式碼中用起來更自然。
 
 ## ✨ 主要功能
 
@@ -183,6 +183,7 @@ Lambda 耐用函數範例位於 `async-durable-execution-examples/src/async_dura
 ## 📚 文件
 
 - **[產生的 API 參考](https://zhongkechen.github.io/async-durable-execution/)** - 從 Python docstring 自動產生，並透過 GitHub Pages 發布
+- **[官方 Python SDK 比較](docs/official-python-sdk-comparison.md)** - 與官方 AWS Durable Execution Python SDK 的並排比較
 - **[遷移指南](docs/migrating-from-official-python-sdk.md)** - 從官方同步 Python SDK 遷移到這個非同步優先 SDK
 - **[使用同步程式碼](docs/using-synchronous-code.md)** - 安全包裝既有同步業務邏輯與阻塞式用戶端
 - **[進階用法](docs/advanced-usage.md)** - 設定 Lambda 用戶端，並透過 AWS Lambda 層共享 SDK

@@ -16,7 +16,7 @@ Build reliable, long-running AWS Lambda workflows with checkpointed steps, waits
 
 This repository is a community-maintained fork of the original Apache-2.0 licensed [AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/) and continues to ship under Apache License 2.0 with the upstream notices preserved.
 
-This fork was created because the official Python SDK does not support `async`/`await`, which makes it hard to integrate cleanly with other `asyncio` libraries. It is specifically focused on making async Python work naturally with durable functions. The official Python SDK also lacks capabilities supported by other official SDKs, including background execution of operations and parallel execution. This SDK addresses those gaps, keeps the public API synchronous at the durable operation boundary, requires user-provided durable callables to use `async def` for handlers, steps, child contexts, callback submitters, and condition checks, and follows a more Pythonic style with APIs that feel natural in modern Python code.
+This fork was created because the official Python SDK does not support `async`/`await`, which makes it hard to integrate cleanly with other `asyncio` libraries. It is specifically focused on making async Python work naturally with durable functions. The official Python SDK also lacks native background operation tasks and direct `asyncio` task composition. This SDK addresses those gaps, keeps the public API synchronous at the durable operation boundary, requires user-provided durable callables to use `async def` for handlers, steps, child contexts, callback submitters, and condition checks, and follows a more Pythonic style with APIs that feel natural in modern Python code.
 
 ## ✨ Key Features
 
@@ -196,6 +196,7 @@ For the developer workflow to run or deploy example integration tests, see the [
 ## 📚 Documentation
 
 - **[Generated API Reference](https://zhongkechen.github.io/async-durable-execution/)** - Auto-generated from Python docstrings and published with GitHub Pages
+- **[Official Python SDK Comparison](docs/official-python-sdk-comparison.md)** - Side-by-side comparison with the official AWS Durable Execution Python SDK
 - **[Migration Guide](docs/migrating-from-official-python-sdk.md)** - Move from the official synchronous Python SDK to this async-first SDK
 - **[Using Synchronous Code](docs/using-synchronous-code.md)** - Wrap existing synchronous business logic and blocking clients safely
 - **[Advanced Usage](docs/advanced-usage.md)** - Configure Lambda clients and share the SDK through an AWS Lambda layer
