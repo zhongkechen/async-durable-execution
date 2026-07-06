@@ -212,7 +212,7 @@ async def test_module_level_context_functions_delegate_to_durable_context():
     async def check(state: str) -> str:
         return state
 
-    wait_strategy = lambda state, attempt: 0
+    polling_strategy = lambda state, attempt: 0
 
     mock_wait = AsyncMock(return_value=None)
     mock_child = AsyncMock(return_value="child-result")
@@ -317,7 +317,7 @@ async def test_module_level_context_functions_delegate_to_durable_context():
                     check,
                     initial_state="pending",
                     name="condition-name",
-                    wait_strategy=wait_strategy,
+                    polling_strategy=polling_strategy,
                 ),
             )
             == "condition-result"
@@ -357,7 +357,7 @@ async def test_module_level_context_functions_delegate_to_durable_context():
         initial_state="pending",
         state=mock_state,
         operation_identifier=ANY,
-        wait_strategy=wait_strategy,
+        polling_strategy=polling_strategy,
         serdes=None,
     )
     wait_for_condition_executor.process.assert_awaited_once()
@@ -2290,7 +2290,7 @@ async def test_context_wait_for_condition_handler_call():
         execution_calls.append("check_called")
         return state
 
-    def test_wait_strategy(state, attempt):
+    def test_polling_strategy(state, attempt):
         return 0
 
     # Create mock state and context
@@ -2309,7 +2309,9 @@ async def test_context_wait_for_condition_handler_call():
         # Call wait_for_condition method
         result = await run_with_context(
             context,
-            lambda: wait_for_condition(test_check, wait_strategy=test_wait_strategy),
+            lambda: wait_for_condition(
+                test_check, polling_strategy=test_polling_strategy
+            ),
         )
 
         # Verify executor was called

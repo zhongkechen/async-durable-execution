@@ -11,7 +11,7 @@ from async_durable_execution import (
     get_current_context,
     JitterStrategy,
     SerDes,
-    WaitDelayStrategy,
+    PollingStrategy,
     WaitForConditionCheckContext,
     wait_for_condition,
 )
@@ -70,7 +70,7 @@ async def handler(_event: Any) -> dict[str, Any]:
             status="completed" if attempt >= 3 else "pending",
         )
 
-    wait_strategy = WaitDelayStrategy[JobStatus](
+    polling_strategy = PollingStrategy[JobStatus](
         initial_delay=timedelta(seconds=1),
         jitter_strategy=JitterStrategy.NONE,
     )
@@ -78,7 +78,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     result = await wait_for_condition(
         check=check_function,
         initial_state=None,
-        wait_strategy=wait_strategy,
+        polling_strategy=polling_strategy,
         serdes=JobStatusSerDes(),
     )
 

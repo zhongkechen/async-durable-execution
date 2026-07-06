@@ -29,7 +29,7 @@ from .composite.parallel import (
     SummaryGenerator,
 )
 from .composite.wait_for_condition import (
-    WaitDelayStrategy,
+    PollingStrategy,
     wait_for_condition,
     WaitForConditionCheckContext,
 )
@@ -143,5 +143,5 @@ __all__ = [
     "ValidationError",
     "WaitForCallbackContext",
     "WaitForConditionCheckContext",
-    "WaitDelayStrategy",
+    "PollingStrategy",
 ]

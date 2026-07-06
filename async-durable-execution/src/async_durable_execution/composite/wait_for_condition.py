@@ -46,16 +46,16 @@ T = TypeVar("T")
 logger = logging.getLogger(__name__)
 
 
-WaitDelayStrategyFunction = Callable[[T, int], Duration | None]
+PollingStrategyFunction = Callable[[T, int], Duration | None]
 
 
 @dataclass
-class WaitDelayStrategy(_DelayStrategy, Generic[T]):
-    """Polling delay strategy for `wait_for_condition()`."""
+class PollingStrategy(_DelayStrategy, Generic[T]):
+    """Polling strategy for `wait_for_condition()`."""
 
     def __call__(self, result: T, attempts_made: int) -> int | None:
         """Return the next polling delay, or None to stop polling."""
-        if attempts_made >= self.max_attempts:
+        if result or attempts_made >= self.max_attempts:
             return None
 
         return self.calculate_delay(attempts_made)
@@ -70,7 +70,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         initial_state: T | None,
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
-        wait_strategy: WaitDelayStrategyFunction[T] | None = None,
+        polling_strategy: PollingStrategyFunction[T] | None = None,
         serdes: SerDes | None = None,
     ):
         """Initialize the wait_for_condition executor.
@@ -80,15 +80,15 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             initial_state: The state to pass to the first condition evaluation
             state: The execution state
             operation_identifier: The operation identifier
-            wait_strategy: Optional strategy for deciding retry delays
+            polling_strategy: Optional strategy for deciding whether and when to poll
             serdes: Optional serializer/deserializer for state payloads
         """
         super().__init__(state=state, operation_identifier=operation_identifier)
         self.check = check
         self.initial_state = initial_state
-        self.wait_strategy = wait_strategy
+        self.polling_strategy = polling_strategy
         self.serdes = serdes
-        self.default_wait_strategy = WaitDelayStrategy[T]()
+        self.default_polling_strategy = PollingStrategy[T]()
 
     async def start(self) -> T:
         """Start a new wait_for_condition operation."""
@@ -219,26 +219,6 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 attempt,
             )
 
-            if new_state:
-                success_operation = OperationUpdate.create_wait_for_condition_succeed(
-                    identifier=self.operation_identifier,
-                    payload=serialized_state,
-                )
-                # Checkpoint SUCCEED operation with blocking (is_sync=True, default).
-                # Must ensure the final state is persisted before returning to the caller.
-                # This guarantees the condition result is durable and won't be re-evaluated on replay.
-                await self.create_checkpoint(success_operation)
-
-                logger.debug(
-                    "✅ wait_for_condition completed for id: %s, name: %s",
-                    self.operation_identifier.operation_id,
-                    self.operation_name,
-                )
-                return await self.deserialize_value(  # noqa: TRY300
-                    data=serialized_state,
-                    serdes=self.serdes,
-                )
-
             suspend_delay_seconds = self._resolve_delay_seconds(new_state, attempt)
             if suspend_delay_seconds is None:
                 success_operation = OperationUpdate.create_wait_for_condition_succeed(
@@ -257,7 +237,6 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                     serdes=self.serdes,
                 )
 
-            # Condition not met - schedule retry.
             delay_seconds = suspend_delay_seconds
 
             # We enforce a minimum delay second of 1, to match model behaviour.
@@ -314,16 +293,16 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         raise ExecutionError(msg)  # pragma: no cover
 
     def _resolve_delay_seconds(self, new_state: T, attempt: int) -> int | None:
-        wait_strategy = self.wait_strategy or self.default_wait_strategy
-        wait_delay = wait_strategy(new_state, attempt)
+        polling_strategy = self.polling_strategy or self.default_polling_strategy
+        wait_delay = polling_strategy(new_state, attempt)
 
         if wait_delay is None:
             return None
 
         if isinstance(wait_delay, int | timedelta):
-            return duration_to_seconds(wait_delay, "wait_strategy delay")
+            return duration_to_seconds(wait_delay, "polling_strategy delay")
 
-        msg = "wait_for_condition wait_strategy must return int seconds, timedelta, or None"
+        msg = "wait_for_condition polling_strategy must return int seconds, timedelta, or None"
         raise ValidationError(msg)
 
 
@@ -332,15 +311,15 @@ def wait_for_condition(
     *,
     initial_state: T | None = None,
     name: str | None = None,
-    wait_strategy: WaitDelayStrategyFunction[T] | None = None,
+    polling_strategy: PollingStrategyFunction[T] | None = None,
     serdes: SerDes | None = None,
 ) -> asyncio.Task[T]:
     """Poll durable state until the configured strategy decides to stop waiting.
 
     The check receives the current state, beginning with `initial_state`,
-    and returns the next state. Truthy check results complete the operation.
-    Falsey results continue polling with the wait strategy's delay. The wait
-    strategy can return None to stop polling.
+    and returns the next state. The polling strategy receives that result and
+    returns the next polling delay, or None to stop polling and complete with
+    the latest result.
     """
     context = get_durable_context("wait_for_condition")
 
@@ -359,7 +338,7 @@ def wait_for_condition(
                 context=context,
                 operation_identifier=operation_identifier,
                 initial_state=initial_state,
-                wait_strategy=wait_strategy,
+                polling_strategy=polling_strategy,
                 serdes=serdes,
             ),
         )
@@ -371,7 +350,7 @@ async def _wait_for_condition(
     context: DurableContext,
     operation_identifier: OperationIdentifier,
     initial_state: T | None = None,
-    wait_strategy: WaitDelayStrategyFunction[T] | None = None,
+    polling_strategy: PollingStrategyFunction[T] | None = None,
     serdes: SerDes | None = None,
 ) -> T:
     executor: WaitForConditionOperationExecutor[T] = WaitForConditionOperationExecutor(
@@ -379,7 +358,7 @@ async def _wait_for_condition(
         initial_state=initial_state,
         state=context.execution_state,
         operation_identifier=operation_identifier,
-        wait_strategy=wait_strategy,
+        polling_strategy=polling_strategy,
         serdes=serdes,
     )
     return await executor.process()
