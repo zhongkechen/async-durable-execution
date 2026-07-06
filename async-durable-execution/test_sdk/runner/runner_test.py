@@ -925,6 +925,46 @@ async def test_cloud_runner_wait_for_completion_get_execution_failure(mock_boto3
         runner._wait_for_completion("test-arn", timeout=10)
 
 
+@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution.runner.cloud.time.sleep")
+async def test_cloud_runner_wait_for_completion_retries_resource_not_found(
+    mock_sleep, mock_boto3
+):
+    """Test _wait_for_completion retries until async execution is visible."""
+    from botocore.exceptions import ClientError
+
+    from async_durable_execution.runner.cloud import (
+        DurableFunctionCloudTestRunner,
+    )
+
+    mock_client = Mock()
+    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_client.get_durable_execution.side_effect = [
+        ClientError(
+            error_response={"Error": {"Code": "ResourceNotFoundException"}},
+            operation_name="GetDurableExecution",
+        ),
+        {
+            "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:test:execution:exec-1",
+            "DurableExecutionName": "test-execution",
+            "FunctionArn": "arn:aws:lambda:us-east-1:123456789012:function:test",
+            "Status": "SUCCEEDED",
+            "StartTimestamp": "2023-01-01T00:00:00Z",
+            "EndTimestamp": "2023-01-01T00:01:00Z",
+        },
+    ]
+
+    runner = DurableFunctionCloudTestRunner(
+        function_name="test-function", poll_interval=0.01
+    )
+
+    result = runner._wait_for_completion("test-arn", timeout=10)
+
+    assert result.status == "SUCCEEDED"
+    assert mock_client.get_durable_execution.call_count == 2
+    mock_sleep.assert_called_once_with(0.01)
+
+
 async def test_durable_function_test_result_from_execution_history_filters_execution_type():
     """Test from_execution_history filters out EXECUTION type operations."""
     import datetime

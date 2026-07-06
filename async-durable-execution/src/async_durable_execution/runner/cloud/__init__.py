@@ -269,27 +269,36 @@ class DurableFunctionCloudTestRunner:
                     DurableExecutionArn=execution_arn
                 )
                 execution = GetDurableExecutionResponse.from_dict(execution_dict)
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code")
+                if error_code == "ResourceNotFoundException":
+                    logger.info(
+                        "Execution status not available yet for %s; retrying",
+                        execution_arn,
+                    )
+                else:
+                    msg = f"Failed to get execution status: {e}"
+                    raise DurableFunctionsTestError(msg) from e
             except Exception as e:
                 msg = f"Failed to get execution status: {e}"
                 raise DurableFunctionsTestError(msg) from e
+            else:
+                # Log status changes
+                if execution.status != last_status:
+                    logger.info("Execution status: %s", execution.status)
+                    last_status = execution.status
 
-            # Log status changes
-            if execution.status != last_status:
-                logger.info("Execution status: %s", execution.status)
-                last_status = execution.status
+                # Check if execution completed
+                if execution.status == "SUCCEEDED":
+                    logger.info("Execution succeeded")
+                    return execution
+                if execution.status == "FAILED":
+                    logger.warning("Execution failed")
+                    return execution
+                if execution.status in ["TIMED_OUT", "ABORTED"]:
+                    logger.warning("Execution terminated: %s", execution.status)
+                    return execution
 
-            # Check if execution completed
-            if execution.status == "SUCCEEDED":
-                logger.info("Execution succeeded")
-                return execution
-            if execution.status == "FAILED":
-                logger.warning("Execution failed")
-                return execution
-            if execution.status in ["TIMED_OUT", "ABORTED"]:
-                logger.warning("Execution terminated: %s", execution.status)
-                return execution
-
-            # Wait before next poll
             time.sleep(self.poll_interval)
 
         # Timeout reached
