@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 env:
-  AWS_REGION: eu-south-1
+  AWS_REGION: us-east-1
 
 permissions:
   id-token: write
