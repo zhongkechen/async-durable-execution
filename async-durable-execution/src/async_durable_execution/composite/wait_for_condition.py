@@ -53,20 +53,6 @@ WaitDelayStrategyFunction = Callable[[T, int], Duration | None]
 class WaitDelayStrategy(_DelayStrategy, Generic[T]):
     """Polling delay strategy for `wait_for_condition()`."""
 
-    timeout: Duration | None = None
-
-    def __post_init__(self):
-        super().__post_init__()
-        if self.timeout is not None:
-            self.timeout = duration_to_seconds(self.timeout, "timeout")
-
-    @property
-    def timeout_seconds(self) -> int | None:
-        """Get timeout in seconds."""
-        if self.timeout is None:
-            return None
-        return duration_to_seconds(self.timeout, "timeout")
-
     def __call__(self, result: T, attempts_made: int) -> int | None:
         """Return the next polling delay, or None to stop polling."""
         if attempts_made >= self.max_attempts:

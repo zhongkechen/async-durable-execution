@@ -1513,7 +1513,6 @@ def test_wait_delay_strategy_defaults():
     assert config.jitter_strategy == JitterStrategy.FULL
     assert config.increment is None
     assert config.increment_seconds is None
-    assert config.timeout_seconds is None
 
 
 def test_wait_delay_strategy_accepts_int_seconds():
@@ -1521,15 +1520,12 @@ def test_wait_delay_strategy_accepts_int_seconds():
     config = WaitDelayStrategy(
         initial_delay=2,
         max_delay=50,
-        timeout=120,
     )
 
     assert config.initial_delay == 2
     assert config.max_delay == 50
-    assert config.timeout == 120
     assert config.initial_delay_seconds == 2
     assert config.max_delay_seconds == 50
-    assert config.timeout_seconds == 120
 
 
 def test_wait_delay_strategy_importable_from_package_root():
