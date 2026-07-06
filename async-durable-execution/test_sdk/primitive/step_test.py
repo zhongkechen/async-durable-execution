@@ -29,15 +29,11 @@ from async_durable_execution.models import (
 import logging
 from async_durable_execution.context import (
     get_current_context,
-    reset_current_context,
-    set_current_context,
 )
-from async_durable_execution.primitive.base import OperationContext
 from async_durable_execution.primitive.step import (
     StepInterruptedError,
     StepOperationExecutor,
     StepSemantics,
-    get_attempt,
     step,
 )
 from async_durable_execution.serdes import SerDes
@@ -969,29 +965,6 @@ async def test_step_immediate_response_immediate_failure():
     mock_callable.assert_called_once()
     # Both START and FAIL checkpoints should be created
     assert mock_state.create_checkpoint.call_count == 2
-
-
-def test_get_attempt_outside_step_context_raises():
-    mock_state = Mock(spec=ExecutionState)
-    context = OperationContext(
-        execution_state=mock_state,
-        operation_identifier=OperationIdentifier(
-            "operation", OperationSubType.EXECUTION, None
-        ),
-    )
-    token = set_current_context(context)
-    try:
-        with pytest.raises(RuntimeError, match="get_attempt\\(\\) can only be used"):
-            get_attempt()
-    finally:
-        reset_current_context(token)
-
-
-def test_get_attempt_without_current_context_raises():
-    with pytest.raises(
-        RuntimeError, match="get_current_context\\(\\) can only be used"
-    ):
-        get_attempt()
 
 
 async def test_step_start_executes_without_second_checkpoint_read():

@@ -106,6 +106,14 @@ def test_wait_strategy_builder_not_exported_from_package_root():
     assert "WaitStrategyBuilder" not in ade.__all__
 
 
+def test_get_attempt_not_exported_from_package_root():
+    """Step attempts are available from get_current_context().attempt."""
+    import async_durable_execution as ade
+
+    assert not hasattr(ade, "get_attempt")
+    assert "get_attempt" not in ade.__all__
+
+
 async def test_module_level_operations_delegate_to_mock_context_methods():
     """Module-level operations use durable-context helper paths."""
     mock_state = Mock()

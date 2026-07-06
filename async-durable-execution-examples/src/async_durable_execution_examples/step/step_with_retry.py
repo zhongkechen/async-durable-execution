@@ -6,7 +6,7 @@ from async_durable_execution import (
     step,
     durable_execution,
     RetryStrategy,
-    get_attempt,
+    get_current_context,
 )
 
 
@@ -14,7 +14,7 @@ from async_durable_execution import (
 async def unreliable_operation() -> str:
     # Retry behavior is derived from the current step attempt so it remains
     # deterministic for each durable execution and safe across warm Lambdas.
-    attempt = get_attempt() or 1
+    attempt = get_current_context().attempt or 1
     if attempt < 2:
         msg = f"Attempt {attempt} failed"
         raise RuntimeError(msg)
