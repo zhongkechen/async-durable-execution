@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Awaitable, Callable, TypeVar
 
 from ..config import Duration
 from ..config import RetryStrategy
+from ..context import bind_current_context
 from ..primitive.child import (
+    DurableContext,
+    get_durable_context,
     run_in_child_context,
 )
 from ..primitive.wait import wait
@@ -17,8 +21,15 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
+@dataclass(frozen=True)
+class WithRetryContext(DurableContext):
+    """Context available while a with_retry body is executing."""
+
+    attempt: int = 1
+
+
 def with_retry(
-    func: Callable[[int], Awaitable[T]],
+    func: Callable[[], Awaitable[T]],
     *,
     name: str | None = None,
     retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
@@ -29,7 +40,8 @@ def with_retry(
     """Retry a block of durable logic with configurable backoff.
 
     Args:
-        func: Async callable to retry. Receives the current attempt number.
+        func: Async callable to retry. Use get_current_context().attempt inside
+            the callable to access the current attempt number.
         name: Optional durable operation name.
         retry_strategy: Optional strategy that returns a retry delay or None to stop.
         serdes: Optional serializer for the child context result.
@@ -43,7 +55,21 @@ def with_retry(
         while True:
             attempt += 1
             try:
-                return await func(attempt)
+                context = get_durable_context("with_retry")
+                retry_context = WithRetryContext(
+                    execution_state=context.execution_state,
+                    operation_identifier=context.operation_identifier,
+                    step_id_prefix=context.step_id_prefix,
+                    replaying=context.is_replaying(),
+                    _replay_status_lock=context._replay_status_lock,  # noqa: SLF001
+                    attempt=attempt,
+                )
+                if "step_counter" in context.__dict__:
+                    retry_context.__dict__["step_counter"] = context.__dict__[
+                        "step_counter"
+                    ]
+                with bind_current_context(retry_context):
+                    return await func()
             except Exception as err:
                 delay = retry(err, attempt)
                 if delay is None:

@@ -10,6 +10,7 @@ from typing import Any
 
 from async_durable_execution import (
     RetryStrategy,
+    WithRetryContext,
     durable_callable,
     durable_execution,
     get_current_context,
@@ -27,8 +28,10 @@ async def handler(_event: Any) -> dict[str, Any]:
     with exponential backoff between attempts.
     """
 
-    async def retryable_callback_flow(attempt: int) -> str:
+    async def retryable_callback_flow() -> str:
         """The retryable block: create a callback and wait for the result."""
+        retry_context = get_current_context()
+        assert isinstance(retry_context, WithRetryContext)
 
         @durable_callable
         async def submitter() -> None:
@@ -40,7 +43,7 @@ async def handler(_event: Any) -> dict[str, Any]:
 
         return await wait_for_callback(
             submitter(),
-            name=f"external-call-attempt-{attempt}",
+            name=f"external-call-attempt-{retry_context.attempt}",
             timeout=timedelta(seconds=3),
             heartbeat_timeout=timedelta(seconds=3),
         )

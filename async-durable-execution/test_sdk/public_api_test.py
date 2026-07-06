@@ -9,6 +9,7 @@ from async_durable_execution import (
     DurableFunctionCloudTestRunner,
     DurableFunctionLocalTestRunner,
     DurableFunctionTestResult,
+    WithRetryContext,
     create_callback,
     create_cloud_runner,
     create_default_sync_client,
@@ -31,6 +32,9 @@ from async_durable_execution.primitive import child
 from async_durable_execution.config import JitterStrategy
 from async_durable_execution.config import RetryStrategy
 from async_durable_execution.composite.parallel import SummaryGenerator
+from async_durable_execution.composite.with_retry import (
+    WithRetryContext as ModuleWithRetryContext,
+)
 from async_durable_execution.composite.wait_for_condition import PollingStrategy
 from async_durable_execution.serdes import ExtendedTypeSerDes
 from async_durable_execution.client import DurableServiceClient
@@ -57,12 +61,14 @@ def test_additional_public_types_importable_from_package_root():
         "OperationSubType": OperationSubType,
         "RetryStrategy": RetryStrategy,
         "SummaryGenerator": SummaryGenerator,
+        "WithRetryContext": ModuleWithRetryContext,
         "PollingStrategy": PollingStrategy,
         "create_cloud_runner": create_cloud_runner,
         "create_default_sync_client": create_default_sync_client,
         "create_local_runner": create_local_runner,
         "get_step_context": get_step_context,
     }
+    assert WithRetryContext is ModuleWithRetryContext
 
     for name, public_type in expected_exports.items():
         assert getattr(ade, name) is public_type
