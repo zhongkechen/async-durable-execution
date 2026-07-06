@@ -21,7 +21,7 @@ def with_retry(
     func: Callable[[int], Awaitable[T]],
     *,
     name: str | None = None,
-    retry_strategy: Callable[[Exception, int], Duration] | None = None,
+    retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
     serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
@@ -31,7 +31,7 @@ def with_retry(
     Args:
         func: Async callable to retry. Receives the current attempt number.
         name: Optional durable operation name.
-        retry_strategy: Optional strategy that returns a retry delay or raises to stop.
+        retry_strategy: Optional strategy that returns a retry delay or None to stop.
         serdes: Optional serializer for the child context result.
         summary_generator: Optional summary generator for large child results.
         is_virtual: Whether the child context should skip lifecycle checkpoints.
@@ -46,6 +46,9 @@ def with_retry(
                 return await func(attempt)
             except Exception as err:
                 delay = retry(err, attempt)
+                if delay is None:
+                    raise
+
                 wait_name = (
                     f"{name}-backoff-{attempt}" if name else f"backoff-{attempt}"
                 )

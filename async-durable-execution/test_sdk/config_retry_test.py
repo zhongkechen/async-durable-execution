@@ -116,13 +116,12 @@ def test_retry_strategy_has_no_build_method():
 
 
 def test_max_attempts_exceeded():
-    """Test strategy raises the error when max attempts are exceeded."""
+    """Test strategy stops retrying when max attempts are exceeded."""
     config = RetryStrategy(max_attempts=2)
     strategy = config
 
     error = Exception("test error")
-    with pytest.raises(Exception, match="test error"):
-        strategy(error, 2)
+    assert strategy(error, 2) is None
 
 
 def test_retryable_error_message_string():
@@ -158,8 +157,7 @@ def test_non_retryable_error():
     strategy = config
 
     error = Exception("permission denied")
-    with pytest.raises(Exception, match="permission denied"):
-        strategy(error, 1)
+    assert strategy(error, 1) is None
 
 
 @patch("random.random")
@@ -223,8 +221,7 @@ def test_none_preset():
     strategy = RetryStrategy.none()
     error = Exception("test error")
 
-    with pytest.raises(Exception, match="test error"):
-        strategy(error, 1)
+    assert strategy(error, 1) is None
 
 
 def test_default_preset_config():
@@ -235,8 +232,7 @@ def test_default_preset_config():
     assert strategy == RetryStrategy()
     assert strategy(error, 1) >= 1
 
-    with pytest.raises(Exception, match="test error"):
-        strategy(error, 6)
+    assert strategy(error, 6) is None
 
 
 def test_transient_preset_config():
@@ -246,8 +242,7 @@ def test_transient_preset_config():
 
     assert strategy(error, 1) >= 1
 
-    with pytest.raises(Exception, match="test error"):
-        strategy(error, 3)
+    assert strategy(error, 3) is None
 
 
 def test_resource_availability_preset():
@@ -257,8 +252,7 @@ def test_resource_availability_preset():
 
     assert strategy(error, 1) >= 1
 
-    with pytest.raises(Exception, match="test error"):
-        strategy(error, 5)
+    assert strategy(error, 5) is None
 
 
 def test_critical_preset_config():
@@ -268,8 +262,7 @@ def test_critical_preset_config():
 
     assert strategy(error, 5) >= 1
 
-    with pytest.raises(Exception, match="test error"):
-        strategy(error, 10)
+    assert strategy(error, 10) is None
 
 
 @patch("random.random")
@@ -296,8 +289,7 @@ def test_linear_preset_config():
 
     assert [strategy(error, attempt) for attempt in range(1, 6)] == [1, 2, 3, 4, 5]
 
-    with pytest.raises(Exception, match="test error"):
-        strategy(error, 6)
+    assert strategy(error, 6) is None
 
 
 def test_linear_strategy_caps_at_max_delay():
@@ -399,8 +391,7 @@ def test_only_retryable_errors_specified():
     assert strategy(error1, 1) >= 1
 
     error2 = Exception("permission denied")
-    with pytest.raises(Exception, match="permission denied"):
-        strategy(error2, 1)
+    assert strategy(error2, 1) is None
 
 
 def test_only_retryable_error_types_specified():
@@ -415,8 +406,7 @@ def test_only_retryable_error_types_specified():
     assert strategy(error2, 1) >= 1
 
     error3 = Exception("some error")
-    with pytest.raises(Exception, match="some error"):
-        strategy(error3, 1)
+    assert strategy(error3, 1) is None
 
 
 def test_both_filters_specified_or_logic():
@@ -433,8 +423,7 @@ def test_both_filters_specified_or_logic():
     assert strategy(error2, 1) >= 1
 
     error3 = RuntimeError("runtime error")
-    with pytest.raises(RuntimeError, match="runtime error"):
-        strategy(error3, 1)
+    assert strategy(error3, 1) is None
 
 
 def test_empty_retryable_errors_with_types():
@@ -446,8 +435,7 @@ def test_empty_retryable_errors_with_types():
     assert strategy(error1, 1) >= 1
 
     error2 = Exception("some error")
-    with pytest.raises(Exception, match="some error"):
-        strategy(error2, 1)
+    assert strategy(error2, 1) is None
 
 
 def test_empty_retryable_error_types_with_errors():
@@ -459,8 +447,7 @@ def test_empty_retryable_error_types_with_errors():
     assert strategy(error1, 1) >= 1
 
     error2 = Exception("permission denied")
-    with pytest.raises(Exception, match="permission denied"):
-        strategy(error2, 1)
+    assert strategy(error2, 1) is None
 
 
 def test_none_config():
@@ -502,8 +489,7 @@ def test_empty_retryable_errors_list():
     strategy = config
 
     error = Exception("test error")
-    with pytest.raises(Exception, match="test error"):
-        strategy(error, 1)
+    assert strategy(error, 1) is None
 
 
 def test_multiple_error_patterns():
