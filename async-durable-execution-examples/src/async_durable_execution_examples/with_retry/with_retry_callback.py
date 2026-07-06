@@ -28,6 +28,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     with exponential backoff between attempts.
     """
 
+    @durable_callable
     async def retryable_callback_flow() -> str:
         """The retryable block: create a callback and wait for the result."""
         retry_context = get_current_context()
@@ -49,7 +50,7 @@ async def handler(_event: Any) -> dict[str, Any]:
         )
 
     result = await with_retry(
-        retryable_callback_flow,
+        retryable_callback_flow(),
         name="callback-with-retry",
         retry_strategy=RetryStrategy(
             max_attempts=5,
