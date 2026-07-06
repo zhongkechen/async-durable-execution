@@ -29,15 +29,12 @@ from async_durable_execution.models import (
 import logging
 from async_durable_execution.context import (
     get_current_context,
-    reset_current_context,
-    set_current_context,
 )
-from async_durable_execution.primitive.base import OperationContext
 from async_durable_execution.primitive.step import (
     StepInterruptedError,
     StepOperationExecutor,
     StepSemantics,
-    get_attempt,
+    get_step_context,
     step,
 )
 from async_durable_execution.serdes import SerDes
@@ -438,6 +435,28 @@ async def test_step_handler_get_current_context_returns_step_context():
     assert result == 1
 
 
+async def test_step_handler_get_step_context_returns_step_context():
+    """get_step_context() should expose StepContext while a step is executing."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_result = None
+    mock_state.operations.get.return_value = mock_result
+    mock_state.durable_execution_arn = "test_arn"
+
+    async def step_callable():
+        return get_step_context().attempt
+
+    result = await step_handler(
+        step_callable,
+        mock_state,
+        OperationIdentifier(
+            "step_specific_context", OperationSubType.STEP, None, "test_step"
+        ),
+        step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+    )
+
+    assert result == 1
+
+
 def test_get_current_context_raises_outside_execution():
     with pytest.raises(
         RuntimeError,
@@ -573,7 +592,7 @@ async def test_step_handler_retry_delay_is_clamped_to_minimum():
 
 
 async def test_step_handler_retry_exhausted():
-    """Test step_handler with retry exhausted."""
+    """Test step_handler checkpoints retry strategy errors as failures."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = None
     mock_state.operations.get.return_value = mock_result
@@ -609,6 +628,39 @@ async def test_step_handler_retry_exhausted():
     assert fail_operation.operation_type is OperationType.STEP
     assert fail_operation.sub_type is OperationSubType.STEP
     assert fail_operation.action is OperationAction.FAIL
+
+
+async def test_step_handler_retry_strategy_none_stops_retrying():
+    """A retry strategy returns None to stop retrying and fail with the step error."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.operations.get.return_value = None
+    mock_state.durable_execution_arn = "test_arn"
+
+    error = RuntimeError("Step execution error")
+    mock_retry_strategy = Mock(return_value=None)
+    mock_callable = Mock(side_effect=error)
+
+    with pytest.raises(CallableRuntimeError, match="Step execution error"):
+        await step_handler(
+            mock_callable,
+            mock_state,
+            OperationIdentifier(
+                "step10_none", OperationSubType.STEP, None, "test_step"
+            ),
+            retry_strategy=mock_retry_strategy,
+        )
+
+    mock_retry_strategy.assert_called_once_with(error, 1)
+    assert mock_state.create_checkpoint.call_count == 2
+
+    fail_call = mock_state.create_checkpoint.call_args_list[1]
+    fail_operation = fail_call[1]["operation_update"]
+    assert fail_operation.operation_id == "step10_none"
+    assert fail_operation.operation_type is OperationType.STEP
+    assert fail_operation.sub_type is OperationSubType.STEP
+    assert fail_operation.action is OperationAction.FAIL
+    assert fail_operation.error.message == "Step execution error"
+    assert fail_operation.error.type == "RuntimeError"
 
 
 async def test_step_handler_retry_interrupted_error():
@@ -953,7 +1005,7 @@ async def test_step_immediate_response_immediate_failure():
     mock_logger = Mock(spec=logging.Logger)
 
     # Configure retry strategy to not retry
-    mock_retry_strategy = Mock(side_effect=error)
+    mock_retry_strategy = Mock(return_value=None)
     # Verify operation raises error after executing step function
     with pytest.raises(CallableRuntimeError, match="Step execution error"):
         await step_handler(
@@ -969,29 +1021,6 @@ async def test_step_immediate_response_immediate_failure():
     mock_callable.assert_called_once()
     # Both START and FAIL checkpoints should be created
     assert mock_state.create_checkpoint.call_count == 2
-
-
-def test_get_attempt_outside_step_context_raises():
-    mock_state = Mock(spec=ExecutionState)
-    context = OperationContext(
-        execution_state=mock_state,
-        operation_identifier=OperationIdentifier(
-            "operation", OperationSubType.EXECUTION, None
-        ),
-    )
-    token = set_current_context(context)
-    try:
-        with pytest.raises(RuntimeError, match="get_attempt\\(\\) can only be used"):
-            get_attempt()
-    finally:
-        reset_current_context(token)
-
-
-def test_get_attempt_without_current_context_raises():
-    with pytest.raises(
-        RuntimeError, match="get_current_context\\(\\) can only be used"
-    ):
-        get_attempt()
 
 
 async def test_step_start_executes_without_second_checkpoint_read():

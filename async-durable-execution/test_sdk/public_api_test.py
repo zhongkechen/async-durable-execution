@@ -13,6 +13,7 @@ from async_durable_execution import (
     create_cloud_runner,
     create_default_sync_client,
     create_local_runner,
+    get_step_context,
     step,
     wait,
     parallel,
@@ -30,7 +31,7 @@ from async_durable_execution.primitive import child
 from async_durable_execution.config import JitterStrategy
 from async_durable_execution.config import RetryStrategy
 from async_durable_execution.composite.parallel import SummaryGenerator
-from async_durable_execution.composite.wait_for_condition import WaitDelayStrategy
+from async_durable_execution.composite.wait_for_condition import PollingStrategy
 from async_durable_execution.serdes import ExtendedTypeSerDes
 from async_durable_execution.client import DurableServiceClient
 
@@ -56,10 +57,11 @@ def test_additional_public_types_importable_from_package_root():
         "OperationSubType": OperationSubType,
         "RetryStrategy": RetryStrategy,
         "SummaryGenerator": SummaryGenerator,
-        "WaitDelayStrategy": WaitDelayStrategy,
+        "PollingStrategy": PollingStrategy,
         "create_cloud_runner": create_cloud_runner,
         "create_default_sync_client": create_default_sync_client,
         "create_local_runner": create_local_runner,
+        "get_step_context": get_step_context,
     }
 
     for name, public_type in expected_exports.items():
@@ -98,12 +100,22 @@ def test_wait_for_condition_decision_not_exported_from_package_root():
     assert "WaitForConditionDecision" not in ade.__all__
 
 
-def test_wait_strategy_builder_not_exported_from_package_root():
-    """WaitDelayStrategy is directly callable without a builder."""
+def test_polling_strategy_builder_not_exported_from_package_root():
+    """PollingStrategy is directly callable without a builder."""
     import async_durable_execution as ade
 
+    assert not hasattr(ade, "WaitDelayStrategy")
+    assert "WaitDelayStrategy" not in ade.__all__
     assert not hasattr(ade, "WaitStrategyBuilder")
     assert "WaitStrategyBuilder" not in ade.__all__
+
+
+def test_get_attempt_not_exported_from_package_root():
+    """Step attempts are available from get_step_context().attempt."""
+    import async_durable_execution as ade
+
+    assert not hasattr(ade, "get_attempt")
+    assert "get_attempt" not in ade.__all__
 
 
 async def test_module_level_operations_delegate_to_mock_context_methods():

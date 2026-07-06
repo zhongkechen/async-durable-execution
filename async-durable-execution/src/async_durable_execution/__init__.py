@@ -29,7 +29,7 @@ from .composite.parallel import (
     SummaryGenerator,
 )
 from .composite.wait_for_condition import (
-    WaitDelayStrategy,
+    PollingStrategy,
     wait_for_condition,
     WaitForConditionCheckContext,
 )
@@ -54,7 +54,7 @@ from .primitive.step import (
     StepContext,
     StepInterruptedError,
     StepSemantics,
-    get_attempt,
+    get_step_context,
     step,
 )
 from .models import ErrorObject
@@ -92,8 +92,8 @@ __all__ = [
     "create_local_runner",
     "durable_callable",
     "durable_execution",
-    "get_attempt",
     "get_current_context",
+    "get_step_context",
     "invoke",
     "map",
     "parallel",
@@ -143,5 +143,5 @@ __all__ = [
     "ValidationError",
     "WaitForCallbackContext",
     "WaitForConditionCheckContext",
-    "WaitDelayStrategy",
+    "PollingStrategy",
 ]

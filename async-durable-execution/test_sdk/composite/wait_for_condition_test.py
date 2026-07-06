@@ -36,7 +36,7 @@ from async_durable_execution.composite.wait_for_condition import (
 from async_durable_execution.state import ExecutionState
 from async_durable_execution import WaitForConditionCheckContext
 from async_durable_execution.config import JitterStrategy
-from async_durable_execution.composite.wait_for_condition import WaitDelayStrategy
+from async_durable_execution.composite.wait_for_condition import PollingStrategy
 from async_durable_execution.serdes import SerDes
 
 from ..serdes_test import CustomDictSerDes
@@ -55,7 +55,7 @@ def test_wait_for_condition_signature_accepts_config_fields_directly():
     parameters = inspect.signature(wait_for_condition).parameters
 
     assert "config" not in parameters
-    assert "wait_strategy" in parameters
+    assert "polling_strategy" in parameters
     assert "serdes" in parameters
 
 
@@ -67,7 +67,7 @@ def test_wait_for_condition_signature_requires_keyword_only_options():
     assert parameters["check"].default is inspect.Parameter.empty
     assert parameters["initial_state"].kind is inspect.Parameter.KEYWORD_ONLY
     assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
-    assert parameters["wait_strategy"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameters["polling_strategy"].kind is inspect.Parameter.KEYWORD_ONLY
     assert parameters["serdes"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
@@ -88,7 +88,7 @@ async def test_wait_for_condition_public_wrapper_builds_executor_from_context():
     context.step_counter.create_step_id.return_value = "wait-op"
     context.parent_id = "parent-op"
     context.execution_state = Mock(spec=ExecutionState)
-    wait_strategy = Mock()
+    polling_strategy = Mock()
     serdes = Mock()
     captured_executor = None
 
@@ -112,7 +112,7 @@ async def test_wait_for_condition_public_wrapper_builds_executor_from_context():
             check,
             initial_state={"status": "pending"},
             name="poll-job",
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
             serdes=serdes,
         )
 
@@ -120,7 +120,7 @@ async def test_wait_for_condition_public_wrapper_builds_executor_from_context():
     assert captured_executor is not None
     executor = captured_executor
     assert executor.initial_state == {"status": "pending"}
-    assert executor.wait_strategy is wait_strategy
+    assert executor.polling_strategy is polling_strategy
     assert executor.serdes is serdes
     assert executor.operation_identifier == OperationIdentifier(
         operation_id="wait-op",
@@ -149,7 +149,7 @@ async def wait_for_condition_handler(
     state,
     operation_identifier,
     initial_state=5,
-    wait_strategy=None,
+    polling_strategy=None,
     serdes=None,
 ):
     """Test helper that wraps WaitForConditionOperationExecutor."""
@@ -158,7 +158,7 @@ async def wait_for_condition_handler(
         initial_state=initial_state,
         state=state,
         operation_identifier=operation_identifier,
-        wait_strategy=wait_strategy,
+        polling_strategy=polling_strategy,
         serdes=serdes,
     )
     return await _invoke_maybe_async(executor.process())
@@ -189,8 +189,38 @@ async def test_wait_for_condition_first_execution_condition_met():
     assert mock_state.create_checkpoint.call_count == 2  # START and SUCCESS
 
 
+async def test_wait_for_condition_delegates_truthy_result_to_polling_strategy():
+    """A custom polling strategy can keep polling even for a truthy result."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "arn:aws:test"
+    mock_state.operations.get.return_value = None
+
+    op_id = OperationIdentifier(
+        "op_truthy_retry", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+    polling_strategy = Mock(return_value=timedelta(seconds=3))
+
+    def check_func(state):
+        return "done"
+
+    with pytest.raises(SuspendExecution, match="will retry in 3 seconds"):
+        await wait_for_condition_handler(
+            state=mock_state,
+            operation_identifier=op_id,
+            check=check_func,
+            polling_strategy=polling_strategy,
+        )
+
+    polling_strategy.assert_called_once_with("done", 1)
+    retry_operation = mock_state.create_checkpoint.call_args_list[1][1][
+        "operation_update"
+    ]
+    assert retry_operation.payload == '"done"'
+    assert retry_operation.step_options.next_attempt_delay_seconds == 3
+
+
 async def test_wait_for_condition_new_condition_result_with_optional_config():
-    """Condition returns the next state without a wait strategy."""
+    """Condition returns the next state without a polling strategy."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
     mock_state.operations.get.return_value = None
@@ -241,7 +271,7 @@ async def test_wait_for_condition_returns_deserialized_serialized_custom_serdes_
 
 
 async def test_wait_for_condition_new_condition_uses_delay_only_strategy():
-    """Condition decides to continue and wait_strategy supplies only delay."""
+    """Condition decides to continue and polling_strategy supplies only delay."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
     mock_state.operations.get.return_value = None
@@ -253,14 +283,14 @@ async def test_wait_for_condition_new_condition_uses_delay_only_strategy():
     def condition(state):
         return None
 
-    wait_strategy = lambda state, attempt: timedelta(seconds=7)
+    polling_strategy = lambda state, attempt: timedelta(seconds=7)
 
     with pytest.raises(SuspendExecution, match="will retry in 7 seconds"):
         await wait_for_condition_handler(
             state=mock_state,
             operation_identifier=op_id,
             check=condition,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
         )
 
     assert mock_state.create_checkpoint.call_count == 2
@@ -281,7 +311,7 @@ async def test_wait_for_condition_first_execution_condition_not_met():
     def check_func(state):
         return None
 
-    def wait_strategy(state, attempt):
+    def polling_strategy(state, attempt):
         return timedelta(seconds=30)
 
     with pytest.raises(SuspendExecution, match="will retry in 30 seconds"):
@@ -289,7 +319,7 @@ async def test_wait_for_condition_first_execution_condition_not_met():
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
         )
 
     assert mock_state.create_checkpoint.call_count == 2  # START and RETRY
@@ -316,13 +346,13 @@ async def test_wait_for_condition_already_succeeded():
     def check_func(state):
         return None
 
-    wait_strategy = lambda s, a: timedelta(seconds=1)
+    polling_strategy = lambda s, a: timedelta(seconds=1)
 
     result = await wait_for_condition_handler(
         state=mock_state,
         operation_identifier=op_id,
         check=check_func,
-        wait_strategy=wait_strategy,
+        polling_strategy=polling_strategy,
     )
 
     assert result == 42
@@ -350,13 +380,13 @@ async def test_wait_for_condition_already_succeeded_none_result():
     def check_func(state):
         return None
 
-    wait_strategy = lambda s, a: None
+    polling_strategy = lambda s, a: None
 
     result = await wait_for_condition_handler(
         state=mock_state,
         operation_identifier=op_id,
         check=check_func,
-        wait_strategy=wait_strategy,
+        polling_strategy=polling_strategy,
     )
 
     assert result is None
@@ -385,14 +415,14 @@ async def test_wait_for_condition_already_failed():
     def check_func(state):
         return None
 
-    wait_strategy = lambda s, a: None
+    polling_strategy = lambda s, a: None
 
     with pytest.raises(CallableRuntimeError):
         await wait_for_condition_handler(
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
         )
 
 
@@ -447,13 +477,13 @@ async def test_wait_for_condition_retry_with_state():
     def check_func(state):
         return state + 1
 
-    wait_strategy = lambda s, a: None
+    polling_strategy = lambda s, a: None
 
     result = await wait_for_condition_handler(
         state=mock_state,
         operation_identifier=op_id,
         check=check_func,
-        wait_strategy=wait_strategy,
+        polling_strategy=polling_strategy,
     )
 
     assert result == 11  # 10 (from checkpoint) + 1
@@ -482,13 +512,13 @@ async def test_wait_for_condition_retry_without_state():
     def check_func(state):
         return state + 1
 
-    wait_strategy = lambda s, a: None
+    polling_strategy = lambda s, a: None
 
     result = await wait_for_condition_handler(
         state=mock_state,
         operation_identifier=op_id,
         check=check_func,
-        wait_strategy=wait_strategy,
+        polling_strategy=polling_strategy,
     )
 
     assert result == 6  # 5 (initial) + 1
@@ -516,13 +546,13 @@ async def test_wait_for_condition_retry_invalid_json_state():
     def check_func(state):
         return state + 1
 
-    wait_strategy = lambda s, a: None
+    polling_strategy = lambda s, a: None
 
     result = await wait_for_condition_handler(
         state=mock_state,
         operation_identifier=op_id,
         check=check_func,
-        wait_strategy=wait_strategy,
+        polling_strategy=polling_strategy,
     )
 
     assert result == 6  # Falls back to initial state
@@ -544,14 +574,14 @@ async def test_wait_for_condition_check_function_exception():
         msg = "Test error"
         raise ValueError(msg)
 
-    wait_strategy = lambda s, a: None
+    polling_strategy = lambda s, a: None
 
     with pytest.raises(ValueError, match="Test error"):
         await wait_for_condition_handler(
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
         )
 
     assert mock_state.create_checkpoint.call_count == 2  # START and FAIL
@@ -574,13 +604,13 @@ async def test_wait_for_condition_check_context():
         captured_context = get_current_context()
         return state + 1
 
-    wait_strategy = lambda s, a: None
+    polling_strategy = lambda s, a: None
 
     await wait_for_condition_handler(
         state=mock_state,
         operation_identifier=op_id,
         check=check_func,
-        wait_strategy=wait_strategy,
+        polling_strategy=polling_strategy,
     )
 
     assert isinstance(captured_context, WaitForConditionCheckContext)
@@ -602,7 +632,7 @@ async def test_wait_for_condition_delay_seconds_none():
     def check_func(state):
         return None
 
-    def wait_strategy(state, attempt):
+    def polling_strategy(state, attempt):
         return timedelta()
 
     with pytest.raises(SuspendExecution, match="will retry in 0 seconds"):
@@ -610,7 +640,7 @@ async def test_wait_for_condition_delay_seconds_none():
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
         )
 
 
@@ -629,14 +659,14 @@ async def test_wait_for_condition_no_operation_in_state_executes_check():
     def check_func(state):
         return None
 
-    wait_strategy = lambda s, a: timedelta(seconds=1)
+    polling_strategy = lambda s, a: timedelta(seconds=1)
 
     with pytest.raises(SuspendExecution, match="will retry"):
         await wait_for_condition_handler(
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
         )
 
 
@@ -665,13 +695,13 @@ async def test_wait_for_condition_operation_no_step_details():
     def check_func(state):
         return state + 1
 
-    wait_strategy = lambda s, a: None
+    polling_strategy = lambda s, a: None
 
     result = await wait_for_condition_handler(
         state=mock_state,
         operation_identifier=op_id,
         check=check_func,
-        wait_strategy=wait_strategy,
+        polling_strategy=polling_strategy,
     )
 
     assert result == 6  # Falls back to initial_state and uses attempt=1
@@ -721,7 +751,7 @@ async def test_wait_for_condition_custom_delay_seconds():
     def check_func(state):
         return None
 
-    def wait_strategy(state, attempt):
+    def polling_strategy(state, attempt):
         return timedelta(minutes=1)
 
     with pytest.raises(SuspendExecution, match="will retry in 60 seconds"):
@@ -729,7 +759,7 @@ async def test_wait_for_condition_custom_delay_seconds():
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
         )
 
 
@@ -746,7 +776,7 @@ async def test_wait_for_condition_custom_delay_accepts_int_seconds():
     def check_func(state):
         return None
 
-    def wait_strategy(state, attempt):
+    def polling_strategy(state, attempt):
         return 60
 
     with pytest.raises(SuspendExecution, match="will retry in 60 seconds"):
@@ -754,12 +784,12 @@ async def test_wait_for_condition_custom_delay_accepts_int_seconds():
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
         )
 
 
 async def test_wait_for_condition_custom_delay_rejects_invalid_return_type():
-    """Custom wait strategies must return int seconds or timedelta."""
+    """Custom polling strategies must return int seconds or timedelta."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
     mock_state.operations.get.return_value = None
@@ -771,25 +801,25 @@ async def test_wait_for_condition_custom_delay_rejects_invalid_return_type():
     def check_func(state):
         return None
 
-    def wait_strategy(state, attempt):
+    def polling_strategy(state, attempt):
         return "later"
 
     with pytest.raises(
         ValidationError,
-        match="wait_strategy must return int seconds, timedelta, or None",
+        match="polling_strategy must return int seconds, timedelta, or None",
     ):
         await wait_for_condition_handler(
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
         )
 
     assert mock_state.create_checkpoint.call_count == 2
 
 
 async def test_wait_for_condition_attempt_number_passed_to_strategy():
-    """Test that attempt number is correctly passed to wait strategy."""
+    """Test that attempt number is correctly passed to polling strategy."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
     operation = Operation(
@@ -812,7 +842,7 @@ async def test_wait_for_condition_attempt_number_passed_to_strategy():
 
     captured_attempt = None
 
-    def wait_strategy(state, attempt):
+    def polling_strategy(state, attempt):
         nonlocal captured_attempt
         captured_attempt = attempt
         return timedelta(seconds=1)
@@ -822,7 +852,7 @@ async def test_wait_for_condition_attempt_number_passed_to_strategy():
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
         )
 
     assert captured_attempt == 4
@@ -853,7 +883,7 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
 
     captured_attempts = []
 
-    def wait_strategy(state, attempt):
+    def polling_strategy(state, attempt):
         captured_attempts.append(attempt)
         return timedelta(seconds=1)
 
@@ -865,7 +895,7 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
         )
 
     assert captured_attempts[-1] == 1, "First execution should have attempt=1"
@@ -885,7 +915,7 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
         )
 
     assert captured_attempts[-1] == 2, (
@@ -907,7 +937,7 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
         )
 
     assert captured_attempts[-1] == 3, (
@@ -929,7 +959,7 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
         )
 
     assert captured_attempts[-1] == 4, (
@@ -946,7 +976,7 @@ async def test_wait_for_condition_attempt_sequence_is_monotonic():
 
 
 async def test_wait_for_condition_state_passed_to_strategy():
-    """Test that new state is correctly passed to wait strategy."""
+    """Test that new state is correctly passed to polling strategy."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
     mock_state.operations.get.return_value = None
@@ -962,7 +992,7 @@ async def test_wait_for_condition_state_passed_to_strategy():
 
     captured_state = None
 
-    def wait_strategy(state, attempt):
+    def polling_strategy(state, attempt):
         nonlocal captured_state
         captured_state = state
         return timedelta(seconds=1)
@@ -972,7 +1002,7 @@ async def test_wait_for_condition_state_passed_to_strategy():
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
         )
 
     assert captured_state == 0
@@ -999,13 +1029,13 @@ async def test_wait_for_condition_logger_with_log_info():
         assert captured_context.attempt == 1
         return state + 1
 
-    wait_strategy = lambda s, a: None
+    polling_strategy = lambda s, a: None
 
     await wait_for_condition_handler(
         state=mock_state,
         operation_identifier=op_id,
         check=check_func,
-        wait_strategy=wait_strategy,
+        polling_strategy=polling_strategy,
     )
 
     assert captured_context is not None
@@ -1031,7 +1061,7 @@ async def test_wait_for_condition_zero_delay_seconds():
     def check_func(state):
         return None
 
-    def wait_strategy(state, attempt):
+    def polling_strategy(state, attempt):
         return timedelta(seconds=0)
 
     with pytest.raises(SuspendExecution, match="will retry in 0 seconds"):
@@ -1039,7 +1069,7 @@ async def test_wait_for_condition_zero_delay_seconds():
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
         )
 
 
@@ -1058,7 +1088,7 @@ async def test_wait_for_condition_custom_serdes_first_execution_condition_met():
     def check_func(state):
         return complex_result
 
-    def wait_strategy(state, attempt):
+    def polling_strategy(state, attempt):
         return None
 
     serdes = CustomDictSerDes()
@@ -1067,7 +1097,7 @@ async def test_wait_for_condition_custom_serdes_first_execution_condition_met():
         state=mock_state,
         operation_identifier=op_id,
         check=check_func,
-        wait_strategy=wait_strategy,
+        polling_strategy=polling_strategy,
         serdes=serdes,
     )
     expected_checkpoointed_result = (
@@ -1101,14 +1131,14 @@ async def test_wait_for_condition_custom_serdes_already_succeeded():
     def check_func(state):
         return state + 1
 
-    wait_strategy = lambda s, a: None
+    polling_strategy = lambda s, a: None
     serdes = CustomDictSerDes()
 
     result = await wait_for_condition_handler(
         state=mock_state,
         operation_identifier=op_id,
         check=check_func,
-        wait_strategy=wait_strategy,
+        polling_strategy=polling_strategy,
         serdes=serdes,
     )
 
@@ -1142,7 +1172,7 @@ async def test_wait_for_condition_pending():
         msg = "Should not be called"
         raise InvocationError(msg)
 
-    wait_strategy = lambda s, a: None
+    polling_strategy = lambda s, a: None
     serdes = CustomDictSerDes()
 
     with pytest.raises(
@@ -1152,7 +1182,7 @@ async def test_wait_for_condition_pending():
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
             serdes=serdes,
         )
 
@@ -1181,7 +1211,7 @@ async def test_wait_for_condition_pending_without_next_attempt():
         msg = "Should not be called"
         raise InvocationError(msg)
 
-    wait_strategy = lambda s, a: None
+    polling_strategy = lambda s, a: None
     serdes = CustomDictSerDes()
 
     with pytest.raises(
@@ -1192,7 +1222,7 @@ async def test_wait_for_condition_pending_without_next_attempt():
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
             serdes=serdes,
         )
 
@@ -1215,13 +1245,13 @@ async def test_wait_for_condition_checkpoint_called_once_with_is_sync_false():
     def check_func(state):
         return state + 1
 
-    wait_strategy = lambda s, a: None
+    polling_strategy = lambda s, a: None
 
     await wait_for_condition_handler(
         state=mock_state,
         operation_identifier=op_id,
         check=check_func,
-        wait_strategy=wait_strategy,
+        polling_strategy=polling_strategy,
     )
 
     # Verify direct state lookup called only once (no second check for async checkpoint)
@@ -1256,13 +1286,13 @@ async def test_wait_for_condition_immediate_success_without_executing_check():
         msg = "Check function should not be called for immediate success"
         raise AssertionError(msg)
 
-    wait_strategy = lambda s, a: None
+    polling_strategy = lambda s, a: None
 
     result = await wait_for_condition_handler(
         state=mock_state,
         operation_identifier=op_id,
         check=check_func,
-        wait_strategy=wait_strategy,
+        polling_strategy=polling_strategy,
     )
 
     # Verify result returned without executing check function
@@ -1296,7 +1326,7 @@ async def test_wait_for_condition_immediate_failure_without_executing_check():
         msg = "Check function should not be called for immediate failure"
         raise AssertionError(msg)
 
-    wait_strategy = lambda s, a: timedelta(seconds=1)
+    polling_strategy = lambda s, a: timedelta(seconds=1)
 
     # Verify error raised without executing check function
     with pytest.raises(CallableRuntimeError):
@@ -1304,7 +1334,7 @@ async def test_wait_for_condition_immediate_failure_without_executing_check():
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
         )
 
     # Verify no new checkpoints created
@@ -1340,7 +1370,7 @@ async def test_wait_for_condition_pending_suspends_without_executing_check():
         msg = "Check function should not be called for pending status"
         raise AssertionError(msg)
 
-    wait_strategy = lambda s, a: timedelta(seconds=1)
+    polling_strategy = lambda s, a: timedelta(seconds=1)
 
     # Verify suspend occurs without executing check function
     with pytest.raises(
@@ -1350,7 +1380,7 @@ async def test_wait_for_condition_pending_suspends_without_executing_check():
             state=mock_state,
             operation_identifier=op_id,
             check=check_func,
-            wait_strategy=wait_strategy,
+            polling_strategy=polling_strategy,
         )
 
     # Verify no new checkpoints created
@@ -1376,13 +1406,13 @@ async def test_wait_for_condition_no_checkpoint_executes_check_function():
         check_called = True
         return state + 1
 
-    wait_strategy = lambda s, a: None
+    polling_strategy = lambda s, a: None
 
     result = await wait_for_condition_handler(
         state=mock_state,
         operation_identifier=op_id,
         check=check_func,
-        wait_strategy=wait_strategy,
+        polling_strategy=polling_strategy,
     )
 
     # Verify check function was executed
@@ -1414,13 +1444,13 @@ async def test_wait_for_condition_already_completed_no_checkpoint_created():
     def check_func(state):
         return state + 1
 
-    wait_strategy = lambda s, a: timedelta(seconds=1)
+    polling_strategy = lambda s, a: timedelta(seconds=1)
 
     result = await wait_for_condition_handler(
         state=mock_state,
         operation_identifier=op_id,
         check=check_func,
-        wait_strategy=wait_strategy,
+        polling_strategy=polling_strategy,
     )
 
     # Verify result returned
@@ -1445,7 +1475,7 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal():
     mock_check_function = Mock(return_value=("final_state"))
     mock_logger = Mock(spec=logging.Logger)
 
-    def mock_wait_strategy(state, attempt):
+    def mock_polling_strategy(state, attempt):
         return None
 
     executor = WaitForConditionOperationExecutor(
@@ -1455,7 +1485,7 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal():
         operation_identifier=OperationIdentifier(
             "wfc-1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wfc"
         ),
-        wait_strategy=mock_wait_strategy,
+        polling_strategy=mock_polling_strategy,
     )
     result = await executor.process()
 
@@ -1480,7 +1510,7 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal_du
     mock_check_function = Mock(return_value=("final_state"))
     mock_logger = Mock(spec=logging.Logger)
 
-    def mock_wait_strategy(state, attempt):
+    def mock_polling_strategy(state, attempt):
         return None
 
     executor = WaitForConditionOperationExecutor(
@@ -1490,7 +1520,7 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal_du
         operation_identifier=OperationIdentifier(
             "wfc-1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wfc"
         ),
-        wait_strategy=mock_wait_strategy,
+        polling_strategy=mock_polling_strategy,
     )
     result = await executor.process()
 
@@ -1500,9 +1530,9 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal_du
     assert mock_state.create_checkpoint.call_count == 2  # START + SUCCESS checkpoints
 
 
-def test_wait_delay_strategy_defaults():
-    """WaitDelayStrategy uses the step retry defaults."""
-    config = WaitDelayStrategy()
+def test_polling_strategy_defaults():
+    """PollingStrategy uses the step retry defaults."""
+    config = PollingStrategy()
 
     assert config.max_attempts == 6
     assert config.initial_delay == 5
@@ -1515,9 +1545,9 @@ def test_wait_delay_strategy_defaults():
     assert config.increment_seconds is None
 
 
-def test_wait_delay_strategy_accepts_int_seconds():
-    """WaitDelayStrategy duration fields accept integer seconds."""
-    config = WaitDelayStrategy(
+def test_polling_strategy_accepts_int_seconds():
+    """PollingStrategy duration fields accept integer seconds."""
+    config = PollingStrategy(
         initial_delay=2,
         max_delay=50,
     )
@@ -1528,181 +1558,188 @@ def test_wait_delay_strategy_accepts_int_seconds():
     assert config.max_delay_seconds == 50
 
 
-def test_wait_delay_strategy_importable_from_package_root():
-    """WaitDelayStrategy remains re-exported from the package root."""
-    from async_durable_execution import WaitDelayStrategy as ImportedStrategy
+def test_polling_strategy_importable_from_package_root():
+    """PollingStrategy remains re-exported from the package root."""
+    from async_durable_execution import PollingStrategy as ImportedStrategy
 
-    assert ImportedStrategy is WaitDelayStrategy
+    assert ImportedStrategy is PollingStrategy
 
 
-def test_wait_delay_strategy_is_callable_without_build():
-    """WaitDelayStrategy is directly callable, not a builder."""
-    config = WaitDelayStrategy()
+def test_polling_strategy_is_callable_without_build():
+    """PollingStrategy is directly callable, not a builder."""
+    config = PollingStrategy()
 
     assert callable(config)
     assert not hasattr(config, "build")
 
 
 def test_max_attempts_exceeded():
-    """Strategy returns no_wait when max attempts are exhausted."""
-    strategy = WaitDelayStrategy(max_attempts=5)
+    """Strategy returns None when max attempts are exhausted."""
+    strategy = PollingStrategy(max_attempts=5)
 
     delay = strategy(None, 5)
     assert delay is None
 
 
-def test_wait_strategy_returns_delay_before_max_attempts():
+def test_polling_strategy_returns_delay_before_max_attempts():
     """Strategy returns a delay before max attempts are exhausted."""
-    strategy = WaitDelayStrategy(max_attempts=5)
+    strategy = PollingStrategy(max_attempts=5)
 
     delay = strategy(None, 1)
     assert delay > 0
+
+
+def test_polling_strategy_stops_for_truthy_result():
+    """The default polling strategy treats truthy results as complete."""
+    strategy = PollingStrategy(max_attempts=5)
+
+    assert strategy("done", 1) is None
 
 
 @patch("random.random")
 def test_exponential_backoff_calculation(mock_random):
     """Backoff calculation uses the configured jitter strategy."""
     mock_random.return_value = 0.5
-    config = WaitDelayStrategy(
+    config = PollingStrategy(
         initial_delay=timedelta(seconds=2),
         backoff_rate=2.0,
         jitter_strategy=JitterStrategy.FULL,
     )
 
-    assert config("pending", 1) == 1
-    assert config("pending", 2) == 2
+    assert config(False, 1) == 1
+    assert config(False, 2) == 2
 
 
 def test_max_delay_cap():
     """Delay is capped by max_delay."""
-    config = WaitDelayStrategy(
+    config = PollingStrategy(
         initial_delay=timedelta(seconds=100),
         max_delay=timedelta(seconds=50),
         backoff_rate=2.0,
         jitter_strategy=JitterStrategy.NONE,
     )
 
-    assert config("pending", 2) == 50
+    assert config(False, 2) == 50
 
 
 def test_minimum_delay_one_second():
     """Delay is clamped to at least one second."""
-    config = WaitDelayStrategy(
+    config = PollingStrategy(
         initial_delay=timedelta(seconds=0),
         jitter_strategy=JitterStrategy.NONE,
     )
 
-    assert config("pending", 1) == 1
+    assert config(False, 1) == 1
 
 
 @patch("random.random")
 def test_full_jitter_integration(mock_random):
-    """Full jitter is applied during wait strategy execution."""
+    """Full jitter is applied during polling strategy execution."""
     mock_random.return_value = 0.8
-    config = WaitDelayStrategy(
+    config = PollingStrategy(
         initial_delay=timedelta(seconds=10),
         jitter_strategy=JitterStrategy.FULL,
     )
 
-    assert config("pending", 1) == 8
+    assert config(False, 1) == 8
 
 
 @patch("random.random")
 def test_half_jitter_integration(mock_random):
-    """Half jitter is applied during wait strategy execution."""
+    """Half jitter is applied during polling strategy execution."""
     mock_random.return_value = 0.0
-    config = WaitDelayStrategy(
+    config = PollingStrategy(
         initial_delay=timedelta(seconds=10),
         jitter_strategy=JitterStrategy.HALF,
     )
 
-    assert config("pending", 1) == 5
+    assert config(False, 1) == 5
 
 
 def test_none_jitter_integration():
     """No jitter preserves the computed delay."""
-    config = WaitDelayStrategy(
+    config = PollingStrategy(
         initial_delay=timedelta(seconds=10),
         jitter_strategy=JitterStrategy.NONE,
     )
 
-    assert config("pending", 1) == 10
+    assert config(False, 1) == 10
 
 
 def test_zero_backoff_rate():
     """A zero backoff rate preserves the initial delay."""
-    config = WaitDelayStrategy(
+    config = PollingStrategy(
         initial_delay=timedelta(seconds=5),
         backoff_rate=0,
         jitter_strategy=JitterStrategy.NONE,
     )
 
-    assert config("pending", 1) == 5
+    assert config(False, 1) == 5
 
 
 def test_fractional_backoff_rate():
     """Fractional backoff rates are supported."""
-    config = WaitDelayStrategy(
+    config = PollingStrategy(
         initial_delay=timedelta(seconds=8),
         backoff_rate=0.5,
         jitter_strategy=JitterStrategy.NONE,
     )
 
-    assert config("pending", 2) == 4
+    assert config(False, 2) == 4
 
 
 def test_linear_increment():
     """Linear delay increments are supported."""
-    config = WaitDelayStrategy(
+    config = PollingStrategy(
         initial_delay=timedelta(seconds=1),
         increment=timedelta(seconds=2),
         max_delay=timedelta(seconds=10),
         jitter_strategy=JitterStrategy.NONE,
     )
 
-    assert config("pending", 1) == 1
-    assert config("pending", 2) == 3
-    assert config("pending", 3) == 5
+    assert config(False, 1) == 1
+    assert config(False, 2) == 3
+    assert config(False, 3) == 5
 
 
 def test_large_backoff_rate():
     """Large backoff rates still honor max_delay."""
-    config = WaitDelayStrategy(
+    config = PollingStrategy(
         initial_delay=timedelta(seconds=10),
         max_delay=timedelta(seconds=100),
         backoff_rate=10.0,
         jitter_strategy=JitterStrategy.NONE,
     )
 
-    assert config("pending", 3) == 100
+    assert config(False, 3) == 100
 
 
 def test_attempt_at_boundary():
     """The max-attempt boundary stops polling exactly when reached."""
-    strategy = WaitDelayStrategy(max_attempts=3)
+    strategy = PollingStrategy(max_attempts=3)
 
-    assert strategy("pending", 3) is None
-    assert strategy("pending", 2) > 0
+    assert strategy(False, 3) is None
+    assert strategy(False, 2) > 0
 
 
 def test_negative_delay_clamped_to_one():
     """Very small computed delays are clamped to one second."""
-    config = WaitDelayStrategy(
+    config = PollingStrategy(
         initial_delay=timedelta(seconds=0),
         backoff_rate=0,
         jitter_strategy=JitterStrategy.NONE,
     )
 
-    assert config("pending", 1) == 1
+    assert config(False, 1) == 1
 
 
 @patch("random.random")
 def test_rounding_behavior(mock_random):
     """Computed delays round up to whole seconds."""
     mock_random.return_value = 0.3
-    config = WaitDelayStrategy(
+    config = PollingStrategy(
         initial_delay=timedelta(seconds=3),
         jitter_strategy=JitterStrategy.FULL,
     )
 
-    assert config("pending", 1) == 1
+    assert config(False, 1) == 1

@@ -229,8 +229,8 @@ async def test_async_function_fails_then_succeeds_returns_successful_result():
     assert len(ctx.wait_calls) == 2
 
 
-async def test_retry_strategy_raises_to_stop_retries():
-    """Retry strategy raises to stop retrying and surface the exception."""
+async def test_retry_strategy_returns_none_to_stop_retries():
+    """Retry strategy returns None to stop retrying and surface the exception."""
     ctx = MockDurableContext()
     retry_strategy = _make_retry_strategy(max_attempts=1)
 

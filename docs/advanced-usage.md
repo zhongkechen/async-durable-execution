@@ -50,10 +50,11 @@ later.
 
 ## Wait For Condition Results
 
-`wait_for_condition()` completes when the result returned by `check` evaluates to
-`True`. A falsey result is checkpointed as the next state and polling continues after
-the configured wait delay. This lets custom result types decide completion with
-`__bool__()`.
+`wait_for_condition()` passes each `check` result to the configured
+`PollingStrategy`. The strategy returns the next polling delay, or `None` to complete
+with the current result. The default `PollingStrategy` completes when the result
+evaluates to `True` or when max attempts are exhausted, so custom result types can
+still decide completion with `__bool__()`.
 
 When the result is a custom type, provide a `SerDes` implementation so the SDK can
 checkpoint and replay it durably:
@@ -65,7 +66,7 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import SerDes
-from async_durable_execution import WaitDelayStrategy
+from async_durable_execution import PollingStrategy
 from async_durable_execution import wait_for_condition
 
 
@@ -111,7 +112,7 @@ async def check_job(state: JobStatus | None) -> JobStatus:
 result = await wait_for_condition(
     check=check_job,
     initial_state=None,
-    wait_strategy=WaitDelayStrategy[JobStatus](
+    polling_strategy=PollingStrategy[JobStatus](
         initial_delay=timedelta(seconds=2),
     ),
     serdes=JobStatusSerDes(),

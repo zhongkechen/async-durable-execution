@@ -30,7 +30,7 @@ async def wait_for_callback_handler(
     timeout: Duration | None = None,
     heartbeat_timeout: Duration | None = None,
     serdes: SerDes | None = None,
-    retry_strategy: Callable[[Exception, int], Duration] | None = None,
+    retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
 ) -> Any:
     """Create a callback, run a submitter, and wait for callback completion."""
     callback_name = f"{name}-callback" if name is not None else "callback"
@@ -69,7 +69,7 @@ def wait_for_callback(
     timeout: Duration | None = None,
     heartbeat_timeout: Duration | None = None,
     serdes: SerDes | None = None,
-    retry_strategy: Callable[[Exception, int], Duration] | None = None,
+    retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
 ) -> asyncio.Task[Any]:
     """Create a callback, run a submitter, then suspend until the callback resolves.
 
@@ -80,7 +80,7 @@ def wait_for_callback(
         timeout: Optional maximum time to wait for callback completion.
         heartbeat_timeout: Optional maximum time to wait between callback heartbeats.
         serdes: Optional serializer for callback results and submitter results.
-        retry_strategy: Optional strategy that returns a retry delay or raises to stop.
+        retry_strategy: Optional strategy that returns a retry delay or None to stop.
     """
     context_name = name if name is not None else getattr(submitter, "__name__", None)
     logger.debug("wait_for_callback name: %s", context_name)

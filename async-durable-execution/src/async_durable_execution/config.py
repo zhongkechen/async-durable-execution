@@ -132,8 +132,8 @@ class RetryStrategy(_DelayStrategy):
     retryable_errors: list[str | re.Pattern] | None = None
     retryable_error_types: list[type[Exception]] | None = None
 
-    def __call__(self, error: Exception, attempts_made: int) -> Duration:
-        """Return retry delay, or raise the error if it should not be retried."""
+    def __call__(self, error: Exception, attempts_made: int) -> Duration | None:
+        """Return retry delay, or None if the error should not be retried."""
         default_retryable_error_pattern = re.compile(r".*")
         should_use_default_errors: bool = (
             self.retryable_errors is None and self.retryable_error_types is None
@@ -149,7 +149,7 @@ class RetryStrategy(_DelayStrategy):
         retryable_error_types: list[type[Exception]] = self.retryable_error_types or []
 
         if attempts_made >= self.max_attempts:
-            raise error
+            return None
 
         is_retryable_error_message: bool = any(
             pattern.search(str(error))
@@ -162,7 +162,7 @@ class RetryStrategy(_DelayStrategy):
         )
 
         if not is_retryable_error_message and not is_retryable_error_type:
-            raise error
+            return None
 
         return self.calculate_delay(attempts_made)
 

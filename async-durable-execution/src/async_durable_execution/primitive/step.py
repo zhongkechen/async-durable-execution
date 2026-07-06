@@ -68,7 +68,7 @@ class StepOperationExecutor(OperationExecutor[T]):
         func: Callable[[], Awaitable[T]],
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
-        retry_strategy: Callable[[Exception, int], Duration] | None = None,
+        retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
         step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
         serdes: SerDes | None = None,
     ):
@@ -258,9 +258,11 @@ class StepOperationExecutor(OperationExecutor[T]):
             if operation and operation.step_details
             else 0
         )
+        delay_seconds: int | None = None
         try:
             retry_delay = retry_strategy(error, retry_attempt + 1)
-            delay_seconds = duration_to_seconds(retry_delay, "retry delay")
+            if retry_delay is not None:
+                delay_seconds = duration_to_seconds(retry_delay, "retry delay")
         except Exception as retry_error:
             fail_error_object = ErrorObject.from_exception(retry_error)
             fail_operation: OperationUpdate = OperationUpdate.create_step_fail(
@@ -276,6 +278,19 @@ class StepOperationExecutor(OperationExecutor[T]):
                 raise retry_error
 
             raise CallableRuntimeError.from_error_object(fail_error_object)
+
+        if retry_delay is None:
+            fail_operation = OperationUpdate.create_step_fail(
+                identifier=self.operation_identifier, error=error_object
+            )
+            await self.create_checkpoint(fail_operation)
+
+            if isinstance(error, StepInterruptedError):
+                raise error
+
+            raise CallableRuntimeError.from_error_object(error_object)
+
+        assert delay_seconds is not None
 
         logger.debug(
             "Retrying step for id: %s, name: %s, attempt: %s",
@@ -337,7 +352,7 @@ def step(
     func: Callable[[], Awaitable[T]],
     *,
     name: str | None = None,
-    retry_strategy: Callable[[Exception, int], Duration] | None = None,
+    retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
     step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
     serdes: SerDes | None = None,
 ) -> asyncio.Task[T]:
@@ -376,7 +391,7 @@ async def _step(
     *,
     context: DurableContext,
     operation_identifier: OperationIdentifier,
-    retry_strategy: Callable[[Exception, int], Duration] | None = None,
+    retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
     step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
     serdes: SerDes | None = None,
 ) -> T:
@@ -398,19 +413,10 @@ class StepContext(OperationContext):
     attempt: int | None = None
 
 
-def get_attempt() -> int | None:
-    """Return the current step attempt number inside a step/check callback."""
-    current_context = get_step_context(
-        "get_attempt() can only be used while a step function is executing.",
-    )
-    return current_context.attempt
-
-
-def get_step_context(
-    message: str,
-):
-    """Return the active `StepContext` or raise a caller-provided error message."""
+def get_step_context() -> StepContext:
+    """Return the active `StepContext`."""
     current_context = get_current_context()
-    if current_context is None or not isinstance(current_context, StepContext):
-        raise RuntimeError(message)
+    if not isinstance(current_context, StepContext):
+        msg = "get_step_context() can only be used while a step function is executing."
+        raise RuntimeError(msg)
     return current_context
