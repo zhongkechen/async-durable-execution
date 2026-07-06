@@ -69,18 +69,20 @@ class JitterStrategy(str, Enum):
                 # Full jitter: random(0, delay)
                 return random.random() * delay  # noqa: S311
 
+    def finalize_delay(self, base_delay: float) -> int:
+        """Apply jitter, round up, and clamp to a minimum of 1 second."""
+        return max(1, math.ceil(self.apply_jitter(base_delay)))
+
 
 @dataclass
-class RetryStrategy:
-    """Exponential-backoff retry strategy for durable operations."""
+class _DelayStrategy:
+    """Common delay configuration for retry and polling strategies."""
 
     max_attempts: int = 6
     initial_delay: Duration = 5
     max_delay: Duration = 60
     backoff_rate: int | float = 2
     jitter_strategy: JitterStrategy = field(default=JitterStrategy.FULL)
-    retryable_errors: list[str | re.Pattern] | None = None
-    retryable_error_types: list[type[Exception]] | None = None
     increment: Duration | None = None
 
     def __post_init__(self):
@@ -101,10 +103,34 @@ class RetryStrategy:
 
     @property
     def increment_seconds(self) -> int | None:
-        """Get linear retry increment in seconds."""
+        """Get linear delay increment in seconds."""
         if self.increment is None:
             return None
         return duration_to_seconds(self.increment, "increment")
+
+    def calculate_delay(self, attempts_made: int) -> int:
+        """Calculate a whole-second delay for exponential or linear strategies."""
+        increment_seconds = self.increment_seconds
+        if increment_seconds is None:
+            base_delay: float = self.initial_delay_seconds * (
+                self.backoff_rate ** (attempts_made - 1)
+            )
+        else:
+            base_delay = self.initial_delay_seconds + increment_seconds * (
+                attempts_made - 1
+            )
+
+        return self.jitter_strategy.finalize_delay(
+            min(base_delay, self.max_delay_seconds)
+        )
+
+
+@dataclass
+class RetryStrategy(_DelayStrategy):
+    """Exponential-backoff retry strategy for durable operations."""
+
+    retryable_errors: list[str | re.Pattern] | None = None
+    retryable_error_types: list[type[Exception]] | None = None
 
     def __call__(self, error: Exception, attempts_made: int) -> Duration:
         """Return retry delay, or raise the error if it should not be retried."""
@@ -138,19 +164,7 @@ class RetryStrategy:
         if not is_retryable_error_message and not is_retryable_error_type:
             raise error
 
-        if self.increment_seconds is None:
-            base_delay: float = self.initial_delay_seconds * (
-                self.backoff_rate ** (attempts_made - 1)
-            )
-        else:
-            base_delay = self.initial_delay_seconds + self.increment_seconds * (
-                attempts_made - 1
-            )
-        base_delay = min(base_delay, self.max_delay_seconds)
-        delay_with_jitter: float = self.jitter_strategy.apply_jitter(base_delay)
-        final_delay: int = max(1, math.ceil(delay_with_jitter))
-
-        return final_delay
+        return self.calculate_delay(attempts_made)
 
     @classmethod
     def none(cls) -> RetryStrategy:

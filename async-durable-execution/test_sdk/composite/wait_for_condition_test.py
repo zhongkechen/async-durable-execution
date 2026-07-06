@@ -1501,17 +1501,18 @@ async def test_wait_for_condition_executes_check_when_checkpoint_not_terminal_du
 
 
 def test_wait_delay_strategy_defaults():
-    """WaitDelayStrategy keeps its expected defaults."""
+    """WaitDelayStrategy uses the step retry defaults."""
     config = WaitDelayStrategy()
 
-    assert config.max_attempts == 60
+    assert config.max_attempts == 6
     assert config.initial_delay == 5
-    assert config.max_delay == 300
+    assert config.max_delay == 60
     assert config.initial_delay_seconds == 5
-    assert config.max_delay_seconds == 300
-    assert config.backoff_rate == 1.5
+    assert config.max_delay_seconds == 60
+    assert config.backoff_rate == 2
     assert config.jitter_strategy == JitterStrategy.FULL
-    assert config.timeout_seconds is None
+    assert config.increment is None
+    assert config.increment_seconds is None
 
 
 def test_wait_delay_strategy_accepts_int_seconds():
@@ -1519,15 +1520,12 @@ def test_wait_delay_strategy_accepts_int_seconds():
     config = WaitDelayStrategy(
         initial_delay=2,
         max_delay=50,
-        timeout=120,
     )
 
     assert config.initial_delay == 2
     assert config.max_delay == 50
-    assert config.timeout == 120
     assert config.initial_delay_seconds == 2
     assert config.max_delay_seconds == 50
-    assert config.timeout_seconds == 120
 
 
 def test_wait_delay_strategy_importable_from_package_root():
@@ -1651,6 +1649,20 @@ def test_fractional_backoff_rate():
     )
 
     assert config("pending", 2) == 4
+
+
+def test_linear_increment():
+    """Linear delay increments are supported."""
+    config = WaitDelayStrategy(
+        initial_delay=timedelta(seconds=1),
+        increment=timedelta(seconds=2),
+        max_delay=timedelta(seconds=10),
+        jitter_strategy=JitterStrategy.NONE,
+    )
+
+    assert config("pending", 1) == 1
+    assert config("pending", 2) == 3
+    assert config("pending", 3) == 5
 
 
 def test_large_backoff_rate():
