@@ -11,7 +11,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from async_durable_execution import with_retry, with_retry as imported_with_retry
+from async_durable_execution import (
+    WithRetryContext,
+    with_retry,
+    with_retry as imported_with_retry,
+)
 from async_durable_execution.config import (
     Duration,
     JitterStrategy,
@@ -23,9 +27,31 @@ from async_durable_execution.context import (
     set_current_context,
 )
 from async_durable_execution.exceptions import SuspendExecution
+from async_durable_execution.models import OperationIdentifier, OperationSubType
+from async_durable_execution.primitive.child import DurableContext
 
 
 _T = TypeVar("_T")
+
+
+def _make_durable_context() -> DurableContext:
+    state = MagicMock()
+    state.durable_execution_arn = "arn:aws:test"
+    state.lambda_context = None
+    return DurableContext(
+        execution_state=state,
+        operation_identifier=OperationIdentifier(
+            operation_id=None,
+            sub_type=OperationSubType.EXECUTION,
+            parent_id="parent",
+        ),
+    )
+
+
+def _current_attempt() -> int:
+    context = get_current_context()
+    assert isinstance(context, WithRetryContext)
+    return context.attempt
 
 
 @dataclass
@@ -116,7 +142,11 @@ async def _call_with_retry(
         summary_generator=None,
         is_virtual: bool = False,
     ):
-        result = await func()
+        token = set_current_context(_make_durable_context())
+        try:
+            result = await func()
+        finally:
+            reset_current_context(token)
         ctx.child_context_calls.append(
             RunInChildContextCall(
                 name=name,
@@ -165,7 +195,7 @@ async def test_success_on_first_attempt_returns_result_without_retry():
     ctx = MockDurableContext()
     retry_strategy = _make_retry_strategy()
 
-    async def tracking_func(attempt: int) -> str:
+    async def tracking_func() -> str:
         return "success"
 
     result = await _call_with_retry(
@@ -185,8 +215,9 @@ async def test_function_fails_then_succeeds_returns_successful_result():
 
     call_count = 0
 
-    async def failing_then_succeeding(attempt: int) -> str:
+    async def failing_then_succeeding() -> str:
         nonlocal call_count
+        attempt = _current_attempt()
         call_count += 1
         if attempt < 3:
             raise ValueError(f"fail on attempt {attempt}")
@@ -210,9 +241,10 @@ async def test_async_function_fails_then_succeeds_returns_successful_result():
 
     call_count = 0
 
-    async def failing_then_succeeding(attempt: int) -> str:
+    async def failing_then_succeeding() -> str:
         nonlocal call_count
         await asyncio.sleep(0)
+        attempt = _current_attempt()
         call_count += 1
         if attempt < 3:
             raise ValueError(f"fail on attempt {attempt}")
@@ -234,7 +266,7 @@ async def test_retry_strategy_returns_none_to_stop_retries():
     ctx = MockDurableContext()
     retry_strategy = _make_retry_strategy(max_attempts=1)
 
-    async def always_fails(attempt: int) -> None:
+    async def always_fails() -> None:
         raise RuntimeError("permanent failure")
 
     with pytest.raises(RuntimeError, match="permanent failure"):
@@ -252,7 +284,7 @@ async def test_suspend_execution_is_reraised_immediately():
     ctx = MockDurableContext()
     retry_strategy = _make_retry_strategy(max_attempts=5)
 
-    async def raises_suspend(attempt: int) -> None:
+    async def raises_suspend() -> None:
         raise SuspendExecution("suspending")
 
     with pytest.raises(SuspendExecution, match="suspending"):
@@ -270,7 +302,7 @@ async def test_async_suspend_execution_is_reraised_immediately():
     ctx = MockDurableContext()
     retry_strategy = _make_retry_strategy(max_attempts=5)
 
-    async def raises_suspend(attempt: int) -> None:
+    async def raises_suspend() -> None:
         await asyncio.sleep(0)
         raise SuspendExecution("suspending")
 
@@ -289,7 +321,7 @@ async def test_default_config_wraps_in_child_context():
     ctx = MockDurableContext()
     retry_strategy = _make_retry_strategy()
 
-    async def simple_func(attempt: int) -> str:
+    async def simple_func() -> str:
         return "ok"
 
     result = await _call_with_retry(ctx, simple_func, retry_strategy=retry_strategy)
@@ -300,8 +332,7 @@ async def test_default_config_wraps_in_child_context():
 
 async def test_retry_body_runs_with_child_context_bound():
     """The retry body keeps the child context installed by run_in_child_context."""
-    parent_ctx = object()
-    child_ctx = object()
+    child_ctx = _make_durable_context()
 
     async def fake_run_in_child_context(func, **_kwargs):
         token = set_current_context(child_ctx)
@@ -310,8 +341,14 @@ async def test_retry_body_runs_with_child_context_bound():
         finally:
             reset_current_context(token)
 
-    async def current_context_is_child(_attempt: int) -> bool:
-        return get_current_context() is child_ctx
+    async def current_context_is_child() -> bool:
+        context = get_current_context()
+        return (
+            isinstance(context, WithRetryContext)
+            and context.attempt == 1
+            and context.execution_state is child_ctx.execution_state
+            and context.operation_identifier is child_ctx.operation_identifier
+        )
 
     with (
         patch(
@@ -320,8 +357,7 @@ async def test_retry_body_runs_with_child_context_bound():
         ),
         patch(
             "async_durable_execution.composite.with_retry.get_durable_context",
-            return_value=parent_ctx,
-            create=True,
+            return_value=child_ctx,
         ),
     ):
         result = await with_retry(current_context_is_child)
@@ -334,8 +370,9 @@ async def test_default_retry_strategy_is_used_when_not_provided():
     ctx = MockDurableContext()
     call_count = 0
 
-    async def fails_once(attempt: int) -> str:
+    async def fails_once() -> str:
         nonlocal call_count
+        attempt = _current_attempt()
         call_count += 1
         if attempt == 1:
             raise ValueError("transient")
@@ -357,8 +394,9 @@ async def test_no_name_creates_default_child_context_and_backoff_waits():
 
     call_count = 0
 
-    async def fails_once(attempt: int) -> str:
+    async def fails_once() -> str:
         nonlocal call_count
+        attempt = _current_attempt()
         call_count += 1
         if attempt == 1:
             raise ValueError("first failure")
@@ -383,7 +421,8 @@ async def test_name_is_forwarded_to_child_context_and_backoff_waits():
     ctx = MockDurableContext()
     retry_strategy = _make_retry_strategy(max_attempts=3)
 
-    async def fails_twice(attempt: int) -> str:
+    async def fails_twice() -> str:
+        attempt = _current_attempt()
         if attempt < 3:
             raise RuntimeError("transient")
         return "done"
@@ -412,7 +451,7 @@ async def test_child_context_fields_are_forwarded():
     summary_generator = MagicMock()
     retry_strategy = _make_retry_strategy(max_attempts=2)
 
-    async def simple_func(attempt: int) -> str:
+    async def simple_func() -> str:
         return "ok"
 
     await _call_with_retry(
@@ -442,7 +481,8 @@ async def test_attempt_number_starts_at_1_and_increments():
     retry_strategy = _make_retry_strategy(max_attempts=5)
     attempts_seen: list[int] = []
 
-    async def record_attempts(attempt: int) -> str:
+    async def record_attempts() -> str:
+        attempt = _current_attempt()
         attempts_seen.append(attempt)
         if attempt < 4:
             raise ValueError("keep retrying")
@@ -467,7 +507,8 @@ async def test_with_retry_importable_from_package():
 async def test_with_retry_strategy_is_not_positional_parameter():
     """with_retry rejects retry strategies as positional arguments."""
 
-    async def test_function(attempt: int) -> str:
+    async def test_function() -> str:
+        attempt = _current_attempt()
         return f"attempt-{attempt}"
 
     with pytest.raises(TypeError):
@@ -488,7 +529,8 @@ async def test_integration_with_retry_strategy():
         jitter_strategy=JitterStrategy.NONE,
     )
 
-    async def fails_three_times(attempt: int) -> str:
+    async def fails_three_times() -> str:
+        attempt = _current_attempt()
         if attempt < 4:
             raise ValueError("transient")
         return "done"
@@ -517,7 +559,8 @@ async def test_integration_retries_exhausted_raises_last_exception():
         jitter_strategy=JitterStrategy.NONE,
     )
 
-    async def always_fails(attempt: int) -> None:
+    async def always_fails() -> None:
+        attempt = _current_attempt()
         raise RuntimeError(f"failure-{attempt}")
 
     with pytest.raises(RuntimeError, match="failure-3"):

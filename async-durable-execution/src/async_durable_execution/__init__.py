@@ -17,7 +17,7 @@ from .config import JitterStrategy, RetryStrategy
 from .context import (
     get_current_context,
 )
-from .composite.with_retry import with_retry
+from .composite.with_retry import WithRetryContext, with_retry
 from .composite.map import MapItemContext, map
 from .composite.parallel import (
     BatchItem,
@@ -143,5 +143,6 @@ __all__ = [
     "ValidationError",
     "WaitForCallbackContext",
     "WaitForConditionCheckContext",
+    "WithRetryContext",
     "PollingStrategy",
 ]
