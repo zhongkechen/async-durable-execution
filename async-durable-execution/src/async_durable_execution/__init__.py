@@ -54,6 +54,7 @@ from .primitive.step import (
     StepContext,
     StepInterruptedError,
     StepSemantics,
+    get_step_context,
     step,
 )
 from .models import ErrorObject
@@ -92,6 +93,7 @@ __all__ = [
     "durable_callable",
     "durable_execution",
     "get_current_context",
+    "get_step_context",
     "invoke",
     "map",
     "parallel",

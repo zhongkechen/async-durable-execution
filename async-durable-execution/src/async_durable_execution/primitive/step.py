@@ -14,7 +14,7 @@ from .base import (
 )
 from .child import get_durable_context
 from ..config import Duration, RetryStrategy, duration_to_seconds
-from ..context import bind_current_context
+from ..context import bind_current_context, get_current_context
 from ..exceptions import (
     CallableRuntimeError,
     ExecutionError,
@@ -396,3 +396,12 @@ class StepContext(OperationContext):
     """Context exposed while a step function is executing."""
 
     attempt: int | None = None
+
+
+def get_step_context() -> StepContext:
+    """Return the active `StepContext`."""
+    current_context = get_current_context()
+    if not isinstance(current_context, StepContext):
+        msg = "get_step_context() can only be used while a step function is executing."
+        raise RuntimeError(msg)
+    return current_context

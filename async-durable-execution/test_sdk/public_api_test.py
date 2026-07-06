@@ -13,6 +13,7 @@ from async_durable_execution import (
     create_cloud_runner,
     create_default_sync_client,
     create_local_runner,
+    get_step_context,
     step,
     wait,
     parallel,
@@ -60,6 +61,7 @@ def test_additional_public_types_importable_from_package_root():
         "create_cloud_runner": create_cloud_runner,
         "create_default_sync_client": create_default_sync_client,
         "create_local_runner": create_local_runner,
+        "get_step_context": get_step_context,
     }
 
     for name, public_type in expected_exports.items():
@@ -107,7 +109,7 @@ def test_wait_strategy_builder_not_exported_from_package_root():
 
 
 def test_get_attempt_not_exported_from_package_root():
-    """Step attempts are available from get_current_context().attempt."""
+    """Step attempts are available from get_step_context().attempt."""
     import async_durable_execution as ade
 
     assert not hasattr(ade, "get_attempt")

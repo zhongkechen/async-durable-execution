@@ -9,13 +9,13 @@ from async_durable_execution import (
     wait,
     durable_execution,
     RetryStrategy,
-    get_current_context,
+    get_step_context,
 )
 
 
 async def simulated_get_item(name: str, poll_count: int) -> dict[str, Any] | None:
     """Simulate getting an item with deterministic per-poll retry behavior."""
-    attempt = get_current_context().attempt or 1
+    attempt = get_step_context().attempt or 1
 
     # Poll 1 fails once, then returns None on retry so the workflow polls again.
     if poll_count == 1 and attempt == 1:

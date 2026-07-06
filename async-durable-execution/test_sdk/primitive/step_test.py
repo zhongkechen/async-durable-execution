@@ -34,6 +34,7 @@ from async_durable_execution.primitive.step import (
     StepInterruptedError,
     StepOperationExecutor,
     StepSemantics,
+    get_step_context,
     step,
 )
 from async_durable_execution.serdes import SerDes
@@ -428,6 +429,28 @@ async def test_step_handler_get_current_context_returns_step_context():
         step_callable,
         mock_state,
         OperationIdentifier("step_context", OperationSubType.STEP, None, "test_step"),
+        step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+    )
+
+    assert result == 1
+
+
+async def test_step_handler_get_step_context_returns_step_context():
+    """get_step_context() should expose StepContext while a step is executing."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_result = None
+    mock_state.operations.get.return_value = mock_result
+    mock_state.durable_execution_arn = "test_arn"
+
+    async def step_callable():
+        return get_step_context().attempt
+
+    result = await step_handler(
+        step_callable,
+        mock_state,
+        OperationIdentifier(
+            "step_specific_context", OperationSubType.STEP, None, "test_step"
+        ),
         step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY,
     )
 
