@@ -83,10 +83,13 @@ class _DelayStrategy:
     max_delay: Duration = 60
     backoff_rate: int | float = 2
     jitter_strategy: JitterStrategy = field(default=JitterStrategy.FULL)
+    increment: Duration | None = None
 
     def __post_init__(self):
         self.initial_delay = duration_to_seconds(self.initial_delay, "initial_delay")
         self.max_delay = duration_to_seconds(self.max_delay, "max_delay")
+        if self.increment is not None:
+            self.increment = duration_to_seconds(self.increment, "increment")
 
     @property
     def initial_delay_seconds(self) -> int:
@@ -98,10 +101,16 @@ class _DelayStrategy:
         """Get max delay in seconds."""
         return duration_to_seconds(self.max_delay, "max_delay")
 
-    def calculate_delay(
-        self, attempts_made: int, *, increment_seconds: int | None = None
-    ) -> int:
+    @property
+    def increment_seconds(self) -> int | None:
+        """Get linear delay increment in seconds."""
+        if self.increment is None:
+            return None
+        return duration_to_seconds(self.increment, "increment")
+
+    def calculate_delay(self, attempts_made: int) -> int:
         """Calculate a whole-second delay for exponential or linear strategies."""
+        increment_seconds = self.increment_seconds
         if increment_seconds is None:
             base_delay: float = self.initial_delay_seconds * (
                 self.backoff_rate ** (attempts_made - 1)
@@ -122,19 +131,6 @@ class RetryStrategy(_DelayStrategy):
 
     retryable_errors: list[str | re.Pattern] | None = None
     retryable_error_types: list[type[Exception]] | None = None
-    increment: Duration | None = None
-
-    def __post_init__(self):
-        super().__post_init__()
-        if self.increment is not None:
-            self.increment = duration_to_seconds(self.increment, "increment")
-
-    @property
-    def increment_seconds(self) -> int | None:
-        """Get linear retry increment in seconds."""
-        if self.increment is None:
-            return None
-        return duration_to_seconds(self.increment, "increment")
 
     def __call__(self, error: Exception, attempts_made: int) -> Duration:
         """Return retry delay, or raise the error if it should not be retried."""
@@ -168,9 +164,7 @@ class RetryStrategy(_DelayStrategy):
         if not is_retryable_error_message and not is_retryable_error_type:
             raise error
 
-        return self.calculate_delay(
-            attempts_made, increment_seconds=self.increment_seconds
-        )
+        return self.calculate_delay(attempts_made)
 
     @classmethod
     def none(cls) -> RetryStrategy:

@@ -53,9 +53,6 @@ WaitDelayStrategyFunction = Callable[[T, int], Duration | None]
 class WaitDelayStrategy(_DelayStrategy, Generic[T]):
     """Polling delay strategy for `wait_for_condition()`."""
 
-    max_attempts: int = 60
-    max_delay: Duration = 300
-    backoff_rate: int | float = 1.5
     timeout: Duration | None = None
 
     def __post_init__(self):
