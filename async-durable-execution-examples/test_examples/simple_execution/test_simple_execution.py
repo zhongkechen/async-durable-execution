@@ -11,7 +11,7 @@ async def test_execute_simple_handler_without_operations(durable_runner):
         "action": "simple-execution",
     }
 
-    with durable_runner(
+    async with durable_runner(
         handler=simple_execution.handler, input=test_payload, timeout=10
     ) as runner:
         result = await runner.run()

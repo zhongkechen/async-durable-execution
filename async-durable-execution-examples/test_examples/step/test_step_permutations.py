@@ -11,7 +11,7 @@ from async_durable_execution_examples.step import (
 
 async def test_step_no_name(durable_runner):
     """Test step without explicit name."""
-    with durable_runner(
+    async with durable_runner(
         handler=step_no_name.handler, input="test", timeout=10
     ) as runner:
         result = await runner.run()
@@ -28,7 +28,7 @@ async def test_step_no_name(durable_runner):
 
 async def test_step_with_name(durable_runner):
     """Test step with explicit name."""
-    with durable_runner(
+    async with durable_runner(
         handler=step_with_name.handler, input="test", timeout=10
     ) as runner:
         result = await runner.run()
@@ -45,7 +45,7 @@ async def test_step_with_name(durable_runner):
 
 async def test_step_with_exponential_backoff(durable_runner):
     """Test step with exponential backoff retry strategy."""
-    with durable_runner(
+    async with durable_runner(
         handler=step_with_exponential_backoff.handler, input="test", timeout=10
     ) as runner:
         result = await runner.run()

@@ -8,7 +8,7 @@ from async_durable_execution_examples.comprehensive_operations import (
 
 async def test_execute_all_operations_successfully(durable_runner):
     """Test that all operations execute successfully."""
-    with durable_runner(
+    async with durable_runner(
         handler=comprehensive_operations.handler, input={"message": "test"}, timeout=30
     ) as runner:
         result = await runner.run()

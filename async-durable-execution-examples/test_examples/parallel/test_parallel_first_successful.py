@@ -7,7 +7,7 @@ from async_durable_execution_examples.parallel import parallel_first_successful
 
 async def test_parallel_first_successful(durable_runner):
     """Test parallel with first_successful completion strategy."""
-    with durable_runner(
+    async with durable_runner(
         handler=parallel_first_successful.handler, input="test", timeout=10
     ) as runner:
         result = await runner.run()

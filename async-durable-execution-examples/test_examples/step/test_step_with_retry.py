@@ -13,7 +13,7 @@ async def test_step_with_retry(durable_runner):
 
     The function deterministically fails once then succeeds on the second attempt.
     """
-    with durable_runner(
+    async with durable_runner(
         handler=step_with_retry.handler, input="test", timeout=30
     ) as runner:
         result = await runner.run()

@@ -13,7 +13,7 @@ def test_cloud_sync_client_example_configures_sync_lambda_client():
 
 
 async def test_cloud_sync_client_example(durable_runner):
-    with durable_runner(
+    async with durable_runner(
         handler=cloud_sync_client.handler,
         input={"name": "sync-cloud"},
         timeout=10,

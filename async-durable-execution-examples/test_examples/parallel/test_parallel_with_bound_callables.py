@@ -10,7 +10,7 @@ from async_durable_execution_examples.parallel import parallel_with_bound_callab
 
 async def test_parallel_with_bound_callables(durable_runner):
     """Test parallel example with bound durable callables."""
-    with durable_runner(
+    async with durable_runner(
         handler=parallel_with_bound_callables.handler,
         input={"user_id": "user-456"},
         timeout=10,

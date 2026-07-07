@@ -6,7 +6,7 @@ from async_durable_execution_examples.step import many_async_steps
 
 async def test_many_async_steps(durable_runner):
     """Test many step tasks collected with asyncio.gather."""
-    with durable_runner(
+    async with durable_runner(
         handler=many_async_steps.handler,
         input={"multiplier": 2, "steps": 500},
         timeout=20,
@@ -22,7 +22,7 @@ async def test_many_async_steps(durable_runner):
 
 async def test_many_async_steps_with_multiplier_one(durable_runner):
     """Test the 500-step sum with multiplier one."""
-    with durable_runner(
+    async with durable_runner(
         handler=many_async_steps.handler,
         input={"multiplier": 1, "steps": 500},
         timeout=20,
@@ -36,7 +36,7 @@ async def test_many_async_steps_with_multiplier_one(durable_runner):
 
 async def test_many_async_steps_operations_are_tracked(durable_runner):
     """Test representative compute operations and replay operations are tracked."""
-    with durable_runner(
+    async with durable_runner(
         handler=many_async_steps.handler,
         input={"multiplier": 1, "steps": 500},
         timeout=20,

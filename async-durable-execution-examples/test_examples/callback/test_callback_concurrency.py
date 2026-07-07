@@ -8,7 +8,7 @@ from async_durable_execution_examples.callback import callback_concurrency
 
 async def test_handle_multiple_concurrent_callback_operations(durable_runner):
     """Test handling multiple concurrent callback operations."""
-    with durable_runner(
+    async with durable_runner(
         handler=callback_concurrency.handler, input=None, timeout=60
     ) as runner:
         # Start the execution (this will pause at the callbacks)

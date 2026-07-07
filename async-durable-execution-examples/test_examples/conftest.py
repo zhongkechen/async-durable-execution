@@ -69,7 +69,7 @@ def durable_runner(request, monkeypatch):
 
     Usage in tests:
         async def test_hello_world(durable_runner):
-            with durable_runner(
+            async with durable_runner(
                 handler=hello_world.handler,
                 input="test",
                 timeout=10,

@@ -10,7 +10,7 @@ async def test_handle_callback_operations_mixed_with_other_operation_types(
     durable_runner,
 ):
     """Test callback operations mixed with other operation types."""
-    with durable_runner(
+    async with durable_runner(
         handler=callback_mixed_ops.handler, input=None, timeout=30
     ) as runner:
         execution_arn = await runner.run_async()

@@ -7,7 +7,7 @@ from async_durable_execution_examples.map import map_with_max_concurrency
 
 async def test_map_with_max_concurrency(durable_runner):
     """Test map with maxConcurrency limit."""
-    with durable_runner(
+    async with durable_runner(
         handler=map_with_max_concurrency.handler, input="test", timeout=10
     ) as runner:
         result = await runner.run()

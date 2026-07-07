@@ -267,29 +267,29 @@ async def test_durable_function_test_runner_init(
 
 
 async def test_durable_function_test_runner_context_manager():
-    """Test DurableFunctionLocalTestRunner context manager."""
+    """Test DurableFunctionLocalTestRunner async context manager."""
     handler = Mock()
 
     with patch.object(DurableFunctionLocalTestRunner, "__init__", return_value=None):
         with patch.object(DurableFunctionLocalTestRunner, "close") as mock_close:
             runner = DurableFunctionLocalTestRunner(handler)
 
-            with runner:
+            async with runner:
                 pass
 
             mock_close.assert_called_once()
 
 
 async def test_durable_function_cloud_test_runner_context_manager():
-    """Test DurableFunctionCloudTestRunner context manager."""
+    """Test DurableFunctionCloudTestRunner async context manager."""
     with patch.object(DurableFunctionCloudTestRunner, "__init__", return_value=None):
-        with patch.object(DurableFunctionCloudTestRunner, "close") as mock_close:
+        with patch.object(DurableFunctionCloudTestRunner, "aclose") as mock_aclose:
             runner = DurableFunctionCloudTestRunner("test-function:$LATEST")
 
-            with runner:
+            async with runner:
                 pass
 
-            mock_close.assert_called_once()
+            mock_aclose.assert_awaited_once()
 
 
 @patch("async_durable_execution.runner.local.DurableFunctionLocalTestRunner")
@@ -675,11 +675,15 @@ async def test_cloud_runner_run_success(mock_boto3):
 
     assert result.status == InvocationStatus.SUCCEEDED
     assert result.result == "test-result"
-    mock_client.invoke.assert_called_once()
+    mock_client.invoke.assert_called_once_with(
+        FunctionName="test-function",
+        InvocationType="RequestResponse",
+        Payload='"test-input"',
+    )
 
 
 @patch("async_durable_execution.runner.cloud.get_session")
-def test_cloud_runner_fetch_execution_history_paginates(mock_boto3):
+async def test_cloud_runner_fetch_execution_history_paginates(mock_boto3):
     """Test cloud history fetching follows NextMarker until all events are loaded."""
     mock_client = Mock()
     mock_boto3.return_value.create_client.return_value = mock_client
@@ -708,7 +712,7 @@ def test_cloud_runner_fetch_execution_history_paginates(mock_boto3):
     ]
 
     runner = DurableFunctionCloudTestRunner(function_name="test-function")
-    history = runner._fetch_execution_history("test-arn")
+    history = await runner._fetch_execution_history("test-arn")
 
     assert [event.name for event in history.events] == ["early-step", "late-step"]
     assert mock_client.get_durable_execution_history.call_args_list[0].kwargs == {
@@ -723,7 +727,7 @@ def test_cloud_runner_fetch_execution_history_paginates(mock_boto3):
 
 
 @patch("async_durable_execution.runner.cloud.get_session")
-def test_cloud_runner_fetch_execution_history_rejects_repeated_marker(mock_boto3):
+async def test_cloud_runner_fetch_execution_history_rejects_repeated_marker(mock_boto3):
     """Test cloud history fetching fails if pagination does not advance."""
     mock_client = Mock()
     mock_boto3.return_value.create_client.return_value = mock_client
@@ -735,7 +739,7 @@ def test_cloud_runner_fetch_execution_history_rejects_repeated_marker(mock_boto3
     runner = DurableFunctionCloudTestRunner(function_name="test-function")
 
     with pytest.raises(DurableFunctionsTestError, match="repeated marker"):
-        runner._fetch_execution_history("test-arn")
+        await runner._fetch_execution_history("test-arn")
 
 
 @patch("async_durable_execution.runner.cloud.get_session")
@@ -788,7 +792,7 @@ async def test_cloud_runner_wait_for_completion_timeout(mock_time, mock_boto3):
     )
 
     with pytest.raises(TimeoutError, match="Execution did not complete within"):
-        runner._wait_for_completion("test-arn", timeout=2)
+        await runner._wait_for_completion("test-arn", timeout=2)
 
 
 async def test_durable_function_test_result_from_execution_history_with_exception():
@@ -856,7 +860,7 @@ async def test_cloud_runner_wait_for_completion_failed_status(mock_boto3):
     }
 
     runner = DurableFunctionCloudTestRunner(function_name="test-function")
-    result = runner._wait_for_completion("test-arn", timeout=10)
+    result = await runner._wait_for_completion("test-arn", timeout=10)
 
     assert result.status == "FAILED"
 
@@ -891,8 +895,8 @@ async def test_cloud_runner_run_bad_status_code(mock_boto3):
 
 
 @patch("async_durable_execution.runner.cloud.get_session")
-async def test_cloud_runner_run_function_error(mock_boto3):
-    """Test DurableFunctionCloudTestRunner.run with function error."""
+async def test_cloud_runner_run_failed_execution(mock_boto3):
+    """Test DurableFunctionCloudTestRunner.run with a failed execution."""
     from async_durable_execution.runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
@@ -902,8 +906,7 @@ async def test_cloud_runner_run_function_error(mock_boto3):
 
     mock_client.invoke.return_value = {
         "StatusCode": 200,
-        "FunctionError": "Unhandled",
-        "Payload": Mock(read=lambda: b'{"errorMessage": "Function failed"}'),
+        "Payload": Mock(read=lambda: b'{"result": "started"}'),
         "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:test:execution:exec-1",
     }
 
@@ -982,11 +985,11 @@ async def test_cloud_runner_wait_for_completion_get_execution_failure(mock_boto3
     with pytest.raises(
         DurableFunctionsTestError, match="Failed to get execution status"
     ):
-        runner._wait_for_completion("test-arn", timeout=10)
+        await runner._wait_for_completion("test-arn", timeout=10)
 
 
 @patch("async_durable_execution.runner.cloud.get_session")
-@patch("async_durable_execution.runner.cloud.time.sleep")
+@patch("async_durable_execution.runner.cloud.asyncio.sleep", new_callable=AsyncMock)
 async def test_cloud_runner_wait_for_completion_retries_resource_not_found(
     mock_sleep, mock_boto3
 ):
@@ -1018,7 +1021,7 @@ async def test_cloud_runner_wait_for_completion_retries_resource_not_found(
         function_name="test-function", poll_interval=0.01
     )
 
-    result = runner._wait_for_completion("test-arn", timeout=10)
+    result = await runner._wait_for_completion("test-arn", timeout=10)
 
     assert result.status == "SUCCEEDED"
     assert mock_client.get_durable_execution.call_count == 2
@@ -1212,7 +1215,7 @@ async def test_cloud_runner_wait_for_completion_timed_out_status(mock_boto3):
     }
 
     runner = DurableFunctionCloudTestRunner(function_name="test-function")
-    result = runner._wait_for_completion("test-arn", timeout=10)
+    result = await runner._wait_for_completion("test-arn", timeout=10)
 
     assert result.status == "TIMED_OUT"
 
@@ -1237,7 +1240,7 @@ async def test_cloud_runner_wait_for_completion_aborted_status(mock_boto3):
     }
 
     runner = DurableFunctionCloudTestRunner(function_name="test-function")
-    result = runner._wait_for_completion("test-arn", timeout=10)
+    result = await runner._wait_for_completion("test-arn", timeout=10)
 
     assert result.status == "ABORTED"
 

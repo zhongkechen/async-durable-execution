@@ -6,7 +6,7 @@ from async_durable_execution_examples.wait import multiple_wait
 
 async def test_multiple_sequential_wait_operations(durable_runner):
     """Test multiple sequential wait operations."""
-    with durable_runner(
+    async with durable_runner(
         handler=multiple_wait.handler, input=None, timeout=20
     ) as runner:
         result = await runner.run()

@@ -59,7 +59,7 @@ async def test_basic_durable_function() -> None:
 
         return results
 
-    with DurableFunctionLocalTestRunner(
+    async with DurableFunctionLocalTestRunner(
         handler=function_under_test, input="input str", timeout=10
     ) as runner:
         result: DurableFunctionTestResult = await runner.run()

@@ -8,7 +8,7 @@ async def test_reproduce_completion_config_behavior_with_detailed_logging(
     durable_runner,
 ):
     """Demonstrates map behavior with minSuccessful and concurrent execution."""
-    with durable_runner(
+    async with durable_runner(
         handler=map_completion.handler, input=None, timeout=60
     ) as runner:
         result = await runner.run()

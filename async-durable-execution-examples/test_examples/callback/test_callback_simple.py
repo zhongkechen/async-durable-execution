@@ -7,7 +7,7 @@ from async_durable_execution_examples.callback import callback_simple
 async def test_callback_success(durable_runner):
     callback_result = "successful"
 
-    with durable_runner(
+    async with durable_runner(
         handler=callback_simple.handler, input=None, timeout=30
     ) as runner:
         execution_arn = await runner.run_async()
@@ -24,7 +24,7 @@ async def test_callback_success(durable_runner):
 
 
 async def test_callback_success_none_result(durable_runner):
-    with durable_runner(
+    async with durable_runner(
         handler=callback_simple.handler, input=None, timeout=30
     ) as runner:
         execution_arn = await runner.run_async()

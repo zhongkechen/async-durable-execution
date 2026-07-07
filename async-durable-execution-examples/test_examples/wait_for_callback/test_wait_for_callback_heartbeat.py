@@ -14,7 +14,7 @@ async def test_handle_wait_for_callback_heartbeat_scenarios_during_long_running_
 ):
     """Test waitForCallback heartbeat scenarios during long-running submitter execution."""
 
-    with durable_runner(
+    async with durable_runner(
         handler=wait_for_callback_heartbeat.handler,
         input=None,
         timeout=60,

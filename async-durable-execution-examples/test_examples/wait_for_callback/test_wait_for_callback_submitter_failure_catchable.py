@@ -9,7 +9,7 @@ async def test_handle_wait_for_callback_with_failing_submitter_function_errors(
     durable_runner,
 ):
     """Test waitForCallback with failing submitter function errors."""
-    with durable_runner(
+    async with durable_runner(
         handler=wait_for_callback_submitter_failure_catchable.handler,
         input=None,
         timeout=30,

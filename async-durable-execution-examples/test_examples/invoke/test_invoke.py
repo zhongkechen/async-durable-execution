@@ -23,7 +23,7 @@ async def test_invoke_uses_mocked_child_result(durable_runner, request):
     if runner_mode != "cloud":
         input_payload["tenant_id"] = "tenant-abc"
 
-    with durable_runner(
+    async with durable_runner(
         handler=invoke.handler,
         input=input_payload,
         timeout=10,

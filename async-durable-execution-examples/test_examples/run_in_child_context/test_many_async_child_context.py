@@ -8,7 +8,7 @@ from async_durable_execution_examples.run_in_child_context import (
 
 async def test_many_async_child_context(durable_runner):
     """Test many child context tasks collected with asyncio.gather."""
-    with durable_runner(
+    async with durable_runner(
         handler=many_async_child_context.handler,
         input={"multiplier": 2, "steps": 500},
         timeout=30,
@@ -24,7 +24,7 @@ async def test_many_async_child_context(durable_runner):
 
 async def test_many_async_child_context_with_multiplier_one(durable_runner):
     """Test the 500-child-context sum with multiplier one."""
-    with durable_runner(
+    async with durable_runner(
         handler=many_async_child_context.handler,
         input={"multiplier": 1, "steps": 500},
         timeout=30,
@@ -38,7 +38,7 @@ async def test_many_async_child_context_with_multiplier_one(durable_runner):
 
 async def test_many_async_child_context_operations_are_tracked(durable_runner):
     """Test representative child contexts and replay operations are tracked."""
-    with durable_runner(
+    async with durable_runner(
         handler=many_async_child_context.handler,
         input={"multiplier": 1, "steps": 500},
         timeout=30,
