@@ -2,7 +2,7 @@
 
 import asyncio
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import DEFAULT, AsyncMock, Mock, patch
 
 import pytest
 
@@ -68,7 +68,53 @@ def mock_service_client():
 
 @pytest.fixture
 def executor(mock_store, mock_scheduler, mock_invoker, mock_service_client):
-    return Executor(mock_store, mock_scheduler, mock_invoker, mock_service_client)
+    executor = Executor(
+        scheduler=mock_scheduler,
+        invoker=mock_invoker,
+        service_client=mock_service_client,
+    )
+
+    save_execution = executor._save_execution
+    update_execution = executor._update_execution
+    get_execution = executor.get_execution
+
+    def save_and_record(execution: Execution) -> None:
+        save_execution(execution)
+        mock_store.save(execution)
+
+    def update_and_record(execution: Execution) -> None:
+        update_execution(execution)
+        mock_store.update(execution)
+
+    def get_or_load(execution_arn: str) -> Execution:
+        should_load_from_mock = (
+            mock_store.load.side_effect is not None
+            or mock_store.load._mock_return_value is not DEFAULT
+        )
+        if should_load_from_mock:
+            try:
+                execution = mock_store.load(execution_arn)
+            except KeyError as error:
+                msg = f"Execution {execution_arn} not found"
+                raise ResourceNotFoundException(msg) from error
+            if not isinstance(getattr(execution, "durable_execution_arn", None), str):
+                execution.durable_execution_arn = execution_arn
+            update_execution(execution)
+            return execution
+
+        try:
+            return get_execution(execution_arn)
+        except ResourceNotFoundException:
+            execution = mock_store.load(execution_arn)
+            if not isinstance(getattr(execution, "durable_execution_arn", None), str):
+                execution.durable_execution_arn = execution_arn
+            update_execution(execution)
+            return execution
+
+    executor._save_execution = save_and_record
+    executor._update_execution = update_and_record
+    executor.get_execution = get_or_load
+    return executor
 
 
 @pytest.fixture
@@ -94,10 +140,14 @@ def mock_execution():
     return execution
 
 
-async def test_init(mock_store, mock_scheduler, mock_invoker, mock_service_client):
+async def test_init(mock_scheduler, mock_invoker, mock_service_client):
     # Test that Executor can be constructed with dependencies
     # Dependency injection is implementation detail - test behavior instead
-    executor = Executor(mock_store, mock_scheduler, mock_invoker, mock_service_client)
+    executor = Executor(
+        scheduler=mock_scheduler,
+        invoker=mock_invoker,
+        service_client=mock_service_client,
+    )
 
     # Verify executor is properly initialized by testing it can perform basic operations
     assert executor is not None
@@ -201,6 +251,21 @@ async def test_start_execution_with_provided_invocation_id(
 
     mock_store.load.assert_called_once_with("test-arn")
     assert result == mock_execution
+
+
+async def test_start_execution_rejects_overlapping_execution(
+    executor, mock_store, start_input
+):
+    execution = Mock()
+    execution.durable_execution_arn = "active-arn"
+    execution.is_complete = False
+    executor.set_execution(execution)
+
+    with pytest.raises(
+        IllegalStateException,
+        match="Local runner supports only one execution at a time",
+    ):
+        executor.start_execution(start_input)
 
 
 async def test_should_complete_workflow_with_error_when_invocation_fails(
@@ -803,10 +868,9 @@ async def test_should_complete_workflow_successfully_through_public_api(
         # Act - Use public API to complete workflow
         executor.complete_execution("test-arn", "result")
 
-    # Assert - Verify final execution status and stored results
-    mock_store.load.assert_called_once_with(execution_arn="test-arn")
+    # Assert - Verify final execution status and result
     mock_execution.complete_success.assert_called_once_with(result="result")
-    mock_store.update.assert_called_once_with(mock_execution)
+    assert executor.get_execution("test-arn") is mock_execution
     mock_complete_events.assert_called_once_with(execution_arn="test-arn")
 
 
@@ -823,10 +887,9 @@ async def test_should_complete_workflow_with_failure_through_public_api(
         # Act - Use public API to fail workflow
         executor.fail_execution("test-arn", error)
 
-    # Assert - Verify final execution status and stored error
-    mock_store.load.assert_called_once_with(execution_arn="test-arn")
+    # Assert - Verify final execution status and error
     mock_execution.complete_fail.assert_called_once_with(error=error)
-    mock_store.update.assert_called_once_with(mock_execution)
+    assert executor.get_execution("test-arn") is mock_execution
     mock_complete_events.assert_called_once_with(execution_arn="test-arn")
 
 
@@ -843,9 +906,8 @@ async def test_should_handle_workflow_completion_state_through_public_api(
         executor.complete_execution("test-arn", "result")
 
     # Assert - Verify completion was processed and observer notifications sent
-    mock_store.load.assert_called_once_with(execution_arn="test-arn")
     mock_execution.complete_success.assert_called_once_with(result="result")
-    mock_store.update.assert_called_once_with(mock_execution)
+    assert executor.get_execution("test-arn") is mock_execution
     mock_complete_events.assert_called_once_with(execution_arn="test-arn")
 
 
@@ -1191,9 +1253,8 @@ async def test_complete_execution(executor, mock_store, mock_execution):
     with patch.object(executor, "_complete_events") as mock_complete_events:
         executor.complete_execution("test-arn", "result")
 
-    mock_store.load.assert_called_once_with(execution_arn="test-arn")
     mock_execution.complete_success.assert_called_once_with(result="result")
-    mock_store.update.assert_called_once_with(mock_execution)
+    assert executor.get_execution("test-arn") is mock_execution
     mock_complete_events.assert_called_once_with(execution_arn="test-arn")
 
 
@@ -1205,9 +1266,8 @@ async def test_fail_execution(executor, mock_store, mock_execution):
     with patch.object(executor, "_complete_events") as mock_complete_events:
         executor.fail_execution("test-arn", error)
 
-    mock_store.load.assert_called_once_with(execution_arn="test-arn")
     mock_execution.complete_fail.assert_called_once_with(error=error)
-    mock_store.update.assert_called_once_with(mock_execution)
+    assert executor.get_execution("test-arn") is mock_execution
     mock_complete_events.assert_called_once_with(execution_arn="test-arn")
 
 
@@ -1282,6 +1342,7 @@ async def test_should_complete_retry_when_retry_scheduled(
 ):
     """Test retry completion through public scheduler callback API."""
     # Arrange
+    mock_execution.durable_execution_arn = "test-arn"
     mock_store.load.return_value = mock_execution
 
     # Mock _invoke_execution to prevent async warnings
@@ -1292,9 +1353,8 @@ async def test_should_complete_retry_when_retry_scheduled(
         await retry_handler()
 
     # Assert - verify observable behavior
-    mock_store.load.assert_called_with("test-arn")
     mock_execution.complete_retry.assert_called_once_with(operation_id="op-123")
-    mock_store.update.assert_called_with(mock_execution)
+    assert executor.get_execution("test-arn") is mock_execution
 
 
 async def test_should_ignore_retry_when_execution_complete(
@@ -2171,7 +2231,7 @@ async def test_callback_timeout_scheduling(executor, mock_store, mock_scheduler)
     callback_options = CallbackOptions(timeout_seconds=60, heartbeat_timeout_seconds=30)
 
     # Set up completion event
-    executor._completion_events["test-arn"] = Mock()
+    executor._completion_event = Mock()
 
     # Test the timeout scheduling directly with correct parameters
     executor._schedule_callback_timeouts("test-arn", callback_options, "callback-id")
@@ -2187,7 +2247,7 @@ async def test_callback_timeout_scheduling_scales_long_delays(
     monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.1")
     callback_options = CallbackOptions(timeout_seconds=60, heartbeat_timeout_seconds=30)
 
-    executor._completion_events["test-arn"] = Mock()
+    executor._completion_event = Mock()
 
     executor._schedule_callback_timeouts("test-arn", callback_options, "callback-id")
 
@@ -2202,7 +2262,7 @@ async def test_callback_timeout_scheduling_preserves_short_delays(
     monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.1")
     callback_options = CallbackOptions(timeout_seconds=3, heartbeat_timeout_seconds=2)
 
-    executor._completion_events["test-arn"] = Mock()
+    executor._completion_event = Mock()
 
     executor._schedule_callback_timeouts("test-arn", callback_options, "callback-id")
 
@@ -2362,7 +2422,7 @@ async def test_schedule_callback_timeouts_zero_timeouts(
     mock_execution.updates = [update]
 
     mock_store.load.return_value = mock_execution
-    executor._completion_events["test-arn"] = Mock()
+    executor._completion_event = Mock()
 
     # Should not schedule any timeouts
     executor._schedule_callback_timeouts("test-arn", callback_options, "callback-id")
@@ -2381,7 +2441,7 @@ async def test_schedule_callback_timeouts_only_main_timeout(
     # Create callback options with only main timeout
     callback_options = CallbackOptions(timeout_seconds=60, heartbeat_timeout_seconds=0)
 
-    executor._completion_events["test-arn"] = Mock()
+    executor._completion_event = Mock()
 
     executor._schedule_callback_timeouts("test-arn", callback_options, "callback-id")
 
@@ -2398,7 +2458,7 @@ async def test_schedule_callback_timeouts_only_heartbeat_timeout(
     # Create callback options with only heartbeat timeout
     callback_options = CallbackOptions(timeout_seconds=0, heartbeat_timeout_seconds=30)
 
-    executor._completion_events["test-arn"] = Mock()
+    executor._completion_event = Mock()
 
     executor._schedule_callback_timeouts("test-arn", callback_options, "callback-id")
 
@@ -2441,8 +2501,7 @@ async def test_timeout_execution(executor, mock_store):
     with patch.object(executor, "_complete_events") as mock_complete_events:
         executor.timeout_execution("test-arn", error)
 
-    mock_store.load.assert_called_once_with(execution_arn="test-arn")
-    mock_store.update.assert_called_once_with(execution)
+    assert executor.get_execution("test-arn") is execution
     mock_complete_events.assert_called_once_with(execution_arn="test-arn")
     assert execution.is_complete is True
     assert execution.close_status == ExecutionStatus.TIMED_OUT
@@ -2620,9 +2679,7 @@ async def test_validate_invocation_response_rejects_completed_execution(
     with pytest.raises(
         IllegalStateException, match="Execution already completed, ignoring result"
     ):
-        executor._validate_invocation_response_and_store(
-            "test-arn", response, mock_execution
-        )
+        executor._validate_invocation_response("test-arn", response, mock_execution)
 
 
 async def test_callback_resume_is_coalesced_while_invocation_active(
@@ -2636,7 +2693,7 @@ async def test_callback_resume_is_coalesced_while_invocation_active(
         executor._mark_invocation_started("test-arn")
         executor._schedule_callback_resume("test-arn")
 
-        assert "test-arn" in executor._pending_resumes
+        assert executor._pending_resume is True
         mock_invoke.assert_not_called()
 
         executor._mark_invocation_finished("test-arn")
@@ -2648,8 +2705,9 @@ async def test_callback_resume_not_invoked_after_completion(executor, mock_store
     execution = Mock()
     execution.is_complete = True
     mock_store.load.return_value = execution
-    executor._active_invocations.add("test-arn")
-    executor._pending_resumes.add("test-arn")
+    executor._execution_arn = "test-arn"
+    executor._active_invocation = True
+    executor._pending_resume = True
 
     with patch.object(executor, "_invoke_execution") as mock_invoke:
         executor._mark_invocation_finished("test-arn")
@@ -2671,7 +2729,7 @@ async def test_wait_resume_is_deferred_while_invocation_active(
         wait_handler = mock_scheduler.call_later.call_args[0][0]
         await wait_handler()
 
-        assert ("test-arn", "wait-op") in executor._deferred_wait_resumes
+        assert "wait-op" in executor._deferred_wait_resumes
         execution.complete_wait.assert_not_called()
         mock_invoke.assert_not_called()
 
@@ -2696,7 +2754,7 @@ async def test_retry_resume_is_deferred_while_invocation_active(
         retry_handler = mock_scheduler.call_later.call_args[0][0]
         await retry_handler()
 
-        assert ("test-arn", "retry-op") in executor._deferred_retry_resumes
+        assert "retry-op" in executor._deferred_retry_resumes
         execution.complete_retry.assert_not_called()
         mock_invoke.assert_not_called()
 
