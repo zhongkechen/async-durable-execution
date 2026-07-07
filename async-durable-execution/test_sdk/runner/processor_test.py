@@ -12,10 +12,7 @@ from async_durable_execution.models import (
     OperationUpdate,
     StateOutput,
 )
-from async_durable_execution.runner.local import (
-    InMemoryExecutionStore,
-    InMemoryServiceClient,
-)
+from async_durable_execution.runner.local import InMemoryServiceClient
 from async_durable_execution.runner.exceptions import (
     InvalidParameterValueException,
 )
@@ -25,10 +22,9 @@ from async_durable_execution.runner.local.scheduler import Scheduler
 
 def test_init():
     """Test InMemoryServiceClient checkpoint processing initialization."""
-    store = Mock(spec=InMemoryExecutionStore)
     scheduler = Mock(spec=Scheduler)
 
-    client = InMemoryServiceClient(store, scheduler)
+    client = InMemoryServiceClient(scheduler)
 
     # Test that client was created successfully by calling a public method
     # This indirectly verifies that internal components were initialized
@@ -41,10 +37,9 @@ def test_init():
 
 def test_bind_executor():
     """Test binding the local executor."""
-    store = Mock(spec=InMemoryExecutionStore)
     scheduler = Mock(spec=Scheduler)
 
-    client = InMemoryServiceClient(store, scheduler)
+    client = InMemoryServiceClient(scheduler)
     executor = Mock()
 
     client.bind_executor(executor)
@@ -57,12 +52,11 @@ def test_bind_executor():
 def test_process_checkpoint_success(mock_transformer_class, mock_validator):
     """Test successful checkpoint processing."""
     # Setup mocks
-    store = Mock(spec=InMemoryExecutionStore)
     scheduler = Mock(spec=Scheduler)
     mock_transformer_instance = Mock()
     mock_transformer_class.return_value = mock_transformer_instance
 
-    client = InMemoryServiceClient(store, scheduler)
+    client = InMemoryServiceClient(scheduler)
     executor = Mock()
     client.bind_executor(executor)
 
@@ -75,7 +69,7 @@ def test_process_checkpoint_success(mock_transformer_class, mock_validator):
     execution.get_new_checkpoint_token.return_value = "new-token"
     execution.get_navigable_operations.return_value = []
 
-    store.load.return_value = execution
+    executor.get_execution.return_value = execution
 
     # Mock transformer
     mock_transformer_instance.process_updates.return_value = ([], [])
@@ -100,14 +94,14 @@ def test_process_checkpoint_success(mock_transformer_class, mock_validator):
         result = client.process_checkpoint(checkpoint_token, updates, "client-token")
 
     # Verify calls
-    store.load.assert_called_once_with("arn:test")
+    executor.get_execution.assert_called_once_with("arn:test")
     mock_validator.validate_input.assert_called_once_with(
         updates,
         execution,
         processors=mock_transformer_instance.processors,
     )
     mock_transformer_instance.process_updates.assert_called_once()
-    store.update.assert_called_once_with(execution)
+    executor.set_execution.assert_called_once_with(execution)
 
     # Verify result
     assert isinstance(result, CheckpointOutput)
@@ -118,16 +112,17 @@ def test_process_checkpoint_success(mock_transformer_class, mock_validator):
 @patch("async_durable_execution.runner.local.CheckpointValidator")
 def test_process_checkpoint_invalid_token_complete_execution(mock_validator):
     """Test checkpoint processing with complete execution."""
-    store = Mock(spec=InMemoryExecutionStore)
     scheduler = Mock(spec=Scheduler)
-    client = InMemoryServiceClient(store, scheduler)
+    client = InMemoryServiceClient(scheduler)
+    executor = Mock()
+    client.bind_executor(executor)
 
     # Mock execution as complete
     execution = Mock(spec=Execution)
     execution.is_complete = True
     execution.token_sequence = 1
 
-    store.load.return_value = execution
+    executor.get_execution.return_value = execution
 
     checkpoint_token = "test-token"  # noqa: S105
     updates = []
@@ -147,16 +142,17 @@ def test_process_checkpoint_invalid_token_complete_execution(mock_validator):
 @patch("async_durable_execution.runner.local.CheckpointValidator")
 def test_process_checkpoint_invalid_token_sequence(mock_validator):
     """Test checkpoint processing with invalid token sequence."""
-    store = Mock(spec=InMemoryExecutionStore)
     scheduler = Mock(spec=Scheduler)
-    client = InMemoryServiceClient(store, scheduler)
+    client = InMemoryServiceClient(scheduler)
+    executor = Mock()
+    client.bind_executor(executor)
 
     # Mock execution with different token sequence
     execution = Mock(spec=Execution)
     execution.is_complete = False
     execution.token_sequence = 2
 
-    store.load.return_value = execution
+    executor.get_execution.return_value = execution
 
     checkpoint_token = "test-token"  # noqa: S105
     updates = []
@@ -179,12 +175,11 @@ def test_process_checkpoint_updates_execution_state(
     mock_transformer_class, mock_validator
 ):
     """Test that checkpoint processing updates execution state correctly."""
-    store = Mock(spec=InMemoryExecutionStore)
     scheduler = Mock(spec=Scheduler)
     mock_transformer_instance = Mock()
     mock_transformer_class.return_value = mock_transformer_instance
 
-    client = InMemoryServiceClient(store, scheduler)
+    client = InMemoryServiceClient(scheduler)
     executor = Mock()
     client.bind_executor(executor)
 
@@ -197,7 +192,7 @@ def test_process_checkpoint_updates_execution_state(
     execution.get_new_checkpoint_token.return_value = "new-token"
     execution.get_navigable_operations.return_value = []
 
-    store.load.return_value = execution
+    executor.get_execution.return_value = execution
 
     # Mock transformer to return updated operations and updates
     updated_operations = [Mock()]
@@ -232,16 +227,17 @@ def test_process_checkpoint_updates_execution_state(
 
 async def test_get_execution_state():
     """Test getting execution state."""
-    store = Mock(spec=InMemoryExecutionStore)
     scheduler = Mock(spec=Scheduler)
-    client = InMemoryServiceClient(store, scheduler)
+    client = InMemoryServiceClient(scheduler)
+    executor = Mock()
+    client.bind_executor(executor)
 
     # Mock execution
     execution = Mock(spec=Execution)
     navigable_ops = [Mock()]
     execution.get_navigable_operations.return_value = navigable_ops
 
-    store.load.return_value = execution
+    executor.get_execution.return_value = execution
 
     checkpoint_token = "test-token"  # noqa: S105
 
@@ -255,7 +251,7 @@ async def test_get_execution_state():
         )
 
     # Verify calls
-    store.load.assert_called_once_with("arn:test")
+    executor.get_execution.assert_called_once_with("arn:test")
     execution.get_navigable_operations.assert_called_once()
 
     # Verify result
@@ -266,13 +262,14 @@ async def test_get_execution_state():
 
 async def test_get_execution_state_default_max_items():
     """Test getting execution state with default max_items."""
-    store = Mock(spec=InMemoryExecutionStore)
     scheduler = Mock(spec=Scheduler)
-    client = InMemoryServiceClient(store, scheduler)
+    client = InMemoryServiceClient(scheduler)
+    executor = Mock()
+    client.bind_executor(executor)
 
     execution = Mock(spec=Execution)
     execution.get_navigable_operations.return_value = []
-    store.load.return_value = execution
+    executor.get_execution.return_value = execution
 
     checkpoint_token = "test-token"  # noqa: S105
 

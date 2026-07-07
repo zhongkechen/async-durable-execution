@@ -235,12 +235,11 @@ async def test_durable_function_test_result_get_deserialized_result():
 
 
 @patch("async_durable_execution.runner.local.Scheduler")
-@patch("async_durable_execution.runner.local.InMemoryExecutionStore")
 @patch("async_durable_execution.runner.local.InMemoryServiceClient")
 @patch("async_durable_execution.runner.local.InProcessInvoker")
 @patch("async_durable_execution.runner.local.Executor")
 async def test_durable_function_test_runner_init(
-    mock_executor, mock_invoker, mock_client, mock_store, mock_scheduler
+    mock_executor, mock_invoker, mock_client, mock_scheduler
 ):
     """Test DurableFunctionLocalTestRunner initialization."""
     handler = Mock()
@@ -250,14 +249,9 @@ async def test_durable_function_test_runner_init(
     # Verify all components are initialized
     mock_scheduler.assert_called_once()
     mock_scheduler.return_value.start.assert_not_called()
-    mock_store.assert_called_once()
-    mock_client.assert_called_once_with(
-        store=mock_store.return_value,
-        scheduler=mock_scheduler.return_value,
-    )
+    mock_client.assert_called_once_with(scheduler=mock_scheduler.return_value)
     mock_invoker.assert_called_once_with(handler, mock_client.return_value)
     mock_executor.assert_called_once_with(
-        store=mock_store.return_value,
         scheduler=mock_scheduler.return_value,
         invoker=mock_invoker.return_value,
         service_client=mock_client.return_value,
@@ -361,16 +355,13 @@ async def test_durable_function_test_runner_close(mock_scheduler):
 
 
 @patch("async_durable_execution.runner.local.Executor")
-@patch("async_durable_execution.runner.local.InMemoryExecutionStore")
-async def test_durable_function_test_runner_run(mock_store_class, mock_executor_class):
+async def test_durable_function_test_runner_run(mock_executor_class):
     """Test DurableFunctionLocalTestRunner run method."""
     handler = Mock()
 
     # Mock the class instances
     mock_executor = Mock()
-    mock_store = Mock()
     mock_executor_class.return_value = mock_executor
-    mock_store_class.return_value = mock_store
 
     # Mock execution output
     output = StartDurableExecutionOutput(execution_arn="test-arn")
@@ -384,7 +375,7 @@ async def test_durable_function_test_runner_run(mock_store_class, mock_executor_
     mock_execution.result.status = InvocationStatus.SUCCEEDED
     mock_execution.result.result = json.dumps("test-result")
     mock_execution.result.error = None
-    mock_store.load.return_value = mock_execution
+    mock_executor.get_execution.return_value = mock_execution
 
     runner = DurableFunctionLocalTestRunner(handler, input="test-input")
     result = await runner.run()
@@ -401,8 +392,8 @@ async def test_durable_function_test_runner_run(mock_store_class, mock_executor_
     # Verify wait_until_complete was called
     mock_executor.wait_until_complete.assert_called_once_with("test-arn", 900)
 
-    # Verify store.load was called
-    mock_store.load.assert_called_once_with("test-arn")
+    # Verify execution was read directly from executor
+    mock_executor.get_execution.assert_called_once_with("test-arn")
 
     # Verify result
     assert isinstance(result, DurableFunctionTestResult)
@@ -410,18 +401,13 @@ async def test_durable_function_test_runner_run(mock_store_class, mock_executor_
 
 
 @patch("async_durable_execution.runner.local.Executor")
-@patch("async_durable_execution.runner.local.InMemoryExecutionStore")
-async def test_durable_function_test_runner_run_with_custom_params(
-    mock_store_class, mock_executor_class
-):
+async def test_durable_function_test_runner_run_with_custom_params(mock_executor_class):
     """Test DurableFunctionLocalTestRunner run method with custom parameters."""
     handler = Mock()
 
     # Mock the class instances
     mock_executor = Mock()
-    mock_store = Mock()
     mock_executor_class.return_value = mock_executor
-    mock_store_class.return_value = mock_store
 
     # Mock execution output
     output = StartDurableExecutionOutput(execution_arn="test-arn")
@@ -435,7 +421,7 @@ async def test_durable_function_test_runner_run_with_custom_params(
     mock_execution.result.status = InvocationStatus.SUCCEEDED
     mock_execution.result.result = json.dumps("test-result")
     mock_execution.result.error = None
-    mock_store.load.return_value = mock_execution
+    mock_executor.get_execution.return_value = mock_execution
 
     runner = DurableFunctionLocalTestRunner(
         handler,

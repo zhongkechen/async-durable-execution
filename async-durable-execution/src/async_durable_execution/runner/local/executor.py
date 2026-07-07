@@ -53,7 +53,6 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
     from asyncio import Future
 
-    from . import InMemoryExecutionStore
     from . import InMemoryServiceClient
     from .scheduler import Event, Scheduler
 
@@ -68,32 +67,32 @@ class Executor:
 
     def __init__(
         self,
-        store: InMemoryExecutionStore,
         scheduler: Scheduler,
         invoker: Invoker,
         service_client: InMemoryServiceClient,
     ):
-        self._store = store
         self._scheduler = scheduler
         self._invoker = invoker
         self._service_client = service_client
-        self._completion_events: dict[str, Event] = {}
+        self._execution: Execution | None = None
+        self._execution_arn: str | None = None
+        self._completion_event: Event | None = None
         self._callback_timeouts: dict[str, Future] = {}
         self._callback_heartbeats: dict[str, Future] = {}
-        self._execution_timeouts: dict[str, Future] = {}
-        self._active_invocations: set[str] = set()
-        self._scheduled_resumes: set[str] = set()
-        self._pending_resumes: set[str] = set()
-        self._deferred_wait_resumes: set[tuple[str, str]] = set()
-        self._deferred_retry_resumes: set[tuple[str, str]] = set()
-        self._deferred_callback_timeouts: set[tuple[str, str, CallbackTimeoutType]] = (
-            set()
-        )
+        self._execution_timeout: Future | None = None
+        self._active_invocation: bool = False
+        self._scheduled_resume: bool = False
+        self._pending_resume: bool = False
+        self._deferred_wait_resumes: set[str] = set()
+        self._deferred_retry_resumes: set[str] = set()
+        self._deferred_callback_timeouts: set[tuple[str, CallbackTimeoutType]] = set()
 
     def start_execution(
         self,
         input: StartDurableExecutionInput,  # noqa: A002
     ) -> StartDurableExecutionOutput:
+        self._ensure_can_start_execution()
+
         # Generate invocation_id if not provided
         if input.invocation_id is None:
             input = StartDurableExecutionInput(
@@ -112,11 +111,19 @@ class Executor:
 
         execution = Execution.new(input=input)
         execution.start()
-        self._store.save(execution)
+        self._save_execution(execution)
         logger.debug("Created execution with ARN: %s", execution.durable_execution_arn)
 
         completion_event = self._scheduler.create_event()
-        self._completion_events[execution.durable_execution_arn] = completion_event
+        self._execution_arn = execution.durable_execution_arn
+        self._completion_event = completion_event
+        self._execution_timeout = None
+        self._active_invocation = False
+        self._scheduled_resume = False
+        self._pending_resume = False
+        self._deferred_wait_resumes.clear()
+        self._deferred_retry_resumes.clear()
+        self._deferred_callback_timeouts.clear()
 
         # Schedule execution timeout
         if input.execution_timeout_seconds > 0:
@@ -127,12 +134,10 @@ class Executor:
                 )
                 self.timeout_execution(execution.durable_execution_arn, error)
 
-            self._execution_timeouts[execution.durable_execution_arn] = (
-                self._scheduler.call_later(
-                    timeout_handler,
-                    delay=input.execution_timeout_seconds,
-                    completion_event=completion_event,
-                )
+            self._execution_timeout = self._scheduler.call_later(
+                timeout_handler,
+                delay=input.execution_timeout_seconds,
+                completion_event=completion_event,
             )
 
         # Schedule initial invocation to run immediately
@@ -141,6 +146,35 @@ class Executor:
         return StartDurableExecutionOutput(
             execution_arn=execution.durable_execution_arn
         )
+
+    def _ensure_can_start_execution(self) -> None:
+        """Reject overlapping executions in the local runner."""
+        if self._execution is None:
+            return
+
+        if not self._execution.is_complete:
+            msg = "Local runner supports only one execution at a time."
+            raise IllegalStateException(msg)
+
+    def _save_execution(self, execution: Execution) -> None:
+        self._execution = execution
+        self._execution_arn = execution.durable_execution_arn
+
+    def _update_execution(self, execution: Execution) -> None:
+        self._execution = execution
+        self._execution_arn = execution.durable_execution_arn
+
+    def set_execution(self, execution: Execution) -> None:
+        """Replace the current local execution object."""
+        self._update_execution(execution)
+
+    def _validate_current_execution(self, execution_arn: str) -> None:
+        if self._execution_arn is None:
+            return
+
+        if self._execution_arn != execution_arn:
+            msg = f"Execution {execution_arn} is not the active local execution."
+            raise ResourceNotFoundException(msg)
 
     def get_execution(self, execution_arn: str) -> Execution:
         """Get execution by ARN.
@@ -154,11 +188,13 @@ class Executor:
         Raises:
             ResourceNotFoundException: If execution does not exist
         """
-        try:
-            return self._store.load(execution_arn)
-        except KeyError as e:
+        if (
+            self._execution is None
+            or self._execution.durable_execution_arn != execution_arn
+        ):
             msg: str = f"Execution {execution_arn} not found"
-            raise ResourceNotFoundException(msg) from e
+            raise ResourceNotFoundException(msg)
+        return self._execution
 
     def get_execution_state(
         self,
@@ -412,7 +448,7 @@ class Executor:
 
         # Save execution state after generating new token
         new_checkpoint_token = execution.get_new_checkpoint_token()
-        self._store.update(execution)
+        self._update_execution(execution)
 
         return CheckpointDurableExecutionResponse(
             checkpoint_token=new_checkpoint_token,
@@ -445,7 +481,7 @@ class Executor:
             callback_token = CallbackToken.from_str(callback_id)
             execution = self.get_execution(callback_token.execution_arn)
             execution.complete_callback_success(callback_id, result)
-            self._store.update(execution)
+            self._update_execution(execution)
             self._cleanup_callback_timeouts(callback_id)
             self._schedule_resume(callback_token.execution_arn)
             logger.info("Callback success completed for callback_id: %s", callback_id)
@@ -483,7 +519,7 @@ class Executor:
             callback_token: CallbackToken = CallbackToken.from_str(callback_id)
             execution: Execution = self.get_execution(callback_token.execution_arn)
             execution.complete_callback_failure(callback_id, callback_error)
-            self._store.update(execution)
+            self._update_execution(execution)
             self._cleanup_callback_timeouts(callback_id)
             self._schedule_resume(callback_token.execution_arn)
             logger.info("Callback failure completed for callback_id: %s", callback_id)
@@ -533,13 +569,13 @@ class Executor:
 
         return SendDurableExecutionCallbackHeartbeatResponse()
 
-    def _validate_invocation_response_and_store(
+    def _validate_invocation_response(
         self,
         execution_arn: str,
         response: DurableExecutionInvocationOutput,
         execution: Execution,
     ):
-        """Validate response status and save it to the store if fine.
+        """Validate response status and apply the resulting execution changes.
 
         Raises:
             InvalidParameterValueException: If the response status is invalid.
@@ -597,7 +633,7 @@ class Executor:
 
         async def invoke() -> None:
             self._mark_invocation_started(execution_arn)
-            execution: Execution = self._store.load(execution_arn)
+            execution: Execution = self.get_execution(execution_arn)
 
             # Early exit if execution is already completed - like Java's COMPLETED check
             if execution.is_complete:
@@ -617,7 +653,7 @@ class Executor:
                     )
                 )
 
-                self._store.save(execution)
+                self._save_execution(execution)
 
                 invocation_start = datetime.now(timezone.utc)
                 invoke_response = await self._invoker.invoke(
@@ -628,13 +664,13 @@ class Executor:
                 invocation_end = datetime.now(timezone.utc)
 
                 # Reload execution after invocation in case it was completed via checkpoint
-                execution = self._store.load(execution_arn)
+                execution = self.get_execution(execution_arn)
 
                 # Record invocation completion and save immediately
                 execution.record_invocation_completion(
                     invocation_start, invocation_end, invoke_response.request_id
                 )
-                self._store.save(execution)
+                self._save_execution(execution)
 
                 if execution.is_complete:
                     logger.info(
@@ -646,7 +682,7 @@ class Executor:
                 # Process successful received response - validate status and handle accordingly
                 response = invoke_response.invocation_output
                 try:
-                    self._validate_invocation_response_and_store(
+                    self._validate_invocation_response(
                         execution_arn, response, execution
                     )
                 except (InvalidParameterValueException, IllegalStateException) as e:
@@ -686,48 +722,50 @@ class Executor:
 
     def _schedule_resume(self, execution_arn: str) -> None:
         """Coalesce external resumes to avoid overlapping replays."""
-        if execution_arn in self._active_invocations:
-            self._pending_resumes.add(execution_arn)
+        self._validate_current_execution(execution_arn)
+        if self._active_invocation:
+            self._pending_resume = True
             return
 
-        if execution_arn in self._scheduled_resumes:
+        if self._scheduled_resume:
             return
 
-        self._scheduled_resumes.add(execution_arn)
-
+        self._scheduled_resume = True
         self._invoke_execution(execution_arn)
 
     def _mark_invocation_started(self, execution_arn: str) -> None:
-        self._scheduled_resumes.discard(execution_arn)
-        self._active_invocations.add(execution_arn)
+        self._validate_current_execution(execution_arn)
+        self._scheduled_resume = False
+        self._active_invocation = True
 
     def _mark_invocation_finished(self, execution_arn: str) -> None:
-        self._active_invocations.discard(execution_arn)
+        self._validate_current_execution(execution_arn)
+        self._active_invocation = False
         should_resume = self._apply_deferred_resume_events(execution_arn)
-        if execution_arn in self._pending_resumes:
-            self._pending_resumes.discard(execution_arn)
+        if self._pending_resume:
+            self._pending_resume = False
             should_resume = True
 
         if should_resume:
-            execution = self._store.load(execution_arn)
+            execution = self.get_execution(execution_arn)
             if not execution.is_complete:
-                self._scheduled_resumes.add(execution_arn)
+                self._scheduled_resume = True
                 self._invoke_execution(execution_arn)
 
     def _invoke_execution(self, execution_arn: str, delay: float = 0) -> None:
         """Invoke execution after delay in seconds."""
-        completion_event = self._completion_events.get(execution_arn)
+        self._validate_current_execution(execution_arn)
         self._scheduler.call_later(
             self._invoke_handler(execution_arn),
             delay=delay,
-            completion_event=completion_event,
+            completion_event=self._completion_event,
         )
 
     def _complete_workflow(
         self, execution_arn: str, result: str | None, error: ErrorObject | None
     ):
         """Complete workflow - handles both success and failure with terminal state validation."""
-        execution = self._store.load(execution_arn)
+        execution = self.get_execution(execution_arn)
 
         if execution.is_complete:
             msg: str = "Cannot make multiple close workflow decisions."
@@ -741,7 +779,7 @@ class Executor:
 
     def _fail_workflow(self, execution_arn: str, error: ErrorObject):
         """Fail workflow with terminal state validation."""
-        execution = self._store.load(execution_arn)
+        execution = self.get_execution(execution_arn)
 
         if execution.is_complete:
             msg: str = "Cannot make multiple close workflow decisions."
@@ -763,18 +801,20 @@ class Executor:
         else:
             # Schedule retry with backoff
             execution.consecutive_failed_invocation_attempts += 1
-            self._store.save(execution)
+            self._save_execution(execution)
             self._invoke_execution(
                 execution_arn=execution.durable_execution_arn,
                 delay=self.RETRY_BACKOFF_SECONDS,
             )
 
     def _complete_events(self, execution_arn: str):
+        self._validate_current_execution(execution_arn)
         # complete doesn't actually checkpoint explicitly
-        if event := self._completion_events.get(execution_arn):
-            event.set()
-        if execution_timeout := self._execution_timeouts.pop(execution_arn, None):
+        if self._completion_event:
+            self._completion_event.set()
+        if execution_timeout := self._execution_timeout:
             execution_timeout.cancel()
+            self._execution_timeout = None
 
     async def wait_until_complete(
         self, execution_arn: str, timeout: float | None = None
@@ -787,7 +827,8 @@ class Executor:
         Returns:
             True when set. False if the event timed out without being set.
         """
-        if event := self._completion_events.get(execution_arn):
+        self._validate_current_execution(execution_arn)
+        if event := self._completion_event:
             return await event.wait_async(timeout)
 
         # this really shouldn't happen - implies execution timed out?
@@ -798,9 +839,9 @@ class Executor:
     def complete_execution(self, execution_arn: str, result: str | None = None) -> None:
         """Complete execution successfully (COMPLETE_WORKFLOW_EXECUTION decision)."""
         logger.debug("[%s] Completing execution with result: %s", execution_arn, result)
-        execution: Execution = self._store.load(execution_arn=execution_arn)
+        execution: Execution = self.get_execution(execution_arn)
         execution.complete_success(result=result)  # Sets CloseStatus.COMPLETED
-        self._store.update(execution)
+        self._update_execution(execution)
         if execution.result is None:
             msg: str = "Execution result is required"
             raise IllegalStateException(msg)
@@ -809,9 +850,9 @@ class Executor:
     def fail_execution(self, execution_arn: str, error: ErrorObject) -> None:
         """Fail execution with error (FAIL_WORKFLOW_EXECUTION decision)."""
         logger.error("[%s] Completing execution with error: %s", execution_arn, error)
-        execution: Execution = self._store.load(execution_arn=execution_arn)
+        execution: Execution = self.get_execution(execution_arn)
         execution.complete_fail(error=error)  # Sets CloseStatus.FAILED
-        self._store.update(execution)
+        self._update_execution(execution)
         # set by complete_fail
         if execution.result is None:
             msg: str = "Execution result is required"
@@ -820,7 +861,7 @@ class Executor:
 
     def _on_wait_succeeded(self, execution_arn: str, operation_id: str) -> bool:
         """Private method - called when a wait operation completes successfully."""
-        execution = self._store.load(execution_arn)
+        execution = self.get_execution(execution_arn)
 
         if execution.is_complete:
             logger.info(
@@ -831,7 +872,7 @@ class Executor:
 
         try:
             execution.complete_wait(operation_id=operation_id)
-            self._store.update(execution)
+            self._update_execution(execution)
             logger.debug(
                 "[%s] Wait succeeded for operation %s", execution_arn, operation_id
             )
@@ -842,7 +883,7 @@ class Executor:
 
     def _on_retry_ready(self, execution_arn: str, operation_id: str) -> bool:
         """Private method - called when a retry delay has elapsed and retry is ready."""
-        execution = self._store.load(execution_arn)
+        execution = self.get_execution(execution_arn)
 
         if execution.is_complete:
             logger.info(
@@ -852,7 +893,7 @@ class Executor:
 
         try:
             execution.complete_retry(operation_id=operation_id)
-            self._store.update(execution)
+            self._update_execution(execution)
             logger.debug(
                 "[%s] Retry ready for operation %s", execution_arn, operation_id
             )
@@ -865,12 +906,13 @@ class Executor:
         self,
         execution_arn: str,
         operation_id: str,
-        deferred_events: set[tuple[str, str]],
+        deferred_events: set[str],
     ) -> bool:
-        if execution_arn not in self._active_invocations:
+        self._validate_current_execution(execution_arn)
+        if not self._active_invocation:
             return False
 
-        deferred_events.add((execution_arn, operation_id))
+        deferred_events.add(operation_id)
         return True
 
     def _defer_callback_timeout_if_active(
@@ -879,37 +921,31 @@ class Executor:
         callback_id: str,
         timeout_type: CallbackTimeoutType,
     ) -> bool:
-        if execution_arn not in self._active_invocations:
+        self._validate_current_execution(execution_arn)
+        if not self._active_invocation:
             return False
 
-        self._deferred_callback_timeouts.add((execution_arn, callback_id, timeout_type))
+        self._deferred_callback_timeouts.add((callback_id, timeout_type))
         return True
 
     def _apply_deferred_resume_events(self, execution_arn: str) -> bool:
+        self._validate_current_execution(execution_arn)
         should_resume = False
 
-        for wait_event in list(self._deferred_wait_resumes):
-            event_execution_arn, operation_id = wait_event
-            if event_execution_arn != execution_arn:
-                continue
-            self._deferred_wait_resumes.discard(wait_event)
+        for operation_id in list(self._deferred_wait_resumes):
+            self._deferred_wait_resumes.discard(operation_id)
             should_resume = (
                 self._on_wait_succeeded(execution_arn, operation_id) or should_resume
             )
 
-        for retry_event in list(self._deferred_retry_resumes):
-            event_execution_arn, operation_id = retry_event
-            if event_execution_arn != execution_arn:
-                continue
-            self._deferred_retry_resumes.discard(retry_event)
+        for operation_id in list(self._deferred_retry_resumes):
+            self._deferred_retry_resumes.discard(operation_id)
             should_resume = (
                 self._on_retry_ready(execution_arn, operation_id) or should_resume
             )
 
         for callback_event in list(self._deferred_callback_timeouts):
-            event_execution_arn, callback_id, timeout_type = callback_event
-            if event_execution_arn != execution_arn:
-                continue
+            callback_id, timeout_type = callback_event
             self._deferred_callback_timeouts.discard(callback_event)
             should_resume = (
                 self._complete_callback_timeout(
@@ -923,9 +959,9 @@ class Executor:
     def timeout_execution(self, execution_arn: str, error: ErrorObject) -> None:
         """Handle execution timeout."""
         logger.exception("[%s] Execution timed out.", execution_arn)
-        execution: Execution = self._store.load(execution_arn=execution_arn)
+        execution: Execution = self.get_execution(execution_arn)
         execution.complete_timeout(error=error)  # Sets CloseStatus.TIMED_OUT
-        self._store.update(execution)
+        self._update_execution(execution)
         self._complete_events(execution_arn=execution_arn)
 
     def stop_execution(self, execution_arn: str, error: ErrorObject) -> None:
@@ -946,9 +982,8 @@ class Executor:
             if self._on_wait_succeeded(execution_arn, operation_id):
                 self._schedule_resume(execution_arn)
 
-        completion_event = self._completion_events.get(execution_arn)
         self._scheduler.call_later(
-            wait_handler, delay=delay, completion_event=completion_event
+            wait_handler, delay=delay, completion_event=self._completion_event
         )
 
     def schedule_step_retry(
@@ -970,9 +1005,8 @@ class Executor:
             if self._on_retry_ready(execution_arn, operation_id):
                 self._schedule_resume(execution_arn)
 
-        completion_event = self._completion_events.get(execution_arn)
         self._scheduler.call_later(
-            retry_handler, delay=delay, completion_event=completion_event
+            retry_handler, delay=delay, completion_event=self._completion_event
         )
 
     def schedule_callback_timeouts(
@@ -995,8 +1029,6 @@ class Executor:
             if not callback_options:
                 return
 
-            completion_event = self._completion_events.get(execution_arn)
-
             # Schedule main timeout if configured
             if callback_options.timeout_seconds > 0:
                 timeout_delay = scale_delay(
@@ -1010,7 +1042,7 @@ class Executor:
                 timeout_future = self._scheduler.call_later(
                     timeout_handler,
                     delay=timeout_delay,
-                    completion_event=completion_event,
+                    completion_event=self._completion_event,
                 )
                 self._callback_timeouts[callback_id] = timeout_future
 
@@ -1027,7 +1059,7 @@ class Executor:
                 heartbeat_future = self._scheduler.call_later(
                     heartbeat_timeout_handler,
                     delay=heartbeat_delay,
-                    completion_event=completion_event,
+                    completion_event=self._completion_event,
                 )
                 self._callback_heartbeats[callback_id] = heartbeat_future
 
@@ -1070,12 +1102,10 @@ class Executor:
                 async def heartbeat_timeout_handler() -> None:
                     self._on_callback_heartbeat_timeout(execution_arn, callback_id)
 
-                completion_event = self._completion_events.get(execution_arn)
-
                 heartbeat_future = self._scheduler.call_later(
                     heartbeat_timeout_handler,
                     delay=heartbeat_delay,
-                    completion_event=completion_event,
+                    completion_event=self._completion_event,
                 )
                 self._callback_heartbeats[callback_id] = heartbeat_future
 
@@ -1119,7 +1149,7 @@ class Executor:
                 f"{timeout_label}: {timeout_type.value}"
             )
             execution.complete_callback_timeout(callback_id, timeout_error)
-            self._store.update(execution)
+            self._update_execution(execution)
             logger.warning("[%s] %s %s", execution_arn, timeout_label, callback_id)
             return True
         except Exception:
