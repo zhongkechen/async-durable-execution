@@ -47,7 +47,9 @@ testpaths = [
     "async-durable-execution-examples/test_examples",
     "scripts/test_scripts",
 ]
-markers = []
+markers = [
+  "aioboto_installed(value): override whether tests see aiobotocore as installed",
+]
 asyncio_mode = "auto"
 
 [tool.coverage.run]

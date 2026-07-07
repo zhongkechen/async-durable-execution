@@ -7,8 +7,7 @@ import functools
 import hashlib
 import logging
 from contextlib import contextmanager
-from dataclasses import dataclass, field
-from threading import Lock
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypeVar, cast
 
 from .base import (
@@ -324,11 +323,6 @@ class DurableContext(OperationContext):
 
     step_id_prefix: str | None = None
     replaying: bool = False
-    _replay_status_lock: Lock = field(
-        default_factory=Lock,
-        repr=False,
-        compare=False,
-    )
 
     @functools.cached_property
     def step_counter(self):
@@ -369,12 +363,10 @@ class DurableContext(OperationContext):
 
     def is_replaying(self) -> bool:
         """Return True while this context is replaying prior operations."""
-        with self._replay_status_lock:
-            return self.replaying
+        return self.replaying
 
     def _set_replay_status_new(self) -> None:
-        with self._replay_status_lock:
-            object.__setattr__(self, "replaying", False)
+        object.__setattr__(self, "replaying", False)
 
     def _peek_next_operation_id(self) -> str:
         return self.step_counter._create_step_id_for_logical_step(  # noqa: SLF001

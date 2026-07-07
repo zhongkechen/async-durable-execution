@@ -121,7 +121,7 @@ class Executor:
         # Schedule execution timeout
         if input.execution_timeout_seconds > 0:
 
-            def timeout_handler():
+            async def timeout_handler() -> None:
                 error = ErrorObject.from_message(
                     f"Execution timed out after {input.execution_timeout_seconds} seconds."
                 )
@@ -938,7 +938,7 @@ class Executor:
         """Schedule a wait operation."""
         logger.debug("[%s] scheduling wait with delay: %d", execution_arn, delay)
 
-        def wait_handler() -> None:
+        async def wait_handler() -> None:
             if self._defer_resume_event_if_active(
                 execution_arn, operation_id, self._deferred_wait_resumes
             ):
@@ -962,7 +962,7 @@ class Executor:
             delay,
         )
 
-        def retry_handler() -> None:
+        async def retry_handler() -> None:
             if self._defer_resume_event_if_active(
                 execution_arn, operation_id, self._deferred_retry_resumes
             ):
@@ -1004,7 +1004,7 @@ class Executor:
                     minimum=_CALLBACK_TIMEOUT_MINIMUM_DELAY_SECONDS,
                 )
 
-                def timeout_handler():
+                async def timeout_handler() -> None:
                     self._on_callback_timeout(execution_arn, callback_id)
 
                 timeout_future = self._scheduler.call_later(
@@ -1021,7 +1021,7 @@ class Executor:
                     minimum=_CALLBACK_TIMEOUT_MINIMUM_DELAY_SECONDS,
                 )
 
-                def heartbeat_timeout_handler():
+                async def heartbeat_timeout_handler() -> None:
                     self._on_callback_heartbeat_timeout(execution_arn, callback_id)
 
                 heartbeat_future = self._scheduler.call_later(
@@ -1067,7 +1067,7 @@ class Executor:
                     minimum=_CALLBACK_TIMEOUT_MINIMUM_DELAY_SECONDS,
                 )
 
-                def heartbeat_timeout_handler():
+                async def heartbeat_timeout_handler() -> None:
                     self._on_callback_heartbeat_timeout(execution_arn, callback_id)
 
                 completion_event = self._completion_events.get(execution_arn)

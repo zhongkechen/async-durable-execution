@@ -7,6 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
+
+pytestmark = pytest.mark.aioboto_installed(False)
+
 from async_durable_execution import (
     DurableContext,
     durable_execution,

@@ -1284,17 +1284,12 @@ async def test_should_complete_retry_when_retry_scheduled(
     # Arrange
     mock_store.load.return_value = mock_execution
 
-    # Configure scheduler to immediately execute the callback
-    def immediate_callback(func, delay=0, count=1, completion_event=None):
-        func()  # Execute the retry handler immediately
-        return Mock()
-
-    mock_scheduler.call_later.side_effect = immediate_callback
-
     # Mock _invoke_execution to prevent async warnings
     with patch.object(executor, "_invoke_execution"):
         # Act - trigger retry through public API
         executor.schedule_step_retry("test-arn", "op-123", 10.0)
+        retry_handler = mock_scheduler.call_later.call_args.args[0]
+        await retry_handler()
 
     # Assert - verify observable behavior
     mock_store.load.assert_called_with("test-arn")
@@ -1310,17 +1305,12 @@ async def test_should_ignore_retry_when_execution_complete(
     mock_execution.is_complete = True
     mock_store.load.return_value = mock_execution
 
-    # Configure scheduler to immediately execute the callback
-    def immediate_callback(func, delay=0, count=1, completion_event=None):
-        func()  # Execute the retry handler immediately
-        return Mock()
-
-    mock_scheduler.call_later.side_effect = immediate_callback
-
     # Mock _invoke_execution to prevent async warnings
     with patch.object(executor, "_invoke_execution"):
         # Act - trigger retry through public API
         executor.schedule_step_retry("test-arn", "op-123", 10.0)
+        retry_handler = mock_scheduler.call_later.call_args.args[0]
+        await retry_handler()
 
     # Assert - verify no retry processing occurs
     mock_execution.complete_retry.assert_not_called()
@@ -1335,17 +1325,12 @@ async def test_should_handle_retry_exception_gracefully(
     mock_store.load.return_value = mock_execution
     mock_execution.complete_retry.side_effect = Exception("test error")
 
-    # Configure scheduler to immediately execute the callback
-    def immediate_callback(func, delay=0, count=1, completion_event=None):
-        func()  # Execute the retry handler immediately
-        return Mock()
-
-    mock_scheduler.call_later.side_effect = immediate_callback
-
     # Mock _invoke_execution to prevent async warnings
     with patch.object(executor, "_invoke_execution"):
         # Act - should not raise exception
         executor.schedule_step_retry("test-arn", "op-123", 10.0)
+        retry_handler = mock_scheduler.call_later.call_args.args[0]
+        await retry_handler()
 
     # Assert - verify the retry was attempted but exception was caught
     mock_execution.complete_retry.assert_called_once_with(operation_id="op-123")
@@ -1674,7 +1659,7 @@ async def test_wait_handler_execution(executor, mock_scheduler):
             wait_handler = wait_timer_call[0][0]
 
             # Execute the handler to test the inner function
-            wait_handler()
+            await wait_handler()
 
             mock_wait.assert_called_once_with("test-arn", "op-123")
             mock_invoke.assert_called_once_with("test-arn")
@@ -1706,7 +1691,7 @@ async def test_retry_handler_execution(executor, mock_scheduler):
             retry_handler = retry_call[0][0]
 
             # Execute the handler to test the inner function
-            retry_handler()
+            await retry_handler()
 
             mock_retry.assert_called_once_with("test-arn", "op-123")
             mock_invoke.assert_called_once_with("test-arn")
@@ -2487,7 +2472,7 @@ async def test_start_execution_timeout_handler_notifies_timed_out(
         with patch.object(executor, "timeout_execution") as mock_timed_out:
             executor.start_execution(start_input)
             timeout_handler = mock_scheduler.call_later.call_args_list[0][0][0]
-            timeout_handler()
+            await timeout_handler()
 
     mock_timed_out.assert_called_once()
     assert mock_timed_out.call_args.args[0] == "test-arn"
@@ -2684,7 +2669,7 @@ async def test_wait_resume_is_deferred_while_invocation_active(
         executor.schedule_wait_timer("test-arn", "wait-op", 1.0)
 
         wait_handler = mock_scheduler.call_later.call_args[0][0]
-        wait_handler()
+        await wait_handler()
 
         assert ("test-arn", "wait-op") in executor._deferred_wait_resumes
         execution.complete_wait.assert_not_called()
@@ -2709,7 +2694,7 @@ async def test_retry_resume_is_deferred_while_invocation_active(
         executor.schedule_step_retry("test-arn", "retry-op", 1.0)
 
         retry_handler = mock_scheduler.call_later.call_args[0][0]
-        retry_handler()
+        await retry_handler()
 
         assert ("test-arn", "retry-op") in executor._deferred_retry_resumes
         execution.complete_retry.assert_not_called()
@@ -2803,11 +2788,11 @@ async def test_callback_timeout_scheduled_handlers_call_timeout_methods(
     timeout_handler = mock_scheduler.call_later.call_args_list[0][0][0]
     heartbeat_handler = mock_scheduler.call_later.call_args_list[1][0][0]
     with patch.object(executor, "_on_callback_timeout") as mock_timeout:
-        timeout_handler()
+        await timeout_handler()
     with patch.object(
         executor, "_on_callback_heartbeat_timeout"
     ) as mock_heartbeat_timeout:
-        heartbeat_handler()
+        await heartbeat_handler()
 
     mock_timeout.assert_called_once_with("test-arn", "callback-id")
     mock_heartbeat_timeout.assert_called_once_with("test-arn", "callback-id")
@@ -2835,7 +2820,7 @@ async def test_reset_callback_heartbeat_scheduled_handler_calls_timeout(
     with patch.object(
         executor, "_on_callback_heartbeat_timeout"
     ) as mock_heartbeat_timeout:
-        heartbeat_handler()
+        await heartbeat_handler()
 
     mock_heartbeat_timeout.assert_called_once_with("test-arn", callback_id)
 
