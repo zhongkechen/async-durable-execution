@@ -6,7 +6,7 @@ from async_durable_execution_examples.wait import wait
 
 async def test_wait(durable_runner):
     """Test wait example."""
-    with durable_runner(handler=wait.handler, input="test", timeout=10) as runner:
+    async with durable_runner(handler=wait.handler, input="test", timeout=10) as runner:
         result = await runner.run()
 
     assert result.status is InvocationStatus.SUCCEEDED

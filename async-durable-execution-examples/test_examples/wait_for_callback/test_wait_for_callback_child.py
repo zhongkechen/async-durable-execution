@@ -10,7 +10,7 @@ async def test_handle_wait_for_callback_within_child_contexts(durable_runner):
     """Test waitForCallback within child contexts."""
     test_payload = {"test": "child-context-callbacks"}
 
-    with durable_runner(
+    async with durable_runner(
         handler=wait_for_callback_child.handler, input=test_payload, timeout=30
     ) as runner:
         execution_arn = await runner.run_async()

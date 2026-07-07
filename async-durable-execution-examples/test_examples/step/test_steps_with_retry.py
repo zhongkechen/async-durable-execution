@@ -15,7 +15,7 @@ async def test_steps_with_retry(durable_runner):
 
     The function finds the item on poll 2 after 1 retry on poll 1.
     """
-    with durable_runner(
+    async with durable_runner(
         handler=steps_with_retry.handler, input={"name": "test-item"}, timeout=30
     ) as runner:
         result = await runner.run()

@@ -3,7 +3,7 @@
 import json
 from datetime import datetime, timezone
 from typing import Any, cast
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
@@ -25,9 +25,12 @@ from async_durable_execution.models import (
     OperationType,
 )
 from async_durable_execution.runner.local.execution import Execution
+from async_durable_execution.runner import cloud as cloud_module
 from async_durable_execution.runner.cloud import (
+    AsyncCloudLambdaClient,
     _LAMBDA_CLIENT_CONFIG,
     LambdaInvoker,
+    ThreadedSyncCloudLambdaClient,
     create_lambda_client,
 )
 from async_durable_execution.runner.local import (
@@ -165,7 +168,8 @@ def test_lambda_invoker_init():
 
     invoker = LambdaInvoker(lambda_client)
 
-    assert invoker.lambda_client is lambda_client
+    assert isinstance(invoker.lambda_client, ThreadedSyncCloudLambdaClient)
+    assert invoker.lambda_client.client is lambda_client
 
 
 def test_lambda_invoker_create():
@@ -177,7 +181,8 @@ def test_lambda_invoker_create():
         invoker = LambdaInvoker.create("http://localhost:3001", "us-west-2")
 
         assert isinstance(invoker, LambdaInvoker)
-        assert invoker.lambda_client is mock_client
+        assert isinstance(invoker.lambda_client, ThreadedSyncCloudLambdaClient)
+        assert invoker.lambda_client.client is mock_client
         mock_boto3.return_value.create_client.assert_called_once_with(
             "lambda",
             endpoint_url="http://localhost:3001",
@@ -658,13 +663,54 @@ def test_create_lambda_client_uses_configured_timeout():
 
         result = create_lambda_client("http://localhost:3001", "us-west-2")
 
-    assert result is mock_client
+    assert isinstance(result, ThreadedSyncCloudLambdaClient)
+    assert result.client is mock_client
     mock_session.return_value.create_client.assert_called_once_with(
         "lambda",
         endpoint_url="http://localhost:3001",
         region_name="us-west-2",
         config=_LAMBDA_CLIENT_CONFIG,
     )
+
+
+@patch("async_durable_execution.runner.cloud.importlib.import_module")
+def test_create_lambda_client_prefers_async_when_aioboto_installed(
+    mock_import_module, monkeypatch
+):
+    """Test create_lambda_client prefers an aioboto client when available."""
+    monkeypatch.setattr(
+        cloud_module.durable_client, "aioboto_is_installed", lambda: True
+    )
+    mock_context = MagicMock()
+    mock_session = Mock()
+    mock_session.create_client.return_value = mock_context
+    mock_aiobotocore_session = Mock()
+    mock_aiobotocore_session.get_session.return_value = mock_session
+    mock_import_module.return_value = mock_aiobotocore_session
+
+    result = create_lambda_client("http://localhost:3001", "us-west-2")
+
+    assert isinstance(result, AsyncCloudLambdaClient)
+    assert result._client_context is mock_context  # noqa: SLF001
+    mock_import_module.assert_called_once_with("aiobotocore.session")
+    mock_session.create_client.assert_called_once_with(
+        "lambda",
+        endpoint_url="http://localhost:3001",
+        region_name="us-west-2",
+        config=_LAMBDA_CLIENT_CONFIG,
+    )
+
+
+async def test_async_cloud_lambda_client_invokes_async_client():
+    """Test AsyncCloudLambdaClient awaits async Lambda operations."""
+    raw_client = Mock()
+    raw_client.invoke = AsyncMock(return_value={"StatusCode": 202})
+    client = AsyncCloudLambdaClient(raw_client)
+
+    result = await client.invoke(FunctionName="test-function")
+
+    assert result == {"StatusCode": 202}
+    raw_client.invoke.assert_awaited_once_with(FunctionName="test-function")
 
 
 def test_lambda_invoker_update_endpoint_reuses_cached_client():
@@ -680,7 +726,8 @@ def test_lambda_invoker_update_endpoint_reuses_cached_client():
         invoker.update_endpoint("http://localhost:3001", "us-west-2")
         invoker.update_endpoint("http://localhost:3001", "us-west-2")
 
-    assert invoker.lambda_client is endpoint_client
+    assert isinstance(invoker.lambda_client, ThreadedSyncCloudLambdaClient)
+    assert invoker.lambda_client.client is endpoint_client
     assert invoker._current_endpoint == "http://localhost:3001"
     mock_create_client.assert_called_once_with("http://localhost:3001", "us-west-2")
 
@@ -706,8 +753,9 @@ def test_lambda_invoker_get_client_for_explicit_endpoint_creates_client():
             region_name="us-west-2",
         )
 
-    assert first is endpoint_client
-    assert second is endpoint_client
+    assert isinstance(first, ThreadedSyncCloudLambdaClient)
+    assert first.client is endpoint_client
+    assert second is first
     mock_create_client.assert_called_once_with("http://localhost:3002", "us-west-2")
 
 

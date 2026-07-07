@@ -6,7 +6,7 @@ from async_durable_execution_examples.no_replay_execution import no_replay_execu
 
 async def test_handle_step_operations_when_no_replay_occurs(durable_runner):
     """Test step operations when no replay occurs."""
-    with durable_runner(
+    async with durable_runner(
         handler=no_replay_execution.handler, input=None, timeout=10
     ) as runner:
         result = await runner.run()

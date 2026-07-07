@@ -6,7 +6,7 @@ from async_durable_execution_examples.run_in_child_context import run_in_child_c
 
 async def test_run_in_child_context(durable_runner):
     """Test run_in_child_context example."""
-    with durable_runner(
+    async with durable_runner(
         handler=run_in_child_context.handler, input="test", timeout=10
     ) as runner:
         result = await runner.run()

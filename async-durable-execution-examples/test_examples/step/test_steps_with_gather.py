@@ -14,7 +14,7 @@ async def test_steps_with_gather(durable_runner):
         ]
     }
 
-    with durable_runner(
+    async with durable_runner(
         handler=steps_with_gather.handler,
         input=input_items,
         timeout=10,

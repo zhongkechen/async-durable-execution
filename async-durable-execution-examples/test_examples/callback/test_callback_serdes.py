@@ -16,7 +16,7 @@ class CustomDataTestSerDes(CustomDataSerDes):
 
 async def test_handle_callback_operations_with_custom_serdes(durable_runner):
     """Test callback operations with custom serdes."""
-    with durable_runner(
+    async with durable_runner(
         handler=callback_serdes.handler, input=None, timeout=30
     ) as runner:
         # Start the execution (this will pause at the callback)

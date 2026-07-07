@@ -12,7 +12,7 @@ async def test_handle_wait_for_callback_mixed_with_steps_waits_and_other_operati
     durable_runner,
 ):
     """Test waitForCallback mixed with steps, waits, and other operations."""
-    with durable_runner(
+    async with durable_runner(
         handler=wait_for_callback_mixed_ops.handler, input=None, timeout=30
     ) as runner:
         # Start the execution (this will pause at the callback)

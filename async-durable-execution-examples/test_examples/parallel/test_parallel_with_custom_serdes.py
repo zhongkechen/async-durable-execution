@@ -7,7 +7,7 @@ from async_durable_execution_examples.parallel import parallel_with_custom_serde
 
 async def test_parallel_with_custom_serdes(durable_runner):
     """Test parallel with custom item serialization."""
-    with durable_runner(
+    async with durable_runner(
         handler=parallel_with_custom_serdes.handler, input="test", timeout=10
     ) as runner:
         result = await runner.run()

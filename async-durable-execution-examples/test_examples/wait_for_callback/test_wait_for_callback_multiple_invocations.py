@@ -14,7 +14,7 @@ async def test_handle_multiple_invocations_tracking_with_wait_for_callback_opera
     """Test multiple invocations tracking with waitForCallback operations."""
     test_payload = {"test": "multiple-invocations"}
 
-    with durable_runner(
+    async with durable_runner(
         handler=wait_for_callback_multiple_invocations.handler,
         input=test_payload,
         timeout=60,

@@ -108,12 +108,6 @@ class DurableFunctionLocalTestRunner:
 
         self._service_client.bind_executor(self._executor)
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-
     async def __aenter__(self) -> DurableFunctionLocalTestRunner:
         if scheduler := getattr(self, "_scheduler", None):
             scheduler.start()

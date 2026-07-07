@@ -6,7 +6,7 @@ from async_durable_execution_examples.step import step_with_class_methods
 
 async def test_step_with_class_methods(durable_runner):
     """Test durable callable instance, class, and static methods."""
-    with durable_runner(
+    async with durable_runner(
         handler=step_with_class_methods.handler,
         input={"prices": [12.0, 8.0, 5.0], "tax_rate": 0.2},
         timeout=10,

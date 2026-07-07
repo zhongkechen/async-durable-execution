@@ -6,7 +6,7 @@ from async_durable_execution_examples.wait import wait_with_name
 
 async def test_wait_with_name(durable_runner):
     """Test wait with explicit name."""
-    with durable_runner(
+    async with durable_runner(
         handler=wait_with_name.handler, input="test", timeout=10
     ) as runner:
         result = await runner.run()

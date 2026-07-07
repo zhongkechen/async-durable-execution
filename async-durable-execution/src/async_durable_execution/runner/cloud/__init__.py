@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
+import inspect
 import json
 import logging
 import time
@@ -12,6 +14,7 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 from botocore.session import get_session
 
+from ... import client as durable_client
 from ...execution import (
     DurableExecutionInvocationInput,
 )
@@ -31,6 +34,168 @@ from ..model import (
 
 
 logger = logging.getLogger(__name__)
+
+
+class ThreadedSyncCloudLambdaClient:
+    """Adapt a sync Lambda client to the async cloud runner interface."""
+
+    def __init__(self, client: Any) -> None:
+        self.client = client
+
+    @property
+    def exceptions(self) -> Any:
+        return self.client.exceptions
+
+    async def invoke(self, **kwargs: Any) -> dict[str, Any]:
+        return cast(
+            dict[str, Any], await asyncio.to_thread(self.client.invoke, **kwargs)
+        )
+
+    async def get_durable_execution(self, **kwargs: Any) -> dict[str, Any]:
+        return cast(
+            dict[str, Any],
+            await asyncio.to_thread(self.client.get_durable_execution, **kwargs),
+        )
+
+    async def get_durable_execution_history(self, **kwargs: Any) -> dict[str, Any]:
+        return cast(
+            dict[str, Any],
+            await asyncio.to_thread(
+                self.client.get_durable_execution_history, **kwargs
+            ),
+        )
+
+    async def send_durable_execution_callback_success(
+        self, **kwargs: Any
+    ) -> dict[str, Any]:
+        return cast(
+            dict[str, Any],
+            await asyncio.to_thread(
+                self.client.send_durable_execution_callback_success, **kwargs
+            ),
+        )
+
+    async def send_durable_execution_callback_failure(
+        self, **kwargs: Any
+    ) -> dict[str, Any]:
+        return cast(
+            dict[str, Any],
+            await asyncio.to_thread(
+                self.client.send_durable_execution_callback_failure, **kwargs
+            ),
+        )
+
+    async def send_durable_execution_callback_heartbeat(
+        self, **kwargs: Any
+    ) -> dict[str, Any]:
+        return cast(
+            dict[str, Any],
+            await asyncio.to_thread(
+                self.client.send_durable_execution_callback_heartbeat, **kwargs
+            ),
+        )
+
+    def close(self) -> None:
+        close = getattr(self.client, "close", None)
+        if callable(close):
+            close()
+
+
+class AsyncCloudLambdaClient:
+    """Adapt an async aioboto Lambda client to the cloud runner interface."""
+
+    def __init__(self, client: Any) -> None:
+        self._client_context = client if hasattr(client, "__aenter__") else None
+        self._client = None if self._client_context is not None else client
+        self._entered_client: Any | None = None
+
+    @property
+    def exceptions(self) -> Any:
+        client = self._entered_client or self._client
+        if client is None:
+            msg = "Async Lambda client has not been initialized"
+            raise AttributeError(msg)
+        return client.exceptions
+
+    async def _get_client(self) -> Any:
+        if self._client is not None:
+            return self._client
+        if self._entered_client is None:
+            assert self._client_context is not None
+            self._entered_client = await self._client_context.__aenter__()
+        return self._entered_client
+
+    async def _call(self, method_name: str, **kwargs: Any) -> dict[str, Any]:
+        client = await self._get_client()
+        result = getattr(client, method_name)(**kwargs)
+        if inspect.isawaitable(result):
+            result = await result
+        return cast(dict[str, Any], result)
+
+    async def invoke(self, **kwargs: Any) -> dict[str, Any]:
+        return await self._call("invoke", **kwargs)
+
+    async def get_durable_execution(self, **kwargs: Any) -> dict[str, Any]:
+        return await self._call("get_durable_execution", **kwargs)
+
+    async def get_durable_execution_history(self, **kwargs: Any) -> dict[str, Any]:
+        return await self._call("get_durable_execution_history", **kwargs)
+
+    async def send_durable_execution_callback_success(
+        self, **kwargs: Any
+    ) -> dict[str, Any]:
+        return await self._call("send_durable_execution_callback_success", **kwargs)
+
+    async def send_durable_execution_callback_failure(
+        self, **kwargs: Any
+    ) -> dict[str, Any]:
+        return await self._call("send_durable_execution_callback_failure", **kwargs)
+
+    async def send_durable_execution_callback_heartbeat(
+        self, **kwargs: Any
+    ) -> dict[str, Any]:
+        return await self._call("send_durable_execution_callback_heartbeat", **kwargs)
+
+    async def aclose(self) -> None:
+        if self._entered_client is not None:
+            assert self._client_context is not None
+            await self._client_context.__aexit__(None, None, None)
+            self._entered_client = None
+            return
+
+        close = getattr(self._client, "aclose", None)
+        if callable(close):
+            await close()
+
+
+async def _read_payload(payload: Any) -> str:
+    read = getattr(payload, "read", None)
+    if callable(read):
+        if inspect.iscoroutinefunction(read):
+            data = await read()
+        else:
+            data = await asyncio.to_thread(read)
+            if inspect.isawaitable(data):
+                data = await data
+    else:
+        data = payload
+
+    if isinstance(data, bytes):
+        return data.decode("utf-8")
+    return str(data)
+
+
+def _cloud_lambda_client_is_async(client: Any) -> bool:
+    return inspect.iscoroutinefunction(getattr(client, "invoke", None))
+
+
+def adapt_lambda_client(client: Any) -> Any:
+    """Adapt a raw Lambda client to the async cloud runner interface."""
+    if isinstance(client, ThreadedSyncCloudLambdaClient | AsyncCloudLambdaClient):
+        return client
+    if _cloud_lambda_client_is_async(client):
+        return AsyncCloudLambdaClient(client)
+    return ThreadedSyncCloudLambdaClient(client)
 
 
 def create_cloud_runner(
@@ -79,91 +244,36 @@ class DurableFunctionCloudTestRunner:
         self._default_input = input
         self._default_timeout = timeout
 
-        client_config = Config(parameter_validation=False)
-        session = get_session()
-        self.lambda_client: Any = session.create_client(
-            "lambda",
-            endpoint_url=lambda_endpoint,
-            region_name=region,
-            config=client_config,
-        )
-
-    def __enter__(self) -> DurableFunctionCloudTestRunner:
-        """Return self for context manager compatibility with local runner."""
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Close underlying resources when leaving a context manager block."""
-        self.close()
+        self.lambda_client: Any = create_lambda_client(lambda_endpoint, region)
 
     async def __aenter__(self) -> DurableFunctionCloudTestRunner:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        self.close()
+        await self.aclose()
 
     def close(self) -> None:
-        """Close the underlying botocore client when supported."""
+        """Close the underlying sync client when supported."""
         close = getattr(self.lambda_client, "close", None)
         if callable(close):
             close()
+
+    async def aclose(self) -> None:
+        """Close the underlying client when supported."""
+        aclose = getattr(self.lambda_client, "aclose", None)
+        if callable(aclose):
+            await aclose()
+            return
+        self.close()
 
     async def run(
         self,
     ) -> DurableFunctionTestResult:
         """Execute function on AWS Lambda and wait for completion."""
-        logger.info(
-            "Invoking Lambda function: %s (timeout: %ds)",
-            self.function_name,
-            self._default_timeout,
+        execution_arn = await self._invoke_for_execution(
+            invocation_type="RequestResponse",
+            expected_status_code=200,
         )
-
-        # JSON encode input
-        payload = json.dumps(self._default_input)
-
-        # Invoke Lambda function
-        try:
-            response: dict[str, Any] = await asyncio.to_thread(
-                lambda: cast(
-                    dict[str, Any],
-                    self.lambda_client.invoke(
-                        FunctionName=self.function_name,
-                        InvocationType="RequestResponse",
-                        Payload=payload,
-                    ),
-                )
-            )
-        except Exception as e:
-            msg = f"Failed to invoke Lambda function {self.function_name}: {e}"
-            raise DurableFunctionsTestError(msg) from e
-
-        # Check HTTP status code, 200 for RequestResponse
-        status_code = response.get("StatusCode")
-        if status_code != 200:
-            error_payload = response["Payload"].read().decode("utf-8")
-            msg = f"Lambda invocation failed with status {status_code}: {error_payload}"
-            raise DurableFunctionsTestError(msg)
-
-        # Check for function errors, we want to return function error for testing purpose
-        if "FunctionError" in response:
-            error_payload = response["Payload"].read().decode("utf-8")
-            logger.warning("Lambda function failed: %s", error_payload)
-
-        result_payload = response["Payload"].read().decode("utf-8")
-        logger.info(
-            "Lambda invocation completed, response: %s",
-            result_payload,
-        )
-
-        # Extract durable execution ARN from response headers
-        # The InvocationResponse includes X-Amz-Durable-Execution-Arn header
-        execution_arn = response.get("DurableExecutionArn")
-        if not execution_arn:
-            msg = (
-                f"No DurableExecutionArn in response for function {self.function_name}"
-            )
-            raise DurableFunctionsTestError(msg)
-
         return await self.wait_for_result(
             execution_arn=execution_arn, timeout=self._default_timeout
         )
@@ -172,6 +282,17 @@ class DurableFunctionCloudTestRunner:
         self,
     ) -> str:
         """Execute function on AWS Lambda asynchronously"""
+        return await self._invoke_for_execution(
+            invocation_type="Event",
+            expected_status_code=202,
+        )
+
+    async def _invoke_for_execution(
+        self,
+        *,
+        invocation_type: str,
+        expected_status_code: int,
+    ) -> str:
         logger.info(
             "Invoking Lambda function: %s (timeout: %ds)",
             self.function_name,
@@ -179,26 +300,27 @@ class DurableFunctionCloudTestRunner:
         )
         payload = json.dumps(self._default_input)
         try:
-            response: dict[str, Any] = await asyncio.to_thread(
-                lambda: cast(
-                    dict[str, Any],
-                    self.lambda_client.invoke(
-                        FunctionName=self.function_name,
-                        InvocationType="Event",
-                        Payload=payload,
-                    ),
-                )
+            response = cast(
+                dict[str, Any],
+                await self.lambda_client.invoke(
+                    FunctionName=self.function_name,
+                    InvocationType=invocation_type,
+                    Payload=payload,
+                ),
             )
         except Exception as e:
             msg = f"Failed to invoke Lambda function {self.function_name}: {e}"
             raise DurableFunctionsTestError(msg) from e
 
-        # Check HTTP status code, 202 for Event
         status_code = response.get("StatusCode")
-        if status_code != 202:
-            error_payload = response["Payload"].read().decode("utf-8")
+        if status_code != expected_status_code:
+            error_payload = await _read_payload(response["Payload"])
             msg = f"Lambda invocation failed with status {status_code}: {error_payload}"
             raise DurableFunctionsTestError(msg)
+
+        if "FunctionError" in response:
+            error_payload = await _read_payload(response["Payload"])
+            logger.warning("Lambda function failed: %s", error_payload)
 
         execution_arn = cast(str | None, response.get("DurableExecutionArn"))
         if execution_arn is None:
@@ -212,8 +334,7 @@ class DurableFunctionCloudTestRunner:
         self, callback_id: str, result: bytes | None = None
     ) -> None:
         try:
-            await asyncio.to_thread(
-                self.lambda_client.send_durable_execution_callback_success,
+            await self.lambda_client.send_durable_execution_callback_success(
                 CallbackId=callback_id,
                 Result=cast(Any, result),
             )
@@ -225,8 +346,7 @@ class DurableFunctionCloudTestRunner:
         self, callback_id: str, error: ErrorObject | None = None
     ) -> None:
         try:
-            await asyncio.to_thread(
-                self.lambda_client.send_durable_execution_callback_failure,
+            await self.lambda_client.send_durable_execution_callback_failure(
                 CallbackId=callback_id,
                 Error=cast(Any, error.to_dict() if error else None),
             )
@@ -236,15 +356,14 @@ class DurableFunctionCloudTestRunner:
 
     async def send_callback_heartbeat(self, callback_id: str) -> None:
         try:
-            await asyncio.to_thread(
-                self.lambda_client.send_durable_execution_callback_heartbeat,
+            await self.lambda_client.send_durable_execution_callback_heartbeat(
                 CallbackId=callback_id,
             )
         except Exception as e:
             msg = f"Failed to send callback heartbeat for {self.function_name}, callback_id {callback_id}: {e}"
             raise DurableFunctionsTestError(msg) from e
 
-    def _wait_for_completion(
+    async def _wait_for_completion(
         self, execution_arn: str, timeout: int
     ) -> GetDurableExecutionResponse:
         """Poll execution status until completion or timeout.
@@ -265,7 +384,7 @@ class DurableFunctionCloudTestRunner:
 
         while time.time() - start_time < timeout:
             try:
-                execution_dict = self.lambda_client.get_durable_execution(
+                execution_dict = await self.lambda_client.get_durable_execution(
                     DurableExecutionArn=execution_arn
                 )
                 execution = GetDurableExecutionResponse.from_dict(execution_dict)
@@ -299,7 +418,7 @@ class DurableFunctionCloudTestRunner:
                     logger.warning("Execution terminated: %s", execution.status)
                     return execution
 
-            time.sleep(self.poll_interval)
+            await asyncio.sleep(self.poll_interval)
 
         # Timeout reached
         elapsed = time.time() - start_time
@@ -312,13 +431,19 @@ class DurableFunctionCloudTestRunner:
     async def wait_for_result(
         self, execution_arn: str, timeout: int = 60
     ) -> DurableFunctionTestResult:
-        execution_response = await asyncio.to_thread(
-            self._wait_for_completion, execution_arn, timeout
+        execution_result = self._wait_for_completion(execution_arn, timeout)
+        execution_response = (
+            await execution_result
+            if inspect.isawaitable(execution_result)
+            else execution_result
         )
 
         try:
-            history_response = await asyncio.to_thread(
-                self._fetch_execution_history, execution_arn
+            history_result = self._fetch_execution_history(execution_arn)
+            history_response = (
+                await history_result
+                if inspect.isawaitable(history_result)
+                else history_result
             )
         except Exception as e:
             msg = f"Failed to fetch execution history: {e}"
@@ -355,9 +480,7 @@ class DurableFunctionCloudTestRunner:
 
         while time.time() - start_time < timeout:
             try:
-                history_response = await asyncio.to_thread(
-                    self._fetch_execution_history, execution_arn
-                )
+                history_response = await self._fetch_execution_history(execution_arn)
                 callback_id = _get_callback_id_from_events(
                     events=history_response.events, name=name
                 )
@@ -384,7 +507,7 @@ class DurableFunctionCloudTestRunner:
         msg = f"Callback was not available within {timeout}s (elapsed: {elapsed:.1f}s)."
         raise TimeoutError(msg)
 
-    def _fetch_execution_history(
+    async def _fetch_execution_history(
         self, execution_arn: str
     ) -> GetDurableExecutionHistoryResponse:
         """Retrieve the complete execution history from Lambda service.
@@ -411,7 +534,9 @@ class DurableFunctionCloudTestRunner:
             if next_marker:
                 request["Marker"] = next_marker
 
-            history_dict = self.lambda_client.get_durable_execution_history(**request)
+            history_dict = await self.lambda_client.get_durable_execution_history(
+                **request
+            )
             history_response = GetDurableExecutionHistoryResponse.from_dict(
                 history_dict
             )
@@ -440,7 +565,7 @@ class DurableFunctionCloudTestRunner:
 
 class LambdaInvoker:
     def __init__(self, lambda_client: Any) -> None:
-        self.lambda_client = lambda_client
+        self.lambda_client = adapt_lambda_client(lambda_client)
         # Maps execution_arn -> endpoint for that execution
         # Maps endpoint -> client to reuse clients across executions
         self._execution_endpoints: dict[str, str] = {}
@@ -461,8 +586,8 @@ class LambdaInvoker:
         # Cache client by endpoint to reuse across executions
         with self._lock:
             if endpoint_url not in self._endpoint_clients:
-                self._endpoint_clients[endpoint_url] = create_lambda_client(
-                    endpoint_url, region_name
+                self._endpoint_clients[endpoint_url] = adapt_lambda_client(
+                    create_lambda_client(endpoint_url, region_name)
                 )
             self.lambda_client = self._endpoint_clients[endpoint_url]
         self._current_endpoint = endpoint_url
@@ -477,8 +602,8 @@ class LambdaInvoker:
         # Use provided endpoint or fall back to cached endpoint for this execution
         if lambda_endpoint:
             if lambda_endpoint not in self._endpoint_clients:
-                self._endpoint_clients[lambda_endpoint] = create_lambda_client(
-                    lambda_endpoint, region_name or "us-east-1"
+                self._endpoint_clients[lambda_endpoint] = adapt_lambda_client(
+                    create_lambda_client(lambda_endpoint, region_name or "us-east-1")
                 )
             return self._endpoint_clients[lambda_endpoint]
 
@@ -532,8 +657,7 @@ class LambdaInvoker:
 
         try:
             # Invoke AWS Lambda function using standard invoke method
-            response: dict[str, Any] = await asyncio.to_thread(
-                client.invoke,
+            response = await client.invoke(
                 FunctionName=function_name,
                 InvocationType="RequestResponse",  # Synchronous invocation
                 Payload=json.dumps(input.to_json_dict()),
@@ -547,12 +671,12 @@ class LambdaInvoker:
 
             # Check for function errors
             if "FunctionError" in response:
-                error_payload = response["Payload"].read().decode("utf-8")
+                error_payload = await _read_payload(response["Payload"])
                 msg = f"Lambda invocation failed with status {status_code}: {error_payload}"
                 raise DurableFunctionsTestError(msg)
 
             # Parse response payload
-            response_payload = response["Payload"].read().decode("utf-8")
+            response_payload = await _read_payload(response["Payload"])
             response_dict = json.loads(response_payload)
 
             # Extract request ID from response headers (x-amzn-RequestId or x-amzn-request-id)
@@ -622,20 +746,43 @@ class LambdaInvoker:
             raise DurableFunctionsTestError(msg) from e
 
 
-def create_lambda_client(endpoint_url: str | None, region_name: str) -> Any:
-    """Create a botocore Lambda client configured for durable function invocations."""
-
+def create_sync_lambda_client(endpoint_url: str | None, region_name: str) -> Any:
+    """Create a sync Lambda client adapted for cloud runner calls."""
     session = get_session()
-    return session.create_client(
-        "lambda",
-        endpoint_url=endpoint_url,
-        region_name=region_name,
-        config=_LAMBDA_CLIENT_CONFIG,
+    return ThreadedSyncCloudLambdaClient(
+        session.create_client(
+            "lambda",
+            endpoint_url=endpoint_url,
+            region_name=region_name,
+            config=_LAMBDA_CLIENT_CONFIG,
+        )
     )
+
+
+def create_async_lambda_client(endpoint_url: str | None, region_name: str) -> Any:
+    """Create an async Lambda client adapted for cloud runner calls."""
+    aiobotocore_session = importlib.import_module("aiobotocore.session")
+    session = aiobotocore_session.get_session()
+    return AsyncCloudLambdaClient(
+        session.create_client(
+            "lambda",
+            endpoint_url=endpoint_url,
+            region_name=region_name,
+            config=_LAMBDA_CLIENT_CONFIG,
+        )
+    )
+
+
+def create_lambda_client(endpoint_url: str | None, region_name: str) -> Any:
+    """Create a Lambda client, preferring aioboto when installed."""
+    if durable_client.aioboto_is_installed():
+        return create_async_lambda_client(endpoint_url, region_name)
+    return create_sync_lambda_client(endpoint_url, region_name)
 
 
 _LAMBDA_READ_TIMEOUT_SECONDS = 960
 _LAMBDA_CLIENT_CONFIG = Config(
+    parameter_validation=False,
     read_timeout=_LAMBDA_READ_TIMEOUT_SECONDS,
     retries={"max_attempts": 0},
 )

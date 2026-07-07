@@ -10,7 +10,7 @@ async def test_handle_nested_wait_for_callback_operations_in_child_contexts(
     durable_runner,
 ):
     """Test nested waitForCallback operations in child contexts."""
-    with durable_runner(
+    async with durable_runner(
         handler=wait_for_callback_nested.handler, input=None, timeout=60
     ) as runner:
         # Start the execution (this will pause at callbacks)

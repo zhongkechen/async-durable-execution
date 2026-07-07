@@ -10,7 +10,7 @@ from async_durable_execution_examples.parallel import parallel_with_wait
 
 async def test_parallel_with_wait(durable_runner):
     """Test parallel with wait operations."""
-    with durable_runner(
+    async with durable_runner(
         handler=parallel_with_wait.handler, input="test", timeout=10
     ) as runner:
         result = await runner.run()

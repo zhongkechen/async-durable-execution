@@ -8,7 +8,7 @@ async def test_handle_wait_for_callback_timeout_scenarios(durable_runner):
     """Test waitForCallback timeout scenarios."""
     test_payload = {"test": "timeout-scenario"}
 
-    with durable_runner(
+    async with durable_runner(
         handler=wait_for_callback_timeout.handler, input=test_payload, timeout=2
     ) as runner:
         execution_arn = await runner.run_async()

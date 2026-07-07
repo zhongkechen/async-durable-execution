@@ -17,7 +17,7 @@ async def test_with_retry_callback_fails_twice_then_succeeds(durable_runner):
     on the 3rd attempt. with_retry handles the failures and retries
     the entire wait_for_callback block.
     """
-    with durable_runner(
+    async with durable_runner(
         handler=with_retry_callback.handler, input=None, timeout=60
     ) as runner:
         execution_arn = await runner.run_async()

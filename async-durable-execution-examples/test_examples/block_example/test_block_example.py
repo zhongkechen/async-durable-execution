@@ -6,7 +6,7 @@ from async_durable_execution_examples.block_example import block_example
 
 async def test_block_example(durable_runner):
     """Test block example with nested child contexts."""
-    with durable_runner(
+    async with durable_runner(
         handler=block_example.handler, input="test", timeout=10
     ) as runner:
         result = await runner.run()

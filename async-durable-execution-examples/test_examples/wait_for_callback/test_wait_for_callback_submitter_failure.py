@@ -12,7 +12,7 @@ async def test_fail_after_exhausting_retries_when_submitter_always_fails(
     """Test that execution fails after exhausting retries when submitter always fails."""
     test_payload = {"shouldFail": True}
 
-    with durable_runner(
+    async with durable_runner(
         handler=wait_for_callback_submitter_failure.handler,
         input=test_payload,
         timeout=30,

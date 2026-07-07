@@ -7,7 +7,7 @@ from async_durable_execution_examples.step import step_semantics_at_most_once
 
 async def test_step_semantics_at_most_once(durable_runner):
     """Test step with at-most-once semantics."""
-    with durable_runner(
+    async with durable_runner(
         handler=step_semantics_at_most_once.handler, input="test", timeout=10
     ) as runner:
         result = await runner.run()

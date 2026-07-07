@@ -10,7 +10,7 @@ async def test_handle_handler_errors_gracefully_and_capture_error_details(
     """Test that handler errors are handled gracefully and error details are captured."""
     test_payload = {"test": "error-case"}
 
-    with durable_runner(
+    async with durable_runner(
         handler=handler_error.handler, input=test_payload, timeout=10
     ) as runner:
         result = await runner.run()

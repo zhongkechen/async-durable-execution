@@ -4,7 +4,7 @@ from async_durable_execution_examples.wait_for_callback import wait_for_callback
 
 
 async def test_wait_for_callback_failure(durable_runner):
-    with durable_runner(
+    async with durable_runner(
         handler=wait_for_callback.handler, input="test", timeout=30
     ) as runner:
         execution_arn = await runner.run_async()

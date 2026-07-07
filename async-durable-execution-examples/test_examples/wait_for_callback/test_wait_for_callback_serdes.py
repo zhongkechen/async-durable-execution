@@ -13,7 +13,7 @@ async def test_handle_wait_for_callback_with_custom_serdes_configuration(
     durable_runner,
 ):
     """Test waitForCallback with custom serdes configuration."""
-    with durable_runner(
+    async with durable_runner(
         handler=wait_for_callback_serdes.handler, input=None, timeout=30
     ) as runner:
         # Start the execution (this will pause at the callback)

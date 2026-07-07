@@ -6,7 +6,7 @@ from async_durable_execution_examples import hello_world
 
 async def test_hello_world(durable_runner):
     """Test hello world example."""
-    with durable_runner(
+    async with durable_runner(
         handler=hello_world.handler, input="test", timeout=30
     ) as runner:
         result = await runner.run()
