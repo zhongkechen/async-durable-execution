@@ -6,7 +6,6 @@ import inspect
 import json
 import logging
 import time
-from threading import Lock
 from typing import Any, cast
 from uuid import uuid4
 
@@ -571,7 +570,6 @@ class LambdaInvoker:
         self._execution_endpoints: dict[str, str] = {}
         self._endpoint_clients: dict[str, Any] = {}
         self._current_endpoint: str = ""  # Track current endpoint for new executions
-        self._lock = Lock()
 
     @staticmethod
     def create(endpoint_url: str, region_name: str) -> LambdaInvoker:
@@ -584,12 +582,11 @@ class LambdaInvoker:
     def update_endpoint(self, endpoint_url: str, region_name: str) -> None:
         """Update the Lambda client endpoint."""
         # Cache client by endpoint to reuse across executions
-        with self._lock:
-            if endpoint_url not in self._endpoint_clients:
-                self._endpoint_clients[endpoint_url] = adapt_lambda_client(
-                    create_lambda_client(endpoint_url, region_name)
-                )
-            self.lambda_client = self._endpoint_clients[endpoint_url]
+        if endpoint_url not in self._endpoint_clients:
+            self._endpoint_clients[endpoint_url] = adapt_lambda_client(
+                create_lambda_client(endpoint_url, region_name)
+            )
+        self.lambda_client = self._endpoint_clients[endpoint_url]
         self._current_endpoint = endpoint_url
 
     def _get_client_for_execution(
@@ -609,11 +606,7 @@ class LambdaInvoker:
 
         # Fallback to cached endpoint
         if durable_execution_arn not in self._execution_endpoints:
-            with self._lock:
-                if durable_execution_arn not in self._execution_endpoints:
-                    self._execution_endpoints[durable_execution_arn] = (
-                        self._current_endpoint
-                    )
+            self._execution_endpoints[durable_execution_arn] = self._current_endpoint
 
         endpoint = self._execution_endpoints[durable_execution_arn]
 

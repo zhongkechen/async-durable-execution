@@ -61,7 +61,6 @@ def with_retry(
                     operation_identifier=context.operation_identifier,
                     step_id_prefix=context.step_id_prefix,
                     replaying=context.is_replaying(),
-                    _replay_status_lock=context._replay_status_lock,  # noqa: SLF001
                     attempt=attempt,
                 )
                 if "step_counter" in context.__dict__:

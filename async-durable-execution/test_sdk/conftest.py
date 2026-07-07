@@ -11,10 +11,14 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def default_to_sync_lambda_client(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Keep tests deterministic when optional async dependencies are installed."""
+def default_to_async_lambda_client(
+    monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> None:
+    """Keep tests deterministic when optional async dependencies are missing."""
+    marker = request.node.get_closest_marker("aioboto_installed")
+    installed = True if marker is None else bool(marker.args[0])
     monkeypatch.setattr(
-        "async_durable_execution.client.aioboto_is_installed", lambda: False
+        "async_durable_execution.client.aioboto_is_installed", lambda: installed
     )
 
 

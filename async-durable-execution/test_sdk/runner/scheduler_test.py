@@ -10,6 +10,10 @@ import pytest
 from async_durable_execution.runner.local import Scheduler, Event
 
 
+async def async_noop() -> None:
+    """Reusable no-op callback for scheduler tests."""
+
+
 def wait_for_condition(condition_func, timeout_iterations=100):
     """Wait for a condition to become true with polling."""
     loop = asyncio.get_event_loop()
@@ -102,12 +106,12 @@ def test_scheduler_task_count():
     scheduler.start()
 
     # Create tasks with longer delay to ensure they're counted
-    future1 = scheduler.call_later(lambda: None, delay=0.5)
+    future1 = scheduler.call_later(async_noop, delay=0.5)
     # Give a moment for the task to be created
     time.sleep(0.01)
     assert scheduler.task_count() >= 1
 
-    future2 = scheduler.call_later(lambda: None, delay=0.5)
+    future2 = scheduler.call_later(async_noop, delay=0.5)
     time.sleep(0.01)
     assert scheduler.task_count() >= 2
 
@@ -117,26 +121,6 @@ def test_scheduler_task_count():
 
     # Wait for tasks to complete or be cancelled
     wait_for_condition(lambda: scheduler.task_count() == 0, timeout_iterations=200)
-
-    scheduler.stop()
-
-
-def test_scheduler_call_later_sync_function():
-    """Test call_later with sync function."""
-    scheduler = Scheduler()
-    scheduler.start()
-
-    result = []
-
-    def sync_func():
-        result.append("executed")
-
-    future = scheduler.call_later(sync_func, delay=0.01)
-    wait_for_condition(lambda: future.done())
-
-    assert isinstance(future, asyncio.Future)
-    assert result == ["executed"]
-    assert future.done()
 
     scheduler.stop()
 
@@ -168,7 +152,7 @@ def test_scheduler_call_later_multiple_count():
 
     result = []
 
-    def func():
+    async def func() -> None:
         result.append("count")
 
     # Note: Current implementation only executes once due to early return
@@ -182,25 +166,20 @@ def test_scheduler_call_later_multiple_count():
     scheduler.stop()
 
 
-def test_scheduler_call_later_serializes_sync_functions():
-    """Test scheduled sync functions run one at a time."""
+def test_scheduler_call_later_runs_async_functions():
+    """Test scheduled async functions run."""
     scheduler = Scheduler()
     scheduler.start()
 
-    active_count = 0
-    max_active_count = 0
+    result = []
 
-    def func():
-        nonlocal active_count, max_active_count
-        active_count += 1
-        max_active_count = max(max_active_count, active_count)
-        time.sleep(0.02)
-        active_count -= 1
+    async def func() -> None:
+        result.append("executed")
 
     futures = [scheduler.call_later(func, delay=0) for _ in range(3)]
     wait_for_condition(lambda: all(future.done() for future in futures))
 
-    assert max_active_count == 1
+    assert result == ["executed", "executed", "executed"]
 
     scheduler.stop()
 
@@ -213,7 +192,7 @@ def test_scheduler_call_later_runs_on_caller_thread():
     caller_thread_id = threading.get_ident()
     callback_thread_ids = []
 
-    def func():
+    async def func() -> None:
         callback_thread_ids.append(threading.get_ident())
 
     future = scheduler.call_later(func, delay=0)
@@ -231,7 +210,7 @@ def test_scheduler_call_later_infinite_count():
 
     result = []
 
-    def func():
+    async def func() -> None:
         result.append("infinite")
 
     # Note: Current implementation only executes once due to early return
@@ -250,7 +229,7 @@ def test_scheduler_call_later_function_exception():
     scheduler = Scheduler()
     scheduler.start()
 
-    def failing_func() -> None:
+    async def failing_func() -> None:
         msg: str = "test error"
 
         raise ValueError(msg)
@@ -283,7 +262,7 @@ def test_task_cancel():
     scheduler = Scheduler()
     scheduler.start()
 
-    def func():
+    async def func() -> None:
         pass
 
     future = scheduler.call_later(func, delay=0.1, count=None)
@@ -302,7 +281,7 @@ def test_task_is_done():
     scheduler = Scheduler()
     scheduler.start()
 
-    def quick_func():
+    async def quick_func() -> None:
         pass
 
     future = scheduler.call_later(quick_func, delay=0.01)
@@ -321,7 +300,7 @@ def test_task_result():
     scheduler = Scheduler()
     scheduler.start()
 
-    def func():
+    async def func() -> None:
         return None
 
     future = scheduler.call_later(func, delay=0.01)
@@ -339,7 +318,7 @@ def test_task_cancel_method():
     scheduler.start()
 
     # Create a future and cancel it immediately
-    future = scheduler.call_later(lambda: None, delay=0.01)
+    future = scheduler.call_later(async_noop, delay=0.01)
     future.cancel()
 
     # The cancel method should work without hanging
@@ -353,7 +332,7 @@ def test_task_result_completed():
     scheduler = Scheduler()
     scheduler.start()
 
-    def func():
+    async def func() -> str:
         return "test_result"
 
     future = scheduler.call_later(func, delay=0.01)
@@ -392,7 +371,11 @@ def test_event_wait_set_by_scheduled_callback():
     scheduler.start()
 
     event = scheduler.create_event()
-    scheduler.call_later(event.set, delay=0.01)
+
+    async def set_event() -> None:
+        event.set()
+
+    scheduler.call_later(set_event, delay=0.01)
 
     assert event.wait(timeout=1.0) is True
 
@@ -466,7 +449,7 @@ def test_scheduler_cleanup_on_stop():
     scheduler.start()
 
     # Create a future and event
-    scheduler.call_later(lambda: None, delay=0.1, count=1)
+    scheduler.call_later(async_noop, delay=0.1, count=1)
     scheduler.create_event()
 
     # Stop scheduler immediately
@@ -484,7 +467,7 @@ def test_scheduler_call_later_after_stop_returns_cancelled_future():
     scheduler.start()
     scheduler.stop()
 
-    future = scheduler.call_later(lambda: None, delay=0.01)
+    future = scheduler.call_later(async_noop, delay=0.01)
 
     assert future.done()
     assert future.cancelled()
@@ -515,7 +498,7 @@ def test_task_properties_after_scheduler_stop():
     scheduler = Scheduler()
     scheduler.start()
 
-    def func():
+    async def func() -> None:
         pass
 
     future = scheduler.call_later(func, delay=0.01)
@@ -551,7 +534,7 @@ def test_scheduler_call_later_zero_delay():
 
     result = []
 
-    def func():
+    async def func() -> None:
         result.append("zero_delay")
 
     future = scheduler.call_later(func, delay=0)
@@ -570,7 +553,7 @@ def test_scheduler_call_later_default_parameters():
 
     result = []
 
-    def func():
+    async def func() -> None:
         result.append("default")
 
     future = scheduler.call_later(func)
@@ -587,7 +570,7 @@ def test_task_result_with_exception():
     scheduler = Scheduler()
     scheduler.start()
 
-    def failing_func() -> None:
+    async def failing_func() -> None:
         msg: str = "test exception"
 
         raise ValueError(msg)
@@ -613,7 +596,7 @@ def test_get_task_result_exception_handling():
     scheduler = Scheduler()
     scheduler.start()
 
-    def func():
+    async def func() -> None:
         pass
 
     future = scheduler.call_later(func, delay=0.01)
@@ -626,27 +609,8 @@ def test_get_task_result_exception_handling():
     scheduler.stop()
 
 
-def test_call_later_with_sync_function():
-    """Test call_later correctly identifies and runs sync functions."""
-    scheduler = Scheduler()
-    scheduler.start()
-
-    result = []
-
-    def sync_function():
-        result.append("sync_executed")
-
-    future = scheduler.call_later(sync_function, delay=0.01)
-    wait_for_condition(lambda: future.done())
-
-    assert result == ["sync_executed"]
-    assert future.done()
-
-    scheduler.stop()
-
-
 def test_call_later_with_async_function():
-    """Test call_later correctly identifies and runs async functions."""
+    """Test call_later runs async functions."""
     scheduler = Scheduler()
     scheduler.start()
 
@@ -687,7 +651,7 @@ def test_call_later_with_completion_event_exception():
 
     completion_event = scheduler.create_event()
 
-    def failing_func() -> None:
+    async def failing_func() -> None:
         msg: str = "completion event test"
 
         raise RuntimeError(msg)
@@ -708,12 +672,12 @@ def test_call_later_multiple_iterations():
 
     result = []
 
-    def func():
+    async def func() -> str | None:
         result.append("iteration")
         # Return early to test the loop behavior
         if len(result) >= 2:
             return "done"
-        return
+        return None
 
     # Use a very small delay and count=3 to test the loop
     future = scheduler.call_later(func, delay=0.001, count=3)
@@ -747,7 +711,7 @@ def test_call_later_loop_exit_condition():
 
     result = []
 
-    def func():
+    async def func() -> None:
         result.append("should_not_execute")
 
     # Test with count=0 to hit the loop exit condition

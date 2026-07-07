@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +63,6 @@ class Scheduler:
         self._stopping: bool = False
         self._events: set[asyncio.Event] = set()
         self._tasks: set[asyncio.Future[Any]] = set()
-        self._timer_handles: dict[asyncio.Future[Any], asyncio.TimerHandle] = {}
         self._running_tasks: dict[asyncio.Future[Any], asyncio.Task[Any]] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
 
@@ -90,16 +88,12 @@ class Scheduler:
         self._running = False
         self._stopping = True
 
-        timer_handles = list(self._timer_handles.values())
         running_tasks = list(self._running_tasks.values())
         futures = list(self._tasks)
         self._events.clear()
-        self._timer_handles.clear()
         self._running_tasks.clear()
         self._tasks.clear()
 
-        for timer_handle in timer_handles:
-            timer_handle.cancel()
         for task in running_tasks:
             task.cancel()
         for future in futures:
@@ -127,7 +121,7 @@ class Scheduler:
 
     def call_later(
         self,
-        func: Callable[[], Any],
+        func: Callable[[], Awaitable[Any]],
         delay: float = 0,
         count: int | None = 1,  # noqa: ARG002
         completion_event: Event | None = None,
@@ -146,8 +140,6 @@ class Scheduler:
 
         def cleanup(_future: asyncio.Future[Any]) -> None:
             self._tasks.discard(_future)
-            if timer_handle := self._timer_handles.pop(_future, None):
-                timer_handle.cancel()
             if task := self._running_tasks.pop(_future, None):
                 task.cancel()
             if _future.done() and not _future.cancelled():
@@ -157,9 +149,10 @@ class Scheduler:
             if future.cancelled():
                 return
             try:
-                result = func()
-                if inspect.isawaitable(result):
-                    result = await result
+                await asyncio.sleep(delay)
+                if not self._running or self._stopping or future.cancelled():
+                    return
+                result = await func()
             except Exception as err:
                 if completion_event:
                     completion_event.set_exception(err)
@@ -172,22 +165,15 @@ class Scheduler:
                 if not future.done():
                     future.set_result(result)
 
-        def run() -> None:
-            if not self._running or self._stopping or future.cancelled():
-                return
-            task = loop.create_task(execute())
-            self._running_tasks[future] = task
+        task = loop.create_task(execute())
+        self._running_tasks[future] = task
 
-            def discard_task(_task: asyncio.Task[Any]) -> None:
-                self._running_tasks.pop(future, None)
+        def discard_task(_task: asyncio.Task[Any]) -> None:
+            self._running_tasks.pop(future, None)
 
-            task.add_done_callback(discard_task)
-
+        task.add_done_callback(discard_task)
         future.add_done_callback(cleanup)
-        timer_handle = loop.call_later(delay, run)
-
         self._tasks.add(future)
-        self._timer_handles[future] = timer_handle
         return future
 
     def create_event(self) -> Event:
