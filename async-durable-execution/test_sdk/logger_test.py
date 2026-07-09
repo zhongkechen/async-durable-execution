@@ -6,6 +6,8 @@ import logging
 from collections.abc import Mapping
 from unittest.mock import Mock
 
+import pytest
+
 from async_durable_execution.context import (
     set_current_context,
     reset_current_context,
@@ -15,6 +17,7 @@ from async_durable_execution.logger import (
     build_context_log_extra,
     configure_durable_logger,
 )
+from async_durable_execution.exceptions import ValidationError
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
     Operation,
@@ -175,6 +178,87 @@ def test_build_context_log_extra_for_step_context():
         "operationName": "process",
         "attempt": 2,
     }
+
+
+def test_build_context_log_extra_includes_callback_id():
+    callback_context = Mock(
+        durable_execution_arn="arn:aws:test",
+        parent_id=None,
+        operation_id=None,
+        operation_name=None,
+        callback_id="callback-1",
+        attempt=None,
+    )
+
+    assert build_context_log_extra(callback_context) == {
+        "executionArn": "arn:aws:test",
+        "callbackId": "callback-1",
+    }
+
+
+def test_filter_allows_logs_without_active_context():
+    record = logging.LogRecord(
+        name="test",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="hello",
+        args=(),
+        exc_info=None,
+    )
+
+    assert DurableContextFilter().filter(record) is True
+
+
+def test_filter_allows_context_without_execution_state():
+    record = logging.LogRecord(
+        name="test",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="hello",
+        args=(),
+        exc_info=None,
+    )
+    context = Mock(spec=[])
+
+    token = set_current_context(context)
+    try:
+        assert DurableContextFilter().filter(record) is True
+    finally:
+        reset_current_context(token)
+
+
+def test_filter_raises_when_execution_state_is_none():
+    record = logging.LogRecord(
+        name="test",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="hello",
+        args=(),
+        exc_info=None,
+    )
+    context = Mock(
+        execution_state=None,
+        durable_execution_arn="arn:aws:test",
+        parent_id=None,
+        operation_id=None,
+        operation_name=None,
+    )
+
+    token = set_current_context(context)
+    try:
+        with pytest.raises(ValidationError, match="execution state is None"):
+            DurableContextFilter().filter(record)
+    finally:
+        reset_current_context(token)
+
+
+def test_configure_durable_logger_ignores_objects_without_add_filter():
+    logger = object()
+
+    assert configure_durable_logger(logger) is logger
 
 
 def test_filter_adds_fields_from_active_context():

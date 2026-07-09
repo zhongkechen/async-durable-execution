@@ -9,7 +9,9 @@ import pytest
 from async_durable_execution.config import (
     JitterStrategy,
     RetryStrategy,
+    duration_to_seconds,
 )
+from async_durable_execution.exceptions import ValidationError
 
 
 def test_none_jitter_returns_delay():
@@ -56,6 +58,12 @@ def test_invalid_jitter_strategy():
     """Test behavior with invalid jitter strategy."""
     with pytest.raises((ValueError, AttributeError)):
         JitterStrategy("INVALID").apply_jitter(10)
+
+
+@pytest.mark.parametrize("duration", [True, "5", 1.2, None])
+def test_duration_to_seconds_rejects_non_duration_values(duration):
+    with pytest.raises(ValidationError, match="wait_time must be an int"):
+        duration_to_seconds(duration, field_name="wait_time")
 
 
 def test_default_config():
