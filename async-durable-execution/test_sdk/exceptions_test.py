@@ -7,6 +7,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 from async_durable_execution.exceptions import (
+    BackgroundThreadError,
     BotoClientError,
     CallableRuntimeError,
     CallableRuntimeErrorSerializableDetails,
@@ -18,6 +19,7 @@ from async_durable_execution.exceptions import (
     GetExecutionStateError,
     InvalidStateError,
     InvocationError,
+    NonDeterministicExecutionError,
     SerDesError,
     SuspendExecution,
     TerminationReason,
@@ -87,6 +89,27 @@ def test_invocation_error():
     assert isinstance(error, UnrecoverableError)
     assert isinstance(error, DurableExecutionsError)
     assert error.termination_reason == TerminationReason.INVOCATION_ERROR
+
+
+def test_invocation_error_default_retry_metadata():
+    error = InvocationError("temporary")
+
+    assert error.is_retryable()
+    assert error.build_logger_extras() == {}
+
+
+def test_non_deterministic_execution_error_sets_step_id():
+    error = NonDeterministicExecutionError("replay mismatch", step_id="step-1")
+
+    assert error.termination_reason == TerminationReason.NON_DETERMINISTIC_EXECUTION
+    assert error.step_id == "step-1"
+
+
+def test_background_thread_error_preserves_source_exception():
+    source = RuntimeError("background failed")
+    error = BackgroundThreadError("checkpoint thread failed", source)
+
+    assert error.source_exception is source
 
 
 def test_checkpoint_error():

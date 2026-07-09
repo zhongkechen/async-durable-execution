@@ -41,6 +41,57 @@ from async_durable_execution.runner.local.model import (
 )
 
 
+class AsyncLambdaClientStub:
+    def __init__(self) -> None:
+        self.exceptions = type("Exceptions", (), {})()
+        self.closed = False
+        self.calls: list[tuple[str, dict]] = []
+
+    async def invoke(self, **kwargs):
+        self.calls.append(("invoke", kwargs))
+        return {"method": "invoke", "kwargs": kwargs}
+
+    async def get_durable_execution(self, **kwargs):
+        self.calls.append(("get_durable_execution", kwargs))
+        return {"method": "get_durable_execution", "kwargs": kwargs}
+
+    async def get_durable_execution_history(self, **kwargs):
+        self.calls.append(("get_durable_execution_history", kwargs))
+        return {"method": "get_durable_execution_history", "kwargs": kwargs}
+
+    async def send_durable_execution_callback_success(self, **kwargs):
+        self.calls.append(("send_durable_execution_callback_success", kwargs))
+        return {"method": "send_durable_execution_callback_success", "kwargs": kwargs}
+
+    async def send_durable_execution_callback_failure(self, **kwargs):
+        self.calls.append(("send_durable_execution_callback_failure", kwargs))
+        return {"method": "send_durable_execution_callback_failure", "kwargs": kwargs}
+
+    async def send_durable_execution_callback_heartbeat(self, **kwargs):
+        self.calls.append(("send_durable_execution_callback_heartbeat", kwargs))
+        return {
+            "method": "send_durable_execution_callback_heartbeat",
+            "kwargs": kwargs,
+        }
+
+    async def aclose(self):
+        self.closed = True
+
+
+class AsyncLambdaClientContextStub:
+    def __init__(self, client):
+        self.client = client
+        self.entered = False
+        self.exited = False
+
+    async def __aenter__(self):
+        self.entered = True
+        return self.client
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        self.exited = True
+
+
 async def test_durable_function_test_result_create():
     """Test DurableFunctionTestResult.create method."""
     # Create mock execution with operations
@@ -336,6 +387,95 @@ async def test_create_cloud_runner_uses_configured_defaults(mock_cloud_runner_cl
         input="payload",
         timeout=45,
     )
+
+
+async def test_async_cloud_lambda_client_direct_client_delegates_all_methods():
+    from async_durable_execution.runner.cloud import AsyncCloudLambdaClient
+
+    raw_client = AsyncLambdaClientStub()
+    client = AsyncCloudLambdaClient(raw_client)
+
+    assert client.exceptions is raw_client.exceptions
+    assert await client.invoke(FunctionName="fn") == {
+        "method": "invoke",
+        "kwargs": {"FunctionName": "fn"},
+    }
+    assert await client.get_durable_execution(DurableExecutionArn="arn") == {
+        "method": "get_durable_execution",
+        "kwargs": {"DurableExecutionArn": "arn"},
+    }
+    assert await client.get_durable_execution_history(DurableExecutionArn="arn") == {
+        "method": "get_durable_execution_history",
+        "kwargs": {"DurableExecutionArn": "arn"},
+    }
+    assert await client.send_durable_execution_callback_success(
+        CallbackId="callback"
+    ) == {
+        "method": "send_durable_execution_callback_success",
+        "kwargs": {"CallbackId": "callback"},
+    }
+    assert await client.send_durable_execution_callback_failure(
+        CallbackId="callback"
+    ) == {
+        "method": "send_durable_execution_callback_failure",
+        "kwargs": {"CallbackId": "callback"},
+    }
+    assert await client.send_durable_execution_callback_heartbeat(
+        CallbackId="callback"
+    ) == {
+        "method": "send_durable_execution_callback_heartbeat",
+        "kwargs": {"CallbackId": "callback"},
+    }
+
+    await client.aclose()
+
+    assert raw_client.closed is True
+
+
+async def test_async_cloud_lambda_client_enters_context_on_first_call():
+    from async_durable_execution.runner.cloud import AsyncCloudLambdaClient
+
+    raw_client = AsyncLambdaClientStub()
+    context = AsyncLambdaClientContextStub(raw_client)
+    client = AsyncCloudLambdaClient(context)
+
+    with pytest.raises(AttributeError, match="not been initialized"):
+        _ = client.exceptions
+
+    assert await client.get_durable_execution(DurableExecutionArn="arn") == {
+        "method": "get_durable_execution",
+        "kwargs": {"DurableExecutionArn": "arn"},
+    }
+    assert context.entered is True
+    assert client.exceptions is raw_client.exceptions
+
+    await client.aclose()
+
+    assert context.exited is True
+
+
+async def test_read_payload_handles_sync_read_returning_awaitable():
+    from async_durable_execution.runner.cloud import _read_payload
+
+    class Payload:
+        def read(self):
+            async def inner():
+                return b"payload"
+
+            return inner()
+
+    assert await _read_payload(Payload()) == "payload"
+
+
+def test_threaded_sync_cloud_lambda_client_close_delegates_to_client():
+    from async_durable_execution.runner.cloud import ThreadedSyncCloudLambdaClient
+
+    raw_client = Mock()
+    client = ThreadedSyncCloudLambdaClient(raw_client)
+
+    client.close()
+
+    raw_client.close.assert_called_once()
 
 
 @patch("async_durable_execution.runner.local.Scheduler")
