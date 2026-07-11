@@ -2,7 +2,7 @@
 
 ## Background Operation Tasks
 
-Durable operation helpers such as `step()`, `wait()`, `invoke()`,
+Durable operation helpers such as `step()`, `wait()`, `invoke()`, `recurse()`,
 `run_in_child_context()`, `wait_for_callback()`, `wait_for_condition()`, and
 `with_retry()` return `asyncio.Task` objects. Awaiting an operation directly still
 works:
@@ -47,6 +47,97 @@ back to normal lazy task creation with `loop.create_task()`. Eager start is trea
 a performance and ordering optimization only; the durable operation contract is still
 that the helper returns an `asyncio.Task` that can run in the background and be awaited
 later.
+
+## Recursive Self Invocation
+
+Use `recurse()` when a durable function needs to invoke itself as a new durable
+execution. This is useful for algorithms that naturally split into smaller units of
+work, or for workflows that need to continue with a changed input without growing the
+Python call stack. `recurse()` is implemented with the same backend chained invoke
+operation as `invoke()`.
+
+```python
+from typing import Any
+
+from async_durable_execution import durable_execution, get_current_context, recurse
+
+
+@durable_execution
+async def handler(event: dict[str, Any]) -> dict[str, Any]:
+    values = [int(value) for value in event["values"]]
+    recursive_level = get_current_context().recursive_level
+
+    if len(values) <= 1:
+        return {
+            "sorted": values,
+            "count": len(values),
+            "recursive_level": recursive_level,
+        }
+
+    pivot_index = len(values) // 2
+    pivot = values[pivot_index]
+    rest = [*values[:pivot_index], *values[pivot_index + 1 :]]
+    left = [value for value in rest if value < pivot]
+    right = [value for value in rest if value >= pivot]
+
+    sorted_left: list[int] = left
+    sorted_right: list[int] = right
+    max_recursive_level = recursive_level
+
+    if len(left) > 1:
+        left_result = await recurse(
+            {"values": left},
+            name=f"sort-left-{recursive_level + 1}",
+            with_recursive_level=True,
+        )
+        sorted_left = list(left_result["sorted"])
+        max_recursive_level = max(
+            max_recursive_level,
+            int(left_result["recursive_level"]),
+        )
+
+    if len(right) > 1:
+        right_result = await recurse(
+            {"values": right},
+            name=f"sort-right-{recursive_level + 1}",
+            with_recursive_level=True,
+        )
+        sorted_right = list(right_result["sorted"])
+        max_recursive_level = max(
+            max_recursive_level,
+            int(right_result["recursive_level"]),
+        )
+
+    return {
+        "sorted": [*sorted_left, pivot, *sorted_right],
+        "count": len(values),
+        "recursive_level": max_recursive_level,
+    }
+```
+
+When `function_name` is omitted, `recurse()` resolves the current Lambda function from
+the active Lambda context. You can pass `function_name=` explicitly in tests or unusual
+runtimes. Recursive self-invokes still require `lambda:InvokeFunction` permission for
+the current function, and the function identifier must be qualified with a version,
+alias, or `$LATEST`.
+
+`recurse()` validates that the payload differs from the current execution input. This
+keeps accidental self-invocation loops from repeatedly starting the same execution
+input. When `with_recursive_level=True`, the payload must be a `dict`; the SDK copies
+it and writes an internal `__recursive_level` field. User code should read the public
+`get_current_context().recursive_level` property rather than reading that field
+directly. The first recursive call has `recursive_level == 1`.
+
+AWS Lambda recursion protection counts the original invocation as part of the invoke
+lineage. Because the SDK's `recursive_level` starts at the first recursive call, the
+example test uses deterministic input where the middle pivot peels off one singleton
+side at each level. A 31-item list reaches `recursive_level == 14` and should not
+trigger protection. A similar 33-item list attempts `recursive_level == 15`, which is
+16 total Lambda invocations and is expected to fail with Lambda's maximum recursion
+depth protection. See
+`async-durable-execution-examples/src/async_durable_execution_examples/invoke/recurse.py`
+for an executable example that verifies the computed result and covers both recursion
+protection cases.
 
 ## Wait For Condition Results
 

@@ -356,6 +356,8 @@ class SerDesContext:
 
     durable_execution_arn: str = ""
 
+    recursive_level: int = 0
+
 
 class SerDes(ABC, Generic[T]):
     """Abstract serializer interface for durable operation payloads and results."""
@@ -466,7 +468,11 @@ EXTENDED_TYPES_SERDES: SerDes[Any] = ExtendedTypeSerDes()
 
 
 async def serialize(
-    serdes: SerDes[T] | None, value: T, operation_id: str, durable_execution_arn: str
+    serdes: SerDes[T] | None,
+    value: T,
+    operation_id: str,
+    durable_execution_arn: str,
+    recursive_level: int = 0,
 ) -> str:
     """Serialize value using provided or default serializer.
 
@@ -482,7 +488,11 @@ async def serialize(
     Raises:
         FatalError: If serialization fails
     """
-    serdes_context: SerDesContext = SerDesContext(operation_id, durable_execution_arn)
+    serdes_context: SerDesContext = SerDesContext(
+        operation_id,
+        durable_execution_arn,
+        recursive_level,
+    )
     active_serdes: SerDes[T] = serdes or EXTENDED_TYPES_SERDES
 
     async def serialize_value() -> str:
@@ -501,7 +511,11 @@ async def serialize(
 
 
 async def deserialize(
-    serdes: SerDes[T] | None, data: str, operation_id: str, durable_execution_arn: str
+    serdes: SerDes[T] | None,
+    data: str,
+    operation_id: str,
+    durable_execution_arn: str,
+    recursive_level: int = 0,
 ) -> T:
     """Deserialize data using provided or default serializer.
 
@@ -517,7 +531,11 @@ async def deserialize(
     Raises:
         FatalError: If deserialization fails
     """
-    serdes_context: SerDesContext = SerDesContext(operation_id, durable_execution_arn)
+    serdes_context: SerDesContext = SerDesContext(
+        operation_id,
+        durable_execution_arn,
+        recursive_level,
+    )
     active_serdes: SerDes[T] = serdes or EXTENDED_TYPES_SERDES
 
     async def deserialize_value() -> T:

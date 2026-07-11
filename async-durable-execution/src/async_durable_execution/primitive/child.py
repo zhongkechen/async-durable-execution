@@ -152,6 +152,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 data=result_payload,
                 operation_id=self.operation_id,
                 durable_execution_arn=self.durable_execution_arn,
+                recursive_level=self.state.recursive_level,
             )
             return result
 
@@ -211,6 +212,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 value=raw_result,
                 operation_id=self.operation_id,
                 durable_execution_arn=self.durable_execution_arn,
+                recursive_level=self.state.recursive_level,
             )
 
             # Check payload size and use ReplayChildren mode if needed
@@ -266,6 +268,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 data=serialized_result,
                 operation_id=self.operation_id,
                 durable_execution_arn=self.durable_execution_arn,
+                recursive_level=self.state.recursive_level,
             )
         except Exception as e:
             error_object = ErrorObject.from_exception(e)

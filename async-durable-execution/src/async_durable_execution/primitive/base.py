@@ -50,6 +50,11 @@ class OperationContext:
     def operation_name(self) -> str | None:
         return self.operation_identifier.name
 
+    @property
+    def recursive_level(self) -> int:
+        """Return the recursion depth recorded on the current execution input."""
+        return self.execution_state.recursive_level
+
     def is_replaying(self) -> bool:
         """Return whether the active context is replaying prior user code."""
         return False
@@ -105,6 +110,7 @@ class OperationExecutor(ABC, Generic[T]):
             value=value,
             operation_id=self.operation_id,
             durable_execution_arn=self.durable_execution_arn,
+            recursive_level=self.state.recursive_level,
         )
 
     async def deserialize_value(self, data: str, serdes: SerDes[S] | None) -> S:
@@ -114,6 +120,7 @@ class OperationExecutor(ABC, Generic[T]):
             data=data,
             operation_id=self.operation_id,
             durable_execution_arn=self.durable_execution_arn,
+            recursive_level=self.state.recursive_level,
         )
 
     @abstractmethod

@@ -237,6 +237,7 @@ class Callback(Generic[T]):  # noqa: PYI059
                 data=operation.callback_details.result,
                 operation_id=self.operation_id,
                 durable_execution_arn=self.state.durable_execution_arn,
+                recursive_level=self.state.recursive_level,
             )
 
         # operation exists; it has not terminated (successfully or otherwise)
