@@ -15,11 +15,15 @@ from async_durable_execution import (
     create_default_sync_client,
     create_local_runner,
     get_step_context,
+    now,
     step,
     wait,
     parallel,
+    random as durable_random,
     recurse,
     run_in_child_context,
+    timestamp,
+    uuid as durable_uuid,
     wait_for_callback,
     map as map_operation,
 )
@@ -68,7 +72,11 @@ def test_additional_public_types_importable_from_package_root():
         "create_default_sync_client": create_default_sync_client,
         "create_local_runner": create_local_runner,
         "get_step_context": get_step_context,
+        "now": now,
+        "random": durable_random,
         "recurse": recurse,
+        "timestamp": timestamp,
+        "uuid": durable_uuid,
     }
     assert WithRetryContext is ModuleWithRetryContext
 

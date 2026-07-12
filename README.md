@@ -109,6 +109,20 @@ On Python 3.12 and newer, the SDK uses `asyncio.eager_task_factory` so newly cre
 
 Handler input is deserialized from the durable execution payload before your code runs. Empty or whitespace payloads are normalized to `{}`, and malformed JSON fails the invocation before user code executes.
 
+### Replay-safe helper values
+
+Use `random()`, `now()`, `timestamp()`, and `uuid()` when workflow code needs common non-deterministic values. Each helper creates a named durable step and reuses the checkpointed value during replay.
+
+```python
+from async_durable_execution import now, random as durable_random, timestamp, uuid
+
+
+request_id = await uuid(name="request_id")
+created_at = await now(name="created_at")
+created_at_seconds = await timestamp(name="created_at_seconds")
+sample = await durable_random(name="sample")
+```
+
 ## 🧪 Testing Durable Functions
 
 The SDK includes runner helpers for testing durable functions locally or against deployed Lambda functions. The local runner executes the durable handler in process, intercepts checkpoint operations with an in-memory service client, and returns a `DurableFunctionTestResult` that can be inspected by operation name.

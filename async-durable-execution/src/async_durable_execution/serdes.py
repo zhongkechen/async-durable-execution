@@ -422,6 +422,7 @@ class ExtendedTypeSerDes(SerDes[T]):
         if SerDes.is_primitive(value):
             return json.dumps(value, separators=(",", ":"))
 
+        self._check_circular_references(value)
         encoded = self._codec.encode(value)
         wrapped = self._to_json_serializable(encoded)
         return json.dumps(wrapped, separators=(",", ":"))
@@ -461,6 +462,32 @@ class ExtendedTypeSerDes(SerDes[T]):
                 return {k: self._to_json_serializable(v) for k, v in obj.items()}
             case _:
                 return obj
+
+    def _check_circular_references(
+        self, obj: Any, seen: set[int] | None = None
+    ) -> None:
+        """Reject circular containers before recursive encoding."""
+        if isinstance(obj, _get_batch_result_type()):
+            obj = obj.to_dict()
+
+        if not isinstance(obj, (dict, list, tuple)):
+            return
+
+        if seen is None:
+            seen = set()
+
+        obj_id = id(obj)
+        if obj_id in seen:
+            msg = "Circular references are not supported"
+            raise SerDesError(msg)
+
+        seen.add(obj_id)
+        try:
+            values = obj.values() if isinstance(obj, dict) else obj
+            for value in values:
+                self._check_circular_references(value, seen)
+        finally:
+            seen.remove(obj_id)
 
 
 DEFAULT_JSON_SERDES: SerDes[Any] = JsonSerDes()
