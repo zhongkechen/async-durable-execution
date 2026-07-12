@@ -21,7 +21,7 @@ This fork was created because the official Python SDK does not support `async`/`
 ## ✨ Key Features
 
 - **Async-first durable code** - Compared with the official AWS SDK, user-provided durable handlers, steps, child contexts, callback submitters, map item functions, parallel branches, and wait-for-condition checks are written with `async def`.
-- **Background operation tasks** - Durable operations such as `step(...)`, `wait(...)`, `invoke(...)`, and `run_in_child_context(...)` return `asyncio.Task` objects, so independent operations can run in the background and be awaited together with `asyncio.gather` without using `parallel()` or `map()`.
+- **Background operation tasks** - Durable operations such as `step(...)`, `wait(...)`, `invoke(...)`, `recurse(...)`, and `run_in_child_context(...)` return `asyncio.Task` objects, so independent operations can run in the background and be awaited together with `asyncio.gather` without using `parallel()` or `map()`.
 - **Simplified operation APIs** - The `v2` API removes config wrapper objects in favor of direct keyword arguments and clearer call sites, including keyword-only operation names.
 - **Integrated local and cloud runner** - Runner functionality now ships through `async_durable_execution`, with separate local and cloud runner factories and typed test result helpers.
 - **Async Lambda client support** - Install the optional `aioboto` extra to use an async Lambda client; otherwise the SDK uses the bundled sync client through an async adapter.
@@ -189,7 +189,7 @@ The example tests in `async-durable-execution-examples/test_examples/` are also 
 - `step/`, `wait/`, `wait_for_callback/`, and `wait_for_condition/` for core durable operations
 - `step/steps_with_gather.py` for starting multiple step tasks and awaiting them together with `asyncio.gather`
 - `map/`, `parallel/`, and `run_in_child_context/` for composition patterns
-- `invoke/`, `with_retry/`, `callback/`, and `logger_example/` for integrations and operational behavior
+- `invoke/`, including `invoke/recurse.py`, `with_retry/`, `callback/`, and `logger_example/` for integrations and operational behavior
 
 For the developer workflow to run or deploy example integration tests, see the [Contributing Guide](CONTRIBUTING.md#example-integration-tests-and-deployment).
 

@@ -825,6 +825,7 @@ class ParallelExecutor(
                         data=operation_details.result,
                         operation_id=operation_id,
                         durable_execution_arn=execution_state.durable_execution_arn,
+                        recursive_level=execution_state.recursive_level,
                     )
             elif operation is not None and operation.status is OperationStatus.FAILED:
                 error = (

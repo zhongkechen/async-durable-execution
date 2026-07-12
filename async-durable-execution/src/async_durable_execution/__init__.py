@@ -33,7 +33,7 @@ from .composite.wait_for_condition import (
     wait_for_condition,
     WaitForConditionCheckContext,
 )
-from .primitive.invoke import invoke
+from .primitive.invoke import invoke, recurse
 from .composite.parallel import (
     parallel,
 )
@@ -97,6 +97,7 @@ __all__ = [
     "invoke",
     "map",
     "parallel",
+    "recurse",
     "run_in_child_context",
     "step",
     "wait",

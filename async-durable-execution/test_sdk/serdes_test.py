@@ -242,6 +242,37 @@ async def test_context_propagation():
     assert deserialized == "data" + "test-arn" + "test-op"
 
 
+async def test_serdes_context_exposes_recursive_level():
+    class RecursiveLevelSerDes(SerDes[str]):
+        async def serialize(self, value: str) -> str:
+            serdes_context = get_current_context()
+            return f"{value}:{serdes_context.recursive_level}"
+
+        async def deserialize(self, data: str) -> str:
+            serdes_context = get_current_context()
+            return f"{data}:{serdes_context.recursive_level}"
+
+    serdes = RecursiveLevelSerDes()
+
+    serialized = await serialize(
+        serdes,
+        "payload",
+        "test-op",
+        "test-arn",
+        recursive_level=4,
+    )
+    assert serialized == "payload:4"
+
+    deserialized = await deserialize(
+        serdes,
+        serialized,
+        "test-op",
+        "test-arn",
+        recursive_level=4,
+    )
+    assert deserialized == "payload:4:4"
+
+
 async def test_context_restored_after_serdes_operation():
     previous_context = object()
     token = set_current_context(previous_context)

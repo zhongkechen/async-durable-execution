@@ -30,6 +30,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+RECURSIVE_LEVEL_INPUT_FIELD = "__recursive_level"
+
 
 @dataclass(frozen=True)
 class CheckpointBatcherConfig:
@@ -194,6 +196,23 @@ class ExecutionState:
                 )
                 raise
         return input_event
+
+    @property
+    def recursive_level(self) -> int:
+        input_event = self.get_input_event()
+        if not isinstance(input_event, dict):
+            return 0
+
+        value = input_event.get(RECURSIVE_LEVEL_INPUT_FIELD, 0)
+        if isinstance(value, bool):
+            return 0
+        if isinstance(value, int):
+            return value
+
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
 
     def get_execution_operation(self) -> Operation | None:
         # invocation id is id of execution operation

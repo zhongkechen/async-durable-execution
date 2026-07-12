@@ -18,6 +18,7 @@ from async_durable_execution import (
     step,
     wait,
     parallel,
+    recurse,
     run_in_child_context,
     wait_for_callback,
     map as map_operation,
@@ -67,6 +68,7 @@ def test_additional_public_types_importable_from_package_root():
         "create_default_sync_client": create_default_sync_client,
         "create_local_runner": create_local_runner,
         "get_step_context": get_step_context,
+        "recurse": recurse,
     }
     assert WithRetryContext is ModuleWithRetryContext
 
