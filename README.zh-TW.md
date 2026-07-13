@@ -186,7 +186,7 @@ Lambda 耐用函數範例位於 `async-durable-execution-examples/src/async_dura
 - **[官方 Python SDK 比較](docs/official-python-sdk-comparison.md)** - 與官方 AWS Durable Execution Python SDK 的並排比較
 - **[遷移指南](docs/migrating-from-official-python-sdk.md)** - 從官方同步 Python SDK 遷移到這個非同步優先 SDK
 - **[使用同步程式碼](docs/using-synchronous-code.md)** - 安全包裝既有同步業務邏輯與阻塞式用戶端
-- **[進階用法](docs/advanced-usage.md)** - 設定 Lambda 用戶端，並透過 AWS Lambda 層共享 SDK
+- **[進階用法](docs/advanced-usage.md)** - 設定批次完成條件、Lambda 用戶端與 Lambda 層
 - **[執行器架構](docs/runner-architecture.md)** - 本機與雲端執行器的執行流程、元件與圖表
 - **[貢獻指南](CONTRIBUTING.md)** - 開發工作流程、Hatch 指令、測試與 pull request 指南
 

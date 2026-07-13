@@ -17,7 +17,9 @@ from async_durable_execution.composite.parallel import (
     BatchResult,
     BranchStatus,
     CompletionConfig,
+    CompletionDecision,
     CompletionReason,
+    CompletionStatus,
     ParallelExecutor,
     Executable,
     ExecutableWithState,
@@ -149,6 +151,118 @@ def test_completion_config_all_successful():
 
     assert config.min_successful is None
     assert config.tolerated_failure_count == 0
+
+
+def test_completion_config_thresholds():
+    """CompletionConfig.thresholds sets both threshold fields."""
+    config = CompletionConfig.thresholds(
+        min_successful=3,
+        tolerated_failure_count=1,
+    )
+
+    assert config.min_successful == 3
+    assert config.tolerated_failure_count == 1
+
+
+def test_completion_config_factories_are_classmethods():
+    """CompletionConfig factories instantiate through cls."""
+
+    class CustomCompletionConfig(CompletionConfig):
+        pass
+
+    assert isinstance(CustomCompletionConfig.thresholds(), CustomCompletionConfig)
+    assert isinstance(CustomCompletionConfig.first_successful(), CustomCompletionConfig)
+    assert isinstance(CustomCompletionConfig.all_completed(), CustomCompletionConfig)
+    assert isinstance(CustomCompletionConfig.all_successful(), CustomCompletionConfig)
+    assert isinstance(
+        CustomCompletionConfig.custom(
+            lambda status: CompletionDecision.continue_execution()
+        ),
+        CustomCompletionConfig,
+    )
+
+
+def test_completion_reason_success_semantics():
+    """CompletionReason exposes success/failure semantics."""
+    assert CompletionReason.ALL_COMPLETED.is_succeeded
+    assert CompletionReason.MIN_SUCCESSFUL_REACHED.is_succeeded
+    assert not CompletionReason.FAILURE_TOLERANCE_EXCEEDED.is_succeeded
+    assert CompletionReason.CUSTOM_COMPLETION_SUCCEEDED.is_succeeded
+    assert not CompletionReason.CUSTOM_COMPLETION_FAILED.is_succeeded
+
+
+def test_completion_status_validation_and_all_completed():
+    """CompletionStatus validates counts and reports all-completed state."""
+    status = CompletionStatus(
+        success_count=1,
+        failure_count=1,
+        total_count=2,
+    )
+
+    assert status.completed_count == 2
+    assert status.all_completed
+
+    with pytest.raises(ValueError, match="completed_count cannot exceed"):
+        CompletionStatus(
+            success_count=1,
+            failure_count=1,
+            total_count=1,
+        )
+
+
+def test_completion_decision_validation_and_success_semantics():
+    """CompletionDecision enforces reason presence when completing."""
+    decision = CompletionDecision.complete(CompletionReason.CUSTOM_COMPLETION_FAILED)
+
+    assert decision.should_complete
+    assert not decision.is_succeeded
+    assert not CompletionDecision.continue_execution().should_complete
+
+    with pytest.raises(ValueError, match="completion_reason is required"):
+        CompletionDecision(True)
+    with pytest.raises(ValueError, match="completion_reason must be None"):
+        CompletionDecision(False, CompletionReason.ALL_COMPLETED)
+
+
+def test_completion_config_custom_should_complete():
+    """CompletionConfig.custom stores and evaluates a custom completion function."""
+    config = CompletionConfig.custom(
+        lambda status: CompletionDecision.complete(
+            CompletionReason.CUSTOM_COMPLETION_SUCCEEDED
+        )
+        if status.success_count >= 2
+        else CompletionDecision.continue_execution()
+    )
+
+    assert config.has_custom_should_complete
+    assert config.min_successful is None
+    assert config.tolerated_failure_count is None
+    assert not config.completion_decision(CompletionStatus(1, 0, 3)).should_complete
+
+    decision = config.completion_decision(CompletionStatus(2, 0, 3))
+
+    assert decision.should_complete
+    assert decision.is_succeeded
+    assert decision.completion_reason == CompletionReason.CUSTOM_COMPLETION_SUCCEEDED
+
+
+def test_completion_config_custom_is_mutually_exclusive_with_thresholds():
+    """Custom completion cannot be combined with threshold fields."""
+    with pytest.raises(ValueError, match="should_complete is mutually exclusive"):
+        CompletionConfig(
+            min_successful=1,
+            should_complete=lambda status: CompletionDecision.complete(
+                CompletionReason.CUSTOM_COMPLETION_SUCCEEDED
+            ),
+        )
+
+
+def test_completion_config_custom_none_decision_raises():
+    """Custom completion functions must return a CompletionDecision."""
+    config = CompletionConfig.custom(lambda status: None)
+
+    with pytest.raises(TypeError, match="must return a CompletionDecision"):
+        config.completion_decision(CompletionStatus(0, 0, 1))
 
 
 def test_nesting_type_enum():
@@ -828,20 +942,22 @@ async def test_execution_counters_creation():
     """Test ExecutionCounters creation."""
     counters = ExecutionCounters(
         total_tasks=10,
-        min_successful=8,
-        tolerated_failure_count=2,
+        completion_config=CompletionConfig(
+            min_successful=8,
+            tolerated_failure_count=2,
+        ),
     )
 
     assert counters.total_tasks == 10
-    assert counters.min_successful == 8
-    assert counters.tolerated_failure_count == 2
+    assert counters.completion_config.min_successful == 8
+    assert counters.completion_config.tolerated_failure_count == 2
     assert counters.success_count == 0
     assert counters.failure_count == 0
 
 
 async def test_execution_counters_complete_task():
     """Test ExecutionCounters complete_task method."""
-    counters = ExecutionCounters(5, 3, None)
+    counters = ExecutionCounters(5, CompletionConfig(min_successful=3))
 
     counters.complete_task()
     assert counters.success_count == 1
@@ -849,7 +965,7 @@ async def test_execution_counters_complete_task():
 
 async def test_execution_counters_fail_task():
     """Test ExecutionCounters fail_task method."""
-    counters = ExecutionCounters(5, 3, None)
+    counters = ExecutionCounters(5, CompletionConfig(min_successful=3))
 
     counters.fail_task()
     assert counters.failure_count == 1
@@ -857,7 +973,7 @@ async def test_execution_counters_fail_task():
 
 async def test_execution_counters_should_complete_min_successful():
     """Test ExecutionCounters should_complete with min successful reached."""
-    counters = ExecutionCounters(5, 3, None)
+    counters = ExecutionCounters(5, CompletionConfig(min_successful=3))
 
     assert not counters.should_complete()
 
@@ -870,7 +986,10 @@ async def test_execution_counters_should_complete_min_successful():
 
 async def test_execution_counters_should_complete_failure_count():
     """Test ExecutionCounters should_complete with failure count exceeded."""
-    counters = ExecutionCounters(5, 3, 1)
+    counters = ExecutionCounters(
+        5,
+        CompletionConfig(min_successful=3, tolerated_failure_count=1),
+    )
 
     assert not counters.should_complete()
 
@@ -883,7 +1002,7 @@ async def test_execution_counters_should_complete_failure_count():
 
 async def test_execution_counters_is_all_completed():
     """Test ExecutionCounters is_all_completed method."""
-    counters = ExecutionCounters(3, 2, None)
+    counters = ExecutionCounters(3, CompletionConfig(min_successful=2))
 
     assert not counters.is_all_completed()
 
@@ -897,7 +1016,7 @@ async def test_execution_counters_is_all_completed():
 
 async def test_execution_counters_is_min_successful_reached():
     """Test ExecutionCounters is_min_successful_reached method."""
-    counters = ExecutionCounters(5, 3, None)
+    counters = ExecutionCounters(5, CompletionConfig(min_successful=3))
 
     assert not counters.is_min_successful_reached()
 
@@ -911,7 +1030,10 @@ async def test_execution_counters_is_min_successful_reached():
 
 async def test_execution_counters_is_failure_tolerance_exceeded():
     """Test ExecutionCounters is_failure_tolerance_exceeded method."""
-    counters = ExecutionCounters(10, 8, 2)
+    counters = ExecutionCounters(
+        10,
+        CompletionConfig(min_successful=8, tolerated_failure_count=2),
+    )
 
     assert not counters.is_failure_tolerance_exceeded()
 
@@ -925,14 +1047,14 @@ async def test_execution_counters_is_failure_tolerance_exceeded():
 
 async def test_execution_counters_zero_total_tasks():
     """Test ExecutionCounters with zero total tasks."""
-    counters = ExecutionCounters(0, 0, None)
+    counters = ExecutionCounters(0, CompletionConfig(min_successful=0))
 
     assert not counters.is_failure_tolerance_exceeded()
 
 
 async def test_execution_counters_increment_counts():
     """Test ExecutionCounters increments counts correctly on one event loop."""
-    counters = ExecutionCounters(100, 50, None)
+    counters = ExecutionCounters(100, CompletionConfig(min_successful=50))
     for _ in range(50):
         counters.complete_task()
 
@@ -1297,7 +1419,7 @@ async def test_concurrent_executor_execute_item_in_child_context():
 
 async def test_execution_counters_impossible_to_succeed():
     """Test ExecutionCounters should_complete when impossible to succeed."""
-    counters = ExecutionCounters(5, 4, None)
+    counters = ExecutionCounters(5, CompletionConfig(min_successful=4))
 
     # Fail 3 tasks, leaving only 2 remaining (can't reach min_successful of 4)
     counters.fail_task()
@@ -1342,6 +1464,118 @@ async def test_concurrent_executor_create_result_failure_tolerance_exceeded():
     # NEW BEHAVIOR: With tolerated_failure_count=0 and 1 failure,
     # tolerance is exceeded, so FAILURE_TOLERANCE_EXCEEDED
     assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
+
+
+async def test_concurrent_executor_custom_should_complete_succeeds_early():
+    """Custom completion can stop after a user-defined success condition."""
+
+    class TestExecutor(ParallelExecutor):
+        async def execute_item(self, child_context, executable):
+            return await executable.func()
+
+    async def branch(index):
+        if index == 2:
+            await asyncio.sleep(2)
+        return f"result_{index}"
+
+    executables = [
+        Executable(0, lambda: branch(0)),
+        Executable(1, lambda: branch(1)),
+        Executable(2, lambda: branch(2)),
+    ]
+    completion_config = CompletionConfig.custom(
+        lambda status: CompletionDecision.complete(
+            CompletionReason.CUSTOM_COMPLETION_SUCCEEDED
+        )
+        if status.success_count >= 2
+        else CompletionDecision.continue_execution()
+    )
+
+    executor = create_concurrent_executor(
+        TestExecutor,
+        executables=executables,
+        max_concurrency=2,
+        completion_config=completion_config,
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
+        name_prefix="test_",
+        serdes=None,
+    )
+
+    result = await run_async(executor.execute())
+
+    assert result.completion_reason == CompletionReason.CUSTOM_COMPLETION_SUCCEEDED
+    assert result.completion_reason.is_succeeded
+    assert result.success_count == 2
+    assert result.started_count == 1
+    assert result.all[2].status == BatchItemStatus.STARTED
+
+
+async def test_concurrent_executor_custom_should_complete_can_complete_as_failed():
+    """Custom completion can choose a failed completion reason."""
+
+    class TestExecutor(ParallelExecutor):
+        async def execute_item(self, child_context, executable):
+            return await executable.func()
+
+    async def branch(index):
+        if index in {0, 1}:
+            msg = f"failed_{index}"
+            raise ValueError(msg)
+        await asyncio.sleep(2)
+        return f"result_{index}"
+
+    executables = [
+        Executable(0, lambda: branch(0)),
+        Executable(1, lambda: branch(1)),
+        Executable(2, lambda: branch(2)),
+    ]
+    completion_config = CompletionConfig.custom(
+        lambda status: CompletionDecision.complete(
+            CompletionReason.CUSTOM_COMPLETION_FAILED
+        )
+        if status.completed_count >= 2
+        else CompletionDecision.continue_execution()
+    )
+
+    executor = create_concurrent_executor(
+        TestExecutor,
+        executables=executables,
+        max_concurrency=2,
+        completion_config=completion_config,
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
+        name_prefix="test_",
+        serdes=None,
+    )
+
+    result = await run_async(executor.execute())
+
+    assert result.completion_reason == CompletionReason.CUSTOM_COMPLETION_FAILED
+    assert not result.completion_reason.is_succeeded
+    assert result.success_count == 0
+    assert result.failure_count == 2
+    assert result.started_count == 1
+
+
+async def test_batch_result_from_items_uses_custom_should_complete_reason():
+    """Reconstructed batch results infer custom completion reasons from config."""
+    config = CompletionConfig.custom(
+        lambda status: CompletionDecision.complete(
+            CompletionReason.CUSTOM_COMPLETION_SUCCEEDED
+        )
+        if status.success_count >= 2
+        else CompletionDecision.continue_execution()
+    )
+    items = [
+        BatchItem(0, BatchItemStatus.SUCCEEDED, result="a"),
+        BatchItem(1, BatchItemStatus.SUCCEEDED, result="b"),
+        BatchItem(2, BatchItemStatus.STARTED),
+    ]
+
+    result = BatchResult.from_items(items, config)
+
+    assert result.completion_reason == CompletionReason.CUSTOM_COMPLETION_SUCCEEDED
 
 
 async def test_single_task_suspend_bubbles_up():

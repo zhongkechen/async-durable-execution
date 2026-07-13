@@ -213,7 +213,7 @@ For the developer workflow to run or deploy example integration tests, see the [
 - **[Official Python SDK Comparison](docs/official-python-sdk-comparison.md)** - Side-by-side comparison with the official AWS Durable Execution Python SDK
 - **[Migration Guide](docs/migrating-from-official-python-sdk.md)** - Move from the official synchronous Python SDK to this async-first SDK
 - **[Using Synchronous Code](docs/using-synchronous-code.md)** - Wrap existing synchronous business logic and blocking clients safely
-- **[Advanced Usage](docs/advanced-usage.md)** - Configure Lambda clients and share the SDK through an AWS Lambda layer
+- **[Advanced Usage](docs/advanced-usage.md)** - Configure batch completion conditions, Lambda clients, and Lambda layers
 - **[Runner Architecture](docs/runner-architecture.md)** - Local and cloud runner execution flow, components, and diagrams
 - **[Contributing Guide](CONTRIBUTING.md)** - Development workflow, Hatch commands, testing, and pull request guidance
 

@@ -3,7 +3,7 @@
 import asyncio
 import datetime
 import json
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
 
@@ -1154,7 +1154,7 @@ async def test_cloud_runner_wait_for_completion_retries_resource_not_found(
 
     assert result.status == "SUCCEEDED"
     assert mock_client.get_durable_execution.call_count == 2
-    mock_sleep.assert_called_once_with(0.01)
+    assert mock_sleep.await_args_list.count(call(0.01)) == 1
 
 
 async def test_durable_function_test_result_from_execution_history_filters_execution_type():
