@@ -1438,6 +1438,8 @@ async def test_concurrent_executor_custom_should_complete_succeeds_early():
             return await executable.func()
 
     async def branch(index):
+        if index == 2:
+            await asyncio.sleep(2)
         return f"result_{index}"
 
     executables = [
@@ -1456,7 +1458,7 @@ async def test_concurrent_executor_custom_should_complete_succeeds_early():
     executor = create_concurrent_executor(
         TestExecutor,
         executables=executables,
-        max_concurrency=1,
+        max_concurrency=2,
         completion_config=completion_config,
         top_level_sub_type="TOP",
         iteration_sub_type="ITER",
@@ -1481,6 +1483,10 @@ async def test_concurrent_executor_custom_should_complete_can_complete_as_failed
             return await executable.func()
 
     async def branch(index):
+        if index in {0, 1}:
+            msg = f"failed_{index}"
+            raise ValueError(msg)
+        await asyncio.sleep(2)
         return f"result_{index}"
 
     executables = [
@@ -1499,7 +1505,7 @@ async def test_concurrent_executor_custom_should_complete_can_complete_as_failed
     executor = create_concurrent_executor(
         TestExecutor,
         executables=executables,
-        max_concurrency=1,
+        max_concurrency=2,
         completion_config=completion_config,
         top_level_sub_type="TOP",
         iteration_sub_type="ITER",
@@ -1511,8 +1517,8 @@ async def test_concurrent_executor_custom_should_complete_can_complete_as_failed
 
     assert result.completion_reason == CompletionReason.CUSTOM_COMPLETION_FAILED
     assert not result.completion_reason.is_succeeded
-    assert result.success_count == 2
-    assert result.failure_count == 0
+    assert result.success_count == 0
+    assert result.failure_count == 2
     assert result.started_count == 1
 
 
