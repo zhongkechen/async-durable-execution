@@ -48,6 +48,76 @@ a performance and ordering optimization only; the durable operation contract is 
 that the helper returns an `asyncio.Task` that can run in the background and be awaited
 later.
 
+## Batch Completion Conditions
+
+`map()` and `parallel()` both accept `completion_config` to decide when a batch-style
+operation has collected enough item or branch results. Use the `CompletionConfig`
+factory methods for common strategies:
+
+```python
+from async_durable_execution import CompletionConfig, map, parallel
+
+
+results = await map(
+    func=process_item,
+    items=items,
+    max_concurrency=5,
+    completion_config=CompletionConfig.thresholds(
+        min_successful=8,
+        tolerated_failure_count=2,
+    ),
+    name="process-items",
+)
+```
+
+`CompletionConfig.thresholds()` accepts either or both threshold fields:
+
+- `min_successful`: complete successfully once this many items or branches succeed.
+- `tolerated_failure_count`: complete as failed once failures exceed this count.
+
+Other built-in factories cover the most common policies:
+
+```python
+# Complete after the first success, even if other work is still running.
+first = CompletionConfig.first_successful()
+
+# Wait for every item or branch to finish, regardless of success or failure.
+all_done = CompletionConfig.all_completed()
+
+# Require all work to succeed. The first failure exceeds the zero-failure tolerance.
+all_ok = CompletionConfig.all_successful()
+```
+
+By default, `parallel()` uses `CompletionConfig.all_successful()`, while `map()` waits
+for all items to complete. Pass an explicit `completion_config` when you want a
+different policy.
+
+For custom policies, use `CompletionConfig.custom()` with a deterministic callback
+that returns a `CompletionDecision`:
+
+```python
+from async_durable_execution import (
+    CompletionConfig,
+    CompletionDecision,
+    CompletionReason,
+    CompletionStatus,
+)
+
+
+def complete_after_half(status: CompletionStatus) -> CompletionDecision:
+    if status.success_count >= (status.total_count + 1) // 2:
+        return CompletionDecision.complete(
+            CompletionReason.CUSTOM_COMPLETION_SUCCEEDED
+        )
+    return CompletionDecision.continue_execution()
+
+
+completion_config = CompletionConfig.custom(complete_after_half)
+```
+
+Custom completion callbacks run as workflow code, so they must be deterministic and
+must not perform external side effects.
+
 ## Recursive Self Invocation
 
 Use `recurse()` when a durable function needs to invoke itself as a new durable

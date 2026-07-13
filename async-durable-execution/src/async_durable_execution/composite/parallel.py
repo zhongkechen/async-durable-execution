@@ -154,7 +154,12 @@ class NestingType(Enum):
 
 @dataclass(frozen=True)
 class CompletionConfig:
-    """Configuration for determining when parallel/map operations complete."""
+    """Configuration for determining when parallel/map operations complete.
+
+    Use the factory methods for common completion strategies:
+    `thresholds()`, `first_successful()`, `all_completed()`,
+    `all_successful()`, and `custom()`.
+    """
 
     min_successful: int | None = None
     tolerated_failure_count: int | None = None
@@ -180,6 +185,7 @@ class CompletionConfig:
         min_successful: int | None = None,
         tolerated_failure_count: int | None = None,
     ):
+        """Complete when threshold-based success or failure criteria are met."""
         return cls(
             min_successful=min_successful,
             tolerated_failure_count=tolerated_failure_count,
@@ -187,6 +193,7 @@ class CompletionConfig:
 
     @classmethod
     def first_successful(cls):
+        """Complete successfully after the first item or branch succeeds."""
         return cls(
             min_successful=1,
             tolerated_failure_count=None,
@@ -194,6 +201,7 @@ class CompletionConfig:
 
     @classmethod
     def all_completed(cls):
+        """Wait until every item or branch reaches a terminal state."""
         return cls(
             min_successful=None,
             tolerated_failure_count=None,
@@ -201,6 +209,7 @@ class CompletionConfig:
 
     @classmethod
     def all_successful(cls):
+        """Require every item or branch to succeed."""
         return cls(
             min_successful=None,
             tolerated_failure_count=0,
