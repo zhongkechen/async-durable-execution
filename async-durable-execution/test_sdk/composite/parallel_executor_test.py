@@ -184,9 +184,7 @@ def test_completion_status_validation_and_all_completed():
 
 def test_completion_decision_validation_and_success_semantics():
     """CompletionDecision enforces reason presence when completing."""
-    decision = CompletionDecision.complete(
-        CompletionReason.CUSTOM_COMPLETION_FAILED
-    )
+    decision = CompletionDecision.complete(CompletionReason.CUSTOM_COMPLETION_FAILED)
 
     assert decision.should_complete
     assert not decision.is_succeeded
@@ -211,9 +209,7 @@ def test_completion_config_custom_should_complete():
     assert config.has_custom_should_complete
     assert config.min_successful is None
     assert config.tolerated_failure_count is None
-    assert not config.completion_decision(
-        CompletionStatus(1, 0, 1, 3)
-    ).should_complete
+    assert not config.completion_decision(CompletionStatus(1, 0, 1, 3)).should_complete
 
     decision = config.completion_decision(CompletionStatus(2, 0, 2, 3))
 

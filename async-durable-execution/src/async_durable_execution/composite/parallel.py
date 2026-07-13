@@ -166,8 +166,7 @@ class CompletionConfig:
             msg = "should_complete must be callable"
             raise TypeError(msg)
         if self.should_complete is not None and (
-            self.min_successful is not None
-            or self.tolerated_failure_count is not None
+            self.min_successful is not None or self.tolerated_failure_count is not None
         ):
             msg = (
                 "should_complete is mutually exclusive with min_successful "
@@ -219,9 +218,7 @@ class CompletionConfig:
             self.min_successful is not None
             and status.success_count >= self.min_successful
         ):
-            return CompletionDecision.complete(
-                CompletionReason.MIN_SUCCESSFUL_REACHED
-            )
+            return CompletionDecision.complete(CompletionReason.MIN_SUCCESSFUL_REACHED)
 
         if (
             self.tolerated_failure_count is not None
@@ -619,9 +616,7 @@ class ExecutionCounters:
 
     def completion_decision(self) -> CompletionDecision:
         if self.completion_config.has_custom_should_complete:
-            return self.completion_config.completion_decision(
-                self.completion_status()
-            )
+            return self.completion_config.completion_decision(self.completion_status())
 
         if self.is_complete() or not self.should_continue():
             return CompletionDecision.complete(
