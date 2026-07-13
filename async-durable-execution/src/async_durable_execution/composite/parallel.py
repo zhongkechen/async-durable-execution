@@ -56,6 +56,96 @@ SummaryGenerator: TypeAlias = Callable[[C_contra], str]
 """Create a compact JSON summary for oversized checkpoint payloads."""
 
 
+class CompletionReason(Enum):
+    """Why a map or parallel operation stopped collecting results."""
+
+    ALL_COMPLETED = "ALL_COMPLETED"
+    MIN_SUCCESSFUL_REACHED = "MIN_SUCCESSFUL_REACHED"
+    FAILURE_TOLERANCE_EXCEEDED = "FAILURE_TOLERANCE_EXCEEDED"
+    CUSTOM_COMPLETION_SUCCEEDED = "CUSTOM_COMPLETION_SUCCEEDED"
+    CUSTOM_COMPLETION_FAILED = "CUSTOM_COMPLETION_FAILED"
+
+    @property
+    def is_succeeded(self) -> bool:
+        """Whether this completion reason represents successful completion."""
+        return self in {
+            CompletionReason.ALL_COMPLETED,
+            CompletionReason.MIN_SUCCESSFUL_REACHED,
+            CompletionReason.CUSTOM_COMPLETION_SUCCEEDED,
+        }
+
+
+@dataclass(frozen=True)
+class CompletionStatus:
+    """Live completion progress for a map or parallel operation."""
+
+    success_count: int
+    failure_count: int
+    completed_count: int
+    total_count: int
+    all_items_registered: bool = True
+
+    def __post_init__(self) -> None:
+        counts = (
+            self.success_count,
+            self.failure_count,
+            self.completed_count,
+            self.total_count,
+        )
+        if any(count < 0 for count in counts):
+            msg = "completion counts must be non-negative"
+            raise ValueError(msg)
+        if self.completed_count != self.success_count + self.failure_count:
+            msg = "completed_count must equal success_count + failure_count"
+            raise ValueError(msg)
+        if self.completed_count > self.total_count:
+            msg = "completed_count cannot exceed total_count"
+            raise ValueError(msg)
+
+    @property
+    def all_completed(self) -> bool:
+        """Whether all registered items have reached a terminal state."""
+        return self.all_items_registered and self.completed_count == self.total_count
+
+
+@dataclass(frozen=True)
+class CompletionDecision:
+    """Decision returned by a completion condition."""
+
+    should_complete: bool
+    completion_reason: CompletionReason | None = None
+
+    def __post_init__(self) -> None:
+        if self.should_complete and self.completion_reason is None:
+            msg = "completion_reason is required when should_complete is true"
+            raise ValueError(msg)
+        if not self.should_complete and self.completion_reason is not None:
+            msg = "completion_reason must be None when should_complete is false"
+            raise ValueError(msg)
+
+    @staticmethod
+    def complete(completion_reason: CompletionReason) -> CompletionDecision:
+        """Complete the operation with the supplied reason."""
+        return CompletionDecision(True, completion_reason)
+
+    @staticmethod
+    def continue_execution() -> CompletionDecision:
+        """Continue waiting for more item results."""
+        return CompletionDecision(False)
+
+    @property
+    def is_succeeded(self) -> bool:
+        """Whether this decision completes the operation successfully."""
+        return (
+            self.should_complete
+            and self.completion_reason is not None
+            and self.completion_reason.is_succeeded
+        )
+
+
+ShouldComplete: TypeAlias = Callable[[CompletionStatus], CompletionDecision]
+
+
 class NestingType(Enum):
     """Control how child contexts are created for batch operations."""
 
@@ -69,6 +159,21 @@ class CompletionConfig:
 
     min_successful: int | None = None
     tolerated_failure_count: int | None = None
+    should_complete: ShouldComplete | None = None
+
+    def __post_init__(self) -> None:
+        if self.should_complete is not None and not callable(self.should_complete):
+            msg = "should_complete must be callable"
+            raise TypeError(msg)
+        if self.should_complete is not None and (
+            self.min_successful is not None
+            or self.tolerated_failure_count is not None
+        ):
+            msg = (
+                "should_complete is mutually exclusive with min_successful "
+                "and tolerated_failure_count"
+            )
+            raise ValueError(msg)
 
     @staticmethod
     def first_successful():
@@ -91,6 +196,51 @@ class CompletionConfig:
             tolerated_failure_count=0,
         )
 
+    @staticmethod
+    def custom(should_complete: ShouldComplete) -> CompletionConfig:
+        """Complete when the supplied decision function says to complete."""
+        return CompletionConfig(should_complete=should_complete)
+
+    @property
+    def has_custom_should_complete(self) -> bool:
+        """Whether a custom completion function is configured."""
+        return self.should_complete is not None
+
+    def completion_decision(self, status: CompletionStatus) -> CompletionDecision:
+        """Evaluate completion for the supplied progress status."""
+        if self.should_complete is not None:
+            decision = self.should_complete(status)
+            if decision is None:
+                msg = "should_complete must return a CompletionDecision"
+                raise TypeError(msg)
+            return decision
+
+        if (
+            self.min_successful is not None
+            and status.success_count >= self.min_successful
+        ):
+            return CompletionDecision.complete(
+                CompletionReason.MIN_SUCCESSFUL_REACHED
+            )
+
+        if (
+            self.tolerated_failure_count is not None
+            and status.failure_count > self.tolerated_failure_count
+        ):
+            return CompletionDecision.complete(
+                CompletionReason.FAILURE_TOLERANCE_EXCEEDED
+            )
+
+        if self.tolerated_failure_count is None and status.failure_count > 0:
+            return CompletionDecision.complete(
+                CompletionReason.FAILURE_TOLERANCE_EXCEEDED
+            )
+
+        if status.all_completed:
+            return CompletionDecision.complete(CompletionReason.ALL_COMPLETED)
+
+        return CompletionDecision.continue_execution()
+
 
 class BatchItemStatus(Enum):
     """Status of one item or branch inside a batch-style operation."""
@@ -98,14 +248,6 @@ class BatchItemStatus(Enum):
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
     STARTED = "STARTED"
-
-
-class CompletionReason(Enum):
-    """Why a map or parallel operation stopped collecting results."""
-
-    ALL_COMPLETED = "ALL_COMPLETED"
-    MIN_SUCCESSFUL_REACHED = "MIN_SUCCESSFUL_REACHED"
-    FAILURE_TOLERANCE_EXCEEDED = "FAILURE_TOLERANCE_EXCEEDED"
 
 
 @dataclass(frozen=True)
@@ -182,6 +324,19 @@ class BatchResult(SerializableModel, Generic[R]):  # noqa: PYI059
             if failure_count > 0:
                 return CompletionReason.FAILURE_TOLERANCE_EXCEEDED
         else:
+            if completion_config.has_custom_should_complete:
+                status = CompletionStatus(
+                    success_count=success_count,
+                    failure_count=failure_count,
+                    completed_count=completed_count,
+                    total_count=total_count,
+                )
+                decision = completion_config.completion_decision(status)
+                if decision.should_complete and decision.completion_reason is not None:
+                    return decision.completion_reason
+
+                return CompletionReason.ALL_COMPLETED
+
             has_any_completion_criteria = (
                 completion_config.min_successful is not None
                 or completion_config.tolerated_failure_count is not None
@@ -412,10 +567,15 @@ class ExecutionCounters:
         total_tasks: int,
         min_successful: int,
         tolerated_failure_count: int | None,
+        completion_config: CompletionConfig | None = None,
     ):
         self.total_tasks = total_tasks
         self.min_successful = min_successful
         self.tolerated_failure_count = tolerated_failure_count
+        self.completion_config = completion_config or CompletionConfig(
+            min_successful=min_successful,
+            tolerated_failure_count=tolerated_failure_count,
+        )
         self.success_count = 0
         self.failure_count = 0
 
@@ -446,7 +606,35 @@ class ExecutionCounters:
         return self.success_count >= self.min_successful
 
     def should_complete(self) -> bool:
-        return self.is_complete() or not self.should_continue()
+        return self.completion_decision().should_complete
+
+    def completion_status(self) -> CompletionStatus:
+        completed_count = self.success_count + self.failure_count
+        return CompletionStatus(
+            success_count=self.success_count,
+            failure_count=self.failure_count,
+            completed_count=completed_count,
+            total_count=self.total_tasks,
+        )
+
+    def completion_decision(self) -> CompletionDecision:
+        if self.completion_config.has_custom_should_complete:
+            return self.completion_config.completion_decision(
+                self.completion_status()
+            )
+
+        if self.is_complete() or not self.should_continue():
+            return CompletionDecision.complete(
+                BatchResult._get_completion_reason(
+                    failure_count=self.failure_count,
+                    success_count=self.success_count,
+                    completed_count=self.success_count + self.failure_count,
+                    total_count=self.total_tasks,
+                    completion_config=self.completion_config,
+                )
+            )
+
+        return CompletionDecision.continue_execution()
 
     def is_all_completed(self) -> bool:
         return self.success_count == self.total_tasks
@@ -550,6 +738,8 @@ class ParallelExecutor(
         self._branch_namer = branch_namer
         self._completion_event = asyncio.Event()
         self._suspend_exception: SuspendExecution | None = None
+        self._completion_exception: Exception | None = None
+        self._completion_decision: CompletionDecision | None = None
         self._running_tasks: set[asyncio.Task[ResultType]] = set()
 
         min_successful = self.completion_config.min_successful or len(self.executables)
@@ -557,6 +747,7 @@ class ParallelExecutor(
             len(executables),
             min_successful,
             self.completion_config.tolerated_failure_count,
+            self.completion_config,
         )
         self.executables_with_state: list[ExecutableWithState] = []
         self.serdes = serdes
@@ -601,6 +792,8 @@ class ParallelExecutor(
         ]
         self._completion_event.clear()
         self._suspend_exception = None
+        self._completion_exception = None
+        self._completion_decision = None
         self._running_tasks.clear()
 
         async def submit_task(
@@ -652,6 +845,8 @@ class ParallelExecutor(
 
             if self._suspend_exception:
                 raise self._suspend_exception
+            if self._completion_exception:
+                raise self._completion_exception
 
         return self._create_result()
 
@@ -718,13 +913,27 @@ class ParallelExecutor(
             exe_state.fail(e)
             self.counters.fail_task()
 
-        if self.counters.should_complete():
+        completion_decision = self.counters.completion_decision()
+        if completion_decision.should_complete:
+            self._completion_decision = completion_decision
             self._completion_event.set()
         else:
             suspend_result = self.should_execution_suspend()
             if suspend_result.should_suspend:
                 self._suspend_exception = suspend_result.exception
                 self._completion_event.set()
+            elif self._all_executables_terminal():
+                self._completion_exception = InvalidStateError(
+                    "custom should_complete did not complete after all branches "
+                    "reached terminal states"
+                )
+                self._completion_event.set()
+
+    def _all_executables_terminal(self) -> bool:
+        return all(
+            exe_state.status in {BranchStatus.COMPLETED, BranchStatus.FAILED}
+            for exe_state in self.executables_with_state
+        )
 
     def _create_result(self) -> BatchResult[ResultType]:
         batch_items: list[BatchItem[ResultType]] = []
@@ -755,6 +964,15 @@ class ParallelExecutor(
                     batch_items.append(
                         BatchItem(executable.index, BatchItemStatus.STARTED)
                     )
+
+        if (
+            self._completion_decision is not None
+            and self._completion_decision.completion_reason is not None
+        ):
+            return BatchResult(
+                all=batch_items,
+                completion_reason=self._completion_decision.completion_reason,
+            )
 
         return BatchResult.from_items(batch_items, self.completion_config)
 
