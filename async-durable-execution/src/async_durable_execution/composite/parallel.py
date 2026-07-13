@@ -562,17 +562,10 @@ class ExecutionCounters:
     def __init__(
         self,
         total_tasks: int,
-        min_successful: int,
-        tolerated_failure_count: int | None,
-        completion_config: CompletionConfig | None = None,
+        completion_config: CompletionConfig,
     ):
         self.total_tasks = total_tasks
-        self.min_successful = min_successful
-        self.tolerated_failure_count = tolerated_failure_count
-        self.completion_config = completion_config or CompletionConfig(
-            min_successful=min_successful,
-            tolerated_failure_count=tolerated_failure_count,
-        )
+        self.completion_config = completion_config
         self.success_count = 0
         self.failure_count = 0
 
@@ -583,12 +576,14 @@ class ExecutionCounters:
         self.failure_count += 1
 
     def should_continue(self) -> bool:
-        if self.tolerated_failure_count is None:
+        tolerated_failure_count = self.completion_config.tolerated_failure_count
+
+        if tolerated_failure_count is None:
             return self.failure_count == 0
 
         if (
-            self.tolerated_failure_count is not None
-            and self.failure_count > self.tolerated_failure_count
+            tolerated_failure_count is not None
+            and self.failure_count > tolerated_failure_count
         ):
             return False
 
@@ -600,7 +595,8 @@ class ExecutionCounters:
         if completed_count == self.total_tasks:
             return True
 
-        return self.success_count >= self.min_successful
+        min_successful = self.completion_config.min_successful
+        return min_successful is not None and self.success_count >= min_successful
 
     def should_complete(self) -> bool:
         return self.completion_decision().should_complete
@@ -635,11 +631,12 @@ class ExecutionCounters:
         return self.success_count == self.total_tasks
 
     def is_min_successful_reached(self) -> bool:
-        return self.success_count >= self.min_successful
+        min_successful = self.completion_config.min_successful
+        return min_successful is not None and self.success_count >= min_successful
 
     def is_failure_tolerance_exceeded(self) -> bool:
         return self._is_failure_condition_reached(
-            tolerated_count=self.tolerated_failure_count,
+            tolerated_count=self.completion_config.tolerated_failure_count,
             failure_count=self.failure_count,
         )
 
@@ -737,11 +734,8 @@ class ParallelExecutor(
         self._completion_decision: CompletionDecision | None = None
         self._running_tasks: set[asyncio.Task[ResultType]] = set()
 
-        min_successful = self.completion_config.min_successful or len(self.executables)
         self.counters = ExecutionCounters(
             len(executables),
-            min_successful,
-            self.completion_config.tolerated_failure_count,
             self.completion_config,
         )
         self.executables_with_state: list[ExecutableWithState] = []

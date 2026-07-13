@@ -914,20 +914,22 @@ async def test_execution_counters_creation():
     """Test ExecutionCounters creation."""
     counters = ExecutionCounters(
         total_tasks=10,
-        min_successful=8,
-        tolerated_failure_count=2,
+        completion_config=CompletionConfig(
+            min_successful=8,
+            tolerated_failure_count=2,
+        ),
     )
 
     assert counters.total_tasks == 10
-    assert counters.min_successful == 8
-    assert counters.tolerated_failure_count == 2
+    assert counters.completion_config.min_successful == 8
+    assert counters.completion_config.tolerated_failure_count == 2
     assert counters.success_count == 0
     assert counters.failure_count == 0
 
 
 async def test_execution_counters_complete_task():
     """Test ExecutionCounters complete_task method."""
-    counters = ExecutionCounters(5, 3, None)
+    counters = ExecutionCounters(5, CompletionConfig(min_successful=3))
 
     counters.complete_task()
     assert counters.success_count == 1
@@ -935,7 +937,7 @@ async def test_execution_counters_complete_task():
 
 async def test_execution_counters_fail_task():
     """Test ExecutionCounters fail_task method."""
-    counters = ExecutionCounters(5, 3, None)
+    counters = ExecutionCounters(5, CompletionConfig(min_successful=3))
 
     counters.fail_task()
     assert counters.failure_count == 1
@@ -943,7 +945,7 @@ async def test_execution_counters_fail_task():
 
 async def test_execution_counters_should_complete_min_successful():
     """Test ExecutionCounters should_complete with min successful reached."""
-    counters = ExecutionCounters(5, 3, None)
+    counters = ExecutionCounters(5, CompletionConfig(min_successful=3))
 
     assert not counters.should_complete()
 
@@ -956,7 +958,10 @@ async def test_execution_counters_should_complete_min_successful():
 
 async def test_execution_counters_should_complete_failure_count():
     """Test ExecutionCounters should_complete with failure count exceeded."""
-    counters = ExecutionCounters(5, 3, 1)
+    counters = ExecutionCounters(
+        5,
+        CompletionConfig(min_successful=3, tolerated_failure_count=1),
+    )
 
     assert not counters.should_complete()
 
@@ -969,7 +974,7 @@ async def test_execution_counters_should_complete_failure_count():
 
 async def test_execution_counters_is_all_completed():
     """Test ExecutionCounters is_all_completed method."""
-    counters = ExecutionCounters(3, 2, None)
+    counters = ExecutionCounters(3, CompletionConfig(min_successful=2))
 
     assert not counters.is_all_completed()
 
@@ -983,7 +988,7 @@ async def test_execution_counters_is_all_completed():
 
 async def test_execution_counters_is_min_successful_reached():
     """Test ExecutionCounters is_min_successful_reached method."""
-    counters = ExecutionCounters(5, 3, None)
+    counters = ExecutionCounters(5, CompletionConfig(min_successful=3))
 
     assert not counters.is_min_successful_reached()
 
@@ -997,7 +1002,10 @@ async def test_execution_counters_is_min_successful_reached():
 
 async def test_execution_counters_is_failure_tolerance_exceeded():
     """Test ExecutionCounters is_failure_tolerance_exceeded method."""
-    counters = ExecutionCounters(10, 8, 2)
+    counters = ExecutionCounters(
+        10,
+        CompletionConfig(min_successful=8, tolerated_failure_count=2),
+    )
 
     assert not counters.is_failure_tolerance_exceeded()
 
@@ -1011,14 +1019,14 @@ async def test_execution_counters_is_failure_tolerance_exceeded():
 
 async def test_execution_counters_zero_total_tasks():
     """Test ExecutionCounters with zero total tasks."""
-    counters = ExecutionCounters(0, 0, None)
+    counters = ExecutionCounters(0, CompletionConfig(min_successful=0))
 
     assert not counters.is_failure_tolerance_exceeded()
 
 
 async def test_execution_counters_increment_counts():
     """Test ExecutionCounters increments counts correctly on one event loop."""
-    counters = ExecutionCounters(100, 50, None)
+    counters = ExecutionCounters(100, CompletionConfig(min_successful=50))
     for _ in range(50):
         counters.complete_task()
 
@@ -1383,7 +1391,7 @@ async def test_concurrent_executor_execute_item_in_child_context():
 
 async def test_execution_counters_impossible_to_succeed():
     """Test ExecutionCounters should_complete when impossible to succeed."""
-    counters = ExecutionCounters(5, 4, None)
+    counters = ExecutionCounters(5, CompletionConfig(min_successful=4))
 
     # Fail 3 tasks, leaving only 2 remaining (can't reach min_successful of 4)
     counters.fail_task()
