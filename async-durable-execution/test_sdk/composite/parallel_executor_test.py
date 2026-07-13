@@ -167,18 +167,17 @@ def test_completion_status_validation_and_all_completed():
     status = CompletionStatus(
         success_count=1,
         failure_count=1,
-        completed_count=2,
         total_count=2,
     )
 
+    assert status.completed_count == 2
     assert status.all_completed
 
-    with pytest.raises(ValueError, match="completed_count must equal"):
+    with pytest.raises(ValueError, match="completed_count cannot exceed"):
         CompletionStatus(
             success_count=1,
             failure_count=1,
-            completed_count=1,
-            total_count=2,
+            total_count=1,
         )
 
 
@@ -209,9 +208,9 @@ def test_completion_config_custom_should_complete():
     assert config.has_custom_should_complete
     assert config.min_successful is None
     assert config.tolerated_failure_count is None
-    assert not config.completion_decision(CompletionStatus(1, 0, 1, 3)).should_complete
+    assert not config.completion_decision(CompletionStatus(1, 0, 3)).should_complete
 
-    decision = config.completion_decision(CompletionStatus(2, 0, 2, 3))
+    decision = config.completion_decision(CompletionStatus(2, 0, 3))
 
     assert decision.should_complete
     assert decision.is_succeeded
@@ -234,7 +233,7 @@ def test_completion_config_custom_none_decision_raises():
     config = CompletionConfig.custom(lambda status: None)
 
     with pytest.raises(TypeError, match="must return a CompletionDecision"):
-        config.completion_decision(CompletionStatus(0, 0, 0, 1))
+        config.completion_decision(CompletionStatus(0, 0, 1))
 
 
 def test_nesting_type_enum():

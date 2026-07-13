@@ -81,25 +81,25 @@ class CompletionStatus:
 
     success_count: int
     failure_count: int
-    completed_count: int
     total_count: int
 
     def __post_init__(self) -> None:
         counts = (
             self.success_count,
             self.failure_count,
-            self.completed_count,
             self.total_count,
         )
         if any(count < 0 for count in counts):
             msg = "completion counts must be non-negative"
             raise ValueError(msg)
-        if self.completed_count != self.success_count + self.failure_count:
-            msg = "completed_count must equal success_count + failure_count"
-            raise ValueError(msg)
         if self.completed_count > self.total_count:
             msg = "completed_count cannot exceed total_count"
             raise ValueError(msg)
+
+    @property
+    def completed_count(self) -> int:
+        """Number of items that have reached a terminal state."""
+        return self.success_count + self.failure_count
 
     @property
     def all_completed(self) -> bool:
@@ -324,7 +324,6 @@ class BatchResult(SerializableModel, Generic[R]):  # noqa: PYI059
                 status = CompletionStatus(
                     success_count=success_count,
                     failure_count=failure_count,
-                    completed_count=completed_count,
                     total_count=total_count,
                 )
                 decision = completion_config.completion_decision(status)
@@ -601,11 +600,9 @@ class ExecutionCounters:
         return self.completion_decision().should_complete
 
     def completion_status(self) -> CompletionStatus:
-        completed_count = self.success_count + self.failure_count
         return CompletionStatus(
             success_count=self.success_count,
             failure_count=self.failure_count,
-            completed_count=completed_count,
             total_count=self.total_tasks,
         )
 
