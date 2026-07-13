@@ -153,6 +153,35 @@ def test_completion_config_all_successful():
     assert config.tolerated_failure_count == 0
 
 
+def test_completion_config_thresholds():
+    """CompletionConfig.thresholds sets both threshold fields."""
+    config = CompletionConfig.thresholds(
+        min_successful=3,
+        tolerated_failure_count=1,
+    )
+
+    assert config.min_successful == 3
+    assert config.tolerated_failure_count == 1
+
+
+def test_completion_config_factories_are_classmethods():
+    """CompletionConfig factories instantiate through cls."""
+
+    class CustomCompletionConfig(CompletionConfig):
+        pass
+
+    assert isinstance(CustomCompletionConfig.thresholds(), CustomCompletionConfig)
+    assert isinstance(CustomCompletionConfig.first_successful(), CustomCompletionConfig)
+    assert isinstance(CustomCompletionConfig.all_completed(), CustomCompletionConfig)
+    assert isinstance(CustomCompletionConfig.all_successful(), CustomCompletionConfig)
+    assert isinstance(
+        CustomCompletionConfig.custom(
+            lambda status: CompletionDecision.continue_execution()
+        ),
+        CustomCompletionConfig,
+    )
+
+
 def test_completion_reason_success_semantics():
     """CompletionReason exposes success/failure semantics."""
     assert CompletionReason.ALL_COMPLETED.is_succeeded

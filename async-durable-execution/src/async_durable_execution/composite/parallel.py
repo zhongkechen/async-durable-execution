@@ -173,31 +173,43 @@ class CompletionConfig:
             )
             raise ValueError(msg)
 
-    @staticmethod
-    def first_successful():
-        return CompletionConfig(
+    @classmethod
+    def thresholds(
+        cls,
+        *,
+        min_successful: int | None = None,
+        tolerated_failure_count: int | None = None,
+    ):
+        return cls(
+            min_successful=min_successful,
+            tolerated_failure_count=tolerated_failure_count,
+        )
+
+    @classmethod
+    def first_successful(cls):
+        return cls(
             min_successful=1,
             tolerated_failure_count=None,
         )
 
-    @staticmethod
-    def all_completed():
-        return CompletionConfig(
+    @classmethod
+    def all_completed(cls):
+        return cls(
             min_successful=None,
             tolerated_failure_count=None,
         )
 
-    @staticmethod
-    def all_successful():
-        return CompletionConfig(
+    @classmethod
+    def all_successful(cls):
+        return cls(
             min_successful=None,
             tolerated_failure_count=0,
         )
 
-    @staticmethod
-    def custom(should_complete: ShouldComplete) -> CompletionConfig:
+    @classmethod
+    def custom(cls, should_complete: ShouldComplete):
         """Complete when the supplied decision function says to complete."""
-        return CompletionConfig(should_complete=should_complete)
+        return cls(should_complete=should_complete)
 
     @property
     def has_custom_should_complete(self) -> bool:
