@@ -57,7 +57,21 @@ SummaryGenerator: TypeAlias = Callable[[C_contra], str]
 
 
 class CompletionReason(Enum):
-    """Why a map or parallel operation stopped collecting results."""
+    """Why a `map()` or `parallel()` operation stopped collecting results.
+
+    Values:
+        ALL_COMPLETED: Every item or branch reached a terminal state and no
+            earlier success, failure, or custom completion condition applied.
+        MIN_SUCCESSFUL_REACHED: The configured `min_successful` threshold was
+            reached.
+        FAILURE_TOLERANCE_EXCEEDED: The number of failures exceeded the
+            configured `tolerated_failure_count`, or no failure tolerance was
+            configured and at least one failure was observed.
+        CUSTOM_COMPLETION_SUCCEEDED: A custom completion function completed the
+            operation successfully.
+        CUSTOM_COMPLETION_FAILED: A custom completion function completed the
+            operation as failed.
+    """
 
     ALL_COMPLETED = "ALL_COMPLETED"
     MIN_SUCCESSFUL_REACHED = "MIN_SUCCESSFUL_REACHED"
@@ -77,7 +91,22 @@ class CompletionReason(Enum):
 
 @dataclass(frozen=True)
 class CompletionStatus:
-    """Live completion progress for a map or parallel operation."""
+    """Live completion progress passed to a custom completion function.
+
+    Attributes:
+        success_count: Number of items or branches that have completed
+            successfully.
+        failure_count: Number of items or branches that have failed.
+        total_count: Total number of items or branches registered for the
+            operation.
+        completed_count: Calculated number of terminal items or branches,
+            equal to `success_count + failure_count`.
+        all_completed: Whether every registered item or branch is terminal.
+
+    Raises:
+        ValueError: If any count is negative, or if completed count exceeds
+            `total_count`.
+    """
 
     success_count: int
     failure_count: int
@@ -109,7 +138,17 @@ class CompletionStatus:
 
 @dataclass(frozen=True)
 class CompletionDecision:
-    """Decision returned by a completion condition."""
+    """Decision returned by a completion condition.
+
+    Args:
+        should_complete: Whether the operation should stop collecting results.
+        completion_reason: Required when `should_complete` is `True`, and must
+            be `None` when `should_complete` is `False`.
+
+    Raises:
+        ValueError: If `completion_reason` is missing for a complete decision,
+            or present for a continue decision.
+    """
 
     should_complete: bool
     completion_reason: CompletionReason | None = None
@@ -124,12 +163,23 @@ class CompletionDecision:
 
     @staticmethod
     def complete(completion_reason: CompletionReason) -> CompletionDecision:
-        """Complete the operation with the supplied reason."""
+        """Create a decision that completes the operation.
+
+        Args:
+            completion_reason: Reason to store on the resulting `BatchResult`.
+
+        Returns:
+            A `CompletionDecision` with `should_complete=True`.
+        """
         return CompletionDecision(True, completion_reason)
 
     @staticmethod
     def continue_execution() -> CompletionDecision:
-        """Continue waiting for more item results."""
+        """Create a decision that keeps collecting item or branch results.
+
+        Returns:
+            A `CompletionDecision` with `should_complete=False`.
+        """
         return CompletionDecision(False)
 
     @property
@@ -143,6 +193,7 @@ class CompletionDecision:
 
 
 ShouldComplete: TypeAlias = Callable[[CompletionStatus], CompletionDecision]
+"""Callable used by `CompletionConfig.custom()` to decide batch completion."""
 
 
 class NestingType(Enum):
@@ -156,9 +207,32 @@ class NestingType(Enum):
 class CompletionConfig:
     """Configuration for determining when parallel/map operations complete.
 
-    Use the factory methods for common completion strategies:
-    `thresholds()`, `first_successful()`, `all_completed()`,
-    `all_successful()`, and `custom()`.
+    Without `should_complete`, completion is evaluated in this order:
+
+    1. Complete successfully when `success_count >= min_successful`, if
+       `min_successful` is configured.
+    2. Complete as failed when `failure_count > tolerated_failure_count`, if
+       `tolerated_failure_count` is configured.
+    3. Complete as failed when `tolerated_failure_count` is `None` and at least
+       one failure is observed.
+    4. Complete successfully when every item or branch has completed.
+
+    If `should_complete` is configured, it fully controls the completion
+    decision and must return a `CompletionDecision`.
+
+    Args:
+        min_successful: Optional success threshold. Reaching this count
+            completes the operation successfully.
+        tolerated_failure_count: Optional failure tolerance. Failures complete
+            the operation as failed only after they exceed this count. When this
+            is `None`, any observed failure fails the operation unless the
+            success threshold has already been reached.
+        should_complete: Optional custom completion function. This is mutually
+            exclusive with `min_successful` and `tolerated_failure_count`.
+
+    Raises:
+        TypeError: If `should_complete` is provided but is not callable.
+        ValueError: If `should_complete` is combined with threshold fields.
     """
 
     min_successful: int | None = None
@@ -185,7 +259,17 @@ class CompletionConfig:
         min_successful: int | None = None,
         tolerated_failure_count: int | None = None,
     ):
-        """Complete when threshold-based success or failure criteria are met."""
+        """Create a threshold-based completion configuration.
+
+        Args:
+            min_successful: Optional success threshold. The operation completes
+                successfully once this many items or branches succeed.
+            tolerated_failure_count: Optional failure tolerance. The operation
+                completes as failed once failures exceed this count.
+
+        Returns:
+            A `CompletionConfig` using the supplied threshold fields.
+        """
         return cls(
             min_successful=min_successful,
             tolerated_failure_count=tolerated_failure_count,
@@ -193,7 +277,13 @@ class CompletionConfig:
 
     @classmethod
     def first_successful(cls):
-        """Complete successfully after the first item or branch succeeds."""
+        """Create a configuration that completes after the first success.
+
+        Returns:
+            A `CompletionConfig` with `min_successful=1` and no explicit failure
+            tolerance. If a failure is observed before any success, the
+            operation completes as failed.
+        """
         return cls(
             min_successful=1,
             tolerated_failure_count=None,
@@ -201,7 +291,13 @@ class CompletionConfig:
 
     @classmethod
     def all_completed(cls):
-        """Wait until every item or branch reaches a terminal state."""
+        """Create a configuration with no explicit thresholds.
+
+        Returns:
+            A `CompletionConfig` with both threshold fields set to `None`. The
+            operation completes successfully when all work completes without
+            failures, and completes as failed when any failure is observed.
+        """
         return cls(
             min_successful=None,
             tolerated_failure_count=None,
@@ -209,7 +305,13 @@ class CompletionConfig:
 
     @classmethod
     def all_successful(cls):
-        """Require every item or branch to succeed."""
+        """Create a configuration that requires every item or branch to succeed.
+
+        Returns:
+            A `CompletionConfig` with `tolerated_failure_count=0`. The first
+            failure exceeds the zero-failure tolerance and completes the
+            operation as failed.
+        """
         return cls(
             min_successful=None,
             tolerated_failure_count=0,
@@ -217,7 +319,15 @@ class CompletionConfig:
 
     @classmethod
     def custom(cls, should_complete: ShouldComplete):
-        """Complete when the supplied decision function says to complete."""
+        """Create a configuration that delegates completion to a callback.
+
+        Args:
+            should_complete: Deterministic callable that receives a
+                `CompletionStatus` and returns a `CompletionDecision`.
+
+        Returns:
+            A `CompletionConfig` that uses the supplied callback.
+        """
         return cls(should_complete=should_complete)
 
     @property
@@ -226,7 +336,19 @@ class CompletionConfig:
         return self.should_complete is not None
 
     def completion_decision(self, status: CompletionStatus) -> CompletionDecision:
-        """Evaluate completion for the supplied progress status."""
+        """Evaluate whether the supplied progress status should complete.
+
+        Args:
+            status: Current completion progress for a `map()` or `parallel()`
+                operation.
+
+        Returns:
+            A `CompletionDecision` describing whether execution should continue
+            and, if complete, why.
+
+        Raises:
+            TypeError: If a custom completion callback returns `None`.
+        """
         if self.should_complete is not None:
             decision = self.should_complete(status)
             if decision is None:
@@ -1142,7 +1264,41 @@ def parallel(
     summary_generator: SummaryGenerator | None = ParallelSummaryGenerator(),
     nesting_type: NestingType = NestingType.NESTED,
 ) -> asyncio.Task[BatchResult[T]]:
-    """Run multiple bound durable callables concurrently and return a `BatchResult`."""
+    """Start a durable parallel operation.
+
+    Each branch is an async zero-argument callable, typically a bound durable
+    callable such as `fetch_user(user_id)`. Branches run in child durable
+    contexts and may contain durable operations such as `step()` or `wait()`.
+
+    The returned object is an `asyncio.Task`; awaiting it yields a `BatchResult`.
+    Calling `parallel()` without immediately awaiting it schedules the durable
+    operation in the background, consistent with other operation helpers.
+
+    By default, `parallel()` uses `CompletionConfig.all_successful()`: every
+    branch must succeed, and the first failure completes the operation as failed.
+    Pass `completion_config` to use threshold-based or custom completion.
+
+    Args:
+        branches: Async zero-argument branch callables to run concurrently.
+        name: Optional durable operation name.
+        max_concurrency: Optional limit for how many branches may run at once.
+        completion_config: Optional completion policy. Use
+            `CompletionConfig.thresholds()`, `first_successful()`,
+            `all_completed()`, `all_successful()`, or `custom()`.
+        serdes: Optional serializer for the final `BatchResult`.
+        item_serdes: Optional serializer for each branch result.
+        summary_generator: Optional callable used to summarize oversized
+            checkpoint payloads.
+        nesting_type: Whether branch operations use nested or flat operation
+            identifiers.
+
+    Returns:
+        An `asyncio.Task` that resolves to a `BatchResult` containing one
+        `BatchItem` per branch.
+
+    Raises:
+        RuntimeError: If called outside a durable context.
+    """
     context = get_durable_context("parallel")
     validated_branches: list[Callable[[], Awaitable[T]]] = []
     for branch in branches:

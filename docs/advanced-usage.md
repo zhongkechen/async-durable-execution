@@ -81,16 +81,21 @@ Other built-in factories cover the most common policies:
 # Complete after the first success, even if other work is still running.
 first = CompletionConfig.first_successful()
 
-# Wait for every item or branch to finish, regardless of success or failure.
+# Use the default no-threshold policy.
 all_done = CompletionConfig.all_completed()
 
 # Require all work to succeed. The first failure exceeds the zero-failure tolerance.
 all_ok = CompletionConfig.all_successful()
 ```
 
-By default, `parallel()` uses `CompletionConfig.all_successful()`, while `map()` waits
-for all items to complete. Pass an explicit `completion_config` when you want a
-different policy.
+Both `CompletionConfig.all_completed()` and the default `CompletionConfig()` have no
+explicit thresholds. They complete successfully when all work completes without
+failures, but any observed failure completes the operation as failed because no
+failure tolerance is configured.
+
+By default, `parallel()` uses `CompletionConfig.all_successful()`, while `map()` uses
+`CompletionConfig()`. Pass an explicit `completion_config` when you want a different
+policy.
 
 For custom policies, use `CompletionConfig.custom()` with a deterministic callback
 that returns a `CompletionDecision`:
