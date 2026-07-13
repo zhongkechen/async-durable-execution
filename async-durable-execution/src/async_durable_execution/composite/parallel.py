@@ -83,7 +83,6 @@ class CompletionStatus:
     failure_count: int
     completed_count: int
     total_count: int
-    all_items_registered: bool = True
 
     def __post_init__(self) -> None:
         counts = (
@@ -104,8 +103,8 @@ class CompletionStatus:
 
     @property
     def all_completed(self) -> bool:
-        """Whether all registered items have reached a terminal state."""
-        return self.all_items_registered and self.completed_count == self.total_count
+        """Whether all items have reached a terminal state."""
+        return self.completed_count == self.total_count
 
 
 @dataclass(frozen=True)
