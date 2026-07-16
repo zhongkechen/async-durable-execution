@@ -4,7 +4,7 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "daily"
     groups:
       # Group updates together, so that they are all applied in a single PR.
       # Grouped updates are currently in beta and is subject to change.
