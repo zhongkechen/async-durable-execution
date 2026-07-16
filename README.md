@@ -2,21 +2,105 @@
 
 [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md)
 
+**Build long-running AWS Lambda workflows with native `async`/`await`.**
+Checkpoint state automatically, pause without active compute, and resume after
+failures without running a workflow server.
+
+[![Deploy now](https://img.shields.io/badge/Deploy_now-AWS_SAM-FF9900?logo=amazonwebservices&logoColor=white)](#deploy-now)
+[![Quick start](https://img.shields.io/badge/Quick_start-Python-3776AB?logo=python&logoColor=white)](#quick-start)
+[![Read the docs](https://img.shields.io/badge/Read_the_docs-API_reference-0A7BBB)](https://zhongkechen.github.io/async-durable-execution/)
+
 [![Build](https://github.com/zhongkechen/async-durable-execution/actions/workflows/build.yml/badge.svg)](https://github.com/zhongkechen/async-durable-execution/actions/workflows/build.yml)
-[![API Docs](https://img.shields.io/badge/API%20Docs-GitHub%20Pages-0A7BBB)](https://zhongkechen.github.io/async-durable-execution/)
 [![Coverage](https://zhongkechen.github.io/async-durable-execution/coverage/badge.svg)](https://zhongkechen.github.io/async-durable-execution/coverage/)
 [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/zhongkechen/async-durable-execution/badge)](https://scorecard.dev/viewer/?uri=github.com/zhongkechen/async-durable-execution)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
------
+> Community-maintained async fork of the Apache-2.0 licensed
+> [AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/).
 
-Build reliable, long-running AWS Lambda workflows with checkpointed steps, waits, callbacks, and parallel execution.
+```python
+from datetime import timedelta
 
-This repository is a community-maintained fork of the original Apache-2.0 licensed [AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/) and continues to ship under Apache License 2.0 with the upstream notices preserved.
+from async_durable_execution import durable_callable, durable_execution, step, wait
 
-This fork was created because the official Python SDK does not support `async`/`await`, which makes it hard to integrate cleanly with other `asyncio` libraries. It is specifically focused on making async Python work naturally with durable functions. The official Python SDK also lacks native background operation tasks and direct `asyncio` task composition. This SDK addresses those gaps, keeps the public API synchronous at the durable operation boundary, requires user-provided durable callables to use `async def` for handlers, steps, child contexts, callback submitters, and condition checks, and follows a more Pythonic style with APIs that feel natural in modern Python code.
+
+@durable_callable
+async def reserve_inventory(order_id: str) -> dict:
+    # API and database calls belong inside checkpointed steps.
+    return {"order_id": order_id, "reserved": True}
+
+
+@durable_execution
+async def handler(event: dict) -> dict:
+    reservation = await step(
+        reserve_inventory(event["order_id"]),
+        name="reserve-inventory",
+    )
+    await wait(timedelta(hours=24), name="payment-window")
+    return {"status": "ready-to-ship", "reservation": reservation}
+```
+
+Completed steps are checkpointed. If the function stops during the wait, AWS
+Lambda resumes the workflow and replays the saved result instead of reserving
+inventory again.
+
+## How It Works
+
+```mermaid
+flowchart LR
+    A[Lambda event] --> B[Async handler]
+    B --> C[Checkpointed step]
+    C --> D[Wait or callback]
+    D --> E[Resume and replay]
+    E --> F[Next step]
+    C -. save result .-> S[(AWS Lambda durable state)]
+    D -. suspend .-> S
+    S -. restore history .-> E
+```
+
+The SDK keeps application code in familiar Python coroutines while AWS Lambda
+stores durable execution history, schedules resumptions, and returns completed
+step results during replay.
+
+## Deploy Now
+
+Deploy the included Hello World workflow with
+[AWS SAM](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html).
+You need AWS credentials, Python 3.10 or newer, Hatch, and the SAM CLI.
+
+```console
+git clone https://github.com/zhongkechen/async-durable-execution.git
+cd async-durable-execution
+
+hatch run examples:build-layer
+hatch run examples:build
+hatch run examples:generate-sam-template -- --example-name "Hello World"
+sam build --template-file async-durable-execution-examples/template.generated.json
+
+AWS_REGION="${AWS_REGION:-us-east-1}"
+sam deploy \
+  --template-file .aws-sam/build/template.yaml \
+  --stack-name async-durable-hello-world \
+  --resolve-s3 \
+  --capabilities CAPABILITY_IAM \
+  --no-confirm-changeset \
+  --region "$AWS_REGION" \
+  --parameter-overrides \
+    LambdaEndpoint="https://lambda.${AWS_REGION}.amazonaws.com"
+```
+
+This repository is a community-maintained fork of the original Apache-2.0
+licensed
+[AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/)
+and continues to ship under Apache License 2.0 with the upstream notices
+preserved.
+
+The fork exists because the official Python SDK does not support
+`async`/`await`, making integration with `asyncio` libraries difficult. This SDK
+adds async durable callables, background operation tasks, direct `asyncio` task
+composition, and APIs designed for modern Python applications.
 
 ## ✨ Key Features
 
@@ -209,7 +293,7 @@ For the developer workflow to run or deploy example integration tests, see the [
 
 ## 📚 Documentation
 
-- **[Generated API Reference](https://zhongkechen.github.io/async-durable-execution/)** - Auto-generated from Python docstrings and published with GitHub Pages
+- **[Documentation Site](https://zhongkechen.github.io/async-durable-execution/)** - Searchable guides and API reference generated from Python docstrings
 - **[Official Python SDK Comparison](docs/official-python-sdk-comparison.md)** - Side-by-side comparison with the official AWS Durable Execution Python SDK
 - **[Migration Guide](docs/migrating-from-official-python-sdk.md)** - Move from the official synchronous Python SDK to this async-first SDK
 - **[Using Synchronous Code](docs/using-synchronous-code.md)** - Wrap existing synchronous business logic and blocking clients safely

@@ -94,10 +94,15 @@ clean = "rm -rf async-durable-execution-examples/build async-durable-execution-e
 workspace.members = [
   "async-durable-execution",
 ]
-dependencies = ["pdoc>=15,<16"]
+dependencies = [
+  "mkdocs>=1.6,<2",
+  "mkdocs-material>=9.6,<10",
+  "mkdocstrings[python]>=0.29,<1",
+  "ruff>=0.11,<1",
+]
 
 [tool.hatch.envs.docs.scripts]
-build = "pdoc async_durable_execution async_durable_execution.runner -o site/api"
+build = "mkdocs build --strict"
 clean = "rm -rf site/api"
 
 [tool.ruff]

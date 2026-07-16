@@ -8,7 +8,9 @@ on:
       - "async-durable-execution/test_sdk/**"
       - "async-durable-execution/pyproject.toml"
       - "async-durable-execution-examples/**"
+      - "docs/**"
       - "scripts/**"
+      - "mkdocs.yml"
       - "pyproject.toml"
       - ".github/workflows/api-docs.yml"
   pull_request:
@@ -18,7 +20,9 @@ on:
       - "async-durable-execution/test_sdk/**"
       - "async-durable-execution/pyproject.toml"
       - "async-durable-execution-examples/**"
+      - "docs/**"
       - "scripts/**"
+      - "mkdocs.yml"
       - "pyproject.toml"
       - ".github/workflows/api-docs.yml"
   workflow_dispatch:
@@ -47,10 +51,10 @@ jobs:
       - name: Install Hatch
         run: python -m pip install hatch==1.16.5
 
-      - name: Build API docs from docstrings
+      - name: Build documentation site
         run: hatch run docs:build
 
-      - name: Preserve API docs at site root
+      - name: Preserve documentation at site root
         run: |
           cp -R site/api/. site/
           rm -rf site/api
