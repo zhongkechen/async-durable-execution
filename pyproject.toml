@@ -103,7 +103,7 @@ dependencies = [
 
 [tool.hatch.envs.docs.scripts]
 build = "mkdocs build --strict"
-clean = "rm -rf site/api"
+clean = "rm -rf build/docs"
 
 [tool.ruff]
 line-length = 88

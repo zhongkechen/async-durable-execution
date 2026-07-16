@@ -5,7 +5,7 @@ repo_url: https://github.com/zhongkechen/async-durable-execution
 repo_name: zhongkechen/async-durable-execution
 edit_uri: edit/main/docs/
 docs_dir: docs
-site_dir: site/api
+site_dir: build/docs
 use_directory_urls: false
 
 theme:
