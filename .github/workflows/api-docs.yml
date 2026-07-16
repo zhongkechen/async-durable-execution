@@ -54,10 +54,12 @@ jobs:
       - name: Build documentation site
         run: hatch run docs:build
 
-      - name: Preserve documentation at site root
+      - name: Assemble documentation at site root
         run: |
-          cp -R site/api/. site/
-          rm -rf site/api
+          cp -R build/docs/. site/
+          test -f site/api/operations.html
+          test -f site/api/composition.html
+          test -f site/api/configuration.html
 
       - name: Build HTML coverage report
         run: hatch run test:cov-html

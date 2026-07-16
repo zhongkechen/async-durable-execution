@@ -75,7 +75,7 @@ Build the searchable documentation site and generated API reference:
 hatch run docs:build
 ```
 
-The build runs in strict mode and writes the site to `site/api`. Fix warnings
+The build runs in strict mode and writes the site to `build/docs`. Fix warnings
 about navigation, links, docstrings, or API signatures before submitting
 documentation changes.
 
