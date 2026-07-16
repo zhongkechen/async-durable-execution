@@ -258,7 +258,7 @@ class CompletionConfig:
         *,
         min_successful: int | None = None,
         tolerated_failure_count: int | None = None,
-    ):
+    ) -> CompletionConfig:
         """Create a threshold-based completion configuration.
 
         Args:
@@ -276,7 +276,7 @@ class CompletionConfig:
         )
 
     @classmethod
-    def first_successful(cls):
+    def first_successful(cls) -> CompletionConfig:
         """Create a configuration that completes after the first success.
 
         Returns:
@@ -290,7 +290,7 @@ class CompletionConfig:
         )
 
     @classmethod
-    def all_completed(cls):
+    def all_completed(cls) -> CompletionConfig:
         """Create a configuration with no explicit thresholds.
 
         Returns:
@@ -304,7 +304,7 @@ class CompletionConfig:
         )
 
     @classmethod
-    def all_successful(cls):
+    def all_successful(cls) -> CompletionConfig:
         """Create a configuration that requires every item or branch to succeed.
 
         Returns:
@@ -318,7 +318,7 @@ class CompletionConfig:
         )
 
     @classmethod
-    def custom(cls, should_complete: ShouldComplete):
+    def custom(cls, should_complete: ShouldComplete) -> CompletionConfig:
         """Create a configuration that delegates completion to a callback.
 
         Args:

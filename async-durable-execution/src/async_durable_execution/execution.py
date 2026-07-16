@@ -130,7 +130,9 @@ class DurableConfig:
 def durable_execution(
     func: Callable[..., Awaitable[Any]] | None = None,
     /,
-    **kwargs,
+    *,
+    boto3_client: LambdaApiClient | AsyncLambdaApiClient | None = None,
+    service_client: DurableServiceClient | None = None,
 ) -> Callable[[Any, LambdaContext], Any]:
     """
     Decorator to create a durable execution handler.
@@ -146,9 +148,13 @@ def durable_execution(
         logger.debug("Decorator called with parameters")
         return functools.partial(
             durable_execution,
-            **kwargs,
+            boto3_client=boto3_client,
+            service_client=service_client,
         )
-    config = DurableConfig(**kwargs)
+    config = DurableConfig(
+        boto3_client=boto3_client,
+        service_client=service_client,
+    )
     logger.debug("Starting durable execution handler...")
 
     # Use the explicitly provided durable client when present. Otherwise, delay

@@ -271,13 +271,30 @@ def generate_sam_template(
     *,
     output_path: Path | None = None,
     runtime: str = DEFAULT_RUNTIME,
+    example_name: str | None = None,
 ) -> Path:
-    """Generate a SAM template for the full examples stack."""
+    """Generate a SAM template for all examples or one named example."""
     catalog = load_catalog()
     validate_catalog_test_coverage(catalog)
+    examples = catalog["examples"]
+    if example_name is not None:
+        examples = [
+            example
+            for example in examples
+            if example["name"].casefold() == example_name.casefold()
+        ]
+        if not examples:
+            available_names = ", ".join(
+                example["name"] for example in catalog["examples"]
+            )
+            msg = (
+                f"Unknown example {example_name!r}. "
+                f"Available examples: {available_names}"
+            )
+            raise ValueError(msg)
 
     template = build_template(
-        catalog["examples"],
+        examples,
         runtime=runtime,
     )
 
@@ -305,12 +322,20 @@ def main() -> int:
         default=DEFAULT_RUNTIME,
         help=f"SAM Lambda runtime to use for generated functions (default: {DEFAULT_RUNTIME})",
     )
+    parser.add_argument(
+        "--example-name",
+        help="Generate a template containing only the named example",
+    )
     args = parser.parse_args()
 
-    template_path = generate_sam_template(
-        output_path=args.output,
-        runtime=args.runtime,
-    )
+    try:
+        template_path = generate_sam_template(
+            output_path=args.output,
+            runtime=args.runtime,
+            example_name=args.example_name,
+        )
+    except ValueError as error:
+        parser.error(str(error))
     print(f"Generated SAM template at {template_path}")
     return 0
 
