@@ -39,23 +39,7 @@ async def handler(event: dict) -> dict:
     return {"status": "ready-to-ship", "reservation": reservation}
 ```
 
-已完成步驟的結果會儲存為檢查點。如果函數在等待期間停止，AWS Lambda 會恢復工作流程並重播已儲存的結果，而不會再次預留庫存。
-
-## 運作方式
-
-```mermaid
-flowchart LR
-    A[Lambda 事件] --> B[非同步處理常式]
-    B --> C[具備檢查點的步驟]
-    C --> D[等待或回呼]
-    D --> E[恢復並重播]
-    E --> F[下一步驟]
-    C -. 儲存結果 .-> S[(AWS Lambda 耐用狀態)]
-    D -. 暫停 .-> S
-    S -. 恢復歷史記錄 .-> E
-```
-
-SDK 讓應用程式程式碼維持為熟悉的 Python 協程，同時由 AWS Lambda 儲存耐用執行歷史記錄、安排恢復，並在重播期間傳回已完成步驟的結果。
+SDK 讓工作流程維持為熟悉的 Python 協程，同時由 AWS Lambda 儲存其耐用執行歷史記錄。每個已完成步驟的結果都會儲存為檢查點，而 `wait` 會暫停工作流程且不占用作用中的運算資源，直到 Lambda 安排恢復執行。處理常式重播時，SDK 會傳回已儲存的預留結果，而不會再次呼叫 `reserve_inventory`，接著從等待之後繼續執行。
 
 <a id="deploy-now"></a>
 

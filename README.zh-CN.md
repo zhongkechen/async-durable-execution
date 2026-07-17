@@ -39,23 +39,7 @@ async def handler(event: dict) -> dict:
     return {"status": "ready-to-ship", "reservation": reservation}
 ```
 
-已完成步骤的结果会保存为检查点。如果函数在等待期间停止，AWS Lambda 会恢复工作流程并重放已保存的结果，而不会再次预留库存。
-
-## 工作原理
-
-```mermaid
-flowchart LR
-    A[Lambda 事件] --> B[异步处理程序]
-    B --> C[带检查点的步骤]
-    C --> D[等待或回调]
-    D --> E[恢复并重放]
-    E --> F[下一步骤]
-    C -. 保存结果 .-> S[(AWS Lambda 持久状态)]
-    D -. 暂停 .-> S
-    S -. 恢复历史记录 .-> E
-```
-
-SDK 让应用程序代码保持为熟悉的 Python 协程，同时由 AWS Lambda 存储持久执行历史记录、安排恢复，并在重放期间返回已完成步骤的结果。
+SDK 让工作流程保持为熟悉的 Python 协程，同时由 AWS Lambda 存储其持久执行历史记录。每个已完成步骤的结果都会保存为检查点，而 `wait` 会暂停工作流程且不占用活跃计算资源，直到 Lambda 安排恢复执行。处理程序重放时，SDK 会返回已保存的预留结果而不是再次调用 `reserve_inventory`，然后从等待之后继续执行。
 
 <a id="deploy-now"></a>
 
