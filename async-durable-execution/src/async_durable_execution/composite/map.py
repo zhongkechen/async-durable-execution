@@ -176,19 +176,45 @@ def map(
     nesting_type: NestingType = NestingType.NESTED,
     item_namer: Callable[[U, int], str] | None = None,
 ) -> asyncio.Task[BatchResult[T]]:
-    """Process a collection durably with optional concurrency controls.
+    """Start a durable map operation over a collection of items.
+
+    `map()` creates one durable child context per item and calls `func` with that
+    item. The item function must be async and may contain durable operations such
+    as `step()` or `wait()`.
+
+    The returned object is an `asyncio.Task`; awaiting it yields a `BatchResult`.
+    Calling `map()` without immediately awaiting it schedules the durable
+    operation in the background, consistent with other operation helpers.
+
+    By default, `map()` uses `CompletionConfig()` with no explicit success
+    threshold or failure tolerance: all-successful completion produces
+    `CompletionReason.ALL_COMPLETED`, while any observed failure completes the
+    operation as failed. Pass `completion_config` to use threshold-based or
+    custom completion.
 
     Args:
-        func: Async callable that processes each item.
+        func: Async callable that processes each item. It receives the original
+            item value and returns that item's result.
         items: Items to process.
         name: Optional durable operation name.
         max_concurrency: Optional limit for concurrent item processing.
-        completion_config: Optional completion criteria.
-        serdes: Optional serializer for the map result.
-        item_serdes: Optional serializer for individual map item results.
-        summary_generator: Optional summary generator for large map results.
-        nesting_type: Whether map iterations use nested or flat operation ids.
+        completion_config: Optional completion policy. Use
+            `CompletionConfig.thresholds()`, `first_successful()`,
+            `all_completed()`, `all_successful()`, or `custom()`.
+        serdes: Optional serializer for the final `BatchResult`.
+        item_serdes: Optional serializer for each item result.
+        summary_generator: Optional callable used to summarize oversized
+            checkpoint payloads.
+        nesting_type: Whether map iterations use nested or flat operation
+            identifiers.
         item_namer: Optional callable for naming map item iterations.
+
+    Returns:
+        An `asyncio.Task` that resolves to a `BatchResult` containing one
+        `BatchItem` per input item.
+
+    Raises:
+        RuntimeError: If called outside a durable context.
     """
     _validate_max_concurrency(max_concurrency)
     context = get_durable_context("map")

@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import inspect
 import json
-from unittest.mock import Mock, patch
+from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
+from async_durable_execution.context import reset_current_context, set_current_context
 from async_durable_execution.exceptions import (
     CallableRuntimeError,
     ExecutionError,
     SuspendExecution,
     TimedSuspendExecution,
+    ValidationError,
     suspend_with_optional_resume_delay,
 )
 from async_durable_execution.models import OperationIdentifier
@@ -27,8 +29,10 @@ from async_durable_execution.models import (
 from async_durable_execution.primitive.invoke import (
     InvokeOperationExecutor,
     invoke,
+    recurse,
 )
-from async_durable_execution.state import ExecutionState
+from async_durable_execution.primitive.child import DurableContext
+from async_durable_execution.state import RECURSIVE_LEVEL_INPUT_FIELD, ExecutionState
 
 from ..serdes_test import CustomDictSerDes
 
@@ -63,6 +67,232 @@ def test_invoke_name_is_keyword_only():
     assert parameters["function_name"].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
     assert parameters["payload"].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
     assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+def test_recurse_name_and_function_name_are_keyword_only():
+    """recurse resolves the target from context unless explicitly overridden."""
+    parameters = inspect.signature(recurse).parameters
+
+    assert parameters["payload"].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
+    assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameters["function_name"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameters["with_recursive_level"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+def _recursive_level_from_input(input_event) -> int:
+    if isinstance(input_event, dict) and isinstance(
+        input_event.get(RECURSIVE_LEVEL_INPUT_FIELD), int
+    ):
+        return input_event[RECURSIVE_LEVEL_INPUT_FIELD]
+    return 0
+
+
+def create_recursive_test_context(lambda_context, input_event=None) -> DurableContext:
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "test_arn"
+    mock_state.lambda_context = lambda_context
+    input_event = {"current": "input"} if input_event is None else input_event
+    mock_state.get_input_event.return_value = input_event
+    mock_state.recursive_level = _recursive_level_from_input(input_event)
+    return DurableContext(
+        execution_state=mock_state,
+        operation_identifier=OperationIdentifier.create_execution_op(),
+    )
+
+
+async def run_recurse_with_context(context: DurableContext, **kwargs):
+    executor = Mock()
+    executor.process = AsyncMock(return_value="recursive-result")
+
+    token = set_current_context(context)
+    try:
+        with patch(
+            "async_durable_execution.primitive.invoke.InvokeOperationExecutor",
+            return_value=executor,
+        ) as mock_executor:
+            result = await recurse(**kwargs)
+    finally:
+        reset_current_context(token)
+
+    return result, mock_executor, executor
+
+
+async def test_recurse_uses_current_invoked_function_arn():
+    """recurse invokes the current qualified Lambda ARN by default."""
+    lambda_context = Mock()
+    lambda_context.invoked_function_arn = (
+        "arn:aws:lambda:us-east-1:123456789012:function:test-function:prod"
+    )
+    lambda_context.function_version = "42"
+    lambda_context.function_name = "test-function"
+    lambda_context.tenant_id = "tenant-1"
+    context = create_recursive_test_context(lambda_context)
+
+    result, mock_executor, executor = await run_recurse_with_context(
+        context,
+        payload={"n": 4},
+        name="recurse-left",
+    )
+
+    assert result == "recursive-result"
+    mock_executor.assert_called_once_with(
+        function_name=(
+            "arn:aws:lambda:us-east-1:123456789012:function:test-function:prod"
+        ),
+        payload={"n": 4},
+        state=context.execution_state,
+        operation_identifier=ANY,
+        serdes_payload=None,
+        serdes_result=None,
+        tenant_id="tenant-1",
+    )
+    executor.process.assert_awaited_once()
+
+
+async def test_recurse_appends_function_version_to_unqualified_arn():
+    """A local or unqualified ARN is made qualified when the context has a version."""
+    lambda_context = Mock()
+    lambda_context.invoked_function_arn = (
+        "arn:aws:lambda:us-east-1:123456789012:function:test-function"
+    )
+    lambda_context.function_version = "$LATEST"
+    lambda_context.function_name = "test-function"
+    lambda_context.tenant_id = "tenant-1"
+    context = create_recursive_test_context(lambda_context)
+
+    _, mock_executor, _ = await run_recurse_with_context(
+        context,
+        payload={"n": 4},
+        tenant_id="tenant-override",
+    )
+
+    assert (
+        mock_executor.call_args.kwargs["function_name"]
+        == "arn:aws:lambda:us-east-1:123456789012:function:test-function:$LATEST"
+    )
+    assert mock_executor.call_args.kwargs["tenant_id"] == "tenant-override"
+
+
+async def test_recurse_falls_back_to_context_function_name():
+    """Short function names are qualified with function_version when possible."""
+    lambda_context = Mock()
+    lambda_context.invoked_function_arn = None
+    lambda_context.function_name = "test-function"
+    lambda_context.function_version = "prod"
+    lambda_context.tenant_id = None
+    context = create_recursive_test_context(lambda_context)
+
+    _, mock_executor, _ = await run_recurse_with_context(
+        context,
+        payload={"n": 4},
+    )
+
+    assert mock_executor.call_args.kwargs["function_name"] == "test-function:prod"
+
+
+async def test_recurse_explicit_function_name_does_not_need_lambda_context():
+    """Explicit function_name is an escape hatch for unusual runtimes and tests."""
+    context = create_recursive_test_context(lambda_context=None)
+
+    _, mock_executor, _ = await run_recurse_with_context(
+        context,
+        payload={"n": 4},
+        function_name="test-function:prod",
+    )
+
+    assert mock_executor.call_args.kwargs["function_name"] == "test-function:prod"
+
+
+async def test_recurse_adds_recursive_level_to_payload():
+    """The first recursive call gets __recursive_level=1."""
+    context = create_recursive_test_context(
+        lambda_context=None,
+        input_event={"n": 10},
+    )
+
+    _, mock_executor, _ = await run_recurse_with_context(
+        context,
+        payload={"n": 5},
+        function_name="test-function:prod",
+        with_recursive_level=True,
+    )
+
+    assert mock_executor.call_args.kwargs["payload"] == {
+        "n": 5,
+        RECURSIVE_LEVEL_INPUT_FIELD: 1,
+    }
+
+
+async def test_recurse_increments_existing_recursive_level():
+    """Nested recursive calls increment from the current context level."""
+    context = create_recursive_test_context(
+        lambda_context=None,
+        input_event={"n": 10, RECURSIVE_LEVEL_INPUT_FIELD: 2},
+    )
+
+    _, mock_executor, _ = await run_recurse_with_context(
+        context,
+        payload={"n": 5},
+        function_name="test-function:prod",
+        with_recursive_level=True,
+    )
+
+    assert mock_executor.call_args.kwargs["payload"] == {
+        "n": 5,
+        RECURSIVE_LEVEL_INPUT_FIELD: 3,
+    }
+
+
+async def test_recurse_rejects_recursive_level_for_non_dict_payload():
+    """recursive_level can only be inserted into dict payloads."""
+    context = create_recursive_test_context(
+        lambda_context=None,
+        input_event={"n": 10},
+    )
+
+    token = set_current_context(context)
+    try:
+        with pytest.raises(ValidationError, match="must be a dict"):
+            recurse(
+                [1, 2, 3],
+                function_name="test-function:prod",
+                with_recursive_level=True,
+            )
+    finally:
+        reset_current_context(token)
+
+
+async def test_recurse_rejects_same_payload_as_execution_input():
+    """recurse must make progress by changing the payload it sends."""
+    current_input = {"n": 4}
+    context = create_recursive_test_context(
+        lambda_context=None,
+        input_event=current_input,
+    )
+
+    token = set_current_context(context)
+    try:
+        with pytest.raises(ValidationError, match="must differ"):
+            recurse(current_input, function_name="test-function:prod")
+    finally:
+        reset_current_context(token)
+
+
+async def test_recurse_requires_resolvable_function_name():
+    """Missing Lambda function metadata produces a clear error."""
+    lambda_context = Mock()
+    lambda_context.invoked_function_arn = None
+    lambda_context.function_name = None
+    lambda_context.function_version = None
+    lambda_context.tenant_id = None
+    context = create_recursive_test_context(lambda_context)
+
+    token = set_current_context(context)
+    try:
+        with pytest.raises(RuntimeError, match="could not determine"):
+            recurse({"n": 4})
+    finally:
+        reset_current_context(token)
 
 
 async def test_invoke_handler_already_succeeded():

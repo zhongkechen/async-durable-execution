@@ -37,6 +37,7 @@ from async_durable_execution.state import (
     CheckpointBatcherConfig,
     ExecutionState as _ExecutionState,
     QueuedOperation,
+    RECURSIVE_LEVEL_INPUT_FIELD,
 )
 
 
@@ -3055,6 +3056,35 @@ async def test_execution_state_get_input_event_defaults_for_blank_payload():
     )
 
     assert state.get_input_event() == {}
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected_level"),
+    [
+        (f'{{"{RECURSIVE_LEVEL_INPUT_FIELD}": 3}}', 3),
+        (f'{{"{RECURSIVE_LEVEL_INPUT_FIELD}": "4"}}', 4),
+        (f'{{"{RECURSIVE_LEVEL_INPUT_FIELD}": true}}', 0),
+        ('{"recursive_level": 3}', 0),
+        ('{"value": 7}', 0),
+        ('["not", "dict"]', 0),
+    ],
+)
+async def test_execution_state_recursive_level(payload: str, expected_level: int):
+    state = ExecutionState(
+        durable_execution_arn="test-arn/exec-1",
+        initial_checkpoint_token="token-0",  # noqa: S106
+        service_client=Mock(spec=ThreadedSyncLambdaClient),
+        operations={
+            "exec-1": Operation(
+                operation_id="exec-1",
+                operation_type=OperationType.EXECUTION,
+                status=OperationStatus.STARTED,
+                execution_details=ExecutionDetails(input_payload=payload),
+            )
+        },
+    )
+
+    assert state.recursive_level == expected_level
 
 
 async def test_execution_state_get_input_event_raises_for_invalid_json():

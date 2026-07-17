@@ -24,7 +24,9 @@ from .composite.parallel import (
     BatchItemStatus,
     BatchResult,
     CompletionConfig,
+    CompletionDecision,
     CompletionReason,
+    CompletionStatus,
     NestingType,
     SummaryGenerator,
 )
@@ -33,7 +35,7 @@ from .composite.wait_for_condition import (
     wait_for_condition,
     WaitForConditionCheckContext,
 )
-from .primitive.invoke import invoke
+from .primitive.invoke import invoke, recurse
 from .composite.parallel import (
     parallel,
 )
@@ -57,6 +59,7 @@ from .primitive.step import (
     get_step_context,
     step,
 )
+from .replay_safe import now, random, timestamp, uuid
 from .models import ErrorObject
 
 # User-facing exception types.
@@ -96,9 +99,14 @@ __all__ = [
     "get_step_context",
     "invoke",
     "map",
+    "now",
     "parallel",
+    "random",
+    "recurse",
     "run_in_child_context",
     "step",
+    "timestamp",
+    "uuid",
     "wait",
     "wait_for_callback",
     "wait_for_condition",
@@ -110,7 +118,9 @@ __all__ = [
     "CallbackError",
     "CallableRuntimeError",
     "CompletionConfig",
+    "CompletionDecision",
     "CompletionReason",
+    "CompletionStatus",
     "DurableContext",
     "DurableFunctionCloudTestRunner",
     "DurableFunctionLocalTestRunner",

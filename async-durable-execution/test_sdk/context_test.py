@@ -187,6 +187,33 @@ async def test_child_context_inherits_lambda_context_from_operation_context():
     assert child_context.lambda_context is lambda_context
 
 
+async def test_operation_contexts_expose_recursive_level():
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = (
+        "arn:aws:durable:us-east-1:123456789012:execution/test"
+    )
+    mock_state.lambda_context = None
+    mock_state.recursive_level = 3
+
+    durable_context = DurableContext(
+        execution_state=mock_state,
+        operation_identifier=OperationIdentifier.create_execution_op(),
+    )
+    step_context = StepContext(
+        execution_state=mock_state,
+        operation_identifier=OperationIdentifier(
+            operation_id="step-1",
+            sub_type=OperationSubType.STEP,
+            parent_id=None,
+        ),
+        attempt=1,
+    )
+
+    assert durable_context.recursive_level == 3
+    assert durable_context.create_child_context("child-op-1").recursive_level == 3
+    assert step_context.recursive_level == 3
+
+
 async def test_module_level_context_functions_delegate_to_durable_context():
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (

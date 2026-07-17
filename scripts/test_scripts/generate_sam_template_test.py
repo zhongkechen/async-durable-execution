@@ -264,6 +264,58 @@ def test_generate_sam_template_writes_template(
     validate.assert_called_once_with(catalog)
 
 
+def test_generate_sam_template_selects_named_example(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    catalog = {
+        "examples": [
+            {
+                "name": "Hello World",
+                "handler": "async_durable_execution_examples.hello_world.handler",
+                "description": "Hello World example.",
+            },
+            {
+                "name": "Step",
+                "handler": "async_durable_execution_examples.step.step.handler",
+                "description": "Step example.",
+            },
+        ]
+    }
+    monkeypatch.setattr(sam_module, "load_catalog", Mock(return_value=catalog))
+    monkeypatch.setattr(sam_module, "validate_catalog_test_coverage", Mock())
+
+    output_path = generate_sam_template(
+        output_path=tmp_path / "template.json",
+        example_name="hello world",
+    )
+
+    template = json.loads(output_path.read_text(encoding="utf-8"))
+    assert "AsyncDurableExecutionExamplesHelloWorld" in template["Resources"]
+    assert "AsyncDurableExecutionExamplesStepStep" not in template["Resources"]
+
+
+def test_generate_sam_template_rejects_unknown_example(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    catalog = {
+        "examples": [
+            {
+                "name": "Hello World",
+                "handler": "async_durable_execution_examples.hello_world.handler",
+                "description": "Hello World example.",
+            }
+        ]
+    }
+    monkeypatch.setattr(sam_module, "load_catalog", Mock(return_value=catalog))
+    monkeypatch.setattr(sam_module, "validate_catalog_test_coverage", Mock())
+
+    with pytest.raises(ValueError, match="Unknown example 'Missing'"):
+        generate_sam_template(
+            output_path=tmp_path / "template.json",
+            example_name="Missing",
+        )
+
+
 def test_main_generates_template_and_prints_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -278,10 +330,16 @@ def test_main_generates_template_and_prints_path(
             str(output_path),
             "--runtime",
             "python3.14",
+            "--example-name",
+            "Hello World",
         ],
     )
     monkeypatch.setattr(sam_module, "generate_sam_template", generate)
 
     assert main() == 0
     assert str(output_path) in capsys.readouterr().out
-    generate.assert_called_once_with(output_path=output_path, runtime="python3.14")
+    generate.assert_called_once_with(
+        output_path=output_path,
+        runtime="python3.14",
+        example_name="Hello World",
+    )

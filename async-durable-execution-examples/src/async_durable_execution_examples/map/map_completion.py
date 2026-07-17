@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 @durable_execution
 async def handler(_event: Any) -> dict[str, Any]:
-    """Handler demonstrating map with completion config issue."""
+    """Handler demonstrating map with threshold completion config."""
     # Test data: Items 2 and 4 will fail (40% failure rate)
     items = [
         {"id": 1, "shouldFail": False},
@@ -29,8 +29,7 @@ async def handler(_event: Any) -> dict[str, Any]:
         {"id": 5, "shouldFail": False},
     ]
 
-    # Fixed completion config that causes the issue
-    completion_config = CompletionConfig(
+    completion_config = CompletionConfig.thresholds(
         min_successful=2,
         tolerated_failure_count=2,
     )

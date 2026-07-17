@@ -15,10 +15,15 @@ from async_durable_execution import (
     create_default_sync_client,
     create_local_runner,
     get_step_context,
+    now,
     step,
     wait,
     parallel,
+    random as durable_random,
+    recurse,
     run_in_child_context,
+    timestamp,
+    uuid as durable_uuid,
     wait_for_callback,
     map as map_operation,
 )
@@ -32,6 +37,8 @@ from async_durable_execution.primitive import child
 from async_durable_execution.config import JitterStrategy
 from async_durable_execution.config import RetryStrategy
 from async_durable_execution.composite.parallel import SummaryGenerator
+from async_durable_execution.composite.parallel import CompletionDecision
+from async_durable_execution.composite.parallel import CompletionStatus
 from async_durable_execution.composite.with_retry import (
     WithRetryContext as ModuleWithRetryContext,
 )
@@ -61,12 +68,19 @@ def test_additional_public_types_importable_from_package_root():
         "OperationSubType": OperationSubType,
         "RetryStrategy": RetryStrategy,
         "SummaryGenerator": SummaryGenerator,
+        "CompletionDecision": CompletionDecision,
+        "CompletionStatus": CompletionStatus,
         "WithRetryContext": ModuleWithRetryContext,
         "PollingStrategy": PollingStrategy,
         "create_cloud_runner": create_cloud_runner,
         "create_default_sync_client": create_default_sync_client,
         "create_local_runner": create_local_runner,
         "get_step_context": get_step_context,
+        "now": now,
+        "random": durable_random,
+        "recurse": recurse,
+        "timestamp": timestamp,
+        "uuid": durable_uuid,
     }
     assert WithRetryContext is ModuleWithRetryContext
 
