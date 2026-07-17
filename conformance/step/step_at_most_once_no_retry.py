@@ -2,7 +2,7 @@
 
 import asyncio
 from async_durable_execution import (
-    RetryPresets,
+    RetryStrategy,
     StepSemantics,
     durable_callable,
     durable_execution,
@@ -25,7 +25,7 @@ async def handler(event: Any) -> str:
     result: str = await step(
         at_most_once_flaky_step(input_1=str(event)),
         name="at_most_once_flaky_step",
-        retry_strategy=RetryPresets.none(),
+        retry_strategy=RetryStrategy.none(),
         step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY,
     )
     return result

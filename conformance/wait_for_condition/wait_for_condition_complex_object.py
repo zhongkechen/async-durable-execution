@@ -2,11 +2,7 @@
 
 from typing import Any
 
-from async_durable_execution import (
-    WaitForConditionDecision,
-    durable_execution,
-    wait_for_condition,
-)
+from async_durable_execution import durable_execution, wait_for_condition
 
 
 @durable_execution
@@ -18,15 +14,12 @@ async def handler(_event: Any) -> dict:
             "status": "DONE" if attempts >= 2 else "PENDING",
             "attempts": attempts,
         }
-        decision = (
-            WaitForConditionDecision.stop_polling()
-            if next_state["status"] == "DONE"
-            else WaitForConditionDecision.continue_waiting()
-        )
-        return next_state, decision
+        return next_state
 
     return await wait_for_condition(
         check,
         initial_state={"status": "PENDING", "attempts": 0},
-        wait_strategy=lambda _s, _a: 1,
+        polling_strategy=lambda state, _attempt: (
+            None if state["status"] == "DONE" else 1
+        ),
     )

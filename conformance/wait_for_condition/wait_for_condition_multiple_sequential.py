@@ -2,31 +2,32 @@
 
 from typing import Any
 
-from async_durable_execution import (
-    WaitForConditionDecision,
-    durable_execution,
-    wait_for_condition,
-)
+from async_durable_execution import durable_execution, wait_for_condition
 
 
 def make_check(threshold: int):
     async def check(state: int | None):
-        next_state = (state or 0) + 1
-        decision = (
-            WaitForConditionDecision.stop_polling()
-            if next_state >= threshold
-            else WaitForConditionDecision.continue_waiting()
-        )
-        return next_state, decision
+        return (state or 0) + 1
 
     return check
+
+
+def make_polling_strategy(threshold: int):
+    def polling_strategy(state: int, _attempt: int) -> int | None:
+        return None if state >= threshold else 1
+
+    return polling_strategy
 
 
 @durable_execution
 async def handler(_event: Any) -> int:
     first = await wait_for_condition(
-        make_check(2), initial_state=0, wait_strategy=lambda _s, _a: 1
+        make_check(2),
+        initial_state=0,
+        polling_strategy=make_polling_strategy(2),
     )
     return await wait_for_condition(
-        make_check(4), initial_state=first, wait_strategy=lambda _s, _a: 1
+        make_check(4),
+        initial_state=first,
+        polling_strategy=make_polling_strategy(4),
     )

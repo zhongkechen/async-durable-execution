@@ -3,9 +3,7 @@
 from typing import Any
 
 from async_durable_execution import (
-    WaitForConditionDecision,
     durable_execution,
-    get_attempt,
     wait_for_condition,
 )
 
@@ -13,10 +11,15 @@ from async_durable_execution import (
 @durable_execution
 async def handler(_event: Any) -> int:
     async def check(state: int | None):
-        if (get_attempt() or 0) >= 3:
+        return (state or 0) + 1
+
+    def polling_strategy(_state: int, attempt: int) -> int:
+        if attempt >= 3:
             raise RuntimeError("maximum polling attempts exceeded")
-        return (state or 0) + 1, WaitForConditionDecision.continue_waiting()
+        return 1
 
     return await wait_for_condition(
-        check, initial_state=0, wait_strategy=lambda _s, _a: 1
+        check,
+        initial_state=0,
+        polling_strategy=polling_strategy,
     )

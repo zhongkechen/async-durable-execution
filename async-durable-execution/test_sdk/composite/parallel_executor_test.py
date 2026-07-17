@@ -24,6 +24,7 @@ from async_durable_execution.composite.parallel import (
     ExecutionCounters,
     NestingType,
     TimerScheduler,
+    parallel,
 )
 from async_durable_execution import DurableContext, get_current_context
 from async_durable_execution.exceptions import (
@@ -31,6 +32,7 @@ from async_durable_execution.exceptions import (
     InvalidStateError,
     SuspendExecution,
     TimedSuspendExecution,
+    ValidationError,
 )
 from async_durable_execution.models import (
     ContextDetails,
@@ -1344,6 +1346,47 @@ async def test_concurrent_executor_create_result_failure_tolerance_exceeded():
     assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
 
 
+async def test_concurrent_executor_does_not_start_items_after_early_completion():
+    """Pending items are not started or returned after fail-fast completes."""
+    started = []
+
+    class TestExecutor(ParallelExecutor):
+        async def _execute_item_in_child_context(self, executor_context, executable):
+            started.append(executable.index)
+            if executable.index == 1:
+                raise ValueError("failed")
+            return f"result_{executable.index}"
+
+    executables = [Executable(index, lambda: None) for index in range(3)]
+    executor = create_concurrent_executor(
+        TestExecutor,
+        executables=executables,
+        max_concurrency=1,
+        completion_config=CompletionConfig(tolerated_failure_count=0),
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
+        name_prefix="test_",
+        serdes=None,
+    )
+
+    result = await executor.execute()
+
+    assert started == [0, 1]
+    assert [item.index for item in result.all] == [0, 1]
+    assert result.total_count == 2
+    assert result.completion_reason is CompletionReason.FAILURE_TOLERANCE_EXCEEDED
+
+
+def test_parallel_rejects_non_positive_max_concurrency_before_creating_context():
+    """Invalid concurrency is rejected before a parallel context is started."""
+
+    async def branch():
+        return "unused"
+
+    with pytest.raises(ValidationError, match="positive integer"):
+        parallel([branch], max_concurrency=0)
+
+
 async def test_single_task_suspend_bubbles_up():
     """Test that single task suspend bubbles up the exception."""
 
@@ -2035,7 +2078,7 @@ async def test_create_result_failed_branch():
 
 
 async def test_create_result_pending_branch():
-    """Test _create_result with PENDING status branch."""
+    """Test _create_result omits a PENDING branch that never started."""
 
     class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
@@ -2062,11 +2105,7 @@ async def test_create_result_pending_branch():
 
     result = executor._create_result()  # noqa: SLF001
 
-    assert len(result.all) == 1
-    assert result.all[0].status == BatchItemStatus.STARTED
-    assert result.all[0].result is None
-    assert result.all[0].error is None
-    assert result.all[0].index == 0
+    assert result.all == []
     # NEW BEHAVIOR: With min_successful=1 and no completed items,
     # defaults to ALL_COMPLETED
     assert result.completion_reason == CompletionReason.ALL_COMPLETED
@@ -2238,7 +2277,8 @@ async def test_create_result_mixed_statuses():
 
     result = executor._create_result()  # noqa: SLF001
 
-    assert len(result.all) == 6
+    assert len(result.all) == 5
+    assert [item.index for item in result.all] == [0, 1, 3, 4, 5]
 
     # Check COMPLETED -> SUCCEEDED
     assert result.all[0].status == BatchItemStatus.SUCCEEDED
@@ -2251,25 +2291,20 @@ async def test_create_result_mixed_statuses():
     assert result.all[1].error is not None
     assert result.all[1].error.message == "Test failure"
 
-    # Check PENDING -> STARTED
+    # Check RUNNING -> STARTED
     assert result.all[2].status == BatchItemStatus.STARTED
     assert result.all[2].result is None
     assert result.all[2].error is None
 
-    # Check RUNNING -> STARTED
+    # Check SUSPENDED -> STARTED
     assert result.all[3].status == BatchItemStatus.STARTED
     assert result.all[3].result is None
     assert result.all[3].error is None
 
-    # Check SUSPENDED -> STARTED
+    # Check SUSPENDED_WITH_TIMEOUT -> STARTED
     assert result.all[4].status == BatchItemStatus.STARTED
     assert result.all[4].result is None
     assert result.all[4].error is None
-
-    # Check SUSPENDED_WITH_TIMEOUT -> STARTED
-    assert result.all[5].status == BatchItemStatus.STARTED
-    assert result.all[5].result is None
-    assert result.all[5].error is None
 
     # we've a min succ set to 1.
     assert result.completion_reason == CompletionReason.MIN_SUCCESSFUL_REACHED
@@ -2406,7 +2441,8 @@ async def test_create_result_multiple_started_states():
 
     result = executor._create_result()  # noqa: SLF001
 
-    assert len(result.all) == 4
+    assert len(result.all) == 3
+    assert [item.index for item in result.all] == [1, 2, 3]
     assert all(item.status == BatchItemStatus.STARTED for item in result.all)
     assert all(item.result is None for item in result.all)
     assert all(item.error is None for item in result.all)
@@ -2909,7 +2945,7 @@ async def test_concurrent_executor_replay_completed_with_failed_operations():
 
 
 async def test_concurrent_executor_replay_completed_with_missing_operation_started():
-    """Missing child checkpoints are preserved as STARTED batch items."""
+    """Missing child checkpoints are omitted as branches that never started."""
 
     async def func1():
         return "result"
@@ -2933,9 +2969,7 @@ async def test_concurrent_executor_replay_completed_with_missing_operation_start
         executor.replay_completed(execution_state, executor_context)
     )
 
-    assert result.all == [
-        BatchItem(index=0, status=BatchItemStatus.STARTED),
-    ]
+    assert result.all == []
 
 
 async def test_concurrent_executor_replay_completed_succeeded_without_details():

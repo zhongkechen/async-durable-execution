@@ -85,7 +85,8 @@ EXECUTION_TIMEOUT_OVERRIDES = {
     "wait.wait_duration_units": 3700,
     "wait.wait_long_duration": 7200,
 }
-ATTEMPTS_ENVIRONMENT_VARIABLE = "ATTEMPTS_TABLE_NAME"
+ATTEMPTS_ENVIRONMENT_VARIABLE = "ATTEMPTS_PARAMETER_PREFIX"
+ATTEMPTS_PARAMETER_PREFIX = "/durable-execution-conformance/attempts"
 TEST_ID_PATTERN = re.compile(r"(?<!\d)([1-9]-\d+)(?!\d)")
 
 
@@ -96,7 +97,7 @@ class ConformanceFunction:
     handler: str
     description: str
     test_id: str | None
-    uses_attempts_table: bool
+    uses_attempts_store: bool
 
 
 def find_handler_node(
@@ -164,7 +165,10 @@ def discover_suite(
                 handler=f"{module}.handler",
                 description=to_description(path.stem, source, tree),
                 test_id=test_id,
-                uses_attempts_table=ATTEMPTS_ENVIRONMENT_VARIABLE in source,
+                uses_attempts_store=(
+                    ATTEMPTS_ENVIRONMENT_VARIABLE in source
+                    or "support.attempts" in source
+                ),
             )
         )
 
@@ -195,7 +199,7 @@ def validate_suite(suite: str, functions: list[ConformanceFunction]) -> None:
         seen.add(function.test_id)
 
 
-def build_role(*, suite: str, uses_attempts_table: bool) -> dict[str, Any]:
+def build_role(*, suite: str, uses_attempts_store: bool) -> dict[str, Any]:
     """Build the shared execution role for a suite stack."""
     policies = []
     additional_actions = []
@@ -225,21 +229,26 @@ def build_role(*, suite: str, uses_attempts_table: bool) -> dict[str, Any]:
                 },
             }
         )
-    if uses_attempts_table:
+    if uses_attempts_store:
         policies.append(
             {
-                "PolicyName": "ConformanceAttemptsTablePolicy",
+                "PolicyName": "ConformanceAttemptsParameterPolicy",
                 "PolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
                         {
                             "Effect": "Allow",
                             "Action": [
-                                "dynamodb:GetItem",
-                                "dynamodb:PutItem",
-                                "dynamodb:UpdateItem",
+                                "ssm:GetParameter",
+                                "ssm:PutParameter",
                             ],
-                            "Resource": {"Fn::GetAtt": ["AttemptsTable", "Arn"]},
+                            "Resource": {
+                                "Fn::Sub": (
+                                    "arn:${AWS::Partition}:ssm:${AWS::Region}:"
+                                    "${AWS::AccountId}:parameter"
+                                    f"{ATTEMPTS_PARAMETER_PREFIX}/*"
+                                )
+                            },
                         }
                     ],
                 },
@@ -271,20 +280,6 @@ def build_role(*, suite: str, uses_attempts_table: bool) -> dict[str, Any]:
     }
 
 
-def build_attempts_table() -> dict[str, Any]:
-    """Build the DynamoDB table used by retry and interruption tests."""
-    return {
-        "Type": "AWS::DynamoDB::Table",
-        "Properties": {
-            "AttributeDefinitions": [
-                {"AttributeName": "executionId", "AttributeType": "S"}
-            ],
-            "KeySchema": [{"AttributeName": "executionId", "KeyType": "HASH"}],
-            "BillingMode": "PAY_PER_REQUEST",
-        },
-    }
-
-
 def build_function_properties(
     function: ConformanceFunction,
 ) -> dict[str, Any]:
@@ -303,8 +298,8 @@ def build_function_properties(
         },
     }
     environment: dict[str, Any] = {}
-    if function.uses_attempts_table:
-        environment[ATTEMPTS_ENVIRONMENT_VARIABLE] = {"Ref": "AttemptsTable"}
+    if function.uses_attempts_store:
+        environment[ATTEMPTS_ENVIRONMENT_VARIABLE] = ATTEMPTS_PARAMETER_PREFIX
     for variable, target in INVOKE_TARGETS.get(
         function.module.split(".")[-1], {}
     ).items():
@@ -321,15 +316,13 @@ def build_template(
     runtime: str = DEFAULT_RUNTIME,
 ) -> dict[str, Any]:
     """Build a deployable SAM template for one conformance suite."""
-    uses_attempts_table = any(function.uses_attempts_table for function in functions)
+    uses_attempts_store = any(function.uses_attempts_store for function in functions)
     resources: dict[str, Any] = {
         "DurableFunctionRole": build_role(
             suite=suite,
-            uses_attempts_table=uses_attempts_table,
+            uses_attempts_store=uses_attempts_store,
         )
     }
-    if uses_attempts_table:
-        resources["AttemptsTable"] = build_attempts_table()
 
     if suite == "invoke":
         for logical_id, helper in INVOKE_HELPERS.items():

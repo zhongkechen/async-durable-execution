@@ -3,7 +3,7 @@
 from datetime import timedelta
 from async_durable_execution import (
     JitterStrategy,
-    RetryStrategyBuilder,
+    RetryStrategy,
     durable_callable,
     durable_execution,
     step,
@@ -19,12 +19,12 @@ async def always_fail() -> str:
 
 @durable_execution
 async def handler(_event: Any) -> str:
-    retry_strategy = RetryStrategyBuilder(
+    retry_strategy = RetryStrategy(
         max_attempts=4,
         initial_delay=timedelta(seconds=1),
         backoff_rate=1,
         jitter_strategy=JitterStrategy.NONE,
-    ).build()
+    )
 
     result: str = await step(always_fail(), retry_strategy=retry_strategy)
     return result

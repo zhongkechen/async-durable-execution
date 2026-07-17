@@ -2,24 +2,16 @@
 
 from typing import Any
 
-from async_durable_execution import (
-    WaitForConditionDecision,
-    durable_execution,
-    wait_for_condition,
-)
+from async_durable_execution import durable_execution, wait_for_condition
 
 
 @durable_execution
 async def handler(event: Any) -> int:
     async def check(state: int | None):
-        value = int(state or 0)
-        decision = (
-            WaitForConditionDecision.stop_polling()
-            if value >= 5
-            else WaitForConditionDecision.continue_waiting()
-        )
-        return value, decision
+        return int(state or 0)
 
     return await wait_for_condition(
-        check, initial_state=int(event), wait_strategy=lambda _s, _a: 1
+        check,
+        initial_state=int(event),
+        polling_strategy=lambda state, _attempt: None if state >= 5 else 1,
     )

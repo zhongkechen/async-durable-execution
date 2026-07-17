@@ -1,7 +1,7 @@
 """1-20: Error caught and handled (try/catch) - step fails, error caught, execution continues."""
 
 from async_durable_execution import (
-    RetryPresets,
+    RetryStrategy,
     durable_callable,
     durable_execution,
     step,
@@ -23,7 +23,7 @@ async def fallback_step() -> str:
 @durable_execution
 async def handler(_event: Any) -> str:
     try:
-        await step(failing_step(), retry_strategy=RetryPresets.none())
+        await step(failing_step(), retry_strategy=RetryStrategy.none())
     except Exception:
         pass
 

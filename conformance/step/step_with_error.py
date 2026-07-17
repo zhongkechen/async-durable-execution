@@ -1,7 +1,7 @@
 """1-19: Step with error (fails permanently)."""
 
 from async_durable_execution import (
-    RetryPresets,
+    RetryStrategy,
     durable_callable,
     durable_execution,
     step,
@@ -17,5 +17,5 @@ async def failing_step() -> str:
 
 @durable_execution
 async def handler(_event: Any) -> str:
-    result: str = await step(failing_step(), retry_strategy=RetryPresets.none())
+    result: str = await step(failing_step(), retry_strategy=RetryStrategy.none())
     return result

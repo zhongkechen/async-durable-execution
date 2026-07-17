@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 from async_durable_execution import (
-    RetryStrategyBuilder,
+    RetryStrategy,
     durable_callable,
     durable_execution,
     step,
@@ -25,11 +25,11 @@ async def throw_transient() -> str:
 
 @durable_execution
 async def handler(_event: Any) -> str:
-    retry_strategy = RetryStrategyBuilder(
+    retry_strategy = RetryStrategy(
         max_attempts=3,
         initial_delay=timedelta(seconds=1),
         retryable_error_types=[ValidationError],
-    ).build()
+    )
 
     result: str = await step(throw_transient(), retry_strategy=retry_strategy)
     return result

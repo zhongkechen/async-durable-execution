@@ -29,6 +29,7 @@ from async_durable_execution.context import (
     reset_current_context,
     set_current_context,
 )
+from async_durable_execution.exceptions import ValidationError
 from async_durable_execution import map as map_operation, DurableContext
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import OperationSubType
@@ -1677,6 +1678,16 @@ async def test_map_with_empty_list_should_exit_early():
     assert result.total_count == 0
     assert result.success_count == 0
     assert result.failure_count == 0
+
+
+def test_map_rejects_non_positive_max_concurrency_before_creating_context():
+    """Invalid concurrency is rejected before a map context is started."""
+
+    async def map_func(item):
+        return item
+
+    with pytest.raises(ValidationError, match="positive integer"):
+        map_operation(map_func, ["unused"], max_concurrency=0)
 
 
 async def test_map_executor_get_iteration_name_default():

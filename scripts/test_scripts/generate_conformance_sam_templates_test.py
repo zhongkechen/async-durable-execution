@@ -24,7 +24,7 @@ def test_to_logical_id_converts_module_name() -> None:
     assert to_logical_id("wait_for_callback_basic") == "WaitForCallbackBasic"
 
 
-def test_discover_suite_reads_ids_and_attempts_table_usage(tmp_path: Path) -> None:
+def test_discover_suite_reads_ids_and_attempts_store_usage(tmp_path: Path) -> None:
     write_handler(
         tmp_path / "step" / "custom_case.py",
         '''
@@ -32,7 +32,7 @@ def test_discover_suite_reads_ids_and_attempts_table_usage(tmp_path: Path) -> No
 import os
 
 async def handler(event):
-    return os.environ["ATTEMPTS_TABLE_NAME"], event
+    return os.environ["ATTEMPTS_PARAMETER_PREFIX"], event
 ''',
     )
 
@@ -45,7 +45,7 @@ async def handler(event):
             handler="step.custom_case.handler",
             description="Custom step case",
             test_id="1-21",
-            uses_attempts_table=True,
+            uses_attempts_store=True,
         )
     ]
 
@@ -67,7 +67,7 @@ def test_validate_suite_rejects_duplicate_ids() -> None:
         handler="step.one.handler",
         description="One",
         test_id="1-1",
-        uses_attempts_table=False,
+        uses_attempts_store=False,
     )
 
     with pytest.raises(ValueError, match="duplicate test ID"):
@@ -94,26 +94,27 @@ def test_repository_sources_cover_all_upstream_requirements() -> None:
         )
 
 
-def test_build_template_adds_attempts_table_and_environment() -> None:
+def test_build_template_adds_attempts_parameter_permissions_and_environment() -> None:
     function = ConformanceFunction(
         module="step.step_with_retry",
         logical_id="StepWithRetry",
         handler="step.step_with_retry.handler",
         description="Step with retry",
         test_id="1-11",
-        uses_attempts_table=True,
+        uses_attempts_store=True,
     )
 
     template = build_template("step", [function], runtime="python3.14")
 
     assert template["Globals"]["Function"]["Runtime"] == "python3.14"
-    assert "AttemptsTable" in template["Resources"]
+    role = template["Resources"]["DurableFunctionRole"]["Properties"]
+    assert role["Policies"][0]["PolicyName"] == "ConformanceAttemptsParameterPolicy"
     properties = template["Resources"]["StepWithRetry"]["Properties"]
     assert properties["CodeUri"] == "../build/"
     assert properties["DurableConfig"] == DEFAULT_DURABLE_CONFIG
-    assert properties["Environment"]["Variables"]["ATTEMPTS_TABLE_NAME"] == {
-        "Ref": "AttemptsTable"
-    }
+    assert properties["Environment"]["Variables"]["ATTEMPTS_PARAMETER_PREFIX"] == (
+        "/durable-execution-conformance/attempts"
+    )
 
 
 def test_build_invoke_template_wires_targets() -> None:
@@ -123,7 +124,7 @@ def test_build_invoke_template_wires_targets() -> None:
         handler="invoke.invoke_with_tenant_id.handler",
         description="Invoke with tenant ID",
         test_id="5-8",
-        uses_attempts_table=False,
+        uses_attempts_store=False,
     )
 
     template = build_template("invoke", [function])

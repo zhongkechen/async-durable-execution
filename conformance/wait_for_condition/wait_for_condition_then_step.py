@@ -3,7 +3,6 @@
 from typing import Any
 
 from async_durable_execution import (
-    WaitForConditionDecision,
     durable_callable,
     durable_execution,
     step,
@@ -21,15 +20,11 @@ async def handler(event: Any) -> int:
     threshold = int(event)
 
     async def check(state: int | None):
-        next_state = (state or 0) + 1
-        decision = (
-            WaitForConditionDecision.stop_polling()
-            if next_state >= threshold
-            else WaitForConditionDecision.continue_waiting()
-        )
-        return next_state, decision
+        return (state or 0) + 1
 
     result = await wait_for_condition(
-        check, initial_state=0, wait_strategy=lambda _s, _a: 1
+        check,
+        initial_state=0,
+        polling_strategy=lambda state, _attempt: (None if state >= threshold else 1),
     )
     return await step(multiply(result))

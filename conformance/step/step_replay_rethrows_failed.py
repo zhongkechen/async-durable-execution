@@ -3,7 +3,7 @@
 import logging
 from datetime import timedelta
 from async_durable_execution import (
-    RetryPresets,
+    RetryStrategy,
     durable_callable,
     durable_execution,
     step,
@@ -24,7 +24,7 @@ async def failing_with_log() -> str:
 @durable_execution
 async def handler(_event: Any) -> str:
     try:
-        await step(failing_with_log(), retry_strategy=RetryPresets.none())
+        await step(failing_with_log(), retry_strategy=RetryStrategy.none())
     except Exception as e:
         error_msg = str(e)
 

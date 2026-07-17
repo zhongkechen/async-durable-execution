@@ -1,7 +1,7 @@
 """3-5: Child context error caught (try/catch, execution succeeds)."""
 
 from async_durable_execution import (
-    RetryPresets,
+    RetryStrategy,
     durable_callable,
     durable_execution,
     run_in_child_context,
@@ -18,7 +18,7 @@ async def failing_step() -> str:
 
 @durable_callable
 async def failing_child() -> str:
-    return await step(failing_step(), retry_strategy=RetryPresets.none())
+    return await step(failing_step(), retry_strategy=RetryStrategy.none())
 
 
 @durable_callable
