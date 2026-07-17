@@ -11,11 +11,17 @@ failures without running a workflow server.
 [![Read the docs](https://img.shields.io/badge/Read_the_docs-API_reference-0A7BBB)](https://zhongkechen.github.io/async-durable-execution/)
 
 [![Build](https://github.com/zhongkechen/async-durable-execution/actions/workflows/build.yml/badge.svg)](https://github.com/zhongkechen/async-durable-execution/actions/workflows/build.yml)
+[![Conformance](https://github.com/zhongkechen/async-durable-execution/actions/workflows/conformance-tests.yml/badge.svg)](https://github.com/zhongkechen/async-durable-execution/actions/workflows/conformance-tests.yml)
 [![Coverage](https://zhongkechen.github.io/async-durable-execution/coverage/badge.svg)](https://zhongkechen.github.io/async-durable-execution/coverage/)
 [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/zhongkechen/async-durable-execution/badge)](https://scorecard.dev/viewer/?uri=github.com/zhongkechen/async-durable-execution)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
+**Fully compliant with the
+[AWS Durable Execution conformance suite](https://github.com/aws/aws-durable-execution-conformance-tests).**
+Every upstream requirement is continuously validated against deployed Lambda
+functions in CI.
 
 > Community-maintained async fork of the Apache-2.0 licensed
 > [AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/).

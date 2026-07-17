@@ -27,7 +27,7 @@ on:
         description: Python runtime for the Lambda functions
         required: true
         type: choice
-        default: "3.13"
+        default: "3.14"
         options:
           - "3.13"
           - "3.14"
@@ -42,7 +42,7 @@ concurrency:
 
 env:
   AWS_REGION: ${{ inputs['aws-region'] || 'us-east-1' }}
-  PYTHON_VERSION: ${{ inputs['python-version'] || '3.13' }}
+  PYTHON_VERSION: ${{ inputs['python-version'] || '3.14' }}
 
 jobs:
   prepare:
