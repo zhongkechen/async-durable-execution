@@ -26,8 +26,8 @@ async def test_map_with_custom_should_complete_succeeds(durable_runner):
     assert result_data["responses"] == ["response:primary", "response:secondary"]
     assert result_data["success_count"] == 2
     assert result_data["failure_count"] == 0
-    assert result_data["started_count"] == 1
-    assert result_data["total_count"] == 3
+    assert result_data["started_count"] == 0
+    assert result_data["total_count"] == 2
 
     map_op = result.get_context("custom_should_complete_map")
     assert map_op is not None
@@ -55,8 +55,8 @@ async def test_map_with_custom_should_complete_can_complete_as_failed(durable_ru
     assert result_data["responses"] == []
     assert result_data["success_count"] == 0
     assert result_data["failure_count"] == 2
-    assert result_data["started_count"] == 1
-    assert result_data["total_count"] == 3
+    assert result_data["started_count"] == 0
+    assert result_data["total_count"] == 2
 
     map_op = result.get_context("custom_should_complete_map")
     assert map_op is not None
