@@ -21,6 +21,7 @@ from .parallel import (
     BatchResult,
     CompletionConfig,
     NestingType,
+    _validate_max_concurrency,
 )
 from .parallel import parallel_handler
 from ..context import bind_current_context
@@ -215,6 +216,7 @@ def map(
     Raises:
         RuntimeError: If called outside a durable context.
     """
+    _validate_max_concurrency(max_concurrency)
     context = get_durable_context("map")
     items_sequence = list(items)
     map_name = name if name is not None else getattr(func, "__name__", None)

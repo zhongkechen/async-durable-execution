@@ -17,6 +17,7 @@ from ..exceptions import (
     InvalidStateError,
     SuspendExecution,
     TimedSuspendExecution,
+    ValidationError,
 )
 from ..models import (
     ErrorObject,
@@ -379,6 +380,16 @@ class CompletionConfig:
             return CompletionDecision.complete(CompletionReason.ALL_COMPLETED)
 
         return CompletionDecision.continue_execution()
+
+
+def _validate_max_concurrency(max_concurrency: int | None) -> None:
+    if max_concurrency is not None and (
+        isinstance(max_concurrency, bool)
+        or not isinstance(max_concurrency, int)
+        or max_concurrency < 1
+    ):
+        msg = "max_concurrency must be a positive integer or None"
+        raise ValidationError(msg)
 
 
 class BatchItemStatus(Enum):
@@ -923,6 +934,7 @@ class ParallelExecutor(
         self._completion_exception = None
         self._completion_decision = None
         self._running_tasks.clear()
+        next_executable_index = 0
 
         async def submit_task(
             executable_with_state: ExecutableWithState[CallableType, ResultType],
@@ -943,15 +955,31 @@ class ParallelExecutor(
 
             def on_done(done_task: asyncio.Task[ResultType]) -> None:
                 self._running_tasks.discard(done_task)
-                asyncio.create_task(
-                    self._on_task_complete(
-                        executable_with_state,
-                        done_task,
-                        scheduler,
-                    )
+                asyncio.create_task(handle_task_completion(done_task))
+
+            async def handle_task_completion(
+                done_task: asyncio.Task[ResultType],
+            ) -> None:
+                await self._on_task_complete(
+                    executable_with_state,
+                    done_task,
+                    scheduler,
                 )
+                if not self._completion_event.is_set():
+                    await submit_next_task()
 
             task.add_done_callback(on_done)
+
+        async def submit_next_task() -> None:
+            nonlocal next_executable_index
+            if self._completion_event.is_set() or next_executable_index >= len(
+                self.executables_with_state
+            ):
+                return
+
+            executable_with_state = self.executables_with_state[next_executable_index]
+            next_executable_index += 1
+            await submit_task(executable_with_state)
 
         async def resubmitter(
             executable_with_state: ExecutableWithState[CallableType, ResultType],
@@ -960,8 +988,8 @@ class ParallelExecutor(
             await submit_task(executable_with_state)
 
         async with TimerScheduler(resubmitter) as scheduler:
-            for exe_state in self.executables_with_state:
-                await submit_task(exe_state)
+            for _ in range(min(max_workers, len(self.executables_with_state))):
+                await submit_next_task()
 
             await self._completion_event.wait()
 
@@ -1084,14 +1112,15 @@ class ParallelExecutor(
                         )
                     )
                 case (
-                    BranchStatus.PENDING
-                    | BranchStatus.RUNNING
+                    BranchStatus.RUNNING
                     | BranchStatus.SUSPENDED
                     | BranchStatus.SUSPENDED_WITH_TIMEOUT
                 ):
                     batch_items.append(
                         BatchItem(executable.index, BatchItemStatus.STARTED)
                     )
+                case BranchStatus.PENDING:
+                    continue
 
         if (
             self._completion_decision is not None
@@ -1181,7 +1210,7 @@ class ParallelExecutor(
                 )
                 status = BatchItemStatus.FAILED
             else:
-                status = BatchItemStatus.STARTED
+                continue
 
             items.append(
                 BatchItem(executable.index, status, result=result, error=error)
@@ -1297,8 +1326,11 @@ def parallel(
         `BatchItem` per branch.
 
     Raises:
+        ValidationError: If `max_concurrency` is not a positive integer or
+            `None`.
         RuntimeError: If called outside a durable context.
     """
+    _validate_max_concurrency(max_concurrency)
     context = get_durable_context("parallel")
     validated_branches: list[Callable[[], Awaitable[T]]] = []
     for branch in branches:

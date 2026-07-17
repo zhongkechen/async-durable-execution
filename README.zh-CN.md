@@ -2,23 +2,20 @@
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
-**使用原生 `async`/`await` 构建长时间运行的 AWS Lambda 工作流程。**
-自动为状态创建检查点，无需持续计算即可暂停，并在故障后恢复执行，无需运行工作流程服务器。
-
 [![Deploy now](https://img.shields.io/badge/Deploy_now-AWS_SAM-FF9900?logo=amazonwebservices&logoColor=white)](#deploy-now)
 [![Quick start](https://img.shields.io/badge/Quick_start-Python-3776AB?logo=python&logoColor=white)](#quick-start)
 [![Read the docs](https://img.shields.io/badge/Read_the_docs-API_reference-0A7BBB)](https://zhongkechen.github.io/async-durable-execution/)
 
 [![Build](https://github.com/zhongkechen/async-durable-execution/actions/workflows/build.yml/badge.svg)](https://github.com/zhongkechen/async-durable-execution/actions/workflows/build.yml)
+[![Conformance](https://github.com/zhongkechen/async-durable-execution/actions/workflows/conformance-tests.yml/badge.svg)](https://github.com/zhongkechen/async-durable-execution/actions/workflows/conformance-tests.yml)
 [![Coverage](https://zhongkechen.github.io/async-durable-execution/coverage/badge.svg)](https://zhongkechen.github.io/async-durable-execution/coverage/)
 [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/zhongkechen/async-durable-execution/badge)](https://scorecard.dev/viewer/?uri=github.com/zhongkechen/async-durable-execution)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-> 这是采用 Apache-2.0 许可证的
-> [AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/)
-> 的社区维护异步分支。
+**使用原生 `async`/`await` 构建完全符合 AWS Durable Execution 规范且可长时间运行的
+AWS Lambda 工作流程。** 自动为状态创建检查点，无需持续计算即可暂停，并在故障后恢复执行，
+无需运行工作流程服务器。
 
 ```python
 from datetime import timedelta
@@ -88,9 +85,17 @@ sam deploy \
     LambdaEndpoint="https://lambda.${AWS_REGION}.amazonaws.com"
 ```
 
-本仓库是原 Apache-2.0 授权
-[AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/)
-的社区维护分支，并在保留上游声明的同时继续以 Apache License 2.0 发布。
+## 项目状态
+
+**完全符合
+[AWS Durable Execution 一致性测试套件](https://github.com/aws/aws-durable-execution-conformance-tests)。**
+所有上游要求都会在 CI 中针对已部署的 Lambda 函数持续验证。
+
+> 这是采用 Apache-2.0 许可证的
+> [AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/)
+> 的社区维护异步分支。
+
+本项目在保留上游声明的同时继续以 Apache License 2.0 发布。
 
 创建此分支是因为官方 Python SDK 不支持 `async`/`await`，导致它难以与 `asyncio` 库集成。此 SDK 增加了异步持久可调用对象、后台操作任务、直接的 `asyncio` 任务组合，以及面向现代 Python 应用程序设计的 API。
 

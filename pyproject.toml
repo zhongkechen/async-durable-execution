@@ -6,6 +6,9 @@ requires-python = ">=3.10"
 [tool.hatch.version]
 path = "VERSION.py"
 
+[tool.setuptools.packages.find]
+include = ["scripts", "scripts.*"]
+
 [tool.hatch.envs.default]
 workspace.members = [
   "async-durable-execution",
@@ -89,6 +92,15 @@ generate-sam-template = "python scripts/generate_sam_template.py {args}"
 build = "python scripts/build_examples.py"
 build-layer = "python scripts/build_layer.py --sdk-source './async-durable-execution[aioboto]' --output dist/async-durable-execution-layer.zip {args}"
 clean = "rm -rf async-durable-execution-examples/build async-durable-execution-examples/.aws-sam async-durable-execution-examples/*.zip async-durable-execution-examples/template.generated.json dist"
+
+[tool.hatch.envs.conformance]
+workspace.members = [
+  "async-durable-execution",
+]
+
+[tool.hatch.envs.conformance.scripts]
+generate = "python scripts/generate_conformance_sam_templates.py {args}"
+build = "python scripts/build_conformance.py {args}"
 
 [tool.hatch.envs.docs]
 workspace.members = [

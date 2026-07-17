@@ -186,7 +186,7 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
                 mock_child_executor,
             ),
             patch(
-                "async_durable_execution.composite.wait_for_callback.run_in_child_context",
+                "async_durable_execution.composite.wait_for_callback._create_child_context_task",
                 mock_callback_child,
             ),
             patch(
@@ -252,6 +252,10 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
     mock_child_executor.assert_called_once()
     assert mock_child_executor.call_args.args[2].name == "test_child"
     mock_callback_child.assert_awaited_once()
+    assert (
+        mock_callback_child.await_args.kwargs["sub_type"]
+        is OperationSubType.WAIT_FOR_CALLBACK
+    )
     assert mock_callback_child.await_args.kwargs["name"] == "test_wait_for_callback"
     mock_map_child.assert_awaited_once()
     mock_parallel_child.assert_awaited_once()
