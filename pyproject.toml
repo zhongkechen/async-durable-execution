@@ -90,6 +90,15 @@ build = "python scripts/build_examples.py"
 build-layer = "python scripts/build_layer.py --sdk-source './async-durable-execution[aioboto]' --output dist/async-durable-execution-layer.zip {args}"
 clean = "rm -rf async-durable-execution-examples/build async-durable-execution-examples/.aws-sam async-durable-execution-examples/*.zip async-durable-execution-examples/template.generated.json dist"
 
+[tool.hatch.envs.conformance]
+workspace.members = [
+  "async-durable-execution",
+]
+
+[tool.hatch.envs.conformance.scripts]
+generate = "python scripts/generate_conformance_sam_templates.py {args}"
+build = "python scripts/build_conformance.py {args}"
+
 [tool.hatch.envs.docs]
 workspace.members = [
   "async-durable-execution",

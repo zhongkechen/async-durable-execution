@@ -1,0 +1,211 @@
+name: Deploy Conformance Functions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "async-durable-execution/**"
+      - "conformance/**"
+      - "scripts/build_conformance.py"
+      - "scripts/generate_conformance_sam_templates.py"
+      - ".github/workflows/conformance-tests.yml"
+  workflow_dispatch:
+    inputs:
+      aws-region:
+        description: AWS Region for the conformance stacks
+        required: true
+        default: us-east-1
+      python-version:
+        description: Python runtime for the Lambda functions
+        required: true
+        type: choice
+        default: "3.13"
+        options:
+          - "3.13"
+          - "3.14"
+      stack-prefix:
+        description: CloudFormation stack name prefix
+        required: true
+        default: python-conformance
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: conformance-deploy-${{ inputs['aws-region'] || 'us-east-1' }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ inputs['aws-region'] || 'us-east-1' }}
+  PYTHON_VERSION: ${{ inputs['python-version'] || '3.13' }}
+  STACK_PREFIX: ${{ inputs['stack-prefix'] || 'python-conformance' }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Generate SAM templates
+        run: |
+          python scripts/generate_conformance_sam_templates.py \
+            --runtime "python${PYTHON_VERSION}"
+
+      - name: Build Lambda bundle
+        run: python scripts/build_conformance.py
+
+      - name: Upload deployment artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: conformance-deployment
+          path: |
+            conformance/build
+            conformance/generated
+          retention-days: 1
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - step
+          - wait
+          - child
+          - callback
+          - invoke
+          - wait_for_condition
+          - wait_for_callback
+          - parallel
+          - map
+
+    steps:
+      - name: Download deployment artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: conformance-deployment
+          path: conformance
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}
+          role-session-name: pythonConformanceDeployment
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up SAM CLI
+        uses: aws-actions/setup-sam@v3
+
+      - name: Build and deploy ${{ matrix.suite }}
+        env:
+          SUITE: ${{ matrix.suite }}
+        run: |
+          set -euo pipefail
+
+          suite_name="${SUITE//_/-}"
+          stack_name="${STACK_PREFIX}-${suite_name}"
+          stack_name="$(echo "$stack_name" | tr -cd '[:alnum:]-' | cut -c1-128)"
+          build_dir=".aws-sam/${SUITE}"
+
+          sam build \
+            --template-file "conformance/generated/template_${SUITE}.json" \
+            --build-dir "$build_dir"
+
+          sam deploy \
+            --template-file "${build_dir}/template.yaml" \
+            --stack-name "$stack_name" \
+            --resolve-s3 \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --region "$AWS_REGION"
+
+  conformance-tests:
+    name: Conformance tests (${{ matrix.suite }})
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - deploy
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - step
+          - wait
+          - child
+          - callback
+          - invoke
+          - wait_for_condition
+          - wait_for_callback
+          - parallel
+          - map
+
+    steps:
+      - name: Download deployment artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: conformance-deployment
+          path: conformance
+
+      - name: Check out conformance test runner
+        uses: actions/checkout@v7
+        with:
+          repository: aws/aws-durable-execution-conformance-tests
+          path: conformance-tests
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install Hatch
+        run: python -m pip install hatch==1.16.5
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}
+          role-session-name: pythonConformanceTests
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up SAM CLI
+        uses: aws-actions/setup-sam@v3
+
+      - name: Run ${{ matrix.suite }} conformance tests
+        working-directory: conformance-tests
+        env:
+          SUITE: ${{ matrix.suite }}
+        run: |
+          set -euo pipefail
+
+          suite_name="${SUITE//_/-}"
+          results_dir="${GITHUB_WORKSPACE}/conformance-results/${SUITE}"
+          mkdir -p "$results_dir"
+
+          hatch run validate \
+            --template "${GITHUB_WORKSPACE}/conformance/generated/template_${SUITE}.json" \
+            --language python \
+            --region "$AWS_REGION" \
+            --name "python-${suite_name}" \
+            --suite "$SUITE" \
+            --history-dir "$results_dir" \
+            --report console json junit \
+            --report-file "${results_dir}/report" \
+            --fail-on failed+uncovered
+
+      - name: Upload ${{ matrix.suite }} conformance results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: conformance-results-${{ matrix.suite }}
+          path: conformance-results/${{ matrix.suite }}
+          if-no-files-found: warn
+          retention-days: 14

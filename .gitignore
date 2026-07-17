@@ -36,6 +36,7 @@ dist/
 **/*.zip
 async-durable-execution-examples/template.yaml
 **/template.generated.json
+conformance/generated/
 
 .env
 *.egg-info
