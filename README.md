@@ -2,10 +2,6 @@
 
 [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md)
 
-**Build long-running AWS Lambda workflows with native `async`/`await`.**
-Checkpoint state automatically, pause without active compute, and resume after
-failures without running a workflow server.
-
 [![Deploy now](https://img.shields.io/badge/Deploy_now-AWS_SAM-FF9900?logo=amazonwebservices&logoColor=white)](#deploy-now)
 [![Quick start](https://img.shields.io/badge/Quick_start-Python-3776AB?logo=python&logoColor=white)](#quick-start)
 [![Read the docs](https://img.shields.io/badge/Read_the_docs-API_reference-0A7BBB)](https://zhongkechen.github.io/async-durable-execution/)
@@ -17,13 +13,9 @@ failures without running a workflow server.
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-**Fully compliant with the
-[AWS Durable Execution conformance suite](https://github.com/aws/aws-durable-execution-conformance-tests).**
-Every upstream requirement is continuously validated against deployed Lambda
-functions in CI.
-
-> Community-maintained async fork of the Apache-2.0 licensed
-> [AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/).
+**Build fully compliant, long-running AWS Lambda workflows with native
+`async`/`await`.** Checkpoint state automatically, pause without active compute,
+and resume after failures without running a workflow server.
 
 ```python
 from datetime import timedelta
@@ -96,11 +88,18 @@ sam deploy \
     LambdaEndpoint="https://lambda.${AWS_REGION}.amazonaws.com"
 ```
 
-This repository is a community-maintained fork of the original Apache-2.0
-licensed
-[AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/)
-and continues to ship under Apache License 2.0 with the upstream notices
-preserved.
+## Project Status
+
+**Fully compliant with the
+[AWS Durable Execution conformance suite](https://github.com/aws/aws-durable-execution-conformance-tests).**
+Every upstream requirement is continuously validated against deployed Lambda
+functions in CI.
+
+> Community-maintained async fork of the Apache-2.0 licensed
+> [AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/).
+
+This project continues to ship under Apache License 2.0 with the upstream
+notices preserved.
 
 The fork exists because the official Python SDK does not support
 `async`/`await`, making integration with `asyncio` libraries difficult. This SDK

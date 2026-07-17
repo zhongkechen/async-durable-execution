@@ -2,9 +2,6 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-**使用原生 `async`/`await` 建置長時間執行的 AWS Lambda 工作流程。**
-自動為狀態建立檢查點，無需持續運算即可暫停，並在故障後恢復執行，無需執行工作流程伺服器。
-
 [![Deploy now](https://img.shields.io/badge/Deploy_now-AWS_SAM-FF9900?logo=amazonwebservices&logoColor=white)](#deploy-now)
 [![Quick start](https://img.shields.io/badge/Quick_start-Python-3776AB?logo=python&logoColor=white)](#quick-start)
 [![Read the docs](https://img.shields.io/badge/Read_the_docs-API_reference-0A7BBB)](https://zhongkechen.github.io/async-durable-execution/)
@@ -16,13 +13,9 @@
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-**完全符合
-[AWS Durable Execution 一致性測試套件](https://github.com/aws/aws-durable-execution-conformance-tests)。**
-所有上游需求都會在 CI 中針對已部署的 Lambda 函數持續驗證。
-
-> 這是採用 Apache-2.0 授權的
-> [AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/)
-> 之社群維護非同步分支。
+**使用原生 `async`/`await` 建置完全符合 AWS Durable Execution 規範且可長時間執行的
+AWS Lambda 工作流程。** 自動為狀態建立檢查點，無需持續運算即可暫停，並在故障後恢復執行，
+無需執行工作流程伺服器。
 
 ```python
 from datetime import timedelta
@@ -92,9 +85,17 @@ sam deploy \
     LambdaEndpoint="https://lambda.${AWS_REGION}.amazonaws.com"
 ```
 
-本儲存庫是原 Apache-2.0 授權
-[AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/)
-的社群維護分支，並在保留上游聲明的同時繼續以 Apache License 2.0 發布。
+## 專案狀態
+
+**完全符合
+[AWS Durable Execution 一致性測試套件](https://github.com/aws/aws-durable-execution-conformance-tests)。**
+所有上游需求都會在 CI 中針對已部署的 Lambda 函數持續驗證。
+
+> 這是採用 Apache-2.0 授權的
+> [AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/)
+> 之社群維護非同步分支。
+
+本專案在保留上游聲明的同時繼續以 Apache License 2.0 發布。
 
 建立這個分支是因為官方 Python SDK 不支援 `async`/`await`，導致它難以與 `asyncio` 函式庫整合。此 SDK 增加了非同步耐用可呼叫物件、背景操作任務、直接的 `asyncio` 任務組合，以及針對現代 Python 應用程式設計的 API。
 
