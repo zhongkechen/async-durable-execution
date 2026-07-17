@@ -1680,14 +1680,21 @@ async def test_map_with_empty_list_should_exit_early():
     assert result.failure_count == 0
 
 
-def test_map_rejects_non_positive_max_concurrency_before_creating_context():
+@pytest.mark.parametrize("invalid_max_concurrency", [0, -1, True, 1.5])
+def test_map_rejects_invalid_max_concurrency_before_creating_context(
+    invalid_max_concurrency,
+):
     """Invalid concurrency is rejected before a map context is started."""
 
     async def map_func(item):
         return item
 
     with pytest.raises(ValidationError, match="positive integer"):
-        map_operation(map_func, ["unused"], max_concurrency=0)
+        map_operation(
+            map_func,
+            ["unused"],
+            max_concurrency=invalid_max_concurrency,
+        )
 
 
 async def test_map_executor_get_iteration_name_default():

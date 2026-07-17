@@ -1377,14 +1377,17 @@ async def test_concurrent_executor_does_not_start_items_after_early_completion()
     assert result.completion_reason is CompletionReason.FAILURE_TOLERANCE_EXCEEDED
 
 
-def test_parallel_rejects_non_positive_max_concurrency_before_creating_context():
+@pytest.mark.parametrize("invalid_max_concurrency", [0, -1, True, 1.5])
+def test_parallel_rejects_invalid_max_concurrency_before_creating_context(
+    invalid_max_concurrency,
+):
     """Invalid concurrency is rejected before a parallel context is started."""
 
     async def branch():
         return "unused"
 
     with pytest.raises(ValidationError, match="positive integer"):
-        parallel([branch], max_concurrency=0)
+        parallel([branch], max_concurrency=invalid_max_concurrency)
 
 
 async def test_single_task_suspend_bubbles_up():
