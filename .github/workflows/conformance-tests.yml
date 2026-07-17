@@ -1,7 +1,15 @@
-name: Deploy Conformance Functions
+name: Conformance Tests
 
 on:
   push:
+    branches: [main]
+    paths:
+      - "async-durable-execution/**"
+      - "conformance/**"
+      - "scripts/build_conformance.py"
+      - "scripts/generate_conformance_sam_templates.py"
+      - ".github/workflows/conformance-tests.yml"
+  pull_request:
     branches: [main]
     paths:
       - "async-durable-execution/**"
