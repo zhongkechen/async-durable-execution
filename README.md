@@ -39,27 +39,11 @@ async def handler(event: dict) -> dict:
     return {"status": "ready-to-ship", "reservation": reservation}
 ```
 
-Completed steps are checkpointed. If the function stops during the wait, AWS
-Lambda resumes the workflow and replays the saved result instead of reserving
-inventory again.
-
-## How It Works
-
-```mermaid
-flowchart LR
-    A[Lambda event] --> B[Async handler]
-    B --> C[Checkpointed step]
-    C --> D[Wait or callback]
-    D --> E[Resume and replay]
-    E --> F[Next step]
-    C -. save result .-> S[(AWS Lambda durable state)]
-    D -. suspend .-> S
-    S -. restore history .-> E
-```
-
-The SDK keeps application code in familiar Python coroutines while AWS Lambda
-stores durable execution history, schedules resumptions, and returns completed
-step results during replay.
+The SDK keeps the workflow in a familiar Python coroutine while AWS Lambda
+stores its durable execution history. Each completed step is checkpointed, and
+the wait suspends the workflow without active compute until Lambda schedules
+its resumption. When the handler replays, the SDK returns the saved reservation
+instead of calling `reserve_inventory` again, then continues after the wait.
 
 ## Deploy Now
 
