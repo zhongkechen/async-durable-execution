@@ -1,0 +1,941 @@
+"""Declarative acyclic durable workflow composition."""
+
+from __future__ import annotations
+
+import asyncio
+import functools
+import heapq
+import inspect
+from collections.abc import Awaitable, Callable, Mapping
+from contextvars import ContextVar
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Generic, ParamSpec, TypeVar, cast
+
+from ..context import (
+    bind_current_context,
+    bind_durable_definition,
+    ensure_durable_operations_allowed,
+)
+from ..exceptions import (
+    CallableRuntimeError,
+    ExecutionError,
+    FlowDefinitionError,
+    FlowExecutionError,
+    InvalidStateError,
+    InvocationError,
+    SerDesError,
+)
+from ..models import ErrorObject, SerializableModel
+from ..primitive.child import DurableContext, get_durable_context, run_in_child_context
+from ..serdes import ExtendedTypeSerDes, SerDes
+from ..task import create_eager_task
+
+
+T = TypeVar("T")
+Params = ParamSpec("Params")
+
+
+class FlowNodeStatus(Enum):
+    """Logical status of a node in a completed flow."""
+
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    SKIPPED = "SKIPPED"
+
+
+@dataclass(frozen=True)
+class FlowNodeResult(SerializableModel, Generic[T]):
+    """Logical result of one flow node."""
+
+    status: FlowNodeStatus
+    outcome: T | None = field(default=None, metadata={"omit_if_none": False})
+    error: ErrorObject | None = field(default=None, metadata={"omit_if_none": False})
+
+    @classmethod
+    def succeeded(cls, outcome: T) -> FlowNodeResult[T]:
+        return cls(status=FlowNodeStatus.SUCCEEDED, outcome=outcome)
+
+    @classmethod
+    def failed(cls, error: ErrorObject) -> FlowNodeResult[T]:
+        return cls(status=FlowNodeStatus.FAILED, error=error)
+
+    @classmethod
+    def skipped(cls) -> FlowNodeResult[T]:
+        return cls(status=FlowNodeStatus.SKIPPED)
+
+
+@dataclass(frozen=True)
+class FlowResult:
+    """Complete logical result of a flow."""
+
+    results: dict[str, FlowNodeResult[Any]]
+    outputs: tuple[FlowNodeResult[Any], ...] = ()
+    unhandled_failures: tuple[str, ...] = ()
+
+    @property
+    def output(
+        self,
+    ) -> FlowNodeResult[Any] | tuple[FlowNodeResult[Any], ...] | None:
+        """Return selected output while preserving the definition's arity."""
+        if not self.outputs:
+            return None
+        if len(self.outputs) == 1:
+            return self.outputs[0]
+        return self.outputs
+
+    @property
+    def has_unhandled_failures(self) -> bool:
+        return bool(self.unhandled_failures)
+
+    def get_result(self, name: str) -> FlowNodeResult[Any]:
+        """Return a node result by its declared name."""
+        try:
+            return self.results[name]
+        except KeyError:
+            msg = f"Flow has no node named {name!r}."
+            raise KeyError(msg) from None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert the flow result to a serialization-friendly mapping."""
+        return {
+            "results": {
+                name: node_result.to_dict()
+                for name, node_result in self.results.items()
+            },
+            "outputs": [output.to_dict() for output in self.outputs],
+            "unhandledFailures": list(self.unhandled_failures),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> FlowResult:
+        return cls(
+            results={
+                str(name): FlowNodeResult.from_dict(node_result)
+                for name, node_result in data["results"].items()
+            },
+            outputs=tuple(
+                FlowNodeResult.from_dict(output) for output in data.get("outputs", ())
+            ),
+            unhandled_failures=tuple(
+                str(name) for name in data.get("unhandledFailures", ())
+            ),
+        )
+
+
+class _DependencyCondition(Enum):
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    COMPLETED = "COMPLETED"
+
+    def matches(self, status: FlowNodeStatus) -> bool:
+        if self is _DependencyCondition.COMPLETED:
+            return True
+        if self is _DependencyCondition.SUCCEEDED:
+            return status is FlowNodeStatus.SUCCEEDED
+        return status is FlowNodeStatus.FAILED
+
+
+class _DependencyMode(Enum):
+    ALL = "ALL"
+    ANY = "ANY"
+
+
+class _EvaluationStatus(Enum):
+    PENDING = "PENDING"
+    MATCHED = "MATCHED"
+    UNMATCHED = "UNMATCHED"
+
+
+@dataclass(frozen=True)
+class _Evaluation:
+    status: _EvaluationStatus
+    handled_failures: tuple[FlowNode[Any], ...] = ()
+
+
+class _DependencyExpression:
+    """Internal immutable dependency expression."""
+
+    builder: _FlowBuilder
+
+    def leaves(self) -> tuple[_DependencyLeaf, ...]:
+        raise NotImplementedError  # pragma: no cover
+
+    def evaluate(
+        self,
+        results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
+        any_winners: dict[int, int] | None = None,
+    ) -> _Evaluation:
+        raise NotImplementedError  # pragma: no cover
+
+    def __and__(
+        self, other: FlowNode[Any] | _DependencyExpression
+    ) -> _DependencyExpression:
+        return self._combine(other, _DependencyMode.ALL)
+
+    def __or__(
+        self, other: FlowNode[Any] | _DependencyExpression
+    ) -> _DependencyExpression:
+        return self._combine(other, _DependencyMode.ANY)
+
+    def _combine(
+        self,
+        other: FlowNode[Any] | _DependencyExpression,
+        mode: _DependencyMode,
+    ) -> _DependencyExpression:
+        _require_active_builder(self.builder)
+        other_expression = _coerce_expression(other)
+        if other_expression.builder is not self.builder:
+            msg = "Dependency expressions from different flow definitions cannot be mixed."
+            raise InvalidStateError(msg)
+
+        children: list[_DependencyExpression] = []
+        for expression in (self, other_expression):
+            if (
+                isinstance(expression, _CompositeDependencyExpression)
+                and expression.mode is mode
+            ):
+                children.extend(expression.children)
+            else:
+                children.append(expression)
+        return _CompositeDependencyExpression(
+            builder=self.builder,
+            mode=mode,
+            children=tuple(children),
+        )
+
+    def __rshift__(
+        self, target: FlowNode[Any] | tuple[FlowNode[Any], ...]
+    ) -> FlowNode[Any] | tuple[FlowNode[Any], ...]:
+        _require_active_builder(self.builder)
+        targets = target if isinstance(target, tuple) else (target,)
+        if not targets:
+            msg = "A dependency expression must target at least one node."
+            raise FlowDefinitionError(msg)
+
+        for flow_node in targets:
+            if not isinstance(flow_node, FlowNode):
+                msg = "Dependency targets must be FlowNode instances."
+                raise FlowDefinitionError(msg)
+            if flow_node._builder is not self.builder:
+                msg = "Nodes from different flow definitions cannot be mixed."
+                raise InvalidStateError(msg)
+            self.builder.add_dependency(flow_node, self)
+        return target
+
+
+@dataclass(frozen=True)
+class _DependencyLeaf(_DependencyExpression):
+    builder: _FlowBuilder
+    node: FlowNode[Any]
+    condition: _DependencyCondition
+
+    def leaves(self) -> tuple[_DependencyLeaf, ...]:
+        return (self,)
+
+    def evaluate(
+        self,
+        results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
+        any_winners: dict[int, int] | None = None,
+    ) -> _Evaluation:
+        node_result = results.get(self.node)
+        if node_result is None:
+            return _Evaluation(_EvaluationStatus.PENDING)
+        if not self.condition.matches(node_result.status):
+            return _Evaluation(_EvaluationStatus.UNMATCHED)
+
+        handled = (
+            (self.node,)
+            if self.condition is _DependencyCondition.FAILED
+            and node_result.status is FlowNodeStatus.FAILED
+            else ()
+        )
+        return _Evaluation(_EvaluationStatus.MATCHED, handled)
+
+
+@dataclass(frozen=True)
+class _CompositeDependencyExpression(_DependencyExpression):
+    builder: _FlowBuilder
+    mode: _DependencyMode
+    children: tuple[_DependencyExpression, ...]
+
+    def leaves(self) -> tuple[_DependencyLeaf, ...]:
+        return tuple(leaf for child in self.children for leaf in child.leaves())
+
+    def evaluate(
+        self,
+        results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
+        any_winners: dict[int, int] | None = None,
+    ) -> _Evaluation:
+        if any_winners is None:
+            any_winners = {}
+        if self.mode is _DependencyMode.ANY and id(self) in any_winners:
+            winner = any_winners[id(self)]
+            return self.children[winner].evaluate(results, any_winners)
+
+        evaluations = [child.evaluate(results, any_winners) for child in self.children]
+        if self.mode is _DependencyMode.ALL:
+            if any(
+                evaluation.status is _EvaluationStatus.PENDING
+                for evaluation in evaluations
+            ):
+                return _Evaluation(_EvaluationStatus.PENDING)
+            if any(
+                evaluation.status is _EvaluationStatus.UNMATCHED
+                for evaluation in evaluations
+            ):
+                return _Evaluation(_EvaluationStatus.UNMATCHED)
+            return _Evaluation(
+                _EvaluationStatus.MATCHED,
+                tuple(
+                    node
+                    for evaluation in evaluations
+                    for node in evaluation.handled_failures
+                ),
+            )
+
+        for index, evaluation in enumerate(evaluations):
+            if evaluation.status is _EvaluationStatus.MATCHED:
+                any_winners[id(self)] = index
+                return evaluation
+        if any(
+            evaluation.status is _EvaluationStatus.PENDING for evaluation in evaluations
+        ):
+            return _Evaluation(_EvaluationStatus.PENDING)
+        return _Evaluation(_EvaluationStatus.UNMATCHED)
+
+
+class FlowNode(Generic[T]):
+    """Typed handle for a node declared inside a durable DAG definition."""
+
+    def __init__(
+        self,
+        builder: _FlowBuilder,
+        index: int,
+        func: Callable[[FlowNodeContext], Awaitable[T]],
+        name: str,
+    ) -> None:
+        self._builder = builder
+        self._index = index
+        self._func = func
+        self.name = name
+        self._dependency: _DependencyExpression | None = None
+
+    def __repr__(self) -> str:
+        return f"FlowNode(name={self.name!r})"
+
+    @property
+    def succeeded(self) -> _DependencyExpression:
+        return _DependencyLeaf(self._builder, self, _DependencyCondition.SUCCEEDED)
+
+    @property
+    def failed(self) -> _DependencyExpression:
+        return _DependencyLeaf(self._builder, self, _DependencyCondition.FAILED)
+
+    @property
+    def completed(self) -> _DependencyExpression:
+        return _DependencyLeaf(self._builder, self, _DependencyCondition.COMPLETED)
+
+    def __and__(
+        self, other: FlowNode[Any] | _DependencyExpression
+    ) -> _DependencyExpression:
+        return self.succeeded & other
+
+    def __or__(
+        self, other: FlowNode[Any] | _DependencyExpression
+    ) -> _DependencyExpression:
+        return self.succeeded | other
+
+    def __rshift__(
+        self, target: FlowNode[Any] | tuple[FlowNode[Any], ...]
+    ) -> FlowNode[Any] | tuple[FlowNode[Any], ...]:
+        return self.succeeded >> target
+
+
+@dataclass(frozen=True)
+class FlowNodeContext(DurableContext):
+    """Durable context available while an eligible flow node executes."""
+
+    _direct_dependencies: frozenset[FlowNode[Any]] = field(default_factory=frozenset)
+    _dependency_results: Mapping[FlowNode[Any], FlowNodeResult[Any]] = field(
+        default_factory=dict
+    )
+
+    def result(self, dependency: FlowNode[T]) -> FlowNodeResult[T]:
+        """Return the settled result of a declared direct dependency."""
+        if dependency not in self._direct_dependencies:
+            msg = (
+                f"Node {dependency.name!r} is not a direct dependency of the "
+                "current flow node."
+            )
+            raise InvalidStateError(msg)
+        if dependency not in self._dependency_results:
+            msg = (
+                f"Result for dependency {dependency.name!r} is not available. "
+                "An ANY dependency may start before its other branches settle."
+            )
+            raise InvalidStateError(msg)
+        return cast("FlowNodeResult[T]", self._dependency_results[dependency])
+
+
+@dataclass(frozen=True)
+class _FrozenFlow:
+    nodes: tuple[FlowNode[Any], ...]
+    topological_nodes: tuple[FlowNode[Any], ...]
+    outputs: tuple[FlowNode[Any], ...]
+
+
+class _FlowBuilder:
+    def __init__(self) -> None:
+        self.nodes: list[FlowNode[Any]] = []
+        self.frozen = False
+
+    def add_node(
+        self,
+        func: Callable[[FlowNodeContext], Awaitable[T]],
+        name: str,
+    ) -> FlowNode[T]:
+        if self.frozen:
+            msg = "Cannot add nodes after a flow definition has been frozen."
+            raise InvalidStateError(msg)
+        flow_node = FlowNode(self, len(self.nodes), func, name)
+        self.nodes.append(flow_node)
+        return flow_node
+
+    def add_dependency(
+        self, target: FlowNode[Any], expression: _DependencyExpression
+    ) -> None:
+        if self.frozen:
+            msg = "Cannot add dependencies after a flow definition has been frozen."
+            raise InvalidStateError(msg)
+        if target._dependency is not None:
+            msg = (
+                f"Node {target.name!r} already has a dependency expression. "
+                "Use an explicit '&' or '|' expression for multiple dependencies."
+            )
+            raise FlowDefinitionError(msg)
+        target._dependency = expression
+
+    def freeze(self, output: Any) -> _FrozenFlow:
+        self.frozen = True
+        outputs = self._validate_outputs(output)
+        self._validate_nodes()
+        topological_nodes = self._topological_sort()
+        return _FrozenFlow(
+            nodes=tuple(self.nodes),
+            topological_nodes=topological_nodes,
+            outputs=outputs,
+        )
+
+    def _validate_outputs(self, output: Any) -> tuple[FlowNode[Any], ...]:
+        if output is None:
+            return ()
+        outputs = output if isinstance(output, tuple) else (output,)
+        for flow_node in outputs:
+            if not isinstance(flow_node, FlowNode):
+                msg = (
+                    "A durable DAG definition must return a FlowNode, a tuple of "
+                    "FlowNode instances, or None."
+                )
+                raise FlowDefinitionError(msg)
+            if flow_node._builder is not self or flow_node not in self.nodes:
+                msg = "Flow outputs must be nodes from the current definition."
+                raise InvalidStateError(msg)
+        return outputs
+
+    def _validate_nodes(self) -> None:
+        names: set[str] = set()
+        known_nodes = set(self.nodes)
+        for flow_node in self.nodes:
+            if not isinstance(flow_node.name, str) or not flow_node.name.strip():
+                msg = "Flow node names must be non-empty strings."
+                raise FlowDefinitionError(msg)
+            if flow_node.name in names:
+                msg = f"Flow node name {flow_node.name!r} is duplicated."
+                raise FlowDefinitionError(msg)
+            names.add(flow_node.name)
+            if not callable(flow_node._func):
+                msg = f"Flow node {flow_node.name!r} must have a callable body."
+                raise FlowDefinitionError(msg)
+
+            dependency = flow_node._dependency
+            if dependency is None:
+                continue
+            if dependency.builder is not self:
+                msg = "Dependency expressions must belong to the current definition."
+                raise InvalidStateError(msg)
+
+            dependencies: set[FlowNode[Any]] = set()
+            for leaf in dependency.leaves():
+                if leaf.builder is not self or leaf.node not in known_nodes:
+                    msg = f"Node {flow_node.name!r} references an unknown dependency."
+                    raise FlowDefinitionError(msg)
+                if leaf.node is flow_node:
+                    msg = f"Flow node {flow_node.name!r} cannot depend on itself."
+                    raise FlowDefinitionError(msg)
+                if leaf.node in dependencies:
+                    msg = (
+                        f"Node {flow_node.name!r} contains duplicate dependency "
+                        f"{leaf.node.name!r}."
+                    )
+                    raise FlowDefinitionError(msg)
+                dependencies.add(leaf.node)
+
+    def _topological_sort(self) -> tuple[FlowNode[Any], ...]:
+        adjacency: dict[FlowNode[Any], list[FlowNode[Any]]] = {
+            flow_node: [] for flow_node in self.nodes
+        }
+        indegree = {flow_node: 0 for flow_node in self.nodes}
+        for target in self.nodes:
+            if target._dependency is None:
+                continue
+            for leaf in target._dependency.leaves():
+                adjacency[leaf.node].append(target)
+                indegree[target] += 1
+
+        for targets in adjacency.values():
+            targets.sort(key=lambda flow_node: flow_node._index)
+
+        ready = [
+            flow_node._index for flow_node in self.nodes if indegree[flow_node] == 0
+        ]
+        heapq.heapify(ready)
+        ordered: list[FlowNode[Any]] = []
+        while ready:
+            index = heapq.heappop(ready)
+            flow_node = self.nodes[index]
+            ordered.append(flow_node)
+            for target in adjacency[flow_node]:
+                indegree[target] -= 1
+                if indegree[target] == 0:
+                    heapq.heappush(ready, target._index)
+
+        if len(ordered) != len(self.nodes):
+            remaining = {
+                flow_node for flow_node in self.nodes if indegree[flow_node] > 0
+            }
+            cycle = self._find_cycle(adjacency, remaining)
+            cycle_path = " -> ".join(flow_node.name for flow_node in cycle)
+            msg = f"Flow contains a cycle: {cycle_path}."
+            raise FlowDefinitionError(msg)
+        return tuple(ordered)
+
+    def _find_cycle(
+        self,
+        adjacency: Mapping[FlowNode[Any], list[FlowNode[Any]]],
+        remaining: set[FlowNode[Any]],
+    ) -> tuple[FlowNode[Any], ...]:
+        state: dict[FlowNode[Any], int] = {}
+        stack: list[FlowNode[Any]] = []
+        stack_positions: dict[FlowNode[Any], int] = {}
+
+        def visit(flow_node: FlowNode[Any]) -> tuple[FlowNode[Any], ...] | None:
+            state[flow_node] = 1
+            stack_positions[flow_node] = len(stack)
+            stack.append(flow_node)
+            for target in adjacency[flow_node]:
+                if target not in remaining:
+                    continue
+                if state.get(target, 0) == 0:
+                    cycle = visit(target)
+                    if cycle is not None:
+                        return cycle
+                elif state[target] == 1:
+                    start = stack_positions[target]
+                    return tuple((*stack[start:], target))
+            stack.pop()
+            stack_positions.pop(flow_node)
+            state[flow_node] = 2
+            return None
+
+        for flow_node in self.nodes:
+            if flow_node in remaining and state.get(flow_node, 0) == 0:
+                cycle = visit(flow_node)
+                if cycle is not None:
+                    return cycle
+
+        msg = "Flow cycle detection failed to identify a concrete cycle."
+        raise FlowDefinitionError(msg)
+
+
+_current_flow_builder: ContextVar[_FlowBuilder | None] = ContextVar(
+    "async_durable_execution.current_flow_builder",
+    default=None,
+)
+
+
+def _require_active_builder(builder: _FlowBuilder) -> None:
+    if _current_flow_builder.get() is not builder or builder.frozen:
+        msg = "Flow nodes and dependency expressions may only be used in their definition."
+        raise InvalidStateError(msg)
+
+
+def _coerce_expression(
+    value: FlowNode[Any] | _DependencyExpression,
+) -> _DependencyExpression:
+    if isinstance(value, FlowNode):
+        return value.succeeded
+    if isinstance(value, _DependencyExpression):
+        return value
+    msg = "Dependencies must be FlowNode handles or dependency expressions."
+    raise FlowDefinitionError(msg)
+
+
+def node(
+    func: Callable[[FlowNodeContext], Awaitable[T]],
+    *,
+    name: str,
+) -> FlowNode[T]:
+    """Declare a node in the currently evaluating durable DAG."""
+    builder = _current_flow_builder.get()
+    if builder is None or builder.frozen:
+        msg = "node() can only be used while a @durable_dag definition is evaluating."
+        raise InvalidStateError(msg)
+    return builder.add_node(func, name)
+
+
+def durable_dag(
+    func: Callable[Params, Any],
+) -> Callable[Params, Callable[[], Any]]:
+    """Bind arguments to a synchronous declarative flow definition."""
+    if isinstance(func, classmethod):
+        return classmethod(durable_dag(func.__func__))
+    if isinstance(func, staticmethod):
+        return staticmethod(durable_dag(func.__func__))
+    if inspect.iscoroutinefunction(func):
+        msg = "@durable_dag can only decorate a synchronous definition function."
+        raise FlowDefinitionError(msg)
+
+    @functools.wraps(func)
+    def wrapper(*args: Params.args, **kwargs: Params.kwargs) -> Callable[[], Any]:
+        bound = functools.partial(func, *args, **kwargs)
+        setattr(bound, "__name__", func.__name__)
+        setattr(bound, "_durable_dag_definition", True)
+        return bound
+
+    setattr(wrapper, "_durable_dag", True)
+    return wrapper
+
+
+@dataclass(frozen=True)
+class _NodeExecution:
+    result: FlowNodeResult[Any]
+    handled_failures: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "result": self.result.to_dict(),
+            "handledFailures": list(self.handled_failures),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> _NodeExecution:
+        return cls(
+            result=FlowNodeResult.from_dict(data["result"]),
+            handled_failures=tuple(
+                str(name) for name in data.get("handledFailures", ())
+            ),
+        )
+
+
+class _NodeExecutionSerDes(SerDes[_NodeExecution]):
+    def __init__(self) -> None:
+        self.delegate: ExtendedTypeSerDes[Any] = ExtendedTypeSerDes()
+
+    async def serialize(self, value: _NodeExecution) -> str:
+        return await self.delegate.serialize(value.to_dict())
+
+    async def deserialize(self, data: str) -> _NodeExecution:
+        decoded = await self.delegate.deserialize(data)
+        if not isinstance(decoded, Mapping):
+            msg = "Serialized flow node result must be a mapping."
+            raise SerDesError(msg)
+        return _NodeExecution.from_dict(decoded)
+
+
+class _FlowResultSerDes(SerDes[FlowResult]):
+    def __init__(self) -> None:
+        self.delegate: ExtendedTypeSerDes[Any] = ExtendedTypeSerDes()
+
+    async def serialize(self, value: FlowResult) -> str:
+        return await self.delegate.serialize(value.to_dict())
+
+    async def deserialize(self, data: str) -> FlowResult:
+        decoded = await self.delegate.deserialize(data)
+        if not isinstance(decoded, Mapping):
+            msg = "Serialized flow result must be a mapping."
+            raise SerDesError(msg)
+        return FlowResult.from_dict(decoded)
+
+
+_NODE_EXECUTION_SERDES = _NodeExecutionSerDes()
+_FLOW_RESULT_SERDES = _FlowResultSerDes()
+
+
+class _FlowControlSignal(BaseException):
+    """Carry SDK control failures through child executors without checkpointing."""
+
+    def __init__(self, error: Exception):
+        super().__init__(str(error))
+        self.error = error
+
+
+@dataclass(frozen=True)
+class _DependencyResolution:
+    matched: bool
+    results: Mapping[FlowNode[Any], FlowNodeResult[Any]]
+    handled_failures: tuple[FlowNode[Any], ...] = ()
+
+
+def _callable_error_object(error: Exception) -> ErrorObject:
+    if isinstance(error, CallableRuntimeError):
+        return ErrorObject(
+            message=error.message,
+            type=error.error_type,
+            data=error.data,
+            stack_trace=error.stack_trace,
+        )
+    return ErrorObject.from_exception(error)
+
+
+def _find_control_error(error: Exception) -> Exception | None:
+    current: BaseException | None = error
+    seen: set[int] = set()
+    while isinstance(current, Exception) and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, (ExecutionError, InvocationError, SerDesError)):
+            return current
+        if isinstance(current, CallableRuntimeError):
+            error_type = current.error_type or ""
+            message = current.message or str(current)
+            if error_type in {
+                "BotoClientError",
+                "CheckpointError",
+                "GetExecutionStateError",
+                "InvocationError",
+                "StepInterruptedError",
+            }:
+                return InvocationError(message)
+            if error_type in {
+                "CallbackError",
+                "ExecutionError",
+                "NonDeterministicExecutionError",
+                "SerDesError",
+            }:
+                return ExecutionError(message)
+        current = current.__cause__ or current.__context__
+    return None
+
+
+async def _resolve_dependencies(
+    expression: _DependencyExpression,
+    tasks: Mapping[FlowNode[Any], asyncio.Task[_NodeExecution]],
+) -> _DependencyResolution:
+    dependencies = expression.leaves()
+    pending = {leaf.node for leaf in dependencies}
+    settled: dict[FlowNode[Any], FlowNodeResult[Any]] = {}
+    any_winners: dict[int, int] = {}
+
+    while pending:
+        await asyncio.wait(
+            [tasks[flow_node] for flow_node in pending],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for leaf in dependencies:
+            flow_node = leaf.node
+            if flow_node not in pending or not tasks[flow_node].done():
+                continue
+            try:
+                execution = tasks[flow_node].result()
+            except _FlowControlSignal:
+                raise
+            except Exception as error:
+                control_error = _find_control_error(error)
+                if control_error is not None:
+                    raise _FlowControlSignal(control_error) from error
+                raise
+
+            pending.remove(flow_node)
+            settled[flow_node] = execution.result
+            evaluation = expression.evaluate(settled, any_winners)
+            if evaluation.status is _EvaluationStatus.MATCHED:
+                return _DependencyResolution(
+                    matched=True,
+                    results=dict(settled),
+                    handled_failures=evaluation.handled_failures,
+                )
+            if evaluation.status is _EvaluationStatus.UNMATCHED:
+                return _DependencyResolution(
+                    matched=False,
+                    results=dict(settled),
+                )
+
+    # A validated expression is terminal once every leaf has settled.
+    raise AssertionError("Dependency expression remained pending")  # pragma: no cover
+
+
+def _flow_node_context(
+    context: DurableContext,
+    direct_dependencies: frozenset[FlowNode[Any]],
+    dependency_results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
+) -> FlowNodeContext:
+    flow_context = FlowNodeContext(
+        execution_state=context.execution_state,
+        operation_identifier=context.operation_identifier,
+        step_id_prefix=context.step_id_prefix,
+        replaying=context.is_replaying(),
+        _direct_dependencies=direct_dependencies,
+        _dependency_results=dependency_results,
+    )
+    if "step_counter" in context.__dict__:
+        flow_context.__dict__["step_counter"] = context.__dict__["step_counter"]
+    return flow_context
+
+
+async def _execute_node(
+    flow_node: FlowNode[Any],
+    tasks: Mapping[FlowNode[Any], asyncio.Task[_NodeExecution]],
+) -> _NodeExecution:
+    expression = flow_node._dependency
+    if expression is None:
+        resolution = _DependencyResolution(matched=True, results={})
+        direct_dependencies: frozenset[FlowNode[Any]] = frozenset()
+    else:
+        resolution = await _resolve_dependencies(expression, tasks)
+        direct_dependencies = frozenset(leaf.node for leaf in expression.leaves())
+
+    handled_failures = tuple(
+        dependency.name for dependency in resolution.handled_failures
+    )
+    if not resolution.matched:
+        return _NodeExecution(
+            result=FlowNodeResult.skipped(),
+            handled_failures=handled_failures,
+        )
+
+    context = get_durable_context("flow node")
+    flow_context = _flow_node_context(
+        context,
+        direct_dependencies,
+        resolution.results,
+    )
+    try:
+        with bind_current_context(flow_context):
+            outcome = await flow_node._func(flow_context)
+        return _NodeExecution(
+            result=FlowNodeResult.succeeded(outcome),
+            handled_failures=handled_failures,
+        )
+    except Exception as error:
+        control_error = _find_control_error(error)
+        if control_error is not None:
+            raise _FlowControlSignal(control_error) from error
+        return _NodeExecution(
+            result=FlowNodeResult.failed(_callable_error_object(error)),
+            handled_failures=handled_failures,
+        )
+
+
+async def _execute_flow(frozen_flow: _FrozenFlow) -> FlowResult:
+    tasks: dict[FlowNode[Any], asyncio.Task[_NodeExecution]] = {}
+    for flow_node in frozen_flow.topological_nodes:
+
+        async def run_node(current_node: FlowNode[Any] = flow_node) -> _NodeExecution:
+            return await _execute_node(current_node, tasks)
+
+        tasks[flow_node] = run_in_child_context(
+            run_node,
+            name=flow_node.name,
+            serdes=_NODE_EXECUTION_SERDES,
+        )
+
+    values = await asyncio.gather(*tasks.values(), return_exceptions=True)
+    executions: dict[FlowNode[Any], _NodeExecution] = {}
+    for flow_node, value in zip(frozen_flow.topological_nodes, values, strict=True):
+        if isinstance(value, _FlowControlSignal):
+            raise value
+        if isinstance(value, BaseException):
+            if isinstance(value, Exception):
+                control_error = _find_control_error(value)
+                if control_error is not None:
+                    raise _FlowControlSignal(control_error) from value
+                raise _FlowControlSignal(value) from value
+            raise value
+        executions[flow_node] = value
+
+    results = {
+        flow_node.name: executions[flow_node].result for flow_node in frozen_flow.nodes
+    }
+    handled_failures = {
+        name for execution in executions.values() for name in execution.handled_failures
+    }
+    unhandled_failures = tuple(
+        flow_node.name
+        for flow_node in frozen_flow.nodes
+        if executions[flow_node].result.status is FlowNodeStatus.FAILED
+        and flow_node.name not in handled_failures
+    )
+    return FlowResult(
+        results=results,
+        outputs=tuple(
+            executions[flow_node].result for flow_node in frozen_flow.outputs
+        ),
+        unhandled_failures=unhandled_failures,
+    )
+
+
+def _evaluate_definition(definition: Callable[[], Any]) -> _FrozenFlow:
+    if not getattr(definition, "_durable_dag_definition", False):
+        msg = "flow() requires a bound callable produced by @durable_dag."
+        raise FlowDefinitionError(msg)
+
+    builder = _FlowBuilder()
+    token = _current_flow_builder.set(builder)
+    try:
+        with bind_durable_definition("flow"):
+            output = definition()
+    finally:
+        _current_flow_builder.reset(token)
+
+    if inspect.isawaitable(output):
+        if inspect.iscoroutine(output):
+            output.close()
+        msg = "A durable DAG definition must execute synchronously."
+        raise FlowDefinitionError(msg)
+    return builder.freeze(output)
+
+
+def flow(
+    definition: Callable[[], Any],
+    *,
+    name: str | None = None,
+) -> asyncio.Task[FlowResult]:
+    """Validate and start a declarative acyclic durable workflow."""
+    ensure_durable_operations_allowed("flow")
+    get_durable_context("flow")
+    frozen_flow = _evaluate_definition(definition)
+    flow_name = name or getattr(definition, "__name__", None) or "flow"
+    child_task = run_in_child_context(
+        functools.partial(_execute_flow, frozen_flow),
+        name=flow_name,
+        serdes=_FLOW_RESULT_SERDES,
+    )
+
+    async def finish_flow() -> FlowResult:
+        try:
+            result = await child_task
+        except _FlowControlSignal as signal:
+            raise signal.error
+        except Exception as error:
+            control_error = _find_control_error(error)
+            if control_error is not None:
+                raise control_error from error
+            raise
+
+        if result.has_unhandled_failures:
+            failures = ", ".join(result.unhandled_failures)
+            msg = f"Flow has unhandled node failures: {failures}."
+            raise FlowExecutionError(msg, result)
+        return result
+
+    return create_eager_task(finish_flow)

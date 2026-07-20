@@ -48,6 +48,86 @@ a performance and ordering optimization only; the durable operation contract is 
 that the helper returns an `asyncio.Task` that can run in the background and be awaited
 later.
 
+## Static DAG Workflows
+
+Use `@durable_dag`, `node()`, and `flow()` to define a static acyclic workflow with
+declarative dependencies. The decorated definition is synchronous: calling it binds
+its arguments without running the body, and `flow()` evaluates and validates the
+complete graph before creating its durable child context.
+
+```python
+from async_durable_execution import (
+    FlowNodeContext,
+    durable_callable,
+    durable_dag,
+    flow,
+    node,
+    step,
+)
+
+
+@durable_callable
+async def fetch_order(order_id: str) -> dict:
+    return {"id": order_id, "status": "ready"}
+
+
+@durable_callable
+async def charge_order(order: dict) -> dict:
+    return {"order": order, "charged": True}
+
+
+@durable_dag
+def order_flow(order_id: str):
+    async def fetch(context: FlowNodeContext) -> dict:
+        return await step(fetch_order(order_id), name="fetch-order")
+
+    async def charge(context: FlowNodeContext) -> dict:
+        order = context.result(fetch_node).outcome
+        return await step(charge_order(order), name="charge-order")
+
+    fetch_node = node(fetch, name="fetch")
+    charge_node = node(charge, name="charge")
+    fetch_node >> charge_node
+    return charge_node
+
+
+result = await flow(order_flow("order-123"), name="process-order")
+charge_result = result.output
+```
+
+Definition code must be deterministic and cannot start `step()`, `wait()`, `invoke()`,
+another `flow()`, or any other durable operation. Node bodies run only after validation
+inside their own durable child contexts, where they can use all normal durable
+operations.
+
+Dependency operators build the graph:
+
+- `a >> b` and `a.succeeded >> b` run `b` after `a` succeeds.
+- `a.failed >> b` runs `b` after `a` fails.
+- `a.completed >> b` runs `b` after any logical terminal status.
+- `(a & b) >> c` requires every dependency to match.
+- `(a | b) >> c` starts after the first matching dependency.
+- `a >> (b, c)` fans out to both targets.
+
+Use parentheses around `&` and `|` expressions. Each target accepts one dependency
+expression, so combine multiple dependencies explicitly instead of assigning them in
+separate statements.
+
+`FlowResult.results` contains every node result keyed by node name. `outputs` contains
+the nodes selected by the definition return value, while `output` is a convenience
+property that preserves zero, one, or multiple output arity. A `FlowNodeResult`
+preserves its `SUCCEEDED`, `FAILED`, or `SKIPPED` status together with its outcome and
+captured error.
+
+A matching `.failed` route handles its source failure. After all runnable nodes settle,
+`flow()` raises `FlowExecutionError` if failures remain unhandled; the exception's
+`result` field contains the complete checkpointed `FlowResult`. `.completed` observes
+a failure but does not handle it.
+
+Flows must remain structurally acyclic. Loops and repeated node activation are not
+supported because every iteration would extend durable checkpoint history and replay
+cost.
+
 ## Batch Completion Conditions
 
 `map()` and `parallel()` both accept `completion_config` to decide when a batch-style

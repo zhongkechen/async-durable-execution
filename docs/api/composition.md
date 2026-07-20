@@ -6,6 +6,16 @@ groups of durable work.
 ::: async_durable_execution
     options:
       members:
+        - durable_dag
+        - flow
+        - node
+        - FlowNode
+        - FlowNodeContext
+        - FlowNodeResult
+        - FlowNodeStatus
+        - FlowResult
+        - FlowDefinitionError
+        - FlowExecutionError
         - map
         - parallel
         - BatchResult

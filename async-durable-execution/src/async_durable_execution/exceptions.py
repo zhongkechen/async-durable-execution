@@ -244,6 +244,18 @@ class ValidationError(DurableExecutionsError):
     """Incorrect arguments to a Durable Function operation."""
 
 
+class FlowDefinitionError(ValidationError):
+    """Raised when a declarative flow definition is invalid."""
+
+
+class FlowExecutionError(DurableExecutionsError):
+    """Raised after a flow checkpoints a result with unhandled node failures."""
+
+    def __init__(self, message: str, result: Any):
+        super().__init__(message)
+        self.result = result
+
+
 class GetExecutionStateError(BotoClientError):
     """Raised when failing to retrieve execution state"""
 
