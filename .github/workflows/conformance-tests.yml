@@ -43,7 +43,6 @@ concurrency:
 env:
   AWS_REGION: ${{ inputs['aws-region'] || 'us-east-1' }}
   PYTHON_VERSION: ${{ inputs['python-version'] || '3.14' }}
-  CONFORMANCE_NAME_PREFIX: python-monorepo
 
 jobs:
   prepare:
@@ -99,20 +98,13 @@ jobs:
           name: conformance-deployment
           path: conformance
 
-      - name: Check out conformance test runner
-        uses: actions/checkout@v7.0.1
-        with:
-          repository: aws/aws-durable-execution-conformance-tests
-          ref: codex/issue-8-monorepo
-          path: conformance-tests
-
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
           python-version: "3.14"
 
-      - name: Install Hatch
-        run: python -m pip install hatch==1.16.5
+      - name: Install conformance test runner
+        run: python -m pip install aws-durable-execution-conformance-tests==0.1.0
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -131,7 +123,7 @@ jobs:
           set -euo pipefail
 
           suite_name="${SUITE//_/-}"
-          stack_name="durable-execution-conformance-tests-${CONFORMANCE_NAME_PREFIX}-${suite_name}"
+          stack_name="durable-execution-conformance-tests-python-${suite_name}"
           stack_status="$(
             aws cloudformation describe-stacks \
               --stack-name "$stack_name" \
@@ -146,7 +138,6 @@ jobs:
           fi
 
       - name: Run ${{ matrix.suite }} conformance tests
-        working-directory: conformance-tests
         env:
           SUITE: ${{ matrix.suite }}
         run: |
@@ -156,11 +147,11 @@ jobs:
           results_dir="${GITHUB_WORKSPACE}/conformance-results/${SUITE}"
           mkdir -p "$results_dir"
 
-          hatch run validate \
+          python -m aws_durable_execution_conformance_tests.app \
             --template "${GITHUB_WORKSPACE}/conformance/generated/template_${SUITE}.json" \
             --language python \
             --region "$AWS_REGION" \
-            --name "${CONFORMANCE_NAME_PREFIX}-${suite_name}" \
+            --name "python-${suite_name}" \
             --suite "$SUITE" \
             --history-dir "$results_dir" \
             --report console json junit \
