@@ -43,6 +43,7 @@ concurrency:
 env:
   AWS_REGION: ${{ inputs['aws-region'] || 'us-east-1' }}
   PYTHON_VERSION: ${{ inputs['python-version'] || '3.14' }}
+  CONFORMANCE_NAME_PREFIX: python-monorepo
 
 jobs:
   prepare:
@@ -130,7 +131,7 @@ jobs:
           set -euo pipefail
 
           suite_name="${SUITE//_/-}"
-          stack_name="durable-execution-conformance-tests-python-${suite_name}"
+          stack_name="durable-execution-conformance-tests-${CONFORMANCE_NAME_PREFIX}-${suite_name}"
           stack_status="$(
             aws cloudformation describe-stacks \
               --stack-name "$stack_name" \
@@ -159,7 +160,7 @@ jobs:
             --template "${GITHUB_WORKSPACE}/conformance/generated/template_${SUITE}.json" \
             --language python \
             --region "$AWS_REGION" \
-            --name "python-${suite_name}" \
+            --name "${CONFORMANCE_NAME_PREFIX}-${suite_name}" \
             --suite "$SUITE" \
             --history-dir "$results_dir" \
             --report console json junit \
