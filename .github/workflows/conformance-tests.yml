@@ -102,6 +102,7 @@ jobs:
         uses: actions/checkout@v7.0.1
         with:
           repository: aws/aws-durable-execution-conformance-tests
+          ref: codex/issue-8-monorepo
           path: conformance-tests
 
       - name: Set up Python
