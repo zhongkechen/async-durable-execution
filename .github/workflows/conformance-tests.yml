@@ -98,19 +98,13 @@ jobs:
           name: conformance-deployment
           path: conformance
 
-      - name: Check out conformance test runner
-        uses: actions/checkout@v7.0.1
-        with:
-          repository: aws/aws-durable-execution-conformance-tests
-          path: conformance-tests
-
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
           python-version: "3.14"
 
-      - name: Install Hatch
-        run: python -m pip install hatch==1.16.5
+      - name: Install conformance test runner
+        run: python -m pip install aws-durable-execution-conformance-tests==0.1.0
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -122,29 +116,7 @@ jobs:
       - name: Set up SAM CLI
         uses: aws-actions/setup-sam@v3
 
-      - name: Recover rollback-complete stack
-        env:
-          SUITE: ${{ matrix.suite }}
-        run: |
-          set -euo pipefail
-
-          suite_name="${SUITE//_/-}"
-          stack_name="durable-execution-conformance-tests-python-${suite_name}"
-          stack_status="$(
-            aws cloudformation describe-stacks \
-              --stack-name "$stack_name" \
-              --query "Stacks[0].StackStatus" \
-              --output text 2>/dev/null || true
-          )"
-
-          if [[ "$stack_status" == "ROLLBACK_COMPLETE" ]]; then
-            echo "Deleting rollback-complete stack: $stack_name"
-            aws cloudformation delete-stack --stack-name "$stack_name"
-            aws cloudformation wait stack-delete-complete --stack-name "$stack_name"
-          fi
-
       - name: Run ${{ matrix.suite }} conformance tests
-        working-directory: conformance-tests
         env:
           SUITE: ${{ matrix.suite }}
         run: |
@@ -154,11 +126,11 @@ jobs:
           results_dir="${GITHUB_WORKSPACE}/conformance-results/${SUITE}"
           mkdir -p "$results_dir"
 
-          hatch run validate \
+          python -m aws_durable_execution_conformance_tests.app \
             --template "${GITHUB_WORKSPACE}/conformance/generated/template_${SUITE}.json" \
             --language python \
             --region "$AWS_REGION" \
-            --name "python-${suite_name}" \
+            --name "python-${suite_name}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --suite "$SUITE" \
             --history-dir "$results_dir" \
             --report console json junit \
