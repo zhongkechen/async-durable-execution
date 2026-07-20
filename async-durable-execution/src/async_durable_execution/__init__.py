@@ -26,6 +26,7 @@ from .composite.flow import (
     FlowNodeStatus,
     FlowResult,
     durable_dag,
+    durable_node,
     flow,
     node,
 )
@@ -108,6 +109,7 @@ __all__ = [
     "durable_callable",
     "durable_dag",
     "durable_execution",
+    "durable_node",
     "flow",
     "get_current_context",
     "get_step_context",

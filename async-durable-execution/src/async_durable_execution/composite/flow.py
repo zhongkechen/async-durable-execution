@@ -312,7 +312,7 @@ class FlowNode(Generic[T]):
         self,
         builder: _FlowBuilder,
         index: int,
-        func: Callable[[FlowNodeContext], Awaitable[T]],
+        func: Callable[[], Awaitable[T]],
         name: str,
     ) -> None:
         self._builder = builder
@@ -354,7 +354,7 @@ class FlowNode(Generic[T]):
 
 @dataclass(frozen=True)
 class FlowNodeContext(DurableContext):
-    """Durable context available while an eligible flow node executes."""
+    """Durable context exposed by get_current_context() inside a flow node."""
 
     _direct_dependencies: frozenset[FlowNode[Any]] = field(default_factory=frozenset)
     _dependency_results: Mapping[FlowNode[Any], FlowNodeResult[Any]] = field(
@@ -392,7 +392,7 @@ class _FlowBuilder:
 
     def add_node(
         self,
-        func: Callable[[FlowNodeContext], Awaitable[T]],
+        func: Callable[[], Awaitable[T]],
         name: str,
     ) -> FlowNode[T]:
         if self.frozen:
@@ -454,8 +454,13 @@ class _FlowBuilder:
                 msg = f"Flow node name {flow_node.name!r} is duplicated."
                 raise FlowDefinitionError(msg)
             names.add(flow_node.name)
-            if not callable(flow_node._func):
-                msg = f"Flow node {flow_node.name!r} must have a callable body."
+            if not callable(flow_node._func) or not getattr(
+                flow_node._func, "_durable_node_callable", False
+            ):
+                msg = (
+                    f"Flow node {flow_node.name!r} must use a bound callable "
+                    "produced by @durable_node."
+                )
                 raise FlowDefinitionError(msg)
 
             dependency = flow_node._dependency
@@ -582,7 +587,7 @@ def _coerce_expression(
 
 
 def node(
-    func: Callable[[FlowNodeContext], Awaitable[T]],
+    func: Callable[[], Awaitable[T]],
     *,
     name: str,
 ) -> FlowNode[T]:
@@ -591,7 +596,35 @@ def node(
     if builder is None or builder.frozen:
         msg = "node() can only be used while a @durable_dag definition is evaluating."
         raise InvalidStateError(msg)
+    if not callable(func) or not getattr(func, "_durable_node_callable", False):
+        msg = "node() requires a bound callable produced by @durable_node."
+        raise FlowDefinitionError(msg)
     return builder.add_node(func, name)
+
+
+def durable_node(
+    func: Callable[Params, Awaitable[T]],
+) -> Callable[Params, Callable[[], Awaitable[T]]]:
+    """Bind arguments to an async function used as a durable flow node."""
+    if isinstance(func, classmethod):
+        return classmethod(durable_node(func.__func__))
+    if isinstance(func, staticmethod):
+        return staticmethod(durable_node(func.__func__))
+    if not inspect.iscoroutinefunction(func):
+        msg = "@durable_node can only decorate an async node function."
+        raise FlowDefinitionError(msg)
+
+    @functools.wraps(func)
+    def wrapper(
+        *args: Params.args, **kwargs: Params.kwargs
+    ) -> Callable[[], Awaitable[T]]:
+        bound = functools.partial(func, *args, **kwargs)
+        setattr(bound, "__name__", func.__name__)
+        setattr(bound, "_durable_node_callable", True)
+        return bound
+
+    setattr(wrapper, "_durable_node", True)
+    return wrapper
 
 
 def durable_dag(
@@ -821,7 +854,7 @@ async def _execute_node(
     )
     try:
         with bind_current_context(flow_context):
-            outcome = await flow_node._func(flow_context)
+            outcome = await flow_node._func()
         return _NodeExecution(
             result=FlowNodeResult.succeeded(outcome),
             handled_failures=handled_failures,

@@ -17,7 +17,9 @@ from async_durable_execution import (
     FlowResult,
     InvalidStateError,
     durable_dag,
+    durable_node,
     flow,
+    get_current_context,
     node,
 )
 from async_durable_execution.composite.flow import (
@@ -45,8 +47,9 @@ from async_durable_execution.serdes import ExtendedTypeSerDes
 from async_durable_execution.state import ExecutionState
 
 
-async def return_name(context: FlowNodeContext) -> str:
-    return context.operation_name or ""
+@durable_node
+async def return_name() -> str:
+    return cast(FlowNodeContext, get_current_context()).operation_name or ""
 
 
 def test_flow_result_helpers_preserve_selected_output_arity():
@@ -110,6 +113,37 @@ def test_durable_dag_supports_class_and_static_method_decorator_orders():
         assert getattr(bound, "_durable_dag_definition")
 
 
+def test_durable_node_supports_class_and_static_method_decorator_orders():
+    class Nodes:
+        @classmethod
+        @durable_node
+        async def class_inside(cls, value: str):
+            return value
+
+        @durable_node
+        @classmethod
+        async def class_outside(cls, value: str):
+            return value
+
+        @staticmethod
+        @durable_node
+        async def static_inside(value: str):
+            return value
+
+        @durable_node
+        @staticmethod
+        async def static_outside(value: str):
+            return value
+
+    for bound in (
+        Nodes.class_inside("a"),
+        Nodes.class_outside("b"),
+        Nodes.static_inside("c"),
+        Nodes.static_outside("d"),
+    ):
+        assert getattr(bound, "_durable_node_callable")
+
+
 def test_definition_returning_awaitable_is_rejected_and_closed():
     @durable_dag
     def invalid_graph():
@@ -127,13 +161,13 @@ def test_dependency_expression_rejects_empty_invalid_and_foreign_targets():
 
     @durable_dag
     def first_graph():
-        captured["foreign"] = node(return_name, name="foreign")
+        captured["foreign"] = node(return_name(), name="foreign")
 
     _evaluate_definition(first_graph())
 
     @durable_dag
     def empty_target_graph():
-        source = node(return_name, name="source")
+        source = node(return_name(), name="source")
         source >> ()
 
     with pytest.raises(FlowDefinitionError, match="at least one"):
@@ -141,7 +175,7 @@ def test_dependency_expression_rejects_empty_invalid_and_foreign_targets():
 
     @durable_dag
     def invalid_target_graph():
-        source = node(return_name, name="source")
+        source = node(return_name(), name="source")
         source.succeeded >> ("invalid",)
 
     with pytest.raises(FlowDefinitionError, match="FlowNode"):
@@ -149,7 +183,7 @@ def test_dependency_expression_rejects_empty_invalid_and_foreign_targets():
 
     @durable_dag
     def foreign_target_graph():
-        source = node(return_name, name="source")
+        source = node(return_name(), name="source")
         source >> captured["foreign"]
 
     with pytest.raises(InvalidStateError, match="different flow"):
@@ -161,7 +195,7 @@ def test_nodes_and_expressions_cannot_cross_definition_boundaries():
 
     @durable_dag
     def first_graph():
-        source = node(return_name, name="source")
+        source = node(return_name(), name="source")
         captured["source"] = source
         captured["expression"] = source.succeeded
         return source
@@ -170,7 +204,7 @@ def test_nodes_and_expressions_cannot_cross_definition_boundaries():
 
     @durable_dag
     def mixed_expression_graph():
-        local = node(return_name, name="local")
+        local = node(return_name(), name="local")
         local.succeeded & captured["expression"]
 
     with pytest.raises(InvalidStateError, match="different flow"):
@@ -178,7 +212,7 @@ def test_nodes_and_expressions_cannot_cross_definition_boundaries():
 
     @durable_dag
     def foreign_output_graph():
-        node(return_name, name="local")
+        node(return_name(), name="local")
         return captured["source"]
 
     with pytest.raises(InvalidStateError, match="outputs"):
@@ -193,7 +227,7 @@ def test_frozen_builder_rejects_late_mutation():
 
     @durable_dag
     def graph():
-        source = node(return_name, name="source")
+        source = node(return_name(), name="source")
         captured["source"] = source
         return source
 
@@ -202,7 +236,7 @@ def test_frozen_builder_rejects_late_mutation():
     builder = source._builder
 
     with pytest.raises(InvalidStateError, match="add nodes"):
-        builder.add_node(return_name, "late")
+        builder.add_node(return_name(), "late")
     with pytest.raises(InvalidStateError, match="add dependencies"):
         builder.add_dependency(source, source.succeeded)
 
@@ -217,9 +251,9 @@ def test_validation_rejects_noncallable_and_unknown_dependency():
 
     @durable_dag
     def unknown_dependency_graph():
-        source = node(return_name, name="source")
-        target = node(return_name, name="target")
-        ghost = FlowNode(source._builder, 99, return_name, "ghost")
+        source = node(return_name(), name="source")
+        target = node(return_name(), name="target")
+        ghost = FlowNode(source._builder, 99, return_name(), "ghost")
         ghost >> target
 
     with pytest.raises(FlowDefinitionError, match="unknown dependency"):
@@ -231,14 +265,14 @@ def test_validation_rejects_dependency_owned_by_another_builder():
 
     @durable_dag
     def first_graph():
-        source = node(return_name, name="source")
+        source = node(return_name(), name="source")
         captured["expression"] = source.succeeded
 
     _evaluate_definition(first_graph())
 
     @durable_dag
     def second_graph():
-        target = node(return_name, name="target")
+        target = node(return_name(), name="target")
         target._dependency = captured["expression"]
 
     with pytest.raises(InvalidStateError, match="current definition"):
@@ -298,10 +332,10 @@ def test_flow_node_repr_and_flat_expression_construction():
 
     @durable_dag
     def graph():
-        a = node(return_name, name="A")
-        b = node(return_name, name="B")
-        c = node(return_name, name="C")
-        d = node(return_name, name="D")
+        a = node(return_name(), name="A")
+        b = node(return_name(), name="B")
+        c = node(return_name(), name="C")
+        d = node(return_name(), name="D")
         (a | b | c) >> d
         captured["a"] = a
         captured["d"] = d
@@ -331,9 +365,9 @@ def test_composite_expression_default_state_and_all_unmatched():
 
     @durable_dag
     def graph():
-        a = node(return_name, name="A")
-        b = node(return_name, name="B")
-        c = node(return_name, name="C")
+        a = node(return_name(), name="A")
+        b = node(return_name(), name="B")
+        c = node(return_name(), name="C")
         (a & b) >> c
         captured.update(a=a, b=b, c=c)
         return c
@@ -353,10 +387,10 @@ def test_composite_expression_default_state_and_all_unmatched():
 
 def test_cycle_search_skips_nonremaining_targets_and_backtracks():
     builder = _FlowBuilder()
-    a = builder.add_node(return_name, "A")
-    branch = builder.add_node(return_name, "branch")
-    b = builder.add_node(return_name, "B")
-    outside = builder.add_node(return_name, "outside")
+    a = builder.add_node(return_name(), "A")
+    branch = builder.add_node(return_name(), "branch")
+    b = builder.add_node(return_name(), "B")
+    outside = builder.add_node(return_name(), "outside")
     adjacency = {
         a: [outside, branch, b],
         branch: [],
@@ -374,8 +408,8 @@ async def test_dependency_resolution_propagates_unclassified_task_error():
 
     @durable_dag
     def graph():
-        a = node(return_name, name="A")
-        b = node(return_name, name="B")
+        a = node(return_name(), name="A")
+        b = node(return_name(), name="B")
         a >> b
         captured.update(a=a, b=b)
         return b
@@ -415,7 +449,7 @@ def test_flow_node_context_reuses_existing_step_counter():
 async def test_execute_flow_wraps_unclassified_child_error(monkeypatch):
     @durable_dag
     def graph():
-        return node(return_name, name="A")
+        return node(return_name(), name="A")
 
     frozen = _evaluate_definition(graph())
 

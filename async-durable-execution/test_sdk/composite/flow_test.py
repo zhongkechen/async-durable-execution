@@ -24,6 +24,7 @@ from async_durable_execution import (
     durable_callable,
     durable_dag,
     durable_execution,
+    durable_node,
     flow,
     get_current_context,
     node,
@@ -39,8 +40,9 @@ from async_durable_execution.models import (
 from async_durable_execution.state import ExecutionState
 
 
-async def return_name(context: FlowNodeContext) -> str:
-    return context.operation_name or ""
+@durable_node
+async def return_name() -> str:
+    return cast(FlowNodeContext, get_current_context()).operation_name or ""
 
 
 def create_test_context() -> tuple[DurableContext, Mock]:
@@ -81,9 +83,34 @@ def test_durable_dag_rejects_async_definition():
             return None
 
 
+async def test_durable_node_binds_arguments_without_running_function():
+    calls: list[str] = []
+
+    @durable_node
+    async def fetch(order_id: str, *, region: str) -> str:
+        calls.append(order_id)
+        return f"{region}:{order_id}"
+
+    bound = fetch("order-123", region="us-west-2")
+
+    assert calls == []
+    assert bound.__name__ == "fetch"
+    assert getattr(bound, "_durable_node_callable")
+    assert await bound() == "us-west-2:order-123"
+    assert calls == ["order-123"]
+
+
+def test_durable_node_rejects_synchronous_function():
+    with pytest.raises(FlowDefinitionError, match="async"):
+
+        @durable_node
+        def invalid_node():
+            return None
+
+
 def test_node_outside_definition_is_rejected():
     with pytest.raises(InvalidStateError, match=r"node\(\)"):
-        node(return_name, name="outside")
+        node(return_name(), name="outside")
 
 
 async def test_plain_callable_is_not_a_flow_definition():
@@ -92,6 +119,20 @@ async def test_plain_callable_is_not_a_flow_definition():
     with bind_current_context(context):
         with pytest.raises(FlowDefinitionError, match="@durable_dag"):
             flow(lambda: None)
+
+    state.create_checkpoint.assert_not_called()
+
+
+async def test_node_requires_bound_durable_node_callable_before_checkpoint():
+    context, state = create_test_context()
+
+    @durable_dag
+    def invalid_graph():
+        node(return_name, name="invalid")
+
+    with bind_current_context(context):
+        with pytest.raises(FlowDefinitionError, match="@durable_node"):
+            flow(invalid_graph())
 
     state.create_checkpoint.assert_not_called()
 
@@ -117,7 +158,7 @@ async def test_empty_node_name_fails_before_checkpoint(name: str):
 
     @durable_dag
     def invalid_graph():
-        node(return_name, name=name)
+        node(return_name(), name=name)
 
     with bind_current_context(context):
         with pytest.raises(FlowDefinitionError, match="non-empty"):
@@ -131,8 +172,8 @@ async def test_duplicate_node_name_fails_before_checkpoint():
 
     @durable_dag
     def invalid_graph():
-        node(return_name, name="same")
-        node(return_name, name="same")
+        node(return_name(), name="same")
+        node(return_name(), name="same")
 
     with bind_current_context(context):
         with pytest.raises(FlowDefinitionError, match="duplicated"):
@@ -146,9 +187,9 @@ async def test_repeated_target_expression_requires_explicit_operator():
 
     @durable_dag
     def invalid_graph():
-        a = node(return_name, name="A")
-        b = node(return_name, name="B")
-        c = node(return_name, name="C")
+        a = node(return_name(), name="A")
+        b = node(return_name(), name="B")
+        c = node(return_name(), name="C")
         a >> c
         b >> c
 
@@ -164,8 +205,8 @@ async def test_duplicate_dependency_and_self_edge_are_rejected():
 
     @durable_dag
     def duplicate_graph():
-        a = node(return_name, name="A")
-        b = node(return_name, name="B")
+        a = node(return_name(), name="A")
+        b = node(return_name(), name="B")
         (a & a) >> b
 
     with bind_current_context(context):
@@ -174,7 +215,7 @@ async def test_duplicate_dependency_and_self_edge_are_rejected():
 
     @durable_dag
     def self_graph():
-        a = node(return_name, name="A")
+        a = node(return_name(), name="A")
         a >> a
 
     with bind_current_context(context):
@@ -189,9 +230,9 @@ async def test_cycle_error_contains_concrete_stable_path():
 
     @durable_dag
     def cyclic_graph():
-        a = node(return_name, name="A")
-        b = node(return_name, name="B")
-        c = node(return_name, name="C")
+        a = node(return_name(), name="A")
+        b = node(return_name(), name="B")
+        c = node(return_name(), name="C")
         a >> b
         b >> c
         c >> a
@@ -211,7 +252,7 @@ async def test_invalid_definition_output_fails_before_checkpoint():
 
     @durable_dag
     def invalid_graph():
-        node(return_name, name="A")
+        node(return_name(), name="A")
         return "A"
 
     with bind_current_context(context):
@@ -224,23 +265,27 @@ async def test_invalid_definition_output_fails_before_checkpoint():
 async def test_linear_fanout_fanin_flow_checkpoints_complete_result():
     @durable_dag
     def graph(value: str):
-        async def run_a(context: FlowNodeContext) -> str:
-            assert get_current_context() is context
-            return value
+        @durable_node
+        async def run_a(node_value: str) -> str:
+            assert isinstance(get_current_context(), FlowNodeContext)
+            return node_value
 
-        async def run_b(context: FlowNodeContext) -> str:
-            return f"{context.result(a).outcome}-B"
+        @durable_node
+        async def run_b() -> str:
+            return f"{cast(FlowNodeContext, get_current_context()).result(a).outcome}-B"
 
-        async def run_c(context: FlowNodeContext) -> str:
-            return f"{context.result(a).outcome}-C"
+        @durable_node
+        async def run_c() -> str:
+            return f"{cast(FlowNodeContext, get_current_context()).result(a).outcome}-C"
 
-        async def run_d(context: FlowNodeContext) -> str:
-            return f"{context.result(b).outcome}+{context.result(c).outcome}"
+        @durable_node
+        async def run_d() -> str:
+            return f"{cast(FlowNodeContext, get_current_context()).result(b).outcome}+{cast(FlowNodeContext, get_current_context()).result(c).outcome}"
 
-        a = node(run_a, name="A")
-        b = node(run_b, name="B")
-        c = node(run_c, name="C")
-        d = node(run_d, name="D")
+        a = node(run_a(value), name="A")
+        b = node(run_b(), name="B")
+        c = node(run_c(), name="C")
+        d = node(run_d(), name="D")
         a >> (b, c)
         (b & c) >> d
         return d
@@ -284,31 +329,38 @@ async def test_failure_route_skips_success_branch_and_handles_source_failure():
 
     @durable_dag
     def graph():
-        async def run_a(context: FlowNodeContext) -> str:
+        @durable_node
+        async def run_a() -> str:
             called.append("A")
             msg = "A failed"
             raise ValueError(msg)
 
-        async def run_b(context: FlowNodeContext) -> str:
+        @durable_node
+        async def run_b() -> str:
             called.append("B")
             return "unexpected"
 
-        async def run_c(context: FlowNodeContext) -> str:
+        @durable_node
+        async def run_c() -> str:
             called.append("C")
-            result = context.result(a)
+            result = cast(FlowNodeContext, get_current_context()).result(a)
             assert result.status is FlowNodeStatus.FAILED
             assert result.error is not None
             return result.error.message or ""
 
-        async def run_d(context: FlowNodeContext) -> str:
+        @durable_node
+        async def run_d() -> str:
             called.append("D")
-            assert context.result(c).status is FlowNodeStatus.SUCCEEDED
+            assert (
+                cast(FlowNodeContext, get_current_context()).result(c).status
+                is FlowNodeStatus.SUCCEEDED
+            )
             return "recovered"
 
-        a = node(run_a, name="A")
-        b = node(run_b, name="B")
-        c = node(run_c, name="C")
-        d = node(run_d, name="D")
+        a = node(run_a(), name="A")
+        b = node(run_b(), name="B")
+        c = node(run_c(), name="C")
+        d = node(run_d(), name="D")
         a >> b
         a.failed >> c
         (b.succeeded | c.succeeded) >> d
@@ -340,11 +392,12 @@ async def test_unhandled_failure_raises_after_flow_result_is_checkpointed():
 
     @durable_dag
     def graph():
-        async def fail(context: FlowNodeContext) -> None:
+        @durable_node
+        async def fail() -> None:
             msg = "unhandled"
             raise RuntimeError(msg)
 
-        return node(fail, name="failure")
+        return node(fail(), name="failure")
 
     @durable_execution
     async def handler(event):
@@ -384,19 +437,21 @@ async def test_node_can_run_durable_operations_in_isolated_scope(monkeypatch):
 
     @durable_dag
     def graph():
-        async def run_a(context: FlowNodeContext) -> str:
+        @durable_node
+        async def run_a() -> str:
             node_calls.append("A")
-            assert isinstance(context, FlowNodeContext)
+            assert isinstance(get_current_context(), FlowNodeContext)
             return await step(checkpoint("A"), name="inside-A")
 
-        async def run_b(context: FlowNodeContext) -> str:
+        @durable_node
+        async def run_b() -> str:
             node_calls.append("B")
-            assert context.result(a).outcome == "A"
+            assert cast(FlowNodeContext, get_current_context()).result(a).outcome == "A"
             await wait(timedelta(seconds=1), name="inside-B-wait")
             return await step(checkpoint("B"), name="inside-B")
 
-        a = node(run_a, name="A")
-        b = node(run_b, name="B")
+        a = node(run_a(), name="A")
+        b = node(run_b(), name="B")
         a >> b
         return a, b
 
@@ -443,28 +498,34 @@ async def test_any_starts_on_first_matching_result_and_does_not_handle_later_fai
 
     @durable_dag
     def graph():
-        async def fail_later(context: FlowNodeContext) -> None:
+        @durable_node
+        async def fail_later() -> None:
             called.append("A")
             await release_failure.wait()
             await asyncio.sleep(0.01)
             msg = "late failure"
             raise ValueError(msg)
 
-        async def succeed_first(context: FlowNodeContext) -> str:
+        @durable_node
+        async def succeed_first() -> str:
             called.append("B")
             return "winner"
 
-        async def handle(context: FlowNodeContext) -> str:
+        @durable_node
+        async def handle() -> str:
             called.append("handler")
-            assert context.result(b).outcome == "winner"
+            assert (
+                cast(FlowNodeContext, get_current_context()).result(b).outcome
+                == "winner"
+            )
             with pytest.raises(InvalidStateError, match="not available"):
-                context.result(a)
+                cast(FlowNodeContext, get_current_context()).result(a)
             release_failure.set()
             return "handled winner"
 
-        a = node(fail_later, name="A")
-        b = node(succeed_first, name="B")
-        handler = node(handle, name="handler")
+        a = node(fail_later(), name="A")
+        b = node(succeed_first(), name="B")
+        handler = node(handle(), name="handler")
         (a.failed | b.succeeded) >> handler
         return handler
 
@@ -496,25 +557,34 @@ async def test_any_ignores_nonmatching_terminal_result():
 
     @durable_dag
     def graph():
-        async def fail_unmatched(context: FlowNodeContext) -> None:
+        @durable_node
+        async def fail_unmatched() -> None:
             release_second.set()
             msg = "not a success"
             raise ValueError(msg)
 
-        async def fail_matched(context: FlowNodeContext) -> None:
+        @durable_node
+        async def fail_matched() -> None:
             await release_second.wait()
             await asyncio.sleep(0.01)
             msg = "matched failure"
             raise RuntimeError(msg)
 
-        async def handle(context: FlowNodeContext) -> str:
-            assert context.result(a).status is FlowNodeStatus.FAILED
-            assert context.result(b).status is FlowNodeStatus.FAILED
+        @durable_node
+        async def handle() -> str:
+            assert (
+                cast(FlowNodeContext, get_current_context()).result(a).status
+                is FlowNodeStatus.FAILED
+            )
+            assert (
+                cast(FlowNodeContext, get_current_context()).result(b).status
+                is FlowNodeStatus.FAILED
+            )
             return "B handled"
 
-        a = node(fail_unmatched, name="A")
-        b = node(fail_matched, name="B")
-        handler = node(handle, name="handler")
+        a = node(fail_unmatched(), name="A")
+        b = node(fail_matched(), name="B")
+        handler = node(handle(), name="handler")
         (a.succeeded | b.failed) >> handler
         return handler
 
@@ -544,10 +614,10 @@ def test_nested_any_does_not_retroactively_change_its_winner():
 
     @durable_dag
     def graph():
-        a = node(return_name, name="A")
-        b = node(return_name, name="B")
-        c = node(return_name, name="C")
-        d = node(return_name, name="D")
+        a = node(return_name(), name="A")
+        b = node(return_name(), name="B")
+        c = node(return_name(), name="C")
+        d = node(return_name(), name="D")
         ((a.failed | b.succeeded) & c.succeeded) >> d
         handles.update(a=a, b=b, c=c, d=d)
         return d
@@ -584,22 +654,25 @@ async def test_all_waits_for_every_dependency_before_running():
 
     @durable_dag
     def graph():
-        async def first(context: FlowNodeContext) -> str:
+        @durable_node
+        async def first() -> str:
             return "first"
 
-        async def second(context: FlowNodeContext) -> str:
+        @durable_node
+        async def second() -> str:
             nonlocal second_finished
             await asyncio.sleep(0.01)
             second_finished = True
             return "second"
 
-        async def combined(context: FlowNodeContext) -> str:
+        @durable_node
+        async def combined() -> str:
             assert second_finished
-            return f"{context.result(a).outcome}+{context.result(b).outcome}"
+            return f"{cast(FlowNodeContext, get_current_context()).result(a).outcome}+{cast(FlowNodeContext, get_current_context()).result(b).outcome}"
 
-        a = node(first, name="A")
-        b = node(second, name="B")
-        c = node(combined, name="C")
+        a = node(first(), name="A")
+        b = node(second(), name="B")
+        c = node(combined(), name="C")
         (a & b) >> c
         return c
 
@@ -622,16 +695,21 @@ async def test_all_waits_for_every_dependency_before_running():
 async def test_completed_route_does_not_handle_failure():
     @durable_dag
     def graph():
-        async def fail(context: FlowNodeContext) -> None:
+        @durable_node
+        async def fail() -> None:
             msg = "failure"
             raise ValueError(msg)
 
-        async def observe(context: FlowNodeContext) -> str:
-            assert context.result(a).status is FlowNodeStatus.FAILED
+        @durable_node
+        async def observe() -> str:
+            assert (
+                cast(FlowNodeContext, get_current_context()).result(a).status
+                is FlowNodeStatus.FAILED
+            )
             return "observed"
 
-        a = node(fail, name="A")
-        observer = node(observe, name="observer")
+        a = node(fail(), name="A")
+        observer = node(observe(), name="observer")
         a.completed >> observer
         return observer
 
@@ -658,16 +736,18 @@ async def test_completed_route_does_not_handle_failure():
 async def test_handler_failure_is_evaluated_independently():
     @durable_dag
     def graph():
-        async def source(context: FlowNodeContext) -> None:
+        @durable_node
+        async def source() -> None:
             msg = "source"
             raise ValueError(msg)
 
-        async def handler(context: FlowNodeContext) -> None:
+        @durable_node
+        async def handler() -> None:
             msg = "handler"
             raise RuntimeError(msg)
 
-        a = node(source, name="source")
-        b = node(handler, name="handler")
+        a = node(source(), name="source")
+        b = node(handler(), name="handler")
         a.failed >> b
         return b
 
@@ -695,22 +775,25 @@ async def test_handler_failure_is_evaluated_independently():
 async def test_invalid_dependency_result_access_is_a_logical_node_failure():
     @durable_dag
     def graph():
-        async def root(context: FlowNodeContext) -> str:
-            return context.operation_name or ""
+        @durable_node
+        async def root() -> str:
+            return cast(FlowNodeContext, get_current_context()).operation_name or ""
 
-        async def invalid(context: FlowNodeContext) -> str:
-            context.result(b)
+        @durable_node
+        async def invalid() -> str:
+            cast(FlowNodeContext, get_current_context()).result(b)
             return "unreachable"
 
-        async def recover(context: FlowNodeContext) -> str:
-            result = context.result(c)
+        @durable_node
+        async def recover() -> str:
+            result = cast(FlowNodeContext, get_current_context()).result(c)
             assert result.error is not None
             return result.error.type or ""
 
-        a = node(root, name="A")
-        b = node(root, name="B")
-        c = node(invalid, name="C")
-        recovery = node(recover, name="recovery")
+        a = node(root(), name="A")
+        b = node(root(), name="B")
+        c = node(invalid(), name="C")
+        recovery = node(recover(), name="recovery")
         a >> c
         c.failed >> recovery
         return recovery
@@ -739,21 +822,26 @@ async def test_failure_handling_metadata_survives_partial_replay(monkeypatch):
 
     @durable_dag
     def graph():
-        async def source(context: FlowNodeContext) -> None:
+        @durable_node
+        async def source() -> None:
             nonlocal source_calls
             source_calls += 1
             msg = "source failed"
             raise ValueError(msg)
 
-        async def recover(context: FlowNodeContext) -> str:
+        @durable_node
+        async def recover() -> str:
             nonlocal handler_calls
             handler_calls += 1
-            assert context.result(a).status is FlowNodeStatus.FAILED
+            assert (
+                cast(FlowNodeContext, get_current_context()).result(a).status
+                is FlowNodeStatus.FAILED
+            )
             await wait(timedelta(seconds=1), name="recovery-wait")
             return "recovered"
 
-        a = node(source, name="source")
-        recovery = node(recover, name="recovery")
+        a = node(source(), name="source")
+        recovery = node(recover(), name="recovery")
         a.failed >> recovery
         return recovery
 
@@ -782,16 +870,18 @@ async def test_sdk_control_error_does_not_activate_failure_route():
 
     @durable_dag
     def graph():
-        async def control_failure(context: FlowNodeContext) -> None:
+        @durable_node
+        async def control_failure() -> None:
             called.append("source")
             msg = "SDK control failure"
             raise ExecutionError(msg)
 
-        async def should_not_run(context: FlowNodeContext) -> None:
+        @durable_node
+        async def should_not_run() -> None:
             called.append("handler")
 
-        a = node(control_failure, name="source")
-        handler = node(should_not_run, name="handler")
+        a = node(control_failure(), name="source")
+        handler = node(should_not_run(), name="handler")
         a.failed >> handler
         return handler
 
@@ -819,8 +909,8 @@ async def test_empty_and_disconnected_flows():
 
     @durable_dag
     def disconnected_graph():
-        node(return_name, name="A")
-        node(return_name, name="B")
+        node(return_name(), name="A")
+        node(return_name(), name="B")
         return None
 
     @durable_execution
@@ -854,15 +944,17 @@ async def test_all_unmatched_dependencies_skip_downstream_callable():
 
     @durable_dag
     def graph():
-        async def succeed(context: FlowNodeContext) -> str:
-            return context.operation_name or ""
+        @durable_node
+        async def succeed() -> str:
+            return cast(FlowNodeContext, get_current_context()).operation_name or ""
 
-        async def skipped(context: FlowNodeContext) -> None:
+        @durable_node
+        async def skipped() -> None:
             called.append("skipped")
 
-        a = node(succeed, name="A")
-        b = node(succeed, name="B")
-        c = node(skipped, name="C")
+        a = node(succeed(), name="A")
+        b = node(succeed(), name="B")
+        c = node(skipped(), name="C")
         (a.failed | b.failed) >> c
         return c
 
@@ -886,19 +978,21 @@ async def test_all_unmatched_dependencies_skip_downstream_callable():
 async def test_nested_flow_can_run_inside_node():
     @durable_dag
     def inner_graph(value: str):
-        async def inner(context: FlowNodeContext) -> str:
+        @durable_node
+        async def inner() -> str:
             return value
 
-        return node(inner, name="inner-node")
+        return node(inner(), name="inner-node")
 
     @durable_dag
     def outer_graph():
-        async def outer(context: FlowNodeContext) -> str:
+        @durable_node
+        async def outer() -> str:
             inner_result = await flow(inner_graph("nested"), name="inner-flow")
             assert len(inner_result.outputs) == 1
             return cast(str, inner_result.outputs[0].outcome)
 
-        return node(outer, name="outer-node")
+        return node(outer(), name="outer-node")
 
     @durable_execution
     async def handler(event):
@@ -928,16 +1022,18 @@ async def test_operation_ids_are_stable_across_sibling_completion_orders():
 
         @durable_dag
         def graph():
-            async def run_a(context: FlowNodeContext) -> str:
+            @durable_node
+            async def run_a() -> str:
                 await asyncio.sleep(delay_a)
                 return await step(checkpoint("A"), name="step-A")
 
-            async def run_b(context: FlowNodeContext) -> str:
+            @durable_node
+            async def run_b() -> str:
                 await asyncio.sleep(delay_b)
                 return await step(checkpoint("B"), name="step-B")
 
-            a = node(run_a, name="A")
-            b = node(run_b, name="B")
+            a = node(run_a(), name="A")
+            b = node(run_b(), name="B")
             return a, b
 
         @durable_execution
@@ -969,15 +1065,17 @@ async def test_serialization_failure_does_not_activate_failure_route():
 
     @durable_dag
     def graph():
-        async def unsupported_result(context: FlowNodeContext):
+        @durable_node
+        async def unsupported_result():
             called.append("source")
             return object()
 
-        async def should_not_run(context: FlowNodeContext) -> None:
+        @durable_node
+        async def should_not_run() -> None:
             called.append("handler")
 
-        source = node(unsupported_result, name="source")
-        handler = node(should_not_run, name="handler")
+        source = node(unsupported_result(), name="source")
+        handler = node(should_not_run(), name="handler")
         source.failed >> handler
         return handler
 

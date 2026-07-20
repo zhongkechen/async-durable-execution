@@ -7,6 +7,7 @@ groups of durable work.
     options:
       members:
         - durable_dag
+        - durable_node
         - flow
         - node
         - FlowNode

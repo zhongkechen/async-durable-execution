@@ -59,15 +59,14 @@ def get_current_context():
     """Return the currently active durable execution context.
 
     Raises:
-        RuntimeError: If called outside a durable handler, step, callback submitter,
-            or wait-for-condition checker.
+        RuntimeError: If called outside supported durable user code.
     """
     ensure_durable_operations_allowed("Durable operations")
     current_context = _current_context.get()
     if current_context is None:
         msg = (
             "get_current_context() can only be used while a durable function, "
-            "step function, wait_for_callback submitter, or "
+            "step function, flow node, wait_for_callback submitter, or "
             "wait_for_condition check, or SerDes operation is executing."
         )
         raise RuntimeError(msg)

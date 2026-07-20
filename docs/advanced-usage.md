@@ -50,17 +50,22 @@ later.
 
 ## Static DAG Workflows
 
-Use `@durable_dag`, `node()`, and `flow()` to define a static acyclic workflow with
-declarative dependencies. The decorated definition is synchronous: calling it binds
-its arguments without running the body, and `flow()` evaluates and validates the
+Use `@durable_dag`, `@durable_node`, `node()`, and `flow()` to define a static
+acyclic workflow with declarative dependencies. Both decorators bind arguments
+without running user code. `flow()` synchronously evaluates and validates the
 complete graph before creating its durable child context.
 
 ```python
+from typing import cast
+
 from async_durable_execution import (
+    FlowNode,
     FlowNodeContext,
     durable_callable,
     durable_dag,
+    durable_node,
     flow,
+    get_current_context,
     node,
     step,
 )
@@ -76,17 +81,22 @@ async def charge_order(order: dict) -> dict:
     return {"order": order, "charged": True}
 
 
+@durable_node
+async def fetch(order_id: str) -> dict:
+    return await step(fetch_order(order_id), name="fetch-order")
+
+
+@durable_node
+async def charge(fetch_node: FlowNode[dict]) -> dict:
+    context = cast(FlowNodeContext, get_current_context())
+    order = context.result(fetch_node).outcome
+    return await step(charge_order(order), name="charge-order")
+
+
 @durable_dag
 def order_flow(order_id: str):
-    async def fetch(context: FlowNodeContext) -> dict:
-        return await step(fetch_order(order_id), name="fetch-order")
-
-    async def charge(context: FlowNodeContext) -> dict:
-        order = context.result(fetch_node).outcome
-        return await step(charge_order(order), name="charge-order")
-
-    fetch_node = node(fetch, name="fetch")
-    charge_node = node(charge, name="charge")
+    fetch_node = node(fetch(order_id), name="fetch")
+    charge_node = node(charge(fetch_node), name="charge")
     fetch_node >> charge_node
     return charge_node
 
@@ -95,10 +105,11 @@ result = await flow(order_flow("order-123"), name="process-order")
 charge_result = result.output
 ```
 
-Definition code must be deterministic and cannot start `step()`, `wait()`, `invoke()`,
-another `flow()`, or any other durable operation. Node bodies run only after validation
-inside their own durable child contexts, where they can use all normal durable
-operations.
+Definition code must be deterministic and cannot start `step()`, `wait()`,
+`invoke()`, another `flow()`, or any other durable operation. Node bodies run only
+after validation inside their own durable child contexts, where they can use all
+normal durable operations. Call `get_current_context()` inside a node body to access
+its `FlowNodeContext` and direct dependency results.
 
 Dependency operators build the graph:
 
