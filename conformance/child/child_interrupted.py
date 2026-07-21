@@ -12,14 +12,10 @@ from async_durable_execution import (
 import os
 from typing import Any
 
-from support.attempts import increment_attempt
-
 
 @durable_callable
-async def crashable_step(*, execution_id: str, value: str) -> str:
-    attempt_count = await increment_attempt(execution_id)
-
-    if attempt_count < 2:
+async def crashable_step(*, should_crash: bool, value: str) -> str:
+    if should_crash:
         # Sleep to allow checkpoint to be sent before crash
         await asyncio.sleep(1)
         # Simulate Lambda crash
@@ -28,18 +24,16 @@ async def crashable_step(*, execution_id: str, value: str) -> str:
 
 
 @durable_callable
-async def interrupted_child(*, execution_id: str, value: str) -> str:
+async def interrupted_child(*, value: str) -> str:
+    # Capture child replay state before step() binds its own operation context.
+    should_crash = not get_current_context().is_replaying()
     return await step(
-        crashable_step(execution_id=execution_id, value=value),
+        crashable_step(should_crash=should_crash, value=value),
         retry_strategy=RetryStrategy.none(),
     )
 
 
 @durable_execution
 async def handler(event: Any) -> str:
-    execution_id = get_current_context().durable_execution_arn
-
-    result: str = await run_in_child_context(
-        interrupted_child(execution_id=execution_id, value=str(event))
-    )
+    result: str = await run_in_child_context(interrupted_child(value=str(event)))
     return result
