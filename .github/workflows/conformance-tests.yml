@@ -22,7 +22,7 @@ on:
       aws-region:
         description: AWS Region for the conformance stacks
         required: true
-        default: us-east-1
+        default: us-west-2
       python-version:
         description: Python runtime for the Lambda functions
         required: true
@@ -37,11 +37,11 @@ permissions:
   id-token: write
 
 concurrency:
-  group: conformance-deploy-${{ inputs['aws-region'] || 'us-east-1' }}
+  group: conformance-deploy-${{ inputs['aws-region'] || 'us-west-2' }}
   cancel-in-progress: false
 
 env:
-  AWS_REGION: ${{ inputs['aws-region'] || 'us-east-1' }}
+  AWS_REGION: ${{ inputs['aws-region'] || 'us-west-2' }}
   PYTHON_VERSION: ${{ inputs['python-version'] || '3.14' }}
 
 jobs:
@@ -130,7 +130,8 @@ jobs:
             --template "${GITHUB_WORKSPACE}/conformance/generated/template_${SUITE}.json" \
             --language python \
             --region "$AWS_REGION" \
-            --name "python-${suite_name}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --name "python-${suite_name}" \
+            --no-cleanup \
             --suite "$SUITE" \
             --history-dir "$results_dir" \
             --report console json junit \
