@@ -131,6 +131,7 @@ jobs:
             --language python \
             --region "$AWS_REGION" \
             --name "python-${suite_name}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --no-cleanup \
             --suite "$SUITE" \
             --history-dir "$results_dir" \
             --report console json junit \
