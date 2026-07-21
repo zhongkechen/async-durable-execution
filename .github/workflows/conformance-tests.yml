@@ -130,7 +130,7 @@ jobs:
             --template "${GITHUB_WORKSPACE}/conformance/generated/template_${SUITE}.json" \
             --language python \
             --region "$AWS_REGION" \
-            --name "python-${suite_name}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --name "python-${suite_name}" \
             --no-cleanup \
             --suite "$SUITE" \
             --history-dir "$results_dir" \
