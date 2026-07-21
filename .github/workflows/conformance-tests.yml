@@ -22,7 +22,7 @@ on:
       aws-region:
         description: AWS Region for the conformance stacks
         required: true
-        default: us-east-1
+        default: us-west-2
       python-version:
         description: Python runtime for the Lambda functions
         required: true
@@ -37,11 +37,11 @@ permissions:
   id-token: write
 
 concurrency:
-  group: conformance-deploy-${{ inputs['aws-region'] || 'us-east-1' }}
+  group: conformance-deploy-${{ inputs['aws-region'] || 'us-west-2' }}
   cancel-in-progress: false
 
 env:
-  AWS_REGION: ${{ inputs['aws-region'] || 'us-east-1' }}
+  AWS_REGION: ${{ inputs['aws-region'] || 'us-west-2' }}
   PYTHON_VERSION: ${{ inputs['python-version'] || '3.14' }}
 
 jobs:
