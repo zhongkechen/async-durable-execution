@@ -299,6 +299,12 @@ jobs:
             --home /home/codex-review \
             --shell /bin/bash \
             --group codex-review
+          sudo install \
+            -d \
+            -m 700 \
+            -o codex-review \
+            -g codex-review \
+            /home/codex-review/.codex
           sudo usermod -a -G runner codex-review
           sudo chown -R runner:codex-review "$GITHUB_WORKSPACE"
           sudo chmod -R g+rX "$GITHUB_WORKSPACE"
@@ -376,6 +382,13 @@ jobs:
           )"
           output_file="${output_dir}/review.md"
           trap 'sudo rm -rf "$output_dir"' EXIT
+
+          sudo -u codex-review -- sh -c '
+            : "${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID was not preserved by sudo}"
+            : "${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY was not preserved by sudo}"
+            : "${AWS_SESSION_TOKEN:?AWS_SESSION_TOKEN was not preserved by sudo}"
+            : "${AWS_REGION:?AWS_REGION was not preserved by sudo}"
+          '
 
           sudo -u codex-review -- env \
             CODEX_HOME=/home/codex-review/.codex \
