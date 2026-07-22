@@ -286,7 +286,7 @@ batch_results = await map(
     func=process_item,
     items=items,
     max_concurrency=5,
-    completion_config=CompletionConfig(tolerated_failure_count=2),
+    completion_config=CompletionConfig.thresholds(tolerated_failure_count=2),
     name="process-items",
 )
 values = batch_results.get_results()

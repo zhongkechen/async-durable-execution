@@ -3,7 +3,7 @@
 import asyncio
 import datetime
 import json
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
 
@@ -39,6 +39,57 @@ from async_durable_execution.runner.local.model import (
     StartDurableExecutionInput,
     StartDurableExecutionOutput,
 )
+
+
+class AsyncLambdaClientStub:
+    def __init__(self) -> None:
+        self.exceptions = type("Exceptions", (), {})()
+        self.closed = False
+        self.calls: list[tuple[str, dict]] = []
+
+    async def invoke(self, **kwargs):
+        self.calls.append(("invoke", kwargs))
+        return {"method": "invoke", "kwargs": kwargs}
+
+    async def get_durable_execution(self, **kwargs):
+        self.calls.append(("get_durable_execution", kwargs))
+        return {"method": "get_durable_execution", "kwargs": kwargs}
+
+    async def get_durable_execution_history(self, **kwargs):
+        self.calls.append(("get_durable_execution_history", kwargs))
+        return {"method": "get_durable_execution_history", "kwargs": kwargs}
+
+    async def send_durable_execution_callback_success(self, **kwargs):
+        self.calls.append(("send_durable_execution_callback_success", kwargs))
+        return {"method": "send_durable_execution_callback_success", "kwargs": kwargs}
+
+    async def send_durable_execution_callback_failure(self, **kwargs):
+        self.calls.append(("send_durable_execution_callback_failure", kwargs))
+        return {"method": "send_durable_execution_callback_failure", "kwargs": kwargs}
+
+    async def send_durable_execution_callback_heartbeat(self, **kwargs):
+        self.calls.append(("send_durable_execution_callback_heartbeat", kwargs))
+        return {
+            "method": "send_durable_execution_callback_heartbeat",
+            "kwargs": kwargs,
+        }
+
+    async def aclose(self):
+        self.closed = True
+
+
+class AsyncLambdaClientContextStub:
+    def __init__(self, client):
+        self.client = client
+        self.entered = False
+        self.exited = False
+
+    async def __aenter__(self):
+        self.entered = True
+        return self.client
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        self.exited = True
 
 
 async def test_durable_function_test_result_create():
@@ -235,12 +286,11 @@ async def test_durable_function_test_result_get_deserialized_result():
 
 
 @patch("async_durable_execution.runner.local.Scheduler")
-@patch("async_durable_execution.runner.local.InMemoryExecutionStore")
 @patch("async_durable_execution.runner.local.InMemoryServiceClient")
 @patch("async_durable_execution.runner.local.InProcessInvoker")
 @patch("async_durable_execution.runner.local.Executor")
 async def test_durable_function_test_runner_init(
-    mock_executor, mock_invoker, mock_client, mock_store, mock_scheduler
+    mock_executor, mock_invoker, mock_client, mock_scheduler
 ):
     """Test DurableFunctionLocalTestRunner initialization."""
     handler = Mock()
@@ -250,14 +300,9 @@ async def test_durable_function_test_runner_init(
     # Verify all components are initialized
     mock_scheduler.assert_called_once()
     mock_scheduler.return_value.start.assert_not_called()
-    mock_store.assert_called_once()
-    mock_client.assert_called_once_with(
-        store=mock_store.return_value,
-        scheduler=mock_scheduler.return_value,
-    )
+    mock_client.assert_called_once_with(scheduler=mock_scheduler.return_value)
     mock_invoker.assert_called_once_with(handler, mock_client.return_value)
     mock_executor.assert_called_once_with(
-        store=mock_store.return_value,
         scheduler=mock_scheduler.return_value,
         invoker=mock_invoker.return_value,
         service_client=mock_client.return_value,
@@ -344,6 +389,95 @@ async def test_create_cloud_runner_uses_configured_defaults(mock_cloud_runner_cl
     )
 
 
+async def test_async_cloud_lambda_client_direct_client_delegates_all_methods():
+    from async_durable_execution.runner.cloud import AsyncCloudLambdaClient
+
+    raw_client = AsyncLambdaClientStub()
+    client = AsyncCloudLambdaClient(raw_client)
+
+    assert client.exceptions is raw_client.exceptions
+    assert await client.invoke(FunctionName="fn") == {
+        "method": "invoke",
+        "kwargs": {"FunctionName": "fn"},
+    }
+    assert await client.get_durable_execution(DurableExecutionArn="arn") == {
+        "method": "get_durable_execution",
+        "kwargs": {"DurableExecutionArn": "arn"},
+    }
+    assert await client.get_durable_execution_history(DurableExecutionArn="arn") == {
+        "method": "get_durable_execution_history",
+        "kwargs": {"DurableExecutionArn": "arn"},
+    }
+    assert await client.send_durable_execution_callback_success(
+        CallbackId="callback"
+    ) == {
+        "method": "send_durable_execution_callback_success",
+        "kwargs": {"CallbackId": "callback"},
+    }
+    assert await client.send_durable_execution_callback_failure(
+        CallbackId="callback"
+    ) == {
+        "method": "send_durable_execution_callback_failure",
+        "kwargs": {"CallbackId": "callback"},
+    }
+    assert await client.send_durable_execution_callback_heartbeat(
+        CallbackId="callback"
+    ) == {
+        "method": "send_durable_execution_callback_heartbeat",
+        "kwargs": {"CallbackId": "callback"},
+    }
+
+    await client.aclose()
+
+    assert raw_client.closed is True
+
+
+async def test_async_cloud_lambda_client_enters_context_on_first_call():
+    from async_durable_execution.runner.cloud import AsyncCloudLambdaClient
+
+    raw_client = AsyncLambdaClientStub()
+    context = AsyncLambdaClientContextStub(raw_client)
+    client = AsyncCloudLambdaClient(context)
+
+    with pytest.raises(AttributeError, match="not been initialized"):
+        _ = client.exceptions
+
+    assert await client.get_durable_execution(DurableExecutionArn="arn") == {
+        "method": "get_durable_execution",
+        "kwargs": {"DurableExecutionArn": "arn"},
+    }
+    assert context.entered is True
+    assert client.exceptions is raw_client.exceptions
+
+    await client.aclose()
+
+    assert context.exited is True
+
+
+async def test_read_payload_handles_sync_read_returning_awaitable():
+    from async_durable_execution.runner.cloud import _read_payload
+
+    class Payload:
+        def read(self):
+            async def inner():
+                return b"payload"
+
+            return inner()
+
+    assert await _read_payload(Payload()) == "payload"
+
+
+def test_threaded_sync_cloud_lambda_client_close_delegates_to_client():
+    from async_durable_execution.runner.cloud import ThreadedSyncCloudLambdaClient
+
+    raw_client = Mock()
+    client = ThreadedSyncCloudLambdaClient(raw_client)
+
+    client.close()
+
+    raw_client.close.assert_called_once()
+
+
 @patch("async_durable_execution.runner.local.Scheduler")
 async def test_durable_function_test_runner_close(mock_scheduler):
     """Test DurableFunctionLocalTestRunner close method."""
@@ -361,16 +495,13 @@ async def test_durable_function_test_runner_close(mock_scheduler):
 
 
 @patch("async_durable_execution.runner.local.Executor")
-@patch("async_durable_execution.runner.local.InMemoryExecutionStore")
-async def test_durable_function_test_runner_run(mock_store_class, mock_executor_class):
+async def test_durable_function_test_runner_run(mock_executor_class):
     """Test DurableFunctionLocalTestRunner run method."""
     handler = Mock()
 
     # Mock the class instances
     mock_executor = Mock()
-    mock_store = Mock()
     mock_executor_class.return_value = mock_executor
-    mock_store_class.return_value = mock_store
 
     # Mock execution output
     output = StartDurableExecutionOutput(execution_arn="test-arn")
@@ -384,7 +515,7 @@ async def test_durable_function_test_runner_run(mock_store_class, mock_executor_
     mock_execution.result.status = InvocationStatus.SUCCEEDED
     mock_execution.result.result = json.dumps("test-result")
     mock_execution.result.error = None
-    mock_store.load.return_value = mock_execution
+    mock_executor.get_execution.return_value = mock_execution
 
     runner = DurableFunctionLocalTestRunner(handler, input="test-input")
     result = await runner.run()
@@ -401,8 +532,8 @@ async def test_durable_function_test_runner_run(mock_store_class, mock_executor_
     # Verify wait_until_complete was called
     mock_executor.wait_until_complete.assert_called_once_with("test-arn", 900)
 
-    # Verify store.load was called
-    mock_store.load.assert_called_once_with("test-arn")
+    # Verify execution was read directly from executor
+    mock_executor.get_execution.assert_called_once_with("test-arn")
 
     # Verify result
     assert isinstance(result, DurableFunctionTestResult)
@@ -410,18 +541,13 @@ async def test_durable_function_test_runner_run(mock_store_class, mock_executor_
 
 
 @patch("async_durable_execution.runner.local.Executor")
-@patch("async_durable_execution.runner.local.InMemoryExecutionStore")
-async def test_durable_function_test_runner_run_with_custom_params(
-    mock_store_class, mock_executor_class
-):
+async def test_durable_function_test_runner_run_with_custom_params(mock_executor_class):
     """Test DurableFunctionLocalTestRunner run method with custom parameters."""
     handler = Mock()
 
     # Mock the class instances
     mock_executor = Mock()
-    mock_store = Mock()
     mock_executor_class.return_value = mock_executor
-    mock_store_class.return_value = mock_store
 
     # Mock execution output
     output = StartDurableExecutionOutput(execution_arn="test-arn")
@@ -435,7 +561,7 @@ async def test_durable_function_test_runner_run_with_custom_params(
     mock_execution.result.status = InvocationStatus.SUCCEEDED
     mock_execution.result.result = json.dumps("test-result")
     mock_execution.result.error = None
-    mock_store.load.return_value = mock_execution
+    mock_executor.get_execution.return_value = mock_execution
 
     runner = DurableFunctionLocalTestRunner(
         handler,
@@ -1028,7 +1154,7 @@ async def test_cloud_runner_wait_for_completion_retries_resource_not_found(
 
     assert result.status == "SUCCEEDED"
     assert mock_client.get_durable_execution.call_count == 2
-    mock_sleep.assert_called_once_with(0.01)
+    assert mock_sleep.await_args_list.count(call(0.01)) == 1
 
 
 async def test_durable_function_test_result_from_execution_history_filters_execution_type():

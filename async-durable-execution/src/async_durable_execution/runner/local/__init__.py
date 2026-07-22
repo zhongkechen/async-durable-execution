@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import inspect
 import time
-from datetime import timezone
 from typing import Any, Callable
 
 from ...client import DurableServiceClient
@@ -50,7 +49,6 @@ __all__ = [
     "DurableFunctionLocalTestRunner",
     "Event",
     "Executor",
-    "InMemoryExecutionStore",
     "InMemoryServiceClient",
     "InProcessInvoker",
     "Scheduler",
@@ -87,7 +85,6 @@ class DurableFunctionLocalTestRunner:
         account_id: str = "123456789012",
     ):
         self._scheduler: Scheduler = Scheduler()
-        self._store = InMemoryExecutionStore()
         self.mode = "local"
         self.poll_interval = poll_interval
         self._default_input = input
@@ -95,12 +92,9 @@ class DurableFunctionLocalTestRunner:
         self._function_name = function_name
         self._execution_name = execution_name
         self._account_id = account_id
-        self._service_client = InMemoryServiceClient(
-            store=self._store, scheduler=self._scheduler
-        )
+        self._service_client = InMemoryServiceClient(scheduler=self._scheduler)
         self._invoker = InProcessInvoker(handler, self._service_client)
         self._executor = Executor(
-            store=self._store,
             scheduler=self._scheduler,
             invoker=self._invoker,
             service_client=self._service_client,
@@ -183,7 +177,7 @@ class DurableFunctionLocalTestRunner:
 
             raise TimeoutError(msg_timeout)
 
-        execution: Execution = self._store.load(execution_arn)
+        execution: Execution = self._executor.get_execution(execution_arn)
         return DurableFunctionTestResult.create(execution=execution)
 
     async def wait_for_callback(
@@ -289,124 +283,10 @@ def create_test_lambda_context() -> LambdaContext:
     )
 
 
-class InMemoryExecutionStore:
-    """Dict-based storage for testing."""
-
-    def __init__(self) -> None:
-        self._store: dict[str, Execution] = {}
-
-    def save(self, execution: Execution) -> None:
-        self._store[execution.durable_execution_arn] = execution
-
-    def load(self, execution_arn: str) -> Execution:
-        return self._store[execution_arn]
-
-    def update(self, execution: Execution) -> None:
-        self._store[execution.durable_execution_arn] = execution
-
-    def list_all(self) -> list[Execution]:
-        return list(self._store.values())
-
-    def query(
-        self,
-        function_name: str | None = None,
-        execution_name: str | None = None,
-        status_filter: str | None = None,
-        started_after: str | None = None,
-        started_before: str | None = None,
-        limit: int | None = None,
-        offset: int = 0,
-        reverse_order: bool = False,  # noqa: FBT001, FBT002
-    ) -> tuple[list[Execution], str | None]:
-        """Apply filtering, sorting, and pagination to executions."""
-        executions: list[Execution] = self.list_all()
-        return self.process_query(
-            executions,
-            function_name=function_name,
-            execution_name=execution_name,
-            status_filter=status_filter,
-            started_after=started_after,
-            started_before=started_before,
-            limit=limit,
-            offset=offset,
-            reverse_order=reverse_order,
-        )
-
-    @staticmethod
-    def process_query(
-        executions: list[Execution],
-        function_name: str | None = None,
-        execution_name: str | None = None,
-        status_filter: str | None = None,
-        started_after: str | None = None,
-        started_before: str | None = None,
-        limit: int | None = None,
-        offset: int = 0,
-        reverse_order: bool = False,  # noqa: FBT001, FBT002
-    ) -> tuple[list[Execution], str | None]:
-        """Apply filtering, sorting, and pagination to executions."""
-        filtered: list[Execution] = []
-        for execution in executions:
-            if function_name and execution.start_input.function_name != function_name:
-                continue
-            if (
-                execution_name
-                and execution.start_input.execution_name != execution_name
-            ):
-                continue
-
-            if status_filter and execution.current_status().value != status_filter:
-                continue
-
-            if started_after or started_before:
-                try:
-                    operation: Operation = execution.get_operation_execution_started()
-                    if operation.start_timestamp:
-                        timestamp: float = (
-                            operation.start_timestamp.timestamp()
-                            if hasattr(operation.start_timestamp, "timestamp")
-                            else operation.start_timestamp.replace(
-                                tzinfo=timezone.utc
-                            ).timestamp()
-                        )
-                        if started_after and timestamp < float(started_after):
-                            continue
-                        if started_before and timestamp > float(started_before):
-                            continue
-                except (ValueError, AttributeError):
-                    continue
-
-            filtered.append(execution)
-
-        def get_sort_key(exe: Execution):
-            try:
-                op: Operation = exe.get_operation_execution_started()
-                if op.start_timestamp:
-                    return (
-                        op.start_timestamp.timestamp()
-                        if hasattr(op.start_timestamp, "timestamp")
-                        else op.start_timestamp.replace(tzinfo=timezone.utc).timestamp()
-                    )
-            except Exception:  # noqa: BLE001, S110
-                pass
-            return 0
-
-        filtered.sort(key=get_sort_key, reverse=reverse_order)
-
-        if limit is not None and limit > 0:
-            end_idx: int = offset + limit
-            paginated: list[Execution] = filtered[offset:end_idx]
-            has_more: bool = end_idx < len(filtered)
-            next_marker: str | None = str(end_idx) if has_more else None
-            return paginated, next_marker
-        return filtered[offset:], None
-
-
 class InMemoryServiceClient(DurableServiceClient):
     """An in-memory service client, that can replace the boto lambda service client."""
 
-    def __init__(self, store: InMemoryExecutionStore, scheduler: Scheduler):
-        self._store = store
+    def __init__(self, scheduler: Scheduler):
         self._scheduler = scheduler
         self._executor = None
         self._transformer = OperationTransformer()
@@ -426,8 +306,12 @@ class InMemoryServiceClient(DurableServiceClient):
         client_token: str | None,  # noqa: ARG002
     ) -> CheckpointOutput:
         """Process checkpoint updates and return result with updated execution state."""
+        if self._executor is None:
+            unbound_msg = "Local executor is not bound to the service client."
+            raise InvalidParameterValueException(unbound_msg)
+
         token: CheckpointToken = CheckpointToken.from_str(checkpoint_token)
-        execution: Execution = self._store.load(token.execution_arn)
+        execution: Execution = self._executor.get_execution(token.execution_arn)
 
         if execution.is_complete or token.token_sequence != execution.token_sequence:
             msg: str = "Invalid checkpoint token"
@@ -436,10 +320,6 @@ class InMemoryServiceClient(DurableServiceClient):
         CheckpointValidator.validate_input(
             updates, execution, processors=self._transformer.processors
         )
-
-        if self._executor is None:
-            msg = "Local executor is not bound to the service client."
-            raise InvalidParameterValueException(msg)
 
         updated_operations, all_updates = self._transformer.process_updates(
             updates=updates,
@@ -451,7 +331,7 @@ class InMemoryServiceClient(DurableServiceClient):
         new_checkpoint_token = execution.get_new_checkpoint_token()
         execution.operations = updated_operations
         execution.updates.extend(all_updates)
-        self._store.update(execution)
+        self._executor.set_execution(execution)
 
         return CheckpointOutput(
             checkpoint_token=new_checkpoint_token,
@@ -478,8 +358,12 @@ class InMemoryServiceClient(DurableServiceClient):
         max_items: int = 1000,
     ) -> StateOutput:
         # durable_execution_arn is not used in in-memory testing
+        if self._executor is None:
+            msg = "Local executor is not bound to the service client."
+            raise InvalidParameterValueException(msg)
+
         token: CheckpointToken = CheckpointToken.from_str(checkpoint_token)
-        execution: Execution = self._store.load(token.execution_arn)
+        execution: Execution = self._executor.get_execution(token.execution_arn)
 
         # TODO: paging when size or max
         return StateOutput(

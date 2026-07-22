@@ -15,10 +15,15 @@ from async_durable_execution import (
     create_default_sync_client,
     create_local_runner,
     get_step_context,
+    now,
     step,
     wait,
     parallel,
+    random as durable_random,
+    recurse,
     run_in_child_context,
+    timestamp,
+    uuid as durable_uuid,
     wait_for_callback,
     map as map_operation,
 )
@@ -32,6 +37,8 @@ from async_durable_execution.primitive import child
 from async_durable_execution.config import JitterStrategy
 from async_durable_execution.config import RetryStrategy
 from async_durable_execution.composite.parallel import SummaryGenerator
+from async_durable_execution.composite.parallel import CompletionDecision
+from async_durable_execution.composite.parallel import CompletionStatus
 from async_durable_execution.composite.with_retry import (
     WithRetryContext as ModuleWithRetryContext,
 )
@@ -61,12 +68,19 @@ def test_additional_public_types_importable_from_package_root():
         "OperationSubType": OperationSubType,
         "RetryStrategy": RetryStrategy,
         "SummaryGenerator": SummaryGenerator,
+        "CompletionDecision": CompletionDecision,
+        "CompletionStatus": CompletionStatus,
         "WithRetryContext": ModuleWithRetryContext,
         "PollingStrategy": PollingStrategy,
         "create_cloud_runner": create_cloud_runner,
         "create_default_sync_client": create_default_sync_client,
         "create_local_runner": create_local_runner,
         "get_step_context": get_step_context,
+        "now": now,
+        "random": durable_random,
+        "recurse": recurse,
+        "timestamp": timestamp,
+        "uuid": durable_uuid,
     }
     assert WithRetryContext is ModuleWithRetryContext
 
@@ -172,7 +186,7 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
                 mock_child_executor,
             ),
             patch(
-                "async_durable_execution.composite.wait_for_callback.run_in_child_context",
+                "async_durable_execution.composite.wait_for_callback._create_child_context_task",
                 mock_callback_child,
             ),
             patch(
@@ -238,6 +252,10 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
     mock_child_executor.assert_called_once()
     assert mock_child_executor.call_args.args[2].name == "test_child"
     mock_callback_child.assert_awaited_once()
+    assert (
+        mock_callback_child.await_args.kwargs["sub_type"]
+        is OperationSubType.WAIT_FOR_CALLBACK
+    )
     assert mock_callback_child.await_args.kwargs["name"] == "test_wait_for_callback"
     mock_map_child.assert_awaited_once()
     mock_parallel_child.assert_awaited_once()

@@ -12,7 +12,8 @@ from ..context import bind_current_context, get_current_context
 from ..execution import durable_callable
 from ..primitive.base import OperationContext
 from ..primitive.callback import Callback, create_callback
-from ..primitive.child import run_in_child_context
+from ..models import OperationSubType
+from ..primitive.child import _create_child_context_task
 from ..primitive.step import step
 
 if TYPE_CHECKING:
@@ -85,7 +86,7 @@ def wait_for_callback(
     context_name = name if name is not None else getattr(submitter, "__name__", None)
     logger.debug("wait_for_callback name: %s", context_name)
 
-    return run_in_child_context(
+    return _create_child_context_task(
         wait_for_callback_handler(
             submitter,
             name=context_name,
@@ -94,7 +95,10 @@ def wait_for_callback(
             serdes=serdes,
             retry_strategy=retry_strategy,
         ),
+        sub_type=OperationSubType.WAIT_FOR_CALLBACK,
         name=context_name,
+        serdes=serdes,
+        operation_name="wait_for_callback",
     )
 
 

@@ -356,6 +356,8 @@ class SerDesContext:
 
     durable_execution_arn: str = ""
 
+    recursive_level: int = 0
+
 
 class SerDes(ABC, Generic[T]):
     """Abstract serializer interface for durable operation payloads and results."""
@@ -420,6 +422,7 @@ class ExtendedTypeSerDes(SerDes[T]):
         if SerDes.is_primitive(value):
             return json.dumps(value, separators=(",", ":"))
 
+        self._check_circular_references(value)
         encoded = self._codec.encode(value)
         wrapped = self._to_json_serializable(encoded)
         return json.dumps(wrapped, separators=(",", ":"))
@@ -460,13 +463,43 @@ class ExtendedTypeSerDes(SerDes[T]):
             case _:
                 return obj
 
+    def _check_circular_references(
+        self, obj: Any, seen: set[int] | None = None
+    ) -> None:
+        """Reject circular containers before recursive encoding."""
+        if isinstance(obj, _get_batch_result_type()):
+            obj = obj.to_dict()
+
+        if not isinstance(obj, (dict, list, tuple)):
+            return
+
+        if seen is None:
+            seen = set()
+
+        obj_id = id(obj)
+        if obj_id in seen:
+            msg = "Circular references are not supported"
+            raise SerDesError(msg)
+
+        seen.add(obj_id)
+        try:
+            values = obj.values() if isinstance(obj, dict) else obj
+            for value in values:
+                self._check_circular_references(value, seen)
+        finally:
+            seen.remove(obj_id)
+
 
 DEFAULT_JSON_SERDES: SerDes[Any] = JsonSerDes()
 EXTENDED_TYPES_SERDES: SerDes[Any] = ExtendedTypeSerDes()
 
 
 async def serialize(
-    serdes: SerDes[T] | None, value: T, operation_id: str, durable_execution_arn: str
+    serdes: SerDes[T] | None,
+    value: T,
+    operation_id: str,
+    durable_execution_arn: str,
+    recursive_level: int = 0,
 ) -> str:
     """Serialize value using provided or default serializer.
 
@@ -482,7 +515,11 @@ async def serialize(
     Raises:
         FatalError: If serialization fails
     """
-    serdes_context: SerDesContext = SerDesContext(operation_id, durable_execution_arn)
+    serdes_context: SerDesContext = SerDesContext(
+        operation_id,
+        durable_execution_arn,
+        recursive_level,
+    )
     active_serdes: SerDes[T] = serdes or EXTENDED_TYPES_SERDES
 
     async def serialize_value() -> str:
@@ -501,7 +538,11 @@ async def serialize(
 
 
 async def deserialize(
-    serdes: SerDes[T] | None, data: str, operation_id: str, durable_execution_arn: str
+    serdes: SerDes[T] | None,
+    data: str,
+    operation_id: str,
+    durable_execution_arn: str,
+    recursive_level: int = 0,
 ) -> T:
     """Deserialize data using provided or default serializer.
 
@@ -517,7 +558,11 @@ async def deserialize(
     Raises:
         FatalError: If deserialization fails
     """
-    serdes_context: SerDesContext = SerDesContext(operation_id, durable_execution_arn)
+    serdes_context: SerDesContext = SerDesContext(
+        operation_id,
+        durable_execution_arn,
+        recursive_level,
+    )
     active_serdes: SerDes[T] = serdes or EXTENDED_TYPES_SERDES
 
     async def deserialize_value() -> T:

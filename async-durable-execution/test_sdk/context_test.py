@@ -187,6 +187,33 @@ async def test_child_context_inherits_lambda_context_from_operation_context():
     assert child_context.lambda_context is lambda_context
 
 
+async def test_operation_contexts_expose_recursive_level():
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = (
+        "arn:aws:durable:us-east-1:123456789012:execution/test"
+    )
+    mock_state.lambda_context = None
+    mock_state.recursive_level = 3
+
+    durable_context = DurableContext(
+        execution_state=mock_state,
+        operation_identifier=OperationIdentifier.create_execution_op(),
+    )
+    step_context = StepContext(
+        execution_state=mock_state,
+        operation_identifier=OperationIdentifier(
+            operation_id="step-1",
+            sub_type=OperationSubType.STEP,
+            parent_id=None,
+        ),
+        attempt=1,
+    )
+
+    assert durable_context.recursive_level == 3
+    assert durable_context.create_child_context("child-op-1").recursive_level == 3
+    assert step_context.recursive_level == 3
+
+
 async def test_module_level_context_functions_delegate_to_durable_context():
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
@@ -250,7 +277,7 @@ async def test_module_level_context_functions_delegate_to_durable_context():
             MagicMock(return_value=make_async_executor("child-result")),
         ),
         patch(
-            "async_durable_execution.composite.wait_for_callback.run_in_child_context",
+            "async_durable_execution.composite.wait_for_callback._create_child_context_task",
             mock_callback_child,
         ),
         patch(
@@ -349,6 +376,10 @@ async def test_module_level_context_functions_delegate_to_durable_context():
     )
     invoke_executor.process.assert_awaited_once()
     mock_callback_child.assert_awaited_once()
+    assert (
+        mock_callback_child.await_args.kwargs["sub_type"]
+        is OperationSubType.WAIT_FOR_CALLBACK
+    )
     assert mock_callback_child.await_args.kwargs["name"] == "wait-callback-name"
     mock_map_child.assert_awaited_once()
     mock_parallel_child.assert_awaited_once()
@@ -1713,7 +1744,7 @@ async def test_wait_for_callback_basic(mock_executor_class):
     )  # Ensure _original_name doesn't exist
 
     with patch(
-        "async_durable_execution.composite.wait_for_callback.run_in_child_context",
+        "async_durable_execution.composite.wait_for_callback._create_child_context_task",
         new_callable=AsyncMock,
     ) as mock_run_in_child:
         mock_run_in_child.return_value = "callback_result"
@@ -1729,7 +1760,10 @@ async def test_wait_for_callback_basic(mock_executor_class):
         # Verify the child context callable
         call_args = mock_run_in_child.call_args
         assert callable(call_args.args[0])
+        assert call_args.kwargs["sub_type"] is OperationSubType.WAIT_FOR_CALLBACK
         assert call_args.kwargs["name"] == "AsyncMock"
+        assert call_args.kwargs["serdes"] is None
+        assert call_args.kwargs["operation_name"] == "wait_for_callback"
 
 
 @patch("async_durable_execution.composite.wait_for_callback.wait_for_callback_handler")
@@ -1746,7 +1780,7 @@ async def test_wait_for_callback_with_name_and_config(mock_executor_class):
     heartbeat_timeout = timedelta(seconds=10)
 
     with patch(
-        "async_durable_execution.composite.wait_for_callback.run_in_child_context",
+        "async_durable_execution.composite.wait_for_callback._create_child_context_task",
         new_callable=AsyncMock,
     ) as mock_run_in_child:
         mock_run_in_child.return_value = "configured_callback_result"
@@ -1765,6 +1799,7 @@ async def test_wait_for_callback_with_name_and_config(mock_executor_class):
         assert result == "configured_callback_result"
         call_args = mock_run_in_child.call_args
         assert callable(call_args.args[0])
+        assert call_args.kwargs["sub_type"] is OperationSubType.WAIT_FOR_CALLBACK
         assert call_args.kwargs["name"] == "submit_function"
 
 
@@ -1781,7 +1816,7 @@ async def test_wait_for_callback_uses_submitter_name(mock_executor_class):
     mock_submitter._original_name = "submit_task"  # noqa: SLF001
 
     with patch(
-        "async_durable_execution.composite.wait_for_callback.run_in_child_context",
+        "async_durable_execution.composite.wait_for_callback._create_child_context_task",
         new_callable=AsyncMock,
     ) as mock_run_in_child:
         mock_run_in_child.return_value = "named_callback_result"
@@ -1826,11 +1861,21 @@ async def test_wait_for_callback_passes_child_context(mock_executor_class):
     mock_executor_class.side_effect = capture_handler_call
 
     with patch(
-        "async_durable_execution.composite.wait_for_callback.run_in_child_context"
+        "async_durable_execution.composite.wait_for_callback._create_child_context_task"
     ) as mock_run_in_child:
 
-        async def run_child_context(callable_func, *, name):
+        async def run_child_context(
+            callable_func,
+            *,
+            sub_type,
+            name,
+            serdes,
+            operation_name,
+        ):
             # Execute the child context callable
+            assert sub_type is OperationSubType.WAIT_FOR_CALLBACK
+            assert serdes is None
+            assert operation_name == "wait_for_callback"
             child_context = create_test_context(state=mock_state, parent_id="test")
             token = set_current_context(child_context)
             try:

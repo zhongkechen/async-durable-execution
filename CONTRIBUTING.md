@@ -67,6 +67,18 @@ hatch fmt --check
 hatch fmt
 ```
 
+### Documentation
+
+Build the searchable documentation site and generated API reference:
+
+```bash
+hatch run docs:build
+```
+
+The build runs in strict mode and writes the site to `build/docs`. Fix warnings
+about navigation, links, docstrings, or API signatures before submitting
+documentation changes.
+
 ### Testing examples against PyPI
 
 To verify the examples package against the published SDK:
@@ -165,6 +177,9 @@ hatch run -- examples:pip install -e async-durable-execution-examples
 Cloud mode exercises deployed Lambda functions with `DurableFunctionCloudTestRunner`:
 
 ```bash
+# Build the SDK Lambda layer.
+hatch run examples:build-layer
+
 # Build the example bundle.
 hatch run examples:build
 
@@ -180,13 +195,13 @@ sam deploy \
   --capabilities CAPABILITY_IAM \
   --no-confirm-changeset \
   --parameter-overrides \
-    FunctionName=HelloWorld-Test \
+    FunctionNamePrefix=hello-world-test- \
     LambdaEndpoint=https://lambda.eu-south-1.amazonaws.com
 
 # Configure cloud test discovery.
 export AWS_REGION=eu-south-1
 export LAMBDA_ENDPOINT=https://lambda.eu-south-1.amazonaws.com
-export QUALIFIED_FUNCTION_NAME="HelloWorld-Test:$LATEST"
+export QUALIFIED_FUNCTION_NAME="hello-world-test-HelloWorld:$LATEST"
 
 # Run one cloud-backed example test.
 pytest --runner-mode=cloud -k test_hello_world async-durable-execution-examples/test_examples/
