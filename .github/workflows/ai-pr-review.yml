@@ -98,6 +98,6 @@ jobs:
             Then post one concise top-level summary. If there are no findings,
             say so and mention any residual test risk. Do not repeat findings.
           claude_args: |
-            --model us.anthropic.claude-fable-5
+            --model us.anthropic.claude-opus-4-8
             --max-turns 12
             --allowedTools "Read,Grep,Glob,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),mcp__github_inline_comment__create_inline_comment"
