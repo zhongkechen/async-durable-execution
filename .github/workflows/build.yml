@@ -43,6 +43,10 @@ jobs:
             cd "$GITHUB_WORKSPACE"
           fi
         done
+    - name: Lint shell scripts
+      run: |
+        shellcheck scripts/*.sh
+        bash -n scripts/*.sh
     - name: type checking
       run: hatch run test:typecheck
     - name: Run tests + coverage
