@@ -609,6 +609,63 @@ async def test_any_ignores_nonmatching_terminal_result():
     assert payload["unhandledFailures"] == ["A"]
 
 
+async def test_any_winner_survives_partial_replay(monkeypatch):
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0")
+    release_definition_first = asyncio.Event()
+    definition_first_finished = asyncio.Event()
+    observed_winners: list[str] = []
+
+    @durable_dag
+    def graph():
+        @durable_node
+        async def definition_first() -> str:
+            await release_definition_first.wait()
+            definition_first_finished.set()
+            return "definition-first"
+
+        @durable_node
+        async def completes_first() -> None:
+            msg = "completion-first failure"
+            raise ValueError(msg)
+
+        @durable_node
+        async def handle() -> str:
+            context = cast(FlowNodeContext, get_current_context())
+            assert context.result(a).status is FlowNodeStatus.FAILED
+            with pytest.raises(InvalidStateError, match="not available"):
+                context.result(b)
+            observed_winners.append("A")
+
+            release_definition_first.set()
+            await definition_first_finished.wait()
+            await asyncio.sleep(0.01)
+            await wait(timedelta(seconds=1), name="handler-wait")
+            return "handled"
+
+        # B is first in definition/expression order, but A completes first.
+        b = node(definition_first(), name="B")
+        a = node(completes_first(), name="A")
+        handler = node(handle(), name="handler")
+        (b.succeeded | a.failed) >> handler
+        return handler
+
+    @durable_execution
+    async def handler(event):
+        return (await flow(graph(), name="replayed-any-winner")).to_dict()
+
+    async with create_local_runner(
+        handler=handler,
+        input={},
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    payload = json.loads(result.result)
+    assert payload["results"]["handler"]["outcome"] == "handled"
+    assert payload["unhandledFailures"] == []
+    assert observed_winners == ["A", "A"]
+
+
 def test_nested_any_does_not_retroactively_change_its_winner():
     handles = {}
 

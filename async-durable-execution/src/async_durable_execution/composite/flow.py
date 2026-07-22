@@ -28,6 +28,7 @@ from ..exceptions import (
 )
 from ..models import ErrorObject, SerializableModel
 from ..primitive.child import DurableContext, get_durable_context, run_in_child_context
+from ..primitive.step import step
 from ..serdes import ExtendedTypeSerDes, SerDes
 from ..task import create_eager_task
 
@@ -161,6 +162,9 @@ class _DependencyExpression:
     def leaves(self) -> tuple[_DependencyLeaf, ...]:
         raise NotImplementedError  # pragma: no cover
 
+    def contains_any(self) -> bool:
+        raise NotImplementedError  # pragma: no cover
+
     def evaluate(
         self,
         results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
@@ -233,6 +237,9 @@ class _DependencyLeaf(_DependencyExpression):
     def leaves(self) -> tuple[_DependencyLeaf, ...]:
         return (self,)
 
+    def contains_any(self) -> bool:
+        return False
+
     def evaluate(
         self,
         results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
@@ -261,6 +268,11 @@ class _CompositeDependencyExpression(_DependencyExpression):
 
     def leaves(self) -> tuple[_DependencyLeaf, ...]:
         return tuple(leaf for child in self.children for leaf in child.leaves())
+
+    def contains_any(self) -> bool:
+        return self.mode is _DependencyMode.ANY or any(
+            child.contains_any() for child in self.children
+        )
 
     def evaluate(
         self,
@@ -686,6 +698,45 @@ class _NodeExecutionSerDes(SerDes[_NodeExecution]):
         return _NodeExecution.from_dict(decoded)
 
 
+@dataclass(frozen=True)
+class _PersistedDependencyResolution:
+    matched: bool
+    settled_nodes: tuple[str, ...]
+    handled_failures: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "matched": self.matched,
+            "settledNodes": list(self.settled_nodes),
+            "handledFailures": list(self.handled_failures),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> _PersistedDependencyResolution:
+        return cls(
+            matched=bool(data["matched"]),
+            settled_nodes=tuple(str(name) for name in data["settledNodes"]),
+            handled_failures=tuple(
+                str(name) for name in data.get("handledFailures", ())
+            ),
+        )
+
+
+class _PersistedDependencyResolutionSerDes(SerDes[_PersistedDependencyResolution]):
+    def __init__(self) -> None:
+        self.delegate: ExtendedTypeSerDes[Any] = ExtendedTypeSerDes()
+
+    async def serialize(self, value: _PersistedDependencyResolution) -> str:
+        return await self.delegate.serialize(value.to_dict())
+
+    async def deserialize(self, data: str) -> _PersistedDependencyResolution:
+        decoded = await self.delegate.deserialize(data)
+        if not isinstance(decoded, Mapping):
+            msg = "Serialized flow dependency resolution must be a mapping."
+            raise SerDesError(msg)
+        return _PersistedDependencyResolution.from_dict(decoded)
+
+
 class _FlowResultSerDes(SerDes[FlowResult]):
     def __init__(self) -> None:
         self.delegate: ExtendedTypeSerDes[Any] = ExtendedTypeSerDes()
@@ -702,6 +753,7 @@ class _FlowResultSerDes(SerDes[FlowResult]):
 
 
 _NODE_EXECUTION_SERDES = _NodeExecutionSerDes()
+_DEPENDENCY_RESOLUTION_SERDES = _PersistedDependencyResolutionSerDes()
 _FLOW_RESULT_SERDES = _FlowResultSerDes()
 
 
@@ -760,6 +812,20 @@ def _find_control_error(error: Exception) -> Exception | None:
     return None
 
 
+async def _await_node_execution(
+    task: asyncio.Task[_NodeExecution],
+) -> _NodeExecution:
+    try:
+        return await task
+    except _FlowControlSignal:
+        raise
+    except Exception as error:
+        control_error = _find_control_error(error)
+        if control_error is not None:
+            raise _FlowControlSignal(control_error) from error
+        raise
+
+
 async def _resolve_dependencies(
     expression: _DependencyExpression,
     tasks: Mapping[FlowNode[Any], asyncio.Task[_NodeExecution]],
@@ -778,15 +844,7 @@ async def _resolve_dependencies(
             flow_node = leaf.node
             if flow_node not in pending or not tasks[flow_node].done():
                 continue
-            try:
-                execution = tasks[flow_node].result()
-            except _FlowControlSignal:
-                raise
-            except Exception as error:
-                control_error = _find_control_error(error)
-                if control_error is not None:
-                    raise _FlowControlSignal(control_error) from error
-                raise
+            execution = await _await_node_execution(tasks[flow_node])
 
             pending.remove(flow_node)
             settled[flow_node] = execution.result
@@ -805,6 +863,47 @@ async def _resolve_dependencies(
 
     # A validated expression is terminal once every leaf has settled.
     raise AssertionError("Dependency expression remained pending")  # pragma: no cover
+
+
+async def _persist_any_resolution(
+    resolution: _DependencyResolution,
+    expression: _DependencyExpression,
+    tasks: Mapping[FlowNode[Any], asyncio.Task[_NodeExecution]],
+) -> _DependencyResolution:
+    nodes_by_name = {leaf.node.name: leaf.node for leaf in expression.leaves()}
+    decision = _PersistedDependencyResolution(
+        matched=resolution.matched,
+        settled_nodes=tuple(node.name for node in resolution.results),
+        handled_failures=tuple(node.name for node in resolution.handled_failures),
+    )
+
+    async def checkpoint_decision() -> _PersistedDependencyResolution:
+        return decision
+
+    try:
+        persisted = await step(
+            checkpoint_decision,
+            name="flow-any-resolution",
+            serdes=_DEPENDENCY_RESOLUTION_SERDES,
+        )
+    except Exception as error:
+        control_error = _find_control_error(error)
+        if control_error is not None:
+            raise _FlowControlSignal(control_error) from error
+        raise
+    settled: dict[FlowNode[Any], FlowNodeResult[Any]] = {}
+    for node_name in persisted.settled_nodes:
+        flow_node = nodes_by_name[node_name]
+        execution = await _await_node_execution(tasks[flow_node])
+        settled[flow_node] = execution.result
+
+    return _DependencyResolution(
+        matched=persisted.matched,
+        results=settled,
+        handled_failures=tuple(
+            nodes_by_name[node_name] for node_name in persisted.handled_failures
+        ),
+    )
 
 
 def _flow_node_context(
@@ -835,6 +934,12 @@ async def _execute_node(
         direct_dependencies: frozenset[FlowNode[Any]] = frozenset()
     else:
         resolution = await _resolve_dependencies(expression, tasks)
+        if resolution.matched and expression.contains_any():
+            resolution = await _persist_any_resolution(
+                resolution,
+                expression,
+                tasks,
+            )
         direct_dependencies = frozenset(leaf.node for leaf in expression.leaves())
 
     handled_failures = tuple(
