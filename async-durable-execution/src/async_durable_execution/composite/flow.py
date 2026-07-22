@@ -6,7 +6,7 @@ import asyncio
 import functools
 import heapq
 import inspect
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Generator, Mapping
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from enum import Enum
@@ -16,6 +16,7 @@ from ..context import (
     bind_current_context,
     bind_durable_definition,
     ensure_durable_operations_allowed,
+    get_current_context,
 )
 from ..exceptions import (
     CallableRuntimeError,
@@ -305,7 +306,7 @@ class _CompositeDependencyExpression(_DependencyExpression):
         return _Evaluation(_EvaluationStatus.UNMATCHED)
 
 
-class FlowNode(Generic[T]):
+class FlowNode(Awaitable[T], Generic[T]):
     """Typed handle for a node declared inside a durable DAG definition."""
 
     def __init__(
@@ -323,6 +324,33 @@ class FlowNode(Generic[T]):
 
     def __repr__(self) -> str:
         return f"FlowNode(name={self.name!r})"
+
+    def result(self) -> FlowNodeResult[T]:
+        """Return this direct dependency's logical result in a running node."""
+        try:
+            context = get_current_context()
+        except RuntimeError as error:
+            msg = "Flow node results are only available while a flow node is executing."
+            raise InvalidStateError(msg) from error
+        if not isinstance(context, FlowNodeContext):
+            msg = "Flow node results are only available while a flow node is executing."
+            raise InvalidStateError(msg)
+        return context.result(self)
+
+    def __await__(self) -> Generator[Any, None, T]:
+        """Return this direct dependency's successful outcome."""
+
+        async def resolve() -> T:
+            result = self.result()
+            if result.status is not FlowNodeStatus.SUCCEEDED:
+                msg = (
+                    f"Flow node {self.name!r} did not succeed "
+                    f"(status {result.status.value}); use result() to inspect it."
+                )
+                raise InvalidStateError(msg)
+            return cast("T", result.outcome)
+
+        return resolve().__await__()
 
     @property
     def succeeded(self) -> _DependencyExpression:
@@ -1205,7 +1233,7 @@ def _evaluate_definition(definition: Callable[[], Any]) -> _FrozenFlow:
     finally:
         _current_flow_builder.reset(token)
 
-    if inspect.isawaitable(output):
+    if inspect.isawaitable(output) and not isinstance(output, FlowNode):
         if inspect.iscoroutine(output):
             output.close()
         msg = "A durable DAG definition must execute synchronously."

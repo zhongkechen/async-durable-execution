@@ -5,13 +5,11 @@ from typing import Any, cast
 
 from async_durable_execution import (
     FlowNode,
-    FlowNodeContext,
     durable_callable,
     durable_dag,
     durable_execution,
     durable_node,
     flow,
-    get_current_context,
     node,
     step,
     wait,
@@ -44,11 +42,7 @@ async def prepare_notification(
     customer_node: FlowNode[dict[str, str]],
 ) -> str:
     """Wait durably before running another step in the node."""
-    context = cast(FlowNodeContext, get_current_context())
-    customer = cast(
-        dict[str, str],
-        context.result(customer_node).outcome,
-    )
+    customer = await customer_node
     await wait(
         duration=timedelta(seconds=1),
         name="notification-delay",

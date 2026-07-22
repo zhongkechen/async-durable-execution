@@ -72,6 +72,30 @@ def test_flow_result_helpers_preserve_selected_output_arity():
     assert FlowResult.from_dict(multiple.to_dict()) == multiple
 
 
+def test_flow_node_result_is_rejected_outside_node_execution():
+    captured = {}
+
+    @durable_dag
+    def graph():
+        captured["source"] = node(return_name(), name="source")
+
+    _evaluate_definition(graph())
+
+    with pytest.raises(InvalidStateError, match="while a flow node is executing"):
+        captured["source"].result()
+
+    context = DurableContext(
+        execution_state=Mock(spec=ExecutionState),
+        operation_identifier=OperationIdentifier(
+            operation_id=None,
+            sub_type=OperationSubType.EXECUTION,
+        ),
+    )
+    with bind_current_context(context):
+        with pytest.raises(InvalidStateError, match="while a flow node is executing"):
+            captured["source"].result()
+
+
 async def test_flow_serdes_reject_non_mapping_payloads():
     delegate = ExtendedTypeSerDes()
     payload = await delegate.serialize("not-a-mapping")

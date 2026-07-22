@@ -56,16 +56,12 @@ without running user code. `flow()` synchronously evaluates and validates the
 complete graph before creating its durable child context.
 
 ```python
-from typing import cast
-
 from async_durable_execution import (
     FlowNode,
-    FlowNodeContext,
     durable_callable,
     durable_dag,
     durable_node,
     flow,
-    get_current_context,
     node,
     step,
 )
@@ -88,8 +84,7 @@ async def fetch(order_id: str) -> dict:
 
 @durable_node
 async def charge(fetch_node: FlowNode[dict]) -> dict:
-    context = cast(FlowNodeContext, get_current_context())
-    order = context.result(fetch_node).outcome
+    order = await fetch_node
     return await step(charge_order(order), name="charge-order")
 
 
@@ -108,8 +103,10 @@ charge_result = result.output
 Definition code must be deterministic and cannot start `step()`, `wait()`,
 `invoke()`, another `flow()`, or any other durable operation. Node bodies run only
 after validation inside their own durable child contexts, where they can use all
-normal durable operations. Call `get_current_context()` inside a node body to access
-its `FlowNodeContext` and direct dependency results.
+normal durable operations. Inside a node body, `await dependency_node` returns a
+successful direct dependency's outcome. Use `dependency_node.result()` to inspect the
+full `FlowNodeResult` in failure or completion routes. `FlowNodeContext.result()`
+remains available as the lower-level equivalent.
 
 Dependency operators build the graph:
 

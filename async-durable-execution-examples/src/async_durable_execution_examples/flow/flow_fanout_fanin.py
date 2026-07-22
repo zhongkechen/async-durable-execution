@@ -4,12 +4,10 @@ from typing import Any, cast
 
 from async_durable_execution import (
     FlowNode,
-    FlowNodeContext,
     durable_dag,
     durable_execution,
     durable_node,
     flow,
-    get_current_context,
     node,
 )
 
@@ -31,8 +29,7 @@ async def load_order(
 @durable_node
 async def validate_order(order_node: FlowNode[dict[str, Any]]) -> dict[str, Any]:
     """Validate an order after it has loaded."""
-    context = cast(FlowNodeContext, get_current_context())
-    order = cast(dict[str, Any], context.result(order_node).outcome)
+    order = await order_node
     return {
         "orderId": order["orderId"],
         "valid": order["quantity"] > 0,
@@ -42,8 +39,7 @@ async def validate_order(order_node: FlowNode[dict[str, Any]]) -> dict[str, Any]
 @durable_node
 async def price_order(order_node: FlowNode[dict[str, Any]]) -> float:
     """Calculate the order total in parallel with validation."""
-    context = cast(FlowNodeContext, get_current_context())
-    order = cast(dict[str, Any], context.result(order_node).outcome)
+    order = await order_node
     return cast(float, order["quantity"] * order["unitPrice"])
 
 
@@ -53,12 +49,8 @@ async def build_response(
     pricing_node: FlowNode[float],
 ) -> dict[str, Any]:
     """Combine both fan-out branches after they complete."""
-    context = cast(FlowNodeContext, get_current_context())
-    validation = cast(
-        dict[str, Any],
-        context.result(validation_node).outcome,
-    )
-    total = context.result(pricing_node).outcome
+    validation = await validation_node
+    total = await pricing_node
     return {
         "orderId": validation["orderId"],
         "valid": validation["valid"],

@@ -1,15 +1,13 @@
 """Route a flow through success or failure dependencies."""
 
-from typing import Any, cast
+from typing import Any
 
 from async_durable_execution import (
     FlowNode,
-    FlowNodeContext,
     durable_dag,
     durable_execution,
     durable_node,
     flow,
-    get_current_context,
     node,
 )
 
@@ -29,16 +27,14 @@ async def fulfill_order(
     payment_node: FlowNode[str],
 ) -> str:
     """Run only when payment succeeds."""
-    context = cast(FlowNodeContext, get_current_context())
-    payment = context.result(payment_node)
-    return f"fulfilled:{order_id}:{payment.outcome}"
+    payment = await payment_node
+    return f"fulfilled:{order_id}:{payment}"
 
 
 @durable_node
 async def record_payment_failure(payment_node: FlowNode[str]) -> str:
     """Handle a failed payment and expose its captured error."""
-    context = cast(FlowNodeContext, get_current_context())
-    payment = context.result(payment_node)
+    payment = payment_node.result()
     message = payment.error.message if payment.error is not None else "unknown"
     return f"recovered:{message}"
 

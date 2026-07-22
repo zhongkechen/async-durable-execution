@@ -324,6 +324,40 @@ async def test_linear_fanout_fanin_flow_checkpoints_complete_result():
     )
 
 
+async def test_flow_node_handle_exposes_result_and_awaitable_outcome():
+    @durable_dag
+    def graph():
+        @durable_node
+        async def source() -> str:
+            return "source"
+
+        @durable_node
+        async def target() -> str:
+            source_result = source_node.result()
+            assert source_result.status is FlowNodeStatus.SUCCEEDED
+            return f"{await source_node}-target"
+
+        source_node = node(source(), name="source")
+        target_node = node(target(), name="target")
+        source_node >> target_node
+        return target_node
+
+    @durable_execution
+    async def handler(event):
+        return (await flow(graph(), name="node-result-access")).to_dict()
+
+    async with create_local_runner(
+        handler=handler,
+        input={},
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    payload = json.loads(result.result)
+    assert payload["outputs"][0]["outcome"] == "source-target"
+
+
 async def test_failure_route_skips_success_branch_and_handles_source_failure():
     called: list[str] = []
 
@@ -384,6 +418,48 @@ async def test_failure_route_skips_success_branch_and_handles_source_failure():
     assert payload["results"]["B"]["status"] == "SKIPPED"
     assert payload["results"]["C"]["outcome"] == "A failed"
     assert payload["results"]["D"]["outcome"] == "recovered"
+    assert payload["unhandledFailures"] == []
+
+
+async def test_flow_node_await_rejects_failure_but_result_remains_available():
+    @durable_dag
+    def graph():
+        @durable_node
+        async def fail() -> None:
+            msg = "source failed"
+            raise ValueError(msg)
+
+        @durable_node
+        async def recover() -> str:
+            source_result = source.result()
+            assert source_result.status is FlowNodeStatus.FAILED
+            assert source_result.error is not None
+            with pytest.raises(
+                InvalidStateError,
+                match=r"did not succeed \(status FAILED\)",
+            ):
+                await source
+            return source_result.error.message or ""
+
+        source = node(fail(), name="source")
+        recovery = node(recover(), name="recovery")
+        source.failed >> recovery
+        return recovery
+
+    @durable_execution
+    async def handler(event):
+        return (await flow(graph(), name="failed-node-result-access")).to_dict()
+
+    async with create_local_runner(
+        handler=handler,
+        input={},
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    payload = json.loads(result.result)
+    assert payload["outputs"][0]["outcome"] == "source failed"
     assert payload["unhandledFailures"] == []
 
 
