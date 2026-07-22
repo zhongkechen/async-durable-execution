@@ -303,13 +303,36 @@ jobs:
           sudo chown -R runner:codex-review "$GITHUB_WORKSPACE"
           sudo chmod -R g+rX "$GITHUB_WORKSPACE"
 
-          # The action invokes Codex through sudo, so preserve its AWS SDK chain.
+          # Codex runs through sudo, so preserve its AWS SDK credential chain.
           sudo sh -c \
             'printf "%s\n" \
               "Defaults:runner env_keep += \"AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_REGION AWS_DEFAULT_REGION\"" \
               > /etc/sudoers.d/codex-review-env'
           sudo chmod 440 /etc/sudoers.d/codex-review-env
           sudo visudo -cf /etc/sudoers.d/codex-review-env
+
+          current_userns="$(
+            sysctl -n kernel.unprivileged_userns_clone 2>/dev/null || true
+          )"
+          if [[ -n "$current_userns" && "$current_userns" != "1" ]]; then
+            sudo sysctl -w kernel.unprivileged_userns_clone=1
+          fi
+
+          current_apparmor="$(
+            sysctl -n kernel.apparmor_restrict_unprivileged_userns \
+              2>/dev/null || true
+          )"
+          if [[ -n "$current_apparmor" && "$current_apparmor" != "0" ]]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "24"
+
+      - name: Install Codex CLI
+        run: npm install -g "@openai/codex@0.145.0"
 
       - name: Configure AWS credentials for Codex
         id: aws-credentials
@@ -338,24 +361,34 @@ jobs:
           output-env-credentials: false
 
       - name: Review pull request with Codex on Amazon Bedrock
-        id: codex
-        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
         env:
           AWS_ACCESS_KEY_ID: ${{ steps.aws-credentials.outputs.aws-access-key-id }}
           AWS_SECRET_ACCESS_KEY: ${{ steps.aws-credentials.outputs.aws-secret-access-key }}
           AWS_SESSION_TOKEN: ${{ steps.aws-credentials.outputs.aws-session-token }}
           AWS_REGION: us-east-1
           AWS_DEFAULT_REGION: us-east-1
-        with:
-          model: openai.gpt-5.6-sol
-          effort: medium
-          codex-version: 0.145.0
-          permission-profile: ":read-only"
-          safety-strategy: unprivileged-user
-          codex-user: codex-review
-          allow-users: ${{ github.actor }}
-          codex-args: '["--ephemeral","--config","model_provider=\"amazon-bedrock\""]'
-          prompt: |
+        run: |
+          set -euo pipefail
+
+          codex_bin="$(command -v codex)"
+          output_dir="$(
+            sudo -u codex-review mktemp -d -t codex-review.XXXXXX
+          )"
+          output_file="${output_dir}/review.md"
+          trap 'sudo rm -rf "$output_dir"' EXIT
+
+          sudo -u codex-review -- env \
+            CODEX_HOME=/home/codex-review/.codex \
+            FORCE_COLOR=1 \
+            "$codex_bin" exec \
+            --skip-git-repo-check \
+            --cd "$GITHUB_WORKSPACE" \
+            --output-last-message "$output_file" \
+            --model openai.gpt-5.6-sol \
+            --config 'model_reasoning_effort="medium"' \
+            --config 'model_provider="amazon-bedrock"' \
+            --config 'default_permissions=":read-only"' \
+            --ephemeral <<'CODEX_PROMPT'
             REPOSITORY: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
             REVIEWED BASE COMMIT: ${{ github.event.pull_request.base.sha }}
@@ -382,16 +415,25 @@ jobs:
             changed-line references, impact, and a concrete fix. Do not repeat
             findings. If there are no findings, say so and mention any residual
             test risk.
+          CODEX_PROMPT
+
+          sudo install \
+            -m 600 \
+            -o runner \
+            -g runner \
+            "$output_file" \
+            "${RUNNER_TEMP}/codex-review.md"
 
       - name: Post Codex review
         env:
-          CODEX_REVIEW: ${{ steps.codex.outputs.final-message }}
+          CODEX_REVIEW_FILE: ${{ runner.temp }}/codex-review.md
           EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
 
+          CODEX_REVIEW="$(cat "$CODEX_REVIEW_FILE")"
           current_head_sha="$(
             gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha
           )"
