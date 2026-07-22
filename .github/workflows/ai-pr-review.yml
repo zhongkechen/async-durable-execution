@@ -11,8 +11,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  approve_external:
+    name: Approve non-owner PR review
+    if: >-
+      !github.event.pull_request.draft &&
+      github.actor != 'dependabot[bot]' &&
+      github.event.pull_request.author_association != 'OWNER'
+    runs-on: ubuntu-latest
+    environment: ai-pr-review
+    permissions: {}
+    steps:
+      - name: Record approval
+        run: echo "Approved review of ${{ github.event.pull_request.head.sha }}"
+
   review:
-    if: ${{ !github.event.pull_request.draft && github.actor != 'dependabot[bot]' }}
+    needs: approve_external
+    if: >-
+      always() &&
+      !github.event.pull_request.draft &&
+      github.actor != 'dependabot[bot]' &&
+      (
+        github.event.pull_request.author_association == 'OWNER' ||
+        needs.approve_external.result == 'success'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -20,6 +41,21 @@ jobs:
       pull-requests: write
 
     steps:
+      - name: Verify approved PR revision
+        if: ${{ github.event.pull_request.author_association != 'OWNER' }}
+        env:
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          current_head_sha="$(
+            gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha
+          )"
+          if [[ "$current_head_sha" != "$EXPECTED_HEAD_SHA" ]]; then
+            echo "::error::The PR changed after approval; approve its latest run instead."
+            exit 1
+          fi
+
       # pull_request_target exposes repository secrets, so only check out the
       # trusted base branch. Claude reads the proposed changes through gh.
       - name: Check out base branch
@@ -37,7 +73,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           use_bedrock: "true"
-          allowed_non_write_users: "*"
+          allowed_non_write_users: ${{ github.actor }}
           classify_inline_comments: "false"
           prompt: |
             REPOSITORY: ${{ github.repository }}
