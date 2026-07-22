@@ -76,6 +76,7 @@ jobs:
           use_bedrock: "true"
           allowed_non_write_users: ${{ github.actor }}
           classify_inline_comments: "false"
+          show_full_output: "true"
           prompt: |
             REPOSITORY: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
