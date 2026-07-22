@@ -24,7 +24,6 @@ from async_durable_execution import (
 )
 from async_durable_execution.composite.flow import (
     FlowNode,
-    _DependencyResolution,
     _FlowBuilder,
     _FlowControlSignal,
     _FlowResultSerDes,
@@ -34,8 +33,7 @@ from async_durable_execution.composite.flow import (
     _evaluate_definition,
     _execute_flow,
     _flow_node_context,
-    _persist_any_resolution,
-    _resolve_dependencies,
+    _resolve_dependency_expression,
 )
 from async_durable_execution.context import bind_current_context
 from async_durable_execution.exceptions import (
@@ -84,39 +82,6 @@ async def test_flow_serdes_reject_non_mapping_payloads():
         await _PersistedDependencyResolutionSerDes().deserialize(payload)
     with pytest.raises(SerDesError, match="flow result"):
         await _FlowResultSerDes().deserialize(payload)
-
-
-async def test_persist_any_resolution_propagates_control_errors(monkeypatch):
-    captured = {}
-
-    @durable_dag
-    def graph():
-        first = node(return_name(), name="first")
-        second = node(return_name(), name="second")
-        target = node(return_name(), name="target")
-        (first | second) >> target
-        captured.update(first=first, target=target)
-
-    _evaluate_definition(graph())
-    expression = captured["target"]._dependency
-    assert expression is not None
-    resolution = _DependencyResolution(
-        matched=True,
-        results={captured["first"]: FlowNodeResult.succeeded("first")},
-    )
-
-    async def fail_checkpoint(*args, **kwargs):
-        raise InvocationError("checkpoint failed")
-
-    monkeypatch.setattr(
-        "async_durable_execution.composite.flow.step",
-        fail_checkpoint,
-    )
-
-    with pytest.raises(_FlowControlSignal) as raised:
-        await _persist_any_resolution(resolution, expression, {})
-
-    assert isinstance(raised.value.error, InvocationError)
 
 
 def test_durable_dag_supports_class_and_static_method_decorator_orders():
@@ -459,9 +424,11 @@ async def test_dependency_resolution_propagates_unclassified_task_error():
 
     task = asyncio.create_task(fail())
     with pytest.raises(ValueError, match="unexpected dependency"):
-        await _resolve_dependencies(
+        await _resolve_dependency_expression(
+            captured["b"],
             captured["b"]._dependency,
             {captured["a"]: task},
+            {},
         )
 
 

@@ -10,7 +10,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Generic, ParamSpec, TypeVar, cast
+from typing import Any, Generic, NoReturn, ParamSpec, TypeVar, cast
 
 from ..context import (
     bind_current_context,
@@ -28,7 +28,6 @@ from ..exceptions import (
 )
 from ..models import ErrorObject, SerializableModel
 from ..primitive.child import DurableContext, get_durable_context, run_in_child_context
-from ..primitive.step import step
 from ..serdes import ExtendedTypeSerDes, SerDes
 from ..task import create_eager_task
 
@@ -162,9 +161,6 @@ class _DependencyExpression:
     def leaves(self) -> tuple[_DependencyLeaf, ...]:
         raise NotImplementedError  # pragma: no cover
 
-    def contains_any(self) -> bool:
-        raise NotImplementedError  # pragma: no cover
-
     def evaluate(
         self,
         results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
@@ -237,9 +233,6 @@ class _DependencyLeaf(_DependencyExpression):
     def leaves(self) -> tuple[_DependencyLeaf, ...]:
         return (self,)
 
-    def contains_any(self) -> bool:
-        return False
-
     def evaluate(
         self,
         results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
@@ -268,11 +261,6 @@ class _CompositeDependencyExpression(_DependencyExpression):
 
     def leaves(self) -> tuple[_DependencyLeaf, ...]:
         return tuple(leaf for child in self.children for leaf in child.leaves())
-
-    def contains_any(self) -> bool:
-        return self.mode is _DependencyMode.ANY or any(
-            child.contains_any() for child in self.children
-        )
 
     def evaluate(
         self,
@@ -701,13 +689,13 @@ class _NodeExecutionSerDes(SerDes[_NodeExecution]):
 @dataclass(frozen=True)
 class _PersistedDependencyResolution:
     matched: bool
-    settled_nodes: tuple[str, ...]
+    selected_nodes: tuple[str, ...]
     handled_failures: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "matched": self.matched,
-            "settledNodes": list(self.settled_nodes),
+            "selectedNodes": list(self.selected_nodes),
             "handledFailures": list(self.handled_failures),
         }
 
@@ -715,7 +703,7 @@ class _PersistedDependencyResolution:
     def from_dict(cls, data: Mapping[str, Any]) -> _PersistedDependencyResolution:
         return cls(
             matched=bool(data["matched"]),
-            settled_nodes=tuple(str(name) for name in data["settledNodes"]),
+            selected_nodes=tuple(str(name) for name in data["selectedNodes"]),
             handled_failures=tuple(
                 str(name) for name in data.get("handledFailures", ())
             ),
@@ -816,7 +804,7 @@ async def _await_node_execution(
     task: asyncio.Task[_NodeExecution],
 ) -> _NodeExecution:
     try:
-        return await task
+        return await asyncio.shield(task)
     except _FlowControlSignal:
         raise
     except Exception as error:
@@ -826,84 +814,199 @@ async def _await_node_execution(
         raise
 
 
-async def _resolve_dependencies(
+async def _await_resolver_resolution(
+    task: asyncio.Task[_PersistedDependencyResolution],
     expression: _DependencyExpression,
     tasks: Mapping[FlowNode[Any], asyncio.Task[_NodeExecution]],
 ) -> _DependencyResolution:
-    dependencies = expression.leaves()
-    pending = {leaf.node for leaf in dependencies}
-    settled: dict[FlowNode[Any], FlowNodeResult[Any]] = {}
-    any_winners: dict[int, int] = {}
-
-    while pending:
-        await asyncio.wait(
-            [tasks[flow_node] for flow_node in pending],
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-        for leaf in dependencies:
-            flow_node = leaf.node
-            if flow_node not in pending or not tasks[flow_node].done():
-                continue
-            execution = await _await_node_execution(tasks[flow_node])
-
-            pending.remove(flow_node)
-            settled[flow_node] = execution.result
-            evaluation = expression.evaluate(settled, any_winners)
-            if evaluation.status is _EvaluationStatus.MATCHED:
-                return _DependencyResolution(
-                    matched=True,
-                    results=dict(settled),
-                    handled_failures=evaluation.handled_failures,
-                )
-            if evaluation.status is _EvaluationStatus.UNMATCHED:
-                return _DependencyResolution(
-                    matched=False,
-                    results=dict(settled),
-                )
-
-    # A validated expression is terminal once every leaf has settled.
-    raise AssertionError("Dependency expression remained pending")  # pragma: no cover
-
-
-async def _persist_any_resolution(
-    resolution: _DependencyResolution,
-    expression: _DependencyExpression,
-    tasks: Mapping[FlowNode[Any], asyncio.Task[_NodeExecution]],
-) -> _DependencyResolution:
-    nodes_by_name = {leaf.node.name: leaf.node for leaf in expression.leaves()}
-    decision = _PersistedDependencyResolution(
-        matched=resolution.matched,
-        settled_nodes=tuple(node.name for node in resolution.results),
-        handled_failures=tuple(node.name for node in resolution.handled_failures),
-    )
-
-    async def checkpoint_decision() -> _PersistedDependencyResolution:
-        return decision
-
     try:
-        persisted = await step(
-            checkpoint_decision,
-            name="flow-any-resolution",
-            serdes=_DEPENDENCY_RESOLUTION_SERDES,
-        )
+        persisted = await asyncio.shield(task)
+    except _FlowControlSignal:
+        raise
     except Exception as error:
         control_error = _find_control_error(error)
         if control_error is not None:
             raise _FlowControlSignal(control_error) from error
         raise
-    settled: dict[FlowNode[Any], FlowNodeResult[Any]] = {}
-    for node_name in persisted.settled_nodes:
+
+    nodes_by_name = {leaf.node.name: leaf.node for leaf in expression.leaves()}
+    selected: dict[FlowNode[Any], FlowNodeResult[Any]] = {}
+    for node_name in persisted.selected_nodes:
         flow_node = nodes_by_name[node_name]
         execution = await _await_node_execution(tasks[flow_node])
-        settled[flow_node] = execution.result
+        selected[flow_node] = execution.result
 
     return _DependencyResolution(
         matched=persisted.matched,
-        results=settled,
+        results=selected,
         handled_failures=tuple(
             nodes_by_name[node_name] for node_name in persisted.handled_failures
         ),
     )
+
+
+def _persisted_resolution(
+    resolution: _DependencyResolution,
+) -> _PersistedDependencyResolution:
+    return _PersistedDependencyResolution(
+        matched=resolution.matched,
+        selected_nodes=tuple(node.name for node in resolution.results),
+        handled_failures=tuple(node.name for node in resolution.handled_failures),
+    )
+
+
+def _raise_task_error(value: BaseException) -> NoReturn:
+    if isinstance(value, _FlowControlSignal):
+        raise value
+    if isinstance(value, Exception):
+        control_error = _find_control_error(value)
+        if control_error is not None:
+            raise _FlowControlSignal(control_error) from value
+        raise value
+    raise value
+
+
+async def _resolve_dependency_expression(
+    target: FlowNode[Any],
+    expression: _DependencyExpression,
+    tasks: Mapping[FlowNode[Any], asyncio.Task[_NodeExecution]],
+    resolver_tasks: Mapping[
+        tuple[FlowNode[Any], int],
+        asyncio.Task[_PersistedDependencyResolution],
+    ],
+) -> _DependencyResolution:
+    if isinstance(expression, _DependencyLeaf):
+        execution = await _await_node_execution(tasks[expression.node])
+        result = execution.result
+        evaluation = expression.evaluate({expression.node: result})
+        return _DependencyResolution(
+            matched=evaluation.status is _EvaluationStatus.MATCHED,
+            results={expression.node: result},
+            handled_failures=evaluation.handled_failures,
+        )
+
+    composite = cast(_CompositeDependencyExpression, expression)
+    if composite.mode is _DependencyMode.ANY:
+        return await _await_resolver_resolution(
+            resolver_tasks[(target, id(composite))],
+            composite,
+            tasks,
+        )
+
+    child_tasks: list[asyncio.Task[_DependencyResolution]] = []
+    for child_expression in composite.children:
+
+        async def resolve_child(
+            current_child: _DependencyExpression = child_expression,
+        ) -> _DependencyResolution:
+            return await _resolve_dependency_expression(
+                target,
+                current_child,
+                tasks,
+                resolver_tasks,
+            )
+
+        child_tasks.append(create_eager_task(resolve_child))
+
+    values = await asyncio.gather(*child_tasks, return_exceptions=True)
+    children: list[_DependencyResolution] = []
+    for value in values:
+        if isinstance(value, BaseException):
+            _raise_task_error(value)
+        children.append(value)
+
+    selected: dict[FlowNode[Any], FlowNodeResult[Any]] = {}
+    for child_resolution in children:
+        selected.update(child_resolution.results)
+    if any(not child_resolution.matched for child_resolution in children):
+        return _DependencyResolution(matched=False, results=selected)
+    return _DependencyResolution(
+        matched=True,
+        results=selected,
+        handled_failures=tuple(
+            dependency
+            for child_resolution in children
+            for dependency in child_resolution.handled_failures
+        ),
+    )
+
+
+async def _resolve_any_expression(
+    target: FlowNode[Any],
+    expression: _CompositeDependencyExpression,
+    tasks: Mapping[FlowNode[Any], asyncio.Task[_NodeExecution]],
+    resolver_tasks: Mapping[
+        tuple[FlowNode[Any], int],
+        asyncio.Task[_PersistedDependencyResolution],
+    ],
+) -> _PersistedDependencyResolution:
+    children: list[asyncio.Task[_DependencyResolution]] = []
+    for child_expression in expression.children:
+
+        async def resolve_child(
+            current_child: _DependencyExpression = child_expression,
+        ) -> _DependencyResolution:
+            return await _resolve_dependency_expression(
+                target,
+                current_child,
+                tasks,
+                resolver_tasks,
+            )
+
+        children.append(create_eager_task(resolve_child))
+
+    pending = set(range(len(children)))
+    unmatched: dict[FlowNode[Any], FlowNodeResult[Any]] = {}
+    try:
+        while pending:
+            await asyncio.wait(
+                [children[index] for index in pending],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for index, child_task in enumerate(children):
+                if index not in pending or not child_task.done():
+                    continue
+                pending.remove(index)
+                try:
+                    resolution = child_task.result()
+                except BaseException as error:
+                    _raise_task_error(error)
+                if resolution.matched:
+                    return _persisted_resolution(
+                        _DependencyResolution(
+                            matched=True,
+                            results={**unmatched, **resolution.results},
+                            handled_failures=resolution.handled_failures,
+                        )
+                    )
+                unmatched.update(resolution.results)
+        return _persisted_resolution(
+            _DependencyResolution(matched=False, results=unmatched)
+        )
+    finally:
+        for index in pending:
+            children[index].cancel()
+        if pending:
+            await asyncio.gather(
+                *(children[index] for index in pending),
+                return_exceptions=True,
+            )
+
+
+def _any_expressions(
+    expression: _DependencyExpression,
+) -> tuple[_CompositeDependencyExpression, ...]:
+    if isinstance(expression, _DependencyLeaf):
+        return ()
+    composite = cast(_CompositeDependencyExpression, expression)
+    nested = tuple(
+        nested_expression
+        for child in composite.children
+        for nested_expression in _any_expressions(child)
+    )
+    if composite.mode is _DependencyMode.ANY:
+        return (*nested, composite)
+    return nested
 
 
 def _flow_node_context(
@@ -927,19 +1030,24 @@ def _flow_node_context(
 async def _execute_node(
     flow_node: FlowNode[Any],
     tasks: Mapping[FlowNode[Any], asyncio.Task[_NodeExecution]],
+    resolver_tasks: Mapping[
+        tuple[FlowNode[Any], int],
+        asyncio.Task[_PersistedDependencyResolution],
+    ],
+    resolver_ready: asyncio.Event,
 ) -> _NodeExecution:
     expression = flow_node._dependency
     if expression is None:
         resolution = _DependencyResolution(matched=True, results={})
         direct_dependencies: frozenset[FlowNode[Any]] = frozenset()
     else:
-        resolution = await _resolve_dependencies(expression, tasks)
-        if resolution.matched and expression.contains_any():
-            resolution = await _persist_any_resolution(
-                resolution,
-                expression,
-                tasks,
-            )
+        await resolver_ready.wait()
+        resolution = await _resolve_dependency_expression(
+            flow_node,
+            expression,
+            tasks,
+            resolver_tasks,
+        )
         direct_dependencies = frozenset(leaf.node for leaf in expression.leaves())
 
     handled_failures = tuple(
@@ -976,10 +1084,20 @@ async def _execute_node(
 
 async def _execute_flow(frozen_flow: _FrozenFlow) -> FlowResult:
     tasks: dict[FlowNode[Any], asyncio.Task[_NodeExecution]] = {}
+    resolver_tasks: dict[
+        tuple[FlowNode[Any], int],
+        asyncio.Task[_PersistedDependencyResolution],
+    ] = {}
+    resolver_ready = asyncio.Event()
     for flow_node in frozen_flow.topological_nodes:
 
         async def run_node(current_node: FlowNode[Any] = flow_node) -> _NodeExecution:
-            return await _execute_node(current_node, tasks)
+            return await _execute_node(
+                current_node,
+                tasks,
+                resolver_tasks,
+                resolver_ready,
+            )
 
         tasks[flow_node] = run_in_child_context(
             run_node,
@@ -987,9 +1105,50 @@ async def _execute_flow(frozen_flow: _FrozenFlow) -> FlowResult:
             serdes=_NODE_EXECUTION_SERDES,
         )
 
-    values = await asyncio.gather(*tasks.values(), return_exceptions=True)
+    resolver_task_order: list[asyncio.Task[_PersistedDependencyResolution]] = []
+    for flow_node in frozen_flow.topological_nodes:
+        expression = flow_node._dependency
+        if expression is None:
+            continue
+        for ordinal, any_expression in enumerate(
+            _any_expressions(expression),
+            start=1,
+        ):
+
+            async def run_resolver(
+                target: FlowNode[Any] = flow_node,
+                current_expression: _CompositeDependencyExpression = any_expression,
+            ) -> _PersistedDependencyResolution:
+                await resolver_ready.wait()
+                return await _resolve_any_expression(
+                    target,
+                    current_expression,
+                    tasks,
+                    resolver_tasks,
+                )
+
+            resolver_task = run_in_child_context(
+                run_resolver,
+                name=f"flow-any-resolution-{flow_node.name}-{ordinal}",
+                serdes=_DEPENDENCY_RESOLUTION_SERDES,
+            )
+            resolver_tasks[(flow_node, id(any_expression))] = resolver_task
+            resolver_task_order.append(resolver_task)
+
+    resolver_ready.set()
+    values = await asyncio.gather(
+        *tasks.values(),
+        *resolver_task_order,
+        return_exceptions=True,
+    )
+    node_values = values[: len(tasks)]
+    resolver_values = values[len(tasks) :]
     executions: dict[FlowNode[Any], _NodeExecution] = {}
-    for flow_node, value in zip(frozen_flow.topological_nodes, values, strict=True):
+    for flow_node, value in zip(
+        frozen_flow.topological_nodes,
+        node_values,
+        strict=True,
+    ):
         if isinstance(value, _FlowControlSignal):
             raise value
         if isinstance(value, BaseException):
@@ -1000,6 +1159,17 @@ async def _execute_flow(frozen_flow: _FrozenFlow) -> FlowResult:
                 raise _FlowControlSignal(value) from value
             raise value
         executions[flow_node] = value
+
+    for value in resolver_values:
+        if isinstance(value, _FlowControlSignal):
+            raise value
+        if isinstance(value, BaseException):
+            if isinstance(value, Exception):
+                control_error = _find_control_error(value)
+                if control_error is not None:
+                    raise _FlowControlSignal(control_error) from value
+                raise _FlowControlSignal(value) from value
+            raise value
 
     results = {
         flow_node.name: executions[flow_node].result for flow_node in frozen_flow.nodes

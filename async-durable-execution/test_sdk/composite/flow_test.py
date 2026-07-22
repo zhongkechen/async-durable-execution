@@ -666,6 +666,107 @@ async def test_any_winner_survives_partial_replay(monkeypatch):
     assert observed_winners == ["A", "A"]
 
 
+async def test_nested_any_winner_survives_outer_all_partial_replay(monkeypatch):
+    from async_durable_execution.composite.flow import (
+        _NodeExecutionSerDes,
+        _PersistedDependencyResolutionSerDes,
+    )
+
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0")
+    winner_persisted = asyncio.Event()
+    release_b = asyncio.Event()
+    b_persisted = asyncio.Event()
+    c_calls = 0
+    observed_dependencies: list[tuple[str, str]] = []
+
+    dependency_deserialize = _PersistedDependencyResolutionSerDes.deserialize
+
+    async def observe_dependency_checkpoint(self, data):
+        resolution = await dependency_deserialize(self, data)
+        if resolution.selected_nodes == ("A",):
+            winner_persisted.set()
+        return resolution
+
+    node_deserialize = _NodeExecutionSerDes.deserialize
+
+    async def observe_node_checkpoint(self, data):
+        execution = await node_deserialize(self, data)
+        if execution.result.outcome == "B":
+            b_persisted.set()
+        return execution
+
+    monkeypatch.setattr(
+        _PersistedDependencyResolutionSerDes,
+        "deserialize",
+        observe_dependency_checkpoint,
+    )
+    monkeypatch.setattr(
+        _NodeExecutionSerDes,
+        "deserialize",
+        observe_node_checkpoint,
+    )
+
+    @durable_dag
+    def graph():
+        @durable_node
+        async def definition_first() -> str:
+            await release_b.wait()
+            return "B"
+
+        @durable_node
+        async def completes_first() -> None:
+            msg = "A failed first"
+            raise ValueError(msg)
+
+        @durable_node
+        async def suspends_outer_all() -> str:
+            nonlocal c_calls
+            c_calls += 1
+            await winner_persisted.wait()
+            release_b.set()
+            await b_persisted.wait()
+            await wait(timedelta(seconds=1), name="C-wait")
+            return "C"
+
+        @durable_node
+        async def target() -> str:
+            context = cast(FlowNodeContext, get_current_context())
+            a_result = context.result(a)
+            c_result = context.result(c)
+            assert a_result.status is FlowNodeStatus.FAILED
+            assert c_result.outcome == "C"
+            with pytest.raises(InvalidStateError, match="not available"):
+                context.result(b)
+            observed_dependencies.append((a_result.status.value, c_result.outcome))
+            return "target"
+
+        # B is first in expression order, but A wins before B is released.
+        b = node(definition_first(), name="B")
+        a = node(completes_first(), name="A")
+        c = node(suspends_outer_all(), name="C")
+        target_node = node(target(), name="target")
+        ((b.succeeded | a.failed) & c.succeeded) >> target_node
+        return target_node
+
+    @durable_execution
+    async def handler(event):
+        return (await flow(graph(), name="replayed-nested-any-winner")).to_dict()
+
+    async with create_local_runner(
+        handler=handler,
+        input={},
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    payload = json.loads(result.result)
+    assert payload["results"]["B"]["status"] == "SUCCEEDED"
+    assert payload["results"]["target"]["outcome"] == "target"
+    assert payload["unhandledFailures"] == []
+    assert c_calls == 2
+    assert observed_dependencies == [("FAILED", "C")]
+
+
 def test_nested_any_does_not_retroactively_change_its_winner():
     handles = {}
 
