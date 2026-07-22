@@ -27,15 +27,15 @@ async def fulfill_order(
     payment_node: FlowNode[str],
 ) -> str:
     """Run only when payment succeeds."""
-    payment = await payment_node
+    payment = payment_node.outcome
     return f"fulfilled:{order_id}:{payment}"
 
 
 @durable_node
 async def record_payment_failure(payment_node: FlowNode[str]) -> str:
     """Handle a failed payment and expose its captured error."""
-    payment = payment_node.result()
-    message = payment.error.message if payment.error is not None else "unknown"
+    error = payment_node.error
+    message = error.message if error is not None else "unknown"
     return f"recovered:{message}"
 
 

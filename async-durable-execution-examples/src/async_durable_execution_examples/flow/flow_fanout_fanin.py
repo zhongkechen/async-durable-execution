@@ -29,7 +29,7 @@ async def load_order(
 @durable_node
 async def validate_order(order_node: FlowNode[dict[str, Any]]) -> dict[str, Any]:
     """Validate an order after it has loaded."""
-    order = await order_node
+    order = order_node.outcome
     return {
         "orderId": order["orderId"],
         "valid": order["quantity"] > 0,
@@ -39,7 +39,7 @@ async def validate_order(order_node: FlowNode[dict[str, Any]]) -> dict[str, Any]
 @durable_node
 async def price_order(order_node: FlowNode[dict[str, Any]]) -> float:
     """Calculate the order total in parallel with validation."""
-    order = await order_node
+    order = order_node.outcome
     return cast(float, order["quantity"] * order["unitPrice"])
 
 
@@ -49,8 +49,8 @@ async def build_response(
     pricing_node: FlowNode[float],
 ) -> dict[str, Any]:
     """Combine both fan-out branches after they complete."""
-    validation = await validation_node
-    total = await pricing_node
+    validation = validation_node.outcome
+    total = pricing_node.outcome
     return {
         "orderId": validation["orderId"],
         "valid": validation["valid"],

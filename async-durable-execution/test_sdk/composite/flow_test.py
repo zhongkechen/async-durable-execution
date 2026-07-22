@@ -324,7 +324,7 @@ async def test_linear_fanout_fanin_flow_checkpoints_complete_result():
     )
 
 
-async def test_flow_node_handle_exposes_result_and_awaitable_outcome():
+async def test_flow_node_handle_exposes_result_status_outcome_and_error():
     @durable_dag
     def graph():
         @durable_node
@@ -335,7 +335,9 @@ async def test_flow_node_handle_exposes_result_and_awaitable_outcome():
         async def target() -> str:
             source_result = source_node.result()
             assert source_result.status is FlowNodeStatus.SUCCEEDED
-            return f"{await source_node}-target"
+            assert source_node.status is FlowNodeStatus.SUCCEEDED
+            assert source_node.error is None
+            return f"{source_node.outcome}-target"
 
         source_node = node(source(), name="source")
         target_node = node(target(), name="target")
@@ -421,7 +423,7 @@ async def test_failure_route_skips_success_branch_and_handles_source_failure():
     assert payload["unhandledFailures"] == []
 
 
-async def test_flow_node_await_rejects_failure_but_result_remains_available():
+async def test_flow_node_failure_properties_remain_available():
     @durable_dag
     def graph():
         @durable_node
@@ -434,11 +436,13 @@ async def test_flow_node_await_rejects_failure_but_result_remains_available():
             source_result = source.result()
             assert source_result.status is FlowNodeStatus.FAILED
             assert source_result.error is not None
+            assert source.status is FlowNodeStatus.FAILED
+            assert source.error == source_result.error
             with pytest.raises(
                 InvalidStateError,
                 match=r"did not succeed \(status FAILED\)",
             ):
-                await source
+                _ = source.outcome
             return source_result.error.message or ""
 
         source = node(fail(), name="source")

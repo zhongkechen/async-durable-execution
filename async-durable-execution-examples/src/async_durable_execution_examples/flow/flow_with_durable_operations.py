@@ -42,7 +42,7 @@ async def prepare_notification(
     customer_node: FlowNode[dict[str, str]],
 ) -> str:
     """Wait durably before running another step in the node."""
-    customer = await customer_node
+    customer = customer_node.outcome
     await wait(
         duration=timedelta(seconds=1),
         name="notification-delay",
