@@ -629,6 +629,18 @@ async def test_operation_update_to_dict():
     assert result == expected
 
 
+async def test_operation_update_to_dict_includes_empty_payload():
+    """Operation updates preserve an empty-string payload."""
+    update = OperationUpdate(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        action=OperationAction.SUCCEED,
+        payload="",
+    )
+
+    assert update.to_dict()["Payload"] == ""
+
+
 async def test_operation_update_to_dict_complete():
     """Test OperationUpdate.to_dict with all optional fields."""
     error = ErrorObject(
@@ -1605,9 +1617,10 @@ async def test_checkpoint_output_from_dict_empty():
     """Test CheckpointOutput.from_dict with empty data."""
     data = {}
     output = CheckpointOutput.from_dict(data)
-    assert not output.checkpoint_token
+    assert output.checkpoint_token is None
     assert len(output.new_execution_state.operations) == 0
     assert output.new_execution_state.next_marker is None
+    assert "CheckpointToken" not in output.to_dict()
 
 
 async def test_checkpoint_updated_execution_state_from_dict():

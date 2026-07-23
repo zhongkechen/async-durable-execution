@@ -6,6 +6,7 @@ import time
 from typing import Any, Callable
 
 from ...client import DurableServiceClient
+from ...exceptions import CheckpointError, GetExecutionStateError
 from ...execution import (
     DurableExecutionInvocationInput,
     InitialExecutionState,
@@ -343,21 +344,28 @@ class InMemoryServiceClient(DurableServiceClient):
     async def checkpoint(
         self,
         durable_execution_arn: str,  # noqa: ARG002
-        checkpoint_token: str,
+        checkpoint_token: str | None,
         updates: list[OperationUpdate],
         client_token: str | None,
     ) -> CheckpointOutput:
         # durable_execution_arn is not used in in-memory testing
+        if not checkpoint_token:
+            msg = "Cannot checkpoint without a checkpoint token."
+            raise CheckpointError(msg)
         return self.process_checkpoint(checkpoint_token, updates, client_token)
 
     async def get_execution_state(
         self,
         durable_execution_arn: str,  # noqa: ARG002
-        checkpoint_token: str,
+        checkpoint_token: str | None,
         next_marker: str,
         max_items: int = 1000,
     ) -> StateOutput:
         # durable_execution_arn is not used in in-memory testing
+        if not checkpoint_token:
+            msg = "Cannot get execution state without a checkpoint token."
+            raise GetExecutionStateError(msg)
+
         if self._executor is None:
             msg = "Local executor is not bound to the service client."
             raise InvalidParameterValueException(msg)

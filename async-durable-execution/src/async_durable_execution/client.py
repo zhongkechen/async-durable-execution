@@ -52,7 +52,7 @@ class DurableServiceClient(Protocol):
     async def checkpoint(
         self,
         durable_execution_arn: str,
-        checkpoint_token: str,
+        checkpoint_token: str | None,
         updates: list[OperationUpdate],
         client_token: str | None,
     ) -> CheckpointOutput: ...  # pragma: no cover
@@ -60,7 +60,7 @@ class DurableServiceClient(Protocol):
     async def get_execution_state(
         self,
         durable_execution_arn: str,
-        checkpoint_token: str,
+        checkpoint_token: str | None,
         next_marker: str,
         max_items: int = 1000,
     ) -> StateOutput: ...  # pragma: no cover
@@ -133,10 +133,14 @@ class ThreadedSyncLambdaClient(DurableServiceClient):
     async def checkpoint(
         self,
         durable_execution_arn: str,
-        checkpoint_token: str,
+        checkpoint_token: str | None,
         updates: list[OperationUpdate],
         client_token: str | None,
     ) -> CheckpointOutput:
+        if not checkpoint_token:
+            msg = "Cannot checkpoint without a checkpoint token."
+            raise CheckpointError(msg)
+
         try:
             optional_params: dict[str, str] = {}
             if client_token is not None:
@@ -161,10 +165,14 @@ class ThreadedSyncLambdaClient(DurableServiceClient):
     async def get_execution_state(
         self,
         durable_execution_arn: str,
-        checkpoint_token: str,
+        checkpoint_token: str | None,
         next_marker: str,
         max_items: int = 1000,
     ) -> StateOutput:
+        if not checkpoint_token:
+            msg = "Cannot get execution state without a checkpoint token."
+            raise GetExecutionStateError(msg)
+
         try:
             result = await asyncio.to_thread(
                 self.client.get_durable_execution_state,
@@ -218,10 +226,14 @@ class AsyncLambdaClient(DurableServiceClient):
     async def checkpoint(
         self,
         durable_execution_arn: str,
-        checkpoint_token: str,
+        checkpoint_token: str | None,
         updates: list[OperationUpdate],
         client_token: str | None,
     ) -> CheckpointOutput:
+        if not checkpoint_token:
+            msg = "Cannot checkpoint without a checkpoint token."
+            raise CheckpointError(msg)
+
         try:
             optional_params: dict[str, str] = {}
             if client_token is not None:
@@ -245,10 +257,14 @@ class AsyncLambdaClient(DurableServiceClient):
     async def get_execution_state(
         self,
         durable_execution_arn: str,
-        checkpoint_token: str,
+        checkpoint_token: str | None,
         next_marker: str,
         max_items: int = 1000,
     ) -> StateOutput:
+        if not checkpoint_token:
+            msg = "Cannot get execution state without a checkpoint token."
+            raise GetExecutionStateError(msg)
+
         try:
             result = await self.client.get_durable_execution_state(
                 DurableExecutionArn=durable_execution_arn,

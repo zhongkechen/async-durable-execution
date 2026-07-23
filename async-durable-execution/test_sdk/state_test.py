@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, Mock, call, create_autospec, patch
 import pytest
 
 from async_durable_execution.exceptions import (
+    CheckpointError,
     DurableApiErrorCategory,
     GetExecutionStateError,
 )
@@ -1119,6 +1120,60 @@ async def test_checkpoint_batches_forever_exception_handling():
     assert completion_future.done()
     with pytest.raises(RuntimeError, match="API error"):
         completion_future.result()
+
+
+async def test_checkpoint_missing_token_on_non_terminal_batch_fails():
+    """A missing token on a non-terminal response fails the checkpoint."""
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
+    mock_lambda_client.checkpoint.return_value = CheckpointOutput(
+        checkpoint_token=None,
+        new_execution_state=CheckpointUpdatedExecutionState(),
+    )
+    state = ExecutionState(
+        durable_execution_arn="test_arn",
+        initial_checkpoint_token="token123",  # noqa: S106
+        operations={},
+        service_client=mock_lambda_client,
+    )
+    operation_update = OperationUpdate(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        action=OperationAction.START,
+    )
+
+    with pytest.raises(
+        CheckpointError, match="omitted the token outside of execution completion"
+    ):
+        await state.create_checkpoint(operation_update)
+
+    assert state._checkpointing_failure is not None
+
+
+async def test_checkpoint_missing_token_on_terminal_batch_succeeds():
+    """A terminal response may omit its token and retains it for pagination."""
+    mock_lambda_client = Mock(spec=ThreadedSyncLambdaClient)
+    mock_lambda_client.checkpoint.return_value = CheckpointOutput(
+        checkpoint_token=None,
+        new_execution_state=CheckpointUpdatedExecutionState(next_marker="next-page"),
+    )
+    state = ExecutionState(
+        durable_execution_arn="test_arn",
+        initial_checkpoint_token="token123",  # noqa: S106
+        operations={},
+        service_client=mock_lambda_client,
+    )
+    state.fetch_paginated_operations = AsyncMock(return_value=[])
+
+    await state.create_checkpoint(
+        OperationUpdate.create_execution_succeed(payload="{}")
+    )
+    await stop_checkpointing_task(state)
+
+    state.fetch_paginated_operations.assert_awaited_once_with(
+        [],
+        "token123",  # noqa: S106
+        "next-page",
+    )
 
 
 async def test_collect_checkpoint_batch_shutdown_path():

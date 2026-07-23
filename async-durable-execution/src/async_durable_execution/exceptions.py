@@ -85,6 +85,10 @@ class ExecutionError(UnrecoverableError):
         super().__init__(message, termination_reason)
 
 
+class WaitForConditionError(ExecutionError):
+    """Raised when a wait_for_condition operation exhausts its attempts."""
+
+
 class InvocationError(UnrecoverableError):
     """Error that should cause Lambda retry by throwing from handler."""
 

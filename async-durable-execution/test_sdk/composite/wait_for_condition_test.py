@@ -15,14 +15,17 @@ from async_durable_execution.context import (
 )
 from async_durable_execution.exceptions import (
     CallableRuntimeError,
+    ExecutionError,
     InvocationError,
     SuspendExecution,
     ValidationError,
+    WaitForConditionError,
 )
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
     ErrorObject,
     Operation,
+    OperationAction,
     OperationStatus,
     OperationSubType,
     OperationType,
@@ -524,8 +527,8 @@ async def test_wait_for_condition_retry_without_state():
     assert result == 6  # 5 (initial) + 1
 
 
-async def test_wait_for_condition_retry_invalid_json_state():
-    """Test wait_for_condition on retry with invalid JSON state."""
+async def test_wait_for_condition_retry_invalid_json_state_fails():
+    """Invalid checkpointed state fails instead of restarting polling."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
     operation = Operation(
@@ -537,25 +540,24 @@ async def test_wait_for_condition_retry_invalid_json_state():
     mock_result = operation
     mock_state.operations.get.return_value = mock_result
 
-    mock_logger = Mock(spec=logging.Logger)
-
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state):
-        return state + 1
+    check_func = Mock(side_effect=AssertionError("check should not run"))
 
-    polling_strategy = lambda s, a: None
+    with pytest.raises(ExecutionError, match="Deserialization failed"):
+        await wait_for_condition_handler(
+            state=mock_state,
+            operation_identifier=op_id,
+            check=check_func,
+            polling_strategy=lambda s, a: None,
+        )
 
-    result = await wait_for_condition_handler(
-        state=mock_state,
-        operation_identifier=op_id,
-        check=check_func,
-        polling_strategy=polling_strategy,
-    )
-
-    assert result == 6  # Falls back to initial state
+    check_func.assert_not_called()
+    mock_state.create_checkpoint.assert_called_once()
+    fail_operation = mock_state.create_checkpoint.call_args.kwargs["operation_update"]
+    assert fail_operation.action is OperationAction.FAIL
 
 
 async def test_wait_for_condition_check_function_exception():
@@ -1574,11 +1576,11 @@ def test_polling_strategy_is_callable_without_build():
 
 
 def test_max_attempts_exceeded():
-    """Strategy returns None when max attempts are exhausted."""
+    """Strategy raises when max attempts are exhausted."""
     strategy = PollingStrategy(max_attempts=5)
 
-    delay = strategy(None, 5)
-    assert delay is None
+    with pytest.raises(WaitForConditionError, match="exhausted 5 attempts"):
+        strategy(None, 5)
 
 
 def test_polling_strategy_returns_delay_before_max_attempts():
@@ -1594,6 +1596,36 @@ def test_polling_strategy_stops_for_truthy_result():
     strategy = PollingStrategy(max_attempts=5)
 
     assert strategy("done", 1) is None
+
+
+def test_polling_strategy_stops_for_truthy_result_on_final_attempt():
+    """A condition met on the final attempt succeeds."""
+    strategy = PollingStrategy(max_attempts=5)
+
+    assert strategy("done", 5) is None
+
+
+async def test_polling_strategy_exhaustion_checkpoints_failure():
+    """Built-in strategy exhaustion writes FAIL and propagates the error."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "arn:aws:test"
+    mock_state.operations.get.return_value = None
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+
+    with pytest.raises(WaitForConditionError, match="exhausted 1 attempts"):
+        await wait_for_condition_handler(
+            state=mock_state,
+            operation_identifier=op_id,
+            check=lambda state: False,
+            polling_strategy=PollingStrategy(max_attempts=1),
+        )
+
+    assert mock_state.create_checkpoint.call_count == 2
+    fail_operation = mock_state.create_checkpoint.call_args.kwargs["operation_update"]
+    assert fail_operation.action is OperationAction.FAIL
+    assert fail_operation.error.type == "WaitForConditionError"
 
 
 @patch("random.random")
@@ -1715,10 +1747,11 @@ def test_large_backoff_rate():
 
 
 def test_attempt_at_boundary():
-    """The max-attempt boundary stops polling exactly when reached."""
+    """The max-attempt boundary fails exactly when reached."""
     strategy = PollingStrategy(max_attempts=3)
 
-    assert strategy(False, 3) is None
+    with pytest.raises(WaitForConditionError):
+        strategy(False, 3)
     assert strategy(False, 2) > 0
 
 

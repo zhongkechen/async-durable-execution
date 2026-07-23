@@ -17,6 +17,7 @@ from ..exceptions import (
     CallableRuntimeError,
     ExecutionError,
     ValidationError,
+    WaitForConditionError,
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
 )
@@ -55,8 +56,15 @@ class PollingStrategy(_DelayStrategy, Generic[T]):
 
     def __call__(self, result: T, attempts_made: int) -> int | None:
         """Return the next polling delay, or None to stop polling."""
-        if result or attempts_made >= self.max_attempts:
+        if result:
             return None
+
+        if attempts_made >= self.max_attempts:
+            msg = (
+                f"wait_for_condition exhausted {self.max_attempts} attempts "
+                "before the condition was met"
+            )
+            raise WaitForConditionError(msg)
 
         return self.calculate_delay(attempts_made)
 
@@ -168,37 +176,28 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             Suspends if condition not met
             Raises error if check function fails
         """
-        # Determine current state from checkpoint
         operation_details = operation.step_details if operation is not None else None
-        if (
-            operation is not None
-            and operation.status in {OperationStatus.STARTED, OperationStatus.READY}
-            and operation_details is not None
-            and operation_details.result
-        ):
-            try:
+
+        try:
+            # Determine current state from checkpoint
+            if (
+                operation is not None
+                and operation.status in {OperationStatus.STARTED, OperationStatus.READY}
+                and operation_details is not None
+                and operation_details.result
+            ):
                 current_state = await self.deserialize_value(
                     data=operation_details.result,
                     serdes=self.serdes,
                 )
-            except Exception:
-                # Default to initial state if there's an error getting checkpointed state
-                logger.exception(
-                    "⚠️ wait_for_condition failed to deserialize state for id: %s, name: %s. Using initial state.",
-                    self.operation_identifier.operation_id,
-                    self.operation_name,
-                )
+            else:
                 current_state = self.initial_state
-        else:
-            current_state = self.initial_state
 
-        # Get attempt number - current attempt is checkpointed attempts + 1
-        # The checkpoint stores completed attempts, so the current attempt being executed is one more
-        attempt: int = 1
-        if operation_details is not None:
-            attempt = operation_details.attempt + 1
+            # The checkpoint stores completed attempts, so the current attempt is one more.
+            attempt: int = 1
+            if operation_details is not None:
+                attempt = operation_details.attempt + 1
 
-        try:
             check_context = WaitForConditionCheckContext(
                 attempt=attempt,
                 execution_state=self.state,

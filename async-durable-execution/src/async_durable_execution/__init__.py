@@ -72,6 +72,7 @@ from .exceptions import (
     SerDesError,
     UserlandError,
     ValidationError,
+    WaitForConditionError,
 )
 
 # Core decorator - used in every durable function
@@ -153,6 +154,7 @@ __all__ = [
     "ValidationError",
     "WaitForCallbackContext",
     "WaitForConditionCheckContext",
+    "WaitForConditionError",
     "WithRetryContext",
     "PollingStrategy",
 ]

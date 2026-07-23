@@ -582,7 +582,7 @@ class OperationUpdate(SerializableModel):
     )
     payload: str | None = field(
         default=None,
-        metadata=_metadata(alias="Payload", omit_if_falsey=True),
+        metadata=_metadata(alias="Payload"),
     )
     error: ErrorObject | None = field(default=None, metadata=_metadata(alias="Error"))
     context_options: ContextOptions | None = field(
@@ -944,9 +944,9 @@ class CheckpointUpdatedExecutionState(SerializableModel):
 class CheckpointOutput(SerializableModel):
     """Representation of the CheckpointDurableExecutionOutput structure of the DEX CheckpointDurableExecution API."""
 
-    checkpoint_token: str = field(
-        default="",
-        metadata=_metadata(alias="CheckpointToken", omit_if_none=False),
+    checkpoint_token: str | None = field(
+        default=None,
+        metadata=_metadata(alias="CheckpointToken"),
     )
     new_execution_state: CheckpointUpdatedExecutionState = field(
         default_factory=CheckpointUpdatedExecutionState,

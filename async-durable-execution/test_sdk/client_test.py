@@ -92,6 +92,35 @@ async def test_lambda_client_checkpoint(_mock_get_session):
     assert result.checkpoint_token == "new_token"  # noqa: S105
 
 
+@pytest.mark.parametrize("token", [None, ""])
+async def test_lambda_client_checkpoint_rejects_missing_token(token):
+    """Sync-backed checkpoint calls reject missing tokens before the API call."""
+    mock_client = Mock()
+    lambda_client = ThreadedSyncLambdaClient(mock_client)
+
+    with pytest.raises(
+        CheckpointError, match="Cannot checkpoint without a checkpoint token"
+    ):
+        await lambda_client.checkpoint("arn123", token, [], None)
+
+    mock_client.checkpoint_durable_execution.assert_not_called()
+
+
+@pytest.mark.parametrize("token", [None, ""])
+async def test_lambda_client_get_execution_state_rejects_missing_token(token):
+    """Sync-backed state calls reject missing tokens before the API call."""
+    mock_client = Mock()
+    lambda_client = ThreadedSyncLambdaClient(mock_client)
+
+    with pytest.raises(
+        GetExecutionStateError,
+        match="Cannot get execution state without a checkpoint token",
+    ):
+        await lambda_client.get_execution_state("arn123", token, "marker")
+
+    mock_client.get_durable_execution_state.assert_not_called()
+
+
 async def test_lambda_client_checkpoint_with_client_token():
     """Test ThreadedSyncLambdaClient.checkpoint method with client_token."""
     mock_client = Mock()
@@ -373,6 +402,37 @@ async def test_async_lambda_client_get_execution_state():
     )
     assert isinstance(result, StateOutput)
     assert result.operations == []
+
+
+@pytest.mark.parametrize("token", [None, ""])
+async def test_async_lambda_client_checkpoint_rejects_missing_token(token):
+    """Async checkpoint calls reject missing tokens before the API call."""
+    mock_client = Mock()
+    mock_client.checkpoint_durable_execution = AsyncMock()
+    lambda_client = AsyncLambdaClient(mock_client)
+
+    with pytest.raises(
+        CheckpointError, match="Cannot checkpoint without a checkpoint token"
+    ):
+        await lambda_client.checkpoint("arn123", token, [], None)
+
+    mock_client.checkpoint_durable_execution.assert_not_awaited()
+
+
+@pytest.mark.parametrize("token", [None, ""])
+async def test_async_lambda_client_get_execution_state_rejects_missing_token(token):
+    """Async state calls reject missing tokens before the API call."""
+    mock_client = Mock()
+    mock_client.get_durable_execution_state = AsyncMock()
+    lambda_client = AsyncLambdaClient(mock_client)
+
+    with pytest.raises(
+        GetExecutionStateError,
+        match="Cannot get execution state without a checkpoint token",
+    ):
+        await lambda_client.get_execution_state("arn123", token, "marker")
+
+    mock_client.get_durable_execution_state.assert_not_awaited()
 
 
 @patch.dict("os.environ", {}, clear=True)
