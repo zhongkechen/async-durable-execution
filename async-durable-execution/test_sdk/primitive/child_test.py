@@ -12,6 +12,7 @@ from unittest.mock import Mock
 import pytest
 from async_durable_execution.context import bind_current_context
 from async_durable_execution.exceptions import (
+    CallbackError,
     CallableRuntimeError,
     InvocationError,
 )
@@ -381,6 +382,75 @@ async def test_child_handler_already_failed_missing_error_details():
         )
 
     mock_callable.assert_not_called()
+
+
+async def test_child_handler_callback_error_checkpoints_callback_id():
+    """A callback failure persists its callback id at the child boundary."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "test_arn"
+    mock_state.operations.get.return_value = None
+    callback_error = CallbackError("Callback failed", callback_id="callback-123")
+    mock_callable = Mock(side_effect=callback_error)
+
+    with pytest.raises(CallbackError) as exc_info:
+        await child_handler(
+            mock_callable,
+            mock_state,
+            OperationIdentifier(
+                "wait-for-callback",
+                OperationSubType.WAIT_FOR_CALLBACK,
+                None,
+                "test_callback",
+            ),
+        )
+
+    assert exc_info.value is callback_error
+    assert exc_info.value.callback_id == "callback-123"
+    fail_operation = mock_state.create_checkpoint.call_args_list[1].kwargs[
+        "operation_update"
+    ]
+    assert fail_operation.action is OperationAction.FAIL
+    assert fail_operation.error == ErrorObject(
+        message="Callback failed",
+        type="CallbackError",
+        data="callback-123",
+    )
+
+
+async def test_child_handler_replays_callback_error_with_callback_id():
+    """A replayed callback failure reconstructs its callback id."""
+    mock_state = Mock(spec=ExecutionState)
+    operation = Operation(
+        operation_id="wait-for-callback",
+        operation_type=OperationType.CONTEXT,
+        status=OperationStatus.FAILED,
+        sub_type=OperationSubType.WAIT_FOR_CALLBACK,
+        context_details=ContextDetails(
+            error=ErrorObject(
+                message="Callback failed",
+                type="CallbackError",
+                data="callback-123",
+            )
+        ),
+    )
+    mock_state.operations.get.return_value = operation
+    mock_callable = Mock()
+
+    with pytest.raises(CallbackError, match="Callback failed") as exc_info:
+        await child_handler(
+            mock_callable,
+            mock_state,
+            OperationIdentifier(
+                "wait-for-callback",
+                OperationSubType.WAIT_FOR_CALLBACK,
+                None,
+                "test_callback",
+            ),
+        )
+
+    assert exc_info.value.callback_id == "callback-123"
+    mock_callable.assert_not_called()
+    mock_state.create_checkpoint.assert_not_called()
 
 
 async def test_should_use_step_id_prefix_when_generating_step_ids():

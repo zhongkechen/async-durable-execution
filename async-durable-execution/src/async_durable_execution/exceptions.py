@@ -89,6 +89,14 @@ class WaitForConditionError(ExecutionError):
     """Raised when a wait_for_condition operation exhausts its attempts."""
 
 
+class CallbackError(ExecutionError):
+    """Error in callback handling."""
+
+    def __init__(self, message: str, callback_id: str | None = None):
+        super().__init__(message, TerminationReason.CALLBACK_ERROR)
+        self.callback_id = callback_id
+
+
 class InvocationError(UnrecoverableError):
     """Error that should cause Lambda retry by throwing from handler."""
 

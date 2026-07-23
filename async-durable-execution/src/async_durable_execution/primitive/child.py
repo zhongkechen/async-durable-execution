@@ -16,6 +16,7 @@ from .base import (
 )
 from ..context import bind_current_context, get_current_context
 from ..exceptions import (
+    CallbackError,
     CallableRuntimeError,
     InvocationError,
 )
@@ -178,6 +179,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
         Raises:
             SuspendExecution: Re-raised without checkpointing
             InvocationError: Re-raised after checkpointing FAIL
+            CallbackError: Re-raised after checkpointing FAIL
             CallableRuntimeError: Raised for other exceptions after checkpointing FAIL
         """
         logger.debug(
@@ -272,6 +274,14 @@ class ChildOperationExecutor(OperationExecutor[T]):
             )
         except Exception as e:
             error_object = ErrorObject.from_exception(e)
+            if isinstance(e, CallbackError):
+                error_object = ErrorObject(
+                    message=error_object.message,
+                    type=error_object.type,
+                    data=e.callback_id,
+                    stack_trace=error_object.stack_trace,
+                )
+
             # Virtual deliberately does not write checkpoints, but exception still propagates below
             if not self.is_virtual:
                 fail_operation: OperationUpdate = OperationUpdate.create_context_fail(
@@ -289,7 +299,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
             # bubble that error upwards (with the checkpoint in place for
             # non-virtual) such that we reach the execution handler at the
             # very top, which will then make the backend retry.
-            if isinstance(e, InvocationError):
+            if isinstance(e, InvocationError | CallbackError):
                 raise
             raise CallableRuntimeError.from_error_object(error_object) from e
 
@@ -315,6 +325,12 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 error_type=None,
                 data=None,
                 stack_trace=None,
+            )
+
+        if error.type == CallbackError.__name__:
+            raise CallbackError(
+                message=error.message or "Callback failed",
+                callback_id=error.data,
             )
 
         raise CallableRuntimeError.from_error_object(error)

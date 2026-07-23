@@ -40,7 +40,6 @@ from .composite.parallel import (
     parallel,
 )
 from .primitive.callback import (
-    CallbackError,
     create_callback,
     Callback,
 )
@@ -64,6 +63,7 @@ from .models import ErrorObject
 
 # User-facing exception types.
 from .exceptions import (
+    CallbackError,
     CallableRuntimeError,
     DurableExecutionsError,
     ExecutionError,

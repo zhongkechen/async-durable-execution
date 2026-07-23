@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar
 from .base import OperationExecutor
 from .child import get_durable_context
 from ..config import Duration, duration_to_seconds
-from ..exceptions import ExecutionError, SuspendExecution, TerminationReason
+from ..exceptions import CallbackError, SuspendExecution
 from ..models import (
     CallbackOptions,
     CallbackTimeoutType,
@@ -32,14 +32,6 @@ T = TypeVar("T")  # Result type
 logger = logging.getLogger(__name__)
 
 PASS_THROUGH_SERDES: SerDes[Any] = PassThroughSerDes()
-
-
-class CallbackError(ExecutionError):
-    """Error in callback handling."""
-
-    def __init__(self, message: str, callback_id: str | None = None):
-        super().__init__(message, TerminationReason.CALLBACK_ERROR)
-        self.callback_id = callback_id
 
 
 class CallbackOperationExecutor(OperationExecutor[str]):
