@@ -19,6 +19,8 @@ from ..exceptions import (
     CallbackError,
     CallableRuntimeError,
     InvocationError,
+    _decode_sdk_error_data,
+    _encode_sdk_error_data,
 )
 from ..models import (
     ContextOptions,
@@ -274,11 +276,11 @@ class ChildOperationExecutor(OperationExecutor[T]):
             )
         except Exception as e:
             error_object = ErrorObject.from_exception(e)
-            if isinstance(e, CallbackError):
+            if type(e) is CallbackError:
                 error_object = ErrorObject(
                     message=error_object.message,
                     type=error_object.type,
-                    data=e.callback_id,
+                    data=_encode_sdk_error_data(CallbackError, e.callback_id),
                     stack_trace=error_object.stack_trace,
                 )
 
@@ -327,10 +329,14 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 stack_trace=None,
             )
 
-        if error.type == CallbackError.__name__:
+        is_callback_error, callback_id = _decode_sdk_error_data(
+            error.data,
+            CallbackError,
+        )
+        if error.type == CallbackError.__name__ and is_callback_error:
             raise CallbackError(
                 message=error.message or "Callback failed",
-                callback_id=error.data,
+                callback_id=callback_id,
             )
 
         raise CallableRuntimeError.from_error_object(error)

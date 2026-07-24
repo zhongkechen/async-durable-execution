@@ -410,11 +410,13 @@ async def test_child_handler_callback_error_checkpoints_callback_id():
         "operation_update"
     ]
     assert fail_operation.action is OperationAction.FAIL
-    assert fail_operation.error == ErrorObject(
-        message="Callback failed",
-        type="CallbackError",
-        data="callback-123",
-    )
+    assert fail_operation.error.message == "Callback failed"
+    assert fail_operation.error.type == "CallbackError"
+    assert json.loads(fail_operation.error.data) == {
+        "__async_durable_execution_error__": 1,
+        "exception_type": "async_durable_execution.exceptions.CallbackError",
+        "payload": "callback-123",
+    }
 
 
 async def test_child_handler_replays_callback_error_with_callback_id():
@@ -429,7 +431,15 @@ async def test_child_handler_replays_callback_error_with_callback_id():
             error=ErrorObject(
                 message="Callback failed",
                 type="CallbackError",
-                data="callback-123",
+                data=json.dumps(
+                    {
+                        "__async_durable_execution_error__": 1,
+                        "exception_type": (
+                            "async_durable_execution.exceptions.CallbackError"
+                        ),
+                        "payload": "callback-123",
+                    }
+                ),
             )
         ),
     )
@@ -451,6 +461,56 @@ async def test_child_handler_replays_callback_error_with_callback_id():
     assert exc_info.value.callback_id == "callback-123"
     mock_callable.assert_not_called()
     mock_state.create_checkpoint.assert_not_called()
+
+
+async def test_child_handler_does_not_replay_user_callback_error_as_sdk_error():
+    """A same-named user exception remains a generic callable failure on replay."""
+    user_callback_error = type("CallbackError", (Exception,), {})("User failure")
+    initial_state = Mock(spec=ExecutionState)
+    initial_state.durable_execution_arn = "test_arn"
+    initial_state.operations.get.return_value = None
+
+    with pytest.raises(CallableRuntimeError, match="User failure"):
+        await child_handler(
+            Mock(side_effect=user_callback_error),
+            initial_state,
+            OperationIdentifier(
+                "user-callback-error",
+                OperationSubType.RUN_IN_CHILD_CONTEXT,
+                None,
+                "user_callback_error",
+            ),
+        )
+
+    fail_operation = initial_state.create_checkpoint.call_args_list[1].kwargs[
+        "operation_update"
+    ]
+    assert fail_operation.error.type == "CallbackError"
+    assert fail_operation.error.data is None
+
+    replay_state = Mock(spec=ExecutionState)
+    replay_state.operations.get.return_value = Operation(
+        operation_id="user-callback-error",
+        operation_type=OperationType.CONTEXT,
+        status=OperationStatus.FAILED,
+        context_details=ContextDetails(error=fail_operation.error),
+    )
+    replay_callable = Mock()
+
+    with pytest.raises(CallableRuntimeError, match="User failure") as exc_info:
+        await child_handler(
+            replay_callable,
+            replay_state,
+            OperationIdentifier(
+                "user-callback-error",
+                OperationSubType.RUN_IN_CHILD_CONTEXT,
+                None,
+                "user_callback_error",
+            ),
+        )
+
+    assert exc_info.value.error_type == "CallbackError"
+    replay_callable.assert_not_called()
 
 
 async def test_should_use_step_id_prefix_when_generating_step_ids():

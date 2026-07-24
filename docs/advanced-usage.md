@@ -219,8 +219,10 @@ protection cases.
 `wait_for_condition()` passes each `check` result to the configured
 `PollingStrategy`. The strategy returns the next polling delay, or `None` to complete
 with the current result. The default `PollingStrategy` completes when the result
-evaluates to `True` or when max attempts are exhausted, so custom result types can
-still decide completion with `__bool__()`.
+evaluates to `True`, so custom result types can decide completion with `__bool__()`.
+If the result remains false after the configured maximum attempts, the strategy raises
+`WaitForConditionError`. A true result on the final attempt still completes
+successfully. A custom polling strategy can return `None` to complete with any result.
 
 When the result is a custom type, provide a `SerDes` implementation so the SDK can
 checkpoint and replay it durably:

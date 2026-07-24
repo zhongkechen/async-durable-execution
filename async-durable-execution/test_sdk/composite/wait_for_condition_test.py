@@ -18,6 +18,7 @@ from async_durable_execution.exceptions import (
     ExecutionError,
     InvocationError,
     SuspendExecution,
+    TerminationReason,
     ValidationError,
     WaitForConditionError,
 )
@@ -440,35 +441,89 @@ async def test_wait_for_condition_already_failed():
 
 async def test_wait_for_condition_replays_exhaustion_error():
     """Replay preserves the public exhaustion exception type."""
-    mock_state = Mock(spec=ExecutionState)
-    mock_state.durable_execution_arn = "test_arn"
-    mock_state.operations.get.return_value = Operation(
+    initial_state = Mock(spec=ExecutionState)
+    initial_state.durable_execution_arn = "test_arn"
+    initial_state.operations.get.return_value = None
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+
+    with pytest.raises(WaitForConditionError, match="exhausted 1 attempts"):
+        await wait_for_condition_handler(
+            state=initial_state,
+            operation_identifier=op_id,
+            check=lambda state: False,
+            polling_strategy=PollingStrategy(max_attempts=1),
+        )
+
+    fail_operation = initial_state.create_checkpoint.call_args.kwargs[
+        "operation_update"
+    ]
+    assert fail_operation.error.type == "WaitForConditionError"
+    assert fail_operation.error.data is not None
+
+    replay_state = Mock(spec=ExecutionState)
+    replay_state.operations.get.return_value = Operation(
         operation_id="op1",
         operation_type=OperationType.STEP,
         status=OperationStatus.FAILED,
-        step_details=StepDetails(
-            error=ErrorObject(
-                "wait_for_condition exhausted 1 attempts before the condition was met",
-                "WaitForConditionError",
-                None,
-                None,
-            )
-        ),
-    )
-    op_id = OperationIdentifier(
-        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+        step_details=StepDetails(error=fail_operation.error),
     )
     check_func = Mock(side_effect=AssertionError("check should not run"))
 
     with pytest.raises(WaitForConditionError, match="exhausted 1 attempts"):
         await wait_for_condition_handler(
-            state=mock_state,
+            state=replay_state,
             operation_identifier=op_id,
             check=check_func,
         )
 
     check_func.assert_not_called()
-    mock_state.create_checkpoint.assert_not_called()
+    replay_state.create_checkpoint.assert_not_called()
+
+
+async def test_wait_for_condition_does_not_replay_same_named_user_error():
+    """A same-named user exception remains a generic callable failure on replay."""
+    user_error = type("WaitForConditionError", (Exception,), {})("User failure")
+    initial_state = Mock(spec=ExecutionState)
+    initial_state.durable_execution_arn = "test_arn"
+    initial_state.operations.get.return_value = None
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+
+    with pytest.raises(type(user_error), match="User failure"):
+        await wait_for_condition_handler(
+            state=initial_state,
+            operation_identifier=op_id,
+            check=Mock(side_effect=user_error),
+        )
+
+    fail_operation = initial_state.create_checkpoint.call_args.kwargs[
+        "operation_update"
+    ]
+    assert fail_operation.error.type == "WaitForConditionError"
+    assert fail_operation.error.data is None
+
+    replay_state = Mock(spec=ExecutionState)
+    replay_state.operations.get.return_value = Operation(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.FAILED,
+        step_details=StepDetails(error=fail_operation.error),
+    )
+    check_func = Mock(side_effect=AssertionError("check should not run"))
+
+    with pytest.raises(CallableRuntimeError, match="User failure") as exc_info:
+        await wait_for_condition_handler(
+            state=replay_state,
+            operation_identifier=op_id,
+            check=check_func,
+        )
+
+    assert exc_info.value.error_type == "WaitForConditionError"
+    check_func.assert_not_called()
+    replay_state.create_checkpoint.assert_not_called()
 
 
 async def test_wait_for_condition_already_failed_without_error_object():
@@ -628,6 +683,54 @@ async def test_wait_for_condition_retry_invalid_json_state_fails():
     mock_state.create_checkpoint.assert_called_once()
     fail_operation = mock_state.create_checkpoint.call_args.kwargs["operation_update"]
     assert fail_operation.action is OperationAction.FAIL
+
+
+async def test_wait_for_condition_replays_deserialization_failure():
+    """Replay preserves ExecutionError for corrupted checkpointed state."""
+    initial_state = Mock(spec=ExecutionState)
+    initial_state.durable_execution_arn = "arn:aws:test"
+    initial_state.operations.get.return_value = Operation(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.STARTED,
+        step_details=StepDetails(result="invalid json", attempt=2),
+    )
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+
+    with pytest.raises(ExecutionError, match="Deserialization failed"):
+        await wait_for_condition_handler(
+            state=initial_state,
+            operation_identifier=op_id,
+            check=Mock(side_effect=AssertionError("check should not run")),
+        )
+
+    fail_operation = initial_state.create_checkpoint.call_args.kwargs[
+        "operation_update"
+    ]
+    assert fail_operation.error.type == "ExecutionError"
+    assert fail_operation.error.data is not None
+
+    replay_state = Mock(spec=ExecutionState)
+    replay_state.operations.get.return_value = Operation(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.FAILED,
+        step_details=StepDetails(error=fail_operation.error),
+    )
+    check_func = Mock(side_effect=AssertionError("check should not run"))
+
+    with pytest.raises(ExecutionError, match="Deserialization failed") as exc_info:
+        await wait_for_condition_handler(
+            state=replay_state,
+            operation_identifier=op_id,
+            check=check_func,
+        )
+
+    assert exc_info.value.termination_reason is TerminationReason.EXECUTION_ERROR
+    check_func.assert_not_called()
+    replay_state.create_checkpoint.assert_not_called()
 
 
 async def test_wait_for_condition_check_function_exception():

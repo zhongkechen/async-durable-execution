@@ -16,8 +16,11 @@ from ..context import (
 from ..exceptions import (
     CallableRuntimeError,
     ExecutionError,
+    TerminationReason,
     ValidationError,
     WaitForConditionError,
+    _decode_sdk_error_data,
+    _encode_sdk_error_data,
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
 )
@@ -142,10 +145,33 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                     data=None,
                     stack_trace=None,
                 )
-            if error.type == WaitForConditionError.__name__:
+            is_wait_for_condition_error, _ = _decode_sdk_error_data(
+                error.data,
+                WaitForConditionError,
+            )
+            if (
+                error.type == WaitForConditionError.__name__
+                and is_wait_for_condition_error
+            ):
                 raise WaitForConditionError(
                     error.message or "wait_for_condition failed"
                 )
+
+            is_execution_error, termination_reason = _decode_sdk_error_data(
+                error.data,
+                ExecutionError,
+            )
+            if error.type == ExecutionError.__name__ and is_execution_error:
+                try:
+                    reason = TerminationReason(termination_reason)
+                except (TypeError, ValueError):
+                    pass
+                else:
+                    raise ExecutionError(
+                        error.message or "wait_for_condition failed",
+                        termination_reason=reason,
+                    )
+
             raise CallableRuntimeError.from_error_object(error)
 
         if operation.status is OperationStatus.PENDING:
@@ -280,9 +306,28 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 self.operation_identifier.name,
             )
 
+            error = ErrorObject.from_exception(e)
+            if type(e) is WaitForConditionError:
+                error = ErrorObject(
+                    message=error.message,
+                    type=error.type,
+                    data=_encode_sdk_error_data(WaitForConditionError),
+                    stack_trace=error.stack_trace,
+                )
+            elif type(e) is ExecutionError:
+                error = ErrorObject(
+                    message=error.message,
+                    type=error.type,
+                    data=_encode_sdk_error_data(
+                        ExecutionError,
+                        e.termination_reason.value,
+                    ),
+                    stack_trace=error.stack_trace,
+                )
+
             fail_operation = OperationUpdate.create_wait_for_condition_fail(
                 identifier=self.operation_identifier,
-                error=ErrorObject.from_exception(e),
+                error=error,
             )
             # Checkpoint FAIL operation with blocking (is_sync=True, default).
             # Must ensure the failure state is persisted before raising the exception.
