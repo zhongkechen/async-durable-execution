@@ -18,5 +18,5 @@ async def test_wait_for_callback_failure(durable_runner):
     assert isinstance(result.error, ErrorObject)
     assert result.error.to_dict() == {
         "ErrorMessage": "my callback error",
-        "ErrorType": "CallableRuntimeError",
+        "ErrorType": "CallbackError",
     }

@@ -52,7 +52,7 @@ class DurableServiceClient(Protocol):
     async def checkpoint(
         self,
         durable_execution_arn: str,
-        checkpoint_token: str | None,
+        checkpoint_token: str,
         updates: list[OperationUpdate],
         client_token: str | None,
     ) -> CheckpointOutput: ...  # pragma: no cover
@@ -60,7 +60,7 @@ class DurableServiceClient(Protocol):
     async def get_execution_state(
         self,
         durable_execution_arn: str,
-        checkpoint_token: str | None,
+        checkpoint_token: str,
         next_marker: str,
         max_items: int = 1000,
     ) -> StateOutput: ...  # pragma: no cover

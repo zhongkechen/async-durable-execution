@@ -53,6 +53,15 @@ class UppercaseSerDes(SerDes[str]):
         return data
 
 
+class EmptyStringSerDes(SerDes[str]):
+    async def serialize(self, value: str) -> str:
+        return ""
+
+    async def deserialize(self, data: str) -> str:
+        assert data == ""
+        return "checkpointed"
+
+
 def test_wait_for_condition_signature_accepts_config_fields_directly():
     """The public wait_for_condition API exposes config fields directly."""
     parameters = inspect.signature(wait_for_condition).parameters
@@ -429,6 +438,39 @@ async def test_wait_for_condition_already_failed():
         )
 
 
+async def test_wait_for_condition_replays_exhaustion_error():
+    """Replay preserves the public exhaustion exception type."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "test_arn"
+    mock_state.operations.get.return_value = Operation(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.FAILED,
+        step_details=StepDetails(
+            error=ErrorObject(
+                "wait_for_condition exhausted 1 attempts before the condition was met",
+                "WaitForConditionError",
+                None,
+                None,
+            )
+        ),
+    )
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+    check_func = Mock(side_effect=AssertionError("check should not run"))
+
+    with pytest.raises(WaitForConditionError, match="exhausted 1 attempts"):
+        await wait_for_condition_handler(
+            state=mock_state,
+            operation_identifier=op_id,
+            check=check_func,
+        )
+
+    check_func.assert_not_called()
+    mock_state.create_checkpoint.assert_not_called()
+
+
 async def test_wait_for_condition_already_failed_without_error_object():
     """Failed checkpoints without error details raise an unknown CallableRuntimeError."""
     mock_state = Mock(spec=ExecutionState)
@@ -491,6 +533,34 @@ async def test_wait_for_condition_retry_with_state():
 
     assert result == 11  # 10 (from checkpoint) + 1
     assert mock_state.create_checkpoint.call_count == 1  # Only SUCCESS
+
+
+async def test_wait_for_condition_retry_with_empty_serialized_state():
+    """An empty serialized payload is replayed instead of replaced by initial state."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "arn:aws:test"
+    mock_state.operations.get.return_value = Operation(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.STARTED,
+        step_details=StepDetails(result="", attempt=2),
+    )
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+    check_func = Mock(return_value="done")
+
+    result = await wait_for_condition_handler(
+        state=mock_state,
+        operation_identifier=op_id,
+        check=check_func,
+        initial_state="initial",
+        polling_strategy=lambda state, attempt: None,
+        serdes=EmptyStringSerDes(),
+    )
+
+    assert result == "checkpointed"
+    check_func.assert_called_once_with("checkpointed")
 
 
 async def test_wait_for_condition_retry_without_state():

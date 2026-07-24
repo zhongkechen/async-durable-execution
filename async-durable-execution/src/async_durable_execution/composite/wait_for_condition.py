@@ -142,6 +142,10 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                     data=None,
                     stack_trace=None,
                 )
+            if error.type == WaitForConditionError.__name__:
+                raise WaitForConditionError(
+                    error.message or "wait_for_condition failed"
+                )
             raise CallableRuntimeError.from_error_object(error)
 
         if operation.status is OperationStatus.PENDING:
@@ -184,7 +188,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 operation is not None
                 and operation.status in {OperationStatus.STARTED, OperationStatus.READY}
                 and operation_details is not None
-                and operation_details.result
+                and operation_details.result is not None
             ):
                 current_state = await self.deserialize_value(
                     data=operation_details.result,
