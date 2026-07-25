@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections import deque
 from dataclasses import dataclass
 from typing import Any, NamedTuple, cast
@@ -46,6 +47,7 @@ from async_durable_execution.composite.flow import (
     _encode_flow_value,
     _evaluate_definition,
     _execute_flow,
+    _find_control_error,
     _flow_node_inputs,
     _flow_node_context,
     _raise_task_error,
@@ -55,16 +57,27 @@ from async_durable_execution.composite.flow import (
 )
 from async_durable_execution.context import bind_current_context
 from async_durable_execution.exceptions import (
+    BotoClientError,
     CallbackError,
     CallableRuntimeError,
+    DurableApiErrorCategory,
     ExecutionError,
     InvocationError,
     SerDesError,
     SuspendExecution,
+    TerminationReason,
     TimedSuspendExecution,
+    _decode_sdk_error_data,
+    _encode_sdk_control_error_data,
     _encode_sdk_error_data,
+    _sdk_error_type_name,
 )
-from async_durable_execution.models import OperationIdentifier, OperationSubType
+from async_durable_execution.execution import handle_user_function_exception
+from async_durable_execution.models import (
+    InvocationStatus,
+    OperationIdentifier,
+    OperationSubType,
+)
 from async_durable_execution.serdes import ExtendedTypeSerDes
 from async_durable_execution.state import ExecutionState
 
@@ -76,6 +89,15 @@ async def return_name() -> str:
 
 class _FatalFlowSignal(BaseException):
     pass
+
+
+class _CustomInvocationError(InvocationError):
+    def __init__(self, message: str, *, retryable: bool):
+        super().__init__(message, TerminationReason.STEP_INTERRUPTED)
+        self._retryable = retryable
+
+    def is_retryable(self) -> bool:
+        return self._retryable
 
 
 def test_flow_result_helpers_preserve_selected_output_arity():
@@ -551,6 +573,27 @@ def test_coerce_expression_rejects_invalid_values():
 
 
 @pytest.mark.parametrize(
+    "data",
+    [
+        "{",
+        "[]",
+        json.dumps({"__async_durable_execution_error__": 2}),
+        json.dumps(
+            {
+                "__async_durable_execution_error__": 1,
+                "exception_type": (
+                    "async_durable_execution.exceptions.InvocationError"
+                ),
+                "payload": {},
+            }
+        ),
+    ],
+)
+def test_sdk_error_data_rejects_invalid_envelopes(data):
+    assert _decode_sdk_error_data(data, InvocationError) == (False, None)
+
+
+@pytest.mark.parametrize(
     ("error_type", "data", "expected_type"),
     [
         (
@@ -577,7 +620,7 @@ def test_coerce_expression_rejects_invalid_values():
         (
             "ExecutionError",
             _encode_sdk_error_data(InvocationError),
-            type(None),
+            InvocationError,
         ),
         ("UnknownUserError", None, type(None)),
     ],
@@ -587,8 +630,6 @@ def test_callable_runtime_error_control_classification(
     data,
     expected_type,
 ):
-    from async_durable_execution.composite.flow import _find_control_error
-
     error = CallableRuntimeError(
         message="failure",
         error_type=error_type,
@@ -601,6 +642,149 @@ def test_callable_runtime_error_control_classification(
         assert classified is None
     else:
         assert isinstance(classified, expected_type)
+
+
+@pytest.mark.parametrize("retryable", [False, True])
+def test_replayed_custom_invocation_error_preserves_retry_behavior(retryable):
+    source = _CustomInvocationError("custom failure", retryable=retryable)
+    data = _encode_sdk_control_error_data(source)
+    assert data is not None
+
+    classified = _find_control_error(
+        CallableRuntimeError(
+            message=str(source),
+            error_type=type(source).__name__,
+            data=data,
+            stack_trace=None,
+        )
+    )
+
+    assert isinstance(classified, InvocationError)
+    assert classified.is_retryable() is retryable
+    assert classified.termination_reason is TerminationReason.STEP_INTERRUPTED
+    assert _sdk_error_type_name(classified) == "_CustomInvocationError"
+    assert classified.build_logger_extras() == {}
+
+    reencoded = _encode_sdk_control_error_data(classified)
+    assert reencoded is not None
+    reclassified = _find_control_error(
+        CallableRuntimeError(
+            message=str(classified),
+            error_type=type(classified).__name__,
+            data=reencoded,
+            stack_trace=None,
+        )
+    )
+    assert isinstance(reclassified, InvocationError)
+    assert reclassified.is_retryable() is retryable
+    assert _sdk_error_type_name(reclassified) == "_CustomInvocationError"
+
+
+async def test_replayed_non_retryable_boto_error_remains_non_retryable():
+    source = BotoClientError(
+        "KMS access denied",
+        error_category=DurableApiErrorCategory.EXECUTION,
+        error={
+            "Code": "KMSAccessDeniedException",
+            "Message": "KMS access denied",
+        },
+        response_metadata={
+            "RequestId": "request-id",
+            "HTTPStatusCode": 502,
+        },
+    )
+    data = _encode_sdk_control_error_data(source)
+    assert data is not None
+
+    classified = _find_control_error(
+        CallableRuntimeError(
+            message=str(source),
+            error_type=type(source).__name__,
+            data=data,
+            stack_trace=None,
+        )
+    )
+
+    assert isinstance(classified, InvocationError)
+    assert not classified.is_retryable()
+    assert classified.build_logger_extras() == {
+        "Error": {
+            "Code": "KMSAccessDeniedException",
+            "Message": "KMS access denied",
+        },
+        "ResponseMetadata": {
+            "RequestId": "request-id",
+            "HTTPStatusCode": 502,
+        },
+    }
+
+    output = await handle_user_function_exception(Mock(), classified)
+    assert output.status is InvocationStatus.FAILED
+    assert output.error is not None
+    assert output.error.type == "BotoClientError"
+
+
+def test_invocation_error_payload_drops_unserializable_boto_diagnostics():
+    source = BotoClientError(
+        "invalid diagnostics",
+        error_category=DurableApiErrorCategory.EXECUTION,
+        error={
+            "Code": "KMSAccessDeniedException",
+            "Message": cast("Any", object()),
+        },
+        response_metadata={
+            "HTTPHeaders": cast("Any", object()),
+        },
+    )
+    data = _encode_sdk_control_error_data(source)
+    assert data is not None
+
+    classified = _find_control_error(
+        CallableRuntimeError(
+            message=str(source),
+            error_type=type(source).__name__,
+            data=data,
+            stack_trace=None,
+        )
+    )
+
+    assert isinstance(classified, InvocationError)
+    assert not classified.is_retryable()
+    assert classified.build_logger_extras() == {}
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "{",
+        json.dumps(
+            {
+                "version": 1,
+                "error_type": "",
+                "retryable": "yes",
+                "termination_reason": "UNKNOWN",
+                "error_category": "UNKNOWN",
+                "error": [],
+                "response_metadata": [],
+            }
+        ),
+    ],
+)
+def test_invalid_invocation_error_payload_fails_closed(payload):
+    classified = _find_control_error(
+        CallableRuntimeError(
+            message="legacy failure",
+            error_type=None,
+            data=_encode_sdk_error_data(InvocationError, payload),
+            stack_trace=None,
+        )
+    )
+
+    assert isinstance(classified, InvocationError)
+    assert not classified.is_retryable()
+    assert classified.termination_reason is TerminationReason.INVOCATION_ERROR
+    assert _sdk_error_type_name(classified) == "InvocationError"
+    assert classified.build_logger_extras() == {}
 
 
 def test_callable_runtime_error_preserves_original_error_details():

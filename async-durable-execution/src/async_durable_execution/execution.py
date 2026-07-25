@@ -15,6 +15,7 @@ from .exceptions import (
     ExecutionError,
     InvocationError,
     SuspendExecution,
+    _sdk_error_type_name,
 )
 from .models import (
     DurableExecutionInvocationOutput,
@@ -356,7 +357,10 @@ async def handle_user_function_exception(
             )
             return DurableExecutionInvocationOutput(
                 status=InvocationStatus.FAILED,
-                error=ErrorObject.from_exception(e),
+                error=ErrorObject(
+                    message=str(e),
+                    type=_sdk_error_type_name(e),
+                ),
             )
         logger.exception("Invocation error. Must terminate.")
         # Throw the error to trigger Lambda retry

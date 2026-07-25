@@ -30,6 +30,7 @@ from ..exceptions import (
     SuspendExecution,
     TimedSuspendExecution,
     _decode_sdk_error_data,
+    _restore_sdk_invocation_error,
 )
 from ..models import ErrorObject, SerializableModel
 from ..primitive.child import DurableContext, get_durable_context, run_in_child_context
@@ -1417,18 +1418,16 @@ def _find_control_error(error: Exception) -> Exception | None:
         if isinstance(current, CallableRuntimeError):
             error_type = current.error_type or ""
             message = current.message or str(current)
-            is_invocation_error, _ = _decode_sdk_error_data(
+            is_invocation_error, payload = _decode_sdk_error_data(
                 current.data,
                 InvocationError,
             )
-            if is_invocation_error and error_type in {
-                "BotoClientError",
-                "CheckpointError",
-                "GetExecutionStateError",
-                "InvocationError",
-                "StepInterruptedError",
-            }:
-                return InvocationError(message)
+            if is_invocation_error:
+                return _restore_sdk_invocation_error(
+                    message,
+                    current.error_type,
+                    payload,
+                )
             is_execution_error, _ = _decode_sdk_error_data(
                 current.data,
                 ExecutionError,
