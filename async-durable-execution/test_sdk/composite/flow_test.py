@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import cast
 from unittest.mock import Mock
@@ -585,20 +586,42 @@ def test_node_inputs_reject_conflicting_and_duplicate_explicit_dependencies():
         _evaluate_definition(duplicate_graph())
 
 
-def test_node_inputs_reject_projection_nested_in_set():
+@pytest.mark.parametrize(
+    ("container_kind", "container_pattern"),
+    [
+        pytest.param("set", r"'set'", id="set"),
+        pytest.param("frozenset", r"'frozenset'", id="frozenset"),
+        pytest.param("dataclass", r"'.*ProjectionPayload'", id="dataclass"),
+    ],
+)
+def test_node_inputs_reject_projection_nested_in_unsupported_container(
+    container_kind: str,
+    container_pattern: str,
+):
+    @dataclass(frozen=True)
+    class ProjectionPayload:
+        value: object
+
     @durable_node
-    async def consume(values: set[object]) -> None:
-        _ = values
+    async def consume(value: object) -> None:
+        _ = value
 
     @durable_dag
     def graph():
         source = node(return_name(), name="source")
-        target = node(consume({source.outcome}), name="target")
+        projection = source.outcome
+        if container_kind == "set":
+            nested_input: object = {projection}
+        elif container_kind == "frozenset":
+            nested_input = frozenset({projection})
+        else:
+            nested_input = ProjectionPayload(projection)
+        target = node(consume(nested_input), name="target")
         return target.outcome
 
     with pytest.raises(
         FlowDefinitionError,
-        match=r"unsupported container type 'set'",
+        match=rf"unsupported container type {container_pattern}",
     ):
         _evaluate_definition(graph())
 
