@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import cast
+from typing import NamedTuple, cast
 from unittest.mock import Mock
 
 import pytest
@@ -14,6 +14,7 @@ from async_durable_execution import (
     FlowDefinitionError,
     FlowNodeContext,
     FlowNodeResult,
+    FlowNodeStatus,
     FlowResult,
     InvalidStateError,
     durable_dag,
@@ -27,12 +28,20 @@ from async_durable_execution.composite.flow import (
     _FlowBuilder,
     _FlowControlSignal,
     _FlowResultSerDes,
+    _FlowNodeInput,
+    _FlowNodeInputKind,
+    _NodeExecution,
     _NodeExecutionSerDes,
     _PersistedDependencyResolutionSerDes,
+    _await_resolver_resolution,
     _coerce_expression,
     _evaluate_definition,
     _execute_flow,
+    _flow_node_inputs,
     _flow_node_context,
+    _raise_task_error,
+    _resolve_any_expression,
+    _resolve_flow_node_inputs,
     _resolve_dependency_expression,
 )
 from async_durable_execution.context import bind_current_context
@@ -50,6 +59,10 @@ from async_durable_execution.state import ExecutionState
 @durable_node
 async def return_name() -> str:
     return cast(FlowNodeContext, get_current_context()).operation_name or ""
+
+
+class _FatalFlowSignal(BaseException):
+    pass
 
 
 def test_flow_result_helpers_preserve_selected_output_arity():
@@ -182,6 +195,19 @@ def test_definition_returning_awaitable_is_rejected_and_closed():
         _evaluate_definition(invalid_graph())
 
 
+def test_definition_returning_noncoroutine_awaitable_is_rejected():
+    class CustomAwaitable:
+        def __await__(self):
+            yield
+
+    @durable_dag
+    def invalid_graph():
+        return CustomAwaitable()
+
+    with pytest.raises(FlowDefinitionError, match="synchronously"):
+        _evaluate_definition(invalid_graph())
+
+
 def test_dependency_expression_rejects_empty_invalid_and_foreign_targets():
     captured = {}
 
@@ -286,6 +312,15 @@ def test_validation_rejects_noncallable_and_unknown_dependency():
         _evaluate_definition(unknown_dependency_graph())
 
 
+def test_builder_validation_rejects_tampered_node_callable():
+    builder = _FlowBuilder()
+    flow_node = builder.add_node(return_name(), "invalid")
+    flow_node._func = None
+
+    with pytest.raises(FlowDefinitionError, match="@durable_node"):
+        builder.freeze(None)
+
+
 def test_validation_rejects_dependency_owned_by_another_builder():
     captured = {}
 
@@ -381,9 +416,19 @@ def test_flow_node_repr_and_flat_expression_construction():
 
 def test_flow_builder_defensive_cycle_error():
     builder = _FlowBuilder()
+    first = builder.add_node(return_name(), "first")
+    second = builder.add_node(return_name(), "second")
+    third = builder.add_node(return_name(), "third")
+    outside = builder.add_node(return_name(), "outside")
+    adjacency = {
+        first: [second, third],
+        second: [],
+        third: [second],
+        outside: [],
+    }
 
     with pytest.raises(FlowDefinitionError, match="failed to identify"):
-        builder._find_cycle({}, set())
+        builder._find_cycle(adjacency, {first, second, third})
 
 
 def test_composite_expression_default_state_and_all_unmatched():
@@ -394,21 +439,103 @@ def test_composite_expression_default_state_and_all_unmatched():
         a = node(return_name(), name="A")
         b = node(return_name(), name="B")
         c = node(return_name(), name="C")
+        d = node(return_name(), name="D")
         (a & b) >> c
-        captured.update(a=a, b=b, c=c)
-        return c
+        (a | b) >> d
+        captured.update(a=a, b=b, c=c, d=d)
+        return c, d
 
     _evaluate_definition(graph())
-    expression = captured["c"]._dependency
+    results = {
+        captured["a"]: FlowNodeResult.failed(ErrorObject.from_message("failed")),
+        captured["b"]: FlowNodeResult.failed(ErrorObject.from_message("failed")),
+    }
 
-    evaluation = expression.evaluate(
-        {
-            captured["a"]: FlowNodeResult.failed(ErrorObject.from_message("failed")),
-            captured["b"]: FlowNodeResult.succeeded("ok"),
-        }
+    assert captured["c"]._dependency.evaluate(results).status.value == "UNMATCHED"
+    assert captured["d"]._dependency.evaluate(results).status.value == "UNMATCHED"
+    assert captured["d"]._dependency.evaluate({}).status.value == "PENDING"
+
+
+def test_flow_node_input_resolution_and_container_helpers():
+    builder = _FlowBuilder()
+    source = builder.add_node(return_name(), "source")
+    outcome_input = _FlowNodeInput(source, _FlowNodeInputKind.OUTCOME)
+    error_input = _FlowNodeInput(source, _FlowNodeInputKind.ERROR)
+    error = ErrorObject.from_message("failed")
+
+    assert outcome_input.resolve({source: FlowNodeResult.succeeded("value")}) == "value"
+    assert error_input.resolve({source: FlowNodeResult.failed(error)}) is error
+
+    with pytest.raises(InvalidStateError, match="not available"):
+        outcome_input.resolve({})
+    with pytest.raises(InvalidStateError, match="expected SUCCEEDED"):
+        outcome_input.resolve({source: FlowNodeResult.failed(error)})
+    with pytest.raises(InvalidStateError, match="has no error"):
+        error_input.resolve(
+            {
+                source: FlowNodeResult(
+                    status=FlowNodeStatus.FAILED,
+                    error=None,
+                )
+            }
+        )
+
+    unchanged_list = ["value"]
+    unchanged_tuple = ("value",)
+    unchanged_dict = {"key": "value"}
+    assert _resolve_flow_node_inputs(unchanged_list, {}) is unchanged_list
+    assert _resolve_flow_node_inputs(unchanged_tuple, {}) is unchanged_tuple
+    assert _resolve_flow_node_inputs(unchanged_dict, {}) is unchanged_dict
+
+    class Pair(NamedTuple):
+        first: object
+        second: object
+
+    resolved_pair = _resolve_flow_node_inputs(
+        Pair(outcome_input, "other"),
+        {source: FlowNodeResult.succeeded("value")},
     )
+    assert resolved_pair == Pair("value", "other")
+    assert isinstance(resolved_pair, Pair)
 
-    assert evaluation.status.value == "UNMATCHED"
+    recursive: list[object] = []
+    recursive.append(recursive)
+    with pytest.raises(FlowDefinitionError, match="recursive containers"):
+        _flow_node_inputs(recursive)
+
+
+def test_node_inputs_reject_foreign_nodes_and_form_all_dependencies():
+    captured = {}
+
+    @durable_node
+    async def consume(*values: object) -> None:
+        _ = values
+
+    @durable_dag
+    def first_graph():
+        captured["foreign"] = node(return_name(), name="foreign")
+
+    _evaluate_definition(first_graph())
+
+    @durable_dag
+    def invalid_graph():
+        node(consume(captured["foreign"].outcome), name="target")
+
+    with pytest.raises(InvalidStateError, match="current flow definition"):
+        _evaluate_definition(invalid_graph())
+
+    @durable_dag
+    def all_graph():
+        first = node(return_name(), name="first")
+        second = node(return_name(), name="second")
+        captured["target"] = node(
+            consume(first.outcome, second.outcome),
+            name="target",
+        )
+
+    _evaluate_definition(all_graph())
+    dependency = captured["target"]._dependency
+    assert [leaf.node.name for leaf in dependency.leaves()] == ["first", "second"]
 
 
 def test_cycle_search_skips_nonremaining_targets_and_backtracks():
@@ -456,8 +583,148 @@ async def test_dependency_resolution_propagates_unclassified_task_error():
         )
 
 
+async def test_all_dependency_resolution_returns_unmatched_child_results():
+    captured = {}
+
+    @durable_dag
+    def graph():
+        first = node(return_name(), name="first")
+        second = node(return_name(), name="second")
+        target = node(return_name(), name="target")
+        (first & second) >> target
+        captured.update(first=first, second=second, target=target)
+
+    _evaluate_definition(graph())
+
+    async def execution(result: FlowNodeResult[object]) -> _NodeExecution:
+        return _NodeExecution(result=result)
+
+    tasks = {
+        captured["first"]: asyncio.create_task(
+            execution(FlowNodeResult.failed(ErrorObject.from_message("failed")))
+        ),
+        captured["second"]: asyncio.create_task(
+            execution(FlowNodeResult.succeeded("ok"))
+        ),
+    }
+    resolution = await _resolve_dependency_expression(
+        captured["target"],
+        captured["target"]._dependency,
+        tasks,
+        {},
+    )
+
+    assert not resolution.matched
+    assert set(resolution.results) == {captured["first"], captured["second"]}
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (_FlowControlSignal(ValueError("control")), _FlowControlSignal),
+        (
+            CallableRuntimeError(
+                message="serialized control",
+                error_type="ExecutionError",
+                data=None,
+                stack_trace=None,
+            ),
+            _FlowControlSignal,
+        ),
+        (ValueError("ordinary"), ValueError),
+    ],
+)
+async def test_await_resolver_resolution_propagates_task_errors(error, expected):
+    captured = {}
+
+    @durable_dag
+    def graph():
+        source = node(return_name(), name="source")
+        target = node(return_name(), name="target")
+        source >> target
+        captured["expression"] = target._dependency
+
+    _evaluate_definition(graph())
+
+    async def fail():
+        raise error
+
+    task = asyncio.create_task(fail())
+    with pytest.raises(expected) as raised:
+        await _await_resolver_resolution(task, captured["expression"], {})
+
+    if isinstance(error, _FlowControlSignal):
+        assert raised.value is error
+    elif isinstance(error, CallableRuntimeError):
+        assert isinstance(raised.value.error, ExecutionError)
+
+
+def test_raise_task_error_preserves_control_and_ordinary_failures():
+    signal = _FlowControlSignal(ValueError("control"))
+    with pytest.raises(_FlowControlSignal) as raised:
+        _raise_task_error(signal)
+    assert raised.value is signal
+
+    with pytest.raises(_FlowControlSignal) as raised:
+        _raise_task_error(ExecutionError("sdk"))
+    assert isinstance(raised.value.error, ExecutionError)
+
+    ordinary = ValueError("ordinary")
+    with pytest.raises(ValueError) as raised:
+        _raise_task_error(ordinary)
+    assert raised.value is ordinary
+
+
+async def test_any_resolution_propagates_child_control_signal():
+    captured = {}
+    blocker = asyncio.Event()
+
+    @durable_dag
+    def graph():
+        first = node(return_name(), name="first")
+        second = node(return_name(), name="second")
+        target = node(return_name(), name="target")
+        (first | second) >> target
+        captured.update(first=first, second=second, target=target)
+
+    _evaluate_definition(graph())
+
+    signal = _FlowControlSignal(ValueError("control"))
+
+    async def fail():
+        raise signal
+
+    async def wait_forever():
+        await blocker.wait()
+        return _NodeExecution(FlowNodeResult.succeeded("late"))
+
+    tasks = {
+        captured["first"]: asyncio.create_task(fail()),
+        captured["second"]: asyncio.create_task(wait_forever()),
+    }
+    with pytest.raises(_FlowControlSignal) as raised:
+        await _resolve_any_expression(
+            captured["target"],
+            captured["target"]._dependency,
+            tasks,
+            {},
+        )
+    assert raised.value is signal
+
+
 def test_flow_node_context_reuses_existing_step_counter():
     state = Mock(spec=ExecutionState)
+    fresh_context = DurableContext(
+        execution_state=state,
+        operation_identifier=OperationIdentifier(
+            operation_id=None,
+            sub_type=OperationSubType.EXECUTION,
+            parent_id="parent",
+        ),
+    )
+    fresh_flow_context = _flow_node_context(fresh_context, frozenset(), {})
+    assert "step_counter" not in fresh_flow_context.__dict__
+
     context = DurableContext(
         execution_state=state,
         operation_identifier=OperationIdentifier(
@@ -496,6 +763,55 @@ async def test_execute_flow_wraps_unclassified_child_error(monkeypatch):
     with pytest.raises(_FlowControlSignal) as raised:
         await _execute_flow(frozen)
     assert isinstance(raised.value.error, ValueError)
+
+
+@pytest.mark.parametrize(
+    ("resolver_error", "expected"),
+    [
+        (_FlowControlSignal(ValueError("control")), _FlowControlSignal),
+        (ExecutionError("sdk control"), _FlowControlSignal),
+        (ValueError("ordinary"), _FlowControlSignal),
+        (_FatalFlowSignal("fatal"), _FatalFlowSignal),
+    ],
+)
+async def test_execute_flow_propagates_resolver_task_errors(
+    monkeypatch,
+    resolver_error,
+    expected,
+):
+    @durable_dag
+    def graph():
+        first = node(return_name(), name="first")
+        second = node(return_name(), name="second")
+        target = node(return_name(), name="target")
+        (first | second) >> target
+        return target
+
+    frozen = _evaluate_definition(graph())
+
+    async def succeed():
+        return _NodeExecution(FlowNodeResult.succeeded("ok"))
+
+    async def fail():
+        raise resolver_error
+
+    def fake_child(func, *, name, **kwargs):
+        _ = func, kwargs
+        coroutine = fail() if name.startswith("flow-any-resolution-") else succeed()
+        return asyncio.create_task(coroutine)
+
+    monkeypatch.setattr(
+        "async_durable_execution.composite.flow.run_in_child_context",
+        fake_child,
+    )
+
+    with pytest.raises(expected) as raised:
+        await _execute_flow(frozen)
+
+    if isinstance(resolver_error, (_FlowControlSignal, _FatalFlowSignal)):
+        assert raised.value is resolver_error
+    else:
+        assert isinstance(raised.value.error, type(resolver_error))
 
 
 @pytest.mark.parametrize(

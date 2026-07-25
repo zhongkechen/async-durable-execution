@@ -39,10 +39,9 @@ async def load_customer(customer_id: str) -> dict[str, str]:
 
 @durable_node
 async def prepare_notification(
-    customer_node: FlowNode[dict[str, str]],
+    customer: dict[str, str],
 ) -> str:
     """Wait durably before running another step in the node."""
-    customer = customer_node.outcome
     await wait(
         duration=timedelta(seconds=1),
         name="notification-delay",
@@ -58,10 +57,9 @@ def notification_flow(customer_id: str) -> FlowNode[str]:
     """Define a linear flow whose nodes contain durable operations."""
     customer = node(load_customer(customer_id), name="load-customer")
     notification = node(
-        prepare_notification(customer),
+        prepare_notification(customer.outcome),
         name="prepare-notification",
     )
-    customer >> notification
     return notification
 
 

@@ -142,6 +142,11 @@ class _DependencyMode(Enum):
     ANY = "ANY"
 
 
+class _FlowNodeInputKind(Enum):
+    OUTCOME = "OUTCOME"
+    ERROR = "ERROR"
+
+
 class _EvaluationStatus(Enum):
     PENDING = "PENDING"
     MATCHED = "MATCHED"
@@ -223,6 +228,41 @@ class _DependencyExpression:
                 raise InvalidStateError(msg)
             self.builder.add_dependency(flow_node, self)
         return target
+
+
+@dataclass(frozen=True)
+class _FlowNodeInput(Generic[T]):
+    """Deferred node value used while a flow definition is being evaluated."""
+
+    node: FlowNode[Any]
+    kind: _FlowNodeInputKind
+
+    @property
+    def condition(self) -> _DependencyCondition:
+        if self.kind is _FlowNodeInputKind.OUTCOME:
+            return _DependencyCondition.SUCCEEDED
+        return _DependencyCondition.FAILED
+
+    def resolve(
+        self,
+        results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
+    ) -> T:
+        result = results.get(self.node)
+        if result is None:
+            msg = f"Result for required input {self.node.name!r} is not available."
+            raise InvalidStateError(msg)
+        if not self.condition.matches(result.status):
+            msg = (
+                f"Result for required input {self.node.name!r} has status "
+                f"{result.status.value}, expected {self.condition.value}."
+            )
+            raise InvalidStateError(msg)
+        if self.kind is _FlowNodeInputKind.OUTCOME:
+            return cast("T", result.outcome)
+        if result.error is None:
+            msg = f"Failed input {self.node.name!r} has no error."
+            raise InvalidStateError(msg)
+        return cast("T", result.error)
 
 
 @dataclass(frozen=True)
@@ -344,7 +384,13 @@ class FlowNode(Generic[T]):
 
     @property
     def outcome(self) -> T:
-        """Return this direct dependency's successful outcome."""
+        """Reference a required successful input or return its resolved outcome."""
+        builder = _current_flow_builder.get()
+        if builder is not None and not builder.frozen:
+            return cast(
+                "T",
+                _FlowNodeInput[Any](self, _FlowNodeInputKind.OUTCOME),
+            )
         result = self.result()
         if result.status is not FlowNodeStatus.SUCCEEDED:
             msg = (
@@ -356,7 +402,13 @@ class FlowNode(Generic[T]):
 
     @property
     def error(self) -> ErrorObject | None:
-        """Return this direct dependency's captured error, if any."""
+        """Reference a required failed input or return its captured error."""
+        builder = _current_flow_builder.get()
+        if builder is not None and not builder.frozen:
+            return cast(
+                "ErrorObject",
+                _FlowNodeInput[ErrorObject](self, _FlowNodeInputKind.ERROR),
+            )
         return self.result().error
 
     @property
@@ -411,6 +463,37 @@ class FlowNodeContext(DurableContext):
             )
             raise InvalidStateError(msg)
         return cast("FlowNodeResult[T]", self._dependency_results[dependency])
+
+    @property
+    def dependency_results(self) -> Mapping[str, FlowNodeResult[Any]]:
+        """Return settled direct dependency results captured for this node."""
+        return {
+            dependency.name: result
+            for dependency, result in self._dependency_results.items()
+        }
+
+    def get_dependency_result(self, name: str) -> FlowNodeResult[Any] | None:
+        """Return an available direct dependency result by stable node name."""
+        dependency = self._dependency_by_name(name)
+        return self._dependency_results.get(dependency)
+
+    def require_dependency_result(self, name: str) -> FlowNodeResult[Any]:
+        """Return an available direct dependency result or raise."""
+        result = self.get_dependency_result(name)
+        if result is None:
+            msg = (
+                f"Result for dependency {name!r} is not available. "
+                "An ANY dependency may start before its other branches settle."
+            )
+            raise InvalidStateError(msg)
+        return result
+
+    def _dependency_by_name(self, name: str) -> FlowNode[Any]:
+        for dependency in self._direct_dependencies:
+            if dependency.name == name:
+                return dependency
+        msg = f"Node {name!r} is not a direct dependency of the current flow node."
+        raise InvalidStateError(msg)
 
 
 @dataclass(frozen=True)
@@ -621,20 +704,145 @@ def _coerce_expression(
     raise FlowDefinitionError(msg)
 
 
+def _flow_node_inputs(
+    value: Any,
+    *,
+    active_containers: set[int] | None = None,
+) -> tuple[_FlowNodeInput[Any], ...]:
+    if isinstance(value, _FlowNodeInput):
+        return (value,)
+    if not isinstance(value, (list, tuple, dict)):
+        return ()
+
+    if active_containers is None:
+        active_containers = set()
+    container_id = id(value)
+    if container_id in active_containers:
+        msg = "Flow node arguments cannot contain recursive containers."
+        raise FlowDefinitionError(msg)
+
+    active_containers.add(container_id)
+    try:
+        values = (
+            (*value.keys(), *value.values())
+            if isinstance(value, dict)
+            else tuple(value)
+        )
+        return tuple(
+            reference
+            for item in values
+            for reference in _flow_node_inputs(
+                item,
+                active_containers=active_containers,
+            )
+        )
+    finally:
+        active_containers.remove(container_id)
+
+
+def _bound_flow_node_inputs(
+    func: Callable[[], Awaitable[Any]],
+) -> tuple[_FlowNodeInput[Any], ...]:
+    args = cast("tuple[Any, ...]", getattr(func, "_durable_node_args"))
+    kwargs = cast("Mapping[str, Any]", getattr(func, "_durable_node_kwargs"))
+    return tuple(
+        reference
+        for value in (*args, *kwargs.values())
+        for reference in _flow_node_inputs(value)
+    )
+
+
+def _input_dependency_expression(
+    builder: _FlowBuilder,
+    func: Callable[[], Awaitable[Any]],
+) -> _DependencyExpression | None:
+    references: dict[FlowNode[Any], _FlowNodeInput[Any]] = {}
+    for reference in _bound_flow_node_inputs(func):
+        if reference.node._builder is not builder:
+            msg = "Flow node inputs must come from the current flow definition."
+            raise InvalidStateError(msg)
+        existing = references.get(reference.node)
+        if existing is not None and existing.kind is not reference.kind:
+            msg = (
+                f"Flow node input {reference.node.name!r} cannot require both "
+                "its outcome and error."
+            )
+            raise FlowDefinitionError(msg)
+        references[reference.node] = reference
+
+    leaves = tuple(
+        _DependencyLeaf(builder, reference.node, reference.condition)
+        for reference in sorted(
+            references.values(),
+            key=lambda item: item.node._index,
+        )
+    )
+    if not leaves:
+        return None
+    if len(leaves) == 1:
+        return leaves[0]
+    return _CompositeDependencyExpression(
+        builder=builder,
+        mode=_DependencyMode.ALL,
+        children=leaves,
+    )
+
+
 def node(
     func: Callable[[], Awaitable[T]],
     *,
-    name: str,
+    name: str | None = None,
+    dependency: FlowNode[Any] | _DependencyExpression | None = None,
 ) -> FlowNode[T]:
-    """Declare a node in the currently evaluating durable DAG."""
+    """Declare a node and derive required dependencies from its bound inputs."""
     builder = _current_flow_builder.get()
     if builder is None or builder.frozen:
         msg = "node() can only be used while a @durable_dag definition is evaluating."
         raise InvalidStateError(msg)
-    if not callable(func) or not getattr(func, "_durable_node_callable", False):
+    required_metadata = (
+        "_durable_node_function",
+        "_durable_node_args",
+        "_durable_node_kwargs",
+    )
+    if (
+        not callable(func)
+        or not getattr(func, "_durable_node_callable", False)
+        or any(not hasattr(func, attribute) for attribute in required_metadata)
+    ):
         msg = "node() requires a bound callable produced by @durable_node."
         raise FlowDefinitionError(msg)
-    return builder.add_node(func, name)
+
+    node_name = name if name is not None else getattr(func, "__name__", None)
+    input_expression = _input_dependency_expression(builder, func)
+    explicit_expression = (
+        _coerce_expression(dependency) if dependency is not None else None
+    )
+
+    expression: _DependencyExpression | None
+    if input_expression is not None and explicit_expression is not None:
+        input_nodes = {leaf.node for leaf in input_expression.leaves()}
+        duplicated = next(
+            (
+                leaf.node
+                for leaf in explicit_expression.leaves()
+                if leaf.node in input_nodes
+            ),
+            None,
+        )
+        if duplicated is not None:
+            msg = (
+                f"Node {node_name!r} declares {duplicated.name!r} as both "
+                "a required input and an explicit dependency."
+            )
+            raise FlowDefinitionError(msg)
+        expression = input_expression & explicit_expression
+    else:
+        expression = input_expression or explicit_expression
+
+    flow_node = builder.add_node(func, cast("str", node_name))
+    if expression is not None:
+        builder.add_dependency(flow_node, expression)
+    return flow_node
 
 
 def durable_node(
@@ -656,6 +864,9 @@ def durable_node(
         bound = functools.partial(func, *args, **kwargs)
         setattr(bound, "__name__", func.__name__)
         setattr(bound, "_durable_node_callable", True)
+        setattr(bound, "_durable_node_function", func)
+        setattr(bound, "_durable_node_args", args)
+        setattr(bound, "_durable_node_kwargs", kwargs)
         return bound
 
     setattr(wrapper, "_durable_node", True)
@@ -1062,6 +1273,69 @@ def _flow_node_context(
     return flow_context
 
 
+def _resolve_flow_node_inputs(
+    value: Any,
+    results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
+) -> Any:
+    if isinstance(value, _FlowNodeInput):
+        return value.resolve(results)
+    if isinstance(value, list):
+        resolved_list = [_resolve_flow_node_inputs(item, results) for item in value]
+        return (
+            value
+            if all(a is b for a, b in zip(resolved_list, value, strict=True))
+            else resolved_list
+        )
+    if isinstance(value, tuple):
+        resolved_tuple = tuple(
+            _resolve_flow_node_inputs(item, results) for item in value
+        )
+        if all(a is b for a, b in zip(resolved_tuple, value, strict=True)):
+            return value
+        if hasattr(value, "_fields"):
+            return type(value)(*resolved_tuple)
+        return resolved_tuple
+    if isinstance(value, dict):
+        resolved_items = tuple(
+            (
+                _resolve_flow_node_inputs(key, results),
+                _resolve_flow_node_inputs(item, results),
+            )
+            for key, item in value.items()
+        )
+        if all(
+            resolved_key is key and resolved_value is item
+            for (resolved_key, resolved_value), (key, item) in zip(
+                resolved_items,
+                value.items(),
+                strict=True,
+            )
+        ):
+            return value
+        return dict(resolved_items)
+    return value
+
+
+async def _invoke_flow_node(
+    flow_node: FlowNode[Any],
+    results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
+) -> Any:
+    func = cast(
+        "Callable[..., Awaitable[Any]]",
+        getattr(flow_node._func, "_durable_node_function"),
+    )
+    args = cast("tuple[Any, ...]", getattr(flow_node._func, "_durable_node_args"))
+    kwargs = cast(
+        "Mapping[str, Any]",
+        getattr(flow_node._func, "_durable_node_kwargs"),
+    )
+    resolved_args = tuple(_resolve_flow_node_inputs(value, results) for value in args)
+    resolved_kwargs = {
+        key: _resolve_flow_node_inputs(value, results) for key, value in kwargs.items()
+    }
+    return await func(*resolved_args, **resolved_kwargs)
+
+
 async def _execute_node(
     flow_node: FlowNode[Any],
     tasks: Mapping[FlowNode[Any], asyncio.Task[_NodeExecution]],
@@ -1102,7 +1376,7 @@ async def _execute_node(
     )
     try:
         with bind_current_context(flow_context):
-            outcome = await flow_node._func()
+            outcome = await _invoke_flow_node(flow_node, resolution.results)
         return _NodeExecution(
             result=FlowNodeResult.succeeded(outcome),
             handled_failures=handled_failures,

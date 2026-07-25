@@ -3,6 +3,7 @@
 from typing import Any
 
 from async_durable_execution import (
+    ErrorObject,
     FlowNode,
     durable_dag,
     durable_execution,
@@ -24,17 +25,15 @@ async def charge_payment(approved: bool) -> str:
 @durable_node
 async def fulfill_order(
     order_id: str,
-    payment_node: FlowNode[str],
+    payment: str,
 ) -> str:
     """Run only when payment succeeds."""
-    payment = payment_node.outcome
     return f"fulfilled:{order_id}:{payment}"
 
 
 @durable_node
-async def record_payment_failure(payment_node: FlowNode[str]) -> str:
+async def record_payment_failure(error: ErrorObject | None) -> str:
     """Handle a failed payment and expose its captured error."""
-    error = payment_node.error
     message = error.message if error is not None else "unknown"
     return f"recovered:{message}"
 
@@ -47,16 +46,14 @@ def payment_flow(
     """Define mutually exclusive success and recovery branches."""
     payment = node(charge_payment(approved), name="charge-payment")
     fulfillment = node(
-        fulfill_order(order_id, payment),
+        fulfill_order(order_id, payment.outcome),
         name="fulfill-order",
     )
     recovery = node(
-        record_payment_failure(payment),
+        record_payment_failure(payment.error),
         name="record-payment-failure",
     )
 
-    payment.succeeded >> fulfillment
-    payment.failed >> recovery
     return fulfillment, recovery
 
 

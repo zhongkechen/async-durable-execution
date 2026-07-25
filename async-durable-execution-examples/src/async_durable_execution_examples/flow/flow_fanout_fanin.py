@@ -27,9 +27,8 @@ async def load_order(
 
 
 @durable_node
-async def validate_order(order_node: FlowNode[dict[str, Any]]) -> dict[str, Any]:
+async def validate_order(order: dict[str, Any]) -> dict[str, Any]:
     """Validate an order after it has loaded."""
-    order = order_node.outcome
     return {
         "orderId": order["orderId"],
         "valid": order["quantity"] > 0,
@@ -37,20 +36,17 @@ async def validate_order(order_node: FlowNode[dict[str, Any]]) -> dict[str, Any]
 
 
 @durable_node
-async def price_order(order_node: FlowNode[dict[str, Any]]) -> float:
+async def price_order(order: dict[str, Any]) -> float:
     """Calculate the order total in parallel with validation."""
-    order = order_node.outcome
     return cast(float, order["quantity"] * order["unitPrice"])
 
 
 @durable_node
 async def build_response(
-    validation_node: FlowNode[dict[str, Any]],
-    pricing_node: FlowNode[float],
+    validation: dict[str, Any],
+    total: float,
 ) -> dict[str, Any]:
     """Combine both fan-out branches after they complete."""
-    validation = validation_node.outcome
-    total = pricing_node.outcome
     return {
         "orderId": validation["orderId"],
         "valid": validation["valid"],
@@ -69,15 +65,13 @@ def order_flow(
         load_order(order_id, quantity, unit_price),
         name="load-order",
     )
-    validation = node(validate_order(order), name="validate-order")
-    pricing = node(price_order(order), name="price-order")
+    validation = node(validate_order(order.outcome), name="validate-order")
+    pricing = node(price_order(order.outcome), name="price-order")
     response = node(
-        build_response(validation, pricing),
+        build_response(validation.outcome, pricing.outcome),
         name="build-response",
     )
 
-    order >> (validation, pricing)
-    (validation & pricing) >> response
     return response
 
 

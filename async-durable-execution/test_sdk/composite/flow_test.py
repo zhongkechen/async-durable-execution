@@ -32,6 +32,7 @@ from async_durable_execution import (
     wait,
 )
 from async_durable_execution.context import bind_current_context
+from async_durable_execution.composite.flow import _evaluate_definition
 from async_durable_execution.models import (
     OperationIdentifier,
     OperationStatus,
@@ -132,6 +133,33 @@ async def test_node_requires_bound_durable_node_callable_before_checkpoint():
 
     with bind_current_context(context):
         with pytest.raises(FlowDefinitionError, match="@durable_node"):
+            flow(invalid_graph())
+
+    state.create_checkpoint.assert_not_called()
+
+
+def test_node_uses_durable_node_function_name_by_default():
+    captured = {}
+
+    @durable_dag
+    def graph():
+        captured["node"] = node(return_name())
+
+    _evaluate_definition(graph())
+
+    assert captured["node"].name == "return_name"
+
+
+async def test_duplicate_default_node_names_fail_before_checkpoint():
+    context, state = create_test_context()
+
+    @durable_dag
+    def invalid_graph():
+        node(return_name())
+        node(return_name())
+
+    with bind_current_context(context):
+        with pytest.raises(FlowDefinitionError, match="duplicated"):
             flow(invalid_graph())
 
     state.create_checkpoint.assert_not_called()
@@ -322,6 +350,186 @@ async def test_linear_fanout_fanin_flow_checkpoints_complete_result():
     assert all(
         operation.status is OperationStatus.SUCCEEDED for operation in node_operations
     )
+
+
+async def test_node_outcome_argument_infers_success_dependency_and_resolves_value():
+    @durable_dag
+    def graph():
+        @durable_node
+        async def source() -> dict[str, str]:
+            return {"payment": "accepted"}
+
+        @durable_node
+        async def consume(payload: dict[str, object]) -> str:
+            values = cast("list[object]", payload["values"])
+            nested = cast("tuple[object]", values[1])
+            assert values[0] is nested[0]
+            payment = cast("dict[str, str]", values[0])
+            return payment["payment"]
+
+        source_node = node(source())
+        return node(
+            consume(
+                {
+                    "values": [
+                        source_node.outcome,
+                        (source_node.outcome,),
+                    ]
+                }
+            )
+        )
+
+    @durable_execution
+    async def handler(event):
+        return (await flow(graph(), name="inferred-success")).to_dict()
+
+    async with create_local_runner(handler=handler, input={}, timeout=10) as runner:
+        result = await runner.run()
+
+    payload = json.loads(result.result)
+    assert payload["results"]["source"]["status"] == "SUCCEEDED"
+    assert payload["results"]["consume"]["outcome"] == "accepted"
+
+
+async def test_node_error_argument_infers_failure_dependency_and_resolves_error():
+    @durable_dag
+    def graph():
+        @durable_node
+        async def fail() -> None:
+            msg = "payment declined"
+            raise ValueError(msg)
+
+        @durable_node
+        async def recover(error: ErrorObject | None) -> str:
+            assert error is not None
+            return error.message or ""
+
+        source = node(fail())
+        return node(recover(source.error))
+
+    @durable_execution
+    async def handler(event):
+        return (await flow(graph(), name="inferred-failure")).to_dict()
+
+    async with create_local_runner(handler=handler, input={}, timeout=10) as runner:
+        result = await runner.run()
+
+    payload = json.loads(result.result)
+    assert payload["results"]["fail"]["status"] == "FAILED"
+    assert payload["results"]["recover"]["outcome"] == "payment declined"
+    assert payload["unhandledFailures"] == []
+
+
+async def test_required_inputs_and_explicit_dependency_are_combined_with_all():
+    @durable_dag
+    def graph():
+        @durable_node
+        async def source() -> str:
+            return "source"
+
+        @durable_node
+        async def gate() -> str:
+            return "open"
+
+        @durable_node
+        async def consume(value: str) -> str:
+            context = cast(FlowNodeContext, get_current_context())
+            assert context.require_dependency_result("gate").outcome == "open"
+            return value
+
+        source_node = node(source())
+        gate_node = node(gate())
+        return node(
+            consume(source_node.outcome),
+            dependency=gate_node.succeeded,
+        )
+
+    @durable_execution
+    async def handler(event):
+        return (await flow(graph(), name="combined-dependencies")).to_dict()
+
+    async with create_local_runner(handler=handler, input={}, timeout=10) as runner:
+        result = await runner.run()
+
+    payload = json.loads(result.result)
+    assert payload["results"]["consume"]["outcome"] == "source"
+
+
+async def test_dependency_argument_exposes_stable_result_snapshot_by_name():
+    release_pending = asyncio.Event()
+
+    @durable_dag
+    def graph():
+        @durable_node
+        async def pending_branch() -> str:
+            await release_pending.wait()
+            return "later"
+
+        @durable_node
+        async def winner() -> str:
+            return "winner"
+
+        @durable_node
+        async def handle() -> str:
+            context = cast(FlowNodeContext, get_current_context())
+            assert context.get_dependency_result("pending") is None
+            with pytest.raises(InvalidStateError, match="not available"):
+                context.require_dependency_result("pending")
+            with pytest.raises(InvalidStateError, match="not a direct dependency"):
+                context.get_dependency_result("missing")
+
+            result = context.require_dependency_result("winner")
+            assert context.dependency_results == {"winner": result}
+            release_pending.set()
+            return cast(str, result.outcome)
+
+        pending = node(pending_branch(), name="pending")
+        completed = node(winner(), name="winner")
+        return node(
+            handle(),
+            name="handler",
+            dependency=pending.failed | completed.succeeded,
+        )
+
+    @durable_execution
+    async def handler(event):
+        return (await flow(graph(), name="dependency-snapshot")).to_dict()
+
+    async with create_local_runner(handler=handler, input={}, timeout=10) as runner:
+        result = await runner.run()
+
+    payload = json.loads(result.result)
+    assert payload["results"]["handler"]["outcome"] == "winner"
+    assert payload["results"]["pending"]["outcome"] == "later"
+
+
+def test_node_inputs_reject_conflicting_and_duplicate_explicit_dependencies():
+    @durable_node
+    async def consume(first: object, second: object) -> None:
+        _ = first, second
+
+    @durable_dag
+    def conflicting_graph():
+        source = node(return_name(), name="source")
+        node(
+            consume(source.outcome, source.error),
+            name="target",
+        )
+
+    with pytest.raises(FlowDefinitionError, match="both its outcome and error"):
+        _evaluate_definition(conflicting_graph())
+
+    @durable_dag
+    def duplicate_graph():
+        source = node(return_name(), name="source")
+        node(
+            consume(source.outcome, "value"),
+            name="target",
+            dependency=source.succeeded,
+        )
+
+    with pytest.raises(FlowDefinitionError, match="both a required input"):
+        _evaluate_definition(duplicate_graph())
 
 
 async def test_flow_node_handle_exposes_result_status_outcome_and_error():
