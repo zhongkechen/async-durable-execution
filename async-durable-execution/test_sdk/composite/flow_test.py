@@ -12,6 +12,7 @@ from unittest.mock import Mock
 import pytest
 
 from async_durable_execution import (
+    BatchResult,
     DurableContext,
     ErrorObject,
     FlowDefinitionError,
@@ -29,6 +30,7 @@ from async_durable_execution import (
     flow,
     get_current_context,
     node,
+    parallel,
     step,
     wait,
 )
@@ -399,6 +401,45 @@ async def test_node_outcome_argument_infers_success_dependency_and_resolves_valu
     payload = json.loads(result.result)
     assert payload["results"]["source"]["status"] == "SUCCEEDED"
     assert payload["results"]["consume"]["outcome"] == "accepted"
+
+
+async def test_batch_result_outcome_preserves_type_across_flow_checkpoints():
+    @durable_callable
+    async def branch(value: str) -> str:
+        return value
+
+    @durable_dag
+    def graph():
+        @durable_node
+        async def source() -> BatchResult[str]:
+            return await parallel(
+                [branch("first"), branch("second")],
+                name="parallel-work",
+            )
+
+        @durable_node
+        async def consume(batch_result: BatchResult[str]) -> list[str]:
+            assert isinstance(batch_result, BatchResult)
+            return batch_result.get_results()
+
+        source_node = node(source(), name="source")
+        return node(
+            consume(source_node.outcome),
+            name="consume",
+        ).outcome
+
+    @durable_execution
+    async def handler(event):
+        result = await flow(graph(), name="batch-result-flow")
+        source_outcome = result.get_result("source").outcome
+        assert isinstance(source_outcome, BatchResult)
+        return result.output
+
+    async with create_local_runner(handler=handler, input={}, timeout=10) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert json.loads(result.result) == ["first", "second"]
 
 
 async def test_node_error_argument_infers_failure_dependency_and_resolves_error():

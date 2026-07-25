@@ -207,6 +207,41 @@ def _flow_output_from_dict(value: Any, kind: _FlowNodeInputKind) -> Any:
     return value
 
 
+def _flow_node_result_to_checkpoint_dict(
+    value: FlowNodeResult[Any],
+) -> dict[str, Any]:
+    """Preserve outcomes for type-aware encoding by ExtendedTypeSerDes."""
+    return {
+        "status": value.status.value,
+        "outcome": value.outcome,
+        "error": value.error.to_dict() if value.error is not None else None,
+    }
+
+
+def _flow_result_to_checkpoint_dict(value: FlowResult) -> dict[str, Any]:
+    outputs = [
+        (
+            _flow_node_result_to_checkpoint_dict(cast("FlowNodeResult[Any]", output))
+            if kind is _FlowNodeInputKind.RESULT
+            else _flow_output_to_dict(output, kind)
+        )
+        for output, kind in zip(
+            value.outputs,
+            value._output_kinds,
+            strict=True,
+        )
+    ]
+    return {
+        "results": {
+            name: _flow_node_result_to_checkpoint_dict(node_result)
+            for name, node_result in value.results.items()
+        },
+        "outputs": outputs,
+        "outputProjections": [kind.value for kind in value._output_kinds],
+        "unhandledFailures": list(value.unhandled_failures),
+    }
+
+
 class _EvaluationStatus(Enum):
     PENDING = "PENDING"
     MATCHED = "MATCHED"
@@ -1113,7 +1148,7 @@ class _NodeExecution:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "result": self.result.to_dict(),
+            "result": _flow_node_result_to_checkpoint_dict(self.result),
             "handledFailures": list(self.handled_failures),
         }
 
@@ -1186,7 +1221,7 @@ class _FlowResultSerDes(SerDes[FlowResult]):
         self.delegate: ExtendedTypeSerDes[Any] = ExtendedTypeSerDes()
 
     async def serialize(self, value: FlowResult) -> str:
-        return await self.delegate.serialize(value.to_dict())
+        return await self.delegate.serialize(_flow_result_to_checkpoint_dict(value))
 
     async def deserialize(self, data: str) -> FlowResult:
         decoded = await self.delegate.deserialize(data)

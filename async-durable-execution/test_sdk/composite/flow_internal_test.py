@@ -11,6 +11,10 @@ from unittest.mock import Mock
 import pytest
 
 from async_durable_execution import (
+    BatchItem,
+    BatchItemStatus,
+    BatchResult,
+    CompletionReason,
     DurableContext,
     ErrorObject,
     FlowDefinitionError,
@@ -167,6 +171,49 @@ async def test_flow_serdes_reject_non_mapping_payloads():
         await _PersistedDependencyResolutionSerDes().deserialize(payload)
     with pytest.raises(SerDesError, match="flow result"):
         await _FlowResultSerDes().deserialize(payload)
+
+
+async def test_flow_serdes_preserve_batch_result_outcomes():
+    batch_result = BatchResult(
+        all=[
+            BatchItem(
+                index=0,
+                status=BatchItemStatus.SUCCEEDED,
+                result="value",
+            )
+        ],
+        completion_reason=CompletionReason.ALL_COMPLETED,
+    )
+    node_result = FlowNodeResult.succeeded(batch_result)
+
+    node_serdes = _NodeExecutionSerDes()
+    restored_execution = await node_serdes.deserialize(
+        await node_serdes.serialize(_NodeExecution(result=node_result))
+    )
+    assert isinstance(restored_execution.result.outcome, BatchResult)
+    assert restored_execution.result.outcome == batch_result
+
+    flow_serdes = _FlowResultSerDes()
+    restored_flow = await flow_serdes.deserialize(
+        await flow_serdes.serialize(
+            FlowResult(
+                results={"source": node_result},
+                outputs=(batch_result, node_result),
+                _output_kinds=(
+                    _FlowNodeInputKind.OUTCOME,
+                    _FlowNodeInputKind.RESULT,
+                ),
+            )
+        )
+    )
+    assert isinstance(restored_flow.results["source"].outcome, BatchResult)
+    assert restored_flow.results["source"].outcome == batch_result
+    assert isinstance(restored_flow.outputs[0], BatchResult)
+    projected_result = cast(
+        "FlowNodeResult[BatchResult[str]]", restored_flow.outputs[1]
+    )
+    assert isinstance(projected_result.outcome, BatchResult)
+    assert projected_result.outcome == batch_result
 
 
 def test_durable_dag_supports_class_and_static_method_decorator_orders():
