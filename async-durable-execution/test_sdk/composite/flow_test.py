@@ -1436,7 +1436,65 @@ async def test_empty_and_disconnected_flows():
         "unhandledFailures": [],
     }
     assert list(payload["disconnected"]["results"]) == ["A", "B"]
+    assert {
+        result["status"] for result in payload["disconnected"]["results"].values()
+    } == {"SKIPPED"}
     assert payload["disconnected"]["outputs"] == []
+    disconnected_operation = result.get_context("disconnected")
+    assert result.get_child_operations(disconnected_operation) == []
+
+
+async def test_flow_executes_only_reverse_dependencies_of_outputs():
+    called: list[str] = []
+
+    @durable_dag
+    def graph():
+        @durable_node
+        async def run(name: str, *, fail: bool = False) -> str:
+            called.append(name)
+            if fail:
+                msg = f"{name} must not run"
+                raise RuntimeError(msg)
+            return name
+
+        active_root = node(run("active-root"), name="active-root")
+        selected = node(run("selected"), name="selected")
+        active_root >> selected
+
+        node(
+            run("unused-root", fail=True),
+            name="unused-root",
+        )
+        unused_descendant = node(
+            run("unused-descendant", fail=True),
+            name="unused-descendant",
+        )
+        selected >> unused_descendant
+        return selected.outcome
+
+    @durable_execution
+    async def handler(event):
+        return (await flow(graph(), name="pruned-flow")).to_dict()
+
+    async with create_local_runner(
+        handler=handler,
+        input={},
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert called == ["active-root", "selected"]
+    payload = json.loads(result.result)
+    assert payload["outputs"] == ["selected"]
+    assert payload["unhandledFailures"] == []
+    assert payload["results"]["unused-root"]["status"] == "SKIPPED"
+    assert payload["results"]["unused-descendant"]["status"] == "SKIPPED"
+
+    flow_operation = result.get_context("pruned-flow")
+    assert [
+        operation.name for operation in result.get_child_operations(flow_operation)
+    ] == ["active-root", "selected"]
 
 
 async def test_all_unmatched_dependencies_skip_downstream_callable():

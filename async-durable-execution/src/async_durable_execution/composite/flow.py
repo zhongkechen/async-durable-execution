@@ -581,6 +581,7 @@ class FlowNodeContext(DurableContext):
 class _FrozenFlow:
     nodes: tuple[FlowNode[Any], ...]
     topological_nodes: tuple[FlowNode[Any], ...]
+    execution_nodes: tuple[FlowNode[Any], ...]
     outputs: tuple[_FlowNodeInput[Any], ...]
 
 
@@ -620,9 +621,11 @@ class _FlowBuilder:
         outputs = self._validate_outputs(output)
         self._validate_nodes()
         topological_nodes = self._topological_sort()
+        execution_nodes = self._execution_nodes(topological_nodes, outputs)
         return _FrozenFlow(
             nodes=tuple(self.nodes),
             topological_nodes=topological_nodes,
+            execution_nodes=execution_nodes,
             outputs=outputs,
         )
 
@@ -733,6 +736,26 @@ class _FlowBuilder:
             msg = f"Flow contains a cycle: {cycle_path}."
             raise FlowDefinitionError(msg)
         return tuple(ordered)
+
+    def _execution_nodes(
+        self,
+        topological_nodes: tuple[FlowNode[Any], ...],
+        outputs: tuple[_FlowNodeInput[Any], ...],
+    ) -> tuple[FlowNode[Any], ...]:
+        reachable = {output.node for output in outputs}
+        pending = list(reachable)
+        while pending:
+            flow_node = pending.pop()
+            expression = flow_node._dependency
+            if expression is None:
+                continue
+            for leaf in expression.leaves():
+                if leaf.node not in reachable:
+                    reachable.add(leaf.node)
+                    pending.append(leaf.node)
+        return tuple(
+            flow_node for flow_node in topological_nodes if flow_node in reachable
+        )
 
     def _find_cycle(
         self,
@@ -1489,7 +1512,7 @@ async def _execute_flow(frozen_flow: _FrozenFlow) -> FlowResult:
         asyncio.Task[_PersistedDependencyResolution],
     ] = {}
     resolver_ready = asyncio.Event()
-    for flow_node in frozen_flow.topological_nodes:
+    for flow_node in frozen_flow.execution_nodes:
 
         async def run_node(current_node: FlowNode[Any] = flow_node) -> _NodeExecution:
             return await _execute_node(
@@ -1506,7 +1529,7 @@ async def _execute_flow(frozen_flow: _FrozenFlow) -> FlowResult:
         )
 
     resolver_task_order: list[asyncio.Task[_PersistedDependencyResolution]] = []
-    for flow_node in frozen_flow.topological_nodes:
+    for flow_node in frozen_flow.execution_nodes:
         expression = flow_node._dependency
         if expression is None:
             continue
@@ -1543,9 +1566,14 @@ async def _execute_flow(frozen_flow: _FrozenFlow) -> FlowResult:
     )
     node_values = values[: len(tasks)]
     resolver_values = values[len(tasks) :]
-    executions: dict[FlowNode[Any], _NodeExecution] = {}
+    execution_nodes = set(frozen_flow.execution_nodes)
+    executions = {
+        flow_node: _NodeExecution(result=FlowNodeResult.skipped())
+        for flow_node in frozen_flow.nodes
+        if flow_node not in execution_nodes
+    }
     for flow_node, value in zip(
-        frozen_flow.topological_nodes,
+        frozen_flow.execution_nodes,
         node_values,
         strict=True,
     ):

@@ -125,6 +125,11 @@ contains every node result keyed by node name. `outputs` contains the projected 
 while `output` preserves zero, one, or multiple output arity. Returning `.error` or
 `.result()` explicitly observes and handles a failure selected as an output.
 
+Execution starts from the selected output nodes and follows their dependencies in
+reverse. Declared nodes outside that reverse-reachable subgraph do not create child
+operations and appear as `SKIPPED` in `FlowResult.results`. A definition that returns
+`None` therefore executes no nodes.
+
 A matching `.failed` route handles its source failure. After all runnable nodes settle,
 `flow()` raises `FlowExecutionError` if failures remain unhandled; the exception's
 `result` field contains the complete checkpointed `FlowResult`. `.completed` observes

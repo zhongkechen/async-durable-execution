@@ -457,6 +457,12 @@ def test_flow_node_repr_and_flat_expression_construction():
         "C",
         "D",
     ]
+    assert [flow_node.name for flow_node in frozen.execution_nodes] == [
+        "A",
+        "B",
+        "C",
+        "D",
+    ]
     assert len(captured["d"]._dependency.children) == 3
 
 
