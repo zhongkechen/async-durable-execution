@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from async_durable_execution.exceptions import CheckpointError, GetExecutionStateError
 from async_durable_execution.models import (
     CheckpointOutput,
     CheckpointUpdatedExecutionState,
@@ -45,6 +46,24 @@ def test_bind_executor():
     client.bind_executor(executor)
 
     assert client._executor is executor  # noqa: SLF001
+
+
+@pytest.mark.parametrize("token", [None, ""])
+async def test_checkpoint_rejects_missing_token(token):
+    """The local service client enforces the protocol's token requirement."""
+    client = InMemoryServiceClient(Mock(spec=Scheduler))
+
+    with pytest.raises(CheckpointError, match="Cannot checkpoint"):
+        await client.checkpoint("arn", token, [], None)
+
+
+@pytest.mark.parametrize("token", [None, ""])
+async def test_get_execution_state_rejects_missing_token(token):
+    """The local service client rejects missing state-fetch tokens."""
+    client = InMemoryServiceClient(Mock(spec=Scheduler))
+
+    with pytest.raises(GetExecutionStateError, match="Cannot get execution state"):
+        await client.get_execution_state("arn", token, "")
 
 
 @patch("async_durable_execution.runner.local.CheckpointValidator")

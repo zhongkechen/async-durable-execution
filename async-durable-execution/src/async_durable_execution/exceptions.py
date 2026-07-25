@@ -6,6 +6,7 @@ Avoid any non-stdlib references in this module, it is at the bottom of the depen
 from __future__ import annotations
 
 import datetime
+import json
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -16,6 +17,8 @@ TOO_MANY_REQUESTS_ERROR: int = 429
 SERVICE_ERROR: int = 500
 INVALID_PARAMETER_VALUE_EXCEPTION: str = "InvalidParameterValueException"
 INVALID_CHECKPOINT_TOKEN_PREFIX: str = "Invalid Checkpoint Token"
+_SDK_ERROR_DATA_KEY: str = "__async_durable_execution_error__"
+_SDK_ERROR_DATA_VERSION: int = 1
 
 # Non-retryable customer error codes that arrive as non-4xx (e.g. HTTP 502) from Lambda.
 # Unlike typical 5xx errors, these require customer intervention (e.g., fixing
@@ -30,6 +33,57 @@ _NON_RETRYABLE_CUSTOMER_ERROR_CODES: frozenset[str] = frozenset(
         "KMSNotFoundException",
     }
 )
+
+
+def _encode_sdk_error_data(
+    exception_type: type[Exception],
+    payload: str | None = None,
+) -> str:
+    """Encode SDK-owned exception metadata for durable replay."""
+    return json.dumps(
+        {
+            _SDK_ERROR_DATA_KEY: _SDK_ERROR_DATA_VERSION,
+            "exception_type": (
+                f"{exception_type.__module__}.{exception_type.__qualname__}"
+            ),
+            "payload": payload,
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
+def _decode_sdk_error_data(
+    data: str | None,
+    expected_exception_type: type[Exception],
+) -> tuple[bool, str | None]:
+    """Return whether data identifies the expected SDK exception and its payload."""
+    if data is None:
+        return False, None
+
+    try:
+        decoded = json.loads(data)
+    except (TypeError, ValueError):
+        return False, None
+
+    if not isinstance(decoded, dict):
+        return False, None
+
+    version = decoded.get(_SDK_ERROR_DATA_KEY)
+    if type(version) is not int or version != _SDK_ERROR_DATA_VERSION:
+        return False, None
+
+    expected_name = (
+        f"{expected_exception_type.__module__}.{expected_exception_type.__qualname__}"
+    )
+    if decoded.get("exception_type") != expected_name:
+        return False, None
+
+    payload = decoded.get("payload")
+    if payload is not None and not isinstance(payload, str):
+        return False, None
+
+    return True, payload
 
 
 class AwsErrorObj(TypedDict):
@@ -83,6 +137,18 @@ class ExecutionError(UnrecoverableError):
         termination_reason: TerminationReason = TerminationReason.EXECUTION_ERROR,
     ):
         super().__init__(message, termination_reason)
+
+
+class WaitForConditionError(ExecutionError):
+    """Raised when a wait_for_condition operation exhausts its attempts."""
+
+
+class CallbackError(ExecutionError):
+    """Error in callback handling."""
+
+    def __init__(self, message: str, callback_id: str | None = None):
+        super().__init__(message, TerminationReason.CALLBACK_ERROR)
+        self.callback_id = callback_id
 
 
 class InvocationError(UnrecoverableError):

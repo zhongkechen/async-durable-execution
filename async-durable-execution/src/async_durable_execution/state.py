@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 from .exceptions import (
+    CheckpointError,
     DurableExecutionsError,
     GetExecutionStateError,
 )
@@ -473,13 +474,26 @@ class ExecutionState:
 
                     logger.debug("Checkpoint batch processed successfully")
 
-                    # Update local token for next iteration
-                    current_checkpoint_token = output.checkpoint_token
+                    if output.checkpoint_token:
+                        current_checkpoint_token = output.checkpoint_token
+                    else:
+                        batch_is_terminal = any(
+                            update.operation_type is OperationType.EXECUTION
+                            and update.action
+                            in {OperationAction.SUCCEED, OperationAction.FAIL}
+                            for update in updates
+                        )
+                        if not batch_is_terminal:
+                            msg = (
+                                "Checkpoint response omitted the token outside of "
+                                "execution completion."
+                            )
+                            raise CheckpointError(msg)
 
                     # Fetch new operations from the API before unblocking sync waiters
                     updated_operations = await self.fetch_paginated_operations(
                         output.new_execution_state.operations,
-                        output.checkpoint_token,
+                        current_checkpoint_token,
                         output.new_execution_state.next_marker,
                     )
                     updated_operations_by_id = {

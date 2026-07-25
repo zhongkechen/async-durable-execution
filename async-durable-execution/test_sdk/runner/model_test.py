@@ -469,6 +469,14 @@ def test_checkpoint_durable_execution_response_minimal():
     assert result_data == data
 
 
+def test_checkpoint_durable_execution_response_without_token():
+    """Terminal checkpoint responses may omit the checkpoint token."""
+    response_obj = CheckpointDurableExecutionResponse.from_dict({})
+
+    assert response_obj.checkpoint_token is None
+    assert response_obj.to_dict() == {}
+
+
 # Tests for missing coverage in StartDurableExecutionInput
 def test_start_durable_execution_input_missing_required_fields():
     """Test StartDurableExecutionInput validation with missing required fields."""

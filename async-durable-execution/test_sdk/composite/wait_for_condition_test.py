@@ -15,14 +15,18 @@ from async_durable_execution.context import (
 )
 from async_durable_execution.exceptions import (
     CallableRuntimeError,
+    ExecutionError,
     InvocationError,
     SuspendExecution,
+    TerminationReason,
     ValidationError,
+    WaitForConditionError,
 )
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
     ErrorObject,
     Operation,
+    OperationAction,
     OperationStatus,
     OperationSubType,
     OperationType,
@@ -48,6 +52,15 @@ class UppercaseSerDes(SerDes[str]):
 
     async def deserialize(self, data: str) -> str:
         return data
+
+
+class EmptyStringSerDes(SerDes[str]):
+    async def serialize(self, value: str) -> str:
+        return ""
+
+    async def deserialize(self, data: str) -> str:
+        assert data == ""
+        return "checkpointed"
 
 
 def test_wait_for_condition_signature_accepts_config_fields_directly():
@@ -426,6 +439,93 @@ async def test_wait_for_condition_already_failed():
         )
 
 
+async def test_wait_for_condition_replays_exhaustion_error():
+    """Replay preserves the public exhaustion exception type."""
+    initial_state = Mock(spec=ExecutionState)
+    initial_state.durable_execution_arn = "test_arn"
+    initial_state.operations.get.return_value = None
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+
+    with pytest.raises(WaitForConditionError, match="exhausted 1 attempts"):
+        await wait_for_condition_handler(
+            state=initial_state,
+            operation_identifier=op_id,
+            check=lambda state: False,
+            polling_strategy=PollingStrategy(max_attempts=1),
+        )
+
+    fail_operation = initial_state.create_checkpoint.call_args.kwargs[
+        "operation_update"
+    ]
+    assert fail_operation.error.type == "WaitForConditionError"
+    assert fail_operation.error.data is not None
+
+    replay_state = Mock(spec=ExecutionState)
+    replay_state.operations.get.return_value = Operation(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.FAILED,
+        step_details=StepDetails(error=fail_operation.error),
+    )
+    check_func = Mock(side_effect=AssertionError("check should not run"))
+
+    with pytest.raises(WaitForConditionError, match="exhausted 1 attempts"):
+        await wait_for_condition_handler(
+            state=replay_state,
+            operation_identifier=op_id,
+            check=check_func,
+        )
+
+    check_func.assert_not_called()
+    replay_state.create_checkpoint.assert_not_called()
+
+
+async def test_wait_for_condition_does_not_replay_same_named_user_error():
+    """A same-named user exception remains a generic callable failure on replay."""
+    user_error = type("WaitForConditionError", (Exception,), {})("User failure")
+    initial_state = Mock(spec=ExecutionState)
+    initial_state.durable_execution_arn = "test_arn"
+    initial_state.operations.get.return_value = None
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+
+    with pytest.raises(type(user_error), match="User failure"):
+        await wait_for_condition_handler(
+            state=initial_state,
+            operation_identifier=op_id,
+            check=Mock(side_effect=user_error),
+        )
+
+    fail_operation = initial_state.create_checkpoint.call_args.kwargs[
+        "operation_update"
+    ]
+    assert fail_operation.error.type == "WaitForConditionError"
+    assert fail_operation.error.data is None
+
+    replay_state = Mock(spec=ExecutionState)
+    replay_state.operations.get.return_value = Operation(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.FAILED,
+        step_details=StepDetails(error=fail_operation.error),
+    )
+    check_func = Mock(side_effect=AssertionError("check should not run"))
+
+    with pytest.raises(CallableRuntimeError, match="User failure") as exc_info:
+        await wait_for_condition_handler(
+            state=replay_state,
+            operation_identifier=op_id,
+            check=check_func,
+        )
+
+    assert exc_info.value.error_type == "WaitForConditionError"
+    check_func.assert_not_called()
+    replay_state.create_checkpoint.assert_not_called()
+
+
 async def test_wait_for_condition_already_failed_without_error_object():
     """Failed checkpoints without error details raise an unknown CallableRuntimeError."""
     mock_state = Mock(spec=ExecutionState)
@@ -490,6 +590,34 @@ async def test_wait_for_condition_retry_with_state():
     assert mock_state.create_checkpoint.call_count == 1  # Only SUCCESS
 
 
+async def test_wait_for_condition_retry_with_empty_serialized_state():
+    """An empty serialized payload is replayed instead of replaced by initial state."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "arn:aws:test"
+    mock_state.operations.get.return_value = Operation(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.STARTED,
+        step_details=StepDetails(result="", attempt=2),
+    )
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+    check_func = Mock(return_value="done")
+
+    result = await wait_for_condition_handler(
+        state=mock_state,
+        operation_identifier=op_id,
+        check=check_func,
+        initial_state="initial",
+        polling_strategy=lambda state, attempt: None,
+        serdes=EmptyStringSerDes(),
+    )
+
+    assert result == "checkpointed"
+    check_func.assert_called_once_with("checkpointed")
+
+
 async def test_wait_for_condition_retry_without_state():
     """Test wait_for_condition on retry without previous state."""
     mock_state = Mock(spec=ExecutionState)
@@ -524,8 +652,8 @@ async def test_wait_for_condition_retry_without_state():
     assert result == 6  # 5 (initial) + 1
 
 
-async def test_wait_for_condition_retry_invalid_json_state():
-    """Test wait_for_condition on retry with invalid JSON state."""
+async def test_wait_for_condition_retry_invalid_json_state_fails():
+    """Invalid checkpointed state fails instead of restarting polling."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "arn:aws:test"
     operation = Operation(
@@ -537,25 +665,72 @@ async def test_wait_for_condition_retry_invalid_json_state():
     mock_result = operation
     mock_state.operations.get.return_value = mock_result
 
-    mock_logger = Mock(spec=logging.Logger)
-
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    def check_func(state):
-        return state + 1
+    check_func = Mock(side_effect=AssertionError("check should not run"))
 
-    polling_strategy = lambda s, a: None
+    with pytest.raises(ExecutionError, match="Deserialization failed"):
+        await wait_for_condition_handler(
+            state=mock_state,
+            operation_identifier=op_id,
+            check=check_func,
+            polling_strategy=lambda s, a: None,
+        )
 
-    result = await wait_for_condition_handler(
-        state=mock_state,
-        operation_identifier=op_id,
-        check=check_func,
-        polling_strategy=polling_strategy,
+    check_func.assert_not_called()
+    mock_state.create_checkpoint.assert_called_once()
+    fail_operation = mock_state.create_checkpoint.call_args.kwargs["operation_update"]
+    assert fail_operation.action is OperationAction.FAIL
+
+
+async def test_wait_for_condition_replays_deserialization_failure():
+    """Replay preserves ExecutionError for corrupted checkpointed state."""
+    initial_state = Mock(spec=ExecutionState)
+    initial_state.durable_execution_arn = "arn:aws:test"
+    initial_state.operations.get.return_value = Operation(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.STARTED,
+        step_details=StepDetails(result="invalid json", attempt=2),
+    )
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
     )
 
-    assert result == 6  # Falls back to initial state
+    with pytest.raises(ExecutionError, match="Deserialization failed"):
+        await wait_for_condition_handler(
+            state=initial_state,
+            operation_identifier=op_id,
+            check=Mock(side_effect=AssertionError("check should not run")),
+        )
+
+    fail_operation = initial_state.create_checkpoint.call_args.kwargs[
+        "operation_update"
+    ]
+    assert fail_operation.error.type == "ExecutionError"
+    assert fail_operation.error.data is not None
+
+    replay_state = Mock(spec=ExecutionState)
+    replay_state.operations.get.return_value = Operation(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.FAILED,
+        step_details=StepDetails(error=fail_operation.error),
+    )
+    check_func = Mock(side_effect=AssertionError("check should not run"))
+
+    with pytest.raises(ExecutionError, match="Deserialization failed") as exc_info:
+        await wait_for_condition_handler(
+            state=replay_state,
+            operation_identifier=op_id,
+            check=check_func,
+        )
+
+    assert exc_info.value.termination_reason is TerminationReason.EXECUTION_ERROR
+    check_func.assert_not_called()
+    replay_state.create_checkpoint.assert_not_called()
 
 
 async def test_wait_for_condition_check_function_exception():
@@ -1574,11 +1749,11 @@ def test_polling_strategy_is_callable_without_build():
 
 
 def test_max_attempts_exceeded():
-    """Strategy returns None when max attempts are exhausted."""
+    """Strategy raises when max attempts are exhausted."""
     strategy = PollingStrategy(max_attempts=5)
 
-    delay = strategy(None, 5)
-    assert delay is None
+    with pytest.raises(WaitForConditionError, match="exhausted 5 attempts"):
+        strategy(None, 5)
 
 
 def test_polling_strategy_returns_delay_before_max_attempts():
@@ -1594,6 +1769,36 @@ def test_polling_strategy_stops_for_truthy_result():
     strategy = PollingStrategy(max_attempts=5)
 
     assert strategy("done", 1) is None
+
+
+def test_polling_strategy_stops_for_truthy_result_on_final_attempt():
+    """A condition met on the final attempt succeeds."""
+    strategy = PollingStrategy(max_attempts=5)
+
+    assert strategy("done", 5) is None
+
+
+async def test_polling_strategy_exhaustion_checkpoints_failure():
+    """Built-in strategy exhaustion writes FAIL and propagates the error."""
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "arn:aws:test"
+    mock_state.operations.get.return_value = None
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+
+    with pytest.raises(WaitForConditionError, match="exhausted 1 attempts"):
+        await wait_for_condition_handler(
+            state=mock_state,
+            operation_identifier=op_id,
+            check=lambda state: False,
+            polling_strategy=PollingStrategy(max_attempts=1),
+        )
+
+    assert mock_state.create_checkpoint.call_count == 2
+    fail_operation = mock_state.create_checkpoint.call_args.kwargs["operation_update"]
+    assert fail_operation.action is OperationAction.FAIL
+    assert fail_operation.error.type == "WaitForConditionError"
 
 
 @patch("random.random")
@@ -1715,10 +1920,11 @@ def test_large_backoff_rate():
 
 
 def test_attempt_at_boundary():
-    """The max-attempt boundary stops polling exactly when reached."""
+    """The max-attempt boundary fails exactly when reached."""
     strategy = PollingStrategy(max_attempts=3)
 
-    assert strategy(False, 3) is None
+    with pytest.raises(WaitForConditionError):
+        strategy(False, 3)
     assert strategy(False, 2) > 0
 
 
