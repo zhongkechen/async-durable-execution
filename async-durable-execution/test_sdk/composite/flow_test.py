@@ -585,6 +585,24 @@ def test_node_inputs_reject_conflicting_and_duplicate_explicit_dependencies():
         _evaluate_definition(duplicate_graph())
 
 
+def test_node_inputs_reject_projection_nested_in_set():
+    @durable_node
+    async def consume(values: set[object]) -> None:
+        _ = values
+
+    @durable_dag
+    def graph():
+        source = node(return_name(), name="source")
+        target = node(consume({source.outcome}), name="target")
+        return target.outcome
+
+    with pytest.raises(
+        FlowDefinitionError,
+        match=r"unsupported container type 'set'",
+    ):
+        _evaluate_definition(graph())
+
+
 async def test_flow_node_handle_exposes_result_status_outcome_and_error():
     @durable_dag
     def graph():

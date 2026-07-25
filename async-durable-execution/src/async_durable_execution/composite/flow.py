@@ -6,9 +6,9 @@ import asyncio
 import functools
 import heapq
 import inspect
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Set
 from contextvars import ContextVar
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields as dataclass_fields, is_dataclass
 from enum import Enum
 from typing import Any, Generic, NoReturn, ParamSpec, TypeVar, cast
 
@@ -826,6 +826,14 @@ def _flow_node_inputs(
     if isinstance(value, _FlowNodeInput):
         return (value,)
     if not isinstance(value, (list, tuple, dict)):
+        hidden_references = _unsupported_flow_node_inputs(value)
+        if hidden_references:
+            container_type = type(value).__qualname__
+            msg = (
+                "Flow node projections nested in unsupported container type "
+                f"{container_type!r} cannot be resolved. Use a list, tuple, or dict."
+            )
+            raise FlowDefinitionError(msg)
         return ()
 
     if active_containers is None:
@@ -852,6 +860,94 @@ def _flow_node_inputs(
         )
     finally:
         active_containers.remove(container_id)
+
+
+def _unsupported_flow_node_inputs(
+    value: Any,
+    *,
+    active_objects: set[int] | None = None,
+) -> tuple[_FlowNodeInput[Any], ...]:
+    if isinstance(value, _FlowNodeInput):
+        return (value,)
+    if isinstance(
+        value,
+        (
+            str,
+            bytes,
+            bytearray,
+            memoryview,
+            range,
+            FlowNode,
+            _DependencyExpression,
+        ),
+    ) or callable(value):
+        return ()
+    if isinstance(value, Iterator):
+        msg = (
+            "Flow node arguments cannot use iterators because they cannot be "
+            "inspected safely. Materialize the iterator as a list or tuple."
+        )
+        raise FlowDefinitionError(msg)
+
+    if active_objects is None:
+        active_objects = set()
+    object_id = id(value)
+    if object_id in active_objects:
+        return ()
+
+    active_objects.add(object_id)
+    try:
+        values: tuple[Any, ...] | None = None
+        if isinstance(value, Mapping):
+            values = (*value.keys(), *value.values())
+        elif isinstance(value, (list, tuple)):
+            values = tuple(value)
+        elif isinstance(value, Set):
+            values = tuple(value)
+        elif is_dataclass(value) and not isinstance(value, type):
+            values = tuple(
+                getattr(value, dataclass_field.name)
+                for dataclass_field in dataclass_fields(value)
+            )
+        else:
+            attrs_fields = getattr(type(value), "__attrs_attrs__", None)
+            if attrs_fields is not None:
+                values = tuple(
+                    getattr(value, attribute.name) for attribute in attrs_fields
+                )
+            elif isinstance(value, Iterable):
+                container_type = type(value).__qualname__
+                msg = (
+                    "Flow node arguments cannot use unsupported container type "
+                    f"{container_type!r}. Use a list, tuple, or dict."
+                )
+                raise FlowDefinitionError(msg)
+            elif hasattr(value, "__dict__"):
+                values = tuple(vars(value).values())
+            else:
+                slots = getattr(type(value), "__slots__", ())
+                if isinstance(slots, str):
+                    slots = (slots,)
+                slot_values = tuple(
+                    getattr(value, slot)
+                    for slot in slots
+                    if slot not in {"__dict__", "__weakref__"} and hasattr(value, slot)
+                )
+                if slot_values:
+                    values = slot_values
+
+        if values is None:
+            return ()
+        return tuple(
+            reference
+            for item in values
+            for reference in _unsupported_flow_node_inputs(
+                item,
+                active_objects=active_objects,
+            )
+        )
+    finally:
+        active_objects.remove(object_id)
 
 
 def _bound_flow_node_inputs(

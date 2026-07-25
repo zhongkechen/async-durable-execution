@@ -106,6 +106,11 @@ and injects the projected value. For explicit complex conditions, use `dependenc
 and read available direct dependency results by stable name through
 `FlowNodeContext`.
 
+Projected inputs may be nested in `list`, `tuple`, and `dict` values. Other iterable
+containers are rejected, while object fields containing a projection are rejected
+during definition because the SDK cannot resolve them without changing the argument's
+type or semantics. Materialize iterators before passing them to a node.
+
 Dependency operators build the graph:
 
 - `a >> b` and `a.succeeded >> b` run `b` after `a` succeeds.

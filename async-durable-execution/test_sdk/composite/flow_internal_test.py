@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
+from dataclasses import dataclass
 from typing import NamedTuple, cast
 from unittest.mock import Mock
 
@@ -557,6 +559,51 @@ def test_flow_node_input_resolution_and_container_helpers():
     recursive.append(recursive)
     with pytest.raises(FlowDefinitionError, match="recursive containers"):
         _flow_node_inputs(recursive)
+
+    @dataclass
+    class Payload:
+        value: object
+
+    class SlottedPayload:
+        __slots__ = "value"
+
+        def __init__(self, value: object) -> None:
+            self.value = value
+
+    class ObjectPayload:
+        def __init__(self, value: object) -> None:
+            self.value = value
+
+    class Attribute:
+        name = "value"
+
+    class AttrsPayload:
+        __attrs_attrs__ = (Attribute(),)
+
+        def __init__(self, value: object) -> None:
+            self.value = value
+
+    for unsupported in (
+        {outcome_input},
+        frozenset({outcome_input}),
+        Payload([outcome_input]),
+        AttrsPayload((outcome_input,)),
+        ObjectPayload(outcome_input),
+        SlottedPayload({"value": outcome_input}),
+        deque([outcome_input]),
+    ):
+        with pytest.raises(
+            FlowDefinitionError,
+            match="unsupported container type",
+        ):
+            _flow_node_inputs(unsupported)
+
+    with pytest.raises(FlowDefinitionError, match="cannot use iterators"):
+        _flow_node_inputs(iter([outcome_input]))
+
+    recursive_payload = ObjectPayload(None)
+    recursive_payload.value = recursive_payload
+    assert _flow_node_inputs(recursive_payload) == ()
 
 
 def test_node_inputs_reject_foreign_nodes_and_form_all_dependencies():
