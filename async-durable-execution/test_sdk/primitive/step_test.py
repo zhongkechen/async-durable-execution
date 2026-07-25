@@ -12,9 +12,11 @@ from async_durable_execution.exceptions import (
     CallableRuntimeError,
     ExecutionError,
     InvocationError,
+    SerDesError,
     SuspendExecution,
     TerminationReason,
     UnrecoverableError,
+    _decode_sdk_error_data,
 )
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
@@ -661,6 +663,31 @@ async def test_step_handler_retry_strategy_none_stops_retrying():
     assert fail_operation.action is OperationAction.FAIL
     assert fail_operation.error.message == "Step execution error"
     assert fail_operation.error.type == "RuntimeError"
+
+
+async def test_step_handler_checkpoints_sdk_error_metadata():
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.operations.get.return_value = None
+    mock_state.durable_execution_arn = "test_arn"
+    error = SerDesError("Serialization failed")
+
+    with pytest.raises(CallableRuntimeError, match="Serialization failed"):
+        await step_handler(
+            Mock(side_effect=error),
+            mock_state,
+            OperationIdentifier("sdk-error", OperationSubType.STEP, None, "test_step"),
+            retry_strategy=Mock(return_value=None),
+        )
+
+    fail_operation = mock_state.create_checkpoint.call_args_list[1].kwargs[
+        "operation_update"
+    ]
+    is_sdk_error, _ = _decode_sdk_error_data(
+        fail_operation.error.data,
+        SerDesError,
+    )
+    assert fail_operation.error.type == "SerDesError"
+    assert is_sdk_error
 
 
 async def test_step_handler_retry_interrupted_error():

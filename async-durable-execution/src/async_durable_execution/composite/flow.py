@@ -19,6 +19,7 @@ from ..context import (
     get_current_context,
 )
 from ..exceptions import (
+    CallbackError,
     CallableRuntimeError,
     ExecutionError,
     FlowDefinitionError,
@@ -28,6 +29,7 @@ from ..exceptions import (
     SerDesError,
     SuspendExecution,
     TimedSuspendExecution,
+    _decode_sdk_error_data,
 )
 from ..models import ErrorObject, SerializableModel
 from ..primitive.child import DurableContext, get_durable_context, run_in_child_context
@@ -1274,7 +1276,11 @@ def _find_control_error(error: Exception) -> Exception | None:
         if isinstance(current, CallableRuntimeError):
             error_type = current.error_type or ""
             message = current.message or str(current)
-            if error_type in {
+            is_invocation_error, _ = _decode_sdk_error_data(
+                current.data,
+                InvocationError,
+            )
+            if is_invocation_error and error_type in {
                 "BotoClientError",
                 "CheckpointError",
                 "GetExecutionStateError",
@@ -1282,12 +1288,27 @@ def _find_control_error(error: Exception) -> Exception | None:
                 "StepInterruptedError",
             }:
                 return InvocationError(message)
-            if error_type in {
-                "CallbackError",
+            is_execution_error, _ = _decode_sdk_error_data(
+                current.data,
+                ExecutionError,
+            )
+            if is_execution_error and error_type in {
                 "ExecutionError",
                 "NonDeterministicExecutionError",
-                "SerDesError",
+                "WaitForConditionError",
             }:
+                return ExecutionError(message)
+            is_serdes_error, _ = _decode_sdk_error_data(
+                current.data,
+                SerDesError,
+            )
+            if is_serdes_error and error_type == "SerDesError":
+                return ExecutionError(message)
+            is_callback_error, _ = _decode_sdk_error_data(
+                current.data,
+                CallbackError,
+            )
+            if is_callback_error and error_type == "CallbackError":
                 return ExecutionError(message)
         current = current.__cause__ or current.__context__
     return None
@@ -1434,17 +1455,22 @@ async def _resolve_any_expression(
     ],
 ) -> _PersistedDependencyResolution:
     children: list[asyncio.Task[_DependencyResolution]] = []
-    for child_expression in expression.children:
+    completed: asyncio.Queue[int] = asyncio.Queue()
+    for index, child_expression in enumerate(expression.children):
 
         async def resolve_child(
             current_child: _DependencyExpression = child_expression,
+            current_index: int = index,
         ) -> _DependencyResolution:
-            return await _resolve_dependency_expression(
-                target,
-                current_child,
-                tasks,
-                resolver_tasks,
-            )
+            try:
+                return await _resolve_dependency_expression(
+                    target,
+                    current_child,
+                    tasks,
+                    resolver_tasks,
+                )
+            finally:
+                completed.put_nowait(current_index)
 
         children.append(create_eager_task(resolve_child))
 
@@ -1453,30 +1479,25 @@ async def _resolve_any_expression(
     suspensions: list[SuspendExecution] = []
     try:
         while pending:
-            await asyncio.wait(
-                [children[index] for index in pending],
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            for index, child_task in enumerate(children):
-                if index not in pending or not child_task.done():
-                    continue
-                pending.remove(index)
-                try:
-                    resolution = child_task.result()
-                except SuspendExecution as error:
-                    suspensions.append(error)
-                    continue
-                except BaseException as error:
-                    _raise_task_error(error)
-                if resolution.matched:
-                    return _persisted_resolution(
-                        _DependencyResolution(
-                            matched=True,
-                            results={**unmatched, **resolution.results},
-                            handled_failures=resolution.handled_failures,
-                        )
+            index = await completed.get()
+            pending.remove(index)
+            child_task = children[index]
+            try:
+                resolution = child_task.result()
+            except SuspendExecution as error:
+                suspensions.append(error)
+                continue
+            except BaseException as error:
+                _raise_task_error(error)
+            if resolution.matched:
+                return _persisted_resolution(
+                    _DependencyResolution(
+                        matched=True,
+                        results={**unmatched, **resolution.results},
+                        handled_failures=resolution.handled_failures,
                     )
-                unmatched.update(resolution.results)
+                )
+            unmatched.update(resolution.results)
         if suspensions:
             timed_suspensions = [
                 error

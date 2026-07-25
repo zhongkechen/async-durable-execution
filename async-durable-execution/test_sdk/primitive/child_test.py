@@ -14,7 +14,9 @@ from async_durable_execution.context import bind_current_context
 from async_durable_execution.exceptions import (
     CallbackError,
     CallableRuntimeError,
+    ExecutionError,
     InvocationError,
+    _decode_sdk_error_data,
 )
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
@@ -794,6 +796,34 @@ async def test_child_handler_error_wrapped():
 
     # Verify FAIL checkpoint was created
     assert mock_state.create_checkpoint.call_count == 2  # start and fail
+
+
+async def test_child_handler_checkpoints_sdk_error_metadata():
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "test_arn"
+    mock_state.operations.get.return_value = None
+
+    with pytest.raises(CallableRuntimeError, match="Execution failed"):
+        await child_handler(
+            Mock(side_effect=ExecutionError("Execution failed")),
+            mock_state,
+            OperationIdentifier(
+                "sdk-error",
+                OperationSubType.RUN_IN_CHILD_CONTEXT,
+                None,
+                "test_name",
+            ),
+        )
+
+    fail_operation = mock_state.create_checkpoint.call_args_list[1].kwargs[
+        "operation_update"
+    ]
+    is_sdk_error, _ = _decode_sdk_error_data(
+        fail_operation.error.data,
+        ExecutionError,
+    )
+    assert fail_operation.error.type == "ExecutionError"
+    assert is_sdk_error
 
 
 async def test_child_handler_invocation_error_reraised():

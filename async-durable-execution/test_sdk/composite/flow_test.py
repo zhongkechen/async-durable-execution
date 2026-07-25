@@ -22,6 +22,7 @@ from async_durable_execution import (
     FlowNodeStatus,
     InvalidStateError,
     InvocationStatus,
+    RetryStrategy,
     create_local_runner,
     durable_callable,
     durable_dag,
@@ -1528,6 +1529,59 @@ async def test_sdk_control_error_does_not_activate_failure_route():
     assert result.error is not None
     assert result.error.type == "ExecutionError"
     assert called == ["source"]
+
+
+async def test_user_execution_error_from_step_activates_failure_route():
+    class ExecutionError(Exception):
+        pass
+
+    called: list[str] = []
+
+    @durable_callable
+    async def fail_step() -> None:
+        msg = "User failure"
+        raise ExecutionError(msg)
+
+    @durable_dag
+    def graph():
+        @durable_node
+        async def source() -> None:
+            called.append("source")
+            await step(
+                fail_step(),
+                name="user-failure-step",
+                retry_strategy=RetryStrategy.none(),
+            )
+
+        @durable_node
+        async def recover() -> str:
+            called.append("recovery")
+            result = cast(FlowNodeContext, get_current_context()).result(a)
+            assert result.error is not None
+            assert result.error.type == "ExecutionError"
+            return "recovered"
+
+        a = node(source(), name="source")
+        recovery = node(recover(), name="recovery")
+        a.failed >> recovery
+        return recovery.outcome
+
+    @durable_execution
+    async def handler(event):
+        return (await flow(graph(), name="user-execution-error")).to_dict()
+
+    async with create_local_runner(
+        handler=handler,
+        input={},
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    payload = json.loads(result.result)
+    assert payload["outputs"] == ["recovered"]
+    assert payload["unhandledFailures"] == []
+    assert called == ["source", "recovery"]
 
 
 async def test_empty_and_disconnected_flows():

@@ -20,6 +20,7 @@ from ..exceptions import (
     ExecutionError,
     InvocationError,
     TerminationReason,
+    _encode_sdk_control_error_data,
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
 )
@@ -43,6 +44,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+
+def _error_object_from_exception(error: Exception) -> ErrorObject:
+    error_object = ErrorObject.from_exception(error)
+    sdk_error_data = _encode_sdk_control_error_data(error)
+    if sdk_error_data is None:
+        return error_object
+    return ErrorObject(
+        message=error_object.message,
+        type=error_object.type,
+        data=sdk_error_data,
+        stack_trace=error_object.stack_trace,
+    )
 
 
 class StepInterruptedError(InvocationError):
@@ -249,7 +263,7 @@ class StepOperationExecutor(OperationExecutor[T]):
             StepInterruptedError: If the error is a StepInterruptedError
             CallableRuntimeError: If retry is exhausted or error is not retryable
         """
-        error_object = ErrorObject.from_exception(error)
+        error_object = _error_object_from_exception(error)
 
         retry_strategy = self.retry_strategy or RetryStrategy.default()
 
@@ -264,7 +278,7 @@ class StepOperationExecutor(OperationExecutor[T]):
             if retry_delay is not None:
                 delay_seconds = duration_to_seconds(retry_delay, "retry delay")
         except Exception as retry_error:
-            fail_error_object = ErrorObject.from_exception(retry_error)
+            fail_error_object = _error_object_from_exception(retry_error)
             fail_operation: OperationUpdate = OperationUpdate.create_step_fail(
                 identifier=self.operation_identifier, error=fail_error_object
             )

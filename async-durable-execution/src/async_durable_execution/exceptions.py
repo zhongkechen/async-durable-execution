@@ -86,6 +86,17 @@ def _decode_sdk_error_data(
     return True, payload
 
 
+def _encode_sdk_control_error_data(error: Exception) -> str | None:
+    """Encode the SDK-owned control category of an exception, if any."""
+    if isinstance(error, InvocationError):
+        return _encode_sdk_error_data(InvocationError)
+    if isinstance(error, ExecutionError):
+        return _encode_sdk_error_data(ExecutionError)
+    if isinstance(error, SerDesError):
+        return _encode_sdk_error_data(SerDesError)
+    return None
+
+
 class AwsErrorObj(TypedDict):
     """Subset of a boto-style AWS error payload."""
 

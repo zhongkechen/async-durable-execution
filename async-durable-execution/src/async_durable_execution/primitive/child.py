@@ -20,6 +20,7 @@ from ..exceptions import (
     CallableRuntimeError,
     InvocationError,
     _decode_sdk_error_data,
+    _encode_sdk_control_error_data,
     _encode_sdk_error_data,
 )
 from ..models import (
@@ -283,6 +284,15 @@ class ChildOperationExecutor(OperationExecutor[T]):
                     data=_encode_sdk_error_data(CallbackError, e.callback_id),
                     stack_trace=error_object.stack_trace,
                 )
+            else:
+                sdk_error_data = _encode_sdk_control_error_data(e)
+                if sdk_error_data is not None:
+                    error_object = ErrorObject(
+                        message=error_object.message,
+                        type=error_object.type,
+                        data=sdk_error_data,
+                        stack_trace=error_object.stack_trace,
+                    )
 
             # Virtual deliberately does not write checkpoints, but exception still propagates below
             if not self.is_virtual:

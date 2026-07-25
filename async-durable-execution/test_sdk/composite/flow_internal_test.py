@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 from dataclasses import dataclass
-from typing import NamedTuple, cast
+from typing import Any, NamedTuple, cast
 from unittest.mock import Mock
 
 import pytest
@@ -31,6 +31,7 @@ from async_durable_execution import (
 )
 from async_durable_execution.composite.flow import (
     FlowNode,
+    _DependencyResolution,
     _FlowBuilder,
     _FlowControlSignal,
     _FlowResultSerDes,
@@ -52,12 +53,14 @@ from async_durable_execution.composite.flow import (
 )
 from async_durable_execution.context import bind_current_context
 from async_durable_execution.exceptions import (
+    CallbackError,
     CallableRuntimeError,
     ExecutionError,
     InvocationError,
     SerDesError,
     SuspendExecution,
     TimedSuspendExecution,
+    _encode_sdk_error_data,
 )
 from async_durable_execution.models import OperationIdentifier, OperationSubType
 from async_durable_execution.serdes import ExtendedTypeSerDes
@@ -443,20 +446,48 @@ def test_coerce_expression_rejects_invalid_values():
 
 
 @pytest.mark.parametrize(
-    ("error_type", "expected_type"),
+    ("error_type", "data", "expected_type"),
     [
-        ("CheckpointError", InvocationError),
-        ("ExecutionError", ExecutionError),
-        ("UnknownUserError", type(None)),
+        (
+            "CheckpointError",
+            _encode_sdk_error_data(InvocationError),
+            InvocationError,
+        ),
+        (
+            "ExecutionError",
+            _encode_sdk_error_data(ExecutionError),
+            ExecutionError,
+        ),
+        (
+            "SerDesError",
+            _encode_sdk_error_data(SerDesError),
+            ExecutionError,
+        ),
+        (
+            "CallbackError",
+            _encode_sdk_error_data(CallbackError),
+            ExecutionError,
+        ),
+        ("ExecutionError", None, type(None)),
+        (
+            "ExecutionError",
+            _encode_sdk_error_data(InvocationError),
+            type(None),
+        ),
+        ("UnknownUserError", None, type(None)),
     ],
 )
-def test_callable_runtime_error_control_classification(error_type, expected_type):
+def test_callable_runtime_error_control_classification(
+    error_type,
+    data,
+    expected_type,
+):
     from async_durable_execution.composite.flow import _find_control_error
 
     error = CallableRuntimeError(
         message="failure",
         error_type=error_type,
-        data=None,
+        data=data,
         stack_trace=None,
     )
     classified = _find_control_error(error)
@@ -777,7 +808,7 @@ async def test_all_dependency_resolution_returns_unmatched_child_results():
             CallableRuntimeError(
                 message="serialized control",
                 error_type="ExecutionError",
-                data=None,
+                data=_encode_sdk_error_data(ExecutionError),
                 stack_trace=None,
             ),
             _FlowControlSignal,
@@ -876,6 +907,44 @@ def _any_resolution_nodes():
 
     _evaluate_definition(graph())
     return captured["first"], captured["second"], captured["target"]
+
+
+async def test_any_resolution_preserves_reverse_completion_order(monkeypatch):
+    first, second, target = _any_resolution_nodes()
+    expression = cast(Any, target._dependency)
+    release_first = asyncio.Event()
+    first_finished = asyncio.Event()
+
+    async def resolve_child(_target, child, _tasks, _resolver_tasks):
+        if child is expression.children[0]:
+            await release_first.wait()
+            first_finished.set()
+            return _DependencyResolution(
+                matched=True,
+                results={first: FlowNodeResult.succeeded("declaration-first")},
+            )
+        release_first.set()
+        return _DependencyResolution(
+            matched=True,
+            results={second: FlowNodeResult.succeeded("completion-first")},
+        )
+
+    def create_normal_task(coro_factory):
+        return asyncio.create_task(coro_factory())
+
+    monkeypatch.setattr(
+        "async_durable_execution.composite.flow._resolve_dependency_expression",
+        resolve_child,
+    )
+    monkeypatch.setattr(
+        "async_durable_execution.composite.flow.create_eager_task",
+        create_normal_task,
+    )
+
+    resolution = await _resolve_any_expression(target, expression, {}, {})
+
+    assert first_finished.is_set()
+    assert resolution.selected_nodes == ("second",)
 
 
 async def test_any_resolution_continues_after_suspended_candidate():
@@ -1055,7 +1124,7 @@ async def test_execute_flow_propagates_resolver_task_errors(
             CallableRuntimeError(
                 message="serialized control",
                 error_type="ExecutionError",
-                data=None,
+                data=_encode_sdk_error_data(ExecutionError),
                 stack_trace=None,
             ),
             ExecutionError,
