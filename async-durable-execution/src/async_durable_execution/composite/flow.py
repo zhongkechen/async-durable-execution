@@ -77,6 +77,7 @@ class FlowResult:
     results: dict[str, FlowNodeResult[Any]]
     outputs: tuple[Any, ...] = ()
     unhandled_failures: tuple[str, ...] = ()
+    unavailable_outputs: tuple[str, ...] = ()
     _output_kinds: tuple[_FlowNodeInputKind, ...] = field(
         default=(),
         repr=False,
@@ -106,6 +107,10 @@ class FlowResult:
     def has_unhandled_failures(self) -> bool:
         return bool(self.unhandled_failures)
 
+    @property
+    def has_unavailable_outputs(self) -> bool:
+        return bool(self.unavailable_outputs)
+
     def get_result(self, name: str) -> FlowNodeResult[Any]:
         """Return a node result by its declared name."""
         try:
@@ -131,6 +136,7 @@ class FlowResult:
             ],
             "outputProjections": [kind.value for kind in self._output_kinds],
             "unhandledFailures": list(self.unhandled_failures),
+            "unavailableOutputs": list(self.unavailable_outputs),
         }
 
     @classmethod
@@ -166,6 +172,9 @@ class FlowResult:
             ),
             unhandled_failures=tuple(
                 str(name) for name in data.get("unhandledFailures", ())
+            ),
+            unavailable_outputs=tuple(
+                str(name) for name in data.get("unavailableOutputs", ())
             ),
             _output_kinds=output_kinds,
         )
@@ -243,7 +252,127 @@ def _flow_result_to_checkpoint_dict(value: FlowResult) -> dict[str, Any]:
         "outputs": outputs,
         "outputProjections": [kind.value for kind in value._output_kinds],
         "unhandledFailures": list(value.unhandled_failures),
+        "unavailableOutputs": list(value.unavailable_outputs),
     }
+
+
+_FLOW_VALUE_VERSION_KEY = "__async_durable_execution_flow_value__"
+_FLOW_VALUE_VERSION = 1
+_FLOW_VALUE_KIND_KEY = "kind"
+_FLOW_VALUE_PAYLOAD_KEY = "value"
+
+
+class _FlowValueKind(Enum):
+    ESCAPED_DICT = "ESCAPED_DICT"
+    ERROR_OBJECT = "ERROR_OBJECT"
+    FLOW_NODE_RESULT = "FLOW_NODE_RESULT"
+    FLOW_RESULT = "FLOW_RESULT"
+
+
+def _encode_flow_value(
+    value: Any,
+    *,
+    active_objects: set[int] | None = None,
+) -> Any:
+    recursive = isinstance(
+        value,
+        (FlowResult, FlowNodeResult, ErrorObject, list, tuple, dict),
+    )
+    if active_objects is None:
+        active_objects = set()
+    object_id = id(value)
+    if recursive and object_id in active_objects:
+        msg = "Circular references are not supported in flow values."
+        raise SerDesError(msg)
+    if recursive:
+        active_objects.add(object_id)
+
+    try:
+        if isinstance(value, FlowResult):
+            kind = _FlowValueKind.FLOW_RESULT
+            payload = _encode_flow_value(
+                _flow_result_to_checkpoint_dict(value),
+                active_objects=active_objects,
+            )
+        elif isinstance(value, FlowNodeResult):
+            kind = _FlowValueKind.FLOW_NODE_RESULT
+            payload = _encode_flow_value(
+                _flow_node_result_to_checkpoint_dict(value),
+                active_objects=active_objects,
+            )
+        elif isinstance(value, ErrorObject):
+            kind = _FlowValueKind.ERROR_OBJECT
+            payload = _encode_flow_value(
+                value.to_dict(),
+                active_objects=active_objects,
+            )
+        elif isinstance(value, list):
+            return [
+                _encode_flow_value(item, active_objects=active_objects)
+                for item in value
+            ]
+        elif isinstance(value, tuple):
+            return tuple(
+                _encode_flow_value(item, active_objects=active_objects)
+                for item in value
+            )
+        elif isinstance(value, dict):
+            payload = {
+                key: _encode_flow_value(item, active_objects=active_objects)
+                for key, item in value.items()
+            }
+            if _FLOW_VALUE_VERSION_KEY not in value:
+                return payload
+            kind = _FlowValueKind.ESCAPED_DICT
+        else:
+            return value
+        return {
+            _FLOW_VALUE_VERSION_KEY: _FLOW_VALUE_VERSION,
+            _FLOW_VALUE_KIND_KEY: kind.value,
+            _FLOW_VALUE_PAYLOAD_KEY: payload,
+        }
+    finally:
+        if recursive:
+            active_objects.remove(object_id)
+
+
+def _decode_flow_value(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_decode_flow_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_decode_flow_value(item) for item in value)
+    if not isinstance(value, Mapping):
+        return value
+    if _FLOW_VALUE_VERSION_KEY not in value:
+        return {key: _decode_flow_value(item) for key, item in value.items()}
+    if (
+        type(value.get(_FLOW_VALUE_VERSION_KEY)) is not int
+        or value[_FLOW_VALUE_VERSION_KEY] != _FLOW_VALUE_VERSION
+    ):
+        msg = "Serialized flow value has an invalid envelope."
+        raise SerDesError(msg)
+    try:
+        kind = _FlowValueKind(value[_FLOW_VALUE_KIND_KEY])
+        payload = value[_FLOW_VALUE_PAYLOAD_KEY]
+    except (KeyError, TypeError, ValueError) as error:
+        msg = "Serialized flow value has an invalid kind or payload."
+        raise SerDesError(msg) from error
+
+    if kind is _FlowValueKind.ESCAPED_DICT:
+        if not isinstance(payload, Mapping):
+            msg = "Serialized escaped dict flow value must be a mapping."
+            raise SerDesError(msg)
+        return {key: _decode_flow_value(item) for key, item in payload.items()}
+
+    decoded = _decode_flow_value(payload)
+    if not isinstance(decoded, Mapping):
+        msg = f"Serialized {kind.value.lower()} flow value must contain a mapping."
+        raise SerDesError(msg)
+    if kind is _FlowValueKind.ERROR_OBJECT:
+        return ErrorObject.from_dict(decoded)
+    if kind is _FlowValueKind.FLOW_NODE_RESULT:
+        return FlowNodeResult.from_dict(decoded)
+    return FlowResult.from_dict(decoded)
 
 
 class _EvaluationStatus(Enum):
@@ -1110,6 +1239,7 @@ def durable_node(
     def wrapper(
         *args: Params.args, **kwargs: Params.kwargs
     ) -> Callable[[], Awaitable[T]]:
+        inspect.signature(func).bind(*args, **kwargs)
         bound = functools.partial(func, *args, **kwargs)
         setattr(bound, "__name__", func.__name__)
         setattr(bound, "_durable_node_callable", True)
@@ -1166,9 +1296,20 @@ class _NodeExecution:
         )
 
 
-class _NodeExecutionSerDes(SerDes[_NodeExecution]):
+class _FlowValueSerDes(SerDes[Any]):
     def __init__(self) -> None:
         self.delegate: ExtendedTypeSerDes[Any] = ExtendedTypeSerDes()
+
+    async def serialize(self, value: Any) -> str:
+        return await self.delegate.serialize(_encode_flow_value(value))
+
+    async def deserialize(self, data: str) -> Any:
+        return _decode_flow_value(await self.delegate.deserialize(data))
+
+
+class _NodeExecutionSerDes(SerDes[_NodeExecution]):
+    def __init__(self) -> None:
+        self.delegate = _FlowValueSerDes()
 
     async def serialize(self, value: _NodeExecution) -> str:
         return await self.delegate.serialize(value.to_dict())
@@ -1222,7 +1363,7 @@ class _PersistedDependencyResolutionSerDes(SerDes[_PersistedDependencyResolution
 
 class _FlowResultSerDes(SerDes[FlowResult]):
     def __init__(self) -> None:
-        self.delegate: ExtendedTypeSerDes[Any] = ExtendedTypeSerDes()
+        self.delegate = _FlowValueSerDes()
 
     async def serialize(self, value: FlowResult) -> str:
         return await self.delegate.serialize(_flow_result_to_checkpoint_dict(value))
@@ -1787,6 +1928,14 @@ async def _execute_flow(frozen_flow: _FrozenFlow) -> FlowResult:
         if executions[flow_node].result.status is FlowNodeStatus.FAILED
         and flow_node.name not in handled_failures
     )
+    unavailable_outputs = tuple(
+        dict.fromkeys(
+            output.node.name
+            for output in frozen_flow.outputs
+            if output.kind is _FlowNodeInputKind.OUTCOME
+            and executions[output.node].result.status is not FlowNodeStatus.SUCCEEDED
+        )
+    )
     return FlowResult(
         results=results,
         outputs=tuple(
@@ -1794,6 +1943,7 @@ async def _execute_flow(frozen_flow: _FrozenFlow) -> FlowResult:
             for output in frozen_flow.outputs
         ),
         unhandled_failures=unhandled_failures,
+        unavailable_outputs=unavailable_outputs,
         _output_kinds=tuple(output.kind for output in frozen_flow.outputs),
     )
 
@@ -1846,9 +1996,18 @@ def flow(
                 raise control_error from error
             raise
 
+        problems: list[str] = []
         if result.has_unhandled_failures:
             failures = ", ".join(result.unhandled_failures)
-            msg = f"Flow has unhandled node failures: {failures}."
+            problems.append(f"unhandled node failures: {failures}")
+        if result.has_unavailable_outputs:
+            outputs = ", ".join(result.unavailable_outputs)
+            problems.append(
+                f"unavailable outcome outputs: {outputs}; return node.result() "
+                "for conditional outputs"
+            )
+        if problems:
+            msg = f"Flow has {'; '.join(problems)}."
             raise FlowExecutionError(msg, result)
         return result
 

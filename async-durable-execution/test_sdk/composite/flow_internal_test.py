@@ -42,6 +42,8 @@ from async_durable_execution.composite.flow import (
     _PersistedDependencyResolutionSerDes,
     _await_resolver_resolution,
     _coerce_expression,
+    _decode_flow_value,
+    _encode_flow_value,
     _evaluate_definition,
     _execute_flow,
     _flow_node_inputs,
@@ -168,14 +170,15 @@ def test_flow_node_result_is_rejected_outside_node_execution():
 
 async def test_flow_serdes_reject_non_mapping_payloads():
     delegate = ExtendedTypeSerDes()
-    payload = await delegate.serialize("not-a-mapping")
+    extended_payload = await delegate.serialize("not-a-mapping")
+    flow_payload = await _NodeExecutionSerDes().delegate.serialize("not-a-mapping")
 
     with pytest.raises(SerDesError, match="node result"):
-        await _NodeExecutionSerDes().deserialize(payload)
+        await _NodeExecutionSerDes().deserialize(flow_payload)
     with pytest.raises(SerDesError, match="dependency resolution"):
-        await _PersistedDependencyResolutionSerDes().deserialize(payload)
+        await _PersistedDependencyResolutionSerDes().deserialize(extended_payload)
     with pytest.raises(SerDesError, match="flow result"):
-        await _FlowResultSerDes().deserialize(payload)
+        await _FlowResultSerDes().deserialize(flow_payload)
 
 
 async def test_flow_serdes_preserve_batch_result_outcomes():
@@ -219,6 +222,108 @@ async def test_flow_serdes_preserve_batch_result_outcomes():
     )
     assert isinstance(projected_result.outcome, BatchResult)
     assert projected_result.outcome == batch_result
+
+
+async def test_flow_serdes_preserve_flow_owned_outcomes_and_user_dicts():
+    error = ErrorObject.from_message("failed")
+    failed = FlowNodeResult.failed(error)
+    nested_flow = FlowResult(
+        results={"failed": failed},
+        outputs=(failed, error),
+        _output_kinds=(
+            _FlowNodeInputKind.RESULT,
+            _FlowNodeInputKind.ERROR,
+        ),
+    )
+    user_dict = {
+        "__async_durable_execution_flow_value__": 1,
+        "kind": "FLOW_RESULT",
+        "value": {"user": "data"},
+    }
+    outcome = {
+        "flow": nested_flow,
+        "result": failed,
+        "error": error,
+        "tuple": ("value",),
+        "user_dict": user_dict,
+    }
+    serdes = _NodeExecutionSerDes()
+
+    restored = await serdes.deserialize(
+        await serdes.serialize(_NodeExecution(result=FlowNodeResult.succeeded(outcome)))
+    )
+
+    restored_outcome = cast("dict[str, Any]", restored.result.outcome)
+    assert isinstance(restored_outcome["flow"], FlowResult)
+    assert isinstance(restored_outcome["result"], FlowNodeResult)
+    assert isinstance(restored_outcome["error"], ErrorObject)
+    assert restored_outcome["flow"] == nested_flow
+    assert restored_outcome["result"] == failed
+    assert restored_outcome["error"] == error
+    assert restored_outcome["tuple"] == ("value",)
+    assert restored_outcome["user_dict"] == user_dict
+
+
+def test_flow_value_encoding_rejects_circular_containers():
+    circular = []
+    circular.append(circular)
+
+    with pytest.raises(SerDesError, match="Circular references"):
+        _encode_flow_value(circular)
+
+
+@pytest.mark.parametrize(
+    ("value", "match"),
+    [
+        (
+            {
+                "__async_durable_execution_flow_value__": True,
+                "kind": "FLOW_RESULT",
+                "value": None,
+            },
+            "invalid envelope",
+        ),
+        (
+            {
+                "__async_durable_execution_flow_value__": 2,
+                "kind": "FLOW_RESULT",
+                "value": None,
+            },
+            "invalid envelope",
+        ),
+        (
+            {"__async_durable_execution_flow_value__": 1},
+            "invalid kind or payload",
+        ),
+        (
+            {
+                "__async_durable_execution_flow_value__": 1,
+                "kind": "UNKNOWN",
+                "value": None,
+            },
+            "invalid kind or payload",
+        ),
+        (
+            {
+                "__async_durable_execution_flow_value__": 1,
+                "kind": "ESCAPED_DICT",
+                "value": [],
+            },
+            "must be a mapping",
+        ),
+        (
+            {
+                "__async_durable_execution_flow_value__": 1,
+                "kind": "FLOW_RESULT",
+                "value": "not-a-mapping",
+            },
+            "must contain a mapping",
+        ),
+    ],
+)
+def test_flow_value_decoding_rejects_malformed_envelopes(value, match):
+    with pytest.raises(SerDesError, match=match):
+        _decode_flow_value(value)
 
 
 def test_durable_dag_supports_class_and_static_method_decorator_orders():

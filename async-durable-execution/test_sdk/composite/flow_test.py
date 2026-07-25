@@ -6,7 +6,7 @@ import asyncio
 import json
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import cast
+from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
@@ -20,6 +20,7 @@ from async_durable_execution import (
     FlowNodeContext,
     FlowNodeResult,
     FlowNodeStatus,
+    FlowResult,
     InvalidStateError,
     InvocationStatus,
     RetryStrategy,
@@ -103,6 +104,31 @@ async def test_durable_node_binds_arguments_without_running_function():
     assert getattr(bound, "_durable_node_callable")
     assert await bound() == "us-west-2:order-123"
     assert calls == ["order-123"]
+
+
+async def test_durable_node_rejects_invalid_arguments_before_checkpoint():
+    context, state = create_test_context()
+
+    @durable_node
+    async def required(value: str) -> str:
+        return value
+
+    invalid_calls = (
+        lambda: required(),
+        lambda: required("first", "second"),
+        lambda: required("value", unknown=True),
+    )
+    with bind_current_context(context):
+        for invalid_call in invalid_calls:
+
+            @durable_dag
+            def graph():
+                return node(invalid_call()).outcome
+
+            with pytest.raises(TypeError):
+                flow(graph())
+
+    state.create_checkpoint.assert_not_called()
 
 
 def test_durable_node_rejects_synchronous_function():
@@ -847,6 +873,90 @@ async def test_unhandled_failure_raises_after_flow_result_is_checkpointed():
     assert payload["results"]["failure"]["status"] == "FAILED"
     assert payload["unhandledFailures"] == ["failure"]
     assert result.get_context("unhandled-flow").status is OperationStatus.SUCCEEDED
+
+
+async def test_handled_failure_outcome_is_reported_as_unavailable():
+    @durable_dag
+    def graph():
+        @durable_node
+        async def fail() -> None:
+            msg = "expected failure"
+            raise ValueError(msg)
+
+        @durable_node
+        async def recover(error: ErrorObject | None) -> str:
+            assert error is not None
+            return "recovered"
+
+        source = node(fail(), name="source")
+        recovery = node(recover(source.error), name="recovery")
+        return source.outcome, recovery.outcome
+
+    @durable_execution
+    async def handler(event):
+        try:
+            await flow(graph(), name="handled-unavailable-output")
+        except FlowExecutionError as error:
+            return error.result.to_dict()
+        pytest.fail("The unavailable source outcome must fail the flow")
+
+    async with create_local_runner(handler=handler, input={}, timeout=10) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    payload = json.loads(result.result)
+    assert payload["outputs"] == [None, "recovered"]
+    assert payload["unhandledFailures"] == []
+    assert payload["unavailableOutputs"] == ["source"]
+    assert (
+        result.get_context("handled-unavailable-output").status
+        is OperationStatus.SUCCEEDED
+    )
+
+
+async def test_skipped_outcome_is_reported_as_unavailable():
+    called: list[str] = []
+
+    @durable_dag
+    def graph():
+        @durable_node
+        async def fail() -> None:
+            msg = "expected failure"
+            raise ValueError(msg)
+
+        @durable_node
+        async def only_on_success() -> str:
+            called.append("target")
+            return "unreachable"
+
+        @durable_node
+        async def recover(error: ErrorObject | None) -> str:
+            assert error is not None
+            return "recovered"
+
+        source = node(fail(), name="source")
+        target = node(only_on_success(), name="target")
+        recovery = node(recover(source.error), name="recovery")
+        source.succeeded >> target
+        return target.outcome, recovery.outcome
+
+    @durable_execution
+    async def handler(event):
+        try:
+            await flow(graph(), name="skipped-unavailable-output")
+        except FlowExecutionError as error:
+            return error.result.to_dict()
+        pytest.fail("The skipped target outcome must fail the flow")
+
+    async with create_local_runner(handler=handler, input={}, timeout=10) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    payload = json.loads(result.result)
+    assert called == []
+    assert payload["results"]["target"]["status"] == "SKIPPED"
+    assert payload["unhandledFailures"] == []
+    assert payload["unavailableOutputs"] == ["target"]
 
 
 async def test_node_can_run_durable_operations_in_isolated_scope(monkeypatch):
@@ -1617,6 +1727,7 @@ async def test_empty_and_disconnected_flows():
         "outputs": [],
         "outputProjections": [],
         "unhandledFailures": [],
+        "unavailableOutputs": [],
     }
     assert list(payload["disconnected"]["results"]) == ["A", "B"]
     assert {
@@ -1753,6 +1864,84 @@ async def test_nested_flow_can_run_inside_node():
     inner_flow = result.get_child_operations(outer_node)[0]
     assert inner_flow.name == "inner-flow"
     assert result.get_child_operations(inner_flow)[0].name == "inner-node"
+
+
+async def test_flow_owned_node_outcomes_preserve_types_across_replay(monkeypatch):
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0")
+    observed: list[tuple[type[Any], type[Any]]] = []
+
+    @durable_dag
+    def inner_graph():
+        @durable_node
+        async def inner() -> str:
+            return "nested"
+
+        return node(inner(), name="inner-node").outcome
+
+    @durable_dag
+    def outer_graph():
+        @durable_node
+        async def return_flow() -> FlowResult:
+            return await flow(inner_graph(), name="inner-flow")
+
+        @durable_node
+        async def consume(inner_result: FlowResult) -> FlowNodeResult[Any]:
+            inner_node_result = inner_result.get_result("inner-node")
+            observed.append((type(inner_result), type(inner_node_result)))
+            await wait(timedelta(seconds=1), name="consumer-wait")
+            return inner_node_result
+
+        nested_flow = node(return_flow(), name="nested-flow")
+        return node(
+            consume(nested_flow.outcome),
+            name="consume",
+        ).outcome
+
+    @durable_execution
+    async def handler(event):
+        result = await flow(outer_graph(), name="outer-flow")
+        assert isinstance(result.output, FlowNodeResult)
+        return result.output.outcome
+
+    async with create_local_runner(handler=handler, input={}, timeout=10) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert json.loads(result.result) == "nested"
+    assert observed == [
+        (FlowResult, FlowNodeResult),
+        (FlowResult, FlowNodeResult),
+    ]
+
+
+async def test_recovery_node_can_return_injected_error():
+    @durable_dag
+    def graph():
+        @durable_node
+        async def fail() -> None:
+            msg = "payment declined"
+            raise ValueError(msg)
+
+        @durable_node
+        async def recover(error: ErrorObject | None) -> ErrorObject:
+            assert error is not None
+            return error
+
+        source = node(fail(), name="source")
+        return node(recover(source.error), name="recovery").outcome
+
+    @durable_execution
+    async def handler(event):
+        result = await flow(graph(), name="error-outcome")
+        assert isinstance(result.output, ErrorObject)
+        return result.output.to_dict()
+
+    async with create_local_runner(handler=handler, input={}, timeout=10) as runner:
+        result = await runner.run()
+
+    payload = json.loads(result.result)
+    assert payload["ErrorType"] == "ValueError"
+    assert payload["ErrorMessage"] == "payment declined"
 
 
 async def test_operation_ids_are_stable_across_sibling_completion_orders():

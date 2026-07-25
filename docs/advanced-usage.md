@@ -129,6 +129,10 @@ projections, or `None`; returning a `FlowNode` directly is invalid. `FlowResult.
 contains every node result keyed by node name. `outputs` contains the projected values,
 while `output` preserves zero, one, or multiple output arity. Returning `.error` or
 `.result()` explicitly observes and handles a failure selected as an output.
+An `.outcome` output requires that node to succeed. If the node fails or is skipped,
+`flow()` raises `FlowExecutionError` after checkpointing the result and lists the node
+in `FlowResult.unavailable_outputs`; return `node.result()` when a conditional output
+may legitimately be failed or skipped.
 
 Execution starts from the selected output nodes and follows their dependencies in
 reverse. Declared nodes outside that reverse-reachable subgraph do not create child
