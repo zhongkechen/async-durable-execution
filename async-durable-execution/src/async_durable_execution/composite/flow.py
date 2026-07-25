@@ -26,6 +26,8 @@ from ..exceptions import (
     InvalidStateError,
     InvocationError,
     SerDesError,
+    SuspendExecution,
+    TimedSuspendExecution,
 )
 from ..models import ErrorObject, SerializableModel
 from ..primitive.child import DurableContext, get_durable_context, run_in_child_context
@@ -1448,6 +1450,7 @@ async def _resolve_any_expression(
 
     pending = set(range(len(children)))
     unmatched: dict[FlowNode[Any], FlowNodeResult[Any]] = {}
+    suspensions: list[SuspendExecution] = []
     try:
         while pending:
             await asyncio.wait(
@@ -1460,6 +1463,9 @@ async def _resolve_any_expression(
                 pending.remove(index)
                 try:
                     resolution = child_task.result()
+                except SuspendExecution as error:
+                    suspensions.append(error)
+                    continue
                 except BaseException as error:
                     _raise_task_error(error)
                 if resolution.matched:
@@ -1471,6 +1477,18 @@ async def _resolve_any_expression(
                         )
                     )
                 unmatched.update(resolution.results)
+        if suspensions:
+            timed_suspensions = [
+                error
+                for error in suspensions
+                if isinstance(error, TimedSuspendExecution)
+            ]
+            if timed_suspensions:
+                raise min(
+                    timed_suspensions,
+                    key=lambda error: error.scheduled_timestamp,
+                )
+            raise suspensions[0]
         return _persisted_resolution(
             _DependencyResolution(matched=False, results=unmatched)
         )

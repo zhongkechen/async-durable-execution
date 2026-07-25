@@ -1089,6 +1089,53 @@ async def test_any_winner_survives_partial_replay(monkeypatch):
     assert observed_winners == ["A", "A"]
 
 
+async def test_any_matching_sibling_runs_before_suspended_branch_resumes(monkeypatch):
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0")
+    observed: list[str] = []
+
+    @durable_dag
+    def graph():
+        @durable_node
+        async def waiting() -> str:
+            await wait(timedelta(seconds=1), name="waiting-delay")
+            observed.append("waiting-completed")
+            return "waiting"
+
+        @durable_node
+        async def ready() -> str:
+            return "ready"
+
+        @durable_node
+        async def handle() -> str:
+            context = cast(FlowNodeContext, get_current_context())
+            assert context.get_dependency_result("waiting") is None
+            assert context.require_dependency_result("ready").outcome == "ready"
+            observed.append("target")
+            return "handled"
+
+        waiting_node = node(waiting(), name="waiting")
+        ready_node = node(ready(), name="ready")
+        target = node(handle(), name="target")
+        (waiting_node.succeeded | ready_node.succeeded) >> target
+        return target.outcome
+
+    @durable_execution
+    async def handler(event):
+        return (await flow(graph(), name="suspended-any")).to_dict()
+
+    async with create_local_runner(
+        handler=handler,
+        input={},
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    payload = json.loads(result.result)
+    assert payload["results"]["target"]["outcome"] == "handled"
+    assert observed == ["target", "waiting-completed"]
+
+
 async def test_nested_any_winner_survives_outer_all_partial_replay(monkeypatch):
     from async_durable_execution.composite.flow import (
         _NodeExecutionSerDes,

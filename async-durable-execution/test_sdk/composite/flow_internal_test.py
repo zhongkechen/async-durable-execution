@@ -56,6 +56,8 @@ from async_durable_execution.exceptions import (
     ExecutionError,
     InvocationError,
     SerDesError,
+    SuspendExecution,
+    TimedSuspendExecution,
 )
 from async_durable_execution.models import OperationIdentifier, OperationSubType
 from async_durable_execution.serdes import ExtendedTypeSerDes
@@ -859,6 +861,89 @@ async def test_any_resolution_propagates_child_control_signal():
             {},
         )
     assert raised.value is signal
+
+
+def _any_resolution_nodes():
+    captured = {}
+
+    @durable_dag
+    def graph():
+        first = node(return_name(), name="first")
+        second = node(return_name(), name="second")
+        target = node(return_name(), name="target")
+        (first | second) >> target
+        captured.update(first=first, second=second, target=target)
+
+    _evaluate_definition(graph())
+    return captured["first"], captured["second"], captured["target"]
+
+
+async def test_any_resolution_continues_after_suspended_candidate():
+    first, second, target = _any_resolution_nodes()
+    suspension = SuspendExecution("waiting for callback")
+
+    async def suspend():
+        raise suspension
+
+    async def succeed():
+        return _NodeExecution(FlowNodeResult.succeeded("winner"))
+
+    resolution = await _resolve_any_expression(
+        target,
+        target._dependency,
+        {
+            first: asyncio.create_task(suspend()),
+            second: asyncio.create_task(succeed()),
+        },
+        {},
+    )
+
+    assert resolution.matched
+    assert resolution.selected_nodes == ("second",)
+
+
+async def test_any_resolution_suspends_when_no_candidate_can_match():
+    first, second, target = _any_resolution_nodes()
+    suspension = SuspendExecution("waiting for callback")
+
+    async def suspend():
+        raise suspension
+
+    async def fail():
+        return _NodeExecution(FlowNodeResult.failed(ErrorObject.from_message("failed")))
+
+    with pytest.raises(SuspendExecution) as raised:
+        await _resolve_any_expression(
+            target,
+            target._dependency,
+            {
+                first: asyncio.create_task(suspend()),
+                second: asyncio.create_task(fail()),
+            },
+            {},
+        )
+    assert raised.value is suspension
+
+
+async def test_any_resolution_uses_earliest_timed_suspension():
+    first, second, target = _any_resolution_nodes()
+    later = TimedSuspendExecution("later", 20)
+    earlier = TimedSuspendExecution("earlier", 10)
+
+    async def suspend(error: TimedSuspendExecution):
+        raise error
+
+    with pytest.raises(TimedSuspendExecution) as raised:
+        await _resolve_any_expression(
+            target,
+            target._dependency,
+            {
+                first: asyncio.create_task(suspend(later)),
+                second: asyncio.create_task(suspend(earlier)),
+            },
+            {},
+        )
+    assert raised.value is earlier
 
 
 def test_flow_node_context_reuses_existing_step_counter():
