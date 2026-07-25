@@ -1,22 +1,12 @@
 # Composition
 
 Use these operations for fan-out, polling, external callbacks, and reusable
-groups of durable work.
+groups of durable work. For declarative acyclic workflows, see
+[DAG workflows](dag.md).
 
 ::: async_durable_execution
     options:
       members:
-        - durable_dag
-        - durable_node
-        - flow
-        - node
-        - FlowNode
-        - FlowNodeContext
-        - FlowNodeResult
-        - FlowNodeStatus
-        - FlowResult
-        - FlowDefinitionError
-        - FlowExecutionError
         - map
         - parallel
         - BatchResult

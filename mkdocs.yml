@@ -51,6 +51,7 @@ nav:
   - API Reference:
       - Overview: async_durable_execution.md
       - Durable Operations: api/operations.md
+      - DAG Workflows: api/dag.md
       - Composition: api/composition.md
       - Configuration and Serialization: api/configuration.md
       - Testing: async_durable_execution/runner.md
