@@ -3,7 +3,6 @@
 from typing import Any, cast
 
 from async_durable_execution import (
-    FlowNode,
     durable_dag,
     durable_execution,
     durable_node,
@@ -59,7 +58,7 @@ def order_flow(
     order_id: str,
     quantity: int,
     unit_price: float,
-) -> FlowNode[dict[str, Any]]:
+) -> dict[str, Any]:
     """Define a diamond-shaped order DAG."""
     order = node(
         load_order(order_id, quantity, unit_price),
@@ -72,7 +71,7 @@ def order_flow(
         name="build-response",
     )
 
-    return response
+    return response.outcome
 
 
 @durable_execution
@@ -86,4 +85,4 @@ async def handler(event: dict[str, Any]) -> dict[str, Any]:
         ),
         name="order-processing-flow",
     )
-    return cast(dict[str, Any], result.get_result("build-response").outcome)
+    return cast(dict[str, Any], result.output)

@@ -279,13 +279,23 @@ async def test_invalid_definition_output_fails_before_checkpoint():
     context, state = create_test_context()
 
     @durable_dag
-    def invalid_graph():
-        node(return_name(), name="A")
+    def raw_value_graph():
         return "A"
 
     with bind_current_context(context):
         with pytest.raises(FlowDefinitionError, match="must return"):
-            flow(invalid_graph())
+            flow(raw_value_graph())
+
+    @durable_dag
+    def raw_node_graph():
+        return node(return_name(), name="A")
+
+    with bind_current_context(context):
+        with pytest.raises(
+            FlowDefinitionError,
+            match=r"cannot return a FlowNode directly.*node\.outcome",
+        ):
+            flow(raw_node_graph())
 
     state.create_checkpoint.assert_not_called()
 
@@ -316,7 +326,7 @@ async def test_linear_fanout_fanin_flow_checkpoints_complete_result():
         d = node(run_d(), name="D")
         a >> (b, c)
         (b & c) >> d
-        return d
+        return d.outcome
 
     @durable_execution
     async def handler(event):
@@ -338,9 +348,8 @@ async def test_linear_fanout_fanin_flow_checkpoints_complete_result():
         "SUCCEEDED",
         "SUCCEEDED",
     ]
-    assert payload["outputs"] == [
-        {"status": "SUCCEEDED", "outcome": "root-B+root-C", "error": None}
-    ]
+    assert payload["outputs"] == ["root-B+root-C"]
+    assert payload["outputProjections"] == ["OUTCOME"]
     assert payload["unhandledFailures"] == []
 
     flow_operation = result.get_context("diamond")
@@ -377,7 +386,7 @@ async def test_node_outcome_argument_infers_success_dependency_and_resolves_valu
                     ]
                 }
             )
-        )
+        ).outcome
 
     @durable_execution
     async def handler(event):
@@ -405,7 +414,7 @@ async def test_node_error_argument_infers_failure_dependency_and_resolves_error(
             return error.message or ""
 
         source = node(fail())
-        return node(recover(source.error))
+        return node(recover(source.error)).outcome
 
     @durable_execution
     async def handler(event):
@@ -417,6 +426,50 @@ async def test_node_error_argument_infers_failure_dependency_and_resolves_error(
     payload = json.loads(result.result)
     assert payload["results"]["fail"]["status"] == "FAILED"
     assert payload["results"]["recover"]["outcome"] == "payment declined"
+    assert payload["unhandledFailures"] == []
+
+
+async def test_dag_outputs_project_outcome_error_and_result():
+    captured_output = None
+
+    @durable_dag
+    def graph():
+        @durable_node
+        async def succeed() -> str:
+            return "value"
+
+        @durable_node
+        async def fail() -> None:
+            msg = "expected failure"
+            raise ValueError(msg)
+
+        success = node(succeed(), name="success")
+        failure = node(fail(), name="failure")
+        return success.outcome, failure.error, failure.result()
+
+    @durable_execution
+    async def handler(event):
+        nonlocal captured_output
+        result = await flow(graph(), name="projected-outputs")
+        captured_output = result.output
+        return result.to_dict()
+
+    async with create_local_runner(handler=handler, input={}, timeout=10) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert isinstance(captured_output, tuple)
+    assert captured_output[0] == "value"
+    assert isinstance(captured_output[1], ErrorObject)
+    assert captured_output[1].message == "expected failure"
+    assert isinstance(captured_output[2], FlowNodeResult)
+    assert captured_output[2].status is FlowNodeStatus.FAILED
+
+    payload = json.loads(result.result)
+    assert payload["outputs"][0] == "value"
+    assert payload["outputs"][1]["ErrorMessage"] == "expected failure"
+    assert payload["outputs"][2]["status"] == "FAILED"
+    assert payload["outputProjections"] == ["OUTCOME", "ERROR", "RESULT"]
     assert payload["unhandledFailures"] == []
 
 
@@ -442,7 +495,7 @@ async def test_required_inputs_and_explicit_dependency_are_combined_with_all():
         return node(
             consume(source_node.outcome),
             dependency=gate_node.succeeded,
-        )
+        ).outcome
 
     @durable_execution
     async def handler(event):
@@ -489,7 +542,7 @@ async def test_dependency_argument_exposes_stable_result_snapshot_by_name():
             handle(),
             name="handler",
             dependency=pending.failed | completed.succeeded,
-        )
+        ).outcome
 
     @durable_execution
     async def handler(event):
@@ -516,7 +569,7 @@ def test_node_inputs_reject_conflicting_and_duplicate_explicit_dependencies():
             name="target",
         )
 
-    with pytest.raises(FlowDefinitionError, match="both its outcome and error"):
+    with pytest.raises(FlowDefinitionError, match="multiple projections"):
         _evaluate_definition(conflicting_graph())
 
     @durable_dag
@@ -550,7 +603,7 @@ async def test_flow_node_handle_exposes_result_status_outcome_and_error():
         source_node = node(source(), name="source")
         target_node = node(target(), name="target")
         source_node >> target_node
-        return target_node
+        return target_node.outcome
 
     @durable_execution
     async def handler(event):
@@ -565,7 +618,7 @@ async def test_flow_node_handle_exposes_result_status_outcome_and_error():
 
     assert result.status is InvocationStatus.SUCCEEDED
     payload = json.loads(result.result)
-    assert payload["outputs"][0]["outcome"] == "source-target"
+    assert payload["outputs"] == ["source-target"]
 
 
 async def test_failure_route_skips_success_branch_and_handles_source_failure():
@@ -608,7 +661,7 @@ async def test_failure_route_skips_success_branch_and_handles_source_failure():
         a >> b
         a.failed >> c
         (b.succeeded | c.succeeded) >> d
-        return d
+        return d.outcome
 
     @durable_execution
     async def handler(event):
@@ -656,7 +709,7 @@ async def test_flow_node_failure_properties_remain_available():
         source = node(fail(), name="source")
         recovery = node(recover(), name="recovery")
         source.failed >> recovery
-        return recovery
+        return recovery.outcome
 
     @durable_execution
     async def handler(event):
@@ -671,7 +724,7 @@ async def test_flow_node_failure_properties_remain_available():
 
     assert result.status is InvocationStatus.SUCCEEDED
     payload = json.loads(result.result)
-    assert payload["outputs"][0]["outcome"] == "source failed"
+    assert payload["outputs"] == ["source failed"]
     assert payload["unhandledFailures"] == []
 
 
@@ -685,7 +738,7 @@ async def test_unhandled_failure_raises_after_flow_result_is_checkpointed():
             msg = "unhandled"
             raise RuntimeError(msg)
 
-        return node(fail(), name="failure")
+        return node(fail(), name="failure").outcome
 
     @durable_execution
     async def handler(event):
@@ -741,7 +794,7 @@ async def test_node_can_run_durable_operations_in_isolated_scope(monkeypatch):
         a = node(run_a(), name="A")
         b = node(run_b(), name="B")
         a >> b
-        return a, b
+        return a.outcome, b.outcome
 
     @durable_execution
     async def handler(event):
@@ -756,7 +809,7 @@ async def test_node_can_run_durable_operations_in_isolated_scope(monkeypatch):
 
     assert result.status is InvocationStatus.SUCCEEDED
     payload = json.loads(result.result)
-    assert [output["outcome"] for output in payload["outputs"]] == ["A", "B"]
+    assert payload["outputs"] == ["A", "B"]
     assert step_calls == ["A", "B"]
     assert node_calls == ["A", "B", "B"]
 
@@ -815,7 +868,7 @@ async def test_any_starts_on_first_matching_result_and_does_not_handle_later_fai
         b = node(succeed_first(), name="B")
         handler = node(handle(), name="handler")
         (a.failed | b.succeeded) >> handler
-        return handler
+        return handler.outcome
 
     @durable_execution
     async def handler(event):
@@ -874,7 +927,7 @@ async def test_any_ignores_nonmatching_terminal_result():
         b = node(fail_matched(), name="B")
         handler = node(handle(), name="handler")
         (a.succeeded | b.failed) >> handler
-        return handler
+        return handler.outcome
 
     @durable_execution
     async def handler(event):
@@ -935,7 +988,7 @@ async def test_any_winner_survives_partial_replay(monkeypatch):
         a = node(completes_first(), name="A")
         handler = node(handle(), name="handler")
         (b.succeeded | a.failed) >> handler
-        return handler
+        return handler.outcome
 
     @durable_execution
     async def handler(event):
@@ -1034,7 +1087,7 @@ async def test_nested_any_winner_survives_outer_all_partial_replay(monkeypatch):
         c = node(suspends_outer_all(), name="C")
         target_node = node(target(), name="target")
         ((b.succeeded | a.failed) & c.succeeded) >> target_node
-        return target_node
+        return target_node.outcome
 
     @durable_execution
     async def handler(event):
@@ -1066,7 +1119,7 @@ def test_nested_any_does_not_retroactively_change_its_winner():
         d = node(return_name(), name="D")
         ((a.failed | b.succeeded) & c.succeeded) >> d
         handles.update(a=a, b=b, c=c, d=d)
-        return d
+        return d.outcome
 
     from async_durable_execution.composite.flow import _evaluate_definition
 
@@ -1120,7 +1173,7 @@ async def test_all_waits_for_every_dependency_before_running():
         b = node(second(), name="B")
         c = node(combined(), name="C")
         (a & b) >> c
-        return c
+        return c.outcome
 
     @durable_execution
     async def handler(event):
@@ -1135,7 +1188,7 @@ async def test_all_waits_for_every_dependency_before_running():
 
     assert result.status is InvocationStatus.SUCCEEDED
     payload = json.loads(result.result)
-    assert payload["outputs"][0]["outcome"] == "first+second"
+    assert payload["outputs"] == ["first+second"]
 
 
 async def test_completed_route_does_not_handle_failure():
@@ -1157,7 +1210,7 @@ async def test_completed_route_does_not_handle_failure():
         a = node(fail(), name="A")
         observer = node(observe(), name="observer")
         a.completed >> observer
-        return observer
+        return observer.outcome
 
     @durable_execution
     async def handler(event):
@@ -1195,7 +1248,7 @@ async def test_handler_failure_is_evaluated_independently():
         a = node(source(), name="source")
         b = node(handler(), name="handler")
         a.failed >> b
-        return b
+        return b.outcome
 
     @durable_execution
     async def handler(event):
@@ -1242,7 +1295,7 @@ async def test_invalid_dependency_result_access_is_a_logical_node_failure():
         recovery = node(recover(), name="recovery")
         a >> c
         c.failed >> recovery
-        return recovery
+        return recovery.outcome
 
     @durable_execution
     async def handler(event):
@@ -1289,7 +1342,7 @@ async def test_failure_handling_metadata_survives_partial_replay(monkeypatch):
         a = node(source(), name="source")
         recovery = node(recover(), name="recovery")
         a.failed >> recovery
-        return recovery
+        return recovery.outcome
 
     @durable_execution
     async def handler(event):
@@ -1304,7 +1357,7 @@ async def test_failure_handling_metadata_survives_partial_replay(monkeypatch):
 
     payload = json.loads(result.result)
     assert payload["unhandledFailures"] == []
-    assert payload["outputs"][0]["outcome"] == "recovered"
+    assert payload["outputs"] == ["recovered"]
     assert source_calls == 1
     assert handler_calls == 2
 
@@ -1329,7 +1382,7 @@ async def test_sdk_control_error_does_not_activate_failure_route():
         a = node(control_failure(), name="source")
         handler = node(should_not_run(), name="handler")
         a.failed >> handler
-        return handler
+        return handler.outcome
 
     @durable_execution
     async def handler(event):
@@ -1379,6 +1432,7 @@ async def test_empty_and_disconnected_flows():
     assert payload["empty"] == {
         "results": {},
         "outputs": [],
+        "outputProjections": [],
         "unhandledFailures": [],
     }
     assert list(payload["disconnected"]["results"]) == ["A", "B"]
@@ -1402,7 +1456,7 @@ async def test_all_unmatched_dependencies_skip_downstream_callable():
         b = node(succeed(), name="B")
         c = node(skipped(), name="C")
         (a.failed | b.failed) >> c
-        return c
+        return c.result()
 
     @durable_execution
     async def handler(event):
@@ -1428,7 +1482,7 @@ async def test_nested_flow_can_run_inside_node():
         async def inner() -> str:
             return value
 
-        return node(inner(), name="inner-node")
+        return node(inner(), name="inner-node").outcome
 
     @durable_dag
     def outer_graph():
@@ -1436,9 +1490,9 @@ async def test_nested_flow_can_run_inside_node():
         async def outer() -> str:
             inner_result = await flow(inner_graph("nested"), name="inner-flow")
             assert len(inner_result.outputs) == 1
-            return cast(str, inner_result.outputs[0].outcome)
+            return cast(str, inner_result.output)
 
-        return node(outer(), name="outer-node")
+        return node(outer(), name="outer-node").outcome
 
     @durable_execution
     async def handler(event):
@@ -1452,7 +1506,7 @@ async def test_nested_flow_can_run_inside_node():
         result = await runner.run()
 
     payload = json.loads(result.result)
-    assert payload["outputs"][0]["outcome"] == "nested"
+    assert payload["outputs"] == ["nested"]
     outer_flow = result.get_context("outer-flow")
     outer_node = result.get_child_operations(outer_flow)[0]
     inner_flow = result.get_child_operations(outer_node)[0]
@@ -1480,7 +1534,7 @@ async def test_operation_ids_are_stable_across_sibling_completion_orders():
 
             a = node(run_a(), name="A")
             b = node(run_b(), name="B")
-            return a, b
+            return a.outcome, b.outcome
 
         @durable_execution
         async def handler(event):
@@ -1523,7 +1577,7 @@ async def test_serialization_failure_does_not_activate_failure_route():
         source = node(unsupported_result(), name="source")
         handler = node(should_not_run(), name="handler")
         source.failed >> handler
-        return handler
+        return handler.outcome
 
     @durable_execution
     async def handler(event):

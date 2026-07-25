@@ -71,13 +71,26 @@ class FlowResult:
     """Complete logical result of a flow."""
 
     results: dict[str, FlowNodeResult[Any]]
-    outputs: tuple[FlowNodeResult[Any], ...] = ()
+    outputs: tuple[Any, ...] = ()
     unhandled_failures: tuple[str, ...] = ()
+    _output_kinds: tuple[_FlowNodeInputKind, ...] = field(
+        default=(),
+        repr=False,
+    )
+
+    def __post_init__(self) -> None:
+        if not self._output_kinds and self.outputs:
+            object.__setattr__(
+                self,
+                "_output_kinds",
+                (_FlowNodeInputKind.RESULT,) * len(self.outputs),
+            )
+        if len(self._output_kinds) != len(self.outputs):
+            msg = "Flow output values and projections must have the same length."
+            raise InvalidStateError(msg)
 
     @property
-    def output(
-        self,
-    ) -> FlowNodeResult[Any] | tuple[FlowNodeResult[Any], ...] | None:
+    def output(self) -> Any:
         """Return selected output while preserving the definition's arity."""
         if not self.outputs:
             return None
@@ -104,23 +117,53 @@ class FlowResult:
                 name: node_result.to_dict()
                 for name, node_result in self.results.items()
             },
-            "outputs": [output.to_dict() for output in self.outputs],
+            "outputs": [
+                _flow_output_to_dict(output, kind)
+                for output, kind in zip(
+                    self.outputs,
+                    self._output_kinds,
+                    strict=True,
+                )
+            ],
+            "outputProjections": [kind.value for kind in self._output_kinds],
             "unhandledFailures": list(self.unhandled_failures),
         }
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> FlowResult:
+        raw_outputs = tuple(data.get("outputs", ()))
+        raw_kinds = data.get("outputProjections")
+        try:
+            output_kinds = (
+                tuple(_FlowNodeInputKind(str(kind)) for kind in raw_kinds)
+                if raw_kinds is not None
+                else (_FlowNodeInputKind.RESULT,) * len(raw_outputs)
+            )
+        except (TypeError, ValueError) as error:
+            msg = "Serialized flow result contains an invalid output projection."
+            raise SerDesError(msg) from error
+        if len(output_kinds) != len(raw_outputs):
+            msg = (
+                "Serialized flow output values and projections have different lengths."
+            )
+            raise SerDesError(msg)
         return cls(
             results={
                 str(name): FlowNodeResult.from_dict(node_result)
                 for name, node_result in data["results"].items()
             },
             outputs=tuple(
-                FlowNodeResult.from_dict(output) for output in data.get("outputs", ())
+                _flow_output_from_dict(output, kind)
+                for output, kind in zip(
+                    raw_outputs,
+                    output_kinds,
+                    strict=True,
+                )
             ),
             unhandled_failures=tuple(
                 str(name) for name in data.get("unhandledFailures", ())
             ),
+            _output_kinds=output_kinds,
         )
 
 
@@ -145,6 +188,23 @@ class _DependencyMode(Enum):
 class _FlowNodeInputKind(Enum):
     OUTCOME = "OUTCOME"
     ERROR = "ERROR"
+    RESULT = "RESULT"
+
+
+def _flow_output_to_dict(value: Any, kind: _FlowNodeInputKind) -> Any:
+    if kind is _FlowNodeInputKind.ERROR:
+        return value.to_dict() if value is not None else None
+    if kind is _FlowNodeInputKind.RESULT:
+        return cast("FlowNodeResult[Any]", value).to_dict()
+    return value
+
+
+def _flow_output_from_dict(value: Any, kind: _FlowNodeInputKind) -> Any:
+    if kind is _FlowNodeInputKind.ERROR:
+        return ErrorObject.from_dict(value) if value is not None else None
+    if kind is _FlowNodeInputKind.RESULT:
+        return FlowNodeResult.from_dict(value)
+    return value
 
 
 class _EvaluationStatus(Enum):
@@ -232,7 +292,7 @@ class _DependencyExpression:
 
 @dataclass(frozen=True)
 class _FlowNodeInput(Generic[T]):
-    """Deferred node value used while a flow definition is being evaluated."""
+    """Deferred node projection used while a flow definition is evaluated."""
 
     node: FlowNode[Any]
     kind: _FlowNodeInputKind
@@ -241,7 +301,9 @@ class _FlowNodeInput(Generic[T]):
     def condition(self) -> _DependencyCondition:
         if self.kind is _FlowNodeInputKind.OUTCOME:
             return _DependencyCondition.SUCCEEDED
-        return _DependencyCondition.FAILED
+        if self.kind is _FlowNodeInputKind.ERROR:
+            return _DependencyCondition.FAILED
+        return _DependencyCondition.COMPLETED
 
     def resolve(
         self,
@@ -259,10 +321,20 @@ class _FlowNodeInput(Generic[T]):
             raise InvalidStateError(msg)
         if self.kind is _FlowNodeInputKind.OUTCOME:
             return cast("T", result.outcome)
-        if result.error is None:
+        if self.kind is _FlowNodeInputKind.ERROR and result.error is None:
             msg = f"Failed input {self.node.name!r} has no error."
             raise InvalidStateError(msg)
-        return cast("T", result.error)
+        if self.kind is _FlowNodeInputKind.ERROR:
+            return cast("T", result.error)
+        return cast("T", result)
+
+    def project(self, result: FlowNodeResult[Any]) -> T:
+        """Project a settled node result without imposing an input condition."""
+        if self.kind is _FlowNodeInputKind.OUTCOME:
+            return cast("T", result.outcome)
+        if self.kind is _FlowNodeInputKind.ERROR:
+            return cast("T", result.error)
+        return cast("T", result)
 
 
 @dataclass(frozen=True)
@@ -366,7 +438,16 @@ class FlowNode(Generic[T]):
         return f"FlowNode(name={self.name!r})"
 
     def result(self) -> FlowNodeResult[T]:
-        """Return this direct dependency's logical result in a running node."""
+        """Reference a completed output or return its result in a running node."""
+        builder = _current_flow_builder.get()
+        if builder is not None and not builder.frozen:
+            return cast(
+                "FlowNodeResult[T]",
+                _FlowNodeInput[FlowNodeResult[T]](
+                    self,
+                    _FlowNodeInputKind.RESULT,
+                ),
+            )
         try:
             context = get_current_context()
         except RuntimeError as error:
@@ -500,7 +581,7 @@ class FlowNodeContext(DurableContext):
 class _FrozenFlow:
     nodes: tuple[FlowNode[Any], ...]
     topological_nodes: tuple[FlowNode[Any], ...]
-    outputs: tuple[FlowNode[Any], ...]
+    outputs: tuple[_FlowNodeInput[Any], ...]
 
 
 class _FlowBuilder:
@@ -545,19 +626,29 @@ class _FlowBuilder:
             outputs=outputs,
         )
 
-    def _validate_outputs(self, output: Any) -> tuple[FlowNode[Any], ...]:
+    def _validate_outputs(self, output: Any) -> tuple[_FlowNodeInput[Any], ...]:
         if output is None:
             return ()
         outputs = output if isinstance(output, tuple) else (output,)
-        for flow_node in outputs:
-            if not isinstance(flow_node, FlowNode):
+        for output_reference in outputs:
+            if isinstance(output_reference, FlowNode):
                 msg = (
-                    "A durable DAG definition must return a FlowNode, a tuple of "
-                    "FlowNode instances, or None."
+                    "A durable DAG definition cannot return a FlowNode directly; "
+                    "return node.outcome, node.error, node.result(), or a tuple "
+                    "of those projections."
                 )
                 raise FlowDefinitionError(msg)
-            if flow_node._builder is not self or flow_node not in self.nodes:
-                msg = "Flow outputs must be nodes from the current definition."
+            if not isinstance(output_reference, _FlowNodeInput):
+                msg = (
+                    "A durable DAG definition must return node.outcome, node.error, "
+                    "node.result(), a tuple of those projections, or None."
+                )
+                raise FlowDefinitionError(msg)
+            if (
+                output_reference.node._builder is not self
+                or output_reference.node not in self.nodes
+            ):
+                msg = "Flow outputs must reference nodes from the current definition."
                 raise InvalidStateError(msg)
         return outputs
 
@@ -764,8 +855,8 @@ def _input_dependency_expression(
         existing = references.get(reference.node)
         if existing is not None and existing.kind is not reference.kind:
             msg = (
-                f"Flow node input {reference.node.name!r} cannot require both "
-                "its outcome and error."
+                f"Flow node input {reference.node.name!r} cannot require multiple "
+                "projections."
             )
             raise FlowDefinitionError(msg)
         references[reference.node] = reference
@@ -1486,6 +1577,12 @@ async def _execute_flow(frozen_flow: _FrozenFlow) -> FlowResult:
     handled_failures = {
         name for execution in executions.values() for name in execution.handled_failures
     }
+    handled_failures.update(
+        output.node.name
+        for output in frozen_flow.outputs
+        if output.kind in {_FlowNodeInputKind.ERROR, _FlowNodeInputKind.RESULT}
+        and executions[output.node].result.status is FlowNodeStatus.FAILED
+    )
     unhandled_failures = tuple(
         flow_node.name
         for flow_node in frozen_flow.nodes
@@ -1495,9 +1592,11 @@ async def _execute_flow(frozen_flow: _FrozenFlow) -> FlowResult:
     return FlowResult(
         results=results,
         outputs=tuple(
-            executions[flow_node].result for flow_node in frozen_flow.outputs
+            output.project(executions[output.node].result)
+            for output in frozen_flow.outputs
         ),
         unhandled_failures=unhandled_failures,
+        _output_kinds=tuple(output.kind for output in frozen_flow.outputs),
     )
 
 

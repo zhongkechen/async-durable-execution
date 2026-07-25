@@ -85,6 +85,52 @@ def test_flow_result_helpers_preserve_selected_output_arity():
     assert FlowResult.from_dict(multiple.to_dict()) == multiple
 
 
+def test_flow_result_projection_serialization_and_validation():
+    first = FlowNodeResult.succeeded("first")
+    legacy = {
+        "results": {"first": first.to_dict()},
+        "outputs": [first.to_dict()],
+        "unhandledFailures": [],
+    }
+    restored_legacy = FlowResult.from_dict(legacy)
+    assert restored_legacy.outputs == (first,)
+
+    error_output = FlowResult(
+        results={},
+        outputs=(None,),
+        _output_kinds=(_FlowNodeInputKind.ERROR,),
+    )
+    assert FlowResult.from_dict(error_output.to_dict()) == error_output
+
+    with pytest.raises(InvalidStateError, match="same length"):
+        FlowResult(
+            results={},
+            outputs=("value",),
+            _output_kinds=(
+                _FlowNodeInputKind.OUTCOME,
+                _FlowNodeInputKind.ERROR,
+            ),
+        )
+
+    with pytest.raises(SerDesError, match="different lengths"):
+        FlowResult.from_dict(
+            {
+                "results": {},
+                "outputs": ["value"],
+                "outputProjections": [],
+            }
+        )
+
+    with pytest.raises(SerDesError, match="invalid output projection"):
+        FlowResult.from_dict(
+            {
+                "results": {},
+                "outputs": ["value"],
+                "outputProjections": ["UNKNOWN"],
+            }
+        )
+
+
 def test_flow_node_result_is_rejected_outside_node_execution():
     captured = {}
 
@@ -250,7 +296,7 @@ def test_nodes_and_expressions_cannot_cross_definition_boundaries():
         source = node(return_name(), name="source")
         captured["source"] = source
         captured["expression"] = source.succeeded
-        return source
+        return source.outcome
 
     _evaluate_definition(first_graph())
 
@@ -265,7 +311,7 @@ def test_nodes_and_expressions_cannot_cross_definition_boundaries():
     @durable_dag
     def foreign_output_graph():
         node(return_name(), name="local")
-        return captured["source"]
+        return captured["source"].outcome
 
     with pytest.raises(InvalidStateError, match="outputs"):
         _evaluate_definition(foreign_output_graph())
@@ -281,7 +327,7 @@ def test_frozen_builder_rejects_late_mutation():
     def graph():
         source = node(return_name(), name="source")
         captured["source"] = source
-        return source
+        return source.outcome
 
     _evaluate_definition(graph())
     source = captured["source"]
@@ -400,7 +446,7 @@ def test_flow_node_repr_and_flat_expression_construction():
         (a | b | c) >> d
         captured["a"] = a
         captured["d"] = d
-        return d
+        return d.outcome
 
     frozen = _evaluate_definition(graph())
 
@@ -443,7 +489,7 @@ def test_composite_expression_default_state_and_all_unmatched():
         (a & b) >> c
         (a | b) >> d
         captured.update(a=a, b=b, c=c, d=d)
-        return c, d
+        return c.outcome, d.outcome
 
     _evaluate_definition(graph())
     results = {
@@ -461,10 +507,13 @@ def test_flow_node_input_resolution_and_container_helpers():
     source = builder.add_node(return_name(), "source")
     outcome_input = _FlowNodeInput(source, _FlowNodeInputKind.OUTCOME)
     error_input = _FlowNodeInput(source, _FlowNodeInputKind.ERROR)
+    result_input = _FlowNodeInput(source, _FlowNodeInputKind.RESULT)
     error = ErrorObject.from_message("failed")
+    success = FlowNodeResult.succeeded("value")
 
-    assert outcome_input.resolve({source: FlowNodeResult.succeeded("value")}) == "value"
+    assert outcome_input.resolve({source: success}) == "value"
     assert error_input.resolve({source: FlowNodeResult.failed(error)}) is error
+    assert result_input.resolve({source: success}) is success
 
     with pytest.raises(InvalidStateError, match="not available"):
         outcome_input.resolve({})
@@ -565,7 +614,7 @@ async def test_dependency_resolution_propagates_unclassified_task_error():
         b = node(return_name(), name="B")
         a >> b
         captured.update(a=a, b=b)
-        return b
+        return b.outcome
 
     _evaluate_definition(graph())
 
@@ -744,7 +793,7 @@ def test_flow_node_context_reuses_existing_step_counter():
 async def test_execute_flow_wraps_unclassified_child_error(monkeypatch):
     @durable_dag
     def graph():
-        return node(return_name(), name="A")
+        return node(return_name(), name="A").outcome
 
     frozen = _evaluate_definition(graph())
 
@@ -785,7 +834,7 @@ async def test_execute_flow_propagates_resolver_task_errors(
         second = node(return_name(), name="second")
         target = node(return_name(), name="target")
         (first | second) >> target
-        return target
+        return target.outcome
 
     frozen = _evaluate_definition(graph())
 

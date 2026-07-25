@@ -57,7 +57,6 @@ complete graph before creating its durable child context.
 
 ```python
 from async_durable_execution import (
-    FlowNode,
     durable_callable,
     durable_dag,
     durable_node,
@@ -83,17 +82,15 @@ async def fetch(order_id: str) -> dict:
 
 
 @durable_node
-async def charge(fetch_node: FlowNode[dict]) -> dict:
-    order = fetch_node.outcome
+async def charge(order: dict) -> dict:
     return await step(charge_order(order), name="charge-order")
 
 
 @durable_dag
 def order_flow(order_id: str):
     fetch_node = node(fetch(order_id), name="fetch")
-    charge_node = node(charge(fetch_node), name="charge")
-    fetch_node >> charge_node
-    return charge_node
+    charge_node = node(charge(fetch_node.outcome), name="charge")
+    return charge_node.outcome
 
 
 result = await flow(order_flow("order-123"), name="process-order")
@@ -103,11 +100,11 @@ charge_result = result.output
 Definition code must be deterministic and cannot start `step()`, `wait()`,
 `invoke()`, another `flow()`, or any other durable operation. Node bodies run only
 after validation inside their own durable child contexts, where they can use all
-normal durable operations. Inside a node body, `dependency_node.outcome` returns a
-successful direct dependency's value. Conditional routes can inspect
-`dependency_node.status` and `dependency_node.error`, while
-`dependency_node.result()` returns the full `FlowNodeResult`.
-`FlowNodeContext.result()` remains available as the lower-level equivalent.
+normal durable operations. Passing `dependency_node.outcome` or
+`dependency_node.error` as a node argument infers a successful or failed dependency
+and injects the projected value. For explicit complex conditions, use `dependency=`
+and read available direct dependency results by stable name through
+`FlowNodeContext`.
 
 Dependency operators build the graph:
 
@@ -122,11 +119,11 @@ Use parentheses around `&` and `|` expressions. Each target accepts one dependen
 expression, so combine multiple dependencies explicitly instead of assigning them in
 separate statements.
 
-`FlowResult.results` contains every node result keyed by node name. `outputs` contains
-the nodes selected by the definition return value, while `output` is a convenience
-property that preserves zero, one, or multiple output arity. A `FlowNodeResult`
-preserves its `SUCCEEDED`, `FAILED`, or `SKIPPED` status together with its outcome and
-captured error.
+The definition returns `node.outcome`, `node.error`, `node.result()`, a tuple of these
+projections, or `None`; returning a `FlowNode` directly is invalid. `FlowResult.results`
+contains every node result keyed by node name. `outputs` contains the projected values,
+while `output` preserves zero, one, or multiple output arity. Returning `.error` or
+`.result()` explicitly observes and handles a failure selected as an output.
 
 A matching `.failed` route handles its source failure. After all runnable nodes settle,
 `flow()` raises `FlowExecutionError` if failures remain unhandled; the exception's

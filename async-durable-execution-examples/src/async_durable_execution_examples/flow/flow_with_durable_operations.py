@@ -4,7 +4,6 @@ from datetime import timedelta
 from typing import Any, cast
 
 from async_durable_execution import (
-    FlowNode,
     durable_callable,
     durable_dag,
     durable_execution,
@@ -53,14 +52,14 @@ async def prepare_notification(
 
 
 @durable_dag
-def notification_flow(customer_id: str) -> FlowNode[str]:
+def notification_flow(customer_id: str) -> str:
     """Define a linear flow whose nodes contain durable operations."""
     customer = node(load_customer(customer_id), name="load-customer")
     notification = node(
         prepare_notification(customer.outcome),
         name="prepare-notification",
     )
-    return notification
+    return notification.outcome
 
 
 @durable_execution
@@ -70,4 +69,4 @@ async def handler(event: dict[str, Any]) -> str:
         notification_flow(str(event["customerId"])),
         name="notification-flow",
     )
-    return cast(str, result.get_result("prepare-notification").outcome)
+    return cast(str, result.output)

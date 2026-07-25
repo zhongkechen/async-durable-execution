@@ -4,7 +4,7 @@ from typing import Any
 
 from async_durable_execution import (
     ErrorObject,
-    FlowNode,
+    FlowNodeResult,
     durable_dag,
     durable_execution,
     durable_node,
@@ -42,7 +42,7 @@ async def record_payment_failure(error: ErrorObject | None) -> str:
 def payment_flow(
     order_id: str,
     approved: bool,
-) -> tuple[FlowNode[str], FlowNode[str]]:
+) -> tuple[FlowNodeResult[str], FlowNodeResult[str]]:
     """Define mutually exclusive success and recovery branches."""
     payment = node(charge_payment(approved), name="charge-payment")
     fulfillment = node(
@@ -54,7 +54,7 @@ def payment_flow(
         name="record-payment-failure",
     )
 
-    return fulfillment, recovery
+    return fulfillment.result(), recovery.result()
 
 
 @durable_execution
