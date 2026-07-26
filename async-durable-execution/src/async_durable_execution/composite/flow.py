@@ -1385,15 +1385,20 @@ _FLOW_RESULT_SERDES = _FlowResultSerDes()
 _FLOW_VALUE_SERDES = _FlowValueSerDes()
 
 
+async def _clone_flow_value(value: Any) -> Any:
+    """Clone a value using the same representation as flow checkpoints."""
+    return await _FLOW_VALUE_SERDES.deserialize(
+        await _FLOW_VALUE_SERDES.serialize(value)
+    )
+
+
 async def _clone_dependency_results(
     results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
 ) -> dict[FlowNode[Any], FlowNodeResult[Any]]:
     """Clone settled results once for one consumer using checkpoint semantics."""
     cloned: dict[FlowNode[Any], FlowNodeResult[Any]] = {}
     for flow_node, result in results.items():
-        value = await _FLOW_VALUE_SERDES.deserialize(
-            await _FLOW_VALUE_SERDES.serialize(result)
-        )
+        value = await _clone_flow_value(result)
         if not isinstance(value, FlowNodeResult):
             msg = "Cloned flow dependency result has an invalid type."
             raise SerDesError(msg)
@@ -1765,6 +1770,79 @@ def _resolve_flow_node_inputs(
     return value
 
 
+async def _clone_flow_node_arguments(
+    args: tuple[Any, ...],
+    kwargs: Mapping[str, Any],
+    results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Clone one node's complete argument graph at its execution boundary."""
+    resolved_args = tuple(_resolve_flow_node_inputs(value, results) for value in args)
+    resolved_kwargs = {
+        key: _resolve_flow_node_inputs(value, results) for key, value in kwargs.items()
+    }
+    cloned = await _clone_flow_value((resolved_args, resolved_kwargs))
+    if not isinstance(cloned, tuple) or len(cloned) != 2:
+        msg = "Cloned flow node arguments have an invalid structure."
+        raise SerDesError(msg)
+    cloned_args, cloned_kwargs = cloned
+    if not isinstance(cloned_args, tuple) or not isinstance(cloned_kwargs, dict):
+        msg = "Cloned flow node arguments have an invalid structure."
+        raise SerDesError(msg)
+    restored_args = cast(
+        "tuple[Any, ...]",
+        _restore_flow_node_input_references(args, cloned_args, results),
+    )
+    restored_kwargs = cast(
+        "dict[str, Any]",
+        _restore_flow_node_input_references(dict(kwargs), cloned_kwargs, results),
+    )
+    return restored_args, restored_kwargs
+
+
+def _restore_flow_node_input_references(
+    template: Any,
+    cloned: Any,
+    results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
+) -> Any:
+    """Rebind projections after cloning while retaining cloned container values."""
+    if isinstance(template, _FlowNodeInput):
+        return template.resolve(results)
+    if isinstance(template, list) and isinstance(cloned, list):
+        return [
+            _restore_flow_node_input_references(source, value, results)
+            for source, value in zip(template, cloned, strict=True)
+        ]
+    if isinstance(template, tuple) and isinstance(cloned, tuple):
+        restored = tuple(
+            _restore_flow_node_input_references(source, value, results)
+            for source, value in zip(template, cloned, strict=True)
+        )
+        if hasattr(template, "_fields"):
+            return type(template)(*restored)
+        return restored
+    if isinstance(template, dict) and isinstance(cloned, dict):
+        return dict(
+            (
+                _restore_flow_node_input_references(
+                    source_key,
+                    cloned_key,
+                    results,
+                ),
+                _restore_flow_node_input_references(
+                    source_value,
+                    cloned_value,
+                    results,
+                ),
+            )
+            for (source_key, source_value), (cloned_key, cloned_value) in zip(
+                template.items(),
+                cloned.items(),
+                strict=True,
+            )
+        )
+    return cloned
+
+
 async def _invoke_flow_node(
     flow_node: FlowNode[Any],
     results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
@@ -1778,11 +1856,12 @@ async def _invoke_flow_node(
         "Mapping[str, Any]",
         getattr(flow_node._func, "_durable_node_kwargs"),
     )
-    resolved_args = tuple(_resolve_flow_node_inputs(value, results) for value in args)
-    resolved_kwargs = {
-        key: _resolve_flow_node_inputs(value, results) for key, value in kwargs.items()
-    }
-    return await func(*resolved_args, **resolved_kwargs)
+    cloned_args, cloned_kwargs = await _clone_flow_node_arguments(
+        args,
+        kwargs,
+        results,
+    )
+    return await func(*cloned_args, **cloned_kwargs)
 
 
 async def _execute_node(

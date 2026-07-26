@@ -45,6 +45,7 @@ from async_durable_execution.composite.flow import (
     _await_resolver_resolution,
     _coerce_expression,
     _clone_dependency_results,
+    _clone_flow_node_arguments,
     _decode_flow_value,
     _encode_flow_value,
     _evaluate_definition,
@@ -179,6 +180,49 @@ async def test_dependency_result_clone_rejects_invalid_decoded_value(monkeypatch
         match="Cloned flow dependency result has an invalid type",
     ):
         await _clone_dependency_results({source: FlowNodeResult.succeeded("original")})
+
+
+async def test_flow_node_arguments_are_cloned_as_one_complete_graph():
+    class Metadata(NamedTuple):
+        label: str
+        values: dict[str, str]
+
+    metadata = Metadata("test", {"state": "original"})
+    args = ({"items": ["original"]}, metadata)
+    kwargs = {"metadata": {"state": "original"}}
+
+    cloned_args, cloned_kwargs = await _clone_flow_node_arguments(args, kwargs, {})
+
+    assert cloned_args == args
+    assert cloned_kwargs == kwargs
+    assert cloned_args is not args
+    assert cloned_kwargs is not kwargs
+    assert cloned_args[0] is not args[0]
+    assert cloned_kwargs["metadata"] is not kwargs["metadata"]
+    cloned_metadata = cast("Metadata", cloned_args[1])
+    assert isinstance(cloned_metadata, Metadata)
+    assert cloned_metadata.values is not metadata.values
+
+
+@pytest.mark.parametrize("invalid_value", ["invalid", ((), [])])
+async def test_flow_node_argument_clone_rejects_invalid_structure(
+    monkeypatch,
+    invalid_value,
+):
+    async def deserialize_invalid_value(self, data):
+        return invalid_value
+
+    monkeypatch.setattr(
+        _FlowValueSerDes,
+        "deserialize",
+        deserialize_invalid_value,
+    )
+
+    with pytest.raises(
+        SerDesError,
+        match="Cloned flow node arguments have an invalid structure",
+    ):
+        await _clone_flow_node_arguments((), {}, {})
 
 
 def test_flow_result_projection_serialization_and_validation():

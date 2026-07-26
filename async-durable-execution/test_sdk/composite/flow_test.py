@@ -1721,6 +1721,75 @@ async def test_mutable_dependency_outcome_is_stable_across_partial_replay(
     assert observer_calls == 2
 
 
+async def test_mutable_bound_input_is_isolated_across_partial_replay(monkeypatch):
+    from async_durable_execution.composite.flow import _NodeExecutionSerDes
+
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0")
+    mutator_persisted = asyncio.Event()
+    observed: list[list[str]] = []
+    mutator_calls = 0
+    observer_calls = 0
+
+    node_deserialize = _NodeExecutionSerDes.deserialize
+
+    async def observe_node_checkpoint(self, data):
+        execution = await node_deserialize(self, data)
+        if execution.result.outcome == "bound-mutator-persisted":
+            mutator_persisted.set()
+        return execution
+
+    monkeypatch.setattr(
+        _NodeExecutionSerDes,
+        "deserialize",
+        observe_node_checkpoint,
+    )
+
+    @durable_dag
+    def graph(shared_input: dict[str, list[str]]):
+        @durable_node
+        async def mutate(value: dict[str, list[str]]) -> str:
+            nonlocal mutator_calls
+            mutator_calls += 1
+            value["items"].append("mutated")
+            return "bound-mutator-persisted"
+
+        @durable_node
+        async def observe(*, value: dict[str, list[str]]) -> list[str]:
+            nonlocal observer_calls
+            observer_calls += 1
+            await mutator_persisted.wait()
+            observed.append(list(value["items"]))
+            await wait(timedelta(seconds=1), name="bound-observer-wait")
+            return value["items"]
+
+        mutator = node(mutate(shared_input), name="bound-mutator")
+        observer = node(observe(value=shared_input), name="bound-observer")
+        return observer.outcome, mutator.outcome
+
+    @durable_execution
+    async def handler(event):
+        return (
+            await flow(
+                graph(event),
+                name="replayed-bound-input-isolation",
+            )
+        ).to_dict()
+
+    async with create_local_runner(
+        handler=handler,
+        input={"items": ["original"]},
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    payload = result.get_deserialized_result()
+    assert payload["outputs"] == [["original"], "bound-mutator-persisted"]
+    assert observed == [["original"], ["original"]]
+    assert mutator_calls == 1
+    assert observer_calls == 2
+
+
 async def test_sdk_control_error_does_not_activate_failure_route():
     called: list[str] = []
 

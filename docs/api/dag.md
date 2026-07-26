@@ -129,6 +129,12 @@ Iterators, sets, frozensets, dataclass fields, and other unsupported containers
 are rejected when they contain a projection. Materialize an iterator as a list
 or tuple before passing it to a node.
 
+Before invoking a node, the SDK resolves projections and clones its complete
+argument graph using flow checkpoint serialization. Each node therefore receives
+consumer-local `args` and `kwargs`; mutating them does not change definition-time
+values or inputs observed by sibling nodes. Bound values must use types supported
+by the default checkpoint serializer.
+
 ## Conditional Dependencies
 
 Use dependency expressions when a node does not require a projected value as
