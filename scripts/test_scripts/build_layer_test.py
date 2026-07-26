@@ -99,14 +99,14 @@ def test_build_layer_installs_sdk_and_returns_archive_details(
     output_path = tmp_path / "dist" / "layer.zip"
     result = build_layer(
         output_path=output_path,
-        sdk_source="./async-durable-execution",
+        sdk_source=".",
         python_executable="python-test",
         pip_args=("--quiet",),
     )
 
     assert result == LayerBuildResult(
         output_path=output_path.resolve(),
-        sdk_source="./async-durable-execution",
+        sdk_source=".",
         file_count=1,
         size_bytes=output_path.stat().st_size,
     )
@@ -115,7 +115,7 @@ def test_build_layer_installs_sdk_and_returns_archive_details(
     assert call["python_executable"] == "python-test"
     assert isinstance(call["target_dir"], Path)
     assert call["target_dir"].name == "python"
-    assert call["sdk_source"] == "./async-durable-execution"
+    assert call["sdk_source"] == "."
     assert call["pip_args"] == ("--quiet",)
 
 

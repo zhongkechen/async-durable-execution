@@ -55,7 +55,7 @@ cd async-durable-execution
 hatch run examples:build-layer
 hatch run examples:build
 hatch run examples:generate-sam-template -- --example-name "Hello World"
-sam build --template-file async-durable-execution-examples/template.generated.json
+sam build --template-file template.generated.json
 
 AWS_REGION="${AWS_REGION:-us-east-1}"
 sam deploy \
@@ -266,9 +266,9 @@ async def test_order_workflow_in_cloud() -> None:
 
 ## 🧩 範例
 
-Lambda 耐用函數範例位於 `async-durable-execution-examples/src/async_durable_execution_examples/`。可以從 `hello_world.py` 開始，它是最小的完整事件處理常式。
+Lambda 耐用函數範例位於 `examples/`。可以從 `hello_world.py` 開始，它是最小的完整事件處理常式。
 
-`async-durable-execution-examples/test_examples/` 中的範例測試也很適合作為可執行的範本參考。可依操作或模式瀏覽：
+`test_examples/` 中的範例測試也很適合作為可執行的範本參考。可依操作或模式瀏覽：
 
 - `step/`、`wait/`、`wait_for_callback/` 與 `wait_for_condition/` 用於核心耐用操作
 - `step/steps_with_gather.py` 展示如何啟動多個步驟任務，並透過 `asyncio.gather` 一起等待

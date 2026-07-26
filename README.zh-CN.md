@@ -55,7 +55,7 @@ cd async-durable-execution
 hatch run examples:build-layer
 hatch run examples:build
 hatch run examples:generate-sam-template -- --example-name "Hello World"
-sam build --template-file async-durable-execution-examples/template.generated.json
+sam build --template-file template.generated.json
 
 AWS_REGION="${AWS_REGION:-us-east-1}"
 sam deploy \
@@ -266,9 +266,9 @@ async def test_order_workflow_in_cloud() -> None:
 
 ## 🧩 示例
 
-Lambda 持久性函数示例位于 `async-durable-execution-examples/src/async_durable_execution_examples/`。可以从 `hello_world.py` 开始，它是最小的完整事件处理程序。
+Lambda 持久性函数示例位于 `examples/`。可以从 `hello_world.py` 开始，它是最小的完整事件处理程序。
 
-`async-durable-execution-examples/test_examples/` 中的示例测试也很适合作为可执行的模板参考。可按操作或模式浏览：
+`test_examples/` 中的示例测试也很适合作为可执行的模板参考。可按操作或模式浏览：
 
 - `step/`、`wait/`、`wait_for_callback/` 与 `wait_for_condition/` 用于核心持久操作
 - `step/steps_with_gather.py` 展示如何启动多个步骤任务，并通过 `asyncio.gather` 一起等待

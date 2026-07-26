@@ -10,7 +10,7 @@ AWS Lambda durable functions extend Lambda's programming model to build multi-st
 **Packages:**
 
 - **Python SDK and test runner**: `async-durable-execution`
-- **Python examples**: `async-durable-execution-examples`
+- **Python examples**: `examples`
 
 **Core Operations:**
 
@@ -783,4 +783,4 @@ Resources:
 
 - [SDK Repository](https://github.com/zhongkechen/async-durable-execution)
 - [SDK README](https://github.com/zhongkechen/async-durable-execution/blob/main/async-durable-execution/README.md)
-- [Examples Package](https://github.com/zhongkechen/async-durable-execution/tree/main/async-durable-execution-examples)
+- [Examples](https://github.com/zhongkechen/async-durable-execution/tree/main/examples)

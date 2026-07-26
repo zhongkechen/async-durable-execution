@@ -7,8 +7,10 @@ on:
   pull_request:
     branches: ["main"]
     paths:
-      - 'async-durable-execution/src/**'
-      - 'async-durable-execution-examples/**'
+      - 'async_durable_execution/**'
+      - 'examples/**'
+      - 'test_examples/**'
+      - 'pyproject.toml'
       - 'scripts/**'
       - '.github/workflows/e2e-tests.yml'
   workflow_dispatch:
@@ -62,7 +64,7 @@ jobs:
       run: |
         python scripts/generate_sam_template.py \
           --runtime "python${{ matrix.python-version }}" \
-          --output async-durable-execution-examples/template.generated.json
+          --output template.generated.json
 
     - name: Deploy all examples with SAM
       id: deploy
@@ -77,7 +79,7 @@ jobs:
         STACK_NAME=$(echo "$STACK_NAME" | tr -cd '[:alnum:]-' | cut -c1-128)
 
         echo "Building SAM application"
-        sam build --template-file async-durable-execution-examples/template.generated.json
+        sam build --template-file template.generated.json
 
         echo "Deploying stack $STACK_NAME with function prefix $FUNCTION_NAME_PREFIX"
         sam deploy \

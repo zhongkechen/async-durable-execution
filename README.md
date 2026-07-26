@@ -58,7 +58,7 @@ cd async-durable-execution
 hatch run examples:build-layer
 hatch run examples:build
 hatch run examples:generate-sam-template -- --example-name "Hello World"
-sam build --template-file async-durable-execution-examples/template.generated.json
+sam build --template-file template.generated.json
 
 AWS_REGION="${AWS_REGION:-us-east-1}"
 sam deploy \
@@ -271,9 +271,9 @@ async def test_order_workflow_in_cloud() -> None:
 
 ## 🧩 Examples
 
-Example durable functions live in `async-durable-execution-examples/src/async_durable_execution_examples/`. Start with `hello_world.py` for the smallest complete handler.
+Example durable functions live in `examples/`. Start with `hello_world.py` for the smallest complete handler.
 
-The example tests in `async-durable-execution-examples/test_examples/` are also useful as executable recipes. Browse them by operation or pattern:
+The example tests in `test_examples/` are also useful as executable recipes. Browse them by operation or pattern:
 
 - `step/`, `wait/`, `wait_for_callback/`, and `wait_for_condition/` for core durable operations
 - `step/steps_with_gather.py` for starting multiple step tasks and awaiting them together with `asyncio.gather`

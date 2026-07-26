@@ -33,7 +33,7 @@ def build_conformance_bundle(
             "--no-compile",
             "--target",
             str(output_dir),
-            str(repo_dir / "async-durable-execution"),
+            str(repo_dir),
             "boto3>=1.42.90,<1.43.1",
         ],
         check=True,

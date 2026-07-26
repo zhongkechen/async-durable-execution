@@ -1,23 +1,23 @@
 # Releasing
 
-This document describes how to cut a release for this monorepo and how the automated PyPI publishing workflow is triggered.
+This document describes how to cut a release and how the automated PyPI publishing workflow is triggered.
 
-## Packages
+## Package
 
-This monorepo contains the following packages:
+This repository publishes the following package:
 
 | Package | Path | Tag Prefix |
 |---------|------|------------|
-| `async-durable-execution` | `async-durable-execution` | `v` |
-| `async-durable-execution-examples` | `async-durable-execution-examples` | `v` |
+| `async-durable-execution` | `.` | `v` |
 
 ## Versioning
 
-All packages share a single version number defined in the repository root:
+The package version is defined in the repository root:
 
-- Shared version source: `VERSION.py`
+- Version source: `VERSION.py`
 
-Package metadata reads from `VERSION.py`, so bumping that file updates the SDK and examples package together. Repository helper scripts also read this shared version where needed.
+Package metadata reads from `VERSION.py`. Repository helper scripts also read
+this version where needed.
 
 ## Cutting a Release
 
@@ -36,9 +36,9 @@ Update `__version__` in `VERSION.py`. Commit and merge to `main`.
 
 ### Tagging Convention
 
-The tag should match the shared monorepo version exactly:
+The tag should match the package version exactly:
 
-- **All packages:** `v<version>` (for example, `v2.0.0a2`)
+- **Package:** `v<version>` (for example, `v2.0.0a2`)
 
 Examples:
 
@@ -56,11 +56,9 @@ Creating a GitHub Release triggers the [`pypi-publish.yml`](.github/workflows/py
 
 The workflow runs on the `release: [published]` event, so it fires whenever a release is published on GitHub — no manual intervention is needed beyond creating the release.
 
-> **Note:** The current workflow publishes `async-durable-execution` to PyPI. The examples package shares the same repo version in `VERSION.py`, but it is not part of the current PyPI publish matrix.
-
 Creating a GitHub Release also triggers the [`lambda-layer-publish.yml`](.github/workflows/lambda-layer-publish.yml) workflow automatically. The workflow:
 
-1. **Builds** a Lambda layer zip from the release tag using the local `async-durable-execution` package.
+1. **Builds** a Lambda layer zip from the release tag using the local root package.
 2. **Discovers** all enabled commercial and China AWS Regions in the publishing accounts, unless Regions are provided explicitly.
 3. **Publishes** a new Lambda layer version in each Region with compatible runtimes `python3.10` through `python3.14`.
 4. **Shares** each layer version with the account ID configured in the `AWS_ACCOUNT_ID` secret, with the China account ID configured in `AWS_ACCOUNT_ID_CN` for China Regions, with principals entered in the manual workflow dispatch form, or with principals configured in `LAMBDA_LAYER_SHARE_PRINCIPALS`.
@@ -79,7 +77,7 @@ Optional repository variables:
 
 PyPI trusted publishing is configured per project, so `async-durable-execution` needs a matching publisher entry in PyPI.
 
-For the current workflow, each PyPI project should trust the following GitHub Actions publisher settings:
+For the current workflow, the PyPI project should trust the following GitHub Actions publisher settings:
 
 - Owner: `zhongkechen`
 - Repository: `async-durable-execution`
@@ -92,7 +90,7 @@ If PyPI returns `invalid-publisher`, compare the failing job's OIDC claims with 
 
 ## Release Notes Format
 
-Release notes should document the monorepo version being released. Use the following structure:
+Release notes should document the package version being released. Use the following structure:
 
 ```markdown
 ## async-durable-execution v2.0.0a2
@@ -119,4 +117,4 @@ Before publishing a release:
 - [ ] CI checks pass on `main`
 - [ ] Release notes written for the version being released
 - [ ] Tag follows the naming convention (`vX.Y.Z` or `vX.Y.ZaN`)
-- [ ] Trusted publisher exists on both PyPI projects with repository `zhongkechen/async-durable-execution`, workflow `.github/workflows/pypi-publish.yml`, and the package-specific environment name
+- [ ] Trusted publisher exists on PyPI with repository `zhongkechen/async-durable-execution`, workflow `.github/workflows/pypi-publish.yml`, and environment `async-durable-execution`
