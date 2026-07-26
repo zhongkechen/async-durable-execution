@@ -10,7 +10,14 @@ description = "Community-maintained durable execution SDK for AWS Lambda in Pyth
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-keywords = []
+keywords = [
+  "asyncio",
+  "aws",
+  "durable-execution",
+  "lambda",
+  "serverless",
+  "workflow",
+]
 authors = [{ name = "Zhongke Chen" }]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
@@ -69,19 +76,19 @@ dependencies = [
 all = "pytest {args}"
 cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=async_durable_execution --cov=scripts {args}"
 cov-html = "pytest --cov-report=term-missing --cov-report=html:site/coverage --cov-report=json:site/coverage/coverage.json --cov-config=pyproject.toml --cov=async_durable_execution --cov=scripts {args}"
-sdk = "pytest test_sdk {args}"
-sdk-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=async_durable_execution --cov-fail-under=98 test_sdk {args}"
-runner = "pytest test_sdk/runner {args}"
-runner-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=async_durable_execution/runner --cov-fail-under=95 test_sdk/runner {args}"
+sdk = "pytest tests {args}"
+sdk-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=async_durable_execution --cov-fail-under=98 tests {args}"
+runner = "pytest tests/runner {args}"
+runner-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=async_durable_execution/runner --cov-fail-under=95 tests/runner {args}"
 examples = "pytest test_examples {args}"
 examples-integration = "pytest --runner-mode=cloud test_examples -v {args}"
-typecheck = "mypy --install-types --non-interactive --warn-unused-ignores {args:async_durable_execution test_sdk scripts}"
+typecheck = "mypy --install-types --non-interactive --warn-unused-ignores {args:async_durable_execution tests scripts}"
 
 [tool.pytest.ini_options]
 # Declare custom markers to avoid warnings with --strict-markers
 addopts = "-v --strict-markers --import-mode=importlib"
 testpaths = [
-    "test_sdk",
+    "tests",
     "test_examples",
     "scripts/test_scripts",
 ]
@@ -121,7 +128,7 @@ dependencies = [
 ]
 
 [tool.hatch.envs.test-pypi-examples.scripts]
-test = "pytest test_examples {args}"
+test = "python scripts/run_pypi_example_tests.py {args}"
 
 [tool.hatch.envs.examples]
 features = ["aioboto"]
@@ -167,7 +174,7 @@ force-single-line = false
 lines-after-imports = 2
 
 [tool.ruff.lint.per-file-ignores]
-"test_sdk/**" = [
+"tests/**" = [
   "ARG001",
   "ARG002",
   "ARG005",

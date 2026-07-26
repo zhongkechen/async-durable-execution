@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - "async_durable_execution/**"
-      - "test_sdk/**"
+      - "tests/**"
       - "examples/**"
       - "test_examples/**"
       - "docs/**"
@@ -17,7 +17,7 @@ on:
     branches: [main]
     paths:
       - "async_durable_execution/**"
-      - "test_sdk/**"
+      - "tests/**"
       - "examples/**"
       - "test_examples/**"
       - "docs/**"

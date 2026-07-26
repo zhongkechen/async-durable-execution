@@ -18,7 +18,7 @@ The SDK, examples, and their tests all live at the repository root:
 
 ```text
 async_durable_execution/  # Core SDK plus local/cloud runner helpers
-test_sdk/                 # SDK and runner tests
+tests/                    # SDK and runner tests
 examples/                 # Example durable functions
 test_examples/            # Local and cloud example tests
 ```
@@ -114,10 +114,10 @@ hatch run test:all
 hatch run test:sdk
 
 # A single test file
-hatch run test:sdk test_sdk/path_to_test_module.py
+hatch run test:sdk tests/path_to_test_module.py
 
 # A single test
-hatch run test:sdk test_sdk/path_to_test_module.py::test_name
+hatch run test:sdk tests/path_to_test_module.py::test_name
 
 # Filter by pattern
 hatch run test:all -k pattern
@@ -140,11 +140,11 @@ hatch run test:all --pdb
 ### Test layout
 
 - Put tests in the test directory that matches the code you are changing. For
-  the SDK package, mirror the source layout under `test_sdk/`: primitive
+  the SDK package, mirror the source layout under `tests/`: primitive
   operation tests live in
   `primitive/`, composite operation tests live in `composite/`, and shared model
-  or package-level behavior stays at the `test_sdk/` root. Runner tests live
-  under `test_sdk/runner/`.
+  or package-level behavior stays at the `tests/` root. Runner tests live
+  under `tests/runner/`.
 - Use filenames ending in `_test.py`.
 - Prefer adding focused unit tests near the affected area, and add integration
   coverage when behavior spans multiple components.

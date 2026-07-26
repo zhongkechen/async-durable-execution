@@ -4,11 +4,11 @@ import hashlib
 
 import pytest
 
-from scripts.function_naming import HASH_LENGTH
-from scripts.function_naming import HANDLER_PACKAGE_PREFIX
-from scripts.function_naming import LEGACY_HANDLER_PACKAGE_PREFIX
-from scripts.function_naming import to_function_name_suffix
-from scripts.function_naming import to_logical_id
+from examples.function_naming import HASH_LENGTH
+from examples.function_naming import HANDLER_PACKAGE_PREFIX
+from examples.function_naming import LEGACY_HANDLER_PACKAGE_PREFIX
+from examples.function_naming import to_function_name_suffix
+from examples.function_naming import to_logical_id
 
 
 def test_to_logical_id_removes_handler_suffix_and_separators() -> None:
