@@ -55,21 +55,48 @@ running again.
 
 ## Execution Model
 
+A durable workflow is **replayed**, not resumed from an in-memory Python stack.
+When a wait finishes or an interrupted execution continues, Lambda invokes the
+handler again from its first line. The SDK uses the saved execution history to
+avoid repeating completed durable operations.
+
 ```mermaid
-flowchart LR
-    A[Lambda event] --> B[Async handler]
-    B --> C[Checkpointed step]
-    C --> D[Wait or callback]
-    D --> E[Resume and replay]
-    E --> F[Next step]
-    C -. save result .-> S[(AWS Lambda durable state)]
-    D -. suspend .-> S
-    S -. restore history .-> E
+sequenceDiagram
+    participant L as AWS Lambda
+    participant H as handler()
+    participant S as SDK and durable history
+
+    L->>H: First invocation
+    H->>S: step("reserve-inventory")
+    S-->>H: Run it and save the result
+    H->>S: wait("payment-window")
+    S-->>L: Save progress and suspend
+
+    Note over L,S: The payment window ends
+
+    L->>H: Invoke again from the first line
+    H->>S: step("reserve-inventory")
+    S-->>H: Return the saved result
+    H->>S: wait("payment-window")
+    S-->>H: The wait is complete
+    H-->>L: Continue and return the response
 ```
 
-Code outside durable operations can replay. Keep it deterministic and put API
-calls, database access, random values, clock reads, and other side effects
-inside checkpointed steps.
+In the example above, `reserve_inventory()` runs only during the first
+invocation. On the second invocation, ordinary handler code before the wait
+runs again, but `step()` returns the saved reservation instead of calling
+`reserve_inventory()` again.
+
+This gives workflow code two different behaviors:
+
+- **Ordinary Python code replays.** For the same event and saved results, it
+  must make the same decisions and call durable operations in the same order.
+- **Durable operations use history.** Completed steps return saved results, and
+  waits or callbacks continue from their recorded state.
+
+Keep API calls, database access, filesystem operations, random values, UUIDs,
+clock reads, and other side effects inside checkpointed steps. Standard
+`logging` calls are replay-aware and can remain in the handler.
 
 ## Next Steps
 
