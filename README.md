@@ -1,7 +1,7 @@
 # Async Durable Execution for Python
 
-[![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-555555)](README.zh-CN.md)
-[![繁體中文](https://img.shields.io/badge/Language-%E7%B9%81%E9%AB%94%E4%B8%AD%E6%96%87-555555)](README.zh-TW.md)
+[![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-555555)](https://github.com/zhongkechen/async-durable-execution/blob/main/README.zh-CN.md)
+[![繁體中文](https://img.shields.io/badge/Language-%E7%B9%81%E9%AB%94%E4%B8%AD%E6%96%87-555555)](https://github.com/zhongkechen/async-durable-execution/blob/main/README.zh-TW.md)
 [![Quick start](https://img.shields.io/badge/Quick_start-Python-3776AB?logo=python&logoColor=white)](#quick-start)
 [![Read the docs](https://img.shields.io/badge/Read_the_docs-API_reference-0A7BBB)](https://zhongkechen.github.io/async-durable-execution/)
 
@@ -10,7 +10,7 @@
 [![Coverage](https://zhongkechen.github.io/async-durable-execution/coverage/badge.svg)](https://zhongkechen.github.io/async-durable-execution/coverage/)
 [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/zhongkechen/async-durable-execution/blob/main/LICENSE)
 
 **Build fully compliant, long-running AWS Lambda workflows with native
 `async`/`await`.** Checkpoint state automatically, pause without active compute,
@@ -22,6 +22,11 @@ and resume after failures without running a workflow server.
 [AWS Durable Execution conformance suite](https://github.com/aws/aws-durable-execution-conformance-tests).**
 Every upstream requirement is continuously validated against deployed Lambda
 functions in CI.
+
+The project also maintains extensive local and cloud runner coverage, publishes
+generated [API documentation](https://zhongkechen.github.io/async-durable-execution/)
+and [coverage reports](https://zhongkechen.github.io/async-durable-execution/coverage/),
+and includes executable examples for async durable workflows.
 
 > Community-maintained async fork of the Apache-2.0 licensed
 > [AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/).
@@ -37,15 +42,14 @@ composition, and APIs designed for modern Python applications.
 ## ✨ Key Features
 
 - **[Async-first durable code](https://zhongkechen.github.io/async-durable-execution/official-python-sdk-comparison.html#programming-model)** - Compared with the official AWS SDK, user-provided durable handlers, steps, child contexts, `flow` nodes, callback submitters, map item functions, parallel branches, and wait-for-condition checks are written with `async def`.
-- **[Operations not available in the official SDK](https://zhongkechen.github.io/async-durable-execution/api/operations.html#sdk-extensions)** - This SDK adds [replay-safe helpers](https://zhongkechen.github.io/async-durable-execution/api/operations.html#replay-safe-helper-values) (`random()`, `now()`, `timestamp()`, and `uuid()`), [durable self-invocation](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#recursive-self-invocation) (`recurse()`), and [declarative DAG execution](https://zhongkechen.github.io/async-durable-execution/api/operations.html#declarative-dag-workflows) (`flow()`).
+- **[Operations not available in the official SDK](https://zhongkechen.github.io/async-durable-execution/api/operations.html#sdk-extensions)** - This SDK adds [replay-safe helpers](https://zhongkechen.github.io/async-durable-execution/api/operations.html#replay-safe-helper-values) (`random()`, `now()`, `timestamp()`, and `uuid()`) and [durable self-invocation](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#recursive-self-invocation) (`recurse()`).
 - **[Declarative DAG workflows](https://zhongkechen.github.io/async-durable-execution/api/dag.html#quick-start)** - Define acyclic workflows with typed node inputs, inferred or conditional dependencies, failure routes, and durable operations inside each node. The SDK validates the graph before execution and skips nodes that are not required by the selected outputs.
 - **[Background operation tasks](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#background-operation-tasks)** - Durable operations such as `step(...)`, `wait(...)`, `invoke(...)`, `recurse(...)`, `run_in_child_context(...)`, and `flow(...)` return `asyncio.Task` objects, so independent operations can run in the background and be awaited together with `asyncio.gather` without using `parallel()` or `map()`.
-- **[Simplified operation APIs](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#api-mapping)** - The `v2` API removes config wrapper objects in favor of direct keyword arguments and clearer call sites, including keyword-only operation names.
+- **[Pythonic operation parameters](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#api-mapping)** - Operations use direct keyword arguments, standard Python types such as `datetime.timedelta`, and keyword-only names instead of configuration wrapper objects.
 - **[Integrated local and cloud runner](https://zhongkechen.github.io/async-durable-execution/async_durable_execution/runner.html#local-and-cloud-runners)** - Runner functionality now ships through `async_durable_execution`, with separate local and cloud runner factories and typed test result helpers.
 - **[Async Lambda client support](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#lambda-client-selection)** - Install the optional `aioboto` extra to use an async Lambda client; otherwise the SDK uses the bundled sync client through an async adapter.
 - **[Replay-aware logging with stdlib logging](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#logging)** - Standard `logging` loggers are enriched by durable context filtering so workflow logs remain replay safe.
 - **[Lambda layer packaging](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#lambda-layer-packaging)** - The repo includes tooling and workflows to build and publish an SDK Lambda layer for functions that do not vendor dependencies directly.
-- **[Broader validation and docs](https://github.com/zhongkechen/async-durable-execution/blob/main/CONTRIBUTING.md#development-workflow)** - The project now includes expanded local/cloud runner coverage, generated API docs, coverage publishing, and updated examples for async durable workflows.
 
 ## 🚀 Quick Start
 
@@ -82,14 +86,12 @@ logger = logging.getLogger(__name__)
 
 @durable_callable
 async def validate_order(order_id: str) -> dict:
-    await asyncio.sleep(0)
     logger.info("Validating order", extra={"order_id": order_id})
     return {"order_id": order_id, "valid": True}
 
 
 @durable_callable
 async def create_receipt(order_id: str) -> dict:
-    await asyncio.sleep(0)
     logger.info("Creating receipt", extra={"order_id": order_id})
     return {"receipt_id": f"receipt-{order_id}", "order_id": order_id}
 
@@ -111,10 +113,6 @@ async def handler(event: dict) -> dict:
     return {"status": "approved", "order_id": order_id, "receipt": receipt}
 ```
 
-Workflow bodies supplied to the SDK must be async, including durable handlers, step callables, `flow` node bodies, `map()` item functions, bound `parallel()` branch callables, child contexts, callback submitters, and wait-for-condition checks. Those callables can be functions, instance methods, class methods, or static methods. Durable context operations are awaitable and run on the same event loop as your handler.
-
-Declarative and configuration hooks use synchronous callables instead, including `@durable_dag` definitions, retry and polling strategies, custom completion callbacks, item namers, and summary generators. Do not define these hooks with `async def`; DAG definitions and other hooks that control replayed workflow structure or metadata must remain deterministic.
-
 Durable operations return `asyncio.Task` objects. If you call an operation without immediately awaiting it, it is scheduled to run in the background and can be awaited later. This lets independent operations run concurrently with normal `asyncio` patterns:
 
 ```python
@@ -124,8 +122,6 @@ pricing_tasks = [
 ]
 priced_items = await asyncio.gather(*pricing_tasks)
 ```
-
-Handler input is deserialized from the durable execution payload before your code runs. Empty or whitespace payloads are normalized to `{}`, and malformed JSON fails the invocation before user code executes.
 
 ## 🧪 Testing Durable Functions
 
@@ -209,18 +205,18 @@ The example tests in `test_examples/` are also useful as executable recipes. Bro
 - `flow/`, `map/`, `parallel/`, and `run_in_child_context/` for composition patterns
 - `invoke/`, including `invoke/recurse.py`, `with_retry/`, `callback/`, and `logger_example/` for integrations and operational behavior
 
-For the developer workflow to run or deploy example integration tests, see the [Contributing Guide](CONTRIBUTING.md#example-integration-tests-and-deployment).
+For the developer workflow to run or deploy example integration tests, see the [Contributing Guide](https://github.com/zhongkechen/async-durable-execution/blob/main/CONTRIBUTING.md#example-integration-tests-and-deployment).
 
 ## 📚 Documentation
 
 - **[Documentation Site](https://zhongkechen.github.io/async-durable-execution/)** - Searchable guides and API reference generated from Python docstrings
-- **[DAG Workflow API](docs/api/dag.md)** - Build declarative workflows with `flow()`, typed node inputs, conditional dependencies, and failure routes
-- **[Official Python SDK Comparison](docs/official-python-sdk-comparison.md)** - Side-by-side comparison with the official AWS Durable Execution Python SDK
-- **[Migration Guide](docs/migrating-from-official-python-sdk.md)** - Move from the official synchronous Python SDK to this async-first SDK
-- **[Using Synchronous Code](docs/using-synchronous-code.md)** - Wrap existing synchronous business logic and blocking clients safely
-- **[Advanced Usage](docs/advanced-usage.md)** - Explore background operation tasks, batch completion conditions, Lambda clients, and Lambda layers
-- **[Runner Architecture](docs/runner-architecture.md)** - Local and cloud runner execution flow, components, and diagrams
-- **[Contributing Guide](CONTRIBUTING.md)** - Development workflow, Hatch commands, testing, and pull request guidance
+- **[DAG Workflow API](https://zhongkechen.github.io/async-durable-execution/api/dag.html)** - Build declarative workflows with `flow()`, typed node inputs, conditional dependencies, and failure routes
+- **[Official Python SDK Comparison](https://zhongkechen.github.io/async-durable-execution/official-python-sdk-comparison.html)** - Side-by-side comparison with the official AWS Durable Execution Python SDK
+- **[Migration Guide](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html)** - Move from the official synchronous Python SDK to this async-first SDK
+- **[Using Synchronous Code](https://zhongkechen.github.io/async-durable-execution/using-synchronous-code.html)** - Wrap existing synchronous business logic and blocking clients safely
+- **[Advanced Usage](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html)** - Explore background operation tasks, batch completion conditions, Lambda clients, and Lambda layers
+- **[Runner Architecture](https://zhongkechen.github.io/async-durable-execution/runner-architecture.html)** - Local and cloud runner execution flow, components, and diagrams
+- **[Contributing Guide](https://github.com/zhongkechen/async-durable-execution/blob/main/CONTRIBUTING.md)** - Development workflow, Hatch commands, testing, and pull request guidance
 
 ## References
 
@@ -232,8 +228,8 @@ For the developer workflow to run or deploy example integration tests, see the [
 - [Bug report](https://github.com/zhongkechen/async-durable-execution/issues/new?template=bug_report.yml)
 - [Feature request](https://github.com/zhongkechen/async-durable-execution/issues/new?template=feature_request.yml)
 - [Documentation feedback](https://github.com/zhongkechen/async-durable-execution/issues/new?template=documentation.yml)
-- [Contributing guide](CONTRIBUTING.md)
+- [Contributing guide](https://github.com/zhongkechen/async-durable-execution/blob/main/CONTRIBUTING.md)
 
 ## 📄 License
 
-See the [LICENSE](LICENSE) file for our project's licensing.
+See the [LICENSE](https://github.com/zhongkechen/async-durable-execution/blob/main/LICENSE) file for our project's licensing.

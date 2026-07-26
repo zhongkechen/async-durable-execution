@@ -1,7 +1,7 @@
 # Python 非同步持久性執行
 
-[![English](https://img.shields.io/badge/Language-English-555555)](README.md)
-[![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-555555)](README.zh-CN.md)
+[![English](https://img.shields.io/badge/Language-English-555555)](https://github.com/zhongkechen/async-durable-execution/blob/main/README.md)
+[![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-555555)](https://github.com/zhongkechen/async-durable-execution/blob/main/README.zh-CN.md)
 [![Quick start](https://img.shields.io/badge/Quick_start-Python-3776AB?logo=python&logoColor=white)](#quick-start)
 [![Read the docs](https://img.shields.io/badge/Read_the_docs-API_reference-0A7BBB)](https://zhongkechen.github.io/async-durable-execution/)
 
@@ -10,7 +10,7 @@
 [![Coverage](https://zhongkechen.github.io/async-durable-execution/coverage/badge.svg)](https://zhongkechen.github.io/async-durable-execution/coverage/)
 [![PyPI - Version](https://img.shields.io/pypi/v/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/async-durable-execution.svg)](https://pypi.org/project/async-durable-execution)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/zhongkechen/async-durable-execution/blob/main/LICENSE)
 
 **使用原生 `async`/`await` 建置完全符合 AWS Durable Execution 規範且可長時間執行的
 AWS Lambda 工作流程。** 自動為狀態建立檢查點，無需持續運算即可暫停，並在故障後恢復執行，
@@ -21,6 +21,11 @@ AWS Lambda 工作流程。** 自動為狀態建立檢查點，無需持續運算
 **完全符合
 [AWS Durable Execution 一致性測試套件](https://github.com/aws/aws-durable-execution-conformance-tests)。**
 所有上游需求都會在 CI 中針對已部署的 Lambda 函數持續驗證。
+
+專案也維護完整的本機與雲端執行器測試覆蓋，發布產生的
+[API 文件](https://zhongkechen.github.io/async-durable-execution/)與
+[覆蓋率報告](https://zhongkechen.github.io/async-durable-execution/coverage/)，
+並提供非同步耐用工作流程的可執行範例。
 
 > 這是採用 Apache-2.0 授權的
 > [AWS Durable Execution Python SDK](https://pypi.org/project/aws-durable-execution-sdk-python/)
@@ -33,15 +38,14 @@ AWS Lambda 工作流程。** 自動為狀態建立檢查點，無需持續運算
 ## ✨ 主要功能
 
 - **[非同步優先的耐用程式碼](https://zhongkechen.github.io/async-durable-execution/official-python-sdk-comparison.html#programming-model)** - 與官方 AWS SDK 相比，使用者提供的耐用事件處理常式、步驟、子內容、`flow` 節點、回呼提交器、`map()` 項目函式、`parallel()` 分支與等待條件檢查都使用 `async def` 撰寫。
-- **[官方 SDK 未提供的擴充操作](https://zhongkechen.github.io/async-durable-execution/api/operations.html#sdk-extensions)** - 本 SDK 新增[重播安全輔助操作](https://zhongkechen.github.io/async-durable-execution/api/operations.html#replay-safe-helper-values)（`random()`、`now()`、`timestamp()` 與 `uuid()`）、[耐用自我呼叫](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#recursive-self-invocation)（`recurse()`），以及[宣告式 DAG 執行](https://zhongkechen.github.io/async-durable-execution/api/operations.html#declarative-dag-workflows)（`flow()`）。
+- **[官方 SDK 未提供的擴充操作](https://zhongkechen.github.io/async-durable-execution/api/operations.html#sdk-extensions)** - 本 SDK 新增[重播安全輔助操作](https://zhongkechen.github.io/async-durable-execution/api/operations.html#replay-safe-helper-values)（`random()`、`now()`、`timestamp()` 與 `uuid()`）和[耐用自我呼叫](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#recursive-self-invocation)（`recurse()`）。
 - **[宣告式 DAG 工作流程](https://zhongkechen.github.io/async-durable-execution/api/dag.html#quick-start)** - 使用具型別的節點輸入、推導或條件相依性、失敗路由和節點內耐用操作來定義無環工作流程。SDK 會在執行前驗證圖，並略過所選輸出未相依的節點。
 - **[背景操作任務](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#background-operation-tasks)** - `step(...)`、`wait(...)`、`invoke(...)`、`recurse(...)`、`run_in_child_context(...)` 與 `flow(...)` 等耐用操作會傳回 `asyncio.Task` 物件，因此獨立操作可以在背景執行，並透過 `asyncio.gather` 一起等待，無需使用 `parallel()` 或 `map()`。
-- **[簡化的耐用操作 API](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#api-mapping)** - `v2` API 移除組態包裝物件，改用直接的關鍵字引數與更清楚的呼叫位置，包括僅限關鍵字的操作名稱。
+- **[符合 Python 慣例的操作參數](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#api-mapping)** - 操作直接使用關鍵字引數、`datetime.timedelta` 等標準 Python 型別及僅限關鍵字的名稱，無需組態包裝物件。
 - **[整合本機與雲端執行器](https://zhongkechen.github.io/async-durable-execution/async_durable_execution/runner.html#local-and-cloud-runners)** - 執行器功能現在透過 `async_durable_execution` 提供，包含獨立的本機與雲端執行器 factory，以及具型別的測試結果輔助物件。
 - **[支援非同步 Lambda 用戶端](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#lambda-client-selection)** - 安裝選用的 `aioboto` extra 即可使用非同步 Lambda 用戶端；否則 SDK 會透過非同步配接器使用內建的同步用戶端。
 - **[以標準函式庫 logging 提供重播感知記錄](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#logging)** - 標準 `logging` logger 會由耐用內容篩選器強化，讓工作流程記錄在重播時保持安全。
 - **[Lambda 層打包](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#lambda-layer-packaging)** - 儲存庫包含建置與發布 SDK Lambda 層的工具和工作流程，適用於不直接封裝相依套件的函式。
-- **[更完整的驗證與文件](https://github.com/zhongkechen/async-durable-execution/blob/main/CONTRIBUTING.md#development-workflow)** - 專案現在包含擴充後的本機/雲端執行器覆蓋、產生的 API 文件、覆蓋率發布，以及針對非同步 Lambda 耐用函數更新的範例。
 
 <a id="quick-start"></a>
 
@@ -80,14 +84,12 @@ logger = logging.getLogger(__name__)
 
 @durable_callable
 async def validate_order(order_id: str) -> dict:
-    await asyncio.sleep(0)
     logger.info("Validating order", extra={"order_id": order_id})
     return {"order_id": order_id, "valid": True}
 
 
 @durable_callable
 async def create_receipt(order_id: str) -> dict:
-    await asyncio.sleep(0)
     logger.info("Creating receipt", extra={"order_id": order_id})
     return {"receipt_id": f"receipt-{order_id}", "order_id": order_id}
 
@@ -109,10 +111,6 @@ async def handler(event: dict) -> dict:
     return {"status": "approved", "order_id": order_id, "receipt": receipt}
 ```
 
-提供給 SDK 的工作流程主體必須是非同步的，包括耐用事件處理常式、步驟可呼叫物件、`flow` 節點主體、`map()` 項目函式、繫結的 `parallel()` 分支可呼叫物件、子內容、回呼提交器與等待條件檢查。這些可呼叫物件可以是函式、實例方法、類別方法或靜態方法。耐用內容操作是可 await 的，並與事件處理常式在同一個 event loop 上執行。
-
-宣告式定義和設定掛鉤則使用同步可呼叫物件，包括 `@durable_dag` 定義、重試與輪詢策略、自訂完成回呼、項目命名器和摘要產生器。不要使用 `async def` 定義這些掛鉤；DAG 定義以及控制重播期間工作流程結構或中繼資料的其他掛鉤必須保持確定性。
-
 耐用操作會傳回 `asyncio.Task` 物件。如果呼叫操作後沒有立即等待它，該操作會被排程在背景執行，之後仍可等待其結果。這讓獨立操作可以透過一般 `asyncio` 模式並行執行：
 
 ```python
@@ -122,8 +120,6 @@ pricing_tasks = [
 ]
 priced_items = await asyncio.gather(*pricing_tasks)
 ```
-
-事件處理常式輸入會在你的程式碼執行前，先從持久性執行有效載荷反序列化。空白或只包含空白字元的有效載荷會正規化為 `{}`，格式錯誤的 JSON 則會在使用者程式碼執行前讓呼叫失敗。
 
 ## 🧪 測試 Lambda 耐用函數
 
@@ -207,18 +203,18 @@ Lambda 耐用函數範例位於 `examples/`。可以從 `hello_world.py` 開始�
 - `flow/`、`map/`、`parallel/` 與 `run_in_child_context/` 用於組合模式
 - `invoke/`（包括 `invoke/recurse.py`）、`with_retry/`、`callback/` 與 `logger_example/` 用於整合與執行行為
 
-如需了解執行或部署範例整合測試的開發者工作流程，請參閱[貢獻指南](CONTRIBUTING.md#example-integration-tests-and-deployment)。
+如需了解執行或部署範例整合測試的開發者工作流程，請參閱[貢獻指南](https://github.com/zhongkechen/async-durable-execution/blob/main/CONTRIBUTING.md#example-integration-tests-and-deployment)。
 
 ## 📚 文件
 
 - **[文件網站](https://zhongkechen.github.io/async-durable-execution/)** - 可搜尋的指南與從 Python docstring 產生的 API 參考
-- **[DAG 工作流程 API](docs/api/dag.md)** - 使用 `flow()`、具型別的節點輸入、條件相依性和失敗路由建構宣告式工作流程
-- **[官方 Python SDK 比較](docs/official-python-sdk-comparison.md)** - 與官方 AWS Durable Execution Python SDK 的並排比較
-- **[遷移指南](docs/migrating-from-official-python-sdk.md)** - 從官方同步 Python SDK 遷移到這個非同步優先 SDK
-- **[使用同步程式碼](docs/using-synchronous-code.md)** - 安全包裝既有同步業務邏輯與阻塞式用戶端
-- **[進階用法](docs/advanced-usage.md)** - 瞭解背景操作任務、批次完成條件、Lambda 用戶端與 Lambda 層
-- **[執行器架構](docs/runner-architecture.md)** - 本機與雲端執行器的執行流程、元件與圖表
-- **[貢獻指南](CONTRIBUTING.md)** - 開發工作流程、Hatch 指令、測試與 pull request 指南
+- **[DAG 工作流程 API](https://zhongkechen.github.io/async-durable-execution/api/dag.html)** - 使用 `flow()`、具型別的節點輸入、條件相依性和失敗路由建構宣告式工作流程
+- **[官方 Python SDK 比較](https://zhongkechen.github.io/async-durable-execution/official-python-sdk-comparison.html)** - 與官方 AWS Durable Execution Python SDK 的並排比較
+- **[遷移指南](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html)** - 從官方同步 Python SDK 遷移到這個非同步優先 SDK
+- **[使用同步程式碼](https://zhongkechen.github.io/async-durable-execution/using-synchronous-code.html)** - 安全包裝既有同步業務邏輯與阻塞式用戶端
+- **[進階用法](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html)** - 瞭解背景操作任務、批次完成條件、Lambda 用戶端與 Lambda 層
+- **[執行器架構](https://zhongkechen.github.io/async-durable-execution/runner-architecture.html)** - 本機與雲端執行器的執行流程、元件與圖表
+- **[貢獻指南](https://github.com/zhongkechen/async-durable-execution/blob/main/CONTRIBUTING.md)** - 開發工作流程、Hatch 指令、測試與 pull request 指南
 
 ## 參考資料
 
@@ -230,8 +226,8 @@ Lambda 耐用函數範例位於 `examples/`。可以從 `hello_world.py` 開始�
 - [Bug 回報](https://github.com/zhongkechen/async-durable-execution/issues/new?template=bug_report.yml)
 - [功能請求](https://github.com/zhongkechen/async-durable-execution/issues/new?template=feature_request.yml)
 - [文件意見回饋](https://github.com/zhongkechen/async-durable-execution/issues/new?template=documentation.yml)
-- [貢獻指南](CONTRIBUTING.md)
+- [貢獻指南](https://github.com/zhongkechen/async-durable-execution/blob/main/CONTRIBUTING.md)
 
 ## 📄 授權
 
-請參閱 [LICENSE](LICENSE) 檔案以了解本專案的授權資訊。
+請參閱 [LICENSE](https://github.com/zhongkechen/async-durable-execution/blob/main/LICENSE) 檔案以了解本專案的授權資訊。

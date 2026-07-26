@@ -32,13 +32,6 @@ stack. See [recursive self-invocation](../advanced-usage.md#recursive-self-invoc
 for payload validation, recursion levels, Lambda permissions, and recursion
 protection.
 
-### Declarative DAG Workflows
-
-Use `flow()` to execute a validated graph declared with `@durable_dag`,
-`@durable_node`, and `node()`. DAG workflows support typed projections,
-inferred and conditional dependencies, failure routes, and execution pruning.
-See the [DAG workflow API](dag.md) for the complete programming model.
-
 ::: async_durable_execution
     options:
       members:
