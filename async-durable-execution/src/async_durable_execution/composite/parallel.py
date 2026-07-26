@@ -625,6 +625,19 @@ class BranchStatus(Enum):
             continues to occupy its slot.
         FAILED: The branch completed with an error. This is a terminal state
             and releases its concurrency slot.
+
+    Typical state transitions::
+
+        NOT_STARTED -> RUNNING -> COMPLETED
+                               -> FAILED
+                               -> SUSPENDED
+                               -> SUSPENDED_WITH_TIMEOUT
+        SUSPENDED_WITH_TIMEOUT -> PENDING -> RUNNING
+
+    A timed suspension transitions through ``PENDING`` when its branch is
+    resubmitted in the same invocation. An indefinitely suspended branch waits
+    for a later durable invocation, which rebuilds this in-memory state before
+    replaying the branch.
     """
 
     NOT_STARTED = "not_started"
