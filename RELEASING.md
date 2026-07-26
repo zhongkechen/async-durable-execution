@@ -12,18 +12,18 @@ This repository publishes the following package:
 
 ## Versioning
 
-The package version is defined in the repository root:
+The package version is defined in the package metadata module:
 
-- Version source: `VERSION.py`
+- Version source: `async_durable_execution/__about__.py`
 
-Package metadata reads from `VERSION.py`. Repository helper scripts also read
-this version where needed.
+Package metadata and repository helper scripts read this version where needed.
 
 ## Cutting a Release
 
 ### 1. Bump the version
 
-Update `__version__` in `VERSION.py`. Commit and merge to `main`.
+Update `__version__` in `async_durable_execution/__about__.py`. Commit and merge
+to `main`.
 
 ### 2. Create a GitHub Release
 
@@ -112,7 +112,7 @@ Keep each release note section self-contained so users can follow the release hi
 
 Before publishing a release:
 
-- [ ] Version bumped in `VERSION.py`
+- [ ] Version bumped in `async_durable_execution/__about__.py`
 - [ ] Changes merged to `main`
 - [ ] CI checks pass on `main`
 - [ ] Release notes written for the version being released
