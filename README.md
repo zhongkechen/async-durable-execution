@@ -70,7 +70,6 @@ The `aioboto` extra installs `aiobotocore`, which lets the SDK create an async L
 Create a durable Lambda handler:
 
 ```python
-import asyncio
 import logging
 from datetime import timedelta
 
@@ -116,6 +115,8 @@ async def handler(event: dict) -> dict:
 Durable operations return `asyncio.Task` objects. If you call an operation without immediately awaiting it, it is scheduled to run in the background and can be awaited later. This lets independent operations run concurrently with normal `asyncio` patterns:
 
 ```python
+import asyncio
+
 pricing_tasks = [
     step(price_line_item(item), name=f"price-{item['sku']}")
     for item in items

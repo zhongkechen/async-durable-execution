@@ -68,7 +68,6 @@ pip install "async-durable-execution[aioboto]"
 建立 Lambda 耐用函數的事件處理常式：
 
 ```python
-import asyncio
 import logging
 from datetime import timedelta
 
@@ -114,6 +113,8 @@ async def handler(event: dict) -> dict:
 耐用操作會傳回 `asyncio.Task` 物件。如果呼叫操作後沒有立即等待它，該操作會被排程在背景執行，之後仍可等待其結果。這讓獨立操作可以透過一般 `asyncio` 模式並行執行：
 
 ```python
+import asyncio
+
 pricing_tasks = [
     step(price_line_item(item), name=f"price-{item['sku']}")
     for item in items

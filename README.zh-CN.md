@@ -68,7 +68,6 @@ pip install "async-durable-execution[aioboto]"
 创建 Lambda 持久性函数的事件处理程序：
 
 ```python
-import asyncio
 import logging
 from datetime import timedelta
 
@@ -114,6 +113,8 @@ async def handler(event: dict) -> dict:
 持久操作会返回 `asyncio.Task` 对象。如果调用操作后没有立即等待它，该操作会被安排在后台运行，之后仍可等待其结果。这让独立操作可以通过常规 `asyncio` 模式并发执行：
 
 ```python
+import asyncio
+
 pricing_tasks = [
     step(price_line_item(item), name=f"price-{item['sku']}")
     for item in items
