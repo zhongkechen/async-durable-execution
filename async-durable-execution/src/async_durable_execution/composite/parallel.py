@@ -607,8 +607,40 @@ class Executable(Generic[CallableType]):
 
 
 class BranchStatus(Enum):
-    """In-memory lifecycle state for a concurrently scheduled branch."""
+    """In-memory lifecycle state for a concurrently scheduled branch.
 
+    Values:
+        NOT_STARTED: The branch has not started and does not occupy a
+            concurrency slot.
+        PENDING: A previously suspended branch is being resubmitted. It has no
+            active task but continues to occupy its original concurrency slot.
+        RUNNING: The branch has an active asyncio task and occupies a
+            concurrency slot.
+        COMPLETED: The branch completed successfully. This is a terminal state
+            and releases its concurrency slot.
+        SUSPENDED: The branch is waiting indefinitely, such as for an external
+            callback. It has no active task but continues to occupy its slot.
+        SUSPENDED_WITH_TIMEOUT: The branch is waiting until a scheduled
+            timestamp, such as for a wait or retry. It has no active task but
+            continues to occupy its slot.
+        FAILED: The branch completed with an error. This is a terminal state
+            and releases its concurrency slot.
+
+    Typical state transitions::
+
+        NOT_STARTED -> RUNNING -> COMPLETED
+                               -> FAILED
+                               -> SUSPENDED
+                               -> SUSPENDED_WITH_TIMEOUT
+        SUSPENDED_WITH_TIMEOUT -> PENDING -> RUNNING
+
+    A timed suspension transitions through ``PENDING`` when its branch is
+    resubmitted in the same invocation. An indefinitely suspended branch waits
+    for a later durable invocation, which rebuilds this in-memory state before
+    replaying the branch.
+    """
+
+    NOT_STARTED = "not_started"
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -622,7 +654,7 @@ class ExecutableWithState(Generic[CallableType, ResultType]):
 
     def __init__(self, executable: Executable[CallableType]):
         self.executable = executable
-        self._status = BranchStatus.PENDING
+        self._status = BranchStatus.NOT_STARTED
         self._future: asyncio.Task[ResultType] | None = None
         self._suspend_until: float | None = None
         self._result: ResultType | None = None
@@ -632,7 +664,7 @@ class ExecutableWithState(Generic[CallableType, ResultType]):
     @property
     def future(self) -> asyncio.Task[ResultType]:
         if self._future is None:
-            msg = f"ExecutableWithState was never started. {self.executable.index}"
+            msg = f"ExecutableWithState has no active task. {self.executable.index}"
             raise InvalidStateError(msg)
         return self._future
 
@@ -679,7 +711,7 @@ class ExecutableWithState(Generic[CallableType, ResultType]):
         return self.executable.func
 
     def run(self, future: asyncio.Task[ResultType]) -> None:
-        if self._status != BranchStatus.PENDING:
+        if self._status not in {BranchStatus.NOT_STARTED, BranchStatus.PENDING}:
             msg = f"Cannot start running from {self._status}"
             raise InvalidStateError(msg)
         self._status = BranchStatus.RUNNING
@@ -965,8 +997,14 @@ class ParallelExecutor(
                     done_task,
                     scheduler,
                 )
-                if not self._completion_event.is_set():
+                if (
+                    not self._completion_event.is_set()
+                    and executable_with_state.status
+                    in {BranchStatus.COMPLETED, BranchStatus.FAILED}
+                ):
                     await submit_next_task()
+                if not self._completion_event.is_set():
+                    self._complete_if_execution_cannot_progress()
 
             task.add_done_callback(on_done)
 
@@ -1015,6 +1053,8 @@ class ParallelExecutor(
         for exe_state in self.executables_with_state:
             if exe_state.status in {BranchStatus.PENDING, BranchStatus.RUNNING}:
                 return SuspendResult.do_not_suspend()
+            if exe_state.status is BranchStatus.NOT_STARTED:
+                continue
             if exe_state.status is BranchStatus.SUSPENDED_WITH_TIMEOUT:
                 if (
                     exe_state.suspend_until
@@ -1073,17 +1113,18 @@ class ParallelExecutor(
         if completion_decision.should_complete:
             self._completion_decision = completion_decision
             self._completion_event.set()
-        else:
-            suspend_result = self.should_execution_suspend()
-            if suspend_result.should_suspend:
-                self._suspend_exception = suspend_result.exception
-                self._completion_event.set()
-            elif self._all_executables_terminal():
-                self._completion_exception = InvalidStateError(
-                    "custom should_complete did not complete after all branches "
-                    "reached terminal states"
-                )
-                self._completion_event.set()
+
+    def _complete_if_execution_cannot_progress(self) -> None:
+        suspend_result = self.should_execution_suspend()
+        if suspend_result.should_suspend:
+            self._suspend_exception = suspend_result.exception
+            self._completion_event.set()
+        elif self._all_executables_terminal():
+            self._completion_exception = InvalidStateError(
+                "custom should_complete did not complete after all branches "
+                "reached terminal states"
+            )
+            self._completion_event.set()
 
     def _all_executables_terminal(self) -> bool:
         return all(
@@ -1112,14 +1153,15 @@ class ParallelExecutor(
                         )
                     )
                 case (
-                    BranchStatus.RUNNING
+                    BranchStatus.PENDING
+                    | BranchStatus.RUNNING
                     | BranchStatus.SUSPENDED
                     | BranchStatus.SUSPENDED_WITH_TIMEOUT
                 ):
                     batch_items.append(
                         BatchItem(executable.index, BatchItemStatus.STARTED)
                     )
-                case BranchStatus.PENDING:
+                case BranchStatus.NOT_STARTED:
                     continue
 
         if (
@@ -1310,7 +1352,8 @@ def parallel(
     Args:
         branches: Async zero-argument branch callables to run concurrently.
         name: Optional durable operation name.
-        max_concurrency: Optional limit for how many branches may run at once.
+        max_concurrency: Optional limit for in-flight branches. A suspended
+            branch retains its slot until it reaches a terminal state.
         completion_config: Optional completion policy. Use
             `CompletionConfig.thresholds()`, `first_successful()`,
             `all_completed()`, `all_successful()`, or `custom()`.

@@ -325,6 +325,7 @@ async def test_completion_reason_enum():
 
 async def test_branch_status_enum():
     """Test BranchStatus enum values."""
+    assert BranchStatus.NOT_STARTED.value == "not_started"
     assert BranchStatus.PENDING.value == "pending"
     assert BranchStatus.RUNNING.value == "running"
     assert BranchStatus.COMPLETED.value == "completed"
@@ -645,7 +646,7 @@ async def test_batch_result_from_dict_infer_all_completed_mixed_success_failure(
         mock_logger.warning.assert_called_once()
 
 
-async def test_batch_result_from_dict_infer_min_successful_reached_has_started():
+async def test_batch_result_from_dict_infers_min_successful_with_started_items():
     """Test BatchResult from_dict infers MIN_SUCCESSFUL_REACHED when items are still started."""
     data = {
         "all": [
@@ -793,7 +794,7 @@ async def test_executable_with_state_creation():
     exe_state = ExecutableWithState(executable)
 
     assert exe_state.executable == executable
-    assert exe_state.status == BranchStatus.PENDING
+    assert exe_state.status == BranchStatus.NOT_STARTED
     assert exe_state.index == 1
     assert exe_state.callable == executable.func
 
@@ -880,9 +881,25 @@ async def test_executable_with_state_run():
     exe_state = ExecutableWithState(executable)
     future = Future()
 
+    assert exe_state.status is BranchStatus.NOT_STARTED
     exe_state.run(future)
     assert exe_state.status == BranchStatus.RUNNING
     assert exe_state.future == future
+
+
+async def test_executable_with_state_runs_from_pending_resume():
+    """A suspended branch transitions through PENDING when resubmitted."""
+    executable = Executable(index=1, func=lambda: "test")
+    exe_state = ExecutableWithState(executable)
+    future = Future()
+
+    exe_state.suspend_with_timeout(time.time() - 1)
+    exe_state.reset_to_pending()
+    assert exe_state.status is BranchStatus.PENDING
+
+    exe_state.run(future)
+    assert exe_state.status is BranchStatus.RUNNING
+    assert exe_state.future is future
 
 
 async def test_executable_with_state_run_invalid_state():
@@ -1497,6 +1514,74 @@ async def test_concurrent_executor_does_not_start_items_after_early_completion()
     assert [item.index for item in result.all] == [0, 1]
     assert result.total_count == 2
     assert result.completion_reason is CompletionReason.FAILURE_TOLERANCE_EXCEEDED
+
+
+async def test_concurrent_executor_suspended_branch_keeps_concurrency_slot():
+    """A suspended branch prevents a pending branch from taking its slot."""
+    started = []
+
+    class TestExecutor(ParallelExecutor):
+        async def _execute_item_in_child_context(self, executor_context, executable):
+            started.append(executable.index)
+            if executable.index == 0:
+                raise SuspendExecution("waiting for callback")
+            return f"result_{executable.index}"
+
+    executables = [Executable(index, lambda: None) for index in range(2)]
+    executor = create_concurrent_executor(
+        TestExecutor,
+        executables=executables,
+        max_concurrency=1,
+        completion_config=CompletionConfig.all_completed(),
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
+        name_prefix="test_",
+        serdes=None,
+    )
+
+    with pytest.raises(SuspendExecution):
+        await executor.execute()
+
+    assert started == [0]
+    assert executor.executables_with_state[0].status is BranchStatus.SUSPENDED
+    assert executor.executables_with_state[1].status is BranchStatus.NOT_STARTED
+
+
+async def test_concurrent_executor_refills_terminal_slot_before_suspending():
+    """A terminal branch is replaced before suspension is evaluated."""
+    started = []
+    first_branch_suspended = asyncio.Event()
+
+    class TestExecutor(ParallelExecutor):
+        async def _execute_item_in_child_context(self, executor_context, executable):
+            started.append(executable.index)
+            if executable.index == 0:
+                first_branch_suspended.set()
+                raise SuspendExecution("waiting for callback")
+            if executable.index == 1:
+                await first_branch_suspended.wait()
+                return "completed"
+            raise SuspendExecution("waiting for callback")
+
+    executables = [Executable(index, lambda: None) for index in range(3)]
+    executor = create_concurrent_executor(
+        TestExecutor,
+        executables=executables,
+        max_concurrency=2,
+        completion_config=CompletionConfig.all_completed(),
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
+        name_prefix="test_",
+        serdes=None,
+    )
+
+    with pytest.raises(SuspendExecution):
+        await executor.execute()
+
+    assert started == [0, 1, 2]
+    assert executor.executables_with_state[0].status is BranchStatus.SUSPENDED
+    assert executor.executables_with_state[1].status is BranchStatus.COMPLETED
+    assert executor.executables_with_state[2].status is BranchStatus.SUSPENDED
 
 
 @pytest.mark.parametrize("invalid_max_concurrency", [0, -1, True, 1.5])
@@ -2314,8 +2399,8 @@ async def test_create_result_failed_branch():
     assert result.all[0].index == 0
 
 
-async def test_create_result_pending_branch():
-    """Test _create_result omits a PENDING branch that never started."""
+async def test_create_result_not_started_branch():
+    """Test _create_result omits a branch that never started."""
 
     class TestExecutor(ParallelExecutor):
         async def execute_item(self, child_context, executable):
@@ -2335,9 +2420,8 @@ async def test_create_result_pending_branch():
         serdes=None,
     )
 
-    # Create executable with PENDING status (default state)
+    # NOT_STARTED is the default state.
     exe_state = ExecutableWithState(executables[0])
-    # PENDING is the default state, no need to change it
     executor.executables_with_state = [exe_state]
 
     result = executor._create_result()  # noqa: SLF001
@@ -2346,6 +2430,36 @@ async def test_create_result_pending_branch():
     # NEW BEHAVIOR: With min_successful=1 and no completed items,
     # defaults to ALL_COMPLETED
     assert result.completion_reason == CompletionReason.ALL_COMPLETED
+
+
+async def test_create_result_pending_branch():
+    """Test _create_result includes a branch pending resubmission."""
+
+    class TestExecutor(ParallelExecutor):
+        async def execute_item(self, child_context, executable):
+            return f"result_{executable.index}"
+
+    executables = [Executable(0, lambda: "test")]
+    executor = create_concurrent_executor(
+        TestExecutor,
+        executables=executables,
+        max_concurrency=1,
+        completion_config=CompletionConfig(min_successful=1),
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
+        name_prefix="test_",
+        serdes=None,
+    )
+    exe_state = ExecutableWithState(executables[0])
+    exe_state.suspend_with_timeout(time.time() - 1)
+    exe_state.reset_to_pending()
+    executor.executables_with_state = [exe_state]
+
+    result = executor._create_result()  # noqa: SLF001
+
+    assert len(result.all) == 1
+    assert result.all[0].index == 0
+    assert result.all[0].status is BatchItemStatus.STARTED
 
 
 async def test_create_result_running_branch():
@@ -2471,7 +2585,7 @@ async def test_create_result_mixed_statuses():
     executables = [
         Executable(0, lambda: "test0"),  # Will be COMPLETED
         Executable(1, lambda: "test1"),  # Will be FAILED
-        Executable(2, lambda: "test2"),  # Will be PENDING
+        Executable(2, lambda: "test2"),  # Will be NOT_STARTED
         Executable(3, lambda: "test3"),  # Will be RUNNING
         Executable(4, lambda: "test4"),  # Will be SUSPENDED
         Executable(5, lambda: "test5"),  # Will be SUSPENDED_WITH_TIMEOUT
@@ -2498,7 +2612,7 @@ async def test_create_result_mixed_statuses():
     # FAILED
     exe_states[1].fail(RuntimeError("Test failure"))
 
-    # PENDING (default state, no change needed)
+    # NOT_STARTED (default state, no change needed)
 
     # RUNNING
     future = Future()
@@ -2641,10 +2755,11 @@ async def test_create_result_multiple_started_states():
             return f"result_{executable.index}"
 
     executables = [
-        Executable(0, lambda: "test0"),  # PENDING
-        Executable(1, lambda: "test1"),  # RUNNING
-        Executable(2, lambda: "test2"),  # SUSPENDED
-        Executable(3, lambda: "test3"),  # SUSPENDED_WITH_TIMEOUT
+        Executable(0, lambda: "test0"),  # NOT_STARTED
+        Executable(1, lambda: "test1"),  # PENDING
+        Executable(2, lambda: "test2"),  # RUNNING
+        Executable(3, lambda: "test3"),  # SUSPENDED
+        Executable(4, lambda: "test4"),  # SUSPENDED_WITH_TIMEOUT
     ]
     completion_config = CompletionConfig(min_successful=1)
 
@@ -2662,24 +2777,28 @@ async def test_create_result_multiple_started_states():
     # Create executables with different STARTED states
     exe_states = [ExecutableWithState(exe) for exe in executables]
 
-    # PENDING (default state)
+    # NOT_STARTED (default state)
+
+    # PENDING
+    exe_states[1].suspend_with_timeout(time.time() - 1)
+    exe_states[1].reset_to_pending()
 
     # RUNNING
     future = Future()
-    exe_states[1].run(future)
+    exe_states[2].run(future)
 
     # SUSPENDED
-    exe_states[2].suspend()
+    exe_states[3].suspend()
 
     # SUSPENDED_WITH_TIMEOUT
-    exe_states[3].suspend_with_timeout(time.time() + 5)
+    exe_states[4].suspend_with_timeout(time.time() + 5)
 
     executor.executables_with_state = exe_states
 
     result = executor._create_result()  # noqa: SLF001
 
-    assert len(result.all) == 3
-    assert [item.index for item in result.all] == [1, 2, 3]
+    assert len(result.all) == 4
+    assert [item.index for item in result.all] == [1, 2, 3, 4]
     assert all(item.status == BatchItemStatus.STARTED for item in result.all)
     assert all(item.result is None for item in result.all)
     assert all(item.error is None for item in result.all)
