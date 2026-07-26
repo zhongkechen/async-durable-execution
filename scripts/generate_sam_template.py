@@ -20,6 +20,8 @@ DEFAULT_LAMBDA_ENDPOINT = f"https://lambda.{DEFAULT_AWS_REGION}.amazonaws.com"
 DEFAULT_RUNTIME = "python3.13"
 SDK_LAYER_LOGICAL_ID = "AsyncDurableExecutionSdkLayer"
 SDK_LAYER_CONTENT_URI = "dist/async-durable-execution-layer.zip"
+# Keep deployed CloudFormation resource identities stable across package layout changes.
+EXAMPLE_LOGICAL_ID_PREFIX = "AsyncDurableExecutionExamples"
 DEFAULT_DURABLE_CONFIG = {
     "RetentionPeriodInDays": 7,
     "ExecutionTimeout": 300,
@@ -222,7 +224,10 @@ def build_template(
     }
 
     for example in examples:
-        logical_id = to_logical_id(example["handler"])
+        handler_without_package = example["handler"].removeprefix(f"{PACKAGE_PREFIX}.")
+        logical_id = (
+            f"{EXAMPLE_LOGICAL_ID_PREFIX}{to_logical_id(handler_without_package)}"
+        )
         function_name_suffix = to_function_name_suffix(example["handler"])
         properties: dict[str, Any] = {
             "CodeUri": "build/lambda/",

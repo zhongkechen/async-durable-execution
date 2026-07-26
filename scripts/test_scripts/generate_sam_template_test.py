@@ -178,7 +178,9 @@ def test_build_template_adds_layer_role_and_functions() -> None:
     assert template["Resources"][SDK_LAYER_LOGICAL_ID]["Properties"][
         "CompatibleRuntimes"
     ] == ["python3.14"]
-    function = template["Resources"]["ExamplesStepStep"]["Properties"]
+    function = template["Resources"]["AsyncDurableExecutionExamplesStepStep"][
+        "Properties"
+    ]
     assert function["Handler"] == "examples.step.step.handler"
     assert function["DurableConfig"] == {"ExecutionTimeout": 10}
     assert function["FunctionName"] == {"Fn::Sub": "${FunctionNamePrefix}StepStep"}
@@ -245,7 +247,7 @@ def test_generate_sam_template_writes_template(
     assert output_path == tmp_path / "template.json"
     template = json.loads(output_path.read_text(encoding="utf-8"))
     assert template["Globals"]["Function"]["Runtime"] == "python3.14"
-    assert "ExamplesStepStep" in template["Resources"]
+    assert "AsyncDurableExecutionExamplesStepStep" in template["Resources"]
     validate.assert_called_once_with(catalog)
 
 
@@ -275,8 +277,8 @@ def test_generate_sam_template_selects_named_example(
     )
 
     template = json.loads(output_path.read_text(encoding="utf-8"))
-    assert "ExamplesHelloWorld" in template["Resources"]
-    assert "ExamplesStepStep" not in template["Resources"]
+    assert "AsyncDurableExecutionExamplesHelloWorld" in template["Resources"]
+    assert "AsyncDurableExecutionExamplesStepStep" not in template["Resources"]
 
 
 def test_generate_sam_template_rejects_unknown_example(
