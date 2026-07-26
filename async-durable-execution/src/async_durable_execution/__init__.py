@@ -28,6 +28,7 @@ from .composite.flow import (
     durable_dag,
     durable_node,
     flow,
+    get_node_context,
     node,
 )
 from .composite.parallel import (
@@ -113,6 +114,7 @@ __all__ = [
     "durable_node",
     "flow",
     "get_current_context",
+    "get_node_context",
     "get_step_context",
     "invoke",
     "map",

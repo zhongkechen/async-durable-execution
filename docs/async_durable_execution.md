@@ -16,6 +16,7 @@ task-oriented API sections.
         - durable_execution
         - durable_callable
         - get_current_context
+        - get_node_context
         - get_step_context
         - DurableContext
         - StepContext

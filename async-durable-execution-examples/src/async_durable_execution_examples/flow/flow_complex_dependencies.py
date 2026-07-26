@@ -3,13 +3,12 @@
 from typing import Any, cast
 
 from async_durable_execution import (
-    FlowNodeContext,
     FlowNodeStatus,
     durable_dag,
     durable_execution,
     durable_node,
     flow,
-    get_current_context,
+    get_node_context,
     node,
 )
 
@@ -50,7 +49,7 @@ async def fulfill_order(
 
 @durable_node
 async def recover_order() -> str:
-    context = cast(FlowNodeContext, get_current_context())
+    context = get_node_context()
     for name in ("charge-payment", "reserve-inventory", "screen-risk"):
         result = context.get_dependency_result(name)
         if (
@@ -65,7 +64,7 @@ async def recover_order() -> str:
 
 @durable_node
 async def record_decision() -> dict[str, str]:
-    context = cast(FlowNodeContext, get_current_context())
+    context = get_node_context()
     fulfillment = context.get_dependency_result("fulfill-order")
     recovery = context.get_dependency_result("recover-order")
     risk = context.require_dependency_result("screen-risk")

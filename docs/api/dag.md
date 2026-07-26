@@ -169,23 +169,20 @@ same source as both an input and an explicit dependency is rejected.
 
 ## Reading Results for Complex Conditions
 
-For an explicit dependency, read settled direct dependency results from
-`FlowNodeContext` by stable node name. This keeps the node function independent
+For an explicit dependency, use `get_node_context()` to read settled direct
+dependency results by stable node name. This keeps the node function independent
 of `FlowNode` handles captured by the definition closure.
 
 ```python
-from typing import cast
-
 from async_durable_execution import (
-    FlowNodeContext,
     FlowNodeStatus,
-    get_current_context,
+    get_node_context,
 )
 
 
 @durable_node
 async def choose_route() -> str:
-    context = cast(FlowNodeContext, get_current_context())
+    context = get_node_context()
     for name in ("payment", "inventory", "review"):
         result = context.get_dependency_result(name)
         if result is not None and result.status is FlowNodeStatus.SUCCEEDED:
@@ -278,6 +275,7 @@ output.
         - durable_dag
         - durable_node
         - flow
+        - get_node_context
         - node
         - FlowNode
         - FlowNodeContext

@@ -20,7 +20,6 @@ from async_durable_execution import (
     DurableContext,
     ErrorObject,
     FlowDefinitionError,
-    FlowNodeContext,
     FlowNodeResult,
     FlowNodeStatus,
     FlowResult,
@@ -28,7 +27,7 @@ from async_durable_execution import (
     durable_dag,
     durable_node,
     flow,
-    get_current_context,
+    get_node_context,
     node,
 )
 from async_durable_execution.composite.flow import (
@@ -88,7 +87,7 @@ from async_durable_execution.state import ExecutionState
 
 @durable_node
 async def return_name() -> str:
-    return cast(FlowNodeContext, get_current_context()).operation_name or ""
+    return get_node_context().operation_name or ""
 
 
 class _FatalFlowSignal(BaseException):

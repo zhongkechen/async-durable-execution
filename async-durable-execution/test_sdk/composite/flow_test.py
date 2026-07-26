@@ -31,6 +31,7 @@ from async_durable_execution import (
     durable_node,
     flow,
     get_current_context,
+    get_node_context,
     node,
     parallel,
     step,
@@ -53,7 +54,7 @@ from async_durable_execution.state import ExecutionState
 
 @durable_node
 async def return_name() -> str:
-    return cast(FlowNodeContext, get_current_context()).operation_name or ""
+    return get_node_context().operation_name or ""
 
 
 def create_test_context() -> tuple[DurableContext, Mock]:
@@ -70,6 +71,28 @@ def create_test_context() -> tuple[DurableContext, Mock]:
         ),
     )
     return context, state
+
+
+def test_get_node_context_rejects_non_node_context():
+    context, _ = create_test_context()
+
+    with bind_current_context(context):
+        with pytest.raises(
+            RuntimeError,
+            match=r"get_node_context\(\) can only be used while a flow node is executing\.",
+        ):
+            get_node_context()
+
+
+def test_get_node_context_returns_bound_flow_node_context():
+    context, _ = create_test_context()
+    node_context = FlowNodeContext(
+        execution_state=context.execution_state,
+        operation_identifier=context.operation_identifier,
+    )
+
+    with bind_current_context(node_context):
+        assert get_node_context() is node_context
 
 
 def test_durable_dag_binds_arguments_without_running_definition():
@@ -340,7 +363,7 @@ async def test_linear_fanout_fanin_flow_checkpoints_complete_result():
     def graph(value: str):
         @durable_node
         async def run_a(node_value: str) -> str:
-            assert isinstance(get_current_context(), FlowNodeContext)
+            assert isinstance(get_node_context(), FlowNodeContext)
             return node_value
 
         @durable_node

@@ -694,7 +694,7 @@ class FlowNode(Generic[T]):
 
 @dataclass(frozen=True)
 class FlowNodeContext(DurableContext):
-    """Durable context exposed by get_current_context() inside a flow node."""
+    """Durable context exposed by get_node_context() inside a flow node."""
 
     _direct_dependencies: frozenset[FlowNode[Any]] = field(default_factory=frozenset)
     _dependency_results: Mapping[FlowNode[Any], FlowNodeResult[Any]] = field(
@@ -747,6 +747,15 @@ class FlowNodeContext(DurableContext):
                 return dependency
         msg = f"Node {name!r} is not a direct dependency of the current flow node."
         raise InvalidStateError(msg)
+
+
+def get_node_context() -> FlowNodeContext:
+    """Return the active `FlowNodeContext`."""
+    current_context = get_current_context()
+    if not isinstance(current_context, FlowNodeContext):
+        msg = "get_node_context() can only be used while a flow node is executing."
+        raise RuntimeError(msg)
+    return current_context
 
 
 @dataclass(frozen=True)
