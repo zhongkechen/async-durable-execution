@@ -22,9 +22,7 @@ from scripts.build_layer import parse_args
 def test_default_sdk_spec_uses_shared_version() -> None:
     namespace: dict[str, str] = {}
     version_file = (
-        Path(__file__).resolve().parents[2]
-        / "async_durable_execution"
-        / "__about__.py"
+        Path(__file__).resolve().parents[2] / "async_durable_execution" / "__about__.py"
     )
     exec(version_file.read_text(encoding="utf-8"), namespace)
 
