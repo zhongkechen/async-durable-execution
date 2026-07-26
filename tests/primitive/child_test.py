@@ -12,7 +12,6 @@ from unittest.mock import Mock
 import pytest
 from async_durable_execution.context import bind_current_context
 from async_durable_execution.exceptions import (
-    CallbackError,
     CallableRuntimeError,
     ExecutionError,
     InvocationError,
@@ -36,6 +35,7 @@ from async_durable_execution.primitive.child import (
     get_durable_context,
     run_in_child_context,
 )
+from async_durable_execution.primitive.callback import CallbackError
 from async_durable_execution.primitive.step import StepContext
 from async_durable_execution.serdes import SerDes
 from async_durable_execution.state import ExecutionState
@@ -441,15 +441,23 @@ async def test_child_handler_callback_error_checkpoints_callback_id():
     assert fail_operation.action is OperationAction.FAIL
     assert fail_operation.error.message == "Callback failed"
     assert fail_operation.error.type == "CallbackError"
+    expected_exception_type = "async_durable_execution.primitive.callback.CallbackError"
     assert json.loads(fail_operation.error.data) == {
         "__async_durable_execution_error__": 1,
-        "exception_type": "async_durable_execution.exceptions.CallbackError",
+        "exception_type": expected_exception_type,
         "payload": "callback-123",
     }
 
 
-async def test_child_handler_replays_callback_error_with_callback_id():
-    """A replayed callback failure reconstructs its callback id."""
+@pytest.mark.parametrize(
+    "exception_type",
+    [
+        "async_durable_execution.primitive.callback.CallbackError",
+        "async_durable_execution.exceptions.CallbackError",
+    ],
+)
+async def test_child_handler_replays_callback_error_with_callback_id(exception_type):
+    """Current and legacy callback metadata reconstruct the callback id."""
     mock_state = Mock(spec=ExecutionState)
     operation = Operation(
         operation_id="wait-for-callback",
@@ -463,9 +471,7 @@ async def test_child_handler_replays_callback_error_with_callback_id():
                 data=json.dumps(
                     {
                         "__async_durable_execution_error__": 1,
-                        "exception_type": (
-                            "async_durable_execution.exceptions.CallbackError"
-                        ),
+                        "exception_type": exception_type,
                         "payload": "callback-123",
                     }
                 ),

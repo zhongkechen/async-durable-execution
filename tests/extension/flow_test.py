@@ -53,6 +53,11 @@ from async_durable_execution.models import (
 from async_durable_execution.state import ExecutionState
 
 
+def test_flow_errors_are_defined_by_flow_module():
+    assert FlowDefinitionError.__module__ == "async_durable_execution.extension.flow"
+    assert FlowExecutionError.__module__ == "async_durable_execution.extension.flow"
+
+
 @durable_node
 async def return_name() -> str:
     return get_node_context().operation_name or ""

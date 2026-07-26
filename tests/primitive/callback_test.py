@@ -71,6 +71,10 @@ def test_create_callback_name_is_keyword_only():
     assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
+def test_callback_error_is_defined_by_callback_module():
+    assert CallbackError.__module__ == "async_durable_execution.primitive.callback"
+
+
 def test_wait_for_callback_name_is_keyword_only():
     """wait_for_callback operation name must be passed as a keyword."""
     parameters = inspect.signature(wait_for_callback).parameters

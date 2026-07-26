@@ -7,9 +7,8 @@ import logging
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from .base import OperationExecutor
-from .child import get_durable_context
 from ..config import Duration, duration_to_seconds
-from ..exceptions import CallbackError, SuspendExecution
+from ..exceptions import ExecutionError, SuspendExecution, TerminationReason
 from ..models import (
     CallbackOptions,
     CallbackTimeoutType,
@@ -32,6 +31,17 @@ T = TypeVar("T")  # Result type
 logger = logging.getLogger(__name__)
 
 PASS_THROUGH_SERDES: SerDes[Any] = PassThroughSerDes()
+_LEGACY_CALLBACK_ERROR_TYPE_NAMES = (
+    "async_durable_execution.exceptions.CallbackError",
+)
+
+
+class CallbackError(ExecutionError):
+    """Error in callback handling."""
+
+    def __init__(self, message: str, callback_id: str | None = None):
+        super().__init__(message, TerminationReason.CALLBACK_ERROR)
+        self.callback_id = callback_id
 
 
 class CallbackOperationExecutor(OperationExecutor[str]):
@@ -129,6 +139,8 @@ def create_callback(
         heartbeat_timeout: Optional maximum time to wait between callback heartbeats.
         serdes: Optional serializer for callback results.
     """
+    from .child import get_durable_context
+
     context = get_durable_context()
 
     with context._replay_aware():

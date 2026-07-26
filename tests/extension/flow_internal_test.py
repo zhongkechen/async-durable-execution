@@ -62,7 +62,6 @@ from async_durable_execution.extension.flow import (
 from async_durable_execution.context import bind_current_context
 from async_durable_execution.exceptions import (
     BotoClientError,
-    CallbackError,
     CallableRuntimeError,
     DurableApiErrorCategory,
     ExecutionError,
@@ -76,6 +75,7 @@ from async_durable_execution.exceptions import (
     _encode_sdk_error_data,
     _sdk_error_type_name,
 )
+from async_durable_execution.primitive.callback import CallbackError
 from async_durable_execution.execution import handle_user_function_exception
 from async_durable_execution.models import (
     InvocationStatus,
@@ -720,6 +720,19 @@ def test_sdk_error_data_rejects_invalid_envelopes(data):
         (
             "CallbackError",
             _encode_sdk_error_data(CallbackError),
+            ExecutionError,
+        ),
+        (
+            "CallbackError",
+            json.dumps(
+                {
+                    "__async_durable_execution_error__": 1,
+                    "exception_type": (
+                        "async_durable_execution.exceptions.CallbackError"
+                    ),
+                    "payload": None,
+                }
+            ),
             ExecutionError,
         ),
         ("ExecutionError", None, type(None)),

@@ -7,12 +7,8 @@ Implementation module: `async_durable_execution.exceptions`.
       members:
         - DurableExecutionsError
         - ExecutionError
-        - WaitForConditionError
-        - CallbackError
         - InvocationError
         - ValidationError
-        - FlowDefinitionError
-        - FlowExecutionError
         - InvalidStateError
         - UserlandError
         - CallableRuntimeError

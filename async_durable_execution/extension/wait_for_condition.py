@@ -18,7 +18,6 @@ from ..exceptions import (
     ExecutionError,
     InvocationError,
     ValidationError,
-    WaitForConditionError,
     _decode_sdk_error_data,
     _encode_sdk_control_error_data,
     _encode_sdk_error_data,
@@ -53,6 +52,13 @@ logger = logging.getLogger(__name__)
 
 
 PollingStrategyFunction = Callable[[T, int], Duration | None]
+_LEGACY_WAIT_FOR_CONDITION_ERROR_TYPE_NAMES = (
+    "async_durable_execution.exceptions.WaitForConditionError",
+)
+
+
+class WaitForConditionError(ExecutionError):
+    """Raised when a wait_for_condition operation exhausts its attempts."""
 
 
 @dataclass
@@ -150,6 +156,9 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             is_wait_for_condition_error, _ = _decode_sdk_error_data(
                 error.data,
                 WaitForConditionError,
+                legacy_exception_type_names=(
+                    _LEGACY_WAIT_FOR_CONDITION_ERROR_TYPE_NAMES
+                ),
             )
             if (
                 error.type == WaitForConditionError.__name__

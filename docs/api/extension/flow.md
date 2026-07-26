@@ -274,6 +274,8 @@ output.
 ::: async_durable_execution.extension.flow
     options:
       members:
+        - FlowDefinitionError
+        - FlowExecutionError
         - durable_dag
         - durable_node
         - flow

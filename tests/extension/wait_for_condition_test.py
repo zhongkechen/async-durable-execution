@@ -21,7 +21,6 @@ from async_durable_execution.exceptions import (
     SuspendExecution,
     TerminationReason,
     ValidationError,
-    WaitForConditionError,
     _sdk_error_type_name,
 )
 from async_durable_execution.models import OperationIdentifier
@@ -36,6 +35,7 @@ from async_durable_execution.models import (
 )
 import logging
 from async_durable_execution.extension.wait_for_condition import (
+    WaitForConditionError,
     WaitForConditionOperationExecutor,
     wait_for_condition,
 )
@@ -72,6 +72,13 @@ def test_wait_for_condition_signature_accepts_config_fields_directly():
     assert "config" not in parameters
     assert "polling_strategy" in parameters
     assert "serdes" in parameters
+
+
+def test_wait_for_condition_error_is_defined_by_operation_module():
+    assert (
+        WaitForConditionError.__module__
+        == "async_durable_execution.extension.wait_for_condition"
+    )
 
 
 def test_wait_for_condition_signature_requires_keyword_only_options():
@@ -463,6 +470,9 @@ async def test_wait_for_condition_replays_exhaustion_error():
     ]
     assert fail_operation.error.type == "WaitForConditionError"
     assert fail_operation.error.data is not None
+    assert json.loads(fail_operation.error.data)["exception_type"] == (
+        "async_durable_execution.extension.wait_for_condition.WaitForConditionError"
+    )
 
     replay_state = Mock(spec=ExecutionState)
     replay_state.operations.get.return_value = Operation(
@@ -470,6 +480,45 @@ async def test_wait_for_condition_replays_exhaustion_error():
         operation_type=OperationType.STEP,
         status=OperationStatus.FAILED,
         step_details=StepDetails(error=fail_operation.error),
+    )
+    check_func = Mock(side_effect=AssertionError("check should not run"))
+
+    with pytest.raises(WaitForConditionError, match="exhausted 1 attempts"):
+        await wait_for_condition_handler(
+            state=replay_state,
+            operation_identifier=op_id,
+            check=check_func,
+        )
+
+    check_func.assert_not_called()
+    replay_state.create_checkpoint.assert_not_called()
+
+
+async def test_wait_for_condition_replays_legacy_exhaustion_error_metadata():
+    """Replay accepts checkpoints written before the exception moved modules."""
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+    replay_state = Mock(spec=ExecutionState)
+    replay_state.operations.get.return_value = Operation(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.FAILED,
+        step_details=StepDetails(
+            error=ErrorObject(
+                message="wait_for_condition exhausted 1 attempts",
+                type="WaitForConditionError",
+                data=json.dumps(
+                    {
+                        "__async_durable_execution_error__": 1,
+                        "exception_type": (
+                            "async_durable_execution.exceptions.WaitForConditionError"
+                        ),
+                        "payload": None,
+                    }
+                ),
+            )
+        ),
     )
     check_func = Mock(side_effect=AssertionError("check should not run"))
 

@@ -20,20 +20,20 @@ from ..context import (
     get_current_context,
 )
 from ..exceptions import (
-    CallbackError,
     CallableRuntimeError,
+    DurableExecutionsError,
     ExecutionError,
-    FlowDefinitionError,
-    FlowExecutionError,
     InvalidStateError,
     InvocationError,
     SerDesError,
     SuspendExecution,
     TimedSuspendExecution,
+    ValidationError,
     _decode_sdk_error_data,
     _restore_sdk_control_error,
 )
 from ..models import ErrorObject, SerializableModel
+from ..primitive.callback import CallbackError, _LEGACY_CALLBACK_ERROR_TYPE_NAMES
 from ..primitive.child import DurableContext, get_durable_context, run_in_child_context
 from ..serdes import ExtendedTypeSerDes, SerDes
 from ..task import create_eager_task
@@ -42,6 +42,18 @@ from ..task import create_eager_task
 T = TypeVar("T")
 Params = ParamSpec("Params")
 _BASE_EXCEPTION_GROUP_TYPE = getattr(builtins, "BaseExceptionGroup", None)
+
+
+class FlowDefinitionError(ValidationError):
+    """Raised when a declarative flow definition is invalid."""
+
+
+class FlowExecutionError(DurableExecutionsError):
+    """Raised after a flow checkpoints a result with unhandled node failures."""
+
+    def __init__(self, message: str, result: Any):
+        super().__init__(message)
+        self.result = result
 
 
 class FlowNodeStatus(Enum):
@@ -1465,6 +1477,7 @@ def _find_control_error(error: Exception) -> Exception | None:
             is_callback_error, _ = _decode_sdk_error_data(
                 current.data,
                 CallbackError,
+                legacy_exception_type_names=_LEGACY_CALLBACK_ERROR_TYPE_NAMES,
             )
             if is_callback_error and error_type == "CallbackError":
                 return ExecutionError(message)

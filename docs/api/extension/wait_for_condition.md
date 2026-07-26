@@ -8,6 +8,7 @@ condition checks.
 ::: async_durable_execution.extension.wait_for_condition
     options:
       members:
+        - WaitForConditionError
         - PollingStrategy
         - wait_for_condition
         - WaitForConditionCheckContext

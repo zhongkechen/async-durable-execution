@@ -16,7 +16,6 @@ from .base import (
 )
 from ..context import bind_current_context, get_current_context
 from ..exceptions import (
-    CallbackError,
     CallableRuntimeError,
     InvocationError,
     _decode_sdk_error_data,
@@ -185,6 +184,8 @@ class ChildOperationExecutor(OperationExecutor[T]):
             CallbackError: Re-raised after checkpointing FAIL
             CallableRuntimeError: Raised for other exceptions after checkpointing FAIL
         """
+        from .callback import CallbackError
+
         logger.debug(
             "▶️ Executing child context for id: %s, name: %s",
             self.operation_identifier.operation_id,
@@ -329,6 +330,11 @@ class ChildOperationExecutor(OperationExecutor[T]):
 
     @staticmethod
     def _raise_callable_error(operation: Operation) -> None:
+        from .callback import (
+            CallbackError,
+            _LEGACY_CALLBACK_ERROR_TYPE_NAMES,
+        )
+
         error = operation.context_details.error if operation.context_details else None
         if error is None:
             msg = "Unknown error. No ErrorObject exists on the Checkpoint Operation."
@@ -342,6 +348,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
         is_callback_error, callback_id = _decode_sdk_error_data(
             error.data,
             CallbackError,
+            legacy_exception_type_names=_LEGACY_CALLBACK_ERROR_TYPE_NAMES,
         )
         if error.type == CallbackError.__name__ and is_callback_error:
             raise CallbackError(

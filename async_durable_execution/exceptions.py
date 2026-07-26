@@ -58,8 +58,16 @@ def _encode_sdk_error_data(
 def _decode_sdk_error_data(
     data: str | None,
     expected_exception_type: type[Exception],
+    *,
+    legacy_exception_type_names: tuple[str, ...] = (),
 ) -> tuple[bool, str | None]:
-    """Return whether data identifies the expected SDK exception and its payload."""
+    """Return whether data identifies the expected SDK exception and its payload.
+
+    Args:
+        data: Encoded exception metadata.
+        expected_exception_type: Current exception type to identify.
+        legacy_exception_type_names: Previous qualified names accepted for replay.
+    """
     if data is None:
         return False, None
 
@@ -78,7 +86,11 @@ def _decode_sdk_error_data(
     expected_name = (
         f"{expected_exception_type.__module__}.{expected_exception_type.__qualname__}"
     )
-    if decoded.get("exception_type") != expected_name:
+    encoded_name = decoded.get("exception_type")
+    if (
+        encoded_name != expected_name
+        and encoded_name not in legacy_exception_type_names
+    ):
         return False, None
 
     payload = decoded.get("payload")
@@ -186,18 +198,6 @@ class _RestoredExecutionError(ExecutionError):
     ):
         super().__init__(message, termination_reason)
         self.original_error_type = original_error_type
-
-
-class WaitForConditionError(ExecutionError):
-    """Raised when a wait_for_condition operation exhausts its attempts."""
-
-
-class CallbackError(ExecutionError):
-    """Error in callback handling."""
-
-    def __init__(self, message: str, callback_id: str | None = None):
-        super().__init__(message, TerminationReason.CALLBACK_ERROR)
-        self.callback_id = callback_id
 
 
 class InvocationError(UnrecoverableError):
@@ -573,18 +573,6 @@ class CheckpointError(BotoClientError):
 
 class ValidationError(DurableExecutionsError):
     """Incorrect arguments to a Durable Function operation."""
-
-
-class FlowDefinitionError(ValidationError):
-    """Raised when a declarative flow definition is invalid."""
-
-
-class FlowExecutionError(DurableExecutionsError):
-    """Raised after a flow checkpoints a result with unhandled node failures."""
-
-    def __init__(self, message: str, result: Any):
-        super().__init__(message)
-        self.result = result
 
 
 class GetExecutionStateError(BotoClientError):
