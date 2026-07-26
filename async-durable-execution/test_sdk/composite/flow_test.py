@@ -38,6 +38,11 @@ from async_durable_execution import (
 )
 from async_durable_execution.context import bind_current_context
 from async_durable_execution.composite.flow import _evaluate_definition
+from async_durable_execution.exceptions import (
+    ExecutionError,
+    SerDesError,
+    TerminationReason,
+)
 from async_durable_execution.models import (
     OperationIdentifier,
     OperationStatus,
@@ -1602,9 +1607,121 @@ async def test_failure_handling_metadata_survives_partial_replay(monkeypatch):
     assert handler_calls == 2
 
 
-async def test_sdk_control_error_does_not_activate_failure_route():
-    from async_durable_execution import ExecutionError
+async def test_mutable_dependency_outcomes_are_isolated_per_consumer():
+    mutator_finished = asyncio.Event()
 
+    @durable_dag
+    def graph():
+        @durable_node
+        async def source() -> dict[str, str]:
+            return {"state": "original"}
+
+        @durable_node
+        async def mutate(value: dict[str, str]) -> dict[str, str]:
+            value["state"] = "mutated"
+            mutator_finished.set()
+            return value
+
+        @durable_node
+        async def observe(value: dict[str, str]) -> str:
+            await mutator_finished.wait()
+            return value["state"]
+
+        source_node = node(source(), name="source")
+        mutator = node(mutate(source_node.outcome), name="mutator")
+        observer = node(observe(source_node.outcome), name="observer")
+        return source_node.outcome, mutator.outcome, observer.outcome
+
+    @durable_execution
+    async def handler(event):
+        return (await flow(graph(), name="isolated-consumers")).to_dict()
+
+    async with create_local_runner(
+        handler=handler,
+        input={},
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    payload = result.get_deserialized_result()
+    assert payload["results"]["source"]["outcome"] == {"state": "original"}
+    assert payload["results"]["mutator"]["outcome"] == {"state": "mutated"}
+    assert payload["results"]["observer"]["outcome"] == "original"
+
+
+async def test_mutable_dependency_outcome_is_stable_across_partial_replay(
+    monkeypatch,
+):
+    from async_durable_execution.composite.flow import _NodeExecutionSerDes
+
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0")
+    mutator_persisted = asyncio.Event()
+    observed: list[str] = []
+    mutator_calls = 0
+    observer_calls = 0
+
+    node_deserialize = _NodeExecutionSerDes.deserialize
+
+    async def observe_node_checkpoint(self, data):
+        execution = await node_deserialize(self, data)
+        if execution.result.outcome == "mutator-persisted":
+            mutator_persisted.set()
+        return execution
+
+    monkeypatch.setattr(
+        _NodeExecutionSerDes,
+        "deserialize",
+        observe_node_checkpoint,
+    )
+
+    @durable_dag
+    def graph():
+        @durable_node
+        async def source() -> dict[str, str]:
+            return {"state": "original"}
+
+        @durable_node
+        async def mutate(value: dict[str, str]) -> str:
+            nonlocal mutator_calls
+            mutator_calls += 1
+            value["state"] = "mutated"
+            return "mutator-persisted"
+
+        @durable_node
+        async def observe(value: dict[str, str]) -> str:
+            nonlocal observer_calls
+            observer_calls += 1
+            await mutator_persisted.wait()
+            observed.append(value["state"])
+            await wait(timedelta(seconds=1), name="observer-wait")
+            return value["state"]
+
+        source_node = node(source(), name="source")
+        mutator = node(mutate(source_node.outcome), name="mutator")
+        observer = node(observe(source_node.outcome), name="observer")
+        return observer.outcome, mutator.outcome
+
+    @durable_execution
+    async def handler(event):
+        return (await flow(graph(), name="replayed-consumer-isolation")).to_dict()
+
+    async with create_local_runner(
+        handler=handler,
+        input={},
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    payload = result.get_deserialized_result()
+    assert payload["outputs"] == ["original", "mutator-persisted"]
+    assert observed == ["original", "original"]
+    assert mutator_calls == 1
+    assert observer_calls == 2
+
+
+async def test_sdk_control_error_does_not_activate_failure_route():
     called: list[str] = []
 
     @durable_dag
@@ -1638,6 +1755,70 @@ async def test_sdk_control_error_does_not_activate_failure_route():
     assert result.status is InvocationStatus.FAILED
     assert result.error is not None
     assert result.error.type == "ExecutionError"
+    assert called == ["source"]
+
+
+class _CustomExecutionControlError(ExecutionError):
+    pass
+
+
+class _CustomSerializationControlError(SerDesError):
+    pass
+
+
+@pytest.mark.parametrize(
+    "control_error",
+    [
+        _CustomExecutionControlError(
+            "custom execution failure",
+            TerminationReason.NON_DETERMINISTIC_EXECUTION,
+        ),
+        _CustomSerializationControlError("custom serialization failure"),
+    ],
+)
+async def test_custom_sdk_control_error_does_not_activate_failure_route(
+    control_error,
+):
+    called: list[str] = []
+
+    @durable_callable
+    async def fail_step() -> None:
+        raise control_error
+
+    @durable_dag
+    def graph():
+        @durable_node
+        async def source() -> None:
+            called.append("source")
+            await step(
+                fail_step(),
+                name="custom-control-failure",
+                retry_strategy=RetryStrategy.none(),
+            )
+
+        @durable_node
+        async def should_not_run() -> None:
+            called.append("handler")
+
+        source_node = node(source(), name="source")
+        recovery = node(should_not_run(), name="handler")
+        source_node.failed >> recovery
+        return recovery.result()
+
+    @durable_execution
+    async def handler(event):
+        await flow(graph(), name="custom-control-error")
+
+    async with create_local_runner(
+        handler=handler,
+        input={},
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.FAILED
+    assert result.error is not None
+    assert result.error.type == type(control_error).__name__
     assert called == ["source"]
 
 

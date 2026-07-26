@@ -36,6 +36,7 @@ from async_durable_execution.composite.flow import (
     _FlowBuilder,
     _FlowControlSignal,
     _FlowResultSerDes,
+    _FlowValueSerDes,
     _FlowNodeInput,
     _FlowNodeInputKind,
     _NodeExecution,
@@ -43,6 +44,7 @@ from async_durable_execution.composite.flow import (
     _PersistedDependencyResolutionSerDes,
     _await_resolver_resolution,
     _coerce_expression,
+    _clone_dependency_results,
     _decode_flow_value,
     _encode_flow_value,
     _evaluate_definition,
@@ -100,6 +102,14 @@ class _CustomInvocationError(InvocationError):
         return self._retryable
 
 
+class _CustomExecutionError(ExecutionError):
+    pass
+
+
+class _CustomSerDesError(SerDesError):
+    pass
+
+
 def test_flow_result_helpers_preserve_selected_output_arity():
     first = FlowNodeResult.succeeded("first")
     second = FlowNodeResult.succeeded("second")
@@ -118,6 +128,57 @@ def test_flow_result_helpers_preserve_selected_output_arity():
     with pytest.raises(KeyError, match="missing"):
         multiple.get_result("missing")
     assert FlowResult.from_dict(multiple.to_dict()) == multiple
+
+
+async def test_dependency_results_are_cloned_per_consumer():
+    builder = _FlowBuilder()
+    source = builder.add_node(return_name(), "source")
+    original = FlowNodeResult.succeeded(
+        {
+            "items": ["original"],
+            "nested": FlowNodeResult.succeeded("value"),
+        }
+    )
+
+    first = await _clone_dependency_results({source: original})
+    second = await _clone_dependency_results({source: original})
+
+    first_result = first[source]
+    second_result = second[source]
+    assert first_result == second_result == original
+    assert first_result is not original
+    assert second_result is not original
+    assert first_result.outcome is not original.outcome
+    assert second_result.outcome is not original.outcome
+    assert isinstance(first_result.outcome, dict)
+    assert isinstance(second_result.outcome, dict)
+    assert isinstance(first_result.outcome["nested"], FlowNodeResult)
+
+    first_result.outcome["items"].append("first")
+    assert original.outcome == {
+        "items": ["original"],
+        "nested": FlowNodeResult.succeeded("value"),
+    }
+    assert second_result.outcome == original.outcome
+
+
+async def test_dependency_result_clone_rejects_invalid_decoded_value(monkeypatch):
+    async def deserialize_invalid_value(self, data):
+        return "invalid"
+
+    monkeypatch.setattr(
+        _FlowValueSerDes,
+        "deserialize",
+        deserialize_invalid_value,
+    )
+    builder = _FlowBuilder()
+    source = builder.add_node(return_name(), "source")
+
+    with pytest.raises(
+        SerDesError,
+        match="Cloned flow dependency result has an invalid type",
+    ):
+        await _clone_dependency_results({source: FlowNodeResult.succeeded("original")})
 
 
 def test_flow_result_projection_serialization_and_validation():
@@ -722,6 +783,110 @@ async def test_replayed_non_retryable_boto_error_remains_non_retryable():
     assert output.status is InvocationStatus.FAILED
     assert output.error is not None
     assert output.error.type == "BotoClientError"
+
+
+@pytest.mark.parametrize(
+    ("source", "expected_reason"),
+    [
+        (
+            _CustomExecutionError(
+                "custom execution failure",
+                TerminationReason.NON_DETERMINISTIC_EXECUTION,
+            ),
+            TerminationReason.NON_DETERMINISTIC_EXECUTION,
+        ),
+        (
+            _CustomSerDesError("custom serialization failure"),
+            TerminationReason.SERIALIZATION_ERROR,
+        ),
+    ],
+)
+async def test_replayed_custom_execution_control_error_preserves_category(
+    source,
+    expected_reason,
+):
+    data = _encode_sdk_control_error_data(source)
+    assert data is not None
+
+    classified = _find_control_error(
+        CallableRuntimeError(
+            message=str(source),
+            error_type=type(source).__name__,
+            data=data,
+            stack_trace=None,
+        )
+    )
+
+    assert isinstance(classified, ExecutionError)
+    assert classified.termination_reason is expected_reason
+    assert _sdk_error_type_name(classified) == type(source).__name__
+
+    reencoded = _encode_sdk_control_error_data(classified)
+    assert reencoded is not None
+    reclassified = _find_control_error(
+        CallableRuntimeError(
+            message=str(classified),
+            error_type=type(classified).__name__,
+            data=reencoded,
+            stack_trace=None,
+        )
+    )
+    assert isinstance(reclassified, ExecutionError)
+    assert reclassified.termination_reason is expected_reason
+    assert _sdk_error_type_name(reclassified) == type(source).__name__
+
+    output = await handle_user_function_exception(Mock(), reclassified)
+    assert output.status is InvocationStatus.FAILED
+    assert output.error is not None
+    assert output.error.type == type(source).__name__
+
+
+def test_replayed_legacy_execution_error_preserves_termination_reason():
+    classified = _find_control_error(
+        CallableRuntimeError(
+            message="legacy execution failure",
+            error_type="CustomLegacyExecutionError",
+            data=_encode_sdk_error_data(
+                ExecutionError,
+                TerminationReason.NON_DETERMINISTIC_EXECUTION.value,
+            ),
+            stack_trace=None,
+        )
+    )
+
+    assert isinstance(classified, ExecutionError)
+    assert (
+        classified.termination_reason is TerminationReason.NON_DETERMINISTIC_EXECUTION
+    )
+    assert _sdk_error_type_name(classified) == "CustomLegacyExecutionError"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "{",
+        json.dumps(
+            {
+                "version": 1,
+                "error_type": 42,
+                "termination_reason": "INVALID",
+            }
+        ),
+    ],
+)
+def test_invalid_execution_error_payload_uses_safe_defaults(payload):
+    classified = _find_control_error(
+        CallableRuntimeError(
+            message="execution failure",
+            error_type="FallbackExecutionError",
+            data=_encode_sdk_error_data(ExecutionError, payload),
+            stack_trace=None,
+        )
+    )
+
+    assert isinstance(classified, ExecutionError)
+    assert classified.termination_reason is TerminationReason.EXECUTION_ERROR
+    assert _sdk_error_type_name(classified) == "FallbackExecutionError"
 
 
 def test_invocation_error_payload_drops_unserializable_boto_diagnostics():

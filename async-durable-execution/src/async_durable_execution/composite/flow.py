@@ -28,8 +28,10 @@ from ..exceptions import (
     InvocationError,
     SerDesError,
     SuspendExecution,
+    TerminationReason,
     TimedSuspendExecution,
     _decode_sdk_error_data,
+    _restore_sdk_execution_error,
     _restore_sdk_invocation_error,
 )
 from ..models import ErrorObject, SerializableModel
@@ -1380,6 +1382,23 @@ class _FlowResultSerDes(SerDes[FlowResult]):
 _NODE_EXECUTION_SERDES = _NodeExecutionSerDes()
 _DEPENDENCY_RESOLUTION_SERDES = _PersistedDependencyResolutionSerDes()
 _FLOW_RESULT_SERDES = _FlowResultSerDes()
+_FLOW_VALUE_SERDES = _FlowValueSerDes()
+
+
+async def _clone_dependency_results(
+    results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
+) -> dict[FlowNode[Any], FlowNodeResult[Any]]:
+    """Clone settled results once for one consumer using checkpoint semantics."""
+    cloned: dict[FlowNode[Any], FlowNodeResult[Any]] = {}
+    for flow_node, result in results.items():
+        value = await _FLOW_VALUE_SERDES.deserialize(
+            await _FLOW_VALUE_SERDES.serialize(result)
+        )
+        if not isinstance(value, FlowNodeResult):
+            msg = "Cloned flow dependency result has an invalid type."
+            raise SerDesError(msg)
+        cloned[flow_node] = value
+    return cloned
 
 
 class _FlowControlSignal(BaseException):
@@ -1428,22 +1447,28 @@ def _find_control_error(error: Exception) -> Exception | None:
                     current.error_type,
                     payload,
                 )
-            is_execution_error, _ = _decode_sdk_error_data(
+            is_execution_error, payload = _decode_sdk_error_data(
                 current.data,
                 ExecutionError,
             )
-            if is_execution_error and error_type in {
-                "ExecutionError",
-                "NonDeterministicExecutionError",
-                "WaitForConditionError",
-            }:
-                return ExecutionError(message)
-            is_serdes_error, _ = _decode_sdk_error_data(
+            if is_execution_error:
+                return _restore_sdk_execution_error(
+                    message,
+                    current.error_type,
+                    payload,
+                    default_termination_reason=TerminationReason.EXECUTION_ERROR,
+                )
+            is_serdes_error, payload = _decode_sdk_error_data(
                 current.data,
                 SerDesError,
             )
-            if is_serdes_error and error_type == "SerDesError":
-                return ExecutionError(message)
+            if is_serdes_error:
+                return _restore_sdk_execution_error(
+                    message,
+                    current.error_type,
+                    payload,
+                    default_termination_reason=TerminationReason.SERIALIZATION_ERROR,
+                )
             is_callback_error, _ = _decode_sdk_error_data(
                 current.data,
                 CallbackError,
@@ -1792,15 +1817,16 @@ async def _execute_node(
             handled_failures=handled_failures,
         )
 
+    consumer_results = await _clone_dependency_results(resolution.results)
     context = get_durable_context("flow node")
     flow_context = _flow_node_context(
         context,
         direct_dependencies,
-        resolution.results,
+        consumer_results,
     )
     try:
         with bind_current_context(flow_context):
-            outcome = await _invoke_flow_node(flow_node, resolution.results)
+            outcome = await _invoke_flow_node(flow_node, consumer_results)
         return _NodeExecution(
             result=FlowNodeResult.succeeded(outcome),
             handled_failures=handled_failures,

@@ -20,6 +20,7 @@ INVALID_CHECKPOINT_TOKEN_PREFIX: str = "Invalid Checkpoint Token"
 _SDK_ERROR_DATA_KEY: str = "__async_durable_execution_error__"
 _SDK_ERROR_DATA_VERSION: int = 1
 _SDK_INVOCATION_ERROR_PAYLOAD_VERSION: int = 1
+_SDK_EXECUTION_ERROR_PAYLOAD_VERSION: int = 1
 
 # Non-retryable customer error codes that arrive as non-4xx (e.g. HTTP 502) from Lambda.
 # Unlike typical 5xx errors, these require customer intervention (e.g., fixing
@@ -95,9 +96,21 @@ def _encode_sdk_control_error_data(error: Exception) -> str | None:
             _encode_sdk_invocation_error_payload(error),
         )
     if isinstance(error, ExecutionError):
-        return _encode_sdk_error_data(ExecutionError)
+        return _encode_sdk_error_data(
+            ExecutionError,
+            _encode_sdk_execution_error_payload(
+                error,
+                error.termination_reason,
+            ),
+        )
     if isinstance(error, SerDesError):
-        return _encode_sdk_error_data(SerDesError)
+        return _encode_sdk_error_data(
+            SerDesError,
+            _encode_sdk_execution_error_payload(
+                error,
+                TerminationReason.SERIALIZATION_ERROR,
+            ),
+        )
     return None
 
 
@@ -152,6 +165,20 @@ class ExecutionError(UnrecoverableError):
         termination_reason: TerminationReason = TerminationReason.EXECUTION_ERROR,
     ):
         super().__init__(message, termination_reason)
+
+
+class _RestoredExecutionError(ExecutionError):
+    """Execution control error restored without importing its original class."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        original_error_type: str,
+        termination_reason: TerminationReason,
+    ):
+        super().__init__(message, termination_reason)
+        self.original_error_type = original_error_type
 
 
 class WaitForConditionError(ExecutionError):
@@ -327,11 +354,66 @@ class _RestoredInvocationError(InvocationError):
         return extras
 
 
-def _sdk_error_type_name(error: InvocationError) -> str:
-    """Return the original type name for a restored invocation error."""
-    if isinstance(error, _RestoredInvocationError):
+def _sdk_error_type_name(error: Exception) -> str:
+    """Return the original type name for a restored SDK control error."""
+    if isinstance(error, _RestoredInvocationError | _RestoredExecutionError):
         return error.original_error_type
     return type(error).__name__
+
+
+def _encode_sdk_execution_error_payload(
+    error: Exception,
+    termination_reason: TerminationReason,
+) -> str:
+    """Encode execution-control details needed after durable replay."""
+    return json.dumps(
+        {
+            "version": _SDK_EXECUTION_ERROR_PAYLOAD_VERSION,
+            "error_type": _sdk_error_type_name(error),
+            "termination_reason": termination_reason.value,
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
+def _restore_sdk_execution_error(
+    message: str,
+    error_type: str | None,
+    payload: str | None,
+    *,
+    default_termination_reason: TerminationReason,
+) -> ExecutionError:
+    """Restore an execution control error from current or legacy metadata."""
+    original_error_type = error_type or ExecutionError.__name__
+    termination_reason = default_termination_reason
+
+    try:
+        termination_reason = TerminationReason(payload)
+    except (TypeError, ValueError):
+        try:
+            decoded = json.loads(payload) if payload is not None else None
+        except (TypeError, ValueError):
+            decoded = None
+        if (
+            isinstance(decoded, dict)
+            and decoded.get("version") == _SDK_EXECUTION_ERROR_PAYLOAD_VERSION
+        ):
+            encoded_error_type = decoded.get("error_type")
+            if isinstance(encoded_error_type, str) and encoded_error_type:
+                original_error_type = encoded_error_type
+            try:
+                termination_reason = TerminationReason(
+                    decoded.get("termination_reason")
+                )
+            except (TypeError, ValueError):
+                pass
+
+    return _RestoredExecutionError(
+        message,
+        original_error_type=original_error_type,
+        termination_reason=termination_reason,
+    )
 
 
 def _encode_sdk_invocation_error_payload(error: InvocationError) -> str:

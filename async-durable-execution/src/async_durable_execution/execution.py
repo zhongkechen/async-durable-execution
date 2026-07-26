@@ -369,7 +369,10 @@ async def handle_user_function_exception(
         logger.exception("Execution error. Must fail execution without retry.")
         return DurableExecutionInvocationOutput(
             status=InvocationStatus.FAILED,
-            error=ErrorObject.from_exception(e),
+            error=ErrorObject(
+                message=str(e),
+                type=_sdk_error_type_name(e),
+            ),
         )
 
     # all user-space errors go here
