@@ -37,6 +37,7 @@ composition, and APIs designed for modern Python applications.
 ## ✨ Key Features
 
 - **Async-first durable code** - Compared with the official AWS SDK, user-provided durable handlers, steps, child contexts, `flow` nodes, callback submitters, map item functions, parallel branches, and wait-for-condition checks are written with `async def`.
+- **Operations not available in the official SDK** - This SDK adds replay-safe helpers (`random()`, `now()`, `timestamp()`, and `uuid()`), durable self-invocation (`recurse()`), and declarative DAG execution (`flow()`). See the [durable operations API](docs/api/operations.md).
 - **Declarative DAG workflows** - Define acyclic workflows with typed node inputs, inferred or conditional dependencies, failure routes, and durable operations inside each node. The SDK validates the graph before execution and skips nodes that are not required by the selected outputs. See the [DAG workflow API](docs/api/dag.md).
 - **Background operation tasks** - Durable operations such as `step(...)`, `wait(...)`, `invoke(...)`, `recurse(...)`, `run_in_child_context(...)`, and `flow(...)` return `asyncio.Task` objects, so independent operations can run in the background and be awaited together with `asyncio.gather` without using `parallel()` or `map()`.
 - **Simplified operation APIs** - The `v2` API removes config wrapper objects in favor of direct keyword arguments and clearer call sites, including keyword-only operation names.
