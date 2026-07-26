@@ -124,20 +124,6 @@ priced_items = await asyncio.gather(*pricing_tasks)
 
 事件處理常式輸入會在你的程式碼執行前，先從持久性執行有效載荷反序列化。空白或只包含空白字元的有效載荷會正規化為 `{}`，格式錯誤的 JSON 則會在使用者程式碼執行前讓呼叫失敗。
 
-### 重播安全的輔助值
-
-當工作流程程式碼需要常見的非確定性值時，請使用 `random()`、`now()`、`timestamp()` 與 `uuid()`。每個輔助函式都會建立一個具名耐用步驟，並在重播期間重複使用已儲存的檢查點值。
-
-```python
-from async_durable_execution import now, random as durable_random, timestamp, uuid
-
-
-request_id = await uuid(name="request_id")
-created_at = await now(name="created_at")
-created_at_seconds = await timestamp(name="created_at_seconds")
-sample = await durable_random(name="sample")
-```
-
 ## 🧪 測試 Lambda 耐用函數
 
 SDK 包含執行器輔助函式，可用於在本機測試 Lambda 耐用函數，或針對已部署的 Lambda 函式進行測試。本機執行器會在程序內執行事件處理常式，使用記憶體內服務用戶端攔截檢查點操作，並傳回可依操作名稱檢查的 `DurableFunctionTestResult`。

@@ -124,20 +124,6 @@ priced_items = await asyncio.gather(*pricing_tasks)
 
 事件处理程序输入会在你的代码运行前，先从持久执行有效载荷反序列化。空白或仅包含空白字符的有效载荷会规范化为 `{}`，格式错误的 JSON 则会在用户代码运行前让调用失败。
 
-### 重放安全的辅助值
-
-当工作流程代码需要常见的非确定性值时，请使用 `random()`、`now()`、`timestamp()` 与 `uuid()`。每个辅助函数都会创建一个具名持久步骤，并在重放期间复用已保存的检查点值。
-
-```python
-from async_durable_execution import now, random as durable_random, timestamp, uuid
-
-
-request_id = await uuid(name="request_id")
-created_at = await now(name="created_at")
-created_at_seconds = await timestamp(name="created_at_seconds")
-sample = await durable_random(name="sample")
-```
-
 ## 🧪 测试 Lambda 持久性函数
 
 SDK 包含运行器辅助函数，可用于在本地测试 Lambda 持久性函数，或针对已部署的 Lambda 函数进行测试。本地运行器会在进程内运行事件处理程序，使用内存内服务客户端拦截检查点操作，并返回可按操作名称检查的 `DurableFunctionTestResult`。
