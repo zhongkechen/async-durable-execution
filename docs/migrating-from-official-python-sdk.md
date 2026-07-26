@@ -45,6 +45,7 @@ from `async_durable_execution`.
 | `context.run_in_child_context(...)` | `await run_in_child_context(child(), name="...")` |
 | `context.map(...)` | `await map(func=..., items=..., ...)` |
 | `context.parallel(...)` | `await parallel(branches=[...], ...)` |
+| No direct declarative DAG equivalent | `await flow(my_dag(...), name="...")` |
 | `context.logger` or `step_context.logger` | standard `logging.getLogger(__name__)` |
 
 This SDK binds the active durable context internally while your async callable runs. If
@@ -298,6 +299,42 @@ parallel_results = await parallel(
 )
 ```
 
+## Declarative DAG Flows
+
+`flow()` is an additional composition API in this SDK rather than a mechanical
+replacement for an official context method. Use it when the workflow is a static
+acyclic graph and benefits from inferred data dependencies, conditional success or
+failure routes, and concurrent independent nodes.
+
+```python
+from async_durable_execution import durable_dag, durable_node, flow, node
+
+
+@durable_node
+async def load_order(order_id: str) -> dict:
+    return {"id": order_id}
+
+
+@durable_node
+async def process_order(order: dict) -> dict:
+    return {"id": order["id"], "status": "processed"}
+
+
+@durable_dag
+def order_flow(order_id: str):
+    loaded = node(load_order(order_id), name="load-order")
+    processed = node(process_order(loaded.outcome), name="process-order")
+    return processed.outcome
+
+
+result = await flow(order_flow(order_id), name="order-flow")
+```
+
+Unlike other user-provided callables, a `@durable_dag` definition is synchronous
+and must be deterministic. `@durable_node` bodies are async and can contain normal
+durable operations. See [DAG workflows](api/dag.md) for the complete dependency,
+failure, and output model.
+
 ## Logging
 
 Use standard Python logging:
@@ -341,8 +378,9 @@ assertions can use `result.get_step("my-step")` instead of depending on operatio
 ## Migration Checklist
 
 1. Replace package dependencies and imports.
-2. Change every durable handler, step, child context, callback submitter, map function,
-   parallel branch, and wait-for-condition check to `async def`.
+2. Change every durable handler, step, child context, flow node, callback submitter,
+   map function, parallel branch, and wait-for-condition check to `async def`; keep
+   `@durable_dag` definitions synchronous.
 3. Replace `DurableContext` method calls with awaited top-level operations.
 4. Replace `@durable_step` with `@durable_callable`.
 5. Remove explicit `DurableContext` and `StepContext` parameters unless you are reading

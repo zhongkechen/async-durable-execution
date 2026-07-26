@@ -5,6 +5,10 @@ This SDK requires durable handlers and user-provided durable operation callables
 existing synchronous functions from async durable callables as long as you preserve the
 durable execution replay rules.
 
+The exception is a `@durable_dag` definition: it must be a synchronous `def`
+because it only declares and validates a flow graph. Its `@durable_node` bodies
+must still be `async def`.
+
 The important distinction is where the synchronous code runs:
 
 - Deterministic, side-effect-free synchronous code may run directly in the handler.
@@ -18,6 +22,7 @@ asynchronous:
 
 - `@durable_execution` handlers
 - `@durable_callable` step functions
+- `@durable_node` flow node functions
 - child context functions passed to `run_in_child_context()`
 - callback submitters passed to `wait_for_callback()`
 - item functions passed to `map()`
@@ -25,7 +30,9 @@ asynchronous:
 - condition checks passed to `wait_for_condition()`
 
 Do not pass a regular `def` function directly to `step()`, `run_in_child_context()`,
-`map()`, or `parallel()`. Wrap synchronous work in an async durable callable instead.
+`node()`, `map()`, or `parallel()`. Wrap synchronous work in an async durable
+callable instead. Keep `@durable_dag` definitions synchronous and deterministic;
+they must not perform I/O or start durable operations.
 
 ## Calling Pure Synchronous Helpers
 
@@ -221,7 +228,8 @@ whether it blocks.
 
 ## Checklist
 
-1. Keep all durable entry points as `async def`.
+1. Keep executable durable entry points as `async def`; only `@durable_dag`
+   graph definitions use synchronous `def`.
 2. Call deterministic synchronous helpers directly only when they have no side effects.
 3. Put synchronous I/O, external reads, and writes inside `@durable_callable` steps.
 4. Use `asyncio.to_thread()` for blocking synchronous I/O.

@@ -145,7 +145,7 @@ an argument:
 | `a >> b` | Run `b` after `a` succeeds |
 | `a.succeeded >> b` | Run `b` after `a` succeeds |
 | `a.failed >> b` | Run `b` after `a` fails and handle that failure |
-| `a.completed >> b` | Run `b` after `a` succeeds or fails |
+| `a.completed >> b` | Run `b` after any logical terminal status |
 | `(a & b) >> c` | Run `c` after both success conditions match |
 | `(a \| b) >> c` | Run `c` after the first success condition matches |
 | `a >> (b, c)` | Fan out from `a` to both targets |

@@ -37,8 +37,8 @@ running again.
 
 ## Why This SDK
 
-- **Async-first**: handlers, steps, callbacks, child contexts, map functions,
-  and condition checks use `async def`.
+- **Async-first**: handlers, steps, callbacks, child contexts, `flow` nodes, map
+  functions, and condition checks use `async def`.
 - **Durable primitives**: compose checkpointed steps, waits, callbacks, child
   contexts, invokes, maps, and parallel branches.
 - **[Declarative DAG workflows](api/dag.md)**: define validated acyclic graphs

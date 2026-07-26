@@ -85,9 +85,9 @@ sam deploy \
 
 ## ✨ 主要功能
 
-- **异步优先的持久代码** - 与官方 AWS SDK 相比，用户提供的持久事件处理程序、步骤、子上下文、回调提交器、`map()` 项函数、`parallel()` 分支与等待条件检查都使用 `async def` 编写。
+- **异步优先的持久代码** - 与官方 AWS SDK 相比，用户提供的持久事件处理程序、步骤、子上下文、`flow` 节点、回调提交器、`map()` 项函数、`parallel()` 分支与等待条件检查都使用 `async def` 编写。
 - **声明式 DAG 工作流** - 使用带类型的节点输入、推导或条件依赖、失败路由和节点内持久操作来定义无环工作流。SDK 会在执行前验证图，并跳过所选输出不依赖的节点。参阅 [DAG 工作流 API](docs/api/dag.md)。
-- **后台操作任务** - `step(...)`、`wait(...)`、`invoke(...)`、`recurse(...)` 与 `run_in_child_context(...)` 等持久操作会返回 `asyncio.Task` 对象，因此独立操作可以在后台运行，并通过 `asyncio.gather` 一起等待，无需使用 `parallel()` 或 `map()`。
+- **后台操作任务** - `step(...)`、`wait(...)`、`invoke(...)`、`recurse(...)`、`run_in_child_context(...)` 与 `flow(...)` 等持久操作会返回 `asyncio.Task` 对象，因此独立操作可以在后台运行，并通过 `asyncio.gather` 一起等待，无需使用 `parallel()` 或 `map()`。
 - **简化的持久操作 API** - `v2` API 移除了配置包装对象，改用直接的关键字参数与更清晰的调用位置，包括仅限关键字的操作名称。
 - **集成本地与云端运行器** - 运行器功能现在通过 `async_durable_execution` 提供，包含独立的本地与云端运行器工厂，以及带类型的测试结果辅助对象。
 - **支持异步 Lambda 客户端** - 安装可选的 `aioboto` extra 即可使用异步 Lambda 客户端；否则 SDK 会通过异步适配器使用内置的同步客户端。
@@ -161,7 +161,7 @@ async def handler(event: dict) -> dict:
     return {"status": "approved", "order_id": order_id, "receipt": receipt}
 ```
 
-SDK 接受用户代码的所有位置都必须使用异步可调用对象，包括 `map()` 项函数、绑定的 `parallel()` 分支可调用对象、子上下文、回调提交器与等待条件检查。这些可调用对象可以是函数、实例方法、类方法或静态方法。持久上下文操作是可 await 的，并与事件处理程序运行在同一个 event loop 上。
+SDK 执行用户代码的所有位置都必须使用异步可调用对象，包括 `flow` 节点体、`map()` 项函数、绑定的 `parallel()` 分支可调用对象、子上下文、回调提交器与等待条件检查。这些可调用对象可以是函数、实例方法、类方法或静态方法。`@durable_dag` 函数是例外：它是一个同步且确定性的定义，只声明节点而不执行节点。持久上下文操作是可 await 的，并与事件处理程序运行在同一个 event loop 上。
 
 持久操作会返回 `asyncio.Task` 对象。如果调用操作后没有立即等待它，该操作会被安排在后台运行，之后仍可等待其结果。这让独立操作可以通过常规 `asyncio` 模式并发执行：
 
@@ -270,7 +270,7 @@ Lambda 持久性函数示例位于 `async-durable-execution-examples/src/async_d
 
 - `step/`、`wait/`、`wait_for_callback/` 与 `wait_for_condition/` 用于核心持久操作
 - `step/steps_with_gather.py` 展示如何启动多个步骤任务，并通过 `asyncio.gather` 一起等待
-- `map/`、`parallel/` 与 `run_in_child_context/` 用于组合模式
+- `flow/`、`map/`、`parallel/` 与 `run_in_child_context/` 用于组合模式
 - `invoke/`（包括 `invoke/recurse.py`）、`with_retry/`、`callback/` 与 `logger_example/` 用于集成与运行行为
 
 如需了解运行或部署示例集成测试的开发者工作流，请参阅[贡献指南](CONTRIBUTING.md#example-integration-tests-and-deployment)。
@@ -278,6 +278,7 @@ Lambda 持久性函数示例位于 `async-durable-execution-examples/src/async_d
 ## 📚 文档
 
 - **[文档网站](https://zhongkechen.github.io/async-durable-execution/)** - 可搜索的指南与从 Python docstring 生成的 API 参考
+- **[DAG 工作流 API](docs/api/dag.md)** - 使用 `flow()`、带类型的节点输入、条件依赖和失败路由构建声明式工作流
 - **[官方 Python SDK 对比](docs/official-python-sdk-comparison.md)** - 与官方 AWS Durable Execution Python SDK 的并排对比
 - **[迁移指南](docs/migrating-from-official-python-sdk.md)** - 从官方同步 Python SDK 迁移到这个异步优先 SDK
 - **[使用同步代码](docs/using-synchronous-code.md)** - 安全包装既有同步业务逻辑与阻塞式客户端

@@ -4,8 +4,8 @@
 
 Durable operation helpers such as `step()`, `wait()`, `invoke()`, `recurse()`,
 `run_in_child_context()`, `wait_for_callback()`, `wait_for_condition()`, and
-`with_retry()` return `asyncio.Task` objects. Awaiting an operation directly still
-works:
+`with_retry()`, and `flow()` return `asyncio.Task` objects. Awaiting an operation
+directly still works:
 
 ```python
 result = await step(fetch_order(order_id), name="fetch-order")
@@ -103,11 +103,11 @@ charge_result = result.output
 Definition code must be deterministic and cannot start `step()`, `wait()`,
 `invoke()`, another `flow()`, or any other durable operation. Node bodies run only
 after validation inside their own durable child contexts, where they can use all
-normal durable operations. Passing `dependency_node.outcome` or
-`dependency_node.error` as a node argument infers a successful or failed dependency
-and injects the projected value. For explicit complex conditions, use `dependency=`
-and read available direct dependency results by stable name through
-`FlowNodeContext`.
+normal durable operations. Passing `dependency_node.outcome`,
+`dependency_node.error`, or `dependency_node.result` as a node argument infers the
+required dependency and injects the projected value. For explicit complex
+conditions, use `dependency=` and read available direct dependency results by stable
+name through `FlowNodeContext`.
 
 Projected inputs may be nested in `list`, `tuple`, and `dict` values. Other iterable
 containers are rejected, while object fields containing a projection are rejected

@@ -99,6 +99,7 @@ execution.
 ## Continue
 
 - [Durable operations](api/operations.md)
+- [Declarative DAG workflows](api/dag.md)
 - [Background tasks and advanced patterns](advanced-usage.md)
 - [Using synchronous libraries](using-synchronous-code.md)
 - [Deploying the included example](https://github.com/zhongkechen/async-durable-execution#deploy-now)
