@@ -610,10 +610,10 @@ class BranchStatus(Enum):
     """In-memory lifecycle state for a concurrently scheduled branch.
 
     Values:
-        PENDING: The branch has no active task. Before its first run,
-            ``has_started`` is false and it does not occupy a concurrency slot.
-            While a suspended branch is being resubmitted, ``has_started`` is
-            true and the branch continues to occupy its original slot.
+        NOT_STARTED: The branch has not started and does not occupy a
+            concurrency slot.
+        PENDING: A previously suspended branch is being resubmitted. It has no
+            active task but continues to occupy its original concurrency slot.
         RUNNING: The branch has an active asyncio task and occupies a
             concurrency slot.
         COMPLETED: The branch completed successfully. This is a terminal state
@@ -627,6 +627,7 @@ class BranchStatus(Enum):
             and releases its concurrency slot.
     """
 
+    NOT_STARTED = "not_started"
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -640,8 +641,7 @@ class ExecutableWithState(Generic[CallableType, ResultType]):
 
     def __init__(self, executable: Executable[CallableType]):
         self.executable = executable
-        self._status = BranchStatus.PENDING
-        self._has_started = False
+        self._status = BranchStatus.NOT_STARTED
         self._future: asyncio.Task[ResultType] | None = None
         self._suspend_until: float | None = None
         self._result: ResultType | None = None
@@ -651,7 +651,7 @@ class ExecutableWithState(Generic[CallableType, ResultType]):
     @property
     def future(self) -> asyncio.Task[ResultType]:
         if self._future is None:
-            msg = f"ExecutableWithState was never started. {self.executable.index}"
+            msg = f"ExecutableWithState has no active task. {self.executable.index}"
             raise InvalidStateError(msg)
         return self._future
 
@@ -682,11 +682,6 @@ class ExecutableWithState(Generic[CallableType, ResultType]):
         return self._status is BranchStatus.RUNNING
 
     @property
-    def has_started(self) -> bool:
-        """Whether this branch has acquired a concurrency slot."""
-        return self._has_started
-
-    @property
     def can_resume(self) -> bool:
         return self._status is BranchStatus.SUSPENDED or (
             self._status is BranchStatus.SUSPENDED_WITH_TIMEOUT
@@ -703,31 +698,26 @@ class ExecutableWithState(Generic[CallableType, ResultType]):
         return self.executable.func
 
     def run(self, future: asyncio.Task[ResultType]) -> None:
-        if self._status != BranchStatus.PENDING:
+        if self._status not in {BranchStatus.NOT_STARTED, BranchStatus.PENDING}:
             msg = f"Cannot start running from {self._status}"
             raise InvalidStateError(msg)
-        self._has_started = True
         self._status = BranchStatus.RUNNING
         self._future = future
 
     def suspend(self) -> None:
-        self._has_started = True
         self._status = BranchStatus.SUSPENDED
         self._suspend_until = None
 
     def suspend_with_timeout(self, timestamp: float) -> None:
-        self._has_started = True
         self._status = BranchStatus.SUSPENDED_WITH_TIMEOUT
         self._suspend_until = timestamp
 
     def complete(self, result: ResultType) -> None:
-        self._has_started = True
         self._status = BranchStatus.COMPLETED
         self._result = result
         self._is_result_set = True
 
     def fail(self, error: Exception) -> None:
-        self._has_started = True
         self._status = BranchStatus.FAILED
         self._error = error
 
@@ -1046,11 +1036,9 @@ class ParallelExecutor(
         ) = None
 
         for exe_state in self.executables_with_state:
-            if exe_state.status is BranchStatus.RUNNING or (
-                exe_state.status is BranchStatus.PENDING and exe_state.has_started
-            ):
+            if exe_state.status in {BranchStatus.PENDING, BranchStatus.RUNNING}:
                 return SuspendResult.do_not_suspend()
-            if exe_state.status is BranchStatus.PENDING:
+            if exe_state.status is BranchStatus.NOT_STARTED:
                 continue
             if exe_state.status is BranchStatus.SUSPENDED_WITH_TIMEOUT:
                 if (
@@ -1149,14 +1137,15 @@ class ParallelExecutor(
                         )
                     )
                 case (
-                    BranchStatus.RUNNING
+                    BranchStatus.PENDING
+                    | BranchStatus.RUNNING
                     | BranchStatus.SUSPENDED
                     | BranchStatus.SUSPENDED_WITH_TIMEOUT
                 ):
                     batch_items.append(
                         BatchItem(executable.index, BatchItemStatus.STARTED)
                     )
-                case BranchStatus.PENDING:
+                case BranchStatus.NOT_STARTED:
                     continue
 
         if (
