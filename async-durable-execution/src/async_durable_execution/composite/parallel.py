@@ -607,7 +607,25 @@ class Executable(Generic[CallableType]):
 
 
 class BranchStatus(Enum):
-    """In-memory lifecycle state for a concurrently scheduled branch."""
+    """In-memory lifecycle state for a concurrently scheduled branch.
+
+    Values:
+        PENDING: The branch has no active task. Before its first run,
+            ``has_started`` is false and it does not occupy a concurrency slot.
+            While a suspended branch is being resubmitted, ``has_started`` is
+            true and the branch continues to occupy its original slot.
+        RUNNING: The branch has an active asyncio task and occupies a
+            concurrency slot.
+        COMPLETED: The branch completed successfully. This is a terminal state
+            and releases its concurrency slot.
+        SUSPENDED: The branch is waiting indefinitely, such as for an external
+            callback. It has no active task but continues to occupy its slot.
+        SUSPENDED_WITH_TIMEOUT: The branch is waiting until a scheduled
+            timestamp, such as for a wait or retry. It has no active task but
+            continues to occupy its slot.
+        FAILED: The branch completed with an error. This is a terminal state
+            and releases its concurrency slot.
+    """
 
     PENDING = "pending"
     RUNNING = "running"
