@@ -42,7 +42,7 @@ Issues = "https://github.com/zhongkechen/async-durable-execution/issues"
 Source = "https://github.com/zhongkechen/async-durable-execution"
 
 [tool.hatch.version]
-path = "VERSION.py"
+path = "async_durable_execution/__about__.py"
 
 [tool.hatch.build.targets.sdist]
 packages = ["async_durable_execution"]
@@ -50,7 +50,6 @@ packages = ["async_durable_execution"]
 [tool.hatch.build.targets.sdist.force-include]
 "LICENSE" = "LICENSE"
 "NOTICE" = "NOTICE"
-"VERSION.py" = "VERSION.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["async_durable_execution"]
@@ -58,7 +57,6 @@ packages = ["async_durable_execution"]
 [tool.hatch.build.targets.wheel.force-include]
 "LICENSE" = "LICENSE"
 "NOTICE" = "NOTICE"
-"VERSION.py" = "VERSION.py"
 
 [tool.hatch.envs.test]
 features = ["aioboto"]

@@ -136,7 +136,7 @@ def _should_skip_archive_path(path: Path) -> bool:
 def _read_packaged_version() -> str:
     source_path = Path(__file__).resolve()
     for parent in source_path.parents:
-        version_path = parent / "VERSION.py"
+        version_path = parent / "async_durable_execution" / "__about__.py"
         if version_path.exists():
             return _load_version_from_path(version_path)
 

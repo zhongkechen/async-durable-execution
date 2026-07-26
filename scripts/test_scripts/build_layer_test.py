@@ -21,7 +21,11 @@ from scripts.build_layer import parse_args
 
 def test_default_sdk_spec_uses_shared_version() -> None:
     namespace: dict[str, str] = {}
-    version_file = Path(__file__).resolve().parents[2] / "VERSION.py"
+    version_file = (
+        Path(__file__).resolve().parents[2]
+        / "async_durable_execution"
+        / "__about__.py"
+    )
     exec(version_file.read_text(encoding="utf-8"), namespace)
 
     assert default_sdk_spec() == f"async-durable-execution=={namespace['__version__']}"
@@ -153,7 +157,7 @@ def test_pip_install_invokes_pip_with_extra_args(
 def test_load_version_from_path_requires_loadable_spec(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    version_path = tmp_path / "VERSION.py"
+    version_path = tmp_path / "__about__.py"
     version_path.write_text("__version__ = '1.2.3'\n")
     monkeypatch.setattr(
         build_layer_module.importlib.util,
