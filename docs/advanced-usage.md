@@ -3,7 +3,7 @@
 ## Background Operation Tasks
 
 Durable operation helpers such as `step()`, `wait()`, `invoke()`, `recurse()`,
-`run_in_child_context()`, `wait_for_callback()`, `wait_for_condition()`, and
+`run_in_child_context()`, `wait_for_callback()`, `wait_for_condition()`,
 `with_retry()`, and `flow()` return `asyncio.Task` objects. Awaiting an operation
 directly still works:
 

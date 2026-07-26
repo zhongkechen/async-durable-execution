@@ -1,13 +1,14 @@
 # Using Synchronous Code
 
-This SDK requires durable handlers and user-provided durable operation callables to be
-`async def`, but your business code does not have to be fully async. You can call
-existing synchronous functions from async durable callables as long as you preserve the
-durable execution replay rules.
+This SDK requires executable workflow bodies such as durable handlers, steps,
+and flow nodes to be `async def`, but your business code does not have to be
+fully async. You can call existing synchronous functions from async durable
+callables as long as you preserve the durable execution replay rules.
 
-The exception is a `@durable_dag` definition: it must be a synchronous `def`
-because it only declares and validates a flow graph. Its `@durable_node` bodies
-must still be `async def`.
+Declarative and configuration hooks are intentionally synchronous. For example,
+a `@durable_dag` definition must be a regular `def` because it only declares
+and validates a flow graph, while its `@durable_node` bodies must be
+`async def`.
 
 The important distinction is where the synchronous code runs:
 
@@ -31,8 +32,22 @@ asynchronous:
 
 Do not pass a regular `def` function directly to `step()`, `run_in_child_context()`,
 `node()`, `map()`, or `parallel()`. Wrap synchronous work in an async durable
-callable instead. Keep `@durable_dag` definitions synchronous and deterministic;
-they must not perform I/O or start durable operations.
+callable instead.
+
+## What Must Stay Synchronous
+
+These declarative and configuration hooks must be regular synchronous callables,
+not `async def` functions:
+
+- `@durable_dag` definitions
+- retry and polling strategies
+- custom completion callbacks passed to `CompletionConfig.custom()`
+- `item_namer` callbacks passed to `map()`
+- `summary_generator` callbacks
+
+Keep DAG definitions and structural or metadata hooks deterministic and
+side-effect free. They must not perform I/O, start durable operations, or return
+awaitables.
 
 ## Calling Pure Synchronous Helpers
 
@@ -228,12 +243,13 @@ whether it blocks.
 
 ## Checklist
 
-1. Keep executable durable entry points as `async def`; only `@durable_dag`
-   graph definitions use synchronous `def`.
-2. Call deterministic synchronous helpers directly only when they have no side effects.
-3. Put synchronous I/O, external reads, and writes inside `@durable_callable` steps.
-4. Use `asyncio.to_thread()` for blocking synchronous I/O.
-5. Do not perform durable operations from inside a step.
-6. Do not call `asyncio.run()` from durable code.
-7. Name the step that wraps each important synchronous operation so tests and logs stay
+1. Keep executable workflow bodies as `async def`.
+2. Keep declarative and configuration hooks synchronous; keep DAG definitions
+   and structural or metadata hooks deterministic and side-effect free.
+3. Call deterministic synchronous helpers directly only when they have no side effects.
+4. Put synchronous I/O, external reads, and writes inside `@durable_callable` steps.
+5. Use `asyncio.to_thread()` for blocking synchronous I/O.
+6. Do not perform durable operations from inside a step.
+7. Do not call `asyncio.run()` from durable code.
+8. Name the step that wraps each important synchronous operation so tests and logs stay
    clear.

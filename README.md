@@ -166,7 +166,9 @@ async def handler(event: dict) -> dict:
     return {"status": "approved", "order_id": order_id, "receipt": receipt}
 ```
 
-Async callables are required anywhere the SDK executes user code, including `flow` node bodies, `map()` item functions, bound `parallel()` branch callables, child contexts, callback submitters, and wait-for-condition checks. Those callables can be functions, instance methods, class methods, or static methods. A `@durable_dag` function is the exception: it is a synchronous, deterministic definition that declares nodes without executing them. Durable context operations are awaitable and run on the same event loop as your handler.
+Workflow bodies supplied to the SDK must be async, including durable handlers, step callables, `flow` node bodies, `map()` item functions, bound `parallel()` branch callables, child contexts, callback submitters, and wait-for-condition checks. Those callables can be functions, instance methods, class methods, or static methods. Durable context operations are awaitable and run on the same event loop as your handler.
+
+Declarative and configuration hooks use synchronous callables instead, including `@durable_dag` definitions, retry and polling strategies, custom completion callbacks, item namers, and summary generators. Do not define these hooks with `async def`; DAG definitions and other hooks that control replayed workflow structure or metadata must remain deterministic.
 
 Durable operations return `asyncio.Task` objects. If you call an operation without immediately awaiting it, it is scheduled to run in the background and can be awaited later. This lets independent operations run concurrently with normal `asyncio` patterns:
 
