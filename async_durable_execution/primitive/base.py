@@ -5,16 +5,16 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from ..context import OperationContext
-from ..models import (
+from ..core.context import OperationContext
+from ..core.models import (
     Operation,
     OperationIdentifier,
 )
-from ..serdes import SerDes, deserialize, serialize
+from ..core.serdes import SerDes, deserialize, serialize
 
 if TYPE_CHECKING:
-    from ..models import OperationUpdate
-    from ..state import ExecutionState
+    from ..core.models import OperationUpdate
+    from ..core.state import ExecutionState
 
 T = TypeVar("T")
 S = TypeVar("S")

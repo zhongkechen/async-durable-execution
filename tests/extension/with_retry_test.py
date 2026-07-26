@@ -16,19 +16,19 @@ from async_durable_execution import (
     with_retry,
     with_retry as imported_with_retry,
 )
-from async_durable_execution.config import (
+from async_durable_execution.core.config import (
     Duration,
     JitterStrategy,
     RetryStrategy,
 )
-from async_durable_execution.context import (
+from async_durable_execution.core.context import (
     DurableContext,
     get_current_context,
     reset_current_context,
     set_current_context,
 )
-from async_durable_execution.exceptions import SuspendExecution
-from async_durable_execution.models import OperationIdentifier, OperationSubType
+from async_durable_execution.core.exceptions import SuspendExecution
+from async_durable_execution.core.models import OperationIdentifier, OperationSubType
 
 
 _T = TypeVar("_T")

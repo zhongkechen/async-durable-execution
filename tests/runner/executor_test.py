@@ -6,11 +6,11 @@ from unittest.mock import DEFAULT, AsyncMock, Mock, patch
 
 import pytest
 
-from async_durable_execution.execution import (
+from async_durable_execution.core.execution import (
     DurableExecutionInvocationOutput,
     InvocationStatus,
 )
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     CallbackDetails,
     CallbackOptions,
     ErrorObject,
@@ -1833,7 +1833,7 @@ async def test_get_execution_history(executor, mock_store):
 
 async def test_get_execution_history_with_events(executor, mock_store):
     """Test get_execution_history with actual events."""
-    from async_durable_execution.models import StepDetails
+    from async_durable_execution.core.models import StepDetails
 
     # Create operations that will generate events
     op1 = Operation(

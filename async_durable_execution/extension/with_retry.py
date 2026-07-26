@@ -4,9 +4,9 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Awaitable, Callable, TypeVar
 
-from ..config import Duration
-from ..config import RetryStrategy
-from ..context import (
+from ..core.config import Duration
+from ..core.config import RetryStrategy
+from ..core.context import (
     DurableContext,
     bind_current_context,
     get_durable_context,
@@ -16,7 +16,7 @@ from ..primitive.wait import wait
 
 if TYPE_CHECKING:
     from .parallel import SummaryGenerator
-    from ..serdes import SerDes
+    from ..core.serdes import SerDes
 
 T = TypeVar("T")
 

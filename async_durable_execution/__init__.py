@@ -3,21 +3,37 @@
 # Package metadata
 from .__about__ import __version__
 
-# Main context - used in every durable function
-# Helper decorators - commonly used for step functions
-# Concurrency
-from .models import (
+# Core runtime and supporting public APIs
+from .core import (
+    CallableRuntimeError,
+    DurableContext,
+    DurableExecutionsError,
+    DurableServiceClient,
+    ErrorObject,
+    ExecutionError,
+    ExtendedTypeSerDes,
+    InvalidStateError,
+    InvocationError,
     InvocationStatus,
+    JitterStrategy,
+    JsonSerDes,
     LambdaContext,
+    OperationStatus,
     OperationSubType,
     OperationType,
-    OperationStatus,
-)
-from .config import JitterStrategy, RetryStrategy
-from .context import (
-    DurableContext,
+    RetryStrategy,
+    SerDes,
+    SerDesContext,
+    SerDesError,
+    UserlandError,
+    ValidationError,
+    create_default_sync_client,
+    durable_callable,
+    durable_execution,
     get_current_context,
 )
+
+# Durable operations
 from .extension.with_retry import WithRetryContext, with_retry
 from .extension.map import MapItemContext, map
 from .extension.flow import (
@@ -74,25 +90,7 @@ from .primitive.step import (
     step,
 )
 from .extension.replay_safe import now, random, timestamp, uuid
-from .models import ErrorObject
-
-# User-facing exception types.
-from .exceptions import (
-    CallableRuntimeError,
-    DurableExecutionsError,
-    ExecutionError,
-    InvalidStateError,
-    InvocationError,
-    SerDesError,
-    UserlandError,
-    ValidationError,
-)
-
-# Core decorator - used in every durable function
-from .execution import durable_callable, durable_execution
 from .primitive.wait import wait
-from .serdes import ExtendedTypeSerDes, JsonSerDes, SerDes, SerDesContext
-from .client import DurableServiceClient, create_default_sync_client
 from .runner import (
     DurableFunctionCloudTestRunner,
     DurableFunctionLocalTestRunner,

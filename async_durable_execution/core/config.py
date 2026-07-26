@@ -1,4 +1,4 @@
-"""Configuration types."""
+"""Core configuration types."""
 
 from __future__ import annotations
 

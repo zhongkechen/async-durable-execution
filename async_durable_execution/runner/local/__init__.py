@@ -5,14 +5,14 @@ import inspect
 import time
 from typing import Any, Callable
 
-from ...client import DurableServiceClient
-from ...exceptions import CheckpointError, GetExecutionStateError
-from ...execution import (
+from ...core.client import DurableServiceClient
+from ...core.exceptions import CheckpointError, GetExecutionStateError
+from ...core.execution import (
     DurableExecutionInvocationInput,
     InitialExecutionState,
     _bind_service_client_to_handler,
 )
-from ...models import (
+from ...core.models import (
     CheckpointOutput,
     CheckpointUpdatedExecutionState,
     DurableExecutionInvocationOutput,

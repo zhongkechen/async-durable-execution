@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from async_durable_execution.context import (
+from async_durable_execution.core.context import (
     get_current_context,
     reset_current_context,
     set_current_context,
@@ -20,13 +20,13 @@ from async_durable_execution.extension.parallel import (
     BatchResult,
     CompletionReason,
 )
-from async_durable_execution.exceptions import (
+from async_durable_execution.core.exceptions import (
     DurableExecutionsError,
     ExecutionError,
     SerDesError,
 )
-from async_durable_execution.models import ErrorObject
-from async_durable_execution.serdes import (
+from async_durable_execution.core.models import ErrorObject
+from async_durable_execution.core.serdes import (
     BytesCodec,
     ContainerCodec,
     DateTimeCodec,

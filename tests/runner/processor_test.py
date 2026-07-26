@@ -4,8 +4,11 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from async_durable_execution.exceptions import CheckpointError, GetExecutionStateError
-from async_durable_execution.models import (
+from async_durable_execution.core.exceptions import (
+    CheckpointError,
+    GetExecutionStateError,
+)
+from async_durable_execution.core.models import (
     CheckpointOutput,
     CheckpointUpdatedExecutionState,
     OperationAction,
@@ -312,7 +315,7 @@ import json
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     ErrorObject,
     Operation,
     OperationAction,
@@ -730,7 +733,7 @@ def test_validate_inconsistent_operation_subtype():
     execution = _create_test_execution()
 
     # Add existing operation with subtype
-    from async_durable_execution.models import OperationSubType
+    from async_durable_execution.core.models import OperationSubType
 
     context_op = Operation(
         operation_id="op-1",
@@ -1007,7 +1010,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     OperationAction,
     OperationType,
     OperationUpdate,

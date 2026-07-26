@@ -1,6 +1,6 @@
 import asyncio
 
-from async_durable_execution.task import create_eager_task
+from async_durable_execution.core.task import create_eager_task
 
 
 async def test_create_eager_task_fallback_uses_lazy_task(monkeypatch):

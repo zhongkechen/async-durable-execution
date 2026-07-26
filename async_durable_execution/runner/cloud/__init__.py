@@ -13,11 +13,11 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 from botocore.session import get_session
 
-from ... import client as durable_client
-from ...execution import (
+from ...core import client as durable_client
+from ...core.execution import (
     DurableExecutionInvocationInput,
 )
-from ...models import DurableExecutionInvocationOutput, ErrorObject
+from ...core.models import DurableExecutionInvocationOutput, ErrorObject
 from ..exceptions import (
     DurableFunctionsTestError,
     InvalidParameterValueException,

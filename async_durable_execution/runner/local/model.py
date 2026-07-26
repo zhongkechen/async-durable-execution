@@ -7,8 +7,8 @@ import json
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from ...execution import DurableExecutionInvocationInput
-from ...models import (
+from ...core.execution import DurableExecutionInvocationInput
+from ...core.models import (
     CheckpointUpdatedExecutionState,
     LambdaContext as LambdaContextProtocol,
     Operation,

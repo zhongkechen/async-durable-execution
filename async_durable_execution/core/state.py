@@ -22,7 +22,7 @@ from .models import (
     OperationUpdate,
 )
 from .client import DurableServiceClient
-from .primitive.child import OrphanedChildException
+from ..primitive.child import OrphanedChildException
 
 
 if TYPE_CHECKING:

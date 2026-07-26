@@ -7,15 +7,15 @@ import logging
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from .base import OperationExecutor
-from ..config import Duration, duration_to_seconds
-from ..context import get_durable_context
-from ..exceptions import (
+from ..core.config import Duration, duration_to_seconds
+from ..core.context import get_durable_context
+from ..core.exceptions import (
     ExecutionError,
     SuspendExecution,
     TerminationReason,
     _register_sdk_control_error_type,
 )
-from ..models import (
+from ..core.models import (
     CallbackOptions,
     CallbackTimeoutType,
     Operation,
@@ -24,13 +24,13 @@ from ..models import (
     OperationUpdate,
     OperationSubType,
 )
-from ..serdes import deserialize, PassThroughSerDes
-from ..task import create_eager_task
+from ..core.serdes import deserialize, PassThroughSerDes
+from ..core.task import create_eager_task
 
 if TYPE_CHECKING:
-    from ..context import DurableContext
-    from ..serdes import SerDes
-    from ..state import ExecutionState
+    from ..core.context import DurableContext
+    from ..core.serdes import SerDes
+    from ..core.state import ExecutionState
 
 T = TypeVar("T")  # Result type
 

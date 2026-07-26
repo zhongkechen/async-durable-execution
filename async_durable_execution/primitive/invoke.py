@@ -8,13 +8,13 @@ from typing import TYPE_CHECKING, TypeVar, cast
 
 # Import base classes for operation executor pattern
 from .base import OperationExecutor
-from ..context import get_durable_context
-from ..exceptions import (
+from ..core.context import get_durable_context
+from ..core.exceptions import (
     CallableRuntimeError,
     ExecutionError,
     suspend_with_optional_resume_delay,
 )
-from ..models import (
+from ..core.models import (
     ChainedInvokeOptions,
     Operation,
     OperationIdentifier,
@@ -22,15 +22,15 @@ from ..models import (
     OperationUpdate,
     OperationSubType,
 )
-from ..serdes import (
+from ..core.serdes import (
     DEFAULT_JSON_SERDES,
 )
-from ..task import create_eager_task
+from ..core.task import create_eager_task
 
 if TYPE_CHECKING:
-    from ..context import DurableContext
-    from ..serdes import SerDes
-    from ..state import ExecutionState
+    from ..core.context import DurableContext
+    from ..core.serdes import SerDes
+    from ..core.state import ExecutionState
 
 P = TypeVar("P")  # Payload type
 R = TypeVar("R")  # Result type

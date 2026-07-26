@@ -18,7 +18,7 @@ from async_durable_execution import (
     create_cloud_runner,
     create_local_runner,
 )
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     CallbackDetails,
     ChainedInvokeDetails,
     ContextDetails,
@@ -26,7 +26,7 @@ from async_durable_execution.models import (
     OperationType,
     StepDetails,
 )
-from async_durable_execution.models import Operation
+from async_durable_execution.core.models import Operation
 from async_durable_execution.runner.exceptions import (
     DurableFunctionsTestError,
     ResourceNotFoundException,
@@ -1289,7 +1289,7 @@ async def test_durable_function_test_result_from_execution_history_failed():
     import datetime
 
     from async_durable_execution import InvocationStatus
-    from async_durable_execution.models import ErrorObject
+    from async_durable_execution.core.models import ErrorObject
     from async_durable_execution.runner.model import (
         GetDurableExecutionHistoryResponse,
         GetDurableExecutionResponse,

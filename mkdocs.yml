@@ -68,16 +68,16 @@ nav:
           - Recursive Invocation: api/extension/recurse.md
           - Replay-Safe Values: api/extension/replay_safe.md
       - Core Runtime:
-          - Execution: api/execution.md
-          - Current Context: api/context.md
+          - Execution: api/core/execution.md
+          - Current Context: api/core/context.md
       - Configuration and Data:
-          - Configuration: api/config.md
-          - Serialization: api/serdes.md
-          - Models: api/models.md
+          - Configuration: api/core/config.md
+          - Serialization: api/core/serdes.md
+          - Models: api/core/models.md
       - Errors:
-          - Exceptions: api/exceptions.md
+          - Exceptions: api/core/exceptions.md
       - Integrations:
-          - Durable Service Client: api/client.md
+          - Durable Service Client: api/core/client.md
       - Testing:
           - Local Runner: api/runner/local.md
           - Cloud Runner: api/runner/cloud.md

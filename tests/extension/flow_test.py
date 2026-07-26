@@ -37,20 +37,20 @@ from async_durable_execution import (
     step,
     wait,
 )
-from async_durable_execution.context import bind_current_context
+from async_durable_execution.core.context import bind_current_context
 from async_durable_execution.extension.flow import _evaluate_definition
-from async_durable_execution.exceptions import (
+from async_durable_execution.core.exceptions import (
     ExecutionError,
     InvocationError,
     SerDesError,
     TerminationReason,
 )
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     OperationIdentifier,
     OperationStatus,
     OperationSubType,
 )
-from async_durable_execution.state import ExecutionState
+from async_durable_execution.core.state import ExecutionState
 
 
 def test_flow_errors_are_defined_by_flow_module():

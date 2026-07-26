@@ -1,10 +1,13 @@
 from unittest.mock import Mock
 
 from async_durable_execution import DurableContext, durable_callable
-from async_durable_execution.context import bind_current_context, get_current_context
-from async_durable_execution.models import OperationIdentifier, OperationSubType
+from async_durable_execution.core.context import (
+    bind_current_context,
+    get_current_context,
+)
+from async_durable_execution.core.models import OperationIdentifier, OperationSubType
 from async_durable_execution.primitive.step import StepContext
-from async_durable_execution.state import ExecutionState
+from async_durable_execution.core.state import ExecutionState
 
 
 async def test_bind_current_context_sets_context_for_invocation():

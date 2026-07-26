@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from botocore.exceptions import ClientError
 
-from async_durable_execution.exceptions import (
+from async_durable_execution.core.exceptions import (
     BackgroundThreadError,
     BotoClientError,
     CallableRuntimeError,

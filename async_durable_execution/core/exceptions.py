@@ -594,11 +594,23 @@ def _restore_sdk_control_error(
         if codec is not None and error_type == codec.exception_type.__name__:
             return codec.restore(message, payload)
 
-    is_invocation_error, payload = _decode_sdk_error_data(data, InvocationError)
+    is_invocation_error, payload = _decode_sdk_error_data(
+        data,
+        InvocationError,
+        legacy_exception_type_names=(
+            "async_durable_execution.exceptions.InvocationError",
+        ),
+    )
     if is_invocation_error:
         return _restore_sdk_invocation_error(message, error_type, payload)
 
-    is_execution_error, payload = _decode_sdk_error_data(data, ExecutionError)
+    is_execution_error, payload = _decode_sdk_error_data(
+        data,
+        ExecutionError,
+        legacy_exception_type_names=(
+            "async_durable_execution.exceptions.ExecutionError",
+        ),
+    )
     if is_execution_error:
         return _restore_sdk_execution_error(
             message,
@@ -607,7 +619,11 @@ def _restore_sdk_control_error(
             default_termination_reason=TerminationReason.EXECUTION_ERROR,
         )
 
-    is_serdes_error, payload = _decode_sdk_error_data(data, SerDesError)
+    is_serdes_error, payload = _decode_sdk_error_data(
+        data,
+        SerDesError,
+        legacy_exception_type_names=("async_durable_execution.exceptions.SerDesError",),
+    )
     if is_serdes_error:
         return _restore_sdk_execution_error(
             message,

@@ -12,7 +12,7 @@ from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from async_durable_execution.context import (
+from async_durable_execution.core.context import (
     DurableContext as ModuleDurableContext,
     bind_current_context,
     get_durable_context,
@@ -40,12 +40,12 @@ from async_durable_execution import (
     StepSemantics,
     DurableContext,
 )
-from async_durable_execution.exceptions import (
+from async_durable_execution.core.exceptions import (
     SuspendExecution,
     ValidationError,
 )
-from async_durable_execution.models import OperationIdentifier
-from async_durable_execution.models import (
+from async_durable_execution.core.models import OperationIdentifier
+from async_durable_execution.core.models import (
     CallbackDetails,
     ErrorObject,
     Operation,
@@ -53,7 +53,7 @@ from async_durable_execution.models import (
     OperationSubType,
     OperationType,
 )
-from async_durable_execution.state import ExecutionState
+from async_durable_execution.core.state import ExecutionState
 from .serdes_test import CustomDictSerDes
 from .test_helpers import operation_id_sequence
 

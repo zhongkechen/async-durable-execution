@@ -13,13 +13,13 @@ from dataclasses import dataclass, field, fields as dataclass_fields, is_datacla
 from enum import Enum
 from typing import Any, Generic, NoReturn, ParamSpec, TypeVar, cast
 
-from ..context import (
+from ..core.context import (
     bind_current_context,
     bind_durable_definition,
     ensure_durable_operations_allowed,
     get_current_context,
 )
-from ..exceptions import (
+from ..core.exceptions import (
     CallableRuntimeError,
     DurableExecutionsError,
     ExecutionError,
@@ -31,11 +31,11 @@ from ..exceptions import (
     ValidationError,
     _restore_sdk_control_error,
 )
-from ..models import ErrorObject, SerializableModel
-from ..context import DurableContext, get_durable_context
+from ..core.models import ErrorObject, SerializableModel
+from ..core.context import DurableContext, get_durable_context
 from ..primitive.child import run_in_child_context
-from ..serdes import ExtendedTypeSerDes, SerDes
-from ..task import create_eager_task
+from ..core.serdes import ExtendedTypeSerDes, SerDes
+from ..core.task import create_eager_task
 
 
 T = TypeVar("T")

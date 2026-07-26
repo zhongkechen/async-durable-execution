@@ -8,7 +8,7 @@ from datetime import timedelta
 from unittest.mock import Mock, patch
 
 import pytest
-from async_durable_execution.exceptions import (
+from async_durable_execution.core.exceptions import (
     CallableRuntimeError,
     ExecutionError,
     InvocationError,
@@ -19,8 +19,8 @@ from async_durable_execution.exceptions import (
     _decode_sdk_error_data,
     _restore_sdk_control_error,
 )
-from async_durable_execution.models import OperationIdentifier
-from async_durable_execution.models import (
+from async_durable_execution.core.models import OperationIdentifier
+from async_durable_execution.core.models import (
     ErrorObject,
     Operation,
     OperationAction,
@@ -30,7 +30,7 @@ from async_durable_execution.models import (
     StepDetails,
 )
 import logging
-from async_durable_execution.context import (
+from async_durable_execution.core.context import (
     get_current_context,
 )
 from async_durable_execution.primitive.step import (
@@ -40,8 +40,8 @@ from async_durable_execution.primitive.step import (
     get_step_context,
     step,
 )
-from async_durable_execution.serdes import SerDes
-from async_durable_execution.state import ExecutionState
+from async_durable_execution.core.serdes import SerDes
+from async_durable_execution.core.state import ExecutionState
 from async_durable_execution import StepContext
 
 from ..serdes_test import CustomDictSerDes

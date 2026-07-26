@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     ErrorObject,
     Operation,
     OperationAction,
@@ -455,7 +455,7 @@ def test_no_step_retry_calls_for_non_retry_actions():
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     ErrorObject,
     Operation,
     OperationAction,

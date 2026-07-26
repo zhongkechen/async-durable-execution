@@ -3,7 +3,7 @@
 # from datetime import datetime, timezone
 # from unittest.mock import Mock
 #
-# from async_durable_execution.models import (
+# from async_durable_execution.core.models import (
 #     OperationStatus,
 #     OperationType,
 # )

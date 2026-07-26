@@ -1,8 +1,10 @@
 # Models
 
-Implementation module: `async_durable_execution.models`.
+Implementation module: `async_durable_execution.core.models`.
 
-::: async_durable_execution.models
+Public exports are also available from `async_durable_execution.core`.
+
+::: async_durable_execution.core.models
     options:
       members:
         - LambdaContext

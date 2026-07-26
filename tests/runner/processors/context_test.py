@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     ErrorObject,
     Operation,
     OperationAction,
@@ -383,7 +383,7 @@ def test_end_timestamp_not_set_for_non_terminal_states():
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     ErrorObject,
     Operation,
     OperationAction,

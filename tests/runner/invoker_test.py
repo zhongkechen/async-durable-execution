@@ -14,14 +14,14 @@ from async_durable_execution import (
     DurableContext,
     durable_execution,
 )
-from async_durable_execution.context import get_current_context
-from async_durable_execution.execution import (
+from async_durable_execution.core.context import get_current_context
+from async_durable_execution.core.execution import (
     DurableExecutionInvocationInput,
     DurableExecutionInvocationOutput,
     InitialExecutionState,
     InvocationStatus,
 )
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     ExecutionDetails,
     Operation,
     OperationStatus,

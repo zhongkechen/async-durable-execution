@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ....models import (
+from ....core.models import (
     Operation,
     OperationAction,
     OperationStatus,

@@ -10,10 +10,10 @@ from typing import Any, cast
 from unittest.mock import Mock, patch
 
 import pytest
-from async_durable_execution.context import (
+from async_durable_execution.core.context import (
     get_current_context,
 )
-from async_durable_execution.exceptions import (
+from async_durable_execution.core.exceptions import (
     CallableRuntimeError,
     ExecutionError,
     InvocationError,
@@ -23,8 +23,8 @@ from async_durable_execution.exceptions import (
     ValidationError,
     _sdk_error_type_name,
 )
-from async_durable_execution.models import OperationIdentifier
-from async_durable_execution.models import (
+from async_durable_execution.core.models import OperationIdentifier
+from async_durable_execution.core.models import (
     ErrorObject,
     Operation,
     OperationAction,
@@ -39,11 +39,11 @@ from async_durable_execution.extension.wait_for_condition import (
     WaitForConditionOperationExecutor,
     wait_for_condition,
 )
-from async_durable_execution.state import ExecutionState
+from async_durable_execution.core.state import ExecutionState
 from async_durable_execution import WaitForConditionCheckContext
-from async_durable_execution.config import JitterStrategy
+from async_durable_execution.core.config import JitterStrategy
 from async_durable_execution.extension.wait_for_condition import PollingStrategy
-from async_durable_execution.serdes import SerDes
+from async_durable_execution.core.serdes import SerDes
 
 from ..serdes_test import CustomDictSerDes
 

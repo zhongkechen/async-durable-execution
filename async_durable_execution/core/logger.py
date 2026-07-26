@@ -1,4 +1,4 @@
-"""Logging helpers for durable execution contexts."""
+"""Core logging helpers for durable execution contexts."""
 
 from __future__ import annotations
 

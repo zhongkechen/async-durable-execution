@@ -7,12 +7,12 @@ import json
 from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
-from async_durable_execution.context import (
+from async_durable_execution.core.context import (
     DurableContext,
     reset_current_context,
     set_current_context,
 )
-from async_durable_execution.exceptions import (
+from async_durable_execution.core.exceptions import (
     CallableRuntimeError,
     ExecutionError,
     SuspendExecution,
@@ -20,8 +20,8 @@ from async_durable_execution.exceptions import (
     ValidationError,
     suspend_with_optional_resume_delay,
 )
-from async_durable_execution.models import OperationIdentifier
-from async_durable_execution.models import (
+from async_durable_execution.core.models import OperationIdentifier
+from async_durable_execution.core.models import (
     ChainedInvokeDetails,
     ErrorObject,
     Operation,
@@ -35,7 +35,10 @@ from async_durable_execution.primitive.invoke import (
     invoke,
 )
 from async_durable_execution.extension.recurse import recurse
-from async_durable_execution.state import RECURSIVE_LEVEL_INPUT_FIELD, ExecutionState
+from async_durable_execution.core.state import (
+    RECURSIVE_LEVEL_INPUT_FIELD,
+    ExecutionState,
+)
 
 from ..serdes_test import CustomDictSerDes
 

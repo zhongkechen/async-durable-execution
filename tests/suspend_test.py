@@ -2,7 +2,7 @@ import datetime
 
 import pytest
 
-from async_durable_execution.exceptions import (
+from async_durable_execution.core.exceptions import (
     SuspendExecution,
     TimedSuspendExecution,
     suspend_with_optional_resume_delay,

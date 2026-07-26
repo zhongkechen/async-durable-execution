@@ -59,8 +59,8 @@ from async_durable_execution.extension.flow import (
     _resolve_flow_node_inputs,
     _resolve_dependency_expression,
 )
-from async_durable_execution.context import bind_current_context
-from async_durable_execution.exceptions import (
+from async_durable_execution.core.context import bind_current_context
+from async_durable_execution.core.exceptions import (
     BotoClientError,
     CallableRuntimeError,
     DurableApiErrorCategory,
@@ -76,14 +76,14 @@ from async_durable_execution.exceptions import (
     _sdk_error_type_name,
 )
 from async_durable_execution.primitive.callback import CallbackError
-from async_durable_execution.execution import handle_user_function_exception
-from async_durable_execution.models import (
+from async_durable_execution.core.execution import handle_user_function_exception
+from async_durable_execution.core.models import (
     InvocationStatus,
     OperationIdentifier,
     OperationSubType,
 )
-from async_durable_execution.serdes import ExtendedTypeSerDes
-from async_durable_execution.state import ExecutionState
+from async_durable_execution.core.serdes import ExtendedTypeSerDes
+from async_durable_execution.core.state import ExecutionState
 
 
 @durable_node
@@ -688,7 +688,7 @@ def test_coerce_expression_rejects_invalid_values():
             {
                 "__async_durable_execution_error__": 1,
                 "exception_type": (
-                    "async_durable_execution.exceptions.InvocationError"
+                    "async_durable_execution.core.exceptions.InvocationError"
                 ),
                 "payload": {},
             }
@@ -730,6 +730,43 @@ def test_sdk_error_data_rejects_invalid_envelopes(data):
                     "exception_type": (
                         "async_durable_execution.exceptions.CallbackError"
                     ),
+                    "payload": None,
+                }
+            ),
+            ExecutionError,
+        ),
+        (
+            "InvocationError",
+            json.dumps(
+                {
+                    "__async_durable_execution_error__": 1,
+                    "exception_type": (
+                        "async_durable_execution.exceptions.InvocationError"
+                    ),
+                    "payload": None,
+                }
+            ),
+            InvocationError,
+        ),
+        (
+            "ExecutionError",
+            json.dumps(
+                {
+                    "__async_durable_execution_error__": 1,
+                    "exception_type": (
+                        "async_durable_execution.exceptions.ExecutionError"
+                    ),
+                    "payload": None,
+                }
+            ),
+            ExecutionError,
+        ),
+        (
+            "SerDesError",
+            json.dumps(
+                {
+                    "__async_durable_execution_error__": 1,
+                    "exception_type": "async_durable_execution.exceptions.SerDesError",
                     "payload": None,
                 }
             ),

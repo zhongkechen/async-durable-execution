@@ -1,7 +1,7 @@
 """Tests for the cloud sync client example."""
 
 from async_durable_execution import InvocationStatus
-from async_durable_execution.client import lambda_api_client_is_async
+from async_durable_execution.core.client import lambda_api_client_is_async
 from examples.cloud_sync_client import cloud_sync_client
 
 

@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     Operation,
     OperationAction,
     OperationStatus,
@@ -269,7 +269,7 @@ def test_notifier_not_called_for_start():
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     Operation,
     OperationAction,
     OperationStatus,

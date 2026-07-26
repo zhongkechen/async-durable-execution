@@ -12,14 +12,14 @@ from dataclasses import dataclass, field as dataclass_field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar, cast
 
-from ..exceptions import (
+from ..core.exceptions import (
     CallableRuntimeError,
     InvalidStateError,
     SuspendExecution,
     TimedSuspendExecution,
     ValidationError,
 )
-from ..models import (
+from ..core.models import (
     ErrorObject,
     Operation,
     OperationIdentifier,
@@ -29,18 +29,18 @@ from ..models import (
     _metadata,
 )
 from ..primitive.base import OperationExecutor
-from ..context import DurableContext, bind_current_context, get_durable_context
+from ..core.context import DurableContext, bind_current_context, get_durable_context
 from ..primitive.child import (
     ChildOperationExecutor,
     OrphanedChildException,
     _create_child_context_task as _run_in_child_context,
 )
-from ..execution import durable_callable
-from ..serdes import deserialize
+from ..core.execution import durable_callable
+from ..core.serdes import deserialize
 
 if TYPE_CHECKING:
-    from ..serdes import SerDes
-    from ..state import ExecutionState
+    from ..core.serdes import SerDes
+    from ..core.state import ExecutionState
 
 
 logger = logging.getLogger(__name__)

@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
-from ...models import (
+from ...core.models import (
     Operation,
     OperationAction,
     OperationType,

@@ -1,8 +1,10 @@
 # Exceptions
 
-Implementation module: `async_durable_execution.exceptions`.
+Implementation module: `async_durable_execution.core.exceptions`.
 
-::: async_durable_execution.exceptions
+Public exports are also available from `async_durable_execution.core`.
+
+::: async_durable_execution.core.exceptions
     options:
       members:
         - DurableExecutionsError

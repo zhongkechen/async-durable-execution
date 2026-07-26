@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     CallbackDetails,
     ChainedInvokeDetails,
     ChainedInvokeOptions,

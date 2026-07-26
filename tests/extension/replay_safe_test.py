@@ -16,7 +16,7 @@ from async_durable_execution import (
     uuid,
     wait,
 )
-from async_durable_execution.serdes import ExtendedTypeSerDes
+from async_durable_execution.core.serdes import ExtendedTypeSerDes
 
 
 def test_replay_safe_helper_signatures_use_keyword_only_names():

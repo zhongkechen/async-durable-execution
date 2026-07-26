@@ -7,18 +7,18 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from ..config import Duration
-from ..context import OperationContext, bind_current_context, get_current_context
-from ..execution import durable_callable
+from ..core.config import Duration
+from ..core.context import OperationContext, bind_current_context, get_current_context
+from ..core.execution import durable_callable
 from ..primitive.callback import Callback, create_callback
-from ..models import OperationSubType
+from ..core.models import OperationSubType
 from ..primitive.child import _create_child_context_task
 from ..primitive.step import step
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from ..serdes import SerDes
+    from ..core.serdes import SerDes
 
 logger = logging.getLogger(__name__)
 

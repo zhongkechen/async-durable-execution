@@ -41,18 +41,18 @@ from async_durable_execution import (
     wait_for_callback,
     map as map_operation,
 )
-from async_durable_execution.context import (
+from async_durable_execution.core.context import (
     DurableContext as ModuleDurableContext,
     reset_current_context,
     set_current_context,
 )
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     LambdaContext,
     OperationIdentifier,
     OperationSubType,
 )
-from async_durable_execution.config import JitterStrategy
-from async_durable_execution.config import RetryStrategy
+from async_durable_execution.core.config import JitterStrategy
+from async_durable_execution.core.config import RetryStrategy
 from async_durable_execution.extension.parallel import SummaryGenerator
 from async_durable_execution.extension.parallel import CompletionDecision
 from async_durable_execution.extension.parallel import CompletionStatus
@@ -67,8 +67,8 @@ from async_durable_execution.extension.replay_safe import (
     timestamp as module_timestamp,
     uuid as module_uuid,
 )
-from async_durable_execution.serdes import ExtendedTypeSerDes
-from async_durable_execution.client import DurableServiceClient
+from async_durable_execution.core.serdes import ExtendedTypeSerDes
+from async_durable_execution.core.client import DurableServiceClient
 
 
 def make_async_executor(result):
@@ -133,13 +133,52 @@ def test_additional_public_types_importable_from_package_root():
         assert name in ade.__all__
 
 
+def test_core_public_api_is_reexported_from_core_package():
+    """Core public symbols are available from both supported package facades."""
+    import async_durable_execution as ade
+    import async_durable_execution.core as core
+
+    expected_exports = {
+        "CallableRuntimeError",
+        "DurableContext",
+        "DurableExecutionsError",
+        "DurableServiceClient",
+        "ErrorObject",
+        "ExecutionError",
+        "ExtendedTypeSerDes",
+        "InvalidStateError",
+        "InvocationError",
+        "InvocationStatus",
+        "JitterStrategy",
+        "JsonSerDes",
+        "LambdaContext",
+        "OperationStatus",
+        "OperationSubType",
+        "OperationType",
+        "RetryStrategy",
+        "SerDes",
+        "SerDesContext",
+        "SerDesError",
+        "UserlandError",
+        "ValidationError",
+        "create_default_sync_client",
+        "durable_callable",
+        "durable_execution",
+        "get_current_context",
+    }
+
+    assert set(core.__all__) == expected_exports
+    for name in expected_exports:
+        assert getattr(core, name) is getattr(ade, name)
+
+
 def test_summary_generator_is_callable_type_alias():
     """SummaryGenerator is a callable interface, not a protocol class."""
     assert get_origin(SummaryGenerator) is Callable
 
 
 def test_internal_model_types_not_exported_from_package_root():
-    """Internal construction models stay in async_durable_execution.models."""
+    """Internal construction models stay in async_durable_execution.core.models."""
     import async_durable_execution as ade
 
     assert not hasattr(ade, "OperationIdentifier")

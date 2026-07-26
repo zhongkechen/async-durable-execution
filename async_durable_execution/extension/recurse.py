@@ -5,14 +5,14 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, TypeVar, cast
 
-from ..exceptions import ValidationError
-from ..context import get_durable_context
+from ..core.exceptions import ValidationError
+from ..core.context import get_durable_context
 from ..primitive.invoke import invoke
-from ..state import RECURSIVE_LEVEL_INPUT_FIELD
+from ..core.state import RECURSIVE_LEVEL_INPUT_FIELD
 
 if TYPE_CHECKING:
-    from ..context import DurableContext
-    from ..serdes import SerDes
+    from ..core.context import DurableContext
+    from ..core.serdes import SerDes
 
 
 P = TypeVar("P")

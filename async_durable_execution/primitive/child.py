@@ -7,15 +7,15 @@ import logging
 from typing import TYPE_CHECKING, TypeVar, cast
 
 from .base import OperationExecutor
-from ..context import DurableContext, bind_current_context, get_durable_context
-from ..exceptions import (
+from ..core.context import DurableContext, bind_current_context, get_durable_context
+from ..core.exceptions import (
     CallableRuntimeError,
     ExecutionError,
     InvocationError,
     _encode_sdk_control_error_data,
     _restore_sdk_control_error,
 )
-from ..models import (
+from ..core.models import (
     ContextOptions,
     ErrorObject,
     Operation,
@@ -24,15 +24,15 @@ from ..models import (
     OperationSubType,
     OperationUpdate,
 )
-from ..serdes import deserialize, serialize
-from ..task import create_eager_task
+from ..core.serdes import deserialize, serialize
+from ..core.task import create_eager_task
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from ..extension.parallel import SummaryGenerator
-    from ..serdes import SerDes
-    from ..state import ExecutionState
+    from ..core.serdes import SerDes
+    from ..core.state import ExecutionState
 
 logger = logging.getLogger(__name__)
 

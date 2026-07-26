@@ -2,7 +2,7 @@
 
 from unittest.mock import Mock
 
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     ErrorObject,
     OperationAction,
     OperationType,
@@ -245,7 +245,7 @@ def test_no_wait_timer_or_step_retry_calls():
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     ErrorObject,
     OperationAction,
     OperationType,

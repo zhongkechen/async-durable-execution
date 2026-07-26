@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     Operation,
     OperationAction,
     OperationStatus,
@@ -337,7 +337,7 @@ def test_cancel_no_timer_scheduled():
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     Operation,
     OperationAction,
     OperationStatus,

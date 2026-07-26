@@ -10,18 +10,18 @@ from typing import cast
 from unittest.mock import Mock
 
 import pytest
-from async_durable_execution.context import (
+from async_durable_execution.core.context import (
     DurableContext,
     bind_current_context,
 )
-from async_durable_execution.exceptions import (
+from async_durable_execution.core.exceptions import (
     CallableRuntimeError,
     ExecutionError,
     InvocationError,
     _decode_sdk_error_data,
 )
-from async_durable_execution.models import OperationIdentifier
-from async_durable_execution.models import (
+from async_durable_execution.core.models import OperationIdentifier
+from async_durable_execution.core.models import (
     ContextDetails,
     ErrorObject,
     Operation,
@@ -37,8 +37,8 @@ from async_durable_execution.primitive.child import (
     run_in_child_context,
 )
 from async_durable_execution.primitive.callback import CallbackError
-from async_durable_execution.serdes import SerDes
-from async_durable_execution.state import ExecutionState
+from async_durable_execution.core.serdes import SerDes
+from async_durable_execution.core.state import ExecutionState
 from async_durable_execution.extension.parallel import SummaryGenerator
 
 from ..serdes_test import CustomDictSerDes

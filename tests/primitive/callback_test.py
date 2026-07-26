@@ -7,18 +7,18 @@ from datetime import timedelta
 from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
-from async_durable_execution.context import (
+from async_durable_execution.core.context import (
     reset_current_context,
     set_current_context,
     get_current_context,
 )
-from async_durable_execution.exceptions import (
+from async_durable_execution.core.exceptions import (
     ValidationError,
     _encode_sdk_control_error_data,
     _restore_sdk_control_error,
 )
-from async_durable_execution.models import OperationIdentifier
-from async_durable_execution.models import (
+from async_durable_execution.core.models import OperationIdentifier
+from async_durable_execution.core.models import (
     CallbackDetails,
     CallbackOptions,
     CallbackTimeoutType,
@@ -41,8 +41,8 @@ from async_durable_execution.extension.wait_for_callback import (
     wait_for_callback,
     wait_for_callback_handler,
 )
-from async_durable_execution.serdes import SerDes
-from async_durable_execution.state import ExecutionState
+from async_durable_execution.core.serdes import SerDes
+from async_durable_execution.core.state import ExecutionState
 from async_durable_execution import WaitForCallbackContext, StepContext
 
 

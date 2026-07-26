@@ -9,11 +9,11 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
-from ..config import _DelayStrategy, Duration, duration_to_seconds
-from ..context import (
+from ..core.config import _DelayStrategy, Duration, duration_to_seconds
+from ..core.context import (
     bind_current_context,
 )
-from ..exceptions import (
+from ..core.exceptions import (
     CallableRuntimeError,
     ExecutionError,
     InvocationError,
@@ -24,7 +24,7 @@ from ..exceptions import (
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
 )
-from ..models import (
+from ..core.models import (
     ErrorObject,
     Operation,
     OperationIdentifier,
@@ -33,16 +33,16 @@ from ..models import (
     OperationSubType,
 )
 from ..primitive.base import OperationExecutor
-from ..context import get_durable_context
+from ..core.context import get_durable_context
 from ..primitive.step import StepContext
-from ..task import create_eager_task
+from ..core.task import create_eager_task
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
-    from ..context import DurableContext
-    from ..serdes import SerDes
-    from ..state import ExecutionState
+    from ..core.context import DurableContext
+    from ..core.serdes import SerDes
+    from ..core.state import ExecutionState
 
 
 T = TypeVar("T")

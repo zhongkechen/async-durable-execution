@@ -5,11 +5,11 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from async_durable_execution.execution import (
+from async_durable_execution.core.execution import (
     DurableExecutionInvocationOutput,
     InvocationStatus,
 )
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     CallbackDetails,
     ErrorObject,
     Operation,

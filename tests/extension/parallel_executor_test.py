@@ -29,14 +29,14 @@ from async_durable_execution.extension.parallel import (
     parallel,
 )
 from async_durable_execution import DurableContext, get_current_context
-from async_durable_execution.exceptions import (
+from async_durable_execution.core.exceptions import (
     CallableRuntimeError,
     InvalidStateError,
     SuspendExecution,
     TimedSuspendExecution,
     ValidationError,
 )
-from async_durable_execution.models import (
+from async_durable_execution.core.models import (
     ContextDetails,
     ErrorObject,
     Operation,

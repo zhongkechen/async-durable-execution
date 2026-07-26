@@ -24,17 +24,17 @@ from .parallel import (
     _validate_max_concurrency,
 )
 from .parallel import parallel_handler
-from ..context import DurableContext, bind_current_context, get_durable_context
-from ..execution import durable_callable
-from ..models import OperationIdentifier, OperationSubType
+from ..core.context import DurableContext, bind_current_context, get_durable_context
+from ..core.execution import durable_callable
+from ..core.models import OperationIdentifier, OperationSubType
 from ..primitive.child import (
     _create_child_context_task as _run_in_child_context,
 )
 
 if TYPE_CHECKING:
     from .parallel import SummaryGenerator
-    from ..serdes import SerDes
-    from ..state import ExecutionState
+    from ..core.serdes import SerDes
+    from ..core.state import ExecutionState
 
 logger = logging.getLogger(__name__)
 

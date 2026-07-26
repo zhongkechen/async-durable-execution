@@ -4,6 +4,9 @@ Import the supported public symbols from `async_durable_execution`. The
 reference pages below are grouped by responsibility, and each page documents
 exactly one implementation module.
 
+Core runtime, configuration, model, serialization, and service symbols can
+also be imported from `async_durable_execution.core`.
+
 ## Primitive Operations
 
 These operations map directly to durable execution backend operations.
@@ -30,22 +33,22 @@ checkpoint conventions.
 
 ## Core Runtime
 
-- [Execution decorators](api/execution.md)
-- [Current context](api/context.md)
+- [Execution decorators](api/core/execution.md)
+- [Current context](api/core/context.md)
 
 ## Configuration and Data
 
-- [Configuration](api/config.md)
-- [Serialization](api/serdes.md)
-- [Models](api/models.md)
+- [Configuration](api/core/config.md)
+- [Serialization](api/core/serdes.md)
+- [Models](api/core/models.md)
 
 ## Errors
 
-- [Exceptions](api/exceptions.md)
+- [Exceptions](api/core/exceptions.md)
 
 ## Integrations
 
-- [Durable service client](api/client.md)
+- [Durable service client](api/core/client.md)
 
 ## Testing
 

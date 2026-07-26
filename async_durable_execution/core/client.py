@@ -11,7 +11,7 @@ from typing import Any, Protocol, cast
 from botocore.config import Config
 from botocore.session import get_session
 
-from .__about__ import __version__
+from ..__about__ import __version__
 from .exceptions import CheckpointError, GetExecutionStateError
 from .models import (
     CheckpointOutput,
