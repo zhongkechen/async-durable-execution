@@ -1003,6 +1003,8 @@ class ParallelExecutor(
                     in {BranchStatus.COMPLETED, BranchStatus.FAILED}
                 ):
                     await submit_next_task()
+                if not self._completion_event.is_set():
+                    self._complete_if_execution_cannot_progress()
 
             task.add_done_callback(on_done)
 
@@ -1111,17 +1113,18 @@ class ParallelExecutor(
         if completion_decision.should_complete:
             self._completion_decision = completion_decision
             self._completion_event.set()
-        else:
-            suspend_result = self.should_execution_suspend()
-            if suspend_result.should_suspend:
-                self._suspend_exception = suspend_result.exception
-                self._completion_event.set()
-            elif self._all_executables_terminal():
-                self._completion_exception = InvalidStateError(
-                    "custom should_complete did not complete after all branches "
-                    "reached terminal states"
-                )
-                self._completion_event.set()
+
+    def _complete_if_execution_cannot_progress(self) -> None:
+        suspend_result = self.should_execution_suspend()
+        if suspend_result.should_suspend:
+            self._suspend_exception = suspend_result.exception
+            self._completion_event.set()
+        elif self._all_executables_terminal():
+            self._completion_exception = InvalidStateError(
+                "custom should_complete did not complete after all branches "
+                "reached terminal states"
+            )
+            self._completion_event.set()
 
     def _all_executables_terminal(self) -> bool:
         return all(

@@ -1547,6 +1547,43 @@ async def test_concurrent_executor_suspended_branch_keeps_concurrency_slot():
     assert executor.executables_with_state[1].status is BranchStatus.NOT_STARTED
 
 
+async def test_concurrent_executor_refills_terminal_slot_before_suspending():
+    """A terminal branch is replaced before suspension is evaluated."""
+    started = []
+    first_branch_suspended = asyncio.Event()
+
+    class TestExecutor(ParallelExecutor):
+        async def _execute_item_in_child_context(self, executor_context, executable):
+            started.append(executable.index)
+            if executable.index == 0:
+                first_branch_suspended.set()
+                raise SuspendExecution("waiting for callback")
+            if executable.index == 1:
+                await first_branch_suspended.wait()
+                return "completed"
+            raise SuspendExecution("waiting for callback")
+
+    executables = [Executable(index, lambda: None) for index in range(3)]
+    executor = create_concurrent_executor(
+        TestExecutor,
+        executables=executables,
+        max_concurrency=2,
+        completion_config=CompletionConfig.all_completed(),
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
+        name_prefix="test_",
+        serdes=None,
+    )
+
+    with pytest.raises(SuspendExecution):
+        await executor.execute()
+
+    assert started == [0, 1, 2]
+    assert executor.executables_with_state[0].status is BranchStatus.SUSPENDED
+    assert executor.executables_with_state[1].status is BranchStatus.COMPLETED
+    assert executor.executables_with_state[2].status is BranchStatus.SUSPENDED
+
+
 @pytest.mark.parametrize("invalid_max_concurrency", [0, -1, True, 1.5])
 def test_parallel_rejects_invalid_max_concurrency_before_creating_context(
     invalid_max_concurrency,
