@@ -38,11 +38,11 @@ AWS Lambda 工作流程。** 自动为状态创建检查点，无需持续计算
 ## ✨ 主要功能
 
 - **[异步优先的持久代码](https://zhongkechen.github.io/async-durable-execution/official-python-sdk-comparison.html#programming-model)** - 与官方 AWS SDK 相比，用户提供的持久事件处理程序、步骤、子上下文、`flow` 节点、回调提交器、`map()` 项函数、`parallel()` 分支与等待条件检查都使用 `async def` 编写。
-- **[官方 SDK 未提供的扩展操作](https://zhongkechen.github.io/async-durable-execution/api/operations.html#sdk-extensions)** - 本 SDK 新增[重放安全辅助操作](https://zhongkechen.github.io/async-durable-execution/api/operations.html#replay-safe-helper-values)（`random()`、`now()`、`timestamp()` 与 `uuid()`）和[持久自调用](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#recursive-self-invocation)（`recurse()`）。
-- **[声明式 DAG 工作流](https://zhongkechen.github.io/async-durable-execution/api/dag.html#quick-start)** - 使用带类型的节点输入、推导或条件依赖、失败路由和节点内持久操作来定义无环工作流。SDK 会在执行前验证图，并跳过所选输出不依赖的节点。
+- **[官方 SDK 未提供的扩展操作](https://zhongkechen.github.io/async-durable-execution/api/extension/replay_safe.html)** - 本 SDK 新增[重放安全辅助操作](https://zhongkechen.github.io/async-durable-execution/api/extension/replay_safe.html)（`random()`、`now()`、`timestamp()` 与 `uuid()`）和[持久自调用](https://zhongkechen.github.io/async-durable-execution/api/extension/recurse.html)（`recurse()`）。
+- **[声明式 DAG 工作流](https://zhongkechen.github.io/async-durable-execution/api/extension/flow.html#quick-start)** - 使用带类型的节点输入、推导或条件依赖、失败路由和节点内持久操作来定义无环工作流。SDK 会在执行前验证图，并跳过所选输出不依赖的节点。
 - **[后台操作任务](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#background-operation-tasks)** - `step(...)`、`wait(...)`、`invoke(...)`、`recurse(...)`、`run_in_child_context(...)` 与 `flow(...)` 等持久操作会返回 `asyncio.Task` 对象，因此独立操作可以在后台运行，并通过 `asyncio.gather` 一起等待，无需使用 `parallel()` 或 `map()`。
 - **[符合 Python 习惯的操作参数](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#api-mapping)** - 操作直接使用关键字参数、`datetime.timedelta` 等标准 Python 类型及仅限关键字的名称，无需配置包装对象。
-- **[集成本地与云端运行器](https://zhongkechen.github.io/async-durable-execution/async_durable_execution/runner.html#local-and-cloud-runners)** - 运行器功能现在通过 `async_durable_execution` 提供，包含独立的本地与云端运行器工厂，以及带类型的测试结果辅助对象。
+- **[集成本地与云端运行器](https://zhongkechen.github.io/async-durable-execution/api/runner/local.html)** - 运行器功能现在通过 `async_durable_execution` 提供，包含独立的本地与云端运行器工厂，以及带类型的测试结果辅助对象。
 - **[支持异步 Lambda 客户端](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#lambda-client-selection)** - 安装可选的 `aioboto` extra 即可使用异步 Lambda 客户端；否则 SDK 会通过异步适配器使用内置的同步客户端。
 - **[通过标准库 logging 提供重放感知日志](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#logging)** - 标准 `logging` logger 会由持久上下文过滤器增强，让工作流程日志在重放时保持安全。
 - **[Lambda 层打包](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#lambda-layer-packaging)** - 仓库包含构建与发布 SDK Lambda 层的工具和工作流程，适用于不直接打包依赖项的函数。
@@ -209,7 +209,7 @@ Lambda 持久性函数示例位于 `examples/`。可以从 `hello_world.py` 开�
 ## 📚 文档
 
 - **[文档网站](https://zhongkechen.github.io/async-durable-execution/)** - 可搜索的指南与从 Python docstring 生成的 API 参考
-- **[DAG 工作流 API](https://zhongkechen.github.io/async-durable-execution/api/dag.html)** - 使用 `flow()`、带类型的节点输入、条件依赖和失败路由构建声明式工作流
+- **[DAG 工作流 API](https://zhongkechen.github.io/async-durable-execution/api/extension/flow.html)** - 使用 `flow()`、带类型的节点输入、条件依赖和失败路由构建声明式工作流
 - **[官方 Python SDK 对比](https://zhongkechen.github.io/async-durable-execution/official-python-sdk-comparison.html)** - 与官方 AWS Durable Execution Python SDK 的并排对比
 - **[迁移指南](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html)** - 从官方同步 Python SDK 迁移到这个异步优先 SDK
 - **[使用同步代码](https://zhongkechen.github.io/async-durable-execution/using-synchronous-code.html)** - 安全包装既有同步业务逻辑与阻塞式客户端

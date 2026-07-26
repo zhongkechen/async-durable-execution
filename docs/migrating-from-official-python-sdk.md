@@ -332,7 +332,7 @@ result = await flow(order_flow(order_id), name="order-flow")
 
 Unlike other user-provided callables, a `@durable_dag` definition is synchronous
 and must be deterministic. `@durable_node` bodies are async and can contain normal
-durable operations. See [DAG workflows](api/dag.md) for the complete dependency,
+durable operations. See [flow and DAG workflows](api/extension/flow.md) for the complete dependency,
 failure, and output model.
 
 ## Logging
