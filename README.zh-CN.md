@@ -33,7 +33,7 @@ AWS Lambda 工作流程。** 自动为状态创建检查点，无需持续计算
 ## ✨ 主要功能
 
 - **[异步优先的持久代码](docs/official-python-sdk-comparison.md#programming-model)** - 与官方 AWS SDK 相比，用户提供的持久事件处理程序、步骤、子上下文、`flow` 节点、回调提交器、`map()` 项函数、`parallel()` 分支与等待条件检查都使用 `async def` 编写。
-- **[官方 SDK 未提供的扩展操作](docs/api/operations.md)** - 本 SDK 新增重放安全辅助操作（`random()`、`now()`、`timestamp()` 与 `uuid()`）、持久自调用（`recurse()`），以及声明式 DAG 执行（`flow()`）。
+- **[官方 SDK 未提供的扩展操作](docs/api/operations.md#sdk-extensions)** - 本 SDK 新增[重放安全辅助操作](docs/api/operations.md#replay-safe-helper-values)（`random()`、`now()`、`timestamp()` 与 `uuid()`）、[持久自调用](docs/advanced-usage.md#recursive-self-invocation)（`recurse()`），以及[声明式 DAG 执行](docs/api/dag.md)（`flow()`）。
 - **[声明式 DAG 工作流](docs/api/dag.md)** - 使用带类型的节点输入、推导或条件依赖、失败路由和节点内持久操作来定义无环工作流。SDK 会在执行前验证图，并跳过所选输出不依赖的节点。
 - **[后台操作任务](docs/advanced-usage.md#background-operation-tasks)** - `step(...)`、`wait(...)`、`invoke(...)`、`recurse(...)`、`run_in_child_context(...)` 与 `flow(...)` 等持久操作会返回 `asyncio.Task` 对象，因此独立操作可以在后台运行，并通过 `asyncio.gather` 一起等待，无需使用 `parallel()` 或 `map()`。
 - **[简化的持久操作 API](docs/migrating-from-official-python-sdk.md#api-mapping)** - `v2` API 移除了配置包装对象，改用直接的关键字参数与更清晰的调用位置，包括仅限关键字的操作名称。
