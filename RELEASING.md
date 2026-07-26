@@ -2,7 +2,7 @@
 
 This document describes how to cut a release and how the automated PyPI publishing workflow is triggered.
 
-## Packages
+## Package
 
 This repository publishes the following package:
 
@@ -14,7 +14,7 @@ This repository publishes the following package:
 
 The package version is defined in the repository root:
 
-- Shared version source: `VERSION.py`
+- Version source: `VERSION.py`
 
 Package metadata reads from `VERSION.py`. Repository helper scripts also read
 this version where needed.
@@ -36,7 +36,7 @@ Update `__version__` in `VERSION.py`. Commit and merge to `main`.
 
 ### Tagging Convention
 
-The tag should match the shared monorepo version exactly:
+The tag should match the package version exactly:
 
 - **Package:** `v<version>` (for example, `v2.0.0a2`)
 
@@ -77,7 +77,7 @@ Optional repository variables:
 
 PyPI trusted publishing is configured per project, so `async-durable-execution` needs a matching publisher entry in PyPI.
 
-For the current workflow, each PyPI project should trust the following GitHub Actions publisher settings:
+For the current workflow, the PyPI project should trust the following GitHub Actions publisher settings:
 
 - Owner: `zhongkechen`
 - Repository: `async-durable-execution`
@@ -90,7 +90,7 @@ If PyPI returns `invalid-publisher`, compare the failing job's OIDC claims with 
 
 ## Release Notes Format
 
-Release notes should document the monorepo version being released. Use the following structure:
+Release notes should document the package version being released. Use the following structure:
 
 ```markdown
 ## async-durable-execution v2.0.0a2
