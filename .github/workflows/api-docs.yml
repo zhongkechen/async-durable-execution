@@ -57,9 +57,9 @@ jobs:
       - name: Assemble documentation at site root
         run: |
           cp -R build/docs/. site/
-          test -f site/api/operations.html
-          test -f site/api/composition.html
-          test -f site/api/configuration.html
+          test -f site/api/primitive/step.html
+          test -f site/api/extension/flow.html
+          test -f site/api/config.html
 
       - name: Build HTML coverage report
         run: hatch run test:cov-html
