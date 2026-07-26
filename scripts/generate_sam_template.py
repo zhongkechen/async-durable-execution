@@ -14,12 +14,12 @@ from scripts.function_naming import to_function_name_suffix, to_logical_id
 from scripts.test_handlers import load_test_handlers
 
 PACKAGE_NAME = "DurableExecutionsPythonExamples-1.0"
-PACKAGE_PREFIX = "async_durable_execution_examples"
+PACKAGE_PREFIX = "examples"
 DEFAULT_AWS_REGION = "eu-south-1"
 DEFAULT_LAMBDA_ENDPOINT = f"https://lambda.{DEFAULT_AWS_REGION}.amazonaws.com"
 DEFAULT_RUNTIME = "python3.13"
 SDK_LAYER_LOGICAL_ID = "AsyncDurableExecutionSdkLayer"
-SDK_LAYER_CONTENT_URI = "../dist/async-durable-execution-layer.zip"
+SDK_LAYER_CONTENT_URI = "dist/async-durable-execution-layer.zip"
 DEFAULT_DURABLE_CONFIG = {
     "RetentionPeriodInDays": 7,
     "ExecutionTimeout": 300,
@@ -39,7 +39,7 @@ SPECIAL_LOGGING_CONFIG = {
 def build_examples_catalog() -> dict[str, Any]:
     """Build the examples catalog by scanning example handlers."""
     repo_dir = Path(__file__).resolve().parent.parent
-    source_root = repo_dir / "async-durable-execution-examples" / "src" / PACKAGE_PREFIX
+    source_root = repo_dir / PACKAGE_PREFIX
     examples = []
     for path in sorted(source_root.rglob("*.py")):
         if path.name in {"__init__.py", "__about__.py"}:
@@ -72,7 +72,7 @@ def build_example_entry(path: Path, source_root: Path) -> dict[str, Any] | None:
         "handler": f"{handler_module}.handler",
         "integration": True,
         "durableConfig": DEFAULT_DURABLE_CONFIG.copy(),
-        "path": f"./src/{PACKAGE_PREFIX}/{relative_path.as_posix()}",
+        "path": f"./{PACKAGE_PREFIX}/{relative_path.as_posix()}",
     }
 
     logging_config = SPECIAL_LOGGING_CONFIG.get(relative_path.as_posix())
@@ -225,7 +225,7 @@ def build_template(
         logical_id = to_logical_id(example["handler"])
         function_name_suffix = to_function_name_suffix(example["handler"])
         properties: dict[str, Any] = {
-            "CodeUri": "build/",
+            "CodeUri": "build/lambda/",
             "Handler": example["handler"],
             "Description": example["description"],
             "Role": {"Fn::GetAtt": ["DurableFunctionRole", "Arn"]},
@@ -250,7 +250,7 @@ def validate_catalog_test_coverage(catalog: dict[str, Any]) -> None:
     """Ensure every example test handler is represented in the examples catalog."""
     catalog_handlers = {example["handler"] for example in catalog["examples"]}
     repo_dir = Path(__file__).resolve().parent.parent
-    test_root = repo_dir / "async-durable-execution-examples" / "test_examples"
+    test_root = repo_dir / "test_examples"
     missing_handlers = sorted(
         handler
         for handler in load_test_handlers(test_root)
@@ -299,9 +299,7 @@ def generate_sam_template(
     )
 
     repo_dir = Path(__file__).resolve().parent.parent
-    template_path = output_path or (
-        repo_dir / "async-durable-execution-examples" / "template.generated.json"
-    )
+    template_path = output_path or (repo_dir / "template.generated.json")
     template_path.parent.mkdir(parents=True, exist_ok=True)
     with template_path.open("w") as file:
         json.dump(template, file, sort_keys=False, indent=2)

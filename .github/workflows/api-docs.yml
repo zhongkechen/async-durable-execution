@@ -4,10 +4,10 @@ on:
   push:
     branches: [main]
     paths:
-      - "async-durable-execution/src/**"
-      - "async-durable-execution/test_sdk/**"
-      - "async-durable-execution/pyproject.toml"
-      - "async-durable-execution-examples/**"
+      - "async_durable_execution/**"
+      - "test_sdk/**"
+      - "examples/**"
+      - "test_examples/**"
       - "docs/**"
       - "scripts/**"
       - "mkdocs.yml"
@@ -16,10 +16,10 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "async-durable-execution/src/**"
-      - "async-durable-execution/test_sdk/**"
-      - "async-durable-execution/pyproject.toml"
-      - "async-durable-execution-examples/**"
+      - "async_durable_execution/**"
+      - "test_sdk/**"
+      - "examples/**"
+      - "test_examples/**"
       - "docs/**"
       - "scripts/**"
       - "mkdocs.yml"

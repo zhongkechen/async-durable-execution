@@ -313,7 +313,7 @@ side at each level. A 31-item list reaches `recursive_level == 14` and should no
 trigger protection. A similar 33-item list attempts `recursive_level == 15`, which is
 16 total Lambda invocations and is expected to fail with Lambda's maximum recursion
 depth protection. See
-`async-durable-execution-examples/src/async_durable_execution_examples/invoke/recurse.py`
+`examples/invoke/recurse.py`
 for an executable example that verifies the computed result and covers both recursion
 protection cases.
 

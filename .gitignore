@@ -34,7 +34,7 @@ dist/
 
 **/build/
 **/*.zip
-async-durable-execution-examples/template.yaml
+/template.yaml
 **/template.generated.json
 conformance/generated/
 

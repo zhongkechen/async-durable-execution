@@ -31,18 +31,7 @@ jobs:
       run: |
         python -m pip install hatch==1.16.5
     - name: static analysis
-      run: |
-        echo "=== Checking format: repository ==="
-        hatch fmt --check
-
-        for pkg in async-durable-execution async-durable-execution-examples; do
-          if [ -f "$pkg/pyproject.toml" ]; then
-            echo "=== Checking format: $pkg ==="
-            cd "$pkg"
-            hatch fmt --check
-            cd "$GITHUB_WORKSPACE"
-          fi
-        done
+      run: hatch fmt --check
     - name: Lint shell scripts
       run: |
         shellcheck scripts/*.sh
@@ -52,12 +41,4 @@ jobs:
     - name: Run tests + coverage
       run: hatch run test:cov
     - name: Build distribution
-      run: |
-        for pkg in async-durable-execution async-durable-execution-examples; do
-          if [ -f "$pkg/pyproject.toml" ]; then
-            echo "=== Building: $pkg ==="
-            cd "$pkg"
-            hatch build
-            cd "$GITHUB_WORKSPACE"
-          fi
-        done
+      run: hatch build

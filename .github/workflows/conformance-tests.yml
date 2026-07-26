@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "async-durable-execution/**"
+      - "async_durable_execution/**"
+      - "pyproject.toml"
       - "conformance/**"
       - "scripts/build_conformance.py"
       - "scripts/generate_conformance_sam_templates.py"
@@ -12,7 +13,8 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "async-durable-execution/**"
+      - "async_durable_execution/**"
+      - "pyproject.toml"
       - "conformance/**"
       - "scripts/build_conformance.py"
       - "scripts/generate_conformance_sam_templates.py"

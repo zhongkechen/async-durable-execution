@@ -62,7 +62,7 @@ plugins:
       handlers:
         python:
           paths:
-            - async-durable-execution/src
+            - .
           options:
             docstring_style: google
             docstring_options:

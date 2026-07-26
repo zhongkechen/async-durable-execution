@@ -12,9 +12,7 @@ def test_build_conformance_bundle_installs_sdk_and_copies_suites(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo_dir = tmp_path / "repo"
-    sdk_dir = repo_dir / "async-durable-execution"
     suite_dir = repo_dir / "conformance" / "step"
-    sdk_dir.mkdir(parents=True)
     suite_dir.mkdir(parents=True)
     (suite_dir / "__init__.py").write_text("", encoding="utf-8")
     (suite_dir / "step_basic.py").write_text("VALUE = 1\n", encoding="utf-8")
@@ -29,7 +27,7 @@ def test_build_conformance_bundle_installs_sdk_and_copies_suites(
 
     run.assert_called_once()
     command = run.call_args.args[0]
-    assert str(sdk_dir) in command
+    assert str(repo_dir) in command
     assert "boto3>=1.42.90,<1.43.1" in command
     assert run.call_args.kwargs == {"check": True}
     assert (output_dir / "step" / "step_basic.py").read_text() == "VALUE = 1\n"

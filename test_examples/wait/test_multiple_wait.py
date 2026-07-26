@@ -1,0 +1,38 @@
+"""Tests for multiple_waits."""
+
+from async_durable_execution import InvocationStatus
+from examples.wait import multiple_wait
+
+
+async def test_multiple_sequential_wait_operations(durable_runner):
+    """Test multiple sequential wait operations."""
+    async with durable_runner(
+        handler=multiple_wait.handler, input=None, timeout=20
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+
+    # Verify the final result
+    assert result.get_deserialized_result() == {
+        "completedWaits": 2,
+        "finalStep": "done",
+    }
+
+    # Verify operations were tracked
+    operations = [op for op in result.operations if op.operation_type.value == "WAIT"]
+    assert len(operations) == 2
+
+    # Find the wait operations by name
+    first_wait = result.get_wait("wait-1")
+    second_wait = result.get_wait("wait-2")
+
+    # Verify operation types and status
+    assert first_wait.operation_type.value == "WAIT"
+    assert first_wait.status.value == "SUCCEEDED"
+    assert second_wait.operation_type.value == "WAIT"
+    assert second_wait.status.value == "SUCCEEDED"
+
+    # Verify wait details
+    assert first_wait.wait_details.scheduled_end_timestamp is not None
+    assert second_wait.wait_details.scheduled_end_timestamp is not None
