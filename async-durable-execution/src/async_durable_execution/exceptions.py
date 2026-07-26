@@ -88,12 +88,19 @@ def _decode_sdk_error_data(
     return True, payload
 
 
-def _encode_sdk_control_error_data(error: Exception) -> str | None:
+def _encode_sdk_control_error_data(
+    error: Exception,
+    *,
+    invocation_retryable: bool | None = None,
+) -> str | None:
     """Encode the SDK-owned control category of an exception, if any."""
     if isinstance(error, InvocationError):
         return _encode_sdk_error_data(
             InvocationError,
-            _encode_sdk_invocation_error_payload(error),
+            _encode_sdk_invocation_error_payload(
+                error,
+                retryable=invocation_retryable,
+            ),
         )
     if isinstance(error, ExecutionError):
         return _encode_sdk_error_data(
@@ -416,12 +423,16 @@ def _restore_sdk_execution_error(
     )
 
 
-def _encode_sdk_invocation_error_payload(error: InvocationError) -> str:
+def _encode_sdk_invocation_error_payload(
+    error: InvocationError,
+    *,
+    retryable: bool | None = None,
+) -> str:
     """Encode retry behavior needed to safely restore an invocation error."""
     details: dict[str, Any] = {
         "version": _SDK_INVOCATION_ERROR_PAYLOAD_VERSION,
         "error_type": _sdk_error_type_name(error),
-        "retryable": bool(error.is_retryable()),
+        "retryable": error.is_retryable() if retryable is None else retryable,
         "termination_reason": error.termination_reason.value,
     }
     if isinstance(error, BotoClientError | _RestoredInvocationError):

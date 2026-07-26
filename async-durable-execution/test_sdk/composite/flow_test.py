@@ -41,6 +41,7 @@ from async_durable_execution.context import bind_current_context
 from async_durable_execution.composite.flow import _evaluate_definition
 from async_durable_execution.exceptions import (
     ExecutionError,
+    InvocationError,
     SerDesError,
     TerminationReason,
 )
@@ -1912,6 +1913,55 @@ async def test_custom_sdk_control_error_does_not_activate_failure_route(
     assert result.error is not None
     assert result.error.type == type(control_error).__name__
     assert called == ["source"]
+
+
+async def test_exhausted_step_invocation_error_is_non_retryable_on_flow_replay(
+    monkeypatch,
+):
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0")
+    step_calls = 0
+    observed_retryability: list[bool] = []
+
+    @durable_callable
+    async def fail_step() -> None:
+        nonlocal step_calls
+        step_calls += 1
+        msg = "step invocation failed"
+        raise InvocationError(msg)
+
+    @durable_dag
+    def graph():
+        @durable_node
+        async def source() -> None:
+            await step(
+                fail_step(),
+                name="exhausted-invocation",
+                retry_strategy=RetryStrategy.none(),
+            )
+
+        return node(source(), name="source").result
+
+    @durable_execution
+    async def handler(event):
+        try:
+            await flow(graph(), name="terminal-invocation")
+        except InvocationError as error:
+            observed_retryability.append(error.is_retryable())
+            await wait(timedelta(seconds=1), name="force-replay")
+            return {"retryable": error.is_retryable()}
+        pytest.fail("The terminal invocation error must remain a control failure")
+
+    async with create_local_runner(
+        handler=handler,
+        input={},
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert json.loads(result.result) == {"retryable": False}
+    assert observed_retryability == [False, False]
+    assert step_calls == 1
 
 
 @pytest.mark.skipif(

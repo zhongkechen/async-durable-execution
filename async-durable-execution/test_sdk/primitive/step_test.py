@@ -17,6 +17,7 @@ from async_durable_execution.exceptions import (
     TerminationReason,
     UnrecoverableError,
     _decode_sdk_error_data,
+    _restore_sdk_control_error,
 )
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
@@ -688,6 +689,75 @@ async def test_step_handler_checkpoints_sdk_error_metadata():
     )
     assert fail_operation.error.type == "SerDesError"
     assert is_sdk_error
+
+
+@pytest.mark.parametrize("failure_source", ["step", "retry-strategy"])
+async def test_terminal_step_invocation_error_is_not_retryable(failure_source):
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.operations.get.return_value = None
+    mock_state.durable_execution_arn = "test_arn"
+    invocation_error = InvocationError(f"{failure_source} invocation failure")
+    if failure_source == "step":
+        callable_error = invocation_error
+        retry_strategy = Mock(return_value=None)
+    else:
+        callable_error = RuntimeError("step failure")
+        retry_strategy = Mock(side_effect=invocation_error)
+
+    with pytest.raises(CallableRuntimeError, match=str(invocation_error)):
+        await step_handler(
+            Mock(side_effect=callable_error),
+            mock_state,
+            OperationIdentifier(
+                f"terminal-{failure_source}",
+                OperationSubType.STEP,
+                None,
+                "test_step",
+            ),
+            retry_strategy=retry_strategy,
+        )
+
+    fail_operation = mock_state.create_checkpoint.call_args_list[1].kwargs[
+        "operation_update"
+    ]
+    restored = _restore_sdk_control_error(
+        fail_operation.error.message,
+        fail_operation.error.type,
+        fail_operation.error.data,
+    )
+    assert isinstance(restored, InvocationError)
+    assert not restored.is_retryable()
+
+
+async def test_step_retry_preserves_retryable_invocation_error_metadata():
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.operations.get.return_value = None
+    mock_state.durable_execution_arn = "test_arn"
+    invocation_error = InvocationError("transient invocation failure")
+
+    with pytest.raises(SuspendExecution, match="Retry scheduled"):
+        await step_handler(
+            Mock(side_effect=invocation_error),
+            mock_state,
+            OperationIdentifier(
+                "retryable-invocation",
+                OperationSubType.STEP,
+                None,
+                "test_step",
+            ),
+            retry_strategy=Mock(return_value=timedelta(seconds=1)),
+        )
+
+    retry_operation = mock_state.create_checkpoint.call_args_list[1].kwargs[
+        "operation_update"
+    ]
+    restored = _restore_sdk_control_error(
+        retry_operation.error.message,
+        retry_operation.error.type,
+        retry_operation.error.data,
+    )
+    assert isinstance(restored, InvocationError)
+    assert restored.is_retryable()
 
 
 async def test_step_handler_retry_interrupted_error():

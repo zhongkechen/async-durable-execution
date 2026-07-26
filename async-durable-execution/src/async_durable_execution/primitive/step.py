@@ -46,9 +46,16 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
-def _error_object_from_exception(error: Exception) -> ErrorObject:
+def _error_object_from_exception(
+    error: Exception,
+    *,
+    invocation_retryable: bool | None = None,
+) -> ErrorObject:
     error_object = ErrorObject.from_exception(error)
-    sdk_error_data = _encode_sdk_control_error_data(error)
+    sdk_error_data = _encode_sdk_control_error_data(
+        error,
+        invocation_retryable=invocation_retryable,
+    )
     if sdk_error_data is None:
         return error_object
     return ErrorObject(
@@ -278,7 +285,10 @@ class StepOperationExecutor(OperationExecutor[T]):
             if retry_delay is not None:
                 delay_seconds = duration_to_seconds(retry_delay, "retry delay")
         except Exception as retry_error:
-            fail_error_object = _error_object_from_exception(retry_error)
+            fail_error_object = _error_object_from_exception(
+                retry_error,
+                invocation_retryable=False,
+            )
             fail_operation: OperationUpdate = OperationUpdate.create_step_fail(
                 identifier=self.operation_identifier, error=fail_error_object
             )
@@ -294,15 +304,19 @@ class StepOperationExecutor(OperationExecutor[T]):
             raise CallableRuntimeError.from_error_object(fail_error_object)
 
         if retry_delay is None:
+            fail_error_object = _error_object_from_exception(
+                error,
+                invocation_retryable=False,
+            )
             fail_operation = OperationUpdate.create_step_fail(
-                identifier=self.operation_identifier, error=error_object
+                identifier=self.operation_identifier, error=fail_error_object
             )
             await self.create_checkpoint(fail_operation)
 
             if isinstance(error, StepInterruptedError):
                 raise error
 
-            raise CallableRuntimeError.from_error_object(error_object)
+            raise CallableRuntimeError.from_error_object(fail_error_object)
 
         assert delay_seconds is not None
 
