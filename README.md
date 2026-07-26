@@ -1,8 +1,7 @@
 # Async Durable Execution for Python
 
-[简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md)
-
-[![Deploy now](https://img.shields.io/badge/Deploy_now-AWS_SAM-FF9900?logo=amazonwebservices&logoColor=white)](#deploy-now)
+[![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-555555)](README.zh-CN.md)
+[![繁體中文](https://img.shields.io/badge/Language-%E7%B9%81%E9%AB%94%E4%B8%AD%E6%96%87-555555)](README.zh-TW.md)
 [![Quick start](https://img.shields.io/badge/Quick_start-Python-3776AB?logo=python&logoColor=white)](#quick-start)
 [![Read the docs](https://img.shields.io/badge/Read_the_docs-API_reference-0A7BBB)](https://zhongkechen.github.io/async-durable-execution/)
 
@@ -16,61 +15,6 @@
 **Build fully compliant, long-running AWS Lambda workflows with native
 `async`/`await`.** Checkpoint state automatically, pause without active compute,
 and resume after failures without running a workflow server.
-
-```python
-from datetime import timedelta
-
-from async_durable_execution import durable_callable, durable_execution, step, wait
-
-
-@durable_callable
-async def reserve_inventory(order_id: str) -> dict:
-    # API and database calls belong inside checkpointed steps.
-    return {"order_id": order_id, "reserved": True}
-
-
-@durable_execution
-async def handler(event: dict) -> dict:
-    reservation = await step(
-        reserve_inventory(event["order_id"]),
-        name="reserve-inventory",
-    )
-    await wait(timedelta(hours=24), name="payment-window")
-    return {"status": "ready-to-ship", "reservation": reservation}
-```
-
-The SDK keeps the workflow in a familiar Python coroutine while AWS Lambda
-stores its durable execution history. Each completed step is checkpointed, and
-the wait suspends the workflow without active compute until Lambda schedules
-its resumption. When the handler replays, the SDK returns the saved reservation
-instead of calling `reserve_inventory` again, then continues after the wait.
-
-## Deploy Now
-
-Deploy the included Hello World workflow with
-[AWS SAM](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html).
-You need AWS credentials, Python 3.10 or newer, Hatch, and the SAM CLI.
-
-```console
-git clone https://github.com/zhongkechen/async-durable-execution.git
-cd async-durable-execution
-
-hatch run examples:build-layer
-hatch run examples:build
-hatch run examples:generate-sam-template -- --example-name "Hello World"
-sam build --template-file template.generated.json
-
-AWS_REGION="${AWS_REGION:-us-east-1}"
-sam deploy \
-  --template-file .aws-sam/build/template.yaml \
-  --stack-name async-durable-hello-world \
-  --resolve-s3 \
-  --capabilities CAPABILITY_IAM \
-  --no-confirm-changeset \
-  --region "$AWS_REGION" \
-  --parameter-overrides \
-    LambdaEndpoint="https://lambda.${AWS_REGION}.amazonaws.com"
-```
 
 ## Project Status
 

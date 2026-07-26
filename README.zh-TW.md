@@ -1,8 +1,7 @@
 # Python 非同步持久性執行
 
-[English](README.md) | [简体中文](README.zh-CN.md)
-
-[![Deploy now](https://img.shields.io/badge/Deploy_now-AWS_SAM-FF9900?logo=amazonwebservices&logoColor=white)](#deploy-now)
+[![English](https://img.shields.io/badge/Language-English-555555)](README.md)
+[![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-555555)](README.zh-CN.md)
 [![Quick start](https://img.shields.io/badge/Quick_start-Python-3776AB?logo=python&logoColor=white)](#quick-start)
 [![Read the docs](https://img.shields.io/badge/Read_the_docs-API_reference-0A7BBB)](https://zhongkechen.github.io/async-durable-execution/)
 
@@ -16,58 +15,6 @@
 **使用原生 `async`/`await` 建置完全符合 AWS Durable Execution 規範且可長時間執行的
 AWS Lambda 工作流程。** 自動為狀態建立檢查點，無需持續運算即可暫停，並在故障後恢復執行，
 無需執行工作流程伺服器。
-
-```python
-from datetime import timedelta
-
-from async_durable_execution import durable_callable, durable_execution, step, wait
-
-
-@durable_callable
-async def reserve_inventory(order_id: str) -> dict:
-    # API 與資料庫呼叫應放在具備檢查點的步驟中。
-    return {"order_id": order_id, "reserved": True}
-
-
-@durable_execution
-async def handler(event: dict) -> dict:
-    reservation = await step(
-        reserve_inventory(event["order_id"]),
-        name="reserve-inventory",
-    )
-    await wait(timedelta(hours=24), name="payment-window")
-    return {"status": "ready-to-ship", "reservation": reservation}
-```
-
-SDK 讓工作流程維持為熟悉的 Python 協程，同時由 AWS Lambda 儲存其耐用執行歷史記錄。每個已完成步驟的結果都會儲存為檢查點，而 `wait` 會暫停工作流程且不占用作用中的運算資源，直到 Lambda 安排恢復執行。處理常式重播時，SDK 會傳回已儲存的預留結果，而不會再次呼叫 `reserve_inventory`，接著從等待之後繼續執行。
-
-<a id="deploy-now"></a>
-
-## 立即部署
-
-使用 [AWS SAM](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
-部署隨附的 Hello World 工作流程。你需要 AWS 憑證、Python 3.10 或更新版本、Hatch 與 SAM CLI。
-
-```console
-git clone https://github.com/zhongkechen/async-durable-execution.git
-cd async-durable-execution
-
-hatch run examples:build-layer
-hatch run examples:build
-hatch run examples:generate-sam-template -- --example-name "Hello World"
-sam build --template-file template.generated.json
-
-AWS_REGION="${AWS_REGION:-us-east-1}"
-sam deploy \
-  --template-file .aws-sam/build/template.yaml \
-  --stack-name async-durable-hello-world \
-  --resolve-s3 \
-  --capabilities CAPABILITY_IAM \
-  --no-confirm-changeset \
-  --region "$AWS_REGION" \
-  --parameter-overrides \
-    LambdaEndpoint="https://lambda.${AWS_REGION}.amazonaws.com"
-```
 
 ## 專案狀態
 
