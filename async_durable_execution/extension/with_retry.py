@@ -6,12 +6,12 @@ from typing import TYPE_CHECKING, Awaitable, Callable, TypeVar
 
 from ..config import Duration
 from ..config import RetryStrategy
-from ..context import bind_current_context
-from ..primitive.child import (
+from ..context import (
     DurableContext,
+    bind_current_context,
     get_durable_context,
-    run_in_child_context,
 )
+from ..primitive.child import run_in_child_context
 from ..primitive.wait import wait
 
 if TYPE_CHECKING:

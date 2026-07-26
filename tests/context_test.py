@@ -1,6 +1,7 @@
 """Unit tests for context."""
 
 import asyncio
+import inspect
 import json
 import random
 from datetime import timedelta
@@ -12,6 +13,9 @@ from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 import pytest
 
 from async_durable_execution.context import (
+    DurableContext as ModuleDurableContext,
+    bind_current_context,
+    get_durable_context,
     reset_current_context,
     set_current_context,
     get_current_context,
@@ -147,6 +151,31 @@ def create_test_context(
 async def test_durable_context():
     """Test the context module."""
     assert DurableContext is not None
+
+
+def test_get_durable_context_has_no_parameters():
+    assert not inspect.signature(get_durable_context).parameters
+
+
+def test_get_durable_context_uses_current_operation_name_in_error():
+    state = Mock(spec=ExecutionState)
+    context = StepContext(
+        execution_state=state,
+        operation_identifier=OperationIdentifier(
+            operation_id="step-op",
+            sub_type=OperationSubType.STEP,
+            name="current-step",
+        ),
+    )
+
+    with (
+        bind_current_context(context),
+        pytest.raises(
+            RuntimeError,
+            match="current-step can only be used while a durable function or child context is executing\\.",
+        ),
+    ):
+        get_durable_context()
 
 
 async def test_step_context_exposes_lambda_context_from_operation_context():
@@ -1645,11 +1674,9 @@ async def test_run_in_child_context_creates_child_context(mock_executor_class):
     expected_parent_id = next(seq)
 
     async def capture_child_context():
-        from async_durable_execution.primitive import child as child_module
-
         child_context = get_current_context()
         # Verify child context properties
-        assert isinstance(child_context, child_module.DurableContext)
+        assert isinstance(child_context, ModuleDurableContext)
         assert child_context.execution_state is mock_state
         assert child_context.parent_id == expected_parent_id  # noqa: SLF001
         return "child_executed"

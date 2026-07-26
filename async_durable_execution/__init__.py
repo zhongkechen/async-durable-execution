@@ -15,6 +15,7 @@ from .models import (
 )
 from .config import JitterStrategy, RetryStrategy
 from .context import (
+    DurableContext,
     get_current_context,
 )
 from .extension.with_retry import WithRetryContext, with_retry
@@ -64,10 +65,7 @@ from .extension.wait_for_callback import (
     wait_for_callback,
     WaitForCallbackContext,
 )
-from .primitive.child import (
-    run_in_child_context,
-    DurableContext,
-)
+from .primitive.child import run_in_child_context
 from .primitive.step import (
     StepContext,
     StepInterruptedError,

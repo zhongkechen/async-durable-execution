@@ -24,13 +24,11 @@ from .parallel import (
     _validate_max_concurrency,
 )
 from .parallel import parallel_handler
-from ..context import bind_current_context
+from ..context import DurableContext, bind_current_context, get_durable_context
 from ..execution import durable_callable
 from ..models import OperationIdentifier, OperationSubType
 from ..primitive.child import (
-    DurableContext,
     _create_child_context_task as _run_in_child_context,
-    get_durable_context,
 )
 
 if TYPE_CHECKING:

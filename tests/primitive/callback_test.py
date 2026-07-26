@@ -12,7 +12,11 @@ from async_durable_execution.context import (
     set_current_context,
     get_current_context,
 )
-from async_durable_execution.exceptions import ValidationError
+from async_durable_execution.exceptions import (
+    ValidationError,
+    _encode_sdk_control_error_data,
+    _restore_sdk_control_error,
+)
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
     CallbackDetails,
@@ -73,6 +77,20 @@ def test_create_callback_name_is_keyword_only():
 
 def test_callback_error_is_defined_by_callback_module():
     assert CallbackError.__module__ == "async_durable_execution.primitive.callback"
+
+
+def test_callback_error_control_codec_preserves_callback_id():
+    source = CallbackError("Callback failed", callback_id="callback-123")
+
+    data = _encode_sdk_control_error_data(source)
+    restored = _restore_sdk_control_error(
+        str(source),
+        type(source).__name__,
+        data,
+    )
+
+    assert isinstance(restored, CallbackError)
+    assert restored.callback_id == "callback-123"
 
 
 def test_wait_for_callback_name_is_keyword_only():

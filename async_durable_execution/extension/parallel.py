@@ -29,18 +29,16 @@ from ..models import (
     _metadata,
 )
 from ..primitive.base import OperationExecutor
+from ..context import DurableContext, bind_current_context, get_durable_context
 from ..primitive.child import (
     ChildOperationExecutor,
     OrphanedChildException,
     _create_child_context_task as _run_in_child_context,
-    get_durable_context,
 )
-from ..context import bind_current_context
 from ..execution import durable_callable
 from ..serdes import deserialize
 
 if TYPE_CHECKING:
-    from ..primitive.child import DurableContext
     from ..serdes import SerDes
     from ..state import ExecutionState
 

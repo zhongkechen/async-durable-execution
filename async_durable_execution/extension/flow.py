@@ -29,12 +29,11 @@ from ..exceptions import (
     SuspendExecution,
     TimedSuspendExecution,
     ValidationError,
-    _decode_sdk_error_data,
     _restore_sdk_control_error,
 )
 from ..models import ErrorObject, SerializableModel
-from ..primitive.callback import CallbackError, _LEGACY_CALLBACK_ERROR_TYPE_NAMES
-from ..primitive.child import DurableContext, get_durable_context, run_in_child_context
+from ..context import DurableContext, get_durable_context
+from ..primitive.child import run_in_child_context
 from ..serdes import ExtendedTypeSerDes, SerDes
 from ..task import create_eager_task
 
@@ -1474,14 +1473,6 @@ def _find_control_error(error: Exception) -> Exception | None:
             )
             if control_error is not None:
                 return control_error
-            is_callback_error, _ = _decode_sdk_error_data(
-                current.data,
-                CallbackError,
-                legacy_exception_type_names=_LEGACY_CALLBACK_ERROR_TYPE_NAMES,
-            )
-            if is_callback_error and error_type == "CallbackError":
-                return ExecutionError(message)
-
         related: list[BaseException] = []
         if _BASE_EXCEPTION_GROUP_TYPE is not None and isinstance(
             current,

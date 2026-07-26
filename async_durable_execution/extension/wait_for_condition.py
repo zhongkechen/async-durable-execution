@@ -18,9 +18,8 @@ from ..exceptions import (
     ExecutionError,
     InvocationError,
     ValidationError,
-    _decode_sdk_error_data,
     _encode_sdk_control_error_data,
-    _encode_sdk_error_data,
+    _register_sdk_control_error_type,
     _restore_sdk_control_error,
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
@@ -34,14 +33,14 @@ from ..models import (
     OperationSubType,
 )
 from ..primitive.base import OperationExecutor
-from ..primitive.child import get_durable_context
+from ..context import get_durable_context
 from ..primitive.step import StepContext
 from ..task import create_eager_task
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
-    from ..primitive.child import DurableContext
+    from ..context import DurableContext
     from ..serdes import SerDes
     from ..state import ExecutionState
 
@@ -59,6 +58,20 @@ _LEGACY_WAIT_FOR_CONDITION_ERROR_TYPE_NAMES = (
 
 class WaitForConditionError(ExecutionError):
     """Raised when a wait_for_condition operation exhausts its attempts."""
+
+
+def _restore_wait_for_condition_error(
+    message: str,
+    _payload: str | None,
+) -> WaitForConditionError:
+    return WaitForConditionError(message)
+
+
+_register_sdk_control_error_type(
+    WaitForConditionError,
+    restore=_restore_wait_for_condition_error,
+    legacy_exception_type_names=_LEGACY_WAIT_FOR_CONDITION_ERROR_TYPE_NAMES,
+)
 
 
 @dataclass
@@ -153,21 +166,6 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                     data=None,
                     stack_trace=None,
                 )
-            is_wait_for_condition_error, _ = _decode_sdk_error_data(
-                error.data,
-                WaitForConditionError,
-                legacy_exception_type_names=(
-                    _LEGACY_WAIT_FOR_CONDITION_ERROR_TYPE_NAMES
-                ),
-            )
-            if (
-                error.type == WaitForConditionError.__name__
-                and is_wait_for_condition_error
-            ):
-                raise WaitForConditionError(
-                    error.message or "wait_for_condition failed"
-                )
-
             control_error = _restore_sdk_control_error(
                 error.message or "wait_for_condition failed",
                 error.type,
@@ -314,22 +312,14 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             )
 
             error = ErrorObject.from_exception(e)
-            if type(e) is WaitForConditionError:
+            sdk_error_data = _encode_sdk_control_error_data(e)
+            if sdk_error_data is not None:
                 error = ErrorObject(
                     message=error.message,
                     type=error.type,
-                    data=_encode_sdk_error_data(WaitForConditionError),
+                    data=sdk_error_data,
                     stack_trace=error.stack_trace,
                 )
-            else:
-                sdk_error_data = _encode_sdk_control_error_data(e)
-                if sdk_error_data is not None:
-                    error = ErrorObject(
-                        message=error.message,
-                        type=error.type,
-                        data=sdk_error_data,
-                        stack_trace=error.stack_trace,
-                    )
 
             fail_operation = OperationUpdate.create_wait_for_condition_fail(
                 identifier=self.operation_identifier,

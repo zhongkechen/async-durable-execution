@@ -8,13 +8,14 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, TypeVar, cast
 
-from .base import (
-    OperationExecutor,
+from .base import OperationExecutor
+from ..context import (
     OperationContext,
+    bind_current_context,
+    get_current_context,
+    get_durable_context,
 )
-from .child import get_durable_context
 from ..config import Duration, RetryStrategy, duration_to_seconds
-from ..context import bind_current_context, get_current_context
 from ..exceptions import (
     CallableRuntimeError,
     ExecutionError,
@@ -37,7 +38,7 @@ from ..task import create_eager_task
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from .child import DurableContext
+    from ..context import DurableContext
     from ..serdes import SerDes
     from ..state import ExecutionState
 

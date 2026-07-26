@@ -8,7 +8,13 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from .base import OperationExecutor
 from ..config import Duration, duration_to_seconds
-from ..exceptions import ExecutionError, SuspendExecution, TerminationReason
+from ..context import get_durable_context
+from ..exceptions import (
+    ExecutionError,
+    SuspendExecution,
+    TerminationReason,
+    _register_sdk_control_error_type,
+)
 from ..models import (
     CallbackOptions,
     CallbackTimeoutType,
@@ -22,7 +28,7 @@ from ..serdes import deserialize, PassThroughSerDes
 from ..task import create_eager_task
 
 if TYPE_CHECKING:
-    from .child import DurableContext
+    from ..context import DurableContext
     from ..serdes import SerDes
     from ..state import ExecutionState
 
@@ -42,6 +48,28 @@ class CallbackError(ExecutionError):
     def __init__(self, message: str, callback_id: str | None = None):
         super().__init__(message, TerminationReason.CALLBACK_ERROR)
         self.callback_id = callback_id
+
+
+def _encode_callback_error_payload(error: ExecutionError) -> str | None:
+    if not isinstance(error, CallbackError):  # pragma: no cover
+        msg = "CallbackError codec received an incompatible exception."
+        raise TypeError(msg)
+    return error.callback_id
+
+
+def _restore_callback_error(
+    message: str,
+    payload: str | None,
+) -> CallbackError:
+    return CallbackError(message=message, callback_id=payload)
+
+
+_register_sdk_control_error_type(
+    CallbackError,
+    encode_payload=_encode_callback_error_payload,
+    restore=_restore_callback_error,
+    legacy_exception_type_names=_LEGACY_CALLBACK_ERROR_TYPE_NAMES,
+)
 
 
 class CallbackOperationExecutor(OperationExecutor[str]):
@@ -139,8 +167,6 @@ def create_callback(
         heartbeat_timeout: Optional maximum time to wait between callback heartbeats.
         serdes: Optional serializer for callback results.
     """
-    from .child import get_durable_context
-
     context = get_durable_context()
 
     with context._replay_aware():

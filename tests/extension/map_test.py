@@ -9,6 +9,8 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+import async_durable_execution.context as context_module
+import async_durable_execution.primitive.child as child
 
 # Mock the executor.execute method
 from async_durable_execution.extension.parallel import (
@@ -33,7 +35,6 @@ from async_durable_execution.exceptions import ValidationError
 from async_durable_execution import map as map_operation, DurableContext
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import OperationSubType
-from async_durable_execution.primitive import child  # PLC0415
 from async_durable_execution.extension.parallel import CompletionConfig, NestingType
 from async_durable_execution.extension.map import (
     BatchedInput,
@@ -70,7 +71,7 @@ def create_test_context(
             "arn:aws:durable:us-east-1:123456789012:execution/test"
         )
 
-    return child.DurableContext(
+    return DurableContext(
         execution_state=state,
         operation_identifier=OperationIdentifier(
             operation_id=None,
@@ -91,7 +92,7 @@ def create_mock_execution_state():
 
 
 def create_mock_child_context(state):
-    return child.DurableContext(
+    return DurableContext(
         execution_state=state,
         operation_identifier=OperationIdentifier(
             operation_id=None,
@@ -1275,7 +1276,9 @@ async def test_map_item_serialize(
         )
 
     with patch.object(
-        child.OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+        context_module.OperationIdGenerator,
+        "_create_step_id_for_logical_step",
+        create_id,
     ):
         context = create_test_context(state=mock_state)
 
@@ -1351,7 +1354,9 @@ async def test_map_item_deserialize(mock_deserialize, item_serdes, batch_serdes)
         )
 
     with patch.object(
-        child.OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+        context_module.OperationIdGenerator,
+        "_create_step_id_for_logical_step",
+        create_id,
     ):
         context = create_test_context(state=mock_state)
 
@@ -1479,7 +1484,7 @@ async def test_map_handler_serializes_batch_result():
                 )
 
             with patch.object(
-                child.OperationIdGenerator,
+                context_module.OperationIdGenerator,
                 "_create_step_id_for_logical_step",
                 create_id,
             ):
@@ -1542,7 +1547,7 @@ async def test_map_default_serdes_serializes_batch_result():
                 )
 
             with patch.object(
-                child.OperationIdGenerator,
+                context_module.OperationIdGenerator,
                 "_create_step_id_for_logical_step",
                 create_id,
             ):
@@ -1613,7 +1618,7 @@ async def test_map_custom_serdes_serializes_batch_result():
                 )
 
             with patch.object(
-                child.OperationIdGenerator,
+                context_module.OperationIdGenerator,
                 "_create_step_id_for_logical_step",
                 create_id,
             ):

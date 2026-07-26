@@ -7,8 +7,8 @@ import logging
 from typing import TYPE_CHECKING
 
 from .base import OperationExecutor
-from .child import get_durable_context
 from ..config import Duration, duration_to_seconds
+from ..context import get_durable_context
 from ..exceptions import ValidationError, suspend_with_optional_resume_delay
 from ..models import (
     Operation,
@@ -21,7 +21,7 @@ from ..models import (
 from ..task import create_eager_task
 
 if TYPE_CHECKING:
-    from .child import DurableContext
+    from ..context import DurableContext
     from ..state import ExecutionState
 
 logger = logging.getLogger(__name__)

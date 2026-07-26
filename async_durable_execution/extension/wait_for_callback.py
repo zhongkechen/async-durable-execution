@@ -8,9 +8,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ..config import Duration
-from ..context import bind_current_context, get_current_context
+from ..context import OperationContext, bind_current_context, get_current_context
 from ..execution import durable_callable
-from ..primitive.base import OperationContext
 from ..primitive.callback import Callback, create_callback
 from ..models import OperationSubType
 from ..primitive.child import _create_child_context_task

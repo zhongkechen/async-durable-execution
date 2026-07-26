@@ -22,13 +22,13 @@ from async_durable_execution.config import (
     RetryStrategy,
 )
 from async_durable_execution.context import (
+    DurableContext,
     get_current_context,
     reset_current_context,
     set_current_context,
 )
 from async_durable_execution.exceptions import SuspendExecution
 from async_durable_execution.models import OperationIdentifier, OperationSubType
-from async_durable_execution.primitive.child import DurableContext
 
 
 _T = TypeVar("_T")

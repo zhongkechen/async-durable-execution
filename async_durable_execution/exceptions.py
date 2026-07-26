@@ -8,6 +8,7 @@ from __future__ import annotations
 import datetime
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, NoReturn, TypedDict, cast
@@ -21,6 +22,19 @@ _SDK_ERROR_DATA_KEY: str = "__async_durable_execution_error__"
 _SDK_ERROR_DATA_VERSION: int = 1
 _SDK_INVOCATION_ERROR_PAYLOAD_VERSION: int = 1
 _SDK_EXECUTION_ERROR_PAYLOAD_VERSION: int = 1
+
+
+@dataclass(frozen=True)
+class _SdkControlErrorCodec:
+    exception_type: type[ExecutionError]
+    encode_payload: Callable[[ExecutionError], str | None] | None
+    restore: Callable[[str, str | None], ExecutionError]
+
+
+_SDK_CONTROL_ERROR_CODECS_BY_TYPE: dict[
+    type[ExecutionError], _SdkControlErrorCodec
+] = {}
+_SDK_CONTROL_ERROR_CODECS_BY_NAME: dict[str, _SdkControlErrorCodec] = {}
 
 # Non-retryable customer error codes that arrive as non-4xx (e.g. HTTP 502) from Lambda.
 # Unlike typical 5xx errors, these require customer intervention (e.g., fixing
@@ -55,6 +69,36 @@ def _encode_sdk_error_data(
     )
 
 
+def _decode_sdk_error_data_envelope(
+    data: str | None,
+) -> tuple[str, str | None] | None:
+    """Decode validated SDK exception metadata without assuming a specific type."""
+    if data is None:
+        return None
+
+    try:
+        decoded = json.loads(data)
+    except (TypeError, ValueError):
+        return None
+
+    if not isinstance(decoded, dict):
+        return None
+
+    version = decoded.get(_SDK_ERROR_DATA_KEY)
+    if type(version) is not int or version != _SDK_ERROR_DATA_VERSION:
+        return None
+
+    exception_type_name = decoded.get("exception_type")
+    if not isinstance(exception_type_name, str) or not exception_type_name:
+        return None
+
+    payload = decoded.get("payload")
+    if payload is not None and not isinstance(payload, str):
+        return None
+
+    return exception_type_name, payload
+
+
 def _decode_sdk_error_data(
     data: str | None,
     expected_exception_type: type[Exception],
@@ -68,36 +112,48 @@ def _decode_sdk_error_data(
         expected_exception_type: Current exception type to identify.
         legacy_exception_type_names: Previous qualified names accepted for replay.
     """
-    if data is None:
+    decoded = _decode_sdk_error_data_envelope(data)
+    if decoded is None:
         return False, None
 
-    try:
-        decoded = json.loads(data)
-    except (TypeError, ValueError):
-        return False, None
-
-    if not isinstance(decoded, dict):
-        return False, None
-
-    version = decoded.get(_SDK_ERROR_DATA_KEY)
-    if type(version) is not int or version != _SDK_ERROR_DATA_VERSION:
-        return False, None
-
+    encoded_name, payload = decoded
     expected_name = (
         f"{expected_exception_type.__module__}.{expected_exception_type.__qualname__}"
     )
-    encoded_name = decoded.get("exception_type")
     if (
         encoded_name != expected_name
         and encoded_name not in legacy_exception_type_names
     ):
         return False, None
 
-    payload = decoded.get("payload")
-    if payload is not None and not isinstance(payload, str):
-        return False, None
-
     return True, payload
+
+
+def _register_sdk_control_error_type(
+    exception_type: type[ExecutionError],
+    *,
+    encode_payload: Callable[[ExecutionError], str | None] | None = None,
+    restore: Callable[[str, str | None], ExecutionError],
+    legacy_exception_type_names: tuple[str, ...] = (),
+) -> None:
+    """Register an operation-specific execution control error codec."""
+    if not issubclass(exception_type, ExecutionError):
+        msg = "SDK control error codecs require an ExecutionError subclass."
+        raise TypeError(msg)
+
+    codec = _SdkControlErrorCodec(
+        exception_type=exception_type,
+        encode_payload=encode_payload,
+        restore=restore,
+    )
+    current_name = f"{exception_type.__module__}.{exception_type.__qualname__}"
+    for exception_type_name in (current_name, *legacy_exception_type_names):
+        existing = _SDK_CONTROL_ERROR_CODECS_BY_NAME.get(exception_type_name)
+        if existing is not None and existing.exception_type is not exception_type:
+            msg = f"SDK control error type name is already registered: {exception_type_name}"
+            raise ValueError(msg)
+        _SDK_CONTROL_ERROR_CODECS_BY_NAME[exception_type_name] = codec
+    _SDK_CONTROL_ERROR_CODECS_BY_TYPE[exception_type] = codec
 
 
 def _encode_sdk_control_error_data(
@@ -106,6 +162,18 @@ def _encode_sdk_control_error_data(
     invocation_retryable: bool | None = None,
 ) -> str | None:
     """Encode the SDK-owned control category of an exception, if any."""
+    if isinstance(error, ExecutionError):
+        codec = _SDK_CONTROL_ERROR_CODECS_BY_TYPE.get(type(error))
+        if codec is not None:
+            return _encode_sdk_error_data(
+                codec.exception_type,
+                (
+                    codec.encode_payload(error)
+                    if codec.encode_payload is not None
+                    else None
+                ),
+            )
+
     if isinstance(error, InvocationError):
         return _encode_sdk_error_data(
             InvocationError,
@@ -519,6 +587,13 @@ def _restore_sdk_control_error(
     data: str | None,
 ) -> ExecutionError | InvocationError | None:
     """Restore a control error identified by SDK-owned checkpoint metadata."""
+    decoded = _decode_sdk_error_data_envelope(data)
+    if decoded is not None:
+        exception_type_name, payload = decoded
+        codec = _SDK_CONTROL_ERROR_CODECS_BY_NAME.get(exception_type_name)
+        if codec is not None and error_type == codec.exception_type.__name__:
+            return codec.restore(message, payload)
+
     is_invocation_error, payload = _decode_sdk_error_data(data, InvocationError)
     if is_invocation_error:
         return _restore_sdk_invocation_error(message, error_type, payload)

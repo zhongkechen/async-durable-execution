@@ -8,8 +8,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
 
-from .context import bind_current_context
-from .primitive.child import DurableContext
+from .context import DurableContext, bind_current_context
 from .exceptions import (
     CheckpointError,
     ExecutionError,

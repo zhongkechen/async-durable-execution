@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
+from ..context import OperationContext
 from ..models import (
     Operation,
     OperationIdentifier,
@@ -13,51 +13,11 @@ from ..models import (
 from ..serdes import SerDes, deserialize, serialize
 
 if TYPE_CHECKING:
-    from ..models import LambdaContext
     from ..models import OperationUpdate
     from ..state import ExecutionState
 
 T = TypeVar("T")
 S = TypeVar("S")
-
-
-@dataclass(frozen=True)
-class OperationContext:
-    """Protocol defining the interface for durable execution contexts."""
-
-    execution_state: ExecutionState
-    operation_identifier: OperationIdentifier
-
-    @property
-    def lambda_context(self) -> LambdaContext | None:
-        """Get the Lambda context for the active invocation."""
-        return self.execution_state.lambda_context
-
-    @property
-    def durable_execution_arn(self) -> str:
-        """Get the ARN of the Durable Execution."""
-        return self.execution_state.durable_execution_arn
-
-    @property
-    def parent_id(self) -> str | None:
-        return self.operation_identifier.parent_id
-
-    @property
-    def operation_id(self) -> str | None:
-        return self.operation_identifier.operation_id
-
-    @property
-    def operation_name(self) -> str | None:
-        return self.operation_identifier.name
-
-    @property
-    def recursive_level(self) -> int:
-        """Return the recursion depth recorded on the current execution input."""
-        return self.execution_state.recursive_level
-
-    def is_replaying(self) -> bool:
-        """Return whether the active context is replaying prior user code."""
-        return False
 
 
 class OperationExecutor(ABC, Generic[T]):

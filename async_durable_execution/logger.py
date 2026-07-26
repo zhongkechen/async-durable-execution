@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import logging
 
+from .context import OperationContext, _current_context
 from .exceptions import ValidationError
-from .primitive.base import OperationContext
-from .context import _current_context
 
 
 class DurableContextFilter(logging.Filter):

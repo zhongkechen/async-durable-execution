@@ -6,6 +6,7 @@ from typing import get_origin
 from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
 from async_durable_execution import (
+    DurableContext,
     DurableFunctionCloudTestRunner,
     DurableFunctionLocalTestRunner,
     DurableFunctionTestResult,
@@ -40,13 +41,16 @@ from async_durable_execution import (
     wait_for_callback,
     map as map_operation,
 )
-from async_durable_execution.context import reset_current_context, set_current_context
+from async_durable_execution.context import (
+    DurableContext as ModuleDurableContext,
+    reset_current_context,
+    set_current_context,
+)
 from async_durable_execution.models import (
     LambdaContext,
     OperationIdentifier,
     OperationSubType,
 )
-from async_durable_execution.primitive import child
 from async_durable_execution.config import JitterStrategy
 from async_durable_execution.config import RetryStrategy
 from async_durable_execution.extension.parallel import SummaryGenerator
@@ -82,6 +86,7 @@ def test_additional_public_types_importable_from_package_root():
         "DurableFunctionCloudTestRunner": DurableFunctionCloudTestRunner,
         "DurableFunctionLocalTestRunner": DurableFunctionLocalTestRunner,
         "DurableFunctionTestResult": DurableFunctionTestResult,
+        "DurableContext": ModuleDurableContext,
         "ExtendedTypeSerDes": ExtendedTypeSerDes,
         "FlowDefinitionError": FlowDefinitionError,
         "FlowExecutionError": FlowExecutionError,
@@ -115,6 +120,7 @@ def test_additional_public_types_importable_from_package_root():
         "timestamp": timestamp,
         "uuid": durable_uuid,
     }
+    assert DurableContext is ModuleDurableContext
     assert WithRetryContext is ModuleWithRetryContext
     assert recurse is module_recurse
     assert now is module_now
@@ -182,7 +188,7 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
     mock_state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
     )
-    context = child.DurableContext(
+    context = DurableContext(
         execution_state=mock_state,
         operation_identifier=OperationIdentifier(
             operation_id=None,

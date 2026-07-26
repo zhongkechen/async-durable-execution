@@ -6,12 +6,12 @@ import asyncio
 from typing import TYPE_CHECKING, TypeVar, cast
 
 from ..exceptions import ValidationError
-from ..primitive.child import get_durable_context
+from ..context import get_durable_context
 from ..primitive.invoke import invoke
 from ..state import RECURSIVE_LEVEL_INPUT_FIELD
 
 if TYPE_CHECKING:
-    from ..primitive.child import DurableContext
+    from ..context import DurableContext
     from ..serdes import SerDes
 
 

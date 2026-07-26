@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, TypeVar, cast
 
 # Import base classes for operation executor pattern
 from .base import OperationExecutor
-from .child import get_durable_context
+from ..context import get_durable_context
 from ..exceptions import (
     CallableRuntimeError,
     ExecutionError,
@@ -28,7 +28,7 @@ from ..serdes import (
 from ..task import create_eager_task
 
 if TYPE_CHECKING:
-    from .child import DurableContext
+    from ..context import DurableContext
     from ..serdes import SerDes
     from ..state import ExecutionState
 
