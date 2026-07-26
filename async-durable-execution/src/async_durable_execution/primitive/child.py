@@ -20,6 +20,7 @@ from ..exceptions import (
     CallableRuntimeError,
     InvocationError,
     _decode_sdk_error_data,
+    _encode_sdk_control_error_data,
     _encode_sdk_error_data,
 )
 from ..models import (
@@ -180,7 +181,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
 
         Raises:
             SuspendExecution: Re-raised without checkpointing
-            InvocationError: Re-raised after checkpointing FAIL
+            InvocationError: Re-raised without checkpointing when retryable
             CallbackError: Re-raised after checkpointing FAIL
             CallableRuntimeError: Raised for other exceptions after checkpointing FAIL
         """
@@ -275,6 +276,9 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 recursive_level=self.state.recursive_level,
             )
         except Exception as e:
+            if isinstance(e, InvocationError) and e.is_retryable():
+                raise
+
             error_object = ErrorObject.from_exception(e)
             if type(e) is CallbackError:
                 error_object = ErrorObject(
@@ -283,6 +287,15 @@ class ChildOperationExecutor(OperationExecutor[T]):
                     data=_encode_sdk_error_data(CallbackError, e.callback_id),
                     stack_trace=error_object.stack_trace,
                 )
+            else:
+                sdk_error_data = _encode_sdk_control_error_data(e)
+                if sdk_error_data is not None:
+                    error_object = ErrorObject(
+                        message=error_object.message,
+                        type=error_object.type,
+                        data=sdk_error_data,
+                        stack_trace=error_object.stack_trace,
+                    )
 
             # Virtual deliberately does not write checkpoints, but exception still propagates below
             if not self.is_virtual:
@@ -296,11 +309,8 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 # This guarantees the error is durable and child operations won't be re-executed on replay.
                 await self.create_checkpoint(fail_operation)
 
-            # InvocationError and its derivatives can be retried.
-            # When we encounter an invocation error (in all of its forms), we
-            # bubble that error upwards (with the checkpoint in place for
-            # non-virtual) such that we reach the execution handler at the
-            # very top, which will then make the backend retry.
+            # Preserve non-retryable invocation and callback control errors for
+            # the top-level execution handler after checkpointing their failure.
             if isinstance(e, InvocationError | CallbackError):
                 raise
             raise CallableRuntimeError.from_error_object(error_object) from e

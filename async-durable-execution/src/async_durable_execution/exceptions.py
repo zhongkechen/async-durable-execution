@@ -10,7 +10,7 @@ import json
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, NoReturn, TypedDict
+from typing import Any, NoReturn, TypedDict, cast
 
 BAD_REQUEST_ERROR: int = 400
 TOO_MANY_REQUESTS_ERROR: int = 429
@@ -19,6 +19,8 @@ INVALID_PARAMETER_VALUE_EXCEPTION: str = "InvalidParameterValueException"
 INVALID_CHECKPOINT_TOKEN_PREFIX: str = "Invalid Checkpoint Token"
 _SDK_ERROR_DATA_KEY: str = "__async_durable_execution_error__"
 _SDK_ERROR_DATA_VERSION: int = 1
+_SDK_INVOCATION_ERROR_PAYLOAD_VERSION: int = 1
+_SDK_EXECUTION_ERROR_PAYLOAD_VERSION: int = 1
 
 # Non-retryable customer error codes that arrive as non-4xx (e.g. HTTP 502) from Lambda.
 # Unlike typical 5xx errors, these require customer intervention (e.g., fixing
@@ -86,6 +88,39 @@ def _decode_sdk_error_data(
     return True, payload
 
 
+def _encode_sdk_control_error_data(
+    error: Exception,
+    *,
+    invocation_retryable: bool | None = None,
+) -> str | None:
+    """Encode the SDK-owned control category of an exception, if any."""
+    if isinstance(error, InvocationError):
+        return _encode_sdk_error_data(
+            InvocationError,
+            _encode_sdk_invocation_error_payload(
+                error,
+                retryable=invocation_retryable,
+            ),
+        )
+    if isinstance(error, ExecutionError):
+        return _encode_sdk_error_data(
+            ExecutionError,
+            _encode_sdk_execution_error_payload(
+                error,
+                error.termination_reason,
+            ),
+        )
+    if isinstance(error, SerDesError):
+        return _encode_sdk_error_data(
+            SerDesError,
+            _encode_sdk_execution_error_payload(
+                error,
+                TerminationReason.SERIALIZATION_ERROR,
+            ),
+        )
+    return None
+
+
 class AwsErrorObj(TypedDict):
     """Subset of a boto-style AWS error payload."""
 
@@ -137,6 +172,20 @@ class ExecutionError(UnrecoverableError):
         termination_reason: TerminationReason = TerminationReason.EXECUTION_ERROR,
     ):
         super().__init__(message, termination_reason)
+
+
+class _RestoredExecutionError(ExecutionError):
+    """Execution control error restored without importing its original class."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        original_error_type: str,
+        termination_reason: TerminationReason,
+    ):
+        super().__init__(message, termination_reason)
+        self.original_error_type = original_error_type
 
 
 class WaitForConditionError(ExecutionError):
@@ -279,6 +328,222 @@ class BotoClientError(InvocationError):
         return extras
 
 
+class _RestoredInvocationError(InvocationError):
+    """Invocation control error restored without importing its original class."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        original_error_type: str,
+        retryable: bool,
+        termination_reason: TerminationReason,
+        error_category: DurableApiErrorCategory | None = None,
+        error: AwsErrorObj | None = None,
+        response_metadata: AwsErrorMetadata | None = None,
+    ):
+        super().__init__(message, termination_reason)
+        self.original_error_type = original_error_type
+        self.retryable = retryable
+        self.error_category = error_category
+        self.error = error
+        self.response_metadata = response_metadata
+
+    def is_retryable(self) -> bool:
+        return self.retryable
+
+    def build_logger_extras(self) -> dict:
+        extras: dict = {}
+        if self.error is not None:
+            extras["Error"] = self.error
+        if self.response_metadata is not None:
+            extras["ResponseMetadata"] = self.response_metadata
+        return extras
+
+
+def _sdk_error_type_name(error: Exception) -> str:
+    """Return the original type name for a restored SDK control error."""
+    if isinstance(error, _RestoredInvocationError | _RestoredExecutionError):
+        return error.original_error_type
+    return type(error).__name__
+
+
+def _encode_sdk_execution_error_payload(
+    error: Exception,
+    termination_reason: TerminationReason,
+) -> str:
+    """Encode execution-control details needed after durable replay."""
+    return json.dumps(
+        {
+            "version": _SDK_EXECUTION_ERROR_PAYLOAD_VERSION,
+            "error_type": _sdk_error_type_name(error),
+            "termination_reason": termination_reason.value,
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
+def _restore_sdk_execution_error(
+    message: str,
+    error_type: str | None,
+    payload: str | None,
+    *,
+    default_termination_reason: TerminationReason,
+) -> ExecutionError:
+    """Restore an execution control error from current or legacy metadata."""
+    original_error_type = error_type or ExecutionError.__name__
+    termination_reason = default_termination_reason
+
+    try:
+        termination_reason = TerminationReason(payload)
+    except (TypeError, ValueError):
+        try:
+            decoded = json.loads(payload) if payload is not None else None
+        except (TypeError, ValueError):
+            decoded = None
+        if (
+            isinstance(decoded, dict)
+            and decoded.get("version") == _SDK_EXECUTION_ERROR_PAYLOAD_VERSION
+        ):
+            encoded_error_type = decoded.get("error_type")
+            if isinstance(encoded_error_type, str) and encoded_error_type:
+                original_error_type = encoded_error_type
+            try:
+                termination_reason = TerminationReason(
+                    decoded.get("termination_reason")
+                )
+            except (TypeError, ValueError):
+                pass
+
+    return _RestoredExecutionError(
+        message,
+        original_error_type=original_error_type,
+        termination_reason=termination_reason,
+    )
+
+
+def _encode_sdk_invocation_error_payload(
+    error: InvocationError,
+    *,
+    retryable: bool | None = None,
+) -> str:
+    """Encode retry behavior needed to safely restore an invocation error."""
+    details: dict[str, Any] = {
+        "version": _SDK_INVOCATION_ERROR_PAYLOAD_VERSION,
+        "error_type": _sdk_error_type_name(error),
+        "retryable": error.is_retryable() if retryable is None else retryable,
+        "termination_reason": error.termination_reason.value,
+    }
+    if isinstance(error, BotoClientError | _RestoredInvocationError):
+        if error.error_category is not None:
+            details["error_category"] = error.error_category.value
+        details["error"] = error.error
+        details["response_metadata"] = error.response_metadata
+
+    try:
+        return json.dumps(details, separators=(",", ":"), sort_keys=True)
+    except (TypeError, ValueError):
+        # Retry behavior is control data; diagnostic boto payloads are best effort.
+        details.pop("error", None)
+        details.pop("response_metadata", None)
+        return json.dumps(details, separators=(",", ":"), sort_keys=True)
+
+
+def _restore_sdk_invocation_error(
+    message: str,
+    error_type: str | None,
+    payload: str | None,
+) -> InvocationError:
+    """Restore replay-critical invocation semantics from SDK-owned metadata."""
+    original_error_type = error_type or InvocationError.__name__
+    # Legacy envelopes had no payload and represented retryable InvocationError.
+    # A present but invalid payload fails closed to avoid an unbounded retry loop.
+    retryable = payload is None
+    termination_reason = TerminationReason.INVOCATION_ERROR
+    error_category: DurableApiErrorCategory | None = None
+    error: AwsErrorObj | None = None
+    response_metadata: AwsErrorMetadata | None = None
+
+    try:
+        decoded = json.loads(payload) if payload is not None else None
+    except (TypeError, ValueError):
+        decoded = None
+
+    if (
+        isinstance(decoded, dict)
+        and decoded.get("version") == _SDK_INVOCATION_ERROR_PAYLOAD_VERSION
+    ):
+        encoded_error_type = decoded.get("error_type")
+        if isinstance(encoded_error_type, str) and encoded_error_type:
+            original_error_type = encoded_error_type
+
+        encoded_retryable = decoded.get("retryable")
+        if type(encoded_retryable) is bool:
+            retryable = encoded_retryable
+
+        try:
+            termination_reason = TerminationReason(decoded.get("termination_reason"))
+        except (TypeError, ValueError):
+            pass
+
+        try:
+            error_category = DurableApiErrorCategory(decoded.get("error_category"))
+        except (TypeError, ValueError):
+            pass
+
+        encoded_error = decoded.get("error")
+        if isinstance(encoded_error, dict):
+            error = cast("AwsErrorObj", encoded_error)
+        encoded_response_metadata = decoded.get("response_metadata")
+        if isinstance(encoded_response_metadata, dict):
+            response_metadata = cast(
+                "AwsErrorMetadata",
+                encoded_response_metadata,
+            )
+
+    return _RestoredInvocationError(
+        message,
+        original_error_type=original_error_type,
+        retryable=retryable,
+        termination_reason=termination_reason,
+        error_category=error_category,
+        error=error,
+        response_metadata=response_metadata,
+    )
+
+
+def _restore_sdk_control_error(
+    message: str,
+    error_type: str | None,
+    data: str | None,
+) -> ExecutionError | InvocationError | None:
+    """Restore a control error identified by SDK-owned checkpoint metadata."""
+    is_invocation_error, payload = _decode_sdk_error_data(data, InvocationError)
+    if is_invocation_error:
+        return _restore_sdk_invocation_error(message, error_type, payload)
+
+    is_execution_error, payload = _decode_sdk_error_data(data, ExecutionError)
+    if is_execution_error:
+        return _restore_sdk_execution_error(
+            message,
+            error_type,
+            payload,
+            default_termination_reason=TerminationReason.EXECUTION_ERROR,
+        )
+
+    is_serdes_error, payload = _decode_sdk_error_data(data, SerDesError)
+    if is_serdes_error:
+        return _restore_sdk_execution_error(
+            message,
+            error_type,
+            payload,
+            default_termination_reason=TerminationReason.SERIALIZATION_ERROR,
+        )
+
+    return None
+
+
 class NonDeterministicExecutionError(ExecutionError):
     """Error when execution is non-deterministic."""
 
@@ -308,6 +573,18 @@ class CheckpointError(BotoClientError):
 
 class ValidationError(DurableExecutionsError):
     """Incorrect arguments to a Durable Function operation."""
+
+
+class FlowDefinitionError(ValidationError):
+    """Raised when a declarative flow definition is invalid."""
+
+
+class FlowExecutionError(DurableExecutionsError):
+    """Raised after a flow checkpoints a result with unhandled node failures."""
+
+    def __init__(self, message: str, result: Any):
+        super().__init__(message)
+        self.result = result
 
 
 class GetExecutionStateError(BotoClientError):

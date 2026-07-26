@@ -17,10 +17,12 @@ from async_durable_execution.exceptions import (
     CallableRuntimeError,
     ExecutionError,
     InvocationError,
+    SerDesError,
     SuspendExecution,
     TerminationReason,
     ValidationError,
     WaitForConditionError,
+    _sdk_error_type_name,
 )
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
@@ -478,6 +480,122 @@ async def test_wait_for_condition_replays_exhaustion_error():
             check=check_func,
         )
 
+    check_func.assert_not_called()
+    replay_state.create_checkpoint.assert_not_called()
+
+
+class _ConditionInvocationError(InvocationError):
+    def is_retryable(self) -> bool:
+        return False
+
+
+async def test_wait_for_condition_retries_retryable_invocation_error_without_fail():
+    state = Mock(spec=ExecutionState)
+    state.durable_execution_arn = "test_arn"
+    state.operations.get.return_value = None
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+    check = Mock(side_effect=[InvocationError("transient failure"), "done"])
+
+    with pytest.raises(InvocationError, match="transient failure"):
+        await wait_for_condition_handler(
+            state=state,
+            operation_identifier=op_id,
+            check=check,
+            polling_strategy=lambda current_state, attempt: None,
+        )
+
+    state.create_checkpoint.assert_called_once()
+    start_operation = state.create_checkpoint.call_args.kwargs["operation_update"]
+    assert start_operation.action is OperationAction.START
+
+    state.reset_mock()
+    state.operations.get.return_value = Operation(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.STARTED,
+    )
+
+    result = await wait_for_condition_handler(
+        state=state,
+        operation_identifier=op_id,
+        check=check,
+        polling_strategy=lambda current_state, attempt: None,
+    )
+
+    assert result == "done"
+    assert check.call_count == 2
+    state.create_checkpoint.assert_called_once()
+    success_operation = state.create_checkpoint.call_args.kwargs["operation_update"]
+    assert success_operation.action is OperationAction.SUCCEED
+
+
+class _ConditionSerDesError(SerDesError):
+    pass
+
+
+@pytest.mark.parametrize(
+    ("source_error", "restored_type", "expected_reason"),
+    [
+        (
+            _ConditionInvocationError("condition invocation failed"),
+            InvocationError,
+            TerminationReason.INVOCATION_ERROR,
+        ),
+        (
+            _ConditionSerDesError("condition serialization failed"),
+            ExecutionError,
+            TerminationReason.SERIALIZATION_ERROR,
+        ),
+    ],
+)
+async def test_wait_for_condition_replays_sdk_control_error_metadata(
+    source_error,
+    restored_type,
+    expected_reason,
+):
+    initial_state = Mock(spec=ExecutionState)
+    initial_state.durable_execution_arn = "test_arn"
+    initial_state.operations.get.return_value = None
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+
+    with pytest.raises(type(source_error), match=str(source_error)):
+        await wait_for_condition_handler(
+            state=initial_state,
+            operation_identifier=op_id,
+            check=Mock(side_effect=source_error),
+        )
+
+    fail_operation = initial_state.create_checkpoint.call_args.kwargs[
+        "operation_update"
+    ]
+    assert fail_operation.error.type == type(source_error).__name__
+    assert fail_operation.error.data is not None
+
+    replay_state = Mock(spec=ExecutionState)
+    replay_state.operations.get.return_value = Operation(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.FAILED,
+        step_details=StepDetails(error=fail_operation.error),
+    )
+    check_func = Mock(side_effect=AssertionError("check should not run"))
+
+    with pytest.raises(restored_type, match=str(source_error)) as exc_info:
+        await wait_for_condition_handler(
+            state=replay_state,
+            operation_identifier=op_id,
+            check=check_func,
+        )
+
+    restored = exc_info.value
+    assert restored.termination_reason is expected_reason
+    assert _sdk_error_type_name(restored) == type(source_error).__name__
+    if isinstance(restored, InvocationError):
+        assert not restored.is_retryable()
     check_func.assert_not_called()
     replay_state.create_checkpoint.assert_not_called()
 

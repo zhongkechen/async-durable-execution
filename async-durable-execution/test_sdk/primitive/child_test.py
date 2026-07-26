@@ -14,7 +14,9 @@ from async_durable_execution.context import bind_current_context
 from async_durable_execution.exceptions import (
     CallbackError,
     CallableRuntimeError,
+    ExecutionError,
     InvocationError,
+    _decode_sdk_error_data,
 )
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import (
@@ -796,40 +798,106 @@ async def test_child_handler_error_wrapped():
     assert mock_state.create_checkpoint.call_count == 2  # start and fail
 
 
-async def test_child_handler_invocation_error_reraised():
-    """Test child_handler re-raises InvocationError after checkpointing FAIL.
-
-    Verifies:
-    - InvocationError: checkpoints FAIL and re-raises (for retry)
-    - FAIL checkpoint is created
-    - Original InvocationError is re-raised (not wrapped)
-    """
-
+async def test_child_handler_checkpoints_sdk_error_metadata():
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
-    mock_result = Mock()
-    mock_result.is_succeeded.return_value = False
-    mock_result.is_failed.return_value = False
-    mock_result.is_started.return_value = False
-    mock_result.is_existent.return_value = False
+    mock_state.operations.get.return_value = None
+
+    with pytest.raises(CallableRuntimeError, match="Execution failed"):
+        await child_handler(
+            Mock(side_effect=ExecutionError("Execution failed")),
+            mock_state,
+            OperationIdentifier(
+                "sdk-error",
+                OperationSubType.RUN_IN_CHILD_CONTEXT,
+                None,
+                "test_name",
+            ),
+        )
+
+    fail_operation = mock_state.create_checkpoint.call_args_list[1].kwargs[
+        "operation_update"
+    ]
+    is_sdk_error, _ = _decode_sdk_error_data(
+        fail_operation.error.data,
+        ExecutionError,
+    )
+    assert fail_operation.error.type == "ExecutionError"
+    assert is_sdk_error
+
+
+async def test_child_handler_retryable_invocation_error_replays_without_fail():
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "test_arn"
     mock_state.operations.get.return_value = None
     test_error = InvocationError("Invocation failed")
-    mock_callable = Mock(side_effect=test_error)
+    mock_callable = Mock(side_effect=[test_error, "replayed result"])
+    operation_identifier = OperationIdentifier(
+        "op7b",
+        OperationSubType.RUN_IN_CHILD_CONTEXT,
+        None,
+        "test_name",
+    )
+
     with pytest.raises(InvocationError, match="Invocation failed"):
         await child_handler(
             mock_callable,
             mock_state,
+            operation_identifier,
+        )
+
+    mock_state.create_checkpoint.assert_called_once()
+    start_operation = mock_state.create_checkpoint.call_args.kwargs["operation_update"]
+    assert start_operation.action is OperationAction.START
+
+    mock_state.reset_mock()
+    mock_state.operations.get.return_value = Operation(
+        operation_id="op7b",
+        operation_type=OperationType.CONTEXT,
+        status=OperationStatus.STARTED,
+    )
+
+    result = await child_handler(
+        mock_callable,
+        mock_state,
+        operation_identifier,
+    )
+
+    assert result == "replayed result"
+    assert mock_callable.call_count == 2
+    mock_state.create_checkpoint.assert_called_once()
+    success_operation = mock_state.create_checkpoint.call_args.kwargs[
+        "operation_update"
+    ]
+    assert success_operation.action is OperationAction.SUCCEED
+
+
+async def test_child_handler_non_retryable_invocation_error_checkpoints_fail():
+    class NonRetryableInvocationError(InvocationError):
+        def is_retryable(self) -> bool:
+            return False
+
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "test_arn"
+    mock_state.operations.get.return_value = None
+    test_error = NonRetryableInvocationError("Invocation failed")
+
+    with pytest.raises(NonRetryableInvocationError, match="Invocation failed"):
+        await child_handler(
+            Mock(side_effect=test_error),
+            mock_state,
             OperationIdentifier(
-                "op7b", OperationSubType.RUN_IN_CHILD_CONTEXT, None, "test_name"
+                "op7c",
+                OperationSubType.RUN_IN_CHILD_CONTEXT,
+                None,
+                "test_name",
             ),
         )
 
-    # Verify FAIL checkpoint was created
-    assert mock_state.create_checkpoint.call_count == 2  # start and fail
-
-    # Verify fail checkpoint
-    fail_call = mock_state.create_checkpoint.call_args_list[1]
-    fail_operation = fail_call[1]["operation_update"]
+    assert mock_state.create_checkpoint.call_count == 2
+    fail_operation = mock_state.create_checkpoint.call_args_list[1].kwargs[
+        "operation_update"
+    ]
     assert fail_operation.action is OperationAction.FAIL
 
 
