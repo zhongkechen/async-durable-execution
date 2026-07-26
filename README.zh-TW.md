@@ -32,16 +32,16 @@ AWS Lambda 工作流程。** 自動為狀態建立檢查點，無需持續運算
 
 ## ✨ 主要功能
 
-- **[非同步優先的耐用程式碼](docs/official-python-sdk-comparison.md#programming-model)** - 與官方 AWS SDK 相比，使用者提供的耐用事件處理常式、步驟、子內容、`flow` 節點、回呼提交器、`map()` 項目函式、`parallel()` 分支與等待條件檢查都使用 `async def` 撰寫。
-- **[官方 SDK 未提供的擴充操作](docs/api/operations.md#sdk-extensions)** - 本 SDK 新增[重播安全輔助操作](docs/api/operations.md#replay-safe-helper-values)（`random()`、`now()`、`timestamp()` 與 `uuid()`）、[耐用自我呼叫](docs/advanced-usage.md#recursive-self-invocation)（`recurse()`），以及[宣告式 DAG 執行](docs/api/operations.md#declarative-dag-workflows)（`flow()`）。
-- **[宣告式 DAG 工作流程](docs/api/dag.md#quick-start)** - 使用具型別的節點輸入、推導或條件相依性、失敗路由和節點內耐用操作來定義無環工作流程。SDK 會在執行前驗證圖，並略過所選輸出未相依的節點。
-- **[背景操作任務](docs/advanced-usage.md#background-operation-tasks)** - `step(...)`、`wait(...)`、`invoke(...)`、`recurse(...)`、`run_in_child_context(...)` 與 `flow(...)` 等耐用操作會傳回 `asyncio.Task` 物件，因此獨立操作可以在背景執行，並透過 `asyncio.gather` 一起等待，無需使用 `parallel()` 或 `map()`。
-- **[簡化的耐用操作 API](docs/migrating-from-official-python-sdk.md#api-mapping)** - `v2` API 移除組態包裝物件，改用直接的關鍵字引數與更清楚的呼叫位置，包括僅限關鍵字的操作名稱。
-- **[整合本機與雲端執行器](docs/async_durable_execution/runner.md#local-and-cloud-runners)** - 執行器功能現在透過 `async_durable_execution` 提供，包含獨立的本機與雲端執行器 factory，以及具型別的測試結果輔助物件。
-- **[支援非同步 Lambda 用戶端](docs/advanced-usage.md#lambda-client-selection)** - 安裝選用的 `aioboto` extra 即可使用非同步 Lambda 用戶端；否則 SDK 會透過非同步配接器使用內建的同步用戶端。
-- **[以標準函式庫 logging 提供重播感知記錄](docs/migrating-from-official-python-sdk.md#logging)** - 標準 `logging` logger 會由耐用內容篩選器強化，讓工作流程記錄在重播時保持安全。
-- **[Lambda 層打包](docs/advanced-usage.md#lambda-layer-packaging)** - 儲存庫包含建置與發布 SDK Lambda 層的工具和工作流程，適用於不直接封裝相依套件的函式。
-- **[更完整的驗證與文件](CONTRIBUTING.md#development-workflow)** - 專案現在包含擴充後的本機/雲端執行器覆蓋、產生的 API 文件、覆蓋率發布，以及針對非同步 Lambda 耐用函數更新的範例。
+- **[非同步優先的耐用程式碼](https://zhongkechen.github.io/async-durable-execution/official-python-sdk-comparison.html#programming-model)** - 與官方 AWS SDK 相比，使用者提供的耐用事件處理常式、步驟、子內容、`flow` 節點、回呼提交器、`map()` 項目函式、`parallel()` 分支與等待條件檢查都使用 `async def` 撰寫。
+- **[官方 SDK 未提供的擴充操作](https://zhongkechen.github.io/async-durable-execution/api/operations.html#sdk-extensions)** - 本 SDK 新增[重播安全輔助操作](https://zhongkechen.github.io/async-durable-execution/api/operations.html#replay-safe-helper-values)（`random()`、`now()`、`timestamp()` 與 `uuid()`）、[耐用自我呼叫](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#recursive-self-invocation)（`recurse()`），以及[宣告式 DAG 執行](https://zhongkechen.github.io/async-durable-execution/api/operations.html#declarative-dag-workflows)（`flow()`）。
+- **[宣告式 DAG 工作流程](https://zhongkechen.github.io/async-durable-execution/api/dag.html#quick-start)** - 使用具型別的節點輸入、推導或條件相依性、失敗路由和節點內耐用操作來定義無環工作流程。SDK 會在執行前驗證圖，並略過所選輸出未相依的節點。
+- **[背景操作任務](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#background-operation-tasks)** - `step(...)`、`wait(...)`、`invoke(...)`、`recurse(...)`、`run_in_child_context(...)` 與 `flow(...)` 等耐用操作會傳回 `asyncio.Task` 物件，因此獨立操作可以在背景執行，並透過 `asyncio.gather` 一起等待，無需使用 `parallel()` 或 `map()`。
+- **[簡化的耐用操作 API](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#api-mapping)** - `v2` API 移除組態包裝物件，改用直接的關鍵字引數與更清楚的呼叫位置，包括僅限關鍵字的操作名稱。
+- **[整合本機與雲端執行器](https://zhongkechen.github.io/async-durable-execution/async_durable_execution/runner.html#local-and-cloud-runners)** - 執行器功能現在透過 `async_durable_execution` 提供，包含獨立的本機與雲端執行器 factory，以及具型別的測試結果輔助物件。
+- **[支援非同步 Lambda 用戶端](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#lambda-client-selection)** - 安裝選用的 `aioboto` extra 即可使用非同步 Lambda 用戶端；否則 SDK 會透過非同步配接器使用內建的同步用戶端。
+- **[以標準函式庫 logging 提供重播感知記錄](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#logging)** - 標準 `logging` logger 會由耐用內容篩選器強化，讓工作流程記錄在重播時保持安全。
+- **[Lambda 層打包](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#lambda-layer-packaging)** - 儲存庫包含建置與發布 SDK Lambda 層的工具和工作流程，適用於不直接封裝相依套件的函式。
+- **[更完整的驗證與文件](https://github.com/zhongkechen/async-durable-execution/blob/main/CONTRIBUTING.md#development-workflow)** - 專案現在包含擴充後的本機/雲端執行器覆蓋、產生的 API 文件、覆蓋率發布，以及針對非同步 Lambda 耐用函數更新的範例。
 
 <a id="quick-start"></a>
 

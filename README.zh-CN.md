@@ -32,16 +32,16 @@ AWS Lambda 工作流程。** 自动为状态创建检查点，无需持续计算
 
 ## ✨ 主要功能
 
-- **[异步优先的持久代码](docs/official-python-sdk-comparison.md#programming-model)** - 与官方 AWS SDK 相比，用户提供的持久事件处理程序、步骤、子上下文、`flow` 节点、回调提交器、`map()` 项函数、`parallel()` 分支与等待条件检查都使用 `async def` 编写。
-- **[官方 SDK 未提供的扩展操作](docs/api/operations.md#sdk-extensions)** - 本 SDK 新增[重放安全辅助操作](docs/api/operations.md#replay-safe-helper-values)（`random()`、`now()`、`timestamp()` 与 `uuid()`）、[持久自调用](docs/advanced-usage.md#recursive-self-invocation)（`recurse()`），以及[声明式 DAG 执行](docs/api/operations.md#declarative-dag-workflows)（`flow()`）。
-- **[声明式 DAG 工作流](docs/api/dag.md#quick-start)** - 使用带类型的节点输入、推导或条件依赖、失败路由和节点内持久操作来定义无环工作流。SDK 会在执行前验证图，并跳过所选输出不依赖的节点。
-- **[后台操作任务](docs/advanced-usage.md#background-operation-tasks)** - `step(...)`、`wait(...)`、`invoke(...)`、`recurse(...)`、`run_in_child_context(...)` 与 `flow(...)` 等持久操作会返回 `asyncio.Task` 对象，因此独立操作可以在后台运行，并通过 `asyncio.gather` 一起等待，无需使用 `parallel()` 或 `map()`。
-- **[简化的持久操作 API](docs/migrating-from-official-python-sdk.md#api-mapping)** - `v2` API 移除了配置包装对象，改用直接的关键字参数与更清晰的调用位置，包括仅限关键字的操作名称。
-- **[集成本地与云端运行器](docs/async_durable_execution/runner.md#local-and-cloud-runners)** - 运行器功能现在通过 `async_durable_execution` 提供，包含独立的本地与云端运行器工厂，以及带类型的测试结果辅助对象。
-- **[支持异步 Lambda 客户端](docs/advanced-usage.md#lambda-client-selection)** - 安装可选的 `aioboto` extra 即可使用异步 Lambda 客户端；否则 SDK 会通过异步适配器使用内置的同步客户端。
-- **[通过标准库 logging 提供重放感知日志](docs/migrating-from-official-python-sdk.md#logging)** - 标准 `logging` logger 会由持久上下文过滤器增强，让工作流程日志在重放时保持安全。
-- **[Lambda 层打包](docs/advanced-usage.md#lambda-layer-packaging)** - 仓库包含构建与发布 SDK Lambda 层的工具和工作流程，适用于不直接打包依赖项的函数。
-- **[更完整的验证与文档](CONTRIBUTING.md#development-workflow)** - 项目现在包含扩展后的本地/云端运行器覆盖、生成的 API 文档、覆盖率发布，以及针对异步 Lambda 持久性函数更新的示例。
+- **[异步优先的持久代码](https://zhongkechen.github.io/async-durable-execution/official-python-sdk-comparison.html#programming-model)** - 与官方 AWS SDK 相比，用户提供的持久事件处理程序、步骤、子上下文、`flow` 节点、回调提交器、`map()` 项函数、`parallel()` 分支与等待条件检查都使用 `async def` 编写。
+- **[官方 SDK 未提供的扩展操作](https://zhongkechen.github.io/async-durable-execution/api/operations.html#sdk-extensions)** - 本 SDK 新增[重放安全辅助操作](https://zhongkechen.github.io/async-durable-execution/api/operations.html#replay-safe-helper-values)（`random()`、`now()`、`timestamp()` 与 `uuid()`）、[持久自调用](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#recursive-self-invocation)（`recurse()`），以及[声明式 DAG 执行](https://zhongkechen.github.io/async-durable-execution/api/operations.html#declarative-dag-workflows)（`flow()`）。
+- **[声明式 DAG 工作流](https://zhongkechen.github.io/async-durable-execution/api/dag.html#quick-start)** - 使用带类型的节点输入、推导或条件依赖、失败路由和节点内持久操作来定义无环工作流。SDK 会在执行前验证图，并跳过所选输出不依赖的节点。
+- **[后台操作任务](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#background-operation-tasks)** - `step(...)`、`wait(...)`、`invoke(...)`、`recurse(...)`、`run_in_child_context(...)` 与 `flow(...)` 等持久操作会返回 `asyncio.Task` 对象，因此独立操作可以在后台运行，并通过 `asyncio.gather` 一起等待，无需使用 `parallel()` 或 `map()`。
+- **[简化的持久操作 API](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#api-mapping)** - `v2` API 移除了配置包装对象，改用直接的关键字参数与更清晰的调用位置，包括仅限关键字的操作名称。
+- **[集成本地与云端运行器](https://zhongkechen.github.io/async-durable-execution/async_durable_execution/runner.html#local-and-cloud-runners)** - 运行器功能现在通过 `async_durable_execution` 提供，包含独立的本地与云端运行器工厂，以及带类型的测试结果辅助对象。
+- **[支持异步 Lambda 客户端](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#lambda-client-selection)** - 安装可选的 `aioboto` extra 即可使用异步 Lambda 客户端；否则 SDK 会通过异步适配器使用内置的同步客户端。
+- **[通过标准库 logging 提供重放感知日志](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#logging)** - 标准 `logging` logger 会由持久上下文过滤器增强，让工作流程日志在重放时保持安全。
+- **[Lambda 层打包](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#lambda-layer-packaging)** - 仓库包含构建与发布 SDK Lambda 层的工具和工作流程，适用于不直接打包依赖项的函数。
+- **[更完整的验证与文档](https://github.com/zhongkechen/async-durable-execution/blob/main/CONTRIBUTING.md#development-workflow)** - 项目现在包含扩展后的本地/云端运行器覆盖、生成的 API 文档、覆盖率发布，以及针对异步 Lambda 持久性函数更新的示例。
 
 <a id="quick-start"></a>
 
