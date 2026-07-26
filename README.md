@@ -36,16 +36,16 @@ composition, and APIs designed for modern Python applications.
 
 ## ✨ Key Features
 
-- **Async-first durable code** - Compared with the official AWS SDK, user-provided durable handlers, steps, child contexts, `flow` nodes, callback submitters, map item functions, parallel branches, and wait-for-condition checks are written with `async def`.
-- **Operations not available in the official SDK** - This SDK adds replay-safe helpers (`random()`, `now()`, `timestamp()`, and `uuid()`), durable self-invocation (`recurse()`), and declarative DAG execution (`flow()`). See the [durable operations API](docs/api/operations.md).
-- **Declarative DAG workflows** - Define acyclic workflows with typed node inputs, inferred or conditional dependencies, failure routes, and durable operations inside each node. The SDK validates the graph before execution and skips nodes that are not required by the selected outputs. See the [DAG workflow API](docs/api/dag.md).
-- **Background operation tasks** - Durable operations such as `step(...)`, `wait(...)`, `invoke(...)`, `recurse(...)`, `run_in_child_context(...)`, and `flow(...)` return `asyncio.Task` objects, so independent operations can run in the background and be awaited together with `asyncio.gather` without using `parallel()` or `map()`.
-- **Simplified operation APIs** - The `v2` API removes config wrapper objects in favor of direct keyword arguments and clearer call sites, including keyword-only operation names.
-- **Integrated local and cloud runner** - Runner functionality now ships through `async_durable_execution`, with separate local and cloud runner factories and typed test result helpers.
-- **Async Lambda client support** - Install the optional `aioboto` extra to use an async Lambda client; otherwise the SDK uses the bundled sync client through an async adapter.
-- **Replay-aware logging with stdlib logging** - Standard `logging` loggers are enriched by durable context filtering so workflow logs remain replay safe.
-- **Lambda layer packaging** - The repo includes tooling and workflows to build and publish an SDK Lambda layer for functions that do not vendor dependencies directly.
-- **Broader validation and docs** - The project now includes expanded local/cloud runner coverage, generated API docs, coverage publishing, and updated examples for async durable workflows.
+- **[Async-first durable code](docs/official-python-sdk-comparison.md#programming-model)** - Compared with the official AWS SDK, user-provided durable handlers, steps, child contexts, `flow` nodes, callback submitters, map item functions, parallel branches, and wait-for-condition checks are written with `async def`.
+- **[Operations not available in the official SDK](docs/api/operations.md)** - This SDK adds replay-safe helpers (`random()`, `now()`, `timestamp()`, and `uuid()`), durable self-invocation (`recurse()`), and declarative DAG execution (`flow()`).
+- **[Declarative DAG workflows](docs/api/dag.md)** - Define acyclic workflows with typed node inputs, inferred or conditional dependencies, failure routes, and durable operations inside each node. The SDK validates the graph before execution and skips nodes that are not required by the selected outputs.
+- **[Background operation tasks](docs/advanced-usage.md#background-operation-tasks)** - Durable operations such as `step(...)`, `wait(...)`, `invoke(...)`, `recurse(...)`, `run_in_child_context(...)`, and `flow(...)` return `asyncio.Task` objects, so independent operations can run in the background and be awaited together with `asyncio.gather` without using `parallel()` or `map()`.
+- **[Simplified operation APIs](docs/migrating-from-official-python-sdk.md#api-mapping)** - The `v2` API removes config wrapper objects in favor of direct keyword arguments and clearer call sites, including keyword-only operation names.
+- **[Integrated local and cloud runner](docs/async_durable_execution/runner.md)** - Runner functionality now ships through `async_durable_execution`, with separate local and cloud runner factories and typed test result helpers.
+- **[Async Lambda client support](docs/advanced-usage.md#lambda-client-selection)** - Install the optional `aioboto` extra to use an async Lambda client; otherwise the SDK uses the bundled sync client through an async adapter.
+- **[Replay-aware logging with stdlib logging](docs/migrating-from-official-python-sdk.md#logging)** - Standard `logging` loggers are enriched by durable context filtering so workflow logs remain replay safe.
+- **[Lambda layer packaging](docs/advanced-usage.md#lambda-layer-packaging)** - The repo includes tooling and workflows to build and publish an SDK Lambda layer for functions that do not vendor dependencies directly.
+- **[Broader validation and docs](CONTRIBUTING.md#development-workflow)** - The project now includes expanded local/cloud runner coverage, generated API docs, coverage publishing, and updated examples for async durable workflows.
 
 ## 🚀 Quick Start
 
