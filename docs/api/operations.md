@@ -6,7 +6,13 @@ declarative composition of these operations, see [DAG workflows](dag.md).
 
 ## SDK Extensions
 
-The official Python SDK does not provide the following operations.
+Operations that are not directly supported by the durable execution backend live
+in `async_durable_execution.extension`. They include `flow()`, `map()`,
+`parallel()`, `wait_for_callback()`, `wait_for_condition()`, `with_retry()`,
+`recurse()`, and the replay-safe helpers. The package-root imports remain the
+public API.
+
+The official Python SDK does not provide the following helper operations.
 
 ### Replay-Safe Helper Values
 

@@ -1,4 +1,4 @@
-"""Composite wait_for_callback operation built from callback, step, and child context."""
+"""wait_for_callback extension built from callback, step, and child context."""
 
 from __future__ import annotations
 

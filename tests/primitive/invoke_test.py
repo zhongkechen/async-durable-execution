@@ -29,8 +29,8 @@ from async_durable_execution.models import (
 from async_durable_execution.primitive.invoke import (
     InvokeOperationExecutor,
     invoke,
-    recurse,
 )
+from async_durable_execution.extension.recurse import recurse
 from async_durable_execution.primitive.child import DurableContext
 from async_durable_execution.state import RECURSIVE_LEVEL_INPUT_FIELD, ExecutionState
 

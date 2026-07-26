@@ -26,14 +26,14 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-import async_durable_execution.composite.wait_for_callback as callback
+import async_durable_execution.extension.wait_for_callback as callback
 from async_durable_execution.primitive.callback import (
     Callback,
     CallbackError,
     CallbackOperationExecutor,
     create_callback,
 )
-from async_durable_execution.composite.wait_for_callback import (
+from async_durable_execution.extension.wait_for_callback import (
     wait_for_callback,
     wait_for_callback_handler,
 )
@@ -104,7 +104,7 @@ def patch_wait_for_callback_ops(mock_callback, *, step_side_effect=None):
     with (
         patch.object(callback, "create_callback", create_callback_mock),
         patch(
-            "async_durable_execution.composite.wait_for_callback.step",
+            "async_durable_execution.extension.wait_for_callback.step",
             step_mock,
         ),
     ):

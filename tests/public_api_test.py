@@ -49,13 +49,20 @@ from async_durable_execution.models import (
 from async_durable_execution.primitive import child
 from async_durable_execution.config import JitterStrategy
 from async_durable_execution.config import RetryStrategy
-from async_durable_execution.composite.parallel import SummaryGenerator
-from async_durable_execution.composite.parallel import CompletionDecision
-from async_durable_execution.composite.parallel import CompletionStatus
-from async_durable_execution.composite.with_retry import (
+from async_durable_execution.extension.parallel import SummaryGenerator
+from async_durable_execution.extension.parallel import CompletionDecision
+from async_durable_execution.extension.parallel import CompletionStatus
+from async_durable_execution.extension.with_retry import (
     WithRetryContext as ModuleWithRetryContext,
 )
-from async_durable_execution.composite.wait_for_condition import PollingStrategy
+from async_durable_execution.extension.wait_for_condition import PollingStrategy
+from async_durable_execution.extension.recurse import recurse as module_recurse
+from async_durable_execution.extension.replay_safe import (
+    now as module_now,
+    random as module_random,
+    timestamp as module_timestamp,
+    uuid as module_uuid,
+)
 from async_durable_execution.serdes import ExtendedTypeSerDes
 from async_durable_execution.client import DurableServiceClient
 
@@ -109,6 +116,11 @@ def test_additional_public_types_importable_from_package_root():
         "uuid": durable_uuid,
     }
     assert WithRetryContext is ModuleWithRetryContext
+    assert recurse is module_recurse
+    assert now is module_now
+    assert durable_random is module_random
+    assert timestamp is module_timestamp
+    assert durable_uuid is module_uuid
 
     for name, public_type in expected_exports.items():
         assert getattr(ade, name) is public_type
@@ -212,15 +224,15 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
                 mock_child_executor,
             ),
             patch(
-                "async_durable_execution.composite.wait_for_callback._create_child_context_task",
+                "async_durable_execution.extension.wait_for_callback._create_child_context_task",
                 mock_callback_child,
             ),
             patch(
-                "async_durable_execution.composite.map._run_in_child_context",
+                "async_durable_execution.extension.map._run_in_child_context",
                 mock_map_child,
             ),
             patch(
-                "async_durable_execution.composite.parallel._run_in_child_context",
+                "async_durable_execution.extension.parallel._run_in_child_context",
                 mock_parallel_child,
             ),
         ):

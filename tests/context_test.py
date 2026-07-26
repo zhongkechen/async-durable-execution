@@ -20,7 +20,7 @@ from async_durable_execution.primitive.callback import (
     Callback,
     CallbackError,
 )
-from async_durable_execution.composite.map import MapSummaryGenerator
+from async_durable_execution.extension.map import MapSummaryGenerator
 from async_durable_execution import (
     durable_callable,
     create_callback,
@@ -267,7 +267,7 @@ async def test_module_level_context_functions_delegate_to_durable_context():
             "async_durable_execution.primitive.invoke.InvokeOperationExecutor"
         ) as mock_invoke_executor,
         patch(
-            "async_durable_execution.composite.wait_for_condition.WaitForConditionOperationExecutor"
+            "async_durable_execution.extension.wait_for_condition.WaitForConditionOperationExecutor"
         ) as mock_wait_for_condition_executor,
         patch(
             "async_durable_execution.primitive.wait.WaitOperationExecutor"
@@ -277,15 +277,15 @@ async def test_module_level_context_functions_delegate_to_durable_context():
             MagicMock(return_value=make_async_executor("child-result")),
         ),
         patch(
-            "async_durable_execution.composite.wait_for_callback._create_child_context_task",
+            "async_durable_execution.extension.wait_for_callback._create_child_context_task",
             mock_callback_child,
         ),
         patch(
-            "async_durable_execution.composite.map._run_in_child_context",
+            "async_durable_execution.extension.map._run_in_child_context",
             mock_map_child,
         ),
         patch(
-            "async_durable_execution.composite.parallel._run_in_child_context",
+            "async_durable_execution.extension.parallel._run_in_child_context",
             mock_parallel_child,
         ),
     ):
@@ -1729,7 +1729,7 @@ async def test_run_in_child_context_uses_callable_name(mock_executor_class):
     assert call_args.args[2].name == "AsyncMock"
 
 
-@patch("async_durable_execution.composite.wait_for_callback.wait_for_callback_handler")
+@patch("async_durable_execution.extension.wait_for_callback.wait_for_callback_handler")
 async def test_wait_for_callback_basic(mock_executor_class):
     """Test wait_for_callback with basic parameters."""
     mock_executor = make_async_executor("callback_result")
@@ -1744,7 +1744,7 @@ async def test_wait_for_callback_basic(mock_executor_class):
     )  # Ensure _original_name doesn't exist
 
     with patch(
-        "async_durable_execution.composite.wait_for_callback._create_child_context_task",
+        "async_durable_execution.extension.wait_for_callback._create_child_context_task",
         new_callable=AsyncMock,
     ) as mock_run_in_child:
         mock_run_in_child.return_value = "callback_result"
@@ -1765,7 +1765,7 @@ async def test_wait_for_callback_basic(mock_executor_class):
         assert call_args.kwargs["serdes"] is None
 
 
-@patch("async_durable_execution.composite.wait_for_callback.wait_for_callback_handler")
+@patch("async_durable_execution.extension.wait_for_callback.wait_for_callback_handler")
 async def test_wait_for_callback_with_name_and_config(mock_executor_class):
     """Test wait_for_callback with name and configuration fields."""
     mock_executor = make_async_executor("configured_callback_result")
@@ -1779,7 +1779,7 @@ async def test_wait_for_callback_with_name_and_config(mock_executor_class):
     heartbeat_timeout = timedelta(seconds=10)
 
     with patch(
-        "async_durable_execution.composite.wait_for_callback._create_child_context_task",
+        "async_durable_execution.extension.wait_for_callback._create_child_context_task",
         new_callable=AsyncMock,
     ) as mock_run_in_child:
         mock_run_in_child.return_value = "configured_callback_result"
@@ -1802,7 +1802,7 @@ async def test_wait_for_callback_with_name_and_config(mock_executor_class):
         assert call_args.kwargs["name"] == "submit_function"
 
 
-@patch("async_durable_execution.composite.wait_for_callback.wait_for_callback_handler")
+@patch("async_durable_execution.extension.wait_for_callback.wait_for_callback_handler")
 async def test_wait_for_callback_uses_submitter_name(mock_executor_class):
     """Test wait_for_callback uses submitter.__name__ when name is not provided."""
     mock_executor = make_async_executor("named_callback_result")
@@ -1815,7 +1815,7 @@ async def test_wait_for_callback_uses_submitter_name(mock_executor_class):
     mock_submitter._original_name = "submit_task"  # noqa: SLF001
 
     with patch(
-        "async_durable_execution.composite.wait_for_callback._create_child_context_task",
+        "async_durable_execution.extension.wait_for_callback._create_child_context_task",
         new_callable=AsyncMock,
     ) as mock_run_in_child:
         mock_run_in_child.return_value = "named_callback_result"
@@ -1828,7 +1828,7 @@ async def test_wait_for_callback_uses_submitter_name(mock_executor_class):
         assert call_args.kwargs["name"] == "AsyncMock"
 
 
-@patch("async_durable_execution.composite.wait_for_callback.wait_for_callback_handler")
+@patch("async_durable_execution.extension.wait_for_callback.wait_for_callback_handler")
 async def test_wait_for_callback_passes_child_context(mock_executor_class):
     """Test wait_for_callback passes child context to handler."""
     mock_state = Mock(spec=ExecutionState)
@@ -1860,7 +1860,7 @@ async def test_wait_for_callback_passes_child_context(mock_executor_class):
     mock_executor_class.side_effect = capture_handler_call
 
     with patch(
-        "async_durable_execution.composite.wait_for_callback._create_child_context_task"
+        "async_durable_execution.extension.wait_for_callback._create_child_context_task"
     ) as mock_run_in_child:
 
         async def run_child_context(
@@ -1891,7 +1891,7 @@ async def test_wait_for_callback_passes_child_context(mock_executor_class):
         mock_executor_class.assert_called_once()
 
 
-@patch("async_durable_execution.composite.map._run_in_child_context")
+@patch("async_durable_execution.extension.map._run_in_child_context")
 async def test_map_basic(mock_handler):
     """Test map with basic parameters."""
     mock_handler.return_value = "map_result"
@@ -1920,7 +1920,7 @@ async def test_map_basic(mock_handler):
     assert call_args.kwargs["name"] == "test_function"
 
 
-@patch("async_durable_execution.composite.map._run_in_child_context")
+@patch("async_durable_execution.extension.map._run_in_child_context")
 async def test_map_with_name_and_config(mock_handler):
     """Test map with name and configuration fields."""
     mock_handler.return_value = "configured_map_result"
@@ -1949,7 +1949,7 @@ async def test_map_with_name_and_config(mock_handler):
     assert call_args.kwargs["name"] == "custom_map"
 
 
-@patch("async_durable_execution.composite.map._run_in_child_context")
+@patch("async_durable_execution.extension.map._run_in_child_context")
 async def test_map_calls_handler_correctly(mock_handler):
     """Test map calls map_handler with correct parameters."""
     mock_handler.return_value = "handler_result"
@@ -1973,7 +1973,7 @@ async def test_map_calls_handler_correctly(mock_handler):
     mock_handler.assert_called_once()
 
 
-@patch("async_durable_execution.composite.map._run_in_child_context")
+@patch("async_durable_execution.extension.map._run_in_child_context")
 async def test_map_with_empty_items(mock_handler):
     """Test map with empty items."""
     mock_handler.return_value = "empty_map_result"
@@ -1991,7 +1991,7 @@ async def test_map_with_empty_items(mock_handler):
     assert result == "empty_map_result"
 
 
-@patch("async_durable_execution.composite.map._run_in_child_context")
+@patch("async_durable_execution.extension.map._run_in_child_context")
 async def test_map_with_different_input_types(mock_handler):
     """Test map with different item types."""
     mock_handler.return_value = "mixed_map_result"
@@ -2009,7 +2009,7 @@ async def test_map_with_different_input_types(mock_handler):
     assert result == "mixed_map_result"
 
 
-@patch("async_durable_execution.composite.parallel._run_in_child_context")
+@patch("async_durable_execution.extension.parallel._run_in_child_context")
 async def test_parallel_basic(mock_handler):
     """Test parallel with basic parameters."""
     mock_handler.return_value = "parallel_result"
@@ -2038,7 +2038,7 @@ async def test_parallel_basic(mock_handler):
     assert call_args.kwargs["sub_type"] is OperationSubType.PARALLEL
 
 
-@patch("async_durable_execution.composite.parallel._run_in_child_context")
+@patch("async_durable_execution.extension.parallel._run_in_child_context")
 async def test_parallel_with_name_and_config_fields(mock_handler):
     """Test parallel with name and direct config fields."""
     mock_handler.return_value = "configured_parallel_result"
@@ -2074,7 +2074,7 @@ async def test_parallel_with_name_and_config_fields(mock_handler):
     assert call_args.kwargs["serdes"] is serdes
 
 
-@patch("async_durable_execution.composite.parallel._run_in_child_context")
+@patch("async_durable_execution.extension.parallel._run_in_child_context")
 async def test_parallel_has_no_default_name(mock_handler):
     """Test parallel has no name when no name is provided."""
     mock_handler.return_value = "unnamed_parallel_result"
@@ -2099,7 +2099,7 @@ async def test_parallel_has_no_default_name(mock_handler):
     assert call_args.kwargs["name"] is None
 
 
-@patch("async_durable_execution.composite.parallel._run_in_child_context")
+@patch("async_durable_execution.extension.parallel._run_in_child_context")
 async def test_parallel_calls_handler_correctly(mock_handler):
     """Test parallel calls parallel_handler with correct parameters."""
     mock_handler.return_value = "handler_result"
@@ -2124,7 +2124,7 @@ async def test_parallel_calls_handler_correctly(mock_handler):
     mock_handler.assert_called_once()
 
 
-@patch("async_durable_execution.composite.parallel.parallel_handler")
+@patch("async_durable_execution.extension.parallel.parallel_handler")
 async def test_parallel_with_empty_callables(mock_handler):
     """Test parallel with empty callables."""
 
@@ -2141,7 +2141,7 @@ async def test_parallel_with_empty_callables(mock_handler):
     assert result == "empty_parallel_result"
 
 
-@patch("async_durable_execution.composite.parallel.parallel_handler")
+@patch("async_durable_execution.extension.parallel.parallel_handler")
 async def test_parallel_with_single_callable(mock_handler):
     """Test parallel with single callable."""
 
@@ -2161,7 +2161,7 @@ async def test_parallel_with_single_callable(mock_handler):
     assert result == "single_parallel_result"
 
 
-@patch("async_durable_execution.composite.parallel.parallel_handler")
+@patch("async_durable_execution.extension.parallel.parallel_handler")
 async def test_parallel_with_many_callables(mock_handler):
     """Test parallel with many callables."""
 
@@ -2184,7 +2184,7 @@ async def test_parallel_with_many_callables(mock_handler):
     assert result == "many_parallel_result"
 
 
-@patch("async_durable_execution.composite.map._run_in_child_context")
+@patch("async_durable_execution.extension.map._run_in_child_context")
 async def test_map_calls_handler(mock_handler):
     """Test map calls map_handler through run_in_child_context."""
     mock_handler.return_value = "map_result"
@@ -2207,7 +2207,7 @@ async def test_map_calls_handler(mock_handler):
     mock_handler.assert_called_once()
 
 
-@patch("async_durable_execution.composite.parallel._run_in_child_context")
+@patch("async_durable_execution.extension.parallel._run_in_child_context")
 async def test_parallel_calls_handler(mock_handler):
     """Test parallel calls parallel_handler through run_in_child_context."""
     mock_handler.return_value = "parallel_result"
@@ -2247,7 +2247,7 @@ async def test_wait_for_condition_validation_errors():
         return state
 
     with patch(
-        "async_durable_execution.composite.wait_for_condition.WaitForConditionOperationExecutor"
+        "async_durable_execution.extension.wait_for_condition.WaitForConditionOperationExecutor"
     ) as mock_executor_class:
         mock_executor = make_async_executor("test")
         mock_executor_class.return_value = mock_executor
@@ -2276,7 +2276,7 @@ async def test_context_map_handler_call():
         return "map_result"
 
     # Mock the handlers to track calls.
-    with patch("async_durable_execution.composite.map.map_handler") as mock_map_handler:
+    with patch("async_durable_execution.extension.map.map_handler") as mock_map_handler:
         mock_map_handler.return_value = bound_map_handler
 
         result = await run_with_context(
@@ -2310,7 +2310,7 @@ async def test_context_parallel_handler_call():
 
     # Mock the handlers to track calls
     with patch(
-        "async_durable_execution.composite.parallel.parallel_handler"
+        "async_durable_execution.extension.parallel.parallel_handler"
     ) as mock_parallel_handler:
 
         async def handler_result():
@@ -2343,7 +2343,7 @@ async def test_context_wait_for_condition_handler_call():
 
     # Mock the executor to track calls
     with patch(
-        "async_durable_execution.composite.wait_for_condition.WaitForConditionOperationExecutor"
+        "async_durable_execution.extension.wait_for_condition.WaitForConditionOperationExecutor"
     ) as mock_executor_class:
         mock_executor = make_async_executor("final_state")
         mock_executor_class.return_value = mock_executor

@@ -9,7 +9,7 @@ from typing import Any
 from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
-from async_durable_execution.composite.parallel import (
+from async_durable_execution.extension.parallel import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
@@ -29,8 +29,8 @@ from async_durable_execution import durable_callable, parallel, DurableContext
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import OperationSubType
 from async_durable_execution.primitive import child
-from async_durable_execution.composite.parallel import CompletionConfig, NestingType
-from async_durable_execution.composite.parallel import (
+from async_durable_execution.extension.parallel import CompletionConfig, NestingType
+from async_durable_execution.extension.parallel import (
     ParallelExecutor,
     ParallelSummaryGenerator,
     parallel_handler,
@@ -196,7 +196,7 @@ def test_parallel_signature_requires_keyword_only_options():
     assert parameters["nesting_type"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
-@patch("async_durable_execution.composite.parallel.parallel_handler")
+@patch("async_durable_execution.extension.parallel.parallel_handler")
 async def test_parallel_passes_config_fields_to_handler(
     mock_parallel_handler,
 ):
@@ -242,7 +242,7 @@ async def test_parallel_passes_config_fields_to_handler(
     assert kwargs["nesting_type"] is NestingType.FLAT
 
 
-@patch("async_durable_execution.composite.parallel.parallel_handler")
+@patch("async_durable_execution.extension.parallel.parallel_handler")
 async def test_parallel_passes_default_summary_generator(
     mock_parallel_handler,
 ):
@@ -295,7 +295,7 @@ def test_parallel_summary_generator_returns_compact_json_payload():
     }
 
 
-@patch("async_durable_execution.composite.parallel._run_in_child_context")
+@patch("async_durable_execution.extension.parallel._run_in_child_context")
 async def test_parallel_raises_when_child_operation_id_is_missing(
     mock_run_in_child_context,
 ):
@@ -317,7 +317,7 @@ async def test_parallel_raises_when_child_operation_id_is_missing(
         await run_with_context(context, lambda: parallel([branch_a]))
 
 
-@patch("async_durable_execution.composite.parallel.parallel_handler")
+@patch("async_durable_execution.extension.parallel.parallel_handler")
 async def test_parallel_accepts_one_shot_branch_iterable(
     mock_parallel_handler,
 ):
@@ -571,7 +571,7 @@ async def test_parallel_handler_creates_executor_with_correct_config():
     executor_context.create_child_context = lambda *args, **kwargs: Mock()
 
     with patch(
-        "async_durable_execution.composite.parallel.ParallelExecutor"
+        "async_durable_execution.extension.parallel.ParallelExecutor"
     ) as mock_executor_class:
         mock_batch_result = Mock(spec=BatchResult)
         mock_executor = Mock()
@@ -633,7 +633,7 @@ async def test_parallel_handler_creates_executor_with_default_fields():
     executor_context.create_child_context = lambda *args, **kwargs: Mock()
 
     with patch(
-        "async_durable_execution.composite.parallel.ParallelExecutor"
+        "async_durable_execution.extension.parallel.ParallelExecutor"
     ) as mock_executor_class:
         mock_batch_result = Mock(spec=BatchResult)
         mock_executor = Mock()
@@ -1118,10 +1118,10 @@ async def test_parallel_handler_first_execution_then_replay():
 
     with (
         patch(
-            "async_durable_execution.composite.parallel.ParallelExecutor.execute"
+            "async_durable_execution.extension.parallel.ParallelExecutor.execute"
         ) as mock_execute,
         patch(
-            "async_durable_execution.composite.parallel.ParallelExecutor.replay_completed"
+            "async_durable_execution.extension.parallel.ParallelExecutor.replay_completed"
         ) as mock_replay,
     ):
         mock_execute.return_value = Mock()  # Mock BatchResult

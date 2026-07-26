@@ -17,9 +17,9 @@ from .config import JitterStrategy, RetryStrategy
 from .context import (
     get_current_context,
 )
-from .composite.with_retry import WithRetryContext, with_retry
-from .composite.map import MapItemContext, map
-from .composite.flow import (
+from .extension.with_retry import WithRetryContext, with_retry
+from .extension.map import MapItemContext, map
+from .extension.flow import (
     FlowNode,
     FlowNodeContext,
     FlowNodeResult,
@@ -31,7 +31,7 @@ from .composite.flow import (
     get_node_context,
     node,
 )
-from .composite.parallel import (
+from .extension.parallel import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
@@ -42,20 +42,21 @@ from .composite.parallel import (
     NestingType,
     SummaryGenerator,
 )
-from .composite.wait_for_condition import (
+from .extension.wait_for_condition import (
     PollingStrategy,
     wait_for_condition,
     WaitForConditionCheckContext,
 )
-from .primitive.invoke import invoke, recurse
-from .composite.parallel import (
+from .primitive.invoke import invoke
+from .extension.recurse import recurse
+from .extension.parallel import (
     parallel,
 )
 from .primitive.callback import (
     create_callback,
     Callback,
 )
-from .composite.wait_for_callback import (
+from .extension.wait_for_callback import (
     wait_for_callback,
     WaitForCallbackContext,
 )
@@ -70,7 +71,7 @@ from .primitive.step import (
     get_step_context,
     step,
 )
-from .replay_safe import now, random, timestamp, uuid
+from .extension.replay_safe import now, random, timestamp, uuid
 from .models import ErrorObject
 
 # User-facing exception types.
