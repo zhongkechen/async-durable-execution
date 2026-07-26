@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import builtins
 import json
 from collections import deque
 from dataclasses import dataclass
@@ -931,6 +932,29 @@ def test_invalid_execution_error_payload_uses_safe_defaults(payload):
     assert isinstance(classified, ExecutionError)
     assert classified.termination_reason is TerminationReason.EXECUTION_ERROR
     assert _sdk_error_type_name(classified) == "FallbackExecutionError"
+
+
+@pytest.mark.skipif(
+    not hasattr(builtins, "ExceptionGroup"),
+    reason="ExceptionGroup requires Python 3.11 or newer",
+)
+def test_control_error_is_found_in_nested_exception_group():
+    group_type = getattr(builtins, "ExceptionGroup")
+    source = _CustomExecutionError(
+        "nested control failure",
+        TerminationReason.NON_DETERMINISTIC_EXECUTION,
+    )
+    nested = group_type("nested", [ValueError("user failure"), source])
+    outer = group_type("outer", [RuntimeError("other failure"), nested])
+
+    assert _find_control_error(outer) is source
+
+
+def test_control_error_search_handles_cyclic_cause_chain():
+    error = RuntimeError("cyclic")
+    error.__cause__ = error
+
+    assert _find_control_error(error) is None
 
 
 def test_invocation_error_payload_drops_unserializable_boto_diagnostics():

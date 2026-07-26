@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import builtins
 import functools
 import heapq
 import inspect
@@ -28,11 +29,9 @@ from ..exceptions import (
     InvocationError,
     SerDesError,
     SuspendExecution,
-    TerminationReason,
     TimedSuspendExecution,
     _decode_sdk_error_data,
-    _restore_sdk_execution_error,
-    _restore_sdk_invocation_error,
+    _restore_sdk_control_error,
 )
 from ..models import ErrorObject, SerializableModel
 from ..primitive.child import DurableContext, get_durable_context, run_in_child_context
@@ -42,6 +41,7 @@ from ..task import create_eager_task
 
 T = TypeVar("T")
 Params = ParamSpec("Params")
+_BASE_EXCEPTION_GROUP_TYPE = getattr(builtins, "BaseExceptionGroup", None)
 
 
 class FlowNodeStatus(Enum):
@@ -1433,54 +1433,46 @@ def _callable_error_object(error: Exception) -> ErrorObject:
 
 
 def _find_control_error(error: Exception) -> Exception | None:
-    current: BaseException | None = error
+    pending: list[BaseException] = [error]
     seen: set[int] = set()
-    while isinstance(current, Exception) and id(current) not in seen:
+    while pending:
+        current = pending.pop()
+        if not isinstance(current, Exception) or id(current) in seen:
+            continue
         seen.add(id(current))
         if isinstance(current, (ExecutionError, InvocationError, SerDesError)):
             return current
         if isinstance(current, CallableRuntimeError):
             error_type = current.error_type or ""
             message = current.message or str(current)
-            is_invocation_error, payload = _decode_sdk_error_data(
+            control_error = _restore_sdk_control_error(
+                message,
+                current.error_type,
                 current.data,
-                InvocationError,
             )
-            if is_invocation_error:
-                return _restore_sdk_invocation_error(
-                    message,
-                    current.error_type,
-                    payload,
-                )
-            is_execution_error, payload = _decode_sdk_error_data(
-                current.data,
-                ExecutionError,
-            )
-            if is_execution_error:
-                return _restore_sdk_execution_error(
-                    message,
-                    current.error_type,
-                    payload,
-                    default_termination_reason=TerminationReason.EXECUTION_ERROR,
-                )
-            is_serdes_error, payload = _decode_sdk_error_data(
-                current.data,
-                SerDesError,
-            )
-            if is_serdes_error:
-                return _restore_sdk_execution_error(
-                    message,
-                    current.error_type,
-                    payload,
-                    default_termination_reason=TerminationReason.SERIALIZATION_ERROR,
-                )
+            if control_error is not None:
+                return control_error
             is_callback_error, _ = _decode_sdk_error_data(
                 current.data,
                 CallbackError,
             )
             if is_callback_error and error_type == "CallbackError":
                 return ExecutionError(message)
-        current = current.__cause__ or current.__context__
+
+        related: list[BaseException] = []
+        if _BASE_EXCEPTION_GROUP_TYPE is not None and isinstance(
+            current,
+            _BASE_EXCEPTION_GROUP_TYPE,
+        ):
+            related.extend(
+                nested
+                for nested in getattr(current, "exceptions", ())
+                if isinstance(nested, BaseException)
+            )
+        cause = current.__cause__ or current.__context__
+        if cause is not None:
+            related.append(cause)
+        pending.extend(reversed(related))
     return None
 
 

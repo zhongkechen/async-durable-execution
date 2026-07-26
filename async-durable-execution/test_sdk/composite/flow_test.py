@@ -1891,6 +1891,53 @@ async def test_custom_sdk_control_error_does_not_activate_failure_route(
     assert called == ["source"]
 
 
+@pytest.mark.skipif(
+    not hasattr(asyncio, "TaskGroup"),
+    reason="asyncio.TaskGroup requires Python 3.11 or newer",
+)
+async def test_task_group_control_error_does_not_activate_failure_route():
+    called: list[str] = []
+
+    @durable_dag
+    def graph():
+        @durable_node
+        async def source() -> None:
+            called.append("source")
+
+            async def fail() -> None:
+                msg = "task group control failure"
+                raise ExecutionError(msg)
+
+            task_group_type = getattr(asyncio, "TaskGroup")
+            async with task_group_type() as task_group:
+                task_group.create_task(fail())
+
+        @durable_node
+        async def should_not_run() -> None:
+            called.append("handler")
+
+        source_node = node(source(), name="source")
+        recovery = node(should_not_run(), name="handler")
+        source_node.failed >> recovery
+        return recovery.result()
+
+    @durable_execution
+    async def handler(event):
+        await flow(graph(), name="task-group-control-error")
+
+    async with create_local_runner(
+        handler=handler,
+        input={},
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.FAILED
+    assert result.error is not None
+    assert result.error.type == "ExecutionError"
+    assert called == ["source"]
+
+
 async def test_user_execution_error_from_step_activates_failure_route():
     class ExecutionError(Exception):
         pass

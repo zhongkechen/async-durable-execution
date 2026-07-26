@@ -502,6 +502,37 @@ def _restore_sdk_invocation_error(
     )
 
 
+def _restore_sdk_control_error(
+    message: str,
+    error_type: str | None,
+    data: str | None,
+) -> ExecutionError | InvocationError | None:
+    """Restore a control error identified by SDK-owned checkpoint metadata."""
+    is_invocation_error, payload = _decode_sdk_error_data(data, InvocationError)
+    if is_invocation_error:
+        return _restore_sdk_invocation_error(message, error_type, payload)
+
+    is_execution_error, payload = _decode_sdk_error_data(data, ExecutionError)
+    if is_execution_error:
+        return _restore_sdk_execution_error(
+            message,
+            error_type,
+            payload,
+            default_termination_reason=TerminationReason.EXECUTION_ERROR,
+        )
+
+    is_serdes_error, payload = _decode_sdk_error_data(data, SerDesError)
+    if is_serdes_error:
+        return _restore_sdk_execution_error(
+            message,
+            error_type,
+            payload,
+            default_termination_reason=TerminationReason.SERIALIZATION_ERROR,
+        )
+
+    return None
+
+
 class NonDeterministicExecutionError(ExecutionError):
     """Error when execution is non-deterministic."""
 
