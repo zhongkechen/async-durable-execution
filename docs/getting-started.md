@@ -96,10 +96,50 @@ return saved results, but ordinary Python code executes again.
 Standard `logging` calls are replay-aware when they run within a durable
 execution.
 
+### Compose Durable Operations Outside Steps
+
+A callable passed to `step()` is one atomic operation and cannot start another
+durable operation. Use `run_in_child_context()` when a reusable sub-workflow
+needs its own steps or waits:
+
+```python
+from datetime import timedelta
+
+from async_durable_execution import (
+    durable_callable,
+    run_in_child_context,
+    step,
+    wait,
+)
+
+
+@durable_callable
+async def load_order(order_id: str) -> dict:
+    return {"order_id": order_id}
+
+
+@durable_callable
+async def process_order(order_id: str) -> dict:
+    order = await step(load_order(order_id), name="load-order")
+    await wait(timedelta(seconds=1), name="processing-delay")
+    return order
+
+
+result = await run_in_child_context(
+    process_order("order-123"),
+    name="process-order",
+)
+```
+
+Handlers and child contexts compose durable operations. Step bodies perform the
+nondeterministic work that should be checkpointed atomically.
+
 ## Continue
 
 - [Durable operations](api/operations.md)
 - [Declarative DAG workflows](api/dag.md)
+- [Workflow patterns](workflow-patterns.md)
+- [Deploy and invoke](deployment.md)
 - [Background tasks and advanced patterns](advanced-usage.md)
 - [Using synchronous libraries](using-synchronous-code.md)
 - [Deploying and testing the included examples](https://github.com/zhongkechen/async-durable-execution/blob/main/CONTRIBUTING.md#example-integration-tests-and-deployment)

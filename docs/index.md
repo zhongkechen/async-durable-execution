@@ -104,6 +104,8 @@ clock reads, and other side effects inside checkpointed steps. Standard
 ## Next Steps
 
 - Follow the [getting-started guide](getting-started.md).
+- Apply common [workflow patterns](workflow-patterns.md).
+- [Deploy and invoke](deployment.md) a durable Lambda function.
 - Learn the [advanced asyncio patterns](advanced-usage.md).
 - Define a [durable DAG workflow](api/dag.md).
 - Browse the [durable operations API](api/operations.md).
