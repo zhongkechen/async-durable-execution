@@ -10,7 +10,14 @@ description = "Community-maintained durable execution SDK for AWS Lambda in Pyth
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-keywords = []
+keywords = [
+  "asyncio",
+  "aws",
+  "durable-execution",
+  "lambda",
+  "serverless",
+  "workflow",
+]
 authors = [{ name = "Zhongke Chen" }]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
