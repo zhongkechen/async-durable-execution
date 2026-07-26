@@ -30,6 +30,10 @@ asynchronous:
 - branch callables passed to `parallel()`
 - condition checks passed to `wait_for_condition()`
 
+These entry points can be functions, instance methods, class methods, or static
+methods. Durable operations are awaitable and run on the same event loop as the
+handler.
+
 Do not pass a regular `def` function directly to `step()`, `run_in_child_context()`,
 `node()`, `map()`, or `parallel()`. Wrap synchronous work in an async durable
 callable instead.
