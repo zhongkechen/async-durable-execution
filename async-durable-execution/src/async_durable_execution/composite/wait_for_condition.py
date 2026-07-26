@@ -366,7 +366,7 @@ def wait_for_condition(
     returns the next polling delay, or None to stop polling and complete with
     the latest result.
     """
-    context = get_durable_context("wait_for_condition")
+    context = get_durable_context()
 
     with context._replay_aware(executes_user_code=True):
         operation_id = context.step_counter.create_step_id()

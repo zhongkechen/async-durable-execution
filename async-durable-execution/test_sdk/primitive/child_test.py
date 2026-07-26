@@ -33,8 +33,10 @@ from async_durable_execution.primitive.child import (
     DurableContext,
     OrphanedChildException,
     _run_in_child_context,
+    get_durable_context,
     run_in_child_context,
 )
+from async_durable_execution.primitive.step import StepContext
 from async_durable_execution.serdes import SerDes
 from async_durable_execution.state import ExecutionState
 from async_durable_execution.composite.parallel import SummaryGenerator
@@ -136,6 +138,31 @@ def test_run_in_child_context_name_is_keyword_only():
 
     assert parameters["func"].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
     assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+def test_get_durable_context_has_no_parameters():
+    assert not inspect.signature(get_durable_context).parameters
+
+
+def test_get_durable_context_uses_current_operation_name_in_error():
+    state = Mock(spec=ExecutionState)
+    context = StepContext(
+        execution_state=state,
+        operation_identifier=OperationIdentifier(
+            operation_id="step-op",
+            sub_type=OperationSubType.STEP,
+            name="current-step",
+        ),
+    )
+
+    with (
+        bind_current_context(context),
+        pytest.raises(
+            RuntimeError,
+            match="current-step can only be used while a durable function or child context is executing\\.",
+        ),
+    ):
+        get_durable_context()
 
 
 async def test_internal_run_in_child_context_uses_custom_sub_type():

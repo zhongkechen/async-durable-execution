@@ -55,7 +55,7 @@ def with_retry(
         while True:
             attempt += 1
             try:
-                context = get_durable_context("with_retry")
+                context = get_durable_context()
                 retry_context = WithRetryContext(
                     execution_state=context.execution_state,
                     operation_identifier=context.operation_identifier,
