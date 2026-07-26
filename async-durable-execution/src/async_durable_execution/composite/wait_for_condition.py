@@ -16,6 +16,7 @@ from ..context import (
 from ..exceptions import (
     CallableRuntimeError,
     ExecutionError,
+    InvocationError,
     ValidationError,
     WaitForConditionError,
     _decode_sdk_error_data,
@@ -292,6 +293,9 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             )
 
         except Exception as e:
+            if isinstance(e, InvocationError) and e.is_retryable():
+                raise
+
             # Mark as failed - waitForCondition doesn't have its own retry logic for errors
             # If the check function throws, it's considered a failure
             logger.exception(

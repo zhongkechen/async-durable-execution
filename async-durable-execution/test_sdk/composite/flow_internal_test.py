@@ -53,6 +53,7 @@ from async_durable_execution.composite.flow import (
     _find_control_error,
     _flow_node_inputs,
     _flow_node_context,
+    _raise_collected_task_errors,
     _raise_task_error,
     _resolve_any_expression,
     _resolve_flow_node_inputs,
@@ -1587,6 +1588,88 @@ async def test_execute_flow_wraps_unclassified_child_error(monkeypatch):
     with pytest.raises(_FlowControlSignal) as raised:
         await _execute_flow(frozen)
     assert isinstance(raised.value.error, ValueError)
+
+
+async def test_execute_flow_prioritizes_resolver_error_over_node_suspension(
+    monkeypatch,
+):
+    @durable_dag
+    def graph():
+        first = node(return_name(), name="first")
+        second = node(return_name(), name="second")
+        target = node(return_name(), name="target")
+        (first | second) >> target
+        return target.outcome
+
+    frozen = _evaluate_definition(graph())
+    suspension = TimedSuspendExecution("node suspended", 100)
+    control_error = _FlowControlSignal(InvocationError("checkpoint failed"))
+
+    async def succeed():
+        return _NodeExecution(FlowNodeResult.succeeded("ok"))
+
+    async def fail(error: BaseException):
+        raise error
+
+    def fake_child(func, *, name, **kwargs):
+        _ = func, kwargs
+        if name == "first":
+            return asyncio.create_task(fail(suspension))
+        if name.startswith("flow-any-resolution-"):
+            return asyncio.create_task(fail(control_error))
+        return asyncio.create_task(succeed())
+
+    monkeypatch.setattr(
+        "async_durable_execution.composite.flow.run_in_child_context",
+        fake_child,
+    )
+
+    with pytest.raises(_FlowControlSignal) as raised:
+        await _execute_flow(frozen)
+    assert raised.value is control_error
+
+
+async def test_execute_flow_uses_earliest_timed_suspension(monkeypatch):
+    @durable_dag
+    def graph():
+        first = node(return_name(), name="first")
+        second = node(return_name(), name="second")
+        third = node(return_name(), name="third")
+        return first.outcome, second.outcome, third.outcome
+
+    frozen = _evaluate_definition(graph())
+    indefinite = SuspendExecution("indefinite")
+    later = TimedSuspendExecution("later", 20)
+    earlier = TimedSuspendExecution("earlier", 10)
+    errors = {
+        "first": indefinite,
+        "second": later,
+        "third": earlier,
+    }
+
+    async def fail(error: BaseException):
+        raise error
+
+    def fake_child(func, *, name, **kwargs):
+        _ = func, kwargs
+        return asyncio.create_task(fail(errors[name]))
+
+    monkeypatch.setattr(
+        "async_durable_execution.composite.flow.run_in_child_context",
+        fake_child,
+    )
+
+    with pytest.raises(TimedSuspendExecution) as raised:
+        await _execute_flow(frozen)
+    assert raised.value is earlier
+
+
+def test_collected_task_errors_use_indefinite_suspension_as_fallback():
+    suspension = SuspendExecution("waiting for callback")
+
+    with pytest.raises(SuspendExecution) as raised:
+        _raise_collected_task_errors([suspension])
+    assert raised.value is suspension
 
 
 @pytest.mark.parametrize(

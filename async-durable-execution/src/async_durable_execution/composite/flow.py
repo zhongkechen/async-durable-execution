@@ -1552,6 +1552,35 @@ def _raise_task_error(value: BaseException) -> NoReturn:
     raise value
 
 
+def _raise_collected_task_errors(values: Iterable[object]) -> None:
+    suspensions: list[SuspendExecution] = []
+    for value in values:
+        if isinstance(value, SuspendExecution):
+            suspensions.append(value)
+        elif isinstance(value, _FlowControlSignal):
+            raise value
+        elif isinstance(value, Exception):
+            control_error = _find_control_error(value)
+            if control_error is not None:
+                raise _FlowControlSignal(control_error) from value
+            raise _FlowControlSignal(value) from value
+        elif isinstance(value, BaseException):
+            raise value
+
+    timed_suspensions = [
+        suspension
+        for suspension in suspensions
+        if isinstance(suspension, TimedSuspendExecution)
+    ]
+    if timed_suspensions:
+        raise min(
+            timed_suspensions,
+            key=lambda suspension: suspension.scheduled_timestamp,
+        )
+    if suspensions:
+        raise suspensions[0]
+
+
 async def _resolve_dependency_expression(
     target: FlowNode[Any],
     expression: _DependencyExpression,
@@ -1981,8 +2010,8 @@ async def _execute_flow(frozen_flow: _FrozenFlow) -> FlowResult:
         *resolver_task_order,
         return_exceptions=True,
     )
+    _raise_collected_task_errors(values)
     node_values = values[: len(tasks)]
-    resolver_values = values[len(tasks) :]
     execution_nodes = set(frozen_flow.execution_nodes)
     executions = {
         flow_node: _NodeExecution(result=FlowNodeResult.skipped())
@@ -1994,27 +2023,7 @@ async def _execute_flow(frozen_flow: _FrozenFlow) -> FlowResult:
         node_values,
         strict=True,
     ):
-        if isinstance(value, _FlowControlSignal):
-            raise value
-        if isinstance(value, BaseException):
-            if isinstance(value, Exception):
-                control_error = _find_control_error(value)
-                if control_error is not None:
-                    raise _FlowControlSignal(control_error) from value
-                raise _FlowControlSignal(value) from value
-            raise value
-        executions[flow_node] = value
-
-    for value in resolver_values:
-        if isinstance(value, _FlowControlSignal):
-            raise value
-        if isinstance(value, BaseException):
-            if isinstance(value, Exception):
-                control_error = _find_control_error(value)
-                if control_error is not None:
-                    raise _FlowControlSignal(control_error) from value
-                raise _FlowControlSignal(value) from value
-            raise value
+        executions[flow_node] = cast("_NodeExecution", value)
 
     results = {
         flow_node.name: executions[flow_node].result for flow_node in frozen_flow.nodes

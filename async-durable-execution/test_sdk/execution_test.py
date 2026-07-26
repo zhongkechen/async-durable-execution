@@ -4477,11 +4477,11 @@ async def test_end_to_end_child_context_error_handling():
         assert len(fail_updates) == 1
 
 
-async def test_end_to_end_child_context_invocation_error_reraised():
+async def test_end_to_end_child_context_retryable_invocation_error_not_checkpointed():
     """Test end-to-end child context InvocationError re-raising.
 
-    Verifies that child context that raises InvocationError creates FAIL checkpoint
-    and re-raises InvocationError (not wrapped) to enable retry at execution handler level.
+    A retryable InvocationError must not create a terminal child checkpoint, so
+    the child can execute again when the Lambda invocation is retried.
     """
 
     async def child_function_with_invocation_error() -> str:
@@ -4532,11 +4532,12 @@ async def test_end_to_end_child_context_invocation_error_reraised():
         with pytest.raises(InvocationError, match="Invocation failed in child"):
             await run_handler(my_handler, event, lambda_context)
 
-        # Verify FAIL checkpoint was created before re-raising
+        # START is asynchronous and may not flush before termination. The
+        # operation must remain absent or STARTED rather than terminally FAILED.
         all_operations = [op for batch in checkpoint_calls for op in batch]
         fail_updates = [
             op
             for op in all_operations
             if hasattr(op, "action") and op.action.value == "FAIL"
         ]
-        assert len(fail_updates) == 1
+        assert fail_updates == []
