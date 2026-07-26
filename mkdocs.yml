@@ -43,6 +43,8 @@ nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - Guides:
+      - Workflow Patterns: workflow-patterns.md
+      - Deploy and Invoke: deployment.md
       - Advanced Usage: advanced-usage.md
       - Using Synchronous Code: using-synchronous-code.md
       - Migrating from the Official SDK: migrating-from-official-python-sdk.md

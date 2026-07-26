@@ -214,6 +214,8 @@ For the developer workflow to run or deploy example integration tests, see the [
 - **[DAG Workflow API](https://zhongkechen.github.io/async-durable-execution/api/dag.html)** - Build declarative workflows with `flow()`, typed node inputs, conditional dependencies, and failure routes
 - **[Official Python SDK Comparison](https://zhongkechen.github.io/async-durable-execution/official-python-sdk-comparison.html)** - Side-by-side comparison with the official AWS Durable Execution Python SDK
 - **[Migration Guide](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html)** - Move from the official synchronous Python SDK to this async-first SDK
+- **[Workflow Patterns](https://zhongkechen.github.io/async-durable-execution/workflow-patterns.html)** - Build agentic loops, human approval workflows, and compensating transactions
+- **[Deploy and Invoke](https://zhongkechen.github.io/async-durable-execution/deployment.html)** - Configure IAM, qualified function identifiers, invocations, CloudFormation, and SAM
 - **[Using Synchronous Code](https://zhongkechen.github.io/async-durable-execution/using-synchronous-code.html)** - Wrap existing synchronous business logic and blocking clients safely
 - **[Advanced Usage](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html)** - Explore background operation tasks, batch completion conditions, Lambda clients, and Lambda layers
 - **[Runner Architecture](https://zhongkechen.github.io/async-durable-execution/runner-architecture.html)** - Local and cloud runner execution flow, components, and diagrams
