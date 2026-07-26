@@ -142,7 +142,7 @@ hatch run test:all --pdb
 - Put tests in the test directory that matches the code you are changing. For
   the SDK package, mirror the source layout under `tests/`: primitive
   operation tests live in
-  `primitive/`, composite operation tests live in `composite/`, and shared model
+  `primitive/`, extension operation tests live in `extension/`, and shared model
   or package-level behavior stays at the `tests/` root. Runner tests live
   under `tests/runner/`.
 - Use filenames ending in `_test.py`.
