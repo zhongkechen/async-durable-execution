@@ -173,7 +173,7 @@ def invoke(
         serdes_result: Optional deserializer for the invocation result.
         tenant_id: Optional tenant identifier for the chained invocation.
     """
-    context = get_durable_context("invoke")
+    context = get_durable_context()
 
     with context._replay_aware():
         operation_id = context.step_counter.create_step_id()
@@ -290,7 +290,7 @@ def recurse(
         tenant_id: Optional tenant identifier. Defaults to the current Lambda context
             tenant id when present.
     """
-    context = get_durable_context("recurse")
+    context = get_durable_context()
     recursive_payload = (
         _add_recursive_level(context, payload) if with_recursive_level else payload
     )

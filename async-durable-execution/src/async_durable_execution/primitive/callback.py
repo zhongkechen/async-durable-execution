@@ -129,7 +129,7 @@ def create_callback(
         heartbeat_timeout: Optional maximum time to wait between callback heartbeats.
         serdes: Optional serializer for callback results.
     """
-    context = get_durable_context("create_callback")
+    context = get_durable_context()
 
     with context._replay_aware():
         operation_id: str = context.step_counter.create_step_id()

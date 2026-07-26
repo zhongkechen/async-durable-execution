@@ -1763,7 +1763,6 @@ async def test_wait_for_callback_basic(mock_executor_class):
         assert call_args.kwargs["sub_type"] is OperationSubType.WAIT_FOR_CALLBACK
         assert call_args.kwargs["name"] == "AsyncMock"
         assert call_args.kwargs["serdes"] is None
-        assert call_args.kwargs["operation_name"] == "wait_for_callback"
 
 
 @patch("async_durable_execution.composite.wait_for_callback.wait_for_callback_handler")
@@ -1870,12 +1869,10 @@ async def test_wait_for_callback_passes_child_context(mock_executor_class):
             sub_type,
             name,
             serdes,
-            operation_name,
         ):
             # Execute the child context callable
             assert sub_type is OperationSubType.WAIT_FOR_CALLBACK
             assert serdes is None
-            assert operation_name == "wait_for_callback"
             child_context = create_test_context(state=mock_state, parent_id="test")
             token = set_current_context(child_context)
             try:

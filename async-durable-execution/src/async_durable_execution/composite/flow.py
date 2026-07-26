@@ -1928,7 +1928,7 @@ async def _execute_node(
         )
 
     consumer_results = await _clone_dependency_results(resolution.results)
-    context = get_durable_context("flow node")
+    context = get_durable_context()
     flow_context = _flow_node_context(
         context,
         direct_dependencies,
@@ -2091,7 +2091,7 @@ def flow(
 ) -> asyncio.Task[FlowResult]:
     """Validate and start a declarative acyclic durable workflow."""
     ensure_durable_operations_allowed("flow")
-    get_durable_context("flow")
+    get_durable_context()
     frozen_flow = _evaluate_definition(definition)
     flow_name = name or getattr(definition, "__name__", None) or "flow"
     child_task = run_in_child_context(

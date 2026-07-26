@@ -1374,13 +1374,13 @@ def parallel(
         RuntimeError: If called outside a durable context.
     """
     _validate_max_concurrency(max_concurrency)
-    context = get_durable_context("parallel")
+    context = get_durable_context()
     validated_branches: list[Callable[[], Awaitable[T]]] = []
     for branch in branches:
         validated_branches.append(branch)
 
     async def run_parallel_handler() -> BatchResult[T]:
-        parallel_context = get_durable_context("parallel")
+        parallel_context = get_durable_context()
         operation_id = parallel_context.step_id_prefix
         if operation_id is None:
             msg = "parallel operation id is not available in the current context"
@@ -1411,5 +1411,4 @@ def parallel(
         sub_type=OperationSubType.PARALLEL,
         name=name,
         serdes=serdes,
-        operation_name="parallel",
     )

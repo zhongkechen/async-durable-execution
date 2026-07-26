@@ -98,7 +98,6 @@ def wait_for_callback(
         sub_type=OperationSubType.WAIT_FOR_CALLBACK,
         name=context_name,
         serdes=serdes,
-        operation_name="wait_for_callback",
     )
 
 

@@ -71,7 +71,7 @@ def _bind_map_item_to_branch(
     async def run_branch() -> R:
         logger.debug("🗺️ Processing map item: %s", index)
         item = items[index]
-        child_context = get_durable_context("map")
+        child_context = get_durable_context()
         map_item_context = MapItemContext(
             execution_state=child_context.execution_state,
             operation_identifier=child_context.operation_identifier,
@@ -218,12 +218,12 @@ def map(
         RuntimeError: If called outside a durable context.
     """
     _validate_max_concurrency(max_concurrency)
-    context = get_durable_context("map")
+    context = get_durable_context()
     items_sequence = list(items)
     map_name = name if name is not None else getattr(func, "__name__", None)
 
     async def run_map_handler() -> BatchResult[T]:
-        map_context = get_durable_context("map")
+        map_context = get_durable_context()
         operation_id = map_context.step_id_prefix
         if operation_id is None:
             msg = "map operation id is not available in the current context"
@@ -256,5 +256,4 @@ def map(
         sub_type=OperationSubType.MAP,
         name=map_name,
         serdes=serdes,
-        operation_name="map",
     )

@@ -479,7 +479,6 @@ def run_in_child_context(
         serdes=serdes,
         summary_generator=summary_generator,
         is_virtual=is_virtual,
-        operation_name="run_in_child_context",
     )
 
 
@@ -491,9 +490,8 @@ def _create_child_context_task(
     serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
-    operation_name: str | None = None,
 ) -> asyncio.Task[T]:
-    context = get_durable_context(operation_name or "run_in_child_context")
+    context = get_durable_context()
 
     operation_id = context.step_counter.create_step_id()
     child_context = context.create_child_context(
@@ -532,7 +530,7 @@ async def _run_in_child_context(
     is_virtual: bool = False,
 ) -> T:
     """Execute a durable sub-workflow with an explicit operation subtype."""
-    context = get_durable_context("run_in_child_context")
+    context = get_durable_context()
     with context._replay_aware():
         operation_id = context.step_counter.create_step_id()
 
@@ -583,7 +581,7 @@ async def _run_child_context(
     return await executor.process()
 
 
-def get_durable_context(operation_name: str | None = None) -> DurableContext:
+def get_durable_context() -> DurableContext:
     current_context = get_current_context()
     if (
         current_context is None
@@ -592,6 +590,7 @@ def get_durable_context(operation_name: str | None = None) -> DurableContext:
         or not hasattr(current_context, "step_counter")
         or not hasattr(current_context, "create_child_context")
     ):
+        operation_name = getattr(current_context, "operation_name", None)
         msg = (
             f"{operation_name or 'Durable operations'} can only be used while a durable function or child "
             "context is executing."
