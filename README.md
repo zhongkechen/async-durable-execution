@@ -92,9 +92,9 @@ composition, and APIs designed for modern Python applications.
 
 ## ✨ Key Features
 
-- **Async-first durable code** - Compared with the official AWS SDK, user-provided durable handlers, steps, child contexts, callback submitters, map item functions, parallel branches, and wait-for-condition checks are written with `async def`.
+- **Async-first durable code** - Compared with the official AWS SDK, user-provided durable handlers, steps, child contexts, `flow` nodes, callback submitters, map item functions, parallel branches, and wait-for-condition checks are written with `async def`.
 - **Declarative DAG workflows** - Define acyclic workflows with typed node inputs, inferred or conditional dependencies, failure routes, and durable operations inside each node. The SDK validates the graph before execution and skips nodes that are not required by the selected outputs. See the [DAG workflow API](docs/api/dag.md).
-- **Background operation tasks** - Durable operations such as `step(...)`, `wait(...)`, `invoke(...)`, `recurse(...)`, and `run_in_child_context(...)` return `asyncio.Task` objects, so independent operations can run in the background and be awaited together with `asyncio.gather` without using `parallel()` or `map()`.
+- **Background operation tasks** - Durable operations such as `step(...)`, `wait(...)`, `invoke(...)`, `recurse(...)`, `run_in_child_context(...)`, and `flow(...)` return `asyncio.Task` objects, so independent operations can run in the background and be awaited together with `asyncio.gather` without using `parallel()` or `map()`.
 - **Simplified operation APIs** - The `v2` API removes config wrapper objects in favor of direct keyword arguments and clearer call sites, including keyword-only operation names.
 - **Integrated local and cloud runner** - Runner functionality now ships through `async_durable_execution`, with separate local and cloud runner factories and typed test result helpers.
 - **Async Lambda client support** - Install the optional `aioboto` extra to use an async Lambda client; otherwise the SDK uses the bundled sync client through an async adapter.
@@ -166,7 +166,9 @@ async def handler(event: dict) -> dict:
     return {"status": "approved", "order_id": order_id, "receipt": receipt}
 ```
 
-Async callables are required anywhere the SDK accepts user code, including `map()` item functions, bound `parallel()` branch callables, child contexts, callback submitters, and wait-for-condition checks. Those callables can be functions, instance methods, class methods, or static methods. Durable context operations are awaitable and run on the same event loop as your handler.
+Workflow bodies supplied to the SDK must be async, including durable handlers, step callables, `flow` node bodies, `map()` item functions, bound `parallel()` branch callables, child contexts, callback submitters, and wait-for-condition checks. Those callables can be functions, instance methods, class methods, or static methods. Durable context operations are awaitable and run on the same event loop as your handler.
+
+Declarative and configuration hooks use synchronous callables instead, including `@durable_dag` definitions, retry and polling strategies, custom completion callbacks, item namers, and summary generators. Do not define these hooks with `async def`; DAG definitions and other hooks that control replayed workflow structure or metadata must remain deterministic.
 
 Durable operations return `asyncio.Task` objects. If you call an operation without immediately awaiting it, it is scheduled to run in the background and can be awaited later. This lets independent operations run concurrently with normal `asyncio` patterns:
 
@@ -275,7 +277,7 @@ The example tests in `async-durable-execution-examples/test_examples/` are also 
 
 - `step/`, `wait/`, `wait_for_callback/`, and `wait_for_condition/` for core durable operations
 - `step/steps_with_gather.py` for starting multiple step tasks and awaiting them together with `asyncio.gather`
-- `map/`, `parallel/`, and `run_in_child_context/` for composition patterns
+- `flow/`, `map/`, `parallel/`, and `run_in_child_context/` for composition patterns
 - `invoke/`, including `invoke/recurse.py`, `with_retry/`, `callback/`, and `logger_example/` for integrations and operational behavior
 
 For the developer workflow to run or deploy example integration tests, see the [Contributing Guide](CONTRIBUTING.md#example-integration-tests-and-deployment).
@@ -283,6 +285,7 @@ For the developer workflow to run or deploy example integration tests, see the [
 ## 📚 Documentation
 
 - **[Documentation Site](https://zhongkechen.github.io/async-durable-execution/)** - Searchable guides and API reference generated from Python docstrings
+- **[DAG Workflow API](docs/api/dag.md)** - Build declarative workflows with `flow()`, typed node inputs, conditional dependencies, and failure routes
 - **[Official Python SDK Comparison](docs/official-python-sdk-comparison.md)** - Side-by-side comparison with the official AWS Durable Execution Python SDK
 - **[Migration Guide](docs/migrating-from-official-python-sdk.md)** - Move from the official synchronous Python SDK to this async-first SDK
 - **[Using Synchronous Code](docs/using-synchronous-code.md)** - Wrap existing synchronous business logic and blocking clients safely

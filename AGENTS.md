@@ -12,11 +12,12 @@ AWS Lambda durable functions extend Lambda's programming model to build multi-st
 - **Python SDK and test runner**: `async-durable-execution`
 - **Python examples**: `async-durable-execution-examples`
 
-**Core Primitives:**
+**Core Operations:**
 
 - **Steps** - Execute business logic with automatic checkpointing and transparent retries
 - **Waits** - Suspend execution without compute charges (for delays, human approvals, scheduled tasks)
 - **Durable Invokes** - Reliable function chaining for modular, composable architectures
+- **Flows** - Define validated acyclic graphs with typed node inputs and conditional dependencies
 
 ## Critical Rules
 
@@ -315,6 +316,49 @@ async def process_order(data: dict) -> dict:
 
 result = await run_in_child_context(process_order(data), name="process-order")
 ```
+
+### Flow - Declarative DAG Workflows
+
+Use a synchronous `@durable_dag` function to declare the graph and async
+`@durable_node` functions to execute each node. Passing a node projection as an
+argument infers the dependency.
+
+```python
+from async_durable_execution import (
+    durable_dag,
+    durable_node,
+    flow,
+    node,
+)
+
+
+@durable_node
+async def load_order(order_id: str) -> dict:
+    return {"id": order_id}
+
+
+@durable_node
+async def process_order(order: dict) -> dict:
+    return {"id": order["id"], "status": "processed"}
+
+
+@durable_dag
+def order_flow(order_id: str):
+    loaded = node(load_order(order_id), name="load-order")
+    processed = node(process_order(loaded.outcome), name="process-order")
+    return processed.outcome
+
+
+result = await flow(order_flow("order-123"), name="order-flow")
+output = result.output
+```
+
+Flow definition code is replayed and must be deterministic. It cannot start
+durable operations. Node bodies run in durable child contexts and may call
+`step()`, `wait()`, `invoke()`, or nested `flow()` operations. Use `.outcome`,
+`.error`, or `.result` projections for success, failure, or any terminal result;
+use `a.failed >> b`, `a.completed >> b`, `a & b`, and `a | b` for explicit
+conditions. Flows must remain acyclic.
 
 ### Wait for Callback - External Integration
 

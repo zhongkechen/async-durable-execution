@@ -85,9 +85,9 @@ sam deploy \
 
 ## ✨ 主要功能
 
-- **非同步優先的耐用程式碼** - 與官方 AWS SDK 相比，使用者提供的耐用事件處理常式、步驟、子內容、回呼提交器、`map()` 項目函式、`parallel()` 分支與等待條件檢查都使用 `async def` 撰寫。
+- **非同步優先的耐用程式碼** - 與官方 AWS SDK 相比，使用者提供的耐用事件處理常式、步驟、子內容、`flow` 節點、回呼提交器、`map()` 項目函式、`parallel()` 分支與等待條件檢查都使用 `async def` 撰寫。
 - **宣告式 DAG 工作流程** - 使用具型別的節點輸入、推導或條件相依性、失敗路由和節點內耐用操作來定義無環工作流程。SDK 會在執行前驗證圖，並略過所選輸出未相依的節點。請參閱 [DAG 工作流程 API](docs/api/dag.md)。
-- **背景操作任務** - `step(...)`、`wait(...)`、`invoke(...)`、`recurse(...)` 與 `run_in_child_context(...)` 等耐用操作會傳回 `asyncio.Task` 物件，因此獨立操作可以在背景執行，並透過 `asyncio.gather` 一起等待，無需使用 `parallel()` 或 `map()`。
+- **背景操作任務** - `step(...)`、`wait(...)`、`invoke(...)`、`recurse(...)`、`run_in_child_context(...)` 與 `flow(...)` 等耐用操作會傳回 `asyncio.Task` 物件，因此獨立操作可以在背景執行，並透過 `asyncio.gather` 一起等待，無需使用 `parallel()` 或 `map()`。
 - **簡化的耐用操作 API** - `v2` API 移除組態包裝物件，改用直接的關鍵字引數與更清楚的呼叫位置，包括僅限關鍵字的操作名稱。
 - **整合本機與雲端執行器** - 執行器功能現在透過 `async_durable_execution` 提供，包含獨立的本機與雲端執行器 factory，以及具型別的測試結果輔助物件。
 - **支援非同步 Lambda 用戶端** - 安裝選用的 `aioboto` extra 即可使用非同步 Lambda 用戶端；否則 SDK 會透過非同步配接器使用內建的同步用戶端。
@@ -161,7 +161,9 @@ async def handler(event: dict) -> dict:
     return {"status": "approved", "order_id": order_id, "receipt": receipt}
 ```
 
-SDK 接受使用者程式碼的所有位置都必須使用非同步可呼叫物件，包括 `map()` 項目函式、繫結的 `parallel()` 分支可呼叫物件、子內容、回呼提交器與等待條件檢查。這些可呼叫物件可以是函式、實例方法、類別方法或靜態方法。耐用內容操作是可 await 的，並與事件處理常式在同一個 event loop 上執行。
+提供給 SDK 的工作流程主體必須是非同步的，包括耐用事件處理常式、步驟可呼叫物件、`flow` 節點主體、`map()` 項目函式、繫結的 `parallel()` 分支可呼叫物件、子內容、回呼提交器與等待條件檢查。這些可呼叫物件可以是函式、實例方法、類別方法或靜態方法。耐用內容操作是可 await 的，並與事件處理常式在同一個 event loop 上執行。
+
+宣告式定義和設定掛鉤則使用同步可呼叫物件，包括 `@durable_dag` 定義、重試與輪詢策略、自訂完成回呼、項目命名器和摘要產生器。不要使用 `async def` 定義這些掛鉤；DAG 定義以及控制重播期間工作流程結構或中繼資料的其他掛鉤必須保持確定性。
 
 耐用操作會傳回 `asyncio.Task` 物件。如果呼叫操作後沒有立即等待它，該操作會被排程在背景執行，之後仍可等待其結果。這讓獨立操作可以透過一般 `asyncio` 模式並行執行：
 
@@ -270,7 +272,7 @@ Lambda 耐用函數範例位於 `async-durable-execution-examples/src/async_dura
 
 - `step/`、`wait/`、`wait_for_callback/` 與 `wait_for_condition/` 用於核心耐用操作
 - `step/steps_with_gather.py` 展示如何啟動多個步驟任務，並透過 `asyncio.gather` 一起等待
-- `map/`、`parallel/` 與 `run_in_child_context/` 用於組合模式
+- `flow/`、`map/`、`parallel/` 與 `run_in_child_context/` 用於組合模式
 - `invoke/`（包括 `invoke/recurse.py`）、`with_retry/`、`callback/` 與 `logger_example/` 用於整合與執行行為
 
 如需了解執行或部署範例整合測試的開發者工作流程，請參閱[貢獻指南](CONTRIBUTING.md#example-integration-tests-and-deployment)。
@@ -278,6 +280,7 @@ Lambda 耐用函數範例位於 `async-durable-execution-examples/src/async_dura
 ## 📚 文件
 
 - **[文件網站](https://zhongkechen.github.io/async-durable-execution/)** - 可搜尋的指南與從 Python docstring 產生的 API 參考
+- **[DAG 工作流程 API](docs/api/dag.md)** - 使用 `flow()`、具型別的節點輸入、條件相依性和失敗路由建構宣告式工作流程
 - **[官方 Python SDK 比較](docs/official-python-sdk-comparison.md)** - 與官方 AWS Durable Execution Python SDK 的並排比較
 - **[遷移指南](docs/migrating-from-official-python-sdk.md)** - 從官方同步 Python SDK 遷移到這個非同步優先 SDK
 - **[使用同步程式碼](docs/using-synchronous-code.md)** - 安全包裝既有同步業務邏輯與阻塞式用戶端
