@@ -39,7 +39,7 @@ from async_durable_execution.primitive.child import (
 from async_durable_execution.primitive.step import StepContext
 from async_durable_execution.serdes import SerDes
 from async_durable_execution.state import ExecutionState
-from async_durable_execution.composite.parallel import SummaryGenerator
+from async_durable_execution.extension.parallel import SummaryGenerator
 
 from ..serdes_test import CustomDictSerDes
 

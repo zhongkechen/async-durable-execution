@@ -38,7 +38,7 @@ from ..task import create_eager_task
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from ..composite.parallel import SummaryGenerator
+    from ..extension.parallel import SummaryGenerator
     from ..serdes import SerDes
     from ..state import ExecutionState
 

@@ -30,7 +30,7 @@ from async_durable_execution import (
     get_node_context,
     node,
 )
-from async_durable_execution.composite.flow import (
+from async_durable_execution.extension.flow import (
     FlowNode,
     _DependencyResolution,
     _FlowBuilder,
@@ -1021,7 +1021,7 @@ def test_invalid_invocation_error_payload_fails_closed(payload):
 
 
 def test_callable_runtime_error_preserves_original_error_details():
-    from async_durable_execution.composite.flow import _callable_error_object
+    from async_durable_execution.extension.flow import _callable_error_object
 
     error = CallableRuntimeError(
         message="failure",
@@ -1455,11 +1455,11 @@ async def test_any_resolution_preserves_reverse_completion_order(monkeypatch):
         return asyncio.create_task(coro_factory())
 
     monkeypatch.setattr(
-        "async_durable_execution.composite.flow._resolve_dependency_expression",
+        "async_durable_execution.extension.flow._resolve_dependency_expression",
         resolve_child,
     )
     monkeypatch.setattr(
-        "async_durable_execution.composite.flow.create_eager_task",
+        "async_durable_execution.extension.flow.create_eager_task",
         create_normal_task,
     )
 
@@ -1581,7 +1581,7 @@ async def test_execute_flow_wraps_unclassified_child_error(monkeypatch):
         return asyncio.create_task(fail())
 
     monkeypatch.setattr(
-        "async_durable_execution.composite.flow.run_in_child_context",
+        "async_durable_execution.extension.flow.run_in_child_context",
         fake_child,
     )
 
@@ -1620,7 +1620,7 @@ async def test_execute_flow_prioritizes_resolver_error_over_node_suspension(
         return asyncio.create_task(succeed())
 
     monkeypatch.setattr(
-        "async_durable_execution.composite.flow.run_in_child_context",
+        "async_durable_execution.extension.flow.run_in_child_context",
         fake_child,
     )
 
@@ -1655,7 +1655,7 @@ async def test_execute_flow_uses_earliest_timed_suspension(monkeypatch):
         return asyncio.create_task(fail(errors[name]))
 
     monkeypatch.setattr(
-        "async_durable_execution.composite.flow.run_in_child_context",
+        "async_durable_execution.extension.flow.run_in_child_context",
         fake_child,
     )
 
@@ -1708,7 +1708,7 @@ async def test_execute_flow_propagates_resolver_task_errors(
         return asyncio.create_task(coroutine)
 
     monkeypatch.setattr(
-        "async_durable_execution.composite.flow.run_in_child_context",
+        "async_durable_execution.extension.flow.run_in_child_context",
         fake_child,
     )
 
@@ -1761,7 +1761,7 @@ async def test_flow_boundary_classifies_child_task_errors(
         ),
     )
     monkeypatch.setattr(
-        "async_durable_execution.composite.flow.run_in_child_context",
+        "async_durable_execution.extension.flow.run_in_child_context",
         fake_child,
     )
 

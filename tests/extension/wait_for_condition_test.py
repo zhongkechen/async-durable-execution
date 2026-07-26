@@ -35,14 +35,14 @@ from async_durable_execution.models import (
     StepDetails,
 )
 import logging
-from async_durable_execution.composite.wait_for_condition import (
+from async_durable_execution.extension.wait_for_condition import (
     WaitForConditionOperationExecutor,
     wait_for_condition,
 )
 from async_durable_execution.state import ExecutionState
 from async_durable_execution import WaitForConditionCheckContext
 from async_durable_execution.config import JitterStrategy
-from async_durable_execution.composite.wait_for_condition import PollingStrategy
+from async_durable_execution.extension.wait_for_condition import PollingStrategy
 from async_durable_execution.serdes import SerDes
 
 from ..serdes_test import CustomDictSerDes
@@ -114,7 +114,7 @@ async def test_wait_for_condition_public_wrapper_builds_executor_from_context():
 
     with (
         patch(
-            "async_durable_execution.composite.wait_for_condition.get_durable_context",
+            "async_durable_execution.extension.wait_for_condition.get_durable_context",
             return_value=context,
         ),
         patch.object(

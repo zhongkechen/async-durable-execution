@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 # Mock the executor.execute method
-from async_durable_execution.composite.parallel import (
+from async_durable_execution.extension.parallel import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
@@ -34,8 +34,8 @@ from async_durable_execution import map as map_operation, DurableContext
 from async_durable_execution.models import OperationIdentifier
 from async_durable_execution.models import OperationSubType
 from async_durable_execution.primitive import child  # PLC0415
-from async_durable_execution.composite.parallel import CompletionConfig, NestingType
-from async_durable_execution.composite.map import (
+from async_durable_execution.extension.parallel import CompletionConfig, NestingType
+from async_durable_execution.extension.map import (
     BatchedInput,
     MapItemContext,
     MapSummaryGenerator,
@@ -43,7 +43,7 @@ from async_durable_execution.composite.map import (
     _create_map_branch_namer,
     map_handler,
 )
-from async_durable_execution.composite.parallel import ParallelExecutor
+from async_durable_execution.extension.parallel import ParallelExecutor
 from async_durable_execution.serdes import serialize
 from async_durable_execution.state import ExecutionState
 
@@ -262,7 +262,7 @@ async def test_map_executor_init_default_config():
     assert executor.nesting_type is NestingType.NESTED
 
 
-@patch("async_durable_execution.composite.map.logger")
+@patch("async_durable_execution.extension.map.logger")
 async def test_map_executor_execute_item(mock_logger):
     """Test map branch executor execute_item method with logging."""
     items = ["hello", "world"]
@@ -584,7 +584,7 @@ async def test_map_handler_passes_default_fields():
         return mock_batch_result
 
     with patch(
-        "async_durable_execution.composite.map.parallel_handler",
+        "async_durable_execution.extension.map.parallel_handler",
         return_value=handler_result,
     ) as mock_parallel_handler:
         executor_context = Mock()
@@ -1013,7 +1013,7 @@ async def test_map_handler_replay_with_replay_children():
         assert result == expected_batch_result
 
 
-@patch("async_durable_execution.composite.map._run_in_child_context")
+@patch("async_durable_execution.extension.map._run_in_child_context")
 async def test_map_iterates_items_iterable_once(mock_handler):
     """Test map materializes one-shot items iterables exactly once."""
     mock_handler.return_value = "map_result"
@@ -1078,8 +1078,8 @@ def test_map_summary_generator_returns_compact_json_payload():
     }
 
 
-@patch("async_durable_execution.composite.map.map_handler")
-@patch("async_durable_execution.composite.map._run_in_child_context")
+@patch("async_durable_execution.extension.map.map_handler")
+@patch("async_durable_execution.extension.map._run_in_child_context")
 async def test_map_passes_default_summary_generator_to_handler(
     mock_run_in_child_context,
     mock_map_handler,
@@ -1114,7 +1114,7 @@ async def test_map_passes_default_summary_generator_to_handler(
     )
 
 
-@patch("async_durable_execution.composite.map._run_in_child_context")
+@patch("async_durable_execution.extension.map._run_in_child_context")
 async def test_map_raises_when_child_operation_id_is_missing(mock_run_in_child_context):
     """The public wrapper fails clearly if no child operation id is available."""
 
@@ -1188,10 +1188,10 @@ async def test_map_handler_first_execution_then_replay_integration():
 
     with (
         patch(
-            "async_durable_execution.composite.parallel.ParallelExecutor.execute"
+            "async_durable_execution.extension.parallel.ParallelExecutor.execute"
         ) as mock_execute,
         patch(
-            "async_durable_execution.composite.parallel.ParallelExecutor.replay_completed"
+            "async_durable_execution.extension.parallel.ParallelExecutor.replay_completed"
         ) as mock_replay,
     ):
         mock_execute.return_value = Mock()  # Mock BatchResult

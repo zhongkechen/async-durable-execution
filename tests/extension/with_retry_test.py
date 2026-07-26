@@ -160,11 +160,11 @@ async def _call_with_retry(
 
     with (
         patch(
-            "async_durable_execution.composite.with_retry.wait",
+            "async_durable_execution.extension.with_retry.wait",
             new=AsyncMock(side_effect=fake_wait),
         ),
         patch(
-            "async_durable_execution.composite.with_retry.run_in_child_context",
+            "async_durable_execution.extension.with_retry.run_in_child_context",
             new=AsyncMock(side_effect=fake_run_in_child_context),
         ),
     ):
@@ -352,11 +352,11 @@ async def test_retry_body_runs_with_child_context_bound():
 
     with (
         patch(
-            "async_durable_execution.composite.with_retry.run_in_child_context",
+            "async_durable_execution.extension.with_retry.run_in_child_context",
             new=AsyncMock(side_effect=fake_run_in_child_context),
         ),
         patch(
-            "async_durable_execution.composite.with_retry.get_durable_context",
+            "async_durable_execution.extension.with_retry.get_durable_context",
             return_value=child_ctx,
         ),
     ):

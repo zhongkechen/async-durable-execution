@@ -40,7 +40,7 @@ from .exceptions import (
 )
 
 if TYPE_CHECKING:
-    from .composite.parallel import BatchResult
+    from .extension.parallel import BatchResult
 
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ VALUE_TOKEN: str = "v"
 
 
 def _get_batch_result_type() -> type[BatchResult]:
-    from .composite.parallel import BatchResult
+    from .extension.parallel import BatchResult
 
     return BatchResult
 

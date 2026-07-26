@@ -38,7 +38,7 @@ from async_durable_execution import (
     wait,
 )
 from async_durable_execution.context import bind_current_context
-from async_durable_execution.composite.flow import _evaluate_definition
+from async_durable_execution.extension.flow import _evaluate_definition
 from async_durable_execution.exceptions import (
     ExecutionError,
     InvocationError,
@@ -1277,7 +1277,7 @@ async def test_any_matching_sibling_runs_before_suspended_branch_resumes(monkeyp
 
 
 async def test_nested_any_winner_survives_outer_all_partial_replay(monkeypatch):
-    from async_durable_execution.composite.flow import (
+    from async_durable_execution.extension.flow import (
         _NodeExecutionSerDes,
         _PersistedDependencyResolutionSerDes,
     )
@@ -1390,7 +1390,7 @@ def test_nested_any_does_not_retroactively_change_its_winner():
         handles.update(a=a, b=b, c=c, d=d)
         return d.outcome
 
-    from async_durable_execution.composite.flow import _evaluate_definition
+    from async_durable_execution.extension.flow import _evaluate_definition
 
     _evaluate_definition(graph())
     expression = handles["d"]._dependency
@@ -1677,7 +1677,7 @@ async def test_mutable_dependency_outcomes_are_isolated_per_consumer():
 async def test_mutable_dependency_outcome_is_stable_across_partial_replay(
     monkeypatch,
 ):
-    from async_durable_execution.composite.flow import _NodeExecutionSerDes
+    from async_durable_execution.extension.flow import _NodeExecutionSerDes
 
     monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0")
     mutator_persisted = asyncio.Event()
@@ -1746,7 +1746,7 @@ async def test_mutable_dependency_outcome_is_stable_across_partial_replay(
 
 
 async def test_mutable_bound_input_is_isolated_across_partial_replay(monkeypatch):
-    from async_durable_execution.composite.flow import _NodeExecutionSerDes
+    from async_durable_execution.extension.flow import _NodeExecutionSerDes
 
     monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0")
     mutator_persisted = asyncio.Event()
