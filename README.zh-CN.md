@@ -122,8 +122,6 @@ pricing_tasks = [
 priced_items = await asyncio.gather(*pricing_tasks)
 ```
 
-在 Python 3.12 及更高版本中，SDK 使用 `asyncio.eager_task_factory`，使新建的操作任务同步启动并运行到首次挂起。在 Python 3.10 和 3.11 中，`asyncio` 不支持任务立即启动，因此操作任务采用常规的延迟调度；这只会影响执行顺序与性能。
-
 事件处理程序输入会在你的代码运行前，先从持久执行有效载荷反序列化。空白或仅包含空白字符的有效载荷会规范化为 `{}`，格式错误的 JSON 则会在用户代码运行前让调用失败。
 
 ### 重放安全的辅助值
@@ -231,7 +229,7 @@ Lambda 持久性函数示例位于 `examples/`。可以从 `hello_world.py` 开�
 - **[官方 Python SDK 对比](docs/official-python-sdk-comparison.md)** - 与官方 AWS Durable Execution Python SDK 的并排对比
 - **[迁移指南](docs/migrating-from-official-python-sdk.md)** - 从官方同步 Python SDK 迁移到这个异步优先 SDK
 - **[使用同步代码](docs/using-synchronous-code.md)** - 安全包装既有同步业务逻辑与阻塞式客户端
-- **[高级用法](docs/advanced-usage.md)** - 配置批量完成条件、Lambda 客户端与 Lambda 层
+- **[高级用法](docs/advanced-usage.md)** - 了解后台操作任务、批量完成条件、Lambda 客户端与 Lambda 层
 - **[运行器架构](docs/runner-architecture.md)** - 本地与云端运行器的执行流程、组件与图表
 - **[贡献指南](CONTRIBUTING.md)** - 开发工作流、Hatch 命令、测试与 pull request 指南
 

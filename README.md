@@ -124,8 +124,6 @@ pricing_tasks = [
 priced_items = await asyncio.gather(*pricing_tasks)
 ```
 
-On Python 3.12 and newer, the SDK uses `asyncio.eager_task_factory` so newly created operation tasks start synchronously until their first suspension point. On Python 3.10 and 3.11, eager task start is not available, so operation tasks use normal lazy `asyncio` task scheduling; this is only an ordering and performance difference.
-
 Handler input is deserialized from the durable execution payload before your code runs. Empty or whitespace payloads are normalized to `{}`, and malformed JSON fails the invocation before user code executes.
 
 ### Replay-safe helper values
@@ -233,7 +231,7 @@ For the developer workflow to run or deploy example integration tests, see the [
 - **[Official Python SDK Comparison](docs/official-python-sdk-comparison.md)** - Side-by-side comparison with the official AWS Durable Execution Python SDK
 - **[Migration Guide](docs/migrating-from-official-python-sdk.md)** - Move from the official synchronous Python SDK to this async-first SDK
 - **[Using Synchronous Code](docs/using-synchronous-code.md)** - Wrap existing synchronous business logic and blocking clients safely
-- **[Advanced Usage](docs/advanced-usage.md)** - Configure batch completion conditions, Lambda clients, and Lambda layers
+- **[Advanced Usage](docs/advanced-usage.md)** - Explore background operation tasks, batch completion conditions, Lambda clients, and Lambda layers
 - **[Runner Architecture](docs/runner-architecture.md)** - Local and cloud runner execution flow, components, and diagrams
 - **[Contributing Guide](CONTRIBUTING.md)** - Development workflow, Hatch commands, testing, and pull request guidance
 
