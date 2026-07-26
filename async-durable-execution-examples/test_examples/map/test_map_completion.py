@@ -17,10 +17,13 @@ async def test_reproduce_completion_config_behavior_with_detailed_logging(
 
     result_data = result.get_deserialized_result()
 
-    # 5 items are processed 2 of them succeeded. We exit early because min_successful is 2.
+    # max_concurrency=3 starts items 0-2. The two failing items hold their
+    # concurrency slots while retrying, so only the first success frees a
+    # slot for item 3. min_successful=2 is reached before item 4 can start,
+    # so 4 items appear in the result and the fifth never starts.
     # Additionally, failure_count shows 0 because failed items have retry strategies configured and are still retrying
     # when execution completes. Failures aren't finalized until retries complete, so they don't appear in the failure_count.
-    assert result_data["totalItems"] == 5
+    assert result_data["totalItems"] == 4
     assert result_data["successfulCount"] == 2
     assert result_data["failedCount"] == 0
     assert result_data["hasFailures"] is False

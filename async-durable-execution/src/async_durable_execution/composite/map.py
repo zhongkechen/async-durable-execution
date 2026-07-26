@@ -197,7 +197,8 @@ def map(
             item value and returns that item's result.
         items: Items to process.
         name: Optional durable operation name.
-        max_concurrency: Optional limit for concurrent item processing.
+        max_concurrency: Optional limit for in-flight items. A suspended item
+            retains its slot until it reaches a terminal state.
         completion_config: Optional completion policy. Use
             `CompletionConfig.thresholds()`, `first_successful()`,
             `all_completed()`, `all_successful()`, or `custom()`.

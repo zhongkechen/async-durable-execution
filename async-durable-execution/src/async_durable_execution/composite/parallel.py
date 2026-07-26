@@ -623,6 +623,7 @@ class ExecutableWithState(Generic[CallableType, ResultType]):
     def __init__(self, executable: Executable[CallableType]):
         self.executable = executable
         self._status = BranchStatus.PENDING
+        self._has_started = False
         self._future: asyncio.Task[ResultType] | None = None
         self._suspend_until: float | None = None
         self._result: ResultType | None = None
@@ -663,6 +664,11 @@ class ExecutableWithState(Generic[CallableType, ResultType]):
         return self._status is BranchStatus.RUNNING
 
     @property
+    def has_started(self) -> bool:
+        """Whether this branch has acquired a concurrency slot."""
+        return self._has_started
+
+    @property
     def can_resume(self) -> bool:
         return self._status is BranchStatus.SUSPENDED or (
             self._status is BranchStatus.SUSPENDED_WITH_TIMEOUT
@@ -682,23 +688,28 @@ class ExecutableWithState(Generic[CallableType, ResultType]):
         if self._status != BranchStatus.PENDING:
             msg = f"Cannot start running from {self._status}"
             raise InvalidStateError(msg)
+        self._has_started = True
         self._status = BranchStatus.RUNNING
         self._future = future
 
     def suspend(self) -> None:
+        self._has_started = True
         self._status = BranchStatus.SUSPENDED
         self._suspend_until = None
 
     def suspend_with_timeout(self, timestamp: float) -> None:
+        self._has_started = True
         self._status = BranchStatus.SUSPENDED_WITH_TIMEOUT
         self._suspend_until = timestamp
 
     def complete(self, result: ResultType) -> None:
+        self._has_started = True
         self._status = BranchStatus.COMPLETED
         self._result = result
         self._is_result_set = True
 
     def fail(self, error: Exception) -> None:
+        self._has_started = True
         self._status = BranchStatus.FAILED
         self._error = error
 
@@ -965,7 +976,11 @@ class ParallelExecutor(
                     done_task,
                     scheduler,
                 )
-                if not self._completion_event.is_set():
+                if (
+                    not self._completion_event.is_set()
+                    and executable_with_state.status
+                    in {BranchStatus.COMPLETED, BranchStatus.FAILED}
+                ):
                     await submit_next_task()
 
             task.add_done_callback(on_done)
@@ -1013,8 +1028,12 @@ class ParallelExecutor(
         ) = None
 
         for exe_state in self.executables_with_state:
-            if exe_state.status in {BranchStatus.PENDING, BranchStatus.RUNNING}:
+            if exe_state.status is BranchStatus.RUNNING or (
+                exe_state.status is BranchStatus.PENDING and exe_state.has_started
+            ):
                 return SuspendResult.do_not_suspend()
+            if exe_state.status is BranchStatus.PENDING:
+                continue
             if exe_state.status is BranchStatus.SUSPENDED_WITH_TIMEOUT:
                 if (
                     exe_state.suspend_until
@@ -1310,7 +1329,8 @@ def parallel(
     Args:
         branches: Async zero-argument branch callables to run concurrently.
         name: Optional durable operation name.
-        max_concurrency: Optional limit for how many branches may run at once.
+        max_concurrency: Optional limit for in-flight branches. A suspended
+            branch retains its slot until it reaches a terminal state.
         completion_config: Optional completion policy. Use
             `CompletionConfig.thresholds()`, `first_successful()`,
             `all_completed()`, `all_successful()`, or `custom()`.

@@ -880,9 +880,23 @@ async def test_executable_with_state_run():
     exe_state = ExecutableWithState(executable)
     future = Future()
 
+    assert not exe_state.has_started
     exe_state.run(future)
     assert exe_state.status == BranchStatus.RUNNING
     assert exe_state.future == future
+    assert exe_state.has_started
+
+
+async def test_executable_with_state_remains_started_while_pending_resume():
+    """A resuming branch keeps its concurrency slot while pending."""
+    executable = Executable(index=1, func=lambda: "test")
+    exe_state = ExecutableWithState(executable)
+
+    exe_state.suspend_with_timeout(time.time() - 1)
+    exe_state.reset_to_pending()
+
+    assert exe_state.status is BranchStatus.PENDING
+    assert exe_state.has_started
 
 
 async def test_executable_with_state_run_invalid_state():
@@ -1497,6 +1511,38 @@ async def test_concurrent_executor_does_not_start_items_after_early_completion()
     assert [item.index for item in result.all] == [0, 1]
     assert result.total_count == 2
     assert result.completion_reason is CompletionReason.FAILURE_TOLERANCE_EXCEEDED
+
+
+async def test_concurrent_executor_suspended_branch_keeps_concurrency_slot():
+    """A suspended branch prevents a pending branch from taking its slot."""
+    started = []
+
+    class TestExecutor(ParallelExecutor):
+        async def _execute_item_in_child_context(self, executor_context, executable):
+            started.append(executable.index)
+            if executable.index == 0:
+                raise SuspendExecution("waiting for callback")
+            return f"result_{executable.index}"
+
+    executables = [Executable(index, lambda: None) for index in range(2)]
+    executor = create_concurrent_executor(
+        TestExecutor,
+        executables=executables,
+        max_concurrency=1,
+        completion_config=CompletionConfig.all_completed(),
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
+        name_prefix="test_",
+        serdes=None,
+    )
+
+    with pytest.raises(SuspendExecution):
+        await executor.execute()
+
+    assert started == [0]
+    assert executor.executables_with_state[0].status is BranchStatus.SUSPENDED
+    assert executor.executables_with_state[1].status is BranchStatus.PENDING
+    assert not executor.executables_with_state[1].has_started
 
 
 @pytest.mark.parametrize("invalid_max_concurrency", [0, -1, True, 1.5])
