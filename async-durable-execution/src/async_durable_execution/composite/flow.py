@@ -608,6 +608,7 @@ class FlowNode(Generic[T]):
     def __repr__(self) -> str:
         return f"FlowNode(name={self.name!r})"
 
+    @property
     def result(self) -> FlowNodeResult[T]:
         """Reference a completed output or return its result in a running node."""
         builder = _current_flow_builder.get()
@@ -632,7 +633,7 @@ class FlowNode(Generic[T]):
     @property
     def status(self) -> FlowNodeStatus:
         """Return this direct dependency's logical status."""
-        return self.result().status
+        return self.result.status
 
     @property
     def outcome(self) -> T:
@@ -643,11 +644,11 @@ class FlowNode(Generic[T]):
                 "T",
                 _FlowNodeInput[Any](self, _FlowNodeInputKind.OUTCOME),
             )
-        result = self.result()
+        result = self.result
         if result.status is not FlowNodeStatus.SUCCEEDED:
             msg = (
                 f"Flow node {self.name!r} did not succeed "
-                f"(status {result.status.value}); inspect status, error, or result()."
+                f"(status {result.status.value}); inspect status, error, or result."
             )
             raise InvalidStateError(msg)
         return cast("T", result.outcome)
@@ -661,7 +662,7 @@ class FlowNode(Generic[T]):
                 "ErrorObject",
                 _FlowNodeInput[ErrorObject](self, _FlowNodeInputKind.ERROR),
             )
-        return self.result().error
+        return self.result.error
 
     @property
     def succeeded(self) -> _DependencyExpression:
@@ -808,14 +809,14 @@ class _FlowBuilder:
             if isinstance(output_reference, FlowNode):
                 msg = (
                     "A durable DAG definition cannot return a FlowNode directly; "
-                    "return node.outcome, node.error, node.result(), or a tuple "
+                    "return node.outcome, node.error, node.result, or a tuple "
                     "of those projections."
                 )
                 raise FlowDefinitionError(msg)
             if not isinstance(output_reference, _FlowNodeInput):
                 msg = (
                     "A durable DAG definition must return node.outcome, node.error, "
-                    "node.result(), a tuple of those projections, or None."
+                    "node.result, a tuple of those projections, or None."
                 )
                 raise FlowDefinitionError(msg)
             if (
@@ -2099,7 +2100,7 @@ def flow(
         if result.has_unavailable_outputs:
             outputs = ", ".join(result.unavailable_outputs)
             problems.append(
-                f"unavailable outcome outputs: {outputs}; return node.result() "
+                f"unavailable outcome outputs: {outputs}; return node.result "
                 "for conditional outputs"
             )
         if problems:

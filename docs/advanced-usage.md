@@ -127,14 +127,14 @@ Use parentheses around `&` and `|` expressions. Each target accepts one dependen
 expression, so combine multiple dependencies explicitly instead of assigning them in
 separate statements.
 
-The definition returns `node.outcome`, `node.error`, `node.result()`, a tuple of these
+The definition returns `node.outcome`, `node.error`, `node.result`, a tuple of these
 projections, or `None`; returning a `FlowNode` directly is invalid. `FlowResult.results`
 contains every node result keyed by node name. `outputs` contains the projected values,
 while `output` preserves zero, one, or multiple output arity. Returning `.error` or
-`.result()` explicitly observes and handles a failure selected as an output.
+`.result` explicitly observes and handles a failure selected as an output.
 An `.outcome` output requires that node to succeed. If the node fails or is skipped,
 `flow()` raises `FlowExecutionError` after checkpointing the result and lists the node
-in `FlowResult.unavailable_outputs`; return `node.result()` when a conditional output
+in `FlowResult.unavailable_outputs`; return `node.result` when a conditional output
 may legitimately be failed or skipped.
 
 Execution starts from the selected output nodes and follows their dependencies in

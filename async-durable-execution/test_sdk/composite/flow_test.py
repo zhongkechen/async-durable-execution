@@ -519,7 +519,7 @@ async def test_dag_outputs_project_outcome_error_and_result():
 
         success = node(succeed(), name="success")
         failure = node(fail(), name="failure")
-        return success.outcome, failure.error, failure.result()
+        return success.outcome, failure.error, failure.result
 
     @durable_execution
     async def handler(event):
@@ -708,7 +708,7 @@ async def test_flow_node_handle_exposes_result_status_outcome_and_error():
 
         @durable_node
         async def target() -> str:
-            source_result = source_node.result()
+            source_result = source_node.result
             assert source_result.status is FlowNodeStatus.SUCCEEDED
             assert source_node.status is FlowNodeStatus.SUCCEEDED
             assert source_node.error is None
@@ -808,7 +808,7 @@ async def test_flow_node_failure_properties_remain_available():
 
         @durable_node
         async def recover() -> str:
-            source_result = source.result()
+            source_result = source.result
             assert source_result.status is FlowNodeStatus.FAILED
             assert source_result.error is not None
             assert source.status is FlowNodeStatus.FAILED
@@ -1872,7 +1872,7 @@ async def test_custom_sdk_control_error_does_not_activate_failure_route(
         source_node = node(source(), name="source")
         recovery = node(should_not_run(), name="handler")
         source_node.failed >> recovery
-        return recovery.result()
+        return recovery.result
 
     @durable_execution
     async def handler(event):
@@ -1919,7 +1919,7 @@ async def test_task_group_control_error_does_not_activate_failure_route():
         source_node = node(source(), name="source")
         recovery = node(should_not_run(), name="handler")
         source_node.failed >> recovery
-        return recovery.result()
+        return recovery.result
 
     @durable_execution
     async def handler(event):
@@ -2105,7 +2105,7 @@ async def test_all_unmatched_dependencies_skip_downstream_callable():
         b = node(succeed(), name="B")
         c = node(skipped(), name="C")
         (a.failed | b.failed) >> c
-        return c.result()
+        return c.result
 
     @durable_execution
     async def handler(event):

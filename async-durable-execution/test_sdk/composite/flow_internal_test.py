@@ -282,7 +282,7 @@ def test_flow_node_result_is_rejected_outside_node_execution():
     _evaluate_definition(graph())
 
     with pytest.raises(InvalidStateError, match="while a flow node is executing"):
-        captured["source"].result()
+        _ = captured["source"].result
 
     context = DurableContext(
         execution_state=Mock(spec=ExecutionState),
@@ -293,7 +293,7 @@ def test_flow_node_result_is_rejected_outside_node_execution():
     )
     with bind_current_context(context):
         with pytest.raises(InvalidStateError, match="while a flow node is executing"):
-            captured["source"].result()
+            _ = captured["source"].result
 
 
 async def test_flow_serdes_reject_non_mapping_payloads():

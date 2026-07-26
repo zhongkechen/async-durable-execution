@@ -104,7 +104,7 @@ A node projection used as an argument automatically creates a dependency:
 | --- | --- | --- | --- |
 | `source.outcome` | `SUCCEEDED` | The successful node value | No |
 | `source.error` | `FAILED` | The captured `ErrorObject` | Yes |
-| `source.result()` | Any terminal status | The complete `FlowNodeResult` | No |
+| `source.result` | Any terminal status | The complete `FlowNodeResult` | No |
 
 ```python
 @durable_node
@@ -121,7 +121,7 @@ async def recover(error):
 def recovery_flow():
     source = node(run_risky_work(), name="source")
     recovery = node(recover(source.error), name="recovery")
-    return recovery.result()
+    return recovery.result
 ```
 
 Projections may be nested inside `list`, `tuple`, and `dict` arguments.
@@ -200,7 +200,7 @@ Available helpers are:
   `InvalidStateError`.
 - `context.dependency_results` returns all currently available direct results
   keyed by name.
-- `context.result(node)` and `node.result()` read a declared direct dependency
+- `context.result(node)` and `node.result` read a declared direct dependency
   when a handle is intentionally available.
 
 With an `OR` dependency, the target starts after the first matching branch.
@@ -214,7 +214,7 @@ does not immediately stop unrelated branches.
 
 A matching `.failed` dependency handles its source failure. An `.error` input
 also creates a failed dependency and handles the failure. `.completed` and
-`.result()` observe failure without handling it.
+`.result` observe failure without handling it.
 
 After runnable nodes settle, `flow()` raises `FlowExecutionError` if any logical
 failure remains unhandled. The exception's `result` attribute contains the
@@ -241,7 +241,7 @@ A DAG definition returns one of:
 
 - `node.outcome`
 - `node.error`
-- `node.result()`
+- `node.result`
 - A tuple of these projections
 - `None`
 
@@ -255,8 +255,8 @@ that reverse-reachable dependency graph do not create child operations and
 appear as `SKIPPED`. A definition that returns `None` executes no nodes.
 
 An `.outcome` output requires the selected node to succeed. For a conditional
-branch that may be failed or skipped, return `node.result()` instead. Returning
-`.error` or `.result()` as an output explicitly handles a selected failed
+branch that may be failed or skipped, return `node.result` instead. Returning
+`.error` or `.result` as an output explicitly handles a selected failed
 output.
 
 ## Constraints

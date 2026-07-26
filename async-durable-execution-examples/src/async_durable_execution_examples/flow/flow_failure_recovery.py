@@ -54,7 +54,7 @@ def payment_flow(
         name="record-payment-failure",
     )
 
-    return fulfillment.result(), recovery.result()
+    return fulfillment.result, recovery.result
 
 
 @durable_execution
