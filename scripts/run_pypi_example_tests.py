@@ -81,9 +81,6 @@ def run_staged_tests(
     stage_test_sources(repo_root, staging_dir)
     environment = isolated_environment()
     sdk_source = find_sdk_source(staging_dir, environment)
-    if sdk_source.is_relative_to(repo_root.resolve()):
-        msg = f"PyPI test imported the local SDK from {sdk_source}"
-        raise RuntimeError(msg)
 
     logger.info("Testing published SDK from %s", sdk_source)
     result = subprocess.run(

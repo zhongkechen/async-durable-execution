@@ -110,18 +110,28 @@ def test_find_sdk_source_requires_site_packages(
         pypi_tests.find_sdk_source(tmp_path, {})
 
 
-def test_run_staged_tests_rejects_local_sdk(
+def test_run_staged_tests_allows_repository_local_virtualenv(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     repo_root = tmp_path / "repo"
     staging_dir = tmp_path / "staging"
     staging_dir.mkdir()
     create_test_sources(repo_root)
-    local_sdk = repo_root / "async_durable_execution" / "__init__.py"
-    monkeypatch.setattr(pypi_tests, "find_sdk_source", Mock(return_value=local_sdk))
+    sdk_source = (
+        repo_root
+        / ".venv"
+        / "lib"
+        / "python3.13"
+        / "site-packages"
+        / "async_durable_execution"
+        / "__init__.py"
+    )
+    monkeypatch.setattr(pypi_tests, "find_sdk_source", Mock(return_value=sdk_source))
+    run = Mock(return_value=CompletedProcess(args=[], returncode=0))
+    monkeypatch.setattr(pypi_tests.subprocess, "run", run)
 
-    with pytest.raises(RuntimeError, match="imported the local SDK"):
-        pypi_tests.run_staged_tests(repo_root, staging_dir, [])
+    assert pypi_tests.run_staged_tests(repo_root, staging_dir, []) == 0
+    assert run.call_args.kwargs["cwd"] == staging_dir
 
 
 def test_run_staged_tests_runs_pytest_from_staging(
