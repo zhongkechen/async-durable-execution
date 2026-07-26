@@ -10,6 +10,7 @@ from typing import Any
 if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from scripts.function_naming import LEGACY_HANDLER_PACKAGE_PREFIX
 from scripts.function_naming import to_function_name_suffix, to_logical_id
 from scripts.test_handlers import load_test_handlers
 
@@ -20,8 +21,6 @@ DEFAULT_LAMBDA_ENDPOINT = f"https://lambda.{DEFAULT_AWS_REGION}.amazonaws.com"
 DEFAULT_RUNTIME = "python3.13"
 SDK_LAYER_LOGICAL_ID = "AsyncDurableExecutionSdkLayer"
 SDK_LAYER_CONTENT_URI = "dist/async-durable-execution-layer.zip"
-# Keep deployed CloudFormation resource identities stable across package layout changes.
-EXAMPLE_LOGICAL_ID_PREFIX = "AsyncDurableExecutionExamples"
 DEFAULT_DURABLE_CONFIG = {
     "RetentionPeriodInDays": 7,
     "ExecutionTimeout": 300,
@@ -225,9 +224,10 @@ def build_template(
 
     for example in examples:
         handler_without_package = example["handler"].removeprefix(f"{PACKAGE_PREFIX}.")
-        logical_id = (
-            f"{EXAMPLE_LOGICAL_ID_PREFIX}{to_logical_id(handler_without_package)}"
+        stable_handler_name = (
+            f"{LEGACY_HANDLER_PACKAGE_PREFIX}{handler_without_package}"
         )
+        logical_id = to_logical_id(stable_handler_name)
         function_name_suffix = to_function_name_suffix(example["handler"])
         properties: dict[str, Any] = {
             "CodeUri": "build/lambda/",

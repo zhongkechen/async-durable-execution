@@ -186,6 +186,20 @@ def test_build_template_adds_layer_role_and_functions() -> None:
     assert function["FunctionName"] == {"Fn::Sub": "${FunctionNamePrefix}StepStep"}
 
 
+def test_build_template_preserves_deployed_handler_error_logical_id() -> None:
+    template = build_template(
+        [
+            {
+                "handler": "examples.handler_error.handler_error.handler",
+                "description": "Handler error example.",
+            }
+        ]
+    )
+
+    assert "AsyncDurableExecutionExamplesErrorError" in template["Resources"]
+    assert "AsyncDurableExecutionExamplesHandlerErrorError" not in template["Resources"]
+
+
 def test_validate_catalog_test_coverage_accepts_known_handlers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

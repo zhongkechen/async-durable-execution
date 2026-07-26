@@ -6,6 +6,7 @@ import pytest
 
 from scripts.function_naming import HASH_LENGTH
 from scripts.function_naming import HANDLER_PACKAGE_PREFIX
+from scripts.function_naming import LEGACY_HANDLER_PACKAGE_PREFIX
 from scripts.function_naming import to_function_name_suffix
 from scripts.function_naming import to_logical_id
 
@@ -24,16 +25,37 @@ def test_to_function_name_suffix_strips_example_package_prefix() -> None:
 
 
 def test_to_function_name_suffix_truncates_with_stable_hash() -> None:
-    handler_name = (
-        f"{HANDLER_PACKAGE_PREFIX}"
+    handler_without_package = (
         "this_is_a_very_long_module_name.with_a_very_long_handler_name.handler"
     )
-    digest = hashlib.sha1(handler_name.encode("utf-8")).hexdigest()[:HASH_LENGTH]
+    handler_name = f"{HANDLER_PACKAGE_PREFIX}{handler_without_package}"
+    stable_handler_name = f"{LEGACY_HANDLER_PACKAGE_PREFIX}{handler_without_package}"
+    digest = hashlib.sha1(stable_handler_name.encode("utf-8")).hexdigest()[:HASH_LENGTH]
 
     suffix = to_function_name_suffix(handler_name, max_length=24)
 
     assert suffix == f"ThisIsAVeryLong-{digest}"
     assert len(suffix) == 24
+
+
+@pytest.mark.parametrize(
+    ("handler_name", "expected"),
+    [
+        (
+            "examples.wait_for_callback.wait_for_callback_multiple_invocations.handler",
+            "WaitForCallbackWaitForCallbackMultipleI-dcfc7f44",
+        ),
+        (
+            "examples.wait_for_callback."
+            "wait_for_callback_submitter_failure_catchable.handler",
+            "WaitForCallbackWaitForCallbackSubmitter-5fe5aebf",
+        ),
+    ],
+)
+def test_to_function_name_suffix_preserves_deployed_names(
+    handler_name: str, expected: str
+) -> None:
+    assert to_function_name_suffix(handler_name) == expected
 
 
 def test_to_function_name_suffix_rejects_too_small_max_length() -> None:
