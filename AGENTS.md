@@ -782,5 +782,5 @@ Resources:
 **Python SDK:**
 
 - [SDK Repository](https://github.com/zhongkechen/async-durable-execution)
-- [SDK README](https://github.com/zhongkechen/async-durable-execution/blob/main/async-durable-execution/README.md)
+- [SDK README](https://github.com/zhongkechen/async-durable-execution/blob/main/README.md)
 - [Examples](https://github.com/zhongkechen/async-durable-execution/tree/main/examples)

@@ -10,8 +10,8 @@ from typing import Any
 if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from scripts.function_naming import LEGACY_HANDLER_PACKAGE_PREFIX
-from scripts.function_naming import to_function_name_suffix, to_logical_id
+from examples.function_naming import LEGACY_HANDLER_PACKAGE_PREFIX
+from examples.function_naming import to_function_name_suffix, to_logical_id
 from scripts.test_handlers import load_test_handlers
 
 PACKAGE_NAME = "DurableExecutionsPythonExamples-1.0"

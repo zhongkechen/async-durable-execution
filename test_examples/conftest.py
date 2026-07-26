@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 from async_durable_execution import create_cloud_runner, create_local_runner
-from scripts.function_naming import to_function_name_suffix
+from examples.function_naming import to_function_name_suffix
 
 
 EXAMPLES_PACKAGE_PREFIX = "examples"

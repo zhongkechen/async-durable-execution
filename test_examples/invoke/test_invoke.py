@@ -5,8 +5,8 @@ import os
 import pytest
 
 from async_durable_execution import InvocationStatus, OperationStatus
+from examples.function_naming import to_function_name_suffix
 from examples.invoke import invoke
-from scripts.function_naming import to_function_name_suffix
 
 
 CHILD_HANDLER = "examples.invoke.price_order_child.handler"

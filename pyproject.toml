@@ -121,7 +121,7 @@ dependencies = [
 ]
 
 [tool.hatch.envs.test-pypi-examples.scripts]
-test = "pytest test_examples {args}"
+test = "python scripts/run_pypi_example_tests.py {args}"
 
 [tool.hatch.envs.examples]
 features = ["aioboto"]
