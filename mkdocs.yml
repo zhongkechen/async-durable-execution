@@ -67,21 +67,8 @@ nav:
           - Retry Durable Work: api/extension/with_retry.md
           - Recursive Invocation: api/extension/recurse.md
           - Replay-Safe Values: api/extension/replay_safe.md
-      - Core Runtime:
-          - Execution: api/core/execution.md
-          - Current Context: api/core/context.md
-      - Configuration and Data:
-          - Configuration: api/core/config.md
-          - Serialization: api/core/serdes.md
-          - Models: api/core/models.md
-      - Errors:
-          - Exceptions: api/core/exceptions.md
-      - Integrations:
-          - Durable Service Client: api/core/client.md
-      - Testing:
-          - Local Runner: api/runner/local.md
-          - Cloud Runner: api/runner/cloud.md
-          - Test Results: api/runner/model.md
+      - Core API: api/core.md
+      - Runner API: api/runner.md
       - Package Metadata:
           - Version: api/about.md
 

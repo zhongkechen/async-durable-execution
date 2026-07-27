@@ -1,8 +1,8 @@
 # API Reference
 
 Import the supported public symbols from `async_durable_execution`. The
-reference pages below are grouped by responsibility, and each page documents
-exactly one implementation module.
+reference pages below are grouped by responsibility. Operation pages correspond
+to their implementation modules; supporting APIs are grouped by package.
 
 The implementation packages are private. Import every supported symbol from
 `async_durable_execution`.
@@ -31,30 +31,14 @@ checkpoint conventions.
 - [Recursive invocation](api/extension/recurse.md)
 - [Replay-safe values](api/extension/replay_safe.md)
 
-## Core Runtime
+## Core API
 
-- [Execution decorators](api/core/execution.md)
-- [Current context](api/core/context.md)
+- [Execution, context, configuration, serialization, models, exceptions, and
+  service client](api/core.md)
 
-## Configuration and Data
+## Runner API
 
-- [Configuration](api/core/config.md)
-- [Serialization](api/core/serdes.md)
-- [Models](api/core/models.md)
-
-## Errors
-
-- [Exceptions](api/core/exceptions.md)
-
-## Integrations
-
-- [Durable service client](api/core/client.md)
-
-## Testing
-
-- [Local runner](api/runner/local.md)
-- [Cloud runner](api/runner/cloud.md)
-- [Test results](api/runner/model.md)
+- [Local runner, cloud runner, and test results](api/runner.md)
 
 ## Package Metadata
 

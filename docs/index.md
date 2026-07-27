@@ -109,4 +109,4 @@ clock reads, and other side effects inside checkpointed steps. Standard
 - Learn the [advanced asyncio patterns](advanced-usage.md).
 - Define a [durable DAG workflow](api/extension/flow.md).
 - Browse the [API reference](async_durable_execution.md).
-- Test locally with the [local runner API](api/runner/local.md).
+- Test locally with the [runner API](api/runner.md).
