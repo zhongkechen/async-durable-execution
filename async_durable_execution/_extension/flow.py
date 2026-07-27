@@ -409,14 +409,14 @@ class _DependencyExpression:
     builder: _FlowBuilder
 
     def leaves(self) -> tuple[_DependencyLeaf, ...]:
-        raise NotImplementedError  # pragma: no cover
+        raise NotImplementedError
 
     def evaluate(
         self,
         results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
         any_winners: dict[int, int] | None = None,
     ) -> _Evaluation:
-        raise NotImplementedError  # pragma: no cover
+        raise NotImplementedError
 
     def __and__(
         self, other: FlowNode[Any] | _DependencyExpression

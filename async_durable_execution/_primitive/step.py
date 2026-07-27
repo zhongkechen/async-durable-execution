@@ -225,7 +225,7 @@ class StepOperationExecutor(OperationExecutor[T]):
                 self.operation_identifier.operation_id,
                 self.operation_identifier.name,
             )
-            return await self.deserialize_value(  # noqa: TRY300
+            return await self.deserialize_value(
                 data=serialized_result,
                 serdes=self.serdes,
             )

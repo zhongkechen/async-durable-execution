@@ -262,7 +262,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                     self.operation_identifier.operation_id,
                     self.operation_name,
                 )
-                return await self.deserialize_value(  # noqa: TRY300
+                return await self.deserialize_value(
                     data=serialized_state,
                     serdes=self.serdes,
                 )
@@ -330,10 +330,8 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             await self.create_checkpoint(fail_operation)
             raise
 
-        msg: str = (
-            "wait_for_condition should never reach this point"  # pragma: no cover
-        )
-        raise ExecutionError(msg)  # pragma: no cover
+        msg: str = "wait_for_condition should never reach this point"
+        raise ExecutionError(msg)
 
     def _resolve_delay_seconds(self, new_state: T, attempt: int) -> int | None:
         polling_strategy = self.polling_strategy or self.default_polling_strategy

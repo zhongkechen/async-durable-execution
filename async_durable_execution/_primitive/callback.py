@@ -50,7 +50,7 @@ class CallbackError(ExecutionError):
 
 
 def _encode_callback_error_payload(error: ExecutionError) -> str | None:
-    if not isinstance(error, CallbackError):  # pragma: no cover
+    if not isinstance(error, CallbackError):
         msg = "CallbackError codec received an incompatible exception."
         raise TypeError(msg)
     return error.callback_id
@@ -213,7 +213,7 @@ async def _create_callback(
     )
 
 
-class Callback(Generic[T]):  # noqa: PYI059
+class Callback(Generic[T]):
     """A future that will block on result() until callback_id returns."""
 
     def __init__(

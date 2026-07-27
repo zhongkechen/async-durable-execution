@@ -359,7 +359,7 @@ class ExecutionState:
         # Conditionally wait for completion based on is_sync parameter
         if is_sync:
             logger.debug("Enqueued checkpoint operation for synchronous processing")
-            if completion_future is None:  # pragma: no cover
+            if completion_future is None:
                 # this shouldn't ever be possible
                 msg: str = "completion_future must be set for synchronous execution"
                 raise DurableExecutionsError(msg)

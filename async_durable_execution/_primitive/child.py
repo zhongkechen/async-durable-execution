@@ -218,7 +218,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
             if replay_children:
                 return raw_result
 
-            return await deserialize(  # noqa: TRY300
+            return await deserialize(
                 serdes=self.serdes,
                 data=serialized_result,
                 operation_id=self.operation_id,

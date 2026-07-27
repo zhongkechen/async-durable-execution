@@ -431,7 +431,7 @@ class BatchItem(SerializableModel, Generic[R]):
 
 
 @dataclass(frozen=True)
-class BatchResult(SerializableModel, Generic[R]):  # noqa: PYI059
+class BatchResult(SerializableModel, Generic[R]):
     """Aggregated outcome of a `map()` or `parallel()` operation."""
 
     all: list[BatchItem[R]]
@@ -630,7 +630,7 @@ class _BatchResultCodec:
         encode_value: Callable[[Any], EncodedValue],
     ) -> Any:
         encoded = encode_value(_batch_result_payload(cast("BatchResult[Any]", obj)))
-        if encoded.tag != "m":  # pragma: no cover
+        if encoded.tag != "m":
             msg = "Serialized BatchResult value must contain a mapping."
             raise SerDesError(msg)
         return encoded.value
@@ -1275,7 +1275,7 @@ class ParallelExecutor(
         operation_identifier = OperationIdentifier(
             operation_id=operation_id,
             sub_type=self.sub_type_iteration,
-            parent_id=executor_context.parent_id,  # noqa: SLF001
+            parent_id=executor_context.parent_id,
             name=name,
         )
 
