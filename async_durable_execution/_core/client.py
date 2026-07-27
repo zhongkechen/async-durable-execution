@@ -25,13 +25,9 @@ logger = logging.getLogger(__name__)
 class LambdaApiClient(Protocol):
     """Minimal Lambda client surface needed by durable execution."""
 
-    def checkpoint_durable_execution(
-        self, **kwargs: Any
-    ) -> Mapping[str, Any]: ...  # pragma: no cover
+    def checkpoint_durable_execution(self, **kwargs: Any) -> Mapping[str, Any]: ...
 
-    def get_durable_execution_state(
-        self, **kwargs: Any
-    ) -> Mapping[str, Any]: ...  # pragma: no cover
+    def get_durable_execution_state(self, **kwargs: Any) -> Mapping[str, Any]: ...
 
 
 class AsyncLambdaApiClient(Protocol):
@@ -39,11 +35,11 @@ class AsyncLambdaApiClient(Protocol):
 
     def checkpoint_durable_execution(
         self, **kwargs: Any
-    ) -> Awaitable[Mapping[str, Any]]: ...  # pragma: no cover
+    ) -> Awaitable[Mapping[str, Any]]: ...
 
     def get_durable_execution_state(
         self, **kwargs: Any
-    ) -> Awaitable[Mapping[str, Any]]: ...  # pragma: no cover
+    ) -> Awaitable[Mapping[str, Any]]: ...
 
 
 class DurableServiceClient(Protocol):
@@ -55,7 +51,7 @@ class DurableServiceClient(Protocol):
         checkpoint_token: str,
         updates: list[OperationUpdate],
         client_token: str | None,
-    ) -> CheckpointOutput: ...  # pragma: no cover
+    ) -> CheckpointOutput: ...
 
     async def get_execution_state(
         self,
@@ -63,7 +59,7 @@ class DurableServiceClient(Protocol):
         checkpoint_token: str,
         next_marker: str,
         max_items: int = 1000,
-    ) -> StateOutput: ...  # pragma: no cover
+    ) -> StateOutput: ...
 
 
 def _create_client_config() -> Config:

@@ -208,18 +208,16 @@ class Invoker(Protocol):
         durable_execution_arn: str,
         checkpoint_token: str,
         operations: list[Operation],
-    ) -> DurableExecutionInvocationInput: ...  # pragma: no cover
+    ) -> DurableExecutionInvocationInput: ...
 
     async def invoke(
         self,
         function_name: str,
         input: DurableExecutionInvocationInput,
         endpoint_url: str | None = None,
-    ) -> InvokeResponse: ...  # pragma: no cover
+    ) -> InvokeResponse: ...
 
-    def update_endpoint(
-        self, endpoint_url: str, region_name: str
-    ) -> None: ...  # pragma: no cover
+    def update_endpoint(self, endpoint_url: str, region_name: str) -> None: ...
 
 
 @dataclass(frozen=True)

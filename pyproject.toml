@@ -115,7 +115,12 @@ async_durable_execution = [
 ]
 
 [tool.coverage.report]
-exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+  'class .+\(Protocol\):',
+]
 
 [tool.hatch.envs.test-pypi-examples]
 skip-install = true
