@@ -12,35 +12,40 @@ from dataclasses import dataclass, field as dataclass_field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar, cast
 
-from ..core.exceptions import (
+from ..core import (
     CallableRuntimeError,
-    InvalidStateError,
-    SuspendExecution,
-    TimedSuspendExecution,
-    ValidationError,
-)
-from ..core.models import (
+    DurableContext,
+    EncodedValue,
     ErrorObject,
+    ExecutionState,
+    ExtendedTypeSerDes,
+    InvalidStateError,
     Operation,
     OperationIdentifier,
     OperationStatus,
     OperationSubType,
+    OrphanedChildException,
+    SerDes,
+    SerDesError,
     SerializableModel,
+    SuspendExecution,
+    TimedSuspendExecution,
+    TypeTag,
+    ValidationError,
     _metadata,
+    bind_current_context,
+    deserialize,
+    durable_callable,
+    get_durable_context,
 )
 from ..primitive.base import OperationExecutor
-from ..core.context import DurableContext, bind_current_context, get_durable_context
 from ..primitive.child import (
     ChildOperationExecutor,
-    OrphanedChildException,
     _create_child_context_task as _run_in_child_context,
 )
-from ..core.execution import durable_callable
-from ..core.serdes import deserialize
 
 if TYPE_CHECKING:
-    from ..core.serdes import SerDes
-    from ..core.state import ExecutionState
+    from ..primitive.child import SummaryGenerator
 
 
 logger = logging.getLogger(__name__)
@@ -49,10 +54,6 @@ CallableType = TypeVar("CallableType")
 ResultType = TypeVar("ResultType")
 R = TypeVar("R")
 T = TypeVar("T")
-C_contra = TypeVar("C_contra", contravariant=True)
-
-SummaryGenerator: TypeAlias = Callable[[C_contra], str]
-"""Create a compact JSON summary for oversized checkpoint payloads."""
 
 
 class CompletionReason(Enum):
@@ -594,6 +595,88 @@ class BatchResult(SerializableModel, Generic[R]):  # noqa: PYI059
     @property
     def total_count(self) -> int:
         return len(self.all)
+
+
+_BATCH_RESULT_TAG = "br"
+
+
+def _batch_result_payload(value: BatchResult[Any]) -> dict[str, Any]:
+    return {
+        "all": [
+            {
+                "index": item.index,
+                "status": item.status.value,
+                "result": item.result,
+                "error": item.error.to_dict() if item.error is not None else None,
+            }
+            for item in value.all
+        ],
+        "completionReason": value.completion_reason.value,
+    }
+
+
+class _BatchResultCodec:
+    """Extended type codec owned by the parallel operation."""
+
+    tag = _BATCH_RESULT_TAG
+
+    @staticmethod
+    def can_encode(obj: Any) -> bool:
+        return isinstance(obj, BatchResult)
+
+    @staticmethod
+    def encode(
+        obj: Any,
+        encode_value: Callable[[Any], EncodedValue],
+    ) -> Any:
+        encoded = encode_value(_batch_result_payload(cast("BatchResult[Any]", obj)))
+        if encoded.tag != "m":  # pragma: no cover
+            msg = "Serialized BatchResult value must contain a mapping."
+            raise SerDesError(msg)
+        return encoded.value
+
+    @staticmethod
+    def decode(
+        value: Any,
+        decode_value: Callable[[TypeTag | str, Any], Any],
+    ) -> BatchResult[Any]:
+        decoded = decode_value("m", value)
+        if not isinstance(decoded, Mapping):
+            msg = "Serialized BatchResult value must contain a mapping."
+            raise SerDesError(msg)
+        return BatchResult.from_dict(decoded)
+
+
+class _BatchResultSerDes(ExtendedTypeSerDes[Any]):
+    """Operation-owned serializer for BatchResult values."""
+
+    def __init__(self) -> None:
+        super().__init__(type_codecs=(_BatchResultCodec(),))
+
+    def _check_circular_references(
+        self,
+        obj: Any,
+        seen: set[int] | None = None,
+    ) -> None:
+        if not isinstance(obj, BatchResult):
+            super()._check_circular_references(obj, seen)
+            return
+
+        if seen is None:
+            seen = set()
+        obj_id = id(obj)
+        if obj_id in seen:
+            msg = "Circular references are not supported"
+            raise SerDesError(msg)
+
+        seen.add(obj_id)
+        try:
+            super()._check_circular_references(_batch_result_payload(obj), seen)
+        finally:
+            seen.remove(obj_id)
+
+
+_BATCH_RESULT_SERDES = _BatchResultSerDes()
 
 
 @dataclass(frozen=True)
@@ -1408,5 +1491,5 @@ def parallel(
         run_parallel_handler,
         sub_type=OperationSubType.PARALLEL,
         name=name,
-        serdes=serdes,
+        serdes=serdes if serdes is not None else _BATCH_RESULT_SERDES,
     )

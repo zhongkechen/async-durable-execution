@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 from typing import Any
 
-from ....core.models import (
+from ....core import (
     CallbackDetails,
     CallbackOptions,
     Operation,

@@ -7,16 +7,14 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from ...core.execution import (
-    DurableExecutionInvocationInput,
-    DurableExecutionInvocationOutput,
-    InvocationStatus,
-)
-from ...core.models import (
+from ...core import (
     CallbackOptions,
     CallbackTimeoutType,
     CheckpointUpdatedExecutionState,
+    DurableExecutionInvocationInput,
+    DurableExecutionInvocationOutput,
     ErrorObject,
+    InvocationStatus,
     Operation,
     OperationStatus,
     OperationType,

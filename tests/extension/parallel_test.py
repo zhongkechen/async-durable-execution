@@ -12,6 +12,8 @@ import pytest
 import async_durable_execution.core.context as context_module
 import async_durable_execution.primitive.child as child
 from async_durable_execution.extension.parallel import (
+    _BATCH_RESULT_SERDES,
+    _BatchResultSerDes,
     BatchItem,
     BatchItemStatus,
     BatchResult,
@@ -39,7 +41,8 @@ from async_durable_execution.extension.parallel import (
     ParallelSummaryGenerator,
     parallel_handler,
 )
-from async_durable_execution.core.serdes import serialize
+from async_durable_execution.core.exceptions import SerDesError
+from async_durable_execution.core.serdes import ExtendedTypeSerDes, serialize
 from async_durable_execution.core.state import ExecutionState
 
 from ..serdes_test import CustomStrSerDes
@@ -1236,7 +1239,10 @@ async def test_parallel_item_serialize(
     assert set(calls_by_operation_id) == {"child-0", "child-1", "parent"}
     assert calls_by_operation_id["child-0"]["serdes"] is expected
     assert calls_by_operation_id["child-1"]["serdes"] is expected
-    assert calls_by_operation_id["parent"]["serdes"] is batch_serdes
+    expected_parent_serdes = (
+        batch_serdes if batch_serdes is not None else _BATCH_RESULT_SERDES
+    )
+    assert calls_by_operation_id["parent"]["serdes"] is expected_parent_serdes
 
 
 @pytest.mark.parametrize(
@@ -1384,16 +1390,68 @@ async def test_parallel_result_serialization_roundtrip():
     assert all(item.status == BatchItemStatus.SUCCEEDED for item in deserialized.all)
 
 
+async def test_batch_result_serdes_owns_type_roundtrip():
+    """BatchResult serialization is implemented by the parallel operation."""
+    nested = BatchResult(
+        all=[BatchItem(0, BatchItemStatus.SUCCEEDED, result=b"nested")],
+        completion_reason=CompletionReason.ALL_COMPLETED,
+    )
+    reserved_key_dict = {
+        "__async_durable_execution_batch_result__": "user value",
+        "nested": nested,
+    }
+    result = BatchResult(
+        all=[BatchItem(0, BatchItemStatus.SUCCEEDED, result=reserved_key_dict)],
+        completion_reason=CompletionReason.ALL_COMPLETED,
+    )
+
+    serdes = _BatchResultSerDes()
+    serialized = await serdes.serialize(result)
+    restored = await serdes.deserialize(serialized)
+
+    assert json.loads(serialized)["t"] == "br"
+    assert isinstance(restored, BatchResult)
+    assert restored == result
+    restored_value = restored.all[0].result
+    assert isinstance(restored_value, dict)
+    restored_nested = restored_value["nested"]
+    assert isinstance(restored_nested, BatchResult)
+
+
+async def test_core_serdes_does_not_know_batch_result():
+    """Generic core serialization does not depend on operation-specific types."""
+    result = BatchResult(
+        all=[],
+        completion_reason=CompletionReason.ALL_COMPLETED,
+    )
+
+    with pytest.raises(SerDesError, match="Unsupported type"):
+        await ExtendedTypeSerDes().serialize(result)
+
+
+async def test_batch_result_serdes_preserves_legacy_wire_format():
+    """Existing BatchResult checkpoints remain readable and stable."""
+    legacy_payload = (
+        '{"t":"br","v":{"all":{"t":"l","v":[]},'
+        '"completionReason":{"t":"s","v":"ALL_COMPLETED"}}}'
+    )
+    expected = BatchResult(
+        all=[],
+        completion_reason=CompletionReason.ALL_COMPLETED,
+    )
+
+    serdes = _BatchResultSerDes()
+
+    assert await serdes.deserialize(legacy_payload) == expected
+    assert await serdes.serialize(expected) == legacy_payload
+
+
 async def test_parallel_handler_serializes_batch_result():
     """Verify parallel_handler serializes BatchResult at parent level."""
     try:
         with (
-            patch(
-                "async_durable_execution.core.serdes.serialize"
-            ) as mock_serdes_serialize,
-            patch(
-                "async_durable_execution.core.serdes.deserialize"
-            ) as mock_deserialize,
+            patch("async_durable_execution.core.serialize") as mock_serdes_serialize,
+            patch("async_durable_execution.core.deserialize") as mock_deserialize,
         ):
             configure_mock_child_serdes_roundtrip(
                 mock_serdes_serialize, mock_deserialize
@@ -1462,7 +1520,7 @@ async def test_parallel_default_serdes_serializes_batch_result():
     """Verify default serdes automatically serializes BatchResult."""
     try:
         with patch(
-            "async_durable_execution.core.serdes.serialize", wraps=serialize
+            "async_durable_execution.core.serialize", wraps=serialize
         ) as mock_serialize:
             importlib.reload(child)
 
@@ -1520,7 +1578,7 @@ async def test_parallel_default_serdes_serializes_batch_result():
             assert isinstance(result, BatchResult)
             assert len(mock_serialize.call_args_list) == 3
             parent_call = mock_serialize.call_args_list[2]
-            assert parent_call[1]["serdes"] is None
+            assert parent_call[1]["serdes"] is _BATCH_RESULT_SERDES
             assert isinstance(parent_call[1]["value"], BatchResult)
             assert parent_call[1]["value"] == result
     finally:
@@ -1534,10 +1592,8 @@ async def test_parallel_custom_serdes_serializes_batch_result():
 
     try:
         with (
-            patch("async_durable_execution.core.serdes.serialize") as mock_serialize,
-            patch(
-                "async_durable_execution.core.serdes.deserialize"
-            ) as mock_deserialize,
+            patch("async_durable_execution.core.serialize") as mock_serialize,
+            patch("async_durable_execution.core.deserialize") as mock_deserialize,
         ):
             configure_mock_child_serdes_roundtrip(mock_serialize, mock_deserialize)
             importlib.reload(child)

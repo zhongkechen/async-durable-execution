@@ -18,23 +18,29 @@ from typing import (
 )
 
 from .parallel import (
+    _BATCH_RESULT_SERDES,
     BatchResult,
     CompletionConfig,
     NestingType,
     _validate_max_concurrency,
 )
 from .parallel import parallel_handler
-from ..core.context import DurableContext, bind_current_context, get_durable_context
-from ..core.execution import durable_callable
-from ..core.models import OperationIdentifier, OperationSubType
+from ..core import (
+    DurableContext,
+    ExecutionState,
+    OperationIdentifier,
+    OperationSubType,
+    SerDes,
+    bind_current_context,
+    durable_callable,
+    get_durable_context,
+)
 from ..primitive.child import (
     _create_child_context_task as _run_in_child_context,
 )
 
 if TYPE_CHECKING:
-    from .parallel import SummaryGenerator
-    from ..core.serdes import SerDes
-    from ..core.state import ExecutionState
+    from ..primitive.child import SummaryGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -253,5 +259,5 @@ def map(
         run_map_handler,
         sub_type=OperationSubType.MAP,
         name=map_name,
-        serdes=serdes,
+        serdes=serdes if serdes is not None else _BATCH_RESULT_SERDES,
     )

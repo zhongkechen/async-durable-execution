@@ -4,54 +4,46 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, TypeVar, cast
+from collections.abc import Callable
+from typing import TYPE_CHECKING, TypeAlias, TypeVar, cast
 
 from .base import OperationExecutor
-from ..core.context import DurableContext, bind_current_context, get_durable_context
-from ..core.exceptions import (
+from ..core import (
     CallableRuntimeError,
-    ExecutionError,
-    InvocationError,
-    _encode_sdk_control_error_data,
-    _restore_sdk_control_error,
-)
-from ..core.models import (
     ContextOptions,
+    DurableContext,
     ErrorObject,
+    ExecutionError,
+    ExecutionState,
+    InvocationError,
     Operation,
     OperationIdentifier,
     OperationStatus,
     OperationSubType,
     OperationUpdate,
+    SerDes,
+    _encode_sdk_control_error_data,
+    _restore_sdk_control_error,
+    bind_current_context,
+    create_eager_task,
+    deserialize,
+    get_durable_context,
+    serialize,
 )
-from ..core.serdes import deserialize, serialize
-from ..core.task import create_eager_task
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
-
-    from ..extension.parallel import SummaryGenerator
-    from ..core.serdes import SerDes
-    from ..core.state import ExecutionState
+    from collections.abc import Awaitable
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+C_contra = TypeVar("C_contra", contravariant=True)
+
+SummaryGenerator: TypeAlias = Callable[[C_contra], str]
+"""Create a compact JSON summary for an oversized child context result."""
 
 # Checkpoint size limit in bytes (256KB)
 CHECKPOINT_SIZE_LIMIT = 256 * 1024
-
-
-class OrphanedChildException(BaseException):
-    """Raised when a child operation checkpoints after its parent context completed.
-
-    This inherits from BaseException so user code does not accidentally catch it
-    with broad exception handlers like ``except Exception``.
-    """
-
-    def __init__(self, message: str, operation_id: str):
-        super().__init__(message)
-        self.operation_id = operation_id
 
 
 class ChildOperationExecutor(OperationExecutor[T]):

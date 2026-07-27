@@ -53,9 +53,9 @@ from async_durable_execution.core.models import (
 )
 from async_durable_execution.core.config import JitterStrategy
 from async_durable_execution.core.config import RetryStrategy
-from async_durable_execution.extension.parallel import SummaryGenerator
 from async_durable_execution.extension.parallel import CompletionDecision
 from async_durable_execution.extension.parallel import CompletionStatus
+from async_durable_execution.primitive.child import SummaryGenerator
 from async_durable_execution.extension.with_retry import (
     WithRetryContext as ModuleWithRetryContext,
 )

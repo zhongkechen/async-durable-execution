@@ -13,11 +13,12 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 from botocore.session import get_session
 
-from ...core import client as durable_client
-from ...core.execution import (
+from ...core import (
     DurableExecutionInvocationInput,
+    DurableExecutionInvocationOutput,
+    ErrorObject,
+    aioboto_is_installed,
 )
-from ...core.models import DurableExecutionInvocationOutput, ErrorObject
 from ..exceptions import (
     DurableFunctionsTestError,
     InvalidParameterValueException,
@@ -768,7 +769,7 @@ def create_async_lambda_client(endpoint_url: str | None, region_name: str) -> An
 
 def create_lambda_client(endpoint_url: str | None, region_name: str) -> Any:
     """Create a Lambda client, preferring aioboto when installed."""
-    if durable_client.aioboto_is_installed():
+    if aioboto_is_installed():
         return create_async_lambda_client(endpoint_url, region_name)
     return create_sync_lambda_client(endpoint_url, region_name)
 

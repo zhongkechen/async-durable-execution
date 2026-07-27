@@ -32,6 +32,7 @@ from async_durable_execution import DurableContext, get_current_context
 from async_durable_execution.core.exceptions import (
     CallableRuntimeError,
     InvalidStateError,
+    OrphanedChildException,
     SuspendExecution,
     TimedSuspendExecution,
     ValidationError,
@@ -47,7 +48,6 @@ from async_durable_execution.core.models import (
 )
 from async_durable_execution.extension.map import _bind_map_item_to_branch
 from async_durable_execution.primitive.base import OperationExecutor
-from async_durable_execution.primitive.child import OrphanedChildException
 
 
 async def run_async(awaitable):

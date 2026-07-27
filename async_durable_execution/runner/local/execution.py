@@ -6,13 +6,11 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
-from ...core.execution import (
+from ...core import (
     DurableExecutionInvocationOutput,
-    InvocationStatus,
-)
-from ...core.models import (
     ErrorObject,
     ExecutionDetails,
+    InvocationStatus,
     Operation,
     OperationStatus,
     OperationType,

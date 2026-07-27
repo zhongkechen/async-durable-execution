@@ -681,9 +681,7 @@ def test_create_lambda_client_prefers_async_when_aioboto_installed(
     mock_import_module, monkeypatch
 ):
     """Test create_lambda_client prefers an aioboto client when available."""
-    monkeypatch.setattr(
-        cloud_module.durable_client, "aioboto_is_installed", lambda: True
-    )
+    monkeypatch.setattr(cloud_module, "aioboto_is_installed", lambda: True)
     mock_context = MagicMock()
     mock_session = Mock()
     mock_session.create_client.return_value = mock_context

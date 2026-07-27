@@ -26,11 +26,12 @@ import json
 import logging
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar, cast
+from typing import Any, Generic, Protocol, TypeVar, cast
 
 from .context import bind_current_context
 from .exceptions import (
@@ -39,22 +40,12 @@ from .exceptions import (
     SerDesError,
 )
 
-if TYPE_CHECKING:
-    from ..extension.parallel import BatchResult
-
-
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
 TYPE_TOKEN: str = "t"
 VALUE_TOKEN: str = "v"
-
-
-def _get_batch_result_type() -> type[BatchResult]:
-    from ..extension.parallel import BatchResult
-
-    return BatchResult
 
 
 class TypeTag(str, Enum):
@@ -73,14 +64,13 @@ class TypeTag(str, Enum):
     TUPLE = "t"
     LIST = "l"
     DICT = "m"
-    BATCH_RESULT = "br"
 
 
 @dataclass(frozen=True)
 class EncodedValue:
     """Encoded value with type tag."""
 
-    tag: TypeTag
+    tag: TypeTag | str
 
     value: Any
 
@@ -90,7 +80,27 @@ class Codec(Protocol):
 
     def encode(self, obj: Any) -> EncodedValue: ...
 
-    def decode(self, tag: TypeTag, value: Any) -> Any: ...
+    def decode(self, tag: TypeTag | str, value: Any) -> Any: ...
+
+
+class TypeCodecExtension(Protocol):
+    """Extension point for types owned outside the core package."""
+
+    tag: str
+
+    def can_encode(self, obj: Any) -> bool: ...
+
+    def encode(
+        self,
+        obj: Any,
+        encode_value: Callable[[Any], EncodedValue],
+    ) -> Any: ...
+
+    def decode(
+        self,
+        value: Any,
+        decode_value: Callable[[TypeTag | str, Any], Any],
+    ) -> Any: ...
 
 
 class PrimitiveCodec:
@@ -219,12 +229,6 @@ class ContainerCodec(Codec):
         """Encode container using dispatcher for recursive elements."""
 
         match obj:
-            case obj if isinstance(obj, _get_batch_result_type()):
-                # Encode BatchResult as dict with special tag
-                return EncodedValue(
-                    TypeTag.BATCH_RESULT,
-                    self._wrap(obj.to_dict(), self.dispatcher).value,
-                )
             case list():
                 return EncodedValue(
                     TypeTag.LIST, [self._wrap(v, self.dispatcher) for v in obj]
@@ -246,15 +250,10 @@ class ContainerCodec(Codec):
                 msg = f"Unsupported container type: {type(obj)!r}"
                 raise SerDesError(msg)
 
-    def decode(self, tag: TypeTag, value: Any) -> Any:
+    def decode(self, tag: TypeTag | str, value: Any) -> Any:
         """Decode container using dispatcher for recursive elements."""
 
         match tag:
-            case TypeTag.BATCH_RESULT:
-                # Decode BatchResult from dict - value is already the dict structure
-                # First decode it as a dict to unwrap all nested EncodedValues
-                decoded_dict = self.decode(TypeTag.DICT, value)
-                return _get_batch_result_type().from_dict(decoded_dict)
             case TypeTag.LIST:
                 if not isinstance(value, list):
                     msg = f"Expected list, got {type(value)}"
@@ -286,8 +285,7 @@ class ContainerCodec(Codec):
             case EncodedValue():
                 return dispatcher.decode(obj.tag, obj.value)
             case dict() if TYPE_TOKEN in obj and VALUE_TOKEN in obj:
-                tag = TypeTag(obj[TYPE_TOKEN])
-                return dispatcher.decode(tag, obj[VALUE_TOKEN])
+                return dispatcher.decode(obj[TYPE_TOKEN], obj[VALUE_TOKEN])
             case _:
                 return obj
 
@@ -295,7 +293,21 @@ class ContainerCodec(Codec):
 class TypeCodec(Codec):
     """Main codec dispatcher."""
 
-    def __init__(self):
+    def __init__(
+        self,
+        extensions: tuple[TypeCodecExtension, ...] = (),
+    ):
+        built_in_tags = {tag.value for tag in TypeTag}
+        extension_tags = [extension.tag for extension in extensions]
+        if len(extension_tags) != len(set(extension_tags)):
+            msg = "Type codec extension tags must be unique."
+            raise ValueError(msg)
+        if built_in_tags.intersection(extension_tags):
+            msg = "Type codec extension tags cannot replace built-in tags."
+            raise ValueError(msg)
+
+        self.extensions = extensions
+        self.extensions_by_tag = {extension.tag: extension for extension in extensions}
         self.primitive_codec = PrimitiveCodec()
         self.bytes_codec = BytesCodec()
         self.uuid_codec = UuidCodec()
@@ -305,6 +317,13 @@ class TypeCodec(Codec):
         self.container_codec.set_dispatcher(self)
 
     def encode(self, obj: Any) -> EncodedValue:
+        for extension in self.extensions:
+            if extension.can_encode(obj):
+                return EncodedValue(
+                    extension.tag,
+                    extension.encode(obj, self.encode),
+                )
+
         match obj:
             case None | str() | bool() | int() | float():
                 return self.primitive_codec.encode(obj)
@@ -316,33 +335,48 @@ class TypeCodec(Codec):
                 return self.decimal_codec.encode(obj)
             case datetime() | date():
                 return self.datetime_codec.encode(obj)
-            case obj if isinstance(obj, list | tuple | dict) or isinstance(
-                obj, _get_batch_result_type()
-            ):
+            case list() | tuple() | dict():
                 return self.container_codec.encode(obj)
             case _:
                 msg = f"Unsupported type: {type(obj)}"
                 raise SerDesError(msg)
 
-    def decode(self, tag: TypeTag, value: Any) -> Any:
-        match tag:
+    def decode(self, tag: TypeTag | str, value: Any) -> Any:
+        tag_value = tag.value if isinstance(tag, TypeTag) else tag
+        extension = self.extensions_by_tag.get(tag_value)
+        if extension is not None:
+            return extension.decode(value, self.decode)
+
+        try:
+            built_in_tag = TypeTag(tag_value)
+        except (TypeError, ValueError):
+            msg = f"Unknown type tag: {tag}"
+            raise SerDesError(msg) from None
+
+        match built_in_tag:
             case (
                 TypeTag.NONE | TypeTag.STR | TypeTag.BOOL | TypeTag.INT | TypeTag.FLOAT
             ):
-                return self.primitive_codec.decode(tag, value)
+                return self.primitive_codec.decode(built_in_tag, value)
             case TypeTag.BYTES:
-                return self.bytes_codec.decode(tag, value)
+                return self.bytes_codec.decode(built_in_tag, value)
             case TypeTag.UUID:
-                return self.uuid_codec.decode(tag, value)
+                return self.uuid_codec.decode(built_in_tag, value)
             case TypeTag.DECIMAL:
-                return self.decimal_codec.decode(tag, value)
+                return self.decimal_codec.decode(built_in_tag, value)
             case TypeTag.DATETIME | TypeTag.DATE:
-                return self.datetime_codec.decode(tag, value)
-            case TypeTag.LIST | TypeTag.TUPLE | TypeTag.DICT | TypeTag.BATCH_RESULT:
-                return self.container_codec.decode(tag, value)
+                return self.datetime_codec.decode(built_in_tag, value)
+            case TypeTag.LIST | TypeTag.TUPLE | TypeTag.DICT:
+                return self.container_codec.decode(built_in_tag, value)
             case _:
                 msg = f"Unknown type tag: {tag}"
                 raise SerDesError(msg)
+
+    def has_tag(self, tag: Any) -> bool:
+        """Return whether a built-in or extension codec owns a tag."""
+        if not isinstance(tag, str):
+            return False
+        return tag in self.extensions_by_tag or tag in {item.value for item in TypeTag}
 
 
 TYPE_CODEC = TypeCodec()
@@ -405,8 +439,11 @@ class JsonSerDes(SerDes[T]):
 class ExtendedTypeSerDes(SerDes[T]):
     """Main serializer class."""
 
-    def __init__(self):
-        self._codec = TYPE_CODEC
+    def __init__(
+        self,
+        type_codecs: tuple[TypeCodecExtension, ...] = (),
+    ):
+        self._codec = TypeCodec(type_codecs) if type_codecs else TYPE_CODEC
 
     async def serialize(self, value: Any) -> str:
         """Serialize value to JSON string."""
@@ -438,13 +475,10 @@ class ExtendedTypeSerDes(SerDes[T]):
         if not (isinstance(obj, dict) and TYPE_TOKEN in obj and VALUE_TOKEN in obj):
             msg = 'Malformed envelope: missing "t" or "v" at root.'
             raise SerDesError(msg)
-        # Python 3.11 compatibility: Using try-except instead of 'in' operator
-        # because checking 'str in EnumType' raises TypeError in Python 3.11
-        try:
-            tag = TypeTag(obj[TYPE_TOKEN])
-        except ValueError:
+        tag = obj[TYPE_TOKEN]
+        if not self._codec.has_tag(tag):
             msg = f'Unknown type tag: "{obj[TYPE_TOKEN]}"'
-            raise SerDesError(msg) from None
+            raise SerDesError(msg)
 
         return self._codec.decode(tag, obj[VALUE_TOKEN])
 
@@ -467,9 +501,6 @@ class ExtendedTypeSerDes(SerDes[T]):
         self, obj: Any, seen: set[int] | None = None
     ) -> None:
         """Reject circular containers before recursive encoding."""
-        if isinstance(obj, _get_batch_result_type()):
-            obj = obj.to_dict()
-
         if not isinstance(obj, (dict, list, tuple)):
             return
 

@@ -14,6 +14,7 @@ import async_durable_execution.primitive.child as child
 
 # Mock the executor.execute method
 from async_durable_execution.extension.parallel import (
+    _BATCH_RESULT_SERDES,
     BatchItem,
     BatchItemStatus,
     BatchResult,
@@ -1300,7 +1301,10 @@ async def test_map_item_serialize(
 
     assert call_kwargs["child-0"]["serdes"] is expected
     assert call_kwargs["child-1"]["serdes"] is expected
-    assert call_kwargs["parent"]["serdes"] is batch_serdes
+    expected_parent_serdes = (
+        batch_serdes if batch_serdes is not None else _BATCH_RESULT_SERDES
+    )
+    assert call_kwargs["parent"]["serdes"] is expected_parent_serdes
 
 
 @pytest.mark.parametrize(
@@ -1441,12 +1445,8 @@ async def test_map_handler_serializes_batch_result():
     """Verify map_handler serializes BatchResult at parent level."""
     try:
         with (
-            patch(
-                "async_durable_execution.core.serdes.serialize"
-            ) as mock_serdes_serialize,
-            patch(
-                "async_durable_execution.core.serdes.deserialize"
-            ) as mock_deserialize,
+            patch("async_durable_execution.core.serialize") as mock_serdes_serialize,
+            patch("async_durable_execution.core.deserialize") as mock_deserialize,
         ):
             configure_mock_child_serdes_roundtrip(
                 mock_serdes_serialize, mock_deserialize
@@ -1512,7 +1512,7 @@ async def test_map_default_serdes_serializes_batch_result():
     """Verify default serdes automatically serializes BatchResult."""
     try:
         with patch(
-            "async_durable_execution.core.serdes.serialize", wraps=serialize
+            "async_durable_execution.core.serialize", wraps=serialize
         ) as mock_serialize:
             importlib.reload(child)
 
@@ -1567,7 +1567,7 @@ async def test_map_default_serdes_serializes_batch_result():
             assert isinstance(result, BatchResult)
             assert len(mock_serialize.call_args_list) == 3
             parent_call = mock_serialize.call_args_list[2]
-            assert parent_call[1]["serdes"] is None
+            assert parent_call[1]["serdes"] is _BATCH_RESULT_SERDES
             assert isinstance(parent_call[1]["value"], BatchResult)
             assert parent_call[1]["value"] == result
     finally:
@@ -1581,10 +1581,8 @@ async def test_map_custom_serdes_serializes_batch_result():
 
     try:
         with (
-            patch("async_durable_execution.core.serdes.serialize") as mock_serialize,
-            patch(
-                "async_durable_execution.core.serdes.deserialize"
-            ) as mock_deserialize,
+            patch("async_durable_execution.core.serialize") as mock_serialize,
+            patch("async_durable_execution.core.deserialize") as mock_deserialize,
         ):
             configure_mock_child_serdes_roundtrip(mock_serialize, mock_deserialize)
             importlib.reload(child)

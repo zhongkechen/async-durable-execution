@@ -6,7 +6,7 @@ import datetime
 from datetime import timedelta
 from typing import Any, ClassVar
 
-from ....core.models import (
+from ....core import (
     CallbackDetails,
     ChainedInvokeDetails,
     ContextDetails,

@@ -4,25 +4,24 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
 
 from .base import OperationExecutor
-from ..core.config import Duration, duration_to_seconds
-from ..core.context import get_durable_context
-from ..core.exceptions import ValidationError, suspend_with_optional_resume_delay
-from ..core.models import (
+from ..core import (
+    Duration,
+    DurableContext,
+    ExecutionState,
     Operation,
     OperationIdentifier,
     OperationStatus,
     OperationSubType,
     OperationUpdate,
+    ValidationError,
     WaitOptions,
+    create_eager_task,
+    duration_to_seconds,
+    get_durable_context,
+    suspend_with_optional_resume_delay,
 )
-from ..core.task import create_eager_task
-
-if TYPE_CHECKING:
-    from ..core.context import DurableContext
-    from ..core.state import ExecutionState
 
 logger = logging.getLogger(__name__)
 

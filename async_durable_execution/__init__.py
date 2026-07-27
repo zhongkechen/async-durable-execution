@@ -59,7 +59,6 @@ from .extension.parallel import (
     CompletionReason,
     CompletionStatus,
     NestingType,
-    SummaryGenerator,
 )
 from .extension.wait_for_condition import (
     PollingStrategy,
@@ -81,7 +80,7 @@ from .extension.wait_for_callback import (
     wait_for_callback,
     WaitForCallbackContext,
 )
-from .primitive.child import run_in_child_context
+from .primitive.child import SummaryGenerator, run_in_child_context
 from .primitive.step import (
     StepContext,
     StepInterruptedError,

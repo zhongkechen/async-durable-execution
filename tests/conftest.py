@@ -20,6 +20,10 @@ def default_to_async_lambda_client(
     monkeypatch.setattr(
         "async_durable_execution.core.client.aioboto_is_installed", lambda: installed
     )
+    monkeypatch.setattr(
+        "async_durable_execution.runner.cloud.aioboto_is_installed",
+        lambda: installed,
+    )
 
 
 @pytest.fixture(autouse=True)

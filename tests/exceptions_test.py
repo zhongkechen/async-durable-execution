@@ -20,6 +20,7 @@ from async_durable_execution.core.exceptions import (
     InvalidStateError,
     InvocationError,
     NonDeterministicExecutionError,
+    OrphanedChildException,
     SerDesError,
     SuspendExecution,
     TerminationReason,
@@ -73,6 +74,35 @@ def test_internal_exceptions_not_exported_from_package_root():
     for name in internal_names:
         assert not hasattr(ade, name)
         assert name not in ade.__all__
+
+
+def test_orphaned_child_exception_bypasses_user_exception_handler():
+    """Orphaned child control flow bypasses broad user exception handlers."""
+    caught_by_exception = False
+    caught_by_base_exception = False
+    exception_instance = None
+
+    try:
+        msg = "test message"
+        raise OrphanedChildException(msg, operation_id="test_op_123")
+    except Exception:  # noqa: BLE001
+        caught_by_exception = True
+    except BaseException as error:  # noqa: BLE001
+        caught_by_base_exception = True
+        exception_instance = error
+
+    assert not caught_by_exception
+    assert caught_by_base_exception
+    assert isinstance(exception_instance, OrphanedChildException)
+    assert exception_instance.operation_id == "test_op_123"
+    assert str(exception_instance) == "test message"
+
+
+def test_orphaned_child_exception_with_operation_id():
+    """OrphanedChildException stores operation_id correctly."""
+    exception = OrphanedChildException("parent completed", operation_id="child_op_456")
+    assert exception.operation_id == "child_op_456"
+    assert str(exception) == "parent completed"
 
 
 def test_durable_executions_error():

@@ -13,29 +13,31 @@ from dataclasses import dataclass, field, fields as dataclass_fields, is_datacla
 from enum import Enum
 from typing import Any, Generic, NoReturn, ParamSpec, TypeVar, cast
 
-from ..core.context import (
-    bind_current_context,
-    bind_durable_definition,
-    ensure_durable_operations_allowed,
-    get_current_context,
-)
-from ..core.exceptions import (
+from ..core import (
     CallableRuntimeError,
+    DurableContext,
     DurableExecutionsError,
+    ErrorObject,
     ExecutionError,
+    ExtendedTypeSerDes,
     InvalidStateError,
     InvocationError,
+    SerDes,
     SerDesError,
+    SerializableModel,
     SuspendExecution,
     TimedSuspendExecution,
     ValidationError,
     _restore_sdk_control_error,
+    bind_current_context,
+    bind_durable_definition,
+    create_eager_task,
+    ensure_durable_operations_allowed,
+    get_current_context,
+    get_durable_context,
 )
-from ..core.models import ErrorObject, SerializableModel
-from ..core.context import DurableContext, get_durable_context
 from ..primitive.child import run_in_child_context
-from ..core.serdes import ExtendedTypeSerDes, SerDes
-from ..core.task import create_eager_task
+from .parallel import _BatchResultSerDes
 
 
 T = TypeVar("T")
@@ -1322,7 +1324,7 @@ class _NodeExecution:
 
 class _FlowValueSerDes(SerDes[Any]):
     def __init__(self) -> None:
-        self.delegate: ExtendedTypeSerDes[Any] = ExtendedTypeSerDes()
+        self.delegate: SerDes[Any] = _BatchResultSerDes()
 
     async def serialize(self, value: Any) -> str:
         return await self.delegate.serialize(_encode_flow_value(value))

@@ -15,6 +15,7 @@ from async_durable_execution.core.exceptions import (
     CheckpointError,
     DurableApiErrorCategory,
     GetExecutionStateError,
+    OrphanedChildException,
 )
 from async_durable_execution.core.models import OperationIdentifier
 from async_durable_execution.core.models import (
@@ -33,7 +34,6 @@ from async_durable_execution.core.models import (
     StepDetails,
 )
 from async_durable_execution.core.client import ThreadedSyncLambdaClient
-from async_durable_execution.primitive.child import OrphanedChildException
 from async_durable_execution.core.state import (
     CheckpointBatcherConfig,
     ExecutionState as _ExecutionState,

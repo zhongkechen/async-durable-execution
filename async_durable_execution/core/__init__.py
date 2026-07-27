@@ -1,28 +1,100 @@
 """Core runtime, configuration, serialization, and service APIs."""
 
-from .client import DurableServiceClient, create_default_sync_client
-from .config import JitterStrategy, RetryStrategy
-from .context import DurableContext, get_current_context
+from .client import (
+    DurableServiceClient,
+    aioboto_is_installed,
+    create_default_sync_client,
+)
+from .config import (
+    Duration,
+    JitterStrategy,
+    RetryStrategy,
+    _DelayStrategy,
+    duration_to_seconds,
+)
+from .context import (
+    DurableContext,
+    OperationContext,
+    bind_current_context,
+    bind_durable_definition,
+    ensure_durable_operations_allowed,
+    get_current_context,
+    get_durable_context,
+)
 from .exceptions import (
     CallableRuntimeError,
+    CheckpointError,
     DurableExecutionsError,
     ExecutionError,
+    GetExecutionStateError,
     InvalidStateError,
     InvocationError,
+    OrphanedChildException,
     SerDesError,
+    SuspendExecution,
+    TerminationReason,
+    TimedSuspendExecution,
     UserlandError,
     ValidationError,
+    _encode_sdk_control_error_data,
+    _register_sdk_control_error_type,
+    _restore_sdk_control_error,
+    suspend_with_optional_resume_delay,
+    suspend_with_optional_resume_timestamp,
 )
-from .execution import durable_callable, durable_execution
+from .execution import (
+    DurableExecutionInvocationInput,
+    InitialExecutionState,
+    _bind_service_client_to_handler,
+    durable_callable,
+    durable_execution,
+)
 from .models import (
+    CallbackDetails,
+    CallbackOptions,
+    CallbackTimeoutType,
+    ChainedInvokeDetails,
+    ChainedInvokeOptions,
+    CheckpointOutput,
+    CheckpointUpdatedExecutionState,
+    ContextDetails,
+    ContextOptions,
+    DurableExecutionInvocationOutput,
     ErrorObject,
+    ExecutionDetails,
     InvocationStatus,
     LambdaContext,
+    Operation,
+    OperationAction,
+    OperationIdentifier,
+    OperationPayload,
     OperationStatus,
     OperationSubType,
     OperationType,
+    OperationUpdate,
+    SerializableModel,
+    StateOutput,
+    StepDetails,
+    TimestampConverter,
+    WaitDetails,
+    WaitOptions,
+    _metadata,
 )
-from .serdes import ExtendedTypeSerDes, JsonSerDes, SerDes, SerDesContext
+from .serdes import (
+    DEFAULT_JSON_SERDES,
+    EncodedValue,
+    ExtendedTypeSerDes,
+    JsonSerDes,
+    PassThroughSerDes,
+    SerDes,
+    SerDesContext,
+    TypeCodecExtension,
+    TypeTag,
+    deserialize,
+    serialize,
+)
+from .state import RECURSIVE_LEVEL_INPUT_FIELD, ExecutionState
+from .task import create_eager_task
 
 __all__ = [
     "CallableRuntimeError",

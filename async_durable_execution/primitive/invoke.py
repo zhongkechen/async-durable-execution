@@ -4,33 +4,27 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, TypeVar, cast
+from typing import TypeVar, cast
 
 # Import base classes for operation executor pattern
 from .base import OperationExecutor
-from ..core.context import get_durable_context
-from ..core.exceptions import (
+from ..core import (
+    DEFAULT_JSON_SERDES,
     CallableRuntimeError,
-    ExecutionError,
-    suspend_with_optional_resume_delay,
-)
-from ..core.models import (
     ChainedInvokeOptions,
+    DurableContext,
+    ExecutionError,
+    ExecutionState,
     Operation,
     OperationIdentifier,
     OperationStatus,
-    OperationUpdate,
     OperationSubType,
+    OperationUpdate,
+    SerDes,
+    create_eager_task,
+    get_durable_context,
+    suspend_with_optional_resume_delay,
 )
-from ..core.serdes import (
-    DEFAULT_JSON_SERDES,
-)
-from ..core.task import create_eager_task
-
-if TYPE_CHECKING:
-    from ..core.context import DurableContext
-    from ..core.serdes import SerDes
-    from ..core.state import ExecutionState
 
 P = TypeVar("P")  # Payload type
 R = TypeVar("R")  # Result type

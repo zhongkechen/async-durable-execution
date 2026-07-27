@@ -16,5 +16,4 @@ completion behavior.
         - BatchItemStatus
         - BatchItem
         - BatchResult
-        - SummaryGenerator
         - parallel

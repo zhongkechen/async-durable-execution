@@ -9,38 +9,35 @@ from enum import Enum
 from typing import TYPE_CHECKING, TypeVar, cast
 
 from .base import OperationExecutor
-from ..core.context import (
-    OperationContext,
-    bind_current_context,
-    get_current_context,
-    get_durable_context,
-)
-from ..core.config import Duration, RetryStrategy, duration_to_seconds
-from ..core.exceptions import (
+from ..core import (
     CallableRuntimeError,
+    Duration,
+    DurableContext,
+    ErrorObject,
     ExecutionError,
+    ExecutionState,
     InvocationError,
+    Operation,
+    OperationContext,
+    OperationIdentifier,
+    OperationStatus,
+    OperationSubType,
+    OperationUpdate,
+    RetryStrategy,
+    SerDes,
     TerminationReason,
     _encode_sdk_control_error_data,
+    bind_current_context,
+    create_eager_task,
+    duration_to_seconds,
+    get_current_context,
+    get_durable_context,
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
 )
-from ..core.models import (
-    ErrorObject,
-    Operation,
-    OperationIdentifier,
-    OperationStatus,
-    OperationUpdate,
-    OperationSubType,
-)
-from ..core.task import create_eager_task
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
-
-    from ..core.context import DurableContext
-    from ..core.serdes import SerDes
-    from ..core.state import ExecutionState
 
 logger = logging.getLogger(__name__)
 

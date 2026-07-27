@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, TypeVar, cast
+from typing import TypeVar, cast
 
-from ..core.exceptions import ValidationError
-from ..core.context import get_durable_context
+from ..core import (
+    RECURSIVE_LEVEL_INPUT_FIELD,
+    DurableContext,
+    SerDes,
+    ValidationError,
+    get_durable_context,
+)
 from ..primitive.invoke import invoke
-from ..core.state import RECURSIVE_LEVEL_INPUT_FIELD
-
-if TYPE_CHECKING:
-    from ..core.context import DurableContext
-    from ..core.serdes import SerDes
 
 
 P = TypeVar("P")

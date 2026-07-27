@@ -14,6 +14,7 @@ from .exceptions import (
     CheckpointError,
     DurableExecutionsError,
     GetExecutionStateError,
+    OrphanedChildException,
 )
 from .models import (
     Operation,
@@ -22,7 +23,6 @@ from .models import (
     OperationUpdate,
 )
 from .client import DurableServiceClient
-from ..primitive.child import OrphanedChildException
 
 
 if TYPE_CHECKING:

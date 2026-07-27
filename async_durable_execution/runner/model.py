@@ -10,7 +10,7 @@ from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Any, Protocol, TYPE_CHECKING
 
-from ..core.models import (
+from ..core import (
     CallbackDetails,
     CallbackOptions,
     ChainedInvokeDetails,
@@ -18,6 +18,7 @@ from ..core.models import (
     DurableExecutionInvocationOutput,
     ErrorObject,
     ExecutionDetails,
+    ExtendedTypeSerDes,
     InvocationStatus,
     Operation,
     OperationAction,
@@ -30,7 +31,6 @@ from ..core.models import (
     TimestampConverter,
     WaitDetails,
 )
-from ..core.serdes import ExtendedTypeSerDes
 from .exceptions import (
     DurableFunctionsTestError,
     InvalidParameterValueException,

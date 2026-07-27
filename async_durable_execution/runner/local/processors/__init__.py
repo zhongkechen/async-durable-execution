@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ....core.models import (
+from ....core import (
     OperationType,
 )
 from .base import (

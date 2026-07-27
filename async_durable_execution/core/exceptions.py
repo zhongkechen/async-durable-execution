@@ -740,6 +740,18 @@ class BackgroundThreadError(BaseException):
         self.source_exception = source_exception
 
 
+class OrphanedChildException(BaseException):
+    """Raised when an operation checkpoints after its parent context completed.
+
+    This inherits from BaseException so user code does not accidentally catch it
+    with broad exception handlers like ``except Exception``.
+    """
+
+    def __init__(self, message: str, operation_id: str):
+        super().__init__(message)
+        self.operation_id = operation_id
+
+
 class SuspendExecution(BaseException):
     """Raise this exception to suspend the current execution by returning PENDING to DAR.
 

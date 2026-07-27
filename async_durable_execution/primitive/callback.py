@@ -4,33 +4,31 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from .base import OperationExecutor
-from ..core.config import Duration, duration_to_seconds
-from ..core.context import get_durable_context
-from ..core.exceptions import (
-    ExecutionError,
-    SuspendExecution,
-    TerminationReason,
-    _register_sdk_control_error_type,
-)
-from ..core.models import (
+from ..core import (
     CallbackOptions,
     CallbackTimeoutType,
+    Duration,
+    DurableContext,
+    ExecutionError,
+    ExecutionState,
     Operation,
     OperationIdentifier,
     OperationStatus,
-    OperationUpdate,
     OperationSubType,
+    OperationUpdate,
+    PassThroughSerDes,
+    SerDes,
+    SuspendExecution,
+    TerminationReason,
+    _register_sdk_control_error_type,
+    create_eager_task,
+    deserialize,
+    duration_to_seconds,
+    get_durable_context,
 )
-from ..core.serdes import deserialize, PassThroughSerDes
-from ..core.task import create_eager_task
-
-if TYPE_CHECKING:
-    from ..core.context import DurableContext
-    from ..core.serdes import SerDes
-    from ..core.state import ExecutionState
 
 T = TypeVar("T")  # Result type
 
