@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import hashlib
 import logging
+from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
@@ -17,14 +18,20 @@ from .models import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
-
     from .models import LambdaContext
-    from .serdes import SerDesContext
     from .state import ExecutionState
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class SerDesContext:
+    """Context for serialization operations."""
+
+    operation_id: str = ""
+    durable_execution_arn: str = ""
+    recursive_level: int = 0
 
 
 class OperationIdGenerator:

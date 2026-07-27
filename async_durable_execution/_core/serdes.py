@@ -33,7 +33,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, Generic, Protocol, TypeVar, cast
 
-from .context import bind_current_context, get_current_context
+from .context import SerDesContext, bind_current_context, get_current_context
 from .exceptions import (
     DurableExecutionsError,
     ExecutionError,
@@ -380,17 +380,6 @@ class TypeCodec(Codec):
 
 
 TYPE_CODEC = TypeCodec()
-
-
-@dataclass(frozen=True)
-class SerDesContext:
-    """Context for serialization operations."""
-
-    operation_id: str = ""
-
-    durable_execution_arn: str = ""
-
-    recursive_level: int = 0
 
 
 def get_serdes_context() -> SerDesContext:

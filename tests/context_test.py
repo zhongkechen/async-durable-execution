@@ -6,17 +6,21 @@ import asyncio
 import inspect
 import json
 import random
+from collections.abc import Iterator
 from datetime import timedelta
 from functools import partial
 from itertools import islice
-from typing import Any, cast
+from typing import Any, cast, get_type_hints
 from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
 from async_durable_execution._core.context import (
     DurableContext as ModuleDurableContext,
+    OperationContext,
+    SerDesContext,
     bind_current_context,
+    bind_durable_definition,
     get_durable_context,
     reset_current_context,
     set_current_context,
@@ -158,6 +162,20 @@ async def test_durable_context() -> None:
 
 def test_get_durable_context_has_no_parameters() -> None:
     assert not inspect.signature(get_durable_context).parameters
+
+
+def test_context_function_type_hints_are_runtime_resolvable() -> None:
+    assert (
+        get_type_hints(ModuleDurableContext._replay_aware)["return"] == Iterator[None]
+    )
+    assert get_type_hints(bind_durable_definition)["return"] == Iterator[None]
+    assert get_type_hints(get_current_context)["return"] == (
+        OperationContext | SerDesContext
+    )
+    assert get_type_hints(bind_current_context) == {
+        "context": OperationContext | SerDesContext,
+        "return": Iterator[None],
+    }
 
 
 def test_get_durable_context_returns_bound_durable_context() -> None:
