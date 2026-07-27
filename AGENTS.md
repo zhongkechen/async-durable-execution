@@ -13,7 +13,7 @@ Start with the documents relevant to the task:
 - `docs/workflow-patterns.md` for agentic loops, approvals, and compensation.
 - `docs/deployment.md` for IAM, qualified function names, invocation, and IaC.
 - `docs/using-synchronous-code.md` for synchronous or blocking integrations.
-- `docs/api/runner/` and `docs/runner-architecture.md` for local and cloud
+- `docs/api/runner.md` and `docs/runner-architecture.md` for local and cloud
   runner behavior.
 - `CONTRIBUTING.md` for repository layout, commands, tests, documentation,
   examples, and pull request expectations.
