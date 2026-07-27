@@ -72,8 +72,8 @@ dependencies = [
 
 [tool.hatch.envs.test.scripts]
 all = "pytest {args}"
-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=async_durable_execution --cov=scripts {args}"
-cov-html = "pytest --cov-report=term-missing --cov-report=html:site/coverage --cov-report=json:site/coverage/coverage.json --cov-config=pyproject.toml --cov=async_durable_execution --cov=scripts {args}"
+cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=async_durable_execution {args}"
+cov-html = "pytest --cov-report=term-missing --cov-report=html:site/coverage --cov-report=json:site/coverage/coverage.json --cov-config=pyproject.toml --cov=async_durable_execution {args}"
 sdk = "pytest tests {args}"
 sdk-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=async_durable_execution --cov-fail-under=98 tests {args}"
 runner = "pytest tests/runner {args}"
