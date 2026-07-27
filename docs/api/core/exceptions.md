@@ -1,10 +1,10 @@
 # Exceptions
 
-Implementation module: `async_durable_execution.core.exceptions`.
+Internal implementation module: `async_durable_execution._core.exceptions`.
 
-Public exports are also available from `async_durable_execution.core`.
+Import these public symbols from `async_durable_execution`.
 
-::: async_durable_execution.core.exceptions
+::: async_durable_execution._core.exceptions
     options:
       members:
         - DurableExecutionsError

@@ -10,18 +10,18 @@ from typing import cast
 from unittest.mock import Mock
 
 import pytest
-from async_durable_execution.core.context import (
+from async_durable_execution._core.context import (
     DurableContext,
     bind_current_context,
 )
-from async_durable_execution.core.exceptions import (
+from async_durable_execution._core.exceptions import (
     CallableRuntimeError,
     ExecutionError,
     InvocationError,
     _decode_sdk_error_data,
 )
-from async_durable_execution.core.models import OperationIdentifier
-from async_durable_execution.core.models import (
+from async_durable_execution._core.models import OperationIdentifier
+from async_durable_execution._core.models import (
     ContextDetails,
     ErrorObject,
     Operation,
@@ -30,15 +30,15 @@ from async_durable_execution.core.models import (
     OperationSubType,
     OperationType,
 )
-from async_durable_execution.primitive.child import (
+from async_durable_execution._primitive.child import (
     ChildOperationExecutor,
     SummaryGenerator,
     _run_in_child_context,
     run_in_child_context,
 )
-from async_durable_execution.primitive.callback import CallbackError
-from async_durable_execution.core.serdes import SerDes
-from async_durable_execution.core.state import ExecutionState
+from async_durable_execution._primitive.callback import CallbackError
+from async_durable_execution._core.serdes import SerDes
+from async_durable_execution._core.state import ExecutionState
 
 from ..serdes_test import CustomDictSerDes
 
@@ -380,7 +380,9 @@ async def test_child_handler_callback_error_checkpoints_callback_id():
     assert fail_operation.action is OperationAction.FAIL
     assert fail_operation.error.message == "Callback failed"
     assert fail_operation.error.type == "CallbackError"
-    expected_exception_type = "async_durable_execution.primitive.callback.CallbackError"
+    expected_exception_type = (
+        "async_durable_execution._primitive.callback.CallbackError"
+    )
     assert json.loads(fail_operation.error.data) == {
         "__async_durable_execution_error__": 1,
         "exception_type": expected_exception_type,
@@ -391,6 +393,7 @@ async def test_child_handler_callback_error_checkpoints_callback_id():
 @pytest.mark.parametrize(
     "exception_type",
     [
+        "async_durable_execution._primitive.callback.CallbackError",
         "async_durable_execution.primitive.callback.CallbackError",
         "async_durable_execution.exceptions.CallbackError",
     ],

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import importlib.util
 from pathlib import Path
 
 
@@ -16,7 +17,7 @@ def test_non_core_packages_import_core_through_package_facade():
     package_paths = (
         path
         for path in PACKAGE_ROOT.iterdir()
-        if path.name != "core" and (path / "__init__.py").is_file()
+        if path.name != "_core" and (path / "__init__.py").is_file()
     )
     for package_path in package_paths:
         for path in package_path.rglob("*.py"):
@@ -24,13 +25,13 @@ def test_non_core_packages_import_core_through_package_facade():
             for node in ast.walk(tree):
                 if isinstance(node, ast.ImportFrom):
                     module = node.module or ""
-                    if module.startswith(("core.", "async_durable_execution.core.")):
+                    if module.startswith(("_core.", "async_durable_execution._core.")):
                         violations.append(
                             f"{path.relative_to(PACKAGE_ROOT)}:{node.lineno}"
                         )
                 elif isinstance(node, ast.Import):
                     if any(
-                        alias.name.startswith("async_durable_execution.core.")
+                        alias.name.startswith("async_durable_execution._core.")
                         for alias in node.names
                     ):
                         violations.append(
@@ -38,6 +39,14 @@ def test_non_core_packages_import_core_through_package_facade():
                         )
 
     assert not violations, (
-        "Import core symbols from async_durable_execution.core.__init__: "
+        "Import core symbols from async_durable_execution._core.__init__: "
         + ", ".join(violations)
     )
+
+
+def test_implementation_packages_are_not_public_import_paths():
+    """Only underscore-prefixed implementation package names are available."""
+    for package_name in ("core", "runner", "primitive", "extension"):
+        assert (
+            importlib.util.find_spec(f"async_durable_execution.{package_name}") is None
+        )

@@ -6,12 +6,12 @@ from unittest.mock import patch
 
 import pytest
 
-from async_durable_execution.core.config import (
+from async_durable_execution._core.config import (
     JitterStrategy,
     RetryStrategy,
     duration_to_seconds,
 )
-from async_durable_execution.core.exceptions import ValidationError
+from async_durable_execution._core.exceptions import ValidationError
 
 
 def test_none_jitter_returns_delay():

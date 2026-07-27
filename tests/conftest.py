@@ -18,10 +18,10 @@ def default_to_async_lambda_client(
     marker = request.node.get_closest_marker("aioboto_installed")
     installed = True if marker is None else bool(marker.args[0])
     monkeypatch.setattr(
-        "async_durable_execution.core.client.aioboto_is_installed", lambda: installed
+        "async_durable_execution._core.client.aioboto_is_installed", lambda: installed
     )
     monkeypatch.setattr(
-        "async_durable_execution.runner.cloud.aioboto_is_installed",
+        "async_durable_execution._runner.cloud.aioboto_is_installed",
         lambda: installed,
     )
 

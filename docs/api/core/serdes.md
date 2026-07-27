@@ -1,10 +1,10 @@
 # Serialization
 
-Implementation module: `async_durable_execution.core.serdes`.
+Internal implementation module: `async_durable_execution._core.serdes`.
 
-Public exports are also available from `async_durable_execution.core`.
+Import these public symbols from `async_durable_execution`.
 
-::: async_durable_execution.core.serdes
+::: async_durable_execution._core.serdes
     options:
       members:
         - SerDesContext

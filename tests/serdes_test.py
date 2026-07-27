@@ -9,17 +9,17 @@ from typing import Any
 
 import pytest
 
-from async_durable_execution.core.context import (
+from async_durable_execution._core.context import (
     get_current_context,
     reset_current_context,
     set_current_context,
 )
-from async_durable_execution.core.exceptions import (
+from async_durable_execution._core.exceptions import (
     DurableExecutionsError,
     ExecutionError,
     SerDesError,
 )
-from async_durable_execution.core.serdes import (
+from async_durable_execution._core.serdes import (
     BytesCodec,
     ContainerCodec,
     DateTimeCodec,

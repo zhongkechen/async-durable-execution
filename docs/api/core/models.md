@@ -1,10 +1,10 @@
 # Models
 
-Implementation module: `async_durable_execution.core.models`.
+Internal implementation module: `async_durable_execution._core.models`.
 
-Public exports are also available from `async_durable_execution.core`.
+Import these public symbols from `async_durable_execution`.
 
-::: async_durable_execution.core.models
+::: async_durable_execution._core.models
     options:
       members:
         - LambdaContext

@@ -8,24 +8,24 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.core.context import (
+from async_durable_execution._core.context import (
     set_current_context,
     reset_current_context,
 )
-from async_durable_execution.core.logger import (
+from async_durable_execution._core.logger import (
     DurableContextFilter,
     build_context_log_extra,
     configure_durable_logger,
 )
-from async_durable_execution.core.exceptions import ValidationError
-from async_durable_execution.core.models import OperationIdentifier
-from async_durable_execution.core.models import (
+from async_durable_execution._core.exceptions import ValidationError
+from async_durable_execution._core.models import OperationIdentifier
+from async_durable_execution._core.models import (
     Operation,
     OperationStatus,
     OperationSubType,
     OperationType,
 )
-from async_durable_execution.core.state import ExecutionState
+from async_durable_execution._core.state import ExecutionState
 from async_durable_execution import DurableContext, StepContext
 
 

@@ -7,18 +7,18 @@ from datetime import timedelta
 from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
-from async_durable_execution.core.context import (
+from async_durable_execution._core.context import (
     reset_current_context,
     set_current_context,
     get_current_context,
 )
-from async_durable_execution.core.exceptions import (
+from async_durable_execution._core.exceptions import (
     ValidationError,
     _encode_sdk_control_error_data,
     _restore_sdk_control_error,
 )
-from async_durable_execution.core.models import OperationIdentifier
-from async_durable_execution.core.models import (
+from async_durable_execution._core.models import OperationIdentifier
+from async_durable_execution._core.models import (
     CallbackDetails,
     CallbackOptions,
     CallbackTimeoutType,
@@ -30,19 +30,19 @@ from async_durable_execution.core.models import (
     OperationType,
     OperationUpdate,
 )
-import async_durable_execution.extension.wait_for_callback as callback
-from async_durable_execution.primitive.callback import (
+import async_durable_execution._extension.wait_for_callback as callback
+from async_durable_execution._primitive.callback import (
     Callback,
     CallbackError,
     CallbackOperationExecutor,
     create_callback,
 )
-from async_durable_execution.extension.wait_for_callback import (
+from async_durable_execution._extension.wait_for_callback import (
     wait_for_callback,
     wait_for_callback_handler,
 )
-from async_durable_execution.core.serdes import SerDes
-from async_durable_execution.core.state import ExecutionState
+from async_durable_execution._core.serdes import SerDes
+from async_durable_execution._core.state import ExecutionState
 from async_durable_execution import WaitForCallbackContext, StepContext
 
 
@@ -76,7 +76,7 @@ def test_create_callback_name_is_keyword_only():
 
 
 def test_callback_error_is_defined_by_callback_module():
-    assert CallbackError.__module__ == "async_durable_execution.primitive.callback"
+    assert CallbackError.__module__ == "async_durable_execution._primitive.callback"
 
 
 def test_callback_error_control_codec_preserves_callback_id():
@@ -126,7 +126,7 @@ def patch_wait_for_callback_ops(mock_callback, *, step_side_effect=None):
     with (
         patch.object(callback, "create_callback", create_callback_mock),
         patch(
-            "async_durable_execution.extension.wait_for_callback.step",
+            "async_durable_execution._extension.wait_for_callback.step",
             step_mock,
         ),
     ):
@@ -1178,7 +1178,7 @@ async def test_callback_name_variations():
         )
 
 
-@patch("async_durable_execution.primitive.callback.OperationUpdate")
+@patch("async_durable_execution._primitive.callback.OperationUpdate")
 async def test_callback_operation_update_creation(mock_operation_update):
     """Test that OperationUpdate.create_callback is called with correct parameters."""
     mock_state = Mock(spec=ExecutionState)

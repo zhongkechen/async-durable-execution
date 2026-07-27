@@ -11,14 +11,14 @@ from unittest.mock import AsyncMock, Mock, call, create_autospec, patch
 
 import pytest
 
-from async_durable_execution.core.exceptions import (
+from async_durable_execution._core.exceptions import (
     CheckpointError,
     DurableApiErrorCategory,
     GetExecutionStateError,
     OrphanedChildException,
 )
-from async_durable_execution.core.models import OperationIdentifier
-from async_durable_execution.core.models import (
+from async_durable_execution._core.models import OperationIdentifier
+from async_durable_execution._core.models import (
     CheckpointOutput,
     CheckpointUpdatedExecutionState,
     ContextDetails,
@@ -33,8 +33,8 @@ from async_durable_execution.core.models import (
     StateOutput,
     StepDetails,
 )
-from async_durable_execution.core.client import ThreadedSyncLambdaClient
-from async_durable_execution.core.state import (
+from async_durable_execution._core.client import ThreadedSyncLambdaClient
+from async_durable_execution._core.state import (
     CheckpointBatcherConfig,
     ExecutionState as _ExecutionState,
     QueuedOperation,
@@ -1465,7 +1465,7 @@ async def test_collect_checkpoint_batch_time_window_expires():
         return start_time + 0.015  # 15ms elapsed, past the 10ms window
 
     with unittest.mock.patch(
-        "async_durable_execution.core.state.time.time", side_effect=mock_time
+        "async_durable_execution._core.state.time.time", side_effect=mock_time
     ):
         # Collect batch - should get first operation, then break when remaining_time <= 0
         batch = await state._collect_checkpoint_batch()
@@ -1515,11 +1515,11 @@ async def test_collect_checkpoint_batch_handles_legacy_asyncio_timeout_error(
         raise LegacyAsyncioTimeoutError
 
     monkeypatch.setattr(
-        "async_durable_execution.core.state.asyncio.TimeoutError",
+        "async_durable_execution._core.state.asyncio.TimeoutError",
         LegacyAsyncioTimeoutError,
     )
     monkeypatch.setattr(
-        "async_durable_execution.core.state.asyncio.wait_for",
+        "async_durable_execution._core.state.asyncio.wait_for",
         fake_wait_for,
     )
 
@@ -2825,7 +2825,7 @@ async def test_execution_state_get_execution_operation_no_operations():
         batcher_config=config,
     )
 
-    with patch("async_durable_execution.core.state.logger") as mock_logger:
+    with patch("async_durable_execution._core.state.logger") as mock_logger:
         result = state.get_execution_operation()
 
         assert result is None

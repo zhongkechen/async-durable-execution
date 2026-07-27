@@ -4,7 +4,7 @@
 from .__about__ import __version__
 
 # Core runtime and supporting public APIs
-from .core import (
+from ._core import (
     CallableRuntimeError,
     DurableContext,
     DurableExecutionsError,
@@ -34,9 +34,9 @@ from .core import (
 )
 
 # Durable operations
-from .extension.with_retry import WithRetryContext, with_retry
-from .extension.map import MapItemContext, map
-from .extension.flow import (
+from ._extension.with_retry import WithRetryContext, with_retry
+from ._extension.map import MapItemContext, map
+from ._extension.flow import (
     FlowDefinitionError,
     FlowExecutionError,
     FlowNode,
@@ -50,7 +50,7 @@ from .extension.flow import (
     get_node_context,
     node,
 )
-from .extension.parallel import (
+from ._extension.parallel import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
@@ -60,37 +60,37 @@ from .extension.parallel import (
     CompletionStatus,
     NestingType,
 )
-from .extension.wait_for_condition import (
+from ._extension.wait_for_condition import (
     PollingStrategy,
     WaitForConditionCheckContext,
     WaitForConditionError,
     wait_for_condition,
 )
-from .primitive.invoke import invoke
-from .extension.recurse import recurse
-from .extension.parallel import (
+from ._primitive.invoke import invoke
+from ._extension.recurse import recurse
+from ._extension.parallel import (
     parallel,
 )
-from .primitive.callback import (
+from ._primitive.callback import (
     Callback,
     CallbackError,
     create_callback,
 )
-from .extension.wait_for_callback import (
+from ._extension.wait_for_callback import (
     wait_for_callback,
     WaitForCallbackContext,
 )
-from .primitive.child import SummaryGenerator, run_in_child_context
-from .primitive.step import (
+from ._primitive.child import SummaryGenerator, run_in_child_context
+from ._primitive.step import (
     StepContext,
     StepInterruptedError,
     StepSemantics,
     get_step_context,
     step,
 )
-from .extension.replay_safe import now, random, timestamp, uuid
-from .primitive.wait import wait
-from .runner import (
+from ._extension.replay_safe import now, random, timestamp, uuid
+from ._primitive.wait import wait
+from ._runner import (
     DurableFunctionCloudTestRunner,
     DurableFunctionLocalTestRunner,
     DurableFunctionTestResult,

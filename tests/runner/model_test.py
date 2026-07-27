@@ -7,15 +7,15 @@ import json
 
 import pytest
 
-from async_durable_execution.core.models import (
+from async_durable_execution._core.models import (
     CheckpointUpdatedExecutionState,
     OperationStatus,
     OperationType,
 )
-from async_durable_execution.runner.exceptions import (
+from async_durable_execution._runner.exceptions import (
     InvalidParameterValueException,
 )
-from async_durable_execution.runner.model import (
+from async_durable_execution._runner.model import (
     CallbackFailedDetails,
     CallbackStartedDetails,
     CallbackSucceededDetails,
@@ -50,7 +50,7 @@ from async_durable_execution.runner.model import (
     WaitSucceededDetails,
     events_to_operations,
 )
-from async_durable_execution.runner.local.model import (
+from async_durable_execution._runner.local.model import (
     CheckpointDurableExecutionResponse,
     GetDurableExecutionStateResponse,
     SendDurableExecutionCallbackFailureResponse,
@@ -2022,7 +2022,7 @@ def test_event_with_callback_timed_out_details():
 # Test for missing branch coverage in CheckpointDurableExecutionResponse
 def test_checkpoint_updated_execution_state_with_next_marker():
     """Test CheckpointUpdatedExecutionState to_dict with next_marker."""
-    from async_durable_execution.core.models import (
+    from async_durable_execution._core.models import (
         Operation,
         OperationStatus,
         OperationType,
@@ -2052,7 +2052,7 @@ def test_checkpoint_updated_execution_state_with_next_marker():
 
 def test_events_to_operations_empty_list():
     """Test events_to_operations with empty event list."""
-    from async_durable_execution.runner.model import events_to_operations
+    from async_durable_execution._runner.model import events_to_operations
 
     operations = events_to_operations([])
     assert operations == []
@@ -2168,11 +2168,11 @@ def test_events_to_operations_step_with_retry():
     """Test events_to_operations with step retry details."""
     import datetime
 
-    from async_durable_execution.core.models import (
+    from async_durable_execution._core.models import (
         OperationStatus,
         OperationType,
     )
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         Event,
         EventResult,
         RetryDetails,
@@ -2206,11 +2206,11 @@ def test_events_to_operations_step_failed_with_next_attempt():
     """Test events_to_operations with failed step and next attempt timestamp."""
     import datetime
 
-    from async_durable_execution.core.models import (
+    from async_durable_execution._core.models import (
         ErrorObject,
         OperationStatus,
     )
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         Event,
         EventError,
         RetryDetails,
@@ -2249,11 +2249,11 @@ def test_events_to_operations_context_succeeded():
     """Test events_to_operations with successful context."""
     import datetime
 
-    from async_durable_execution.core.models import (
+    from async_durable_execution._core.models import (
         OperationStatus,
         OperationType,
     )
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         ContextSucceededDetails,
         Event,
         EventResult,
@@ -2285,11 +2285,11 @@ def test_events_to_operations_chained_invoke_succeeded():
     """Test events_to_operations with successful chained invoke."""
     import datetime
 
-    from async_durable_execution.core.models import (
+    from async_durable_execution._core.models import (
         OperationStatus,
         OperationType,
     )
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         ChainedInvokeSucceededDetails,
         Event,
         EventResult,
@@ -2335,11 +2335,11 @@ def test_events_to_operations_callback_failed():
     """Test events_to_operations with failed callback."""
     import datetime
 
-    from async_durable_execution.core.models import (
+    from async_durable_execution._core.models import (
         ErrorObject,
         OperationStatus,
     )
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         CallbackFailedDetails,
         CallbackStartedDetails,
         Event,
@@ -2383,11 +2383,11 @@ def test_events_to_operations_callback_timed_out():
     """Test events_to_operations with timed out callback."""
     import datetime
 
-    from async_durable_execution.core.models import (
+    from async_durable_execution._core.models import (
         ErrorObject,
         OperationStatus,
     )
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         CallbackStartedDetails,
         CallbackTimedOutDetails,
         Event,
@@ -2430,11 +2430,11 @@ def test_events_to_operations_wait_started():
     """Test events_to_operations with wait operation."""
     import datetime
 
-    from async_durable_execution.core.models import (
+    from async_durable_execution._core.models import (
         OperationStatus,
         OperationType,
     )
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         Event,
         WaitStartedDetails,
         events_to_operations,
@@ -2467,11 +2467,11 @@ def test_events_to_operations_context_failed():
     """Test events_to_operations with failed context."""
     import datetime
 
-    from async_durable_execution.core.models import (
+    from async_durable_execution._core.models import (
         ErrorObject,
         OperationStatus,
     )
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         ContextFailedDetails,
         Event,
         EventError,
@@ -2505,11 +2505,11 @@ def test_events_to_operations_chained_invoke_failed():
     """Test events_to_operations with failed chained invoke."""
     import datetime
 
-    from async_durable_execution.core.models import (
+    from async_durable_execution._core.models import (
         ErrorObject,
         OperationStatus,
     )
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         ChainedInvokeFailedDetails,
         Event,
         EventError,
@@ -2543,11 +2543,11 @@ def test_events_to_operations_multiple_operations():
     """Test events_to_operations with multiple different operations."""
     import datetime
 
-    from async_durable_execution.core.models import (
+    from async_durable_execution._core.models import (
         OperationStatus,
         OperationType,
     )
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         Event,
         EventResult,
         StepSucceededDetails,
@@ -2602,7 +2602,7 @@ def test_events_to_operations_merges_timestamps():
     """Test events_to_operations correctly merges start and end timestamps."""
     import datetime
 
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         Event,
         EventResult,
         StepSucceededDetails,

@@ -4,8 +4,8 @@ Import the supported public symbols from `async_durable_execution`. The
 reference pages below are grouped by responsibility, and each page documents
 exactly one implementation module.
 
-Core runtime, configuration, model, serialization, and service symbols can
-also be imported from `async_durable_execution.core`.
+The implementation packages are private. Import every supported symbol from
+`async_durable_execution`.
 
 ## Primitive Operations
 

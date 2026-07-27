@@ -133,7 +133,7 @@ hatch run test:all --pdb
 
 - `TimeoutError: Execution did not complete within 60s` - Increase the runner
   timeout, for example `timeout=120`.
-- `ModuleNotFoundError: No module named 'async_durable_execution.runner'` - Run
+- `ModuleNotFoundError: No module named 'async_durable_execution._runner'` - Run
   through Hatch, such as `hatch run test:examples`, so the local SDK is
   installed automatically.
 

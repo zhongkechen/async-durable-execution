@@ -16,19 +16,19 @@ from async_durable_execution import (
     with_retry,
     with_retry as imported_with_retry,
 )
-from async_durable_execution.core.config import (
+from async_durable_execution._core.config import (
     Duration,
     JitterStrategy,
     RetryStrategy,
 )
-from async_durable_execution.core.context import (
+from async_durable_execution._core.context import (
     DurableContext,
     get_current_context,
     reset_current_context,
     set_current_context,
 )
-from async_durable_execution.core.exceptions import SuspendExecution
-from async_durable_execution.core.models import OperationIdentifier, OperationSubType
+from async_durable_execution._core.exceptions import SuspendExecution
+from async_durable_execution._core.models import OperationIdentifier, OperationSubType
 
 
 _T = TypeVar("_T")
@@ -160,11 +160,11 @@ async def _call_with_retry(
 
     with (
         patch(
-            "async_durable_execution.extension.with_retry.wait",
+            "async_durable_execution._extension.with_retry.wait",
             new=AsyncMock(side_effect=fake_wait),
         ),
         patch(
-            "async_durable_execution.extension.with_retry.run_in_child_context",
+            "async_durable_execution._extension.with_retry.run_in_child_context",
             new=AsyncMock(side_effect=fake_run_in_child_context),
         ),
     ):
@@ -352,11 +352,11 @@ async def test_retry_body_runs_with_child_context_bound():
 
     with (
         patch(
-            "async_durable_execution.extension.with_retry.run_in_child_context",
+            "async_durable_execution._extension.with_retry.run_in_child_context",
             new=AsyncMock(side_effect=fake_run_in_child_context),
         ),
         patch(
-            "async_durable_execution.extension.with_retry.get_durable_context",
+            "async_durable_execution._extension.with_retry.get_durable_context",
             return_value=child_ctx,
         ),
     ):

@@ -10,10 +10,10 @@ from typing import Any, cast
 from unittest.mock import Mock, patch
 
 import pytest
-from async_durable_execution.core.context import (
+from async_durable_execution._core.context import (
     get_current_context,
 )
-from async_durable_execution.core.exceptions import (
+from async_durable_execution._core.exceptions import (
     CallableRuntimeError,
     ExecutionError,
     InvocationError,
@@ -23,8 +23,8 @@ from async_durable_execution.core.exceptions import (
     ValidationError,
     _sdk_error_type_name,
 )
-from async_durable_execution.core.models import OperationIdentifier
-from async_durable_execution.core.models import (
+from async_durable_execution._core.models import OperationIdentifier
+from async_durable_execution._core.models import (
     ErrorObject,
     Operation,
     OperationAction,
@@ -34,16 +34,16 @@ from async_durable_execution.core.models import (
     StepDetails,
 )
 import logging
-from async_durable_execution.extension.wait_for_condition import (
+from async_durable_execution._extension.wait_for_condition import (
     WaitForConditionError,
     WaitForConditionOperationExecutor,
     wait_for_condition,
 )
-from async_durable_execution.core.state import ExecutionState
+from async_durable_execution._core.state import ExecutionState
 from async_durable_execution import WaitForConditionCheckContext
-from async_durable_execution.core.config import JitterStrategy
-from async_durable_execution.extension.wait_for_condition import PollingStrategy
-from async_durable_execution.core.serdes import SerDes
+from async_durable_execution._core.config import JitterStrategy
+from async_durable_execution._extension.wait_for_condition import PollingStrategy
+from async_durable_execution._core.serdes import SerDes
 
 from ..serdes_test import CustomDictSerDes
 
@@ -77,7 +77,7 @@ def test_wait_for_condition_signature_accepts_config_fields_directly():
 def test_wait_for_condition_error_is_defined_by_operation_module():
     assert (
         WaitForConditionError.__module__
-        == "async_durable_execution.extension.wait_for_condition"
+        == "async_durable_execution._extension.wait_for_condition"
     )
 
 
@@ -121,7 +121,7 @@ async def test_wait_for_condition_public_wrapper_builds_executor_from_context():
 
     with (
         patch(
-            "async_durable_execution.extension.wait_for_condition.get_durable_context",
+            "async_durable_execution._extension.wait_for_condition.get_durable_context",
             return_value=context,
         ),
         patch.object(
@@ -471,7 +471,7 @@ async def test_wait_for_condition_replays_exhaustion_error():
     assert fail_operation.error.type == "WaitForConditionError"
     assert fail_operation.error.data is not None
     assert json.loads(fail_operation.error.data)["exception_type"] == (
-        "async_durable_execution.extension.wait_for_condition.WaitForConditionError"
+        "async_durable_execution._extension.wait_for_condition.WaitForConditionError"
     )
 
     replay_state = Mock(spec=ExecutionState)
@@ -494,7 +494,16 @@ async def test_wait_for_condition_replays_exhaustion_error():
     replay_state.create_checkpoint.assert_not_called()
 
 
-async def test_wait_for_condition_replays_legacy_exhaustion_error_metadata():
+@pytest.mark.parametrize(
+    "exception_type",
+    [
+        "async_durable_execution.extension.wait_for_condition.WaitForConditionError",
+        "async_durable_execution.exceptions.WaitForConditionError",
+    ],
+)
+async def test_wait_for_condition_replays_legacy_exhaustion_error_metadata(
+    exception_type,
+):
     """Replay accepts checkpoints written before the exception moved modules."""
     op_id = OperationIdentifier(
         "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
@@ -511,9 +520,7 @@ async def test_wait_for_condition_replays_legacy_exhaustion_error_metadata():
                 data=json.dumps(
                     {
                         "__async_durable_execution_error__": 1,
-                        "exception_type": (
-                            "async_durable_execution.exceptions.WaitForConditionError"
-                        ),
+                        "exception_type": exception_type,
                         "payload": None,
                     }
                 ),

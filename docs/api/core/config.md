@@ -1,10 +1,10 @@
 # Configuration
 
-Implementation module: `async_durable_execution.core.config`.
+Internal implementation module: `async_durable_execution._core.config`.
 
-Public exports are also available from `async_durable_execution.core`.
+Import these public symbols from `async_durable_execution`.
 
-::: async_durable_execution.core.config
+::: async_durable_execution._core.config
     options:
       members:
         - JitterStrategy

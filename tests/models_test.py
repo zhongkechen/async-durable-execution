@@ -6,9 +6,9 @@ from unittest.mock import patch
 
 import pytest
 
-from async_durable_execution.core.exceptions import CallableRuntimeError
-from async_durable_execution.core.models import OperationIdentifier
-from async_durable_execution.core.models import (
+from async_durable_execution._core.exceptions import CallableRuntimeError
+from async_durable_execution._core.models import OperationIdentifier
+from async_durable_execution._core.models import (
     CallbackDetails,
     CallbackOptions,
     ChainedInvokeDetails,
@@ -731,7 +731,7 @@ async def test_operation_update_create_wait_start():
     assert update.sub_type is OperationSubType.WAIT
 
 
-@patch("async_durable_execution.core.models.datetime")
+@patch("async_durable_execution._core.models.datetime")
 async def test_operation_update_create_execution_succeed(mock_datetime):
     """Test OperationUpdate.create_execution_succeed factory method."""
 

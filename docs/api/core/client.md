@@ -1,10 +1,10 @@
 # Durable Service Client
 
-Implementation module: `async_durable_execution.core.client`.
+Internal implementation module: `async_durable_execution._core.client`.
 
-Public exports are also available from `async_durable_execution.core`.
+Import these public symbols from `async_durable_execution`.
 
-::: async_durable_execution.core.client
+::: async_durable_execution._core.client
     options:
       members:
         - DurableServiceClient

@@ -41,34 +41,34 @@ from async_durable_execution import (
     wait_for_callback,
     map as map_operation,
 )
-from async_durable_execution.core.context import (
+from async_durable_execution._core.context import (
     DurableContext as ModuleDurableContext,
     reset_current_context,
     set_current_context,
 )
-from async_durable_execution.core.models import (
+from async_durable_execution._core.models import (
     LambdaContext,
     OperationIdentifier,
     OperationSubType,
 )
-from async_durable_execution.core.config import JitterStrategy
-from async_durable_execution.core.config import RetryStrategy
-from async_durable_execution.extension.parallel import CompletionDecision
-from async_durable_execution.extension.parallel import CompletionStatus
-from async_durable_execution.primitive.child import SummaryGenerator
-from async_durable_execution.extension.with_retry import (
+from async_durable_execution._core.config import JitterStrategy
+from async_durable_execution._core.config import RetryStrategy
+from async_durable_execution._extension.parallel import CompletionDecision
+from async_durable_execution._extension.parallel import CompletionStatus
+from async_durable_execution._primitive.child import SummaryGenerator
+from async_durable_execution._extension.with_retry import (
     WithRetryContext as ModuleWithRetryContext,
 )
-from async_durable_execution.extension.wait_for_condition import PollingStrategy
-from async_durable_execution.extension.recurse import recurse as module_recurse
-from async_durable_execution.extension.replay_safe import (
+from async_durable_execution._extension.wait_for_condition import PollingStrategy
+from async_durable_execution._extension.recurse import recurse as module_recurse
+from async_durable_execution._extension.replay_safe import (
     now as module_now,
     random as module_random,
     timestamp as module_timestamp,
     uuid as module_uuid,
 )
-from async_durable_execution.core.serdes import ExtendedTypeSerDes
-from async_durable_execution.core.client import DurableServiceClient
+from async_durable_execution._core.serdes import ExtendedTypeSerDes
+from async_durable_execution._core.client import DurableServiceClient
 
 
 def make_async_executor(result):
@@ -136,7 +136,7 @@ def test_additional_public_types_importable_from_package_root():
 def test_core_public_api_is_reexported_from_core_package():
     """Core public symbols are available from both supported package facades."""
     import async_durable_execution as ade
-    import async_durable_execution.core as core
+    import async_durable_execution._core as core
 
     expected_exports = {
         "CallableRuntimeError",
@@ -178,7 +178,7 @@ def test_summary_generator_is_callable_type_alias():
 
 
 def test_internal_model_types_not_exported_from_package_root():
-    """Internal construction models stay in async_durable_execution.core.models."""
+    """Internal construction models stay in async_durable_execution._core.models."""
     import async_durable_execution as ade
 
     assert not hasattr(ade, "OperationIdentifier")
@@ -256,28 +256,28 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
     try:
         with (
             patch(
-                "async_durable_execution.primitive.step.StepOperationExecutor"
+                "async_durable_execution._primitive.step.StepOperationExecutor"
             ) as mock_step_executor,
             patch(
-                "async_durable_execution.primitive.callback.CallbackOperationExecutor"
+                "async_durable_execution._primitive.callback.CallbackOperationExecutor"
             ) as mock_callback_executor,
             patch(
-                "async_durable_execution.primitive.wait.WaitOperationExecutor"
+                "async_durable_execution._primitive.wait.WaitOperationExecutor"
             ) as mock_wait_executor,
             patch(
-                "async_durable_execution.primitive.child.ChildOperationExecutor",
+                "async_durable_execution._primitive.child.ChildOperationExecutor",
                 mock_child_executor,
             ),
             patch(
-                "async_durable_execution.extension.wait_for_callback._create_child_context_task",
+                "async_durable_execution._extension.wait_for_callback._create_child_context_task",
                 mock_callback_child,
             ),
             patch(
-                "async_durable_execution.extension.map._run_in_child_context",
+                "async_durable_execution._extension.map._run_in_child_context",
                 mock_map_child,
             ),
             patch(
-                "async_durable_execution.extension.parallel._run_in_child_context",
+                "async_durable_execution._extension.parallel._run_in_child_context",
                 mock_parallel_child,
             ),
         ):
