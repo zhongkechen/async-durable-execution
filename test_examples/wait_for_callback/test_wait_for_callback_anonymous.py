@@ -8,7 +8,9 @@ from examples.wait_for_callback import (
 )
 
 
-async def test_handle_basic_wait_for_callback_with_anonymous_submitter(durable_runner):
+async def test_handle_basic_wait_for_callback_with_anonymous_submitter(
+    durable_runner,
+) -> None:
     """Test basic waitForCallback with anonymous submitter."""
     async with durable_runner(
         handler=wait_for_callback_anonymous.handler, input=None, timeout=30

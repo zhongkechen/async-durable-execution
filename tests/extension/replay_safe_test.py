@@ -1,5 +1,9 @@
 """Tests for replay-safe helper operations."""
 
+from typing import no_type_check
+
+from typing import Any
+
 import inspect
 import json
 import uuid as uuid_module
@@ -19,7 +23,7 @@ from async_durable_execution import (
 from async_durable_execution._core.serdes import ExtendedTypeSerDes
 
 
-def test_replay_safe_helper_signatures_use_keyword_only_names():
+def test_replay_safe_helper_signatures_use_keyword_only_names() -> None:
     """Helper operation names are explicit keyword-only options."""
     for helper in (random, now, timestamp, uuid):
         parameters = inspect.signature(helper).parameters
@@ -28,14 +32,15 @@ def test_replay_safe_helper_signatures_use_keyword_only_names():
         assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
-async def test_replay_safe_helpers_use_default_step_names(monkeypatch):
+@no_type_check
+async def test_replay_safe_helpers_use_default_step_names(monkeypatch) -> None:
     """Default helper names make their checkpoints easy to inspect."""
     monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0")
     expected_now = datetime(2026, 7, 12, 1, 2, 3, tzinfo=timezone.utc)
     expected_uuid = uuid_module.UUID("12345678-1234-5678-1234-567812345678")
 
     @durable_execution
-    async def function_under_test(event):
+    async def function_under_test(event) -> Any:
         value_random = await random()
         value_now = await now()
         value_timestamp = await timestamp()
@@ -100,7 +105,10 @@ async def test_replay_safe_helpers_use_default_step_names(monkeypatch):
     assert await serdes.deserialize(uuid_operation.step_details.result) == expected_uuid
 
 
-async def test_replay_safe_helpers_reuse_checkpointed_values_after_replay(monkeypatch):
+@no_type_check
+async def test_replay_safe_helpers_reuse_checkpointed_values_after_replay(
+    monkeypatch,
+) -> None:
     """Values generated before a wait are replayed from checkpoints."""
     monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0")
     now_values = [
@@ -113,7 +121,7 @@ async def test_replay_safe_helpers_reuse_checkpointed_values_after_replay(monkey
     ]
 
     @durable_execution
-    async def function_under_test(event):
+    async def function_under_test(event) -> Any:
         first_random = await random(name="first-random")
         first_now = await now(name="first-now")
         first_timestamp = await timestamp(name="first-timestamp")

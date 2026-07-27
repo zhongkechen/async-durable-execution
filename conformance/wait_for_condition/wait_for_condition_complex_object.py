@@ -7,7 +7,7 @@ from async_durable_execution import durable_execution, wait_for_condition
 
 @durable_execution
 async def handler(_event: Any) -> dict:
-    async def check(state: dict | None):
+    async def check(state: dict | None) -> dict:
         current = state or {"status": "PENDING", "attempts": 0}
         attempts = current["attempts"] + 1
         next_state = {

@@ -1,5 +1,9 @@
 """Unit tests for checkpoint processing helpers."""
 
+from typing import no_type_check
+
+from typing import Any
+
 from unittest.mock import Mock, patch
 
 import pytest
@@ -24,7 +28,7 @@ from async_durable_execution._runner.local.execution import Execution
 from async_durable_execution._runner.local.scheduler import Scheduler
 
 
-def test_init():
+def test_init() -> None:
     """Test InMemoryServiceClient checkpoint processing initialization."""
     scheduler = Mock(spec=Scheduler)
 
@@ -39,7 +43,7 @@ def test_init():
     assert client._executor is executor  # noqa: SLF001
 
 
-def test_bind_executor():
+def test_bind_executor() -> None:
     """Test binding the local executor."""
     scheduler = Mock(spec=Scheduler)
 
@@ -52,7 +56,7 @@ def test_bind_executor():
 
 
 @pytest.mark.parametrize("token", [None, ""])
-async def test_checkpoint_rejects_missing_token(token):
+async def test_checkpoint_rejects_missing_token(token) -> None:
     """The local service client enforces the protocol's token requirement."""
     client = InMemoryServiceClient(Mock(spec=Scheduler))
 
@@ -61,7 +65,7 @@ async def test_checkpoint_rejects_missing_token(token):
 
 
 @pytest.mark.parametrize("token", [None, ""])
-async def test_get_execution_state_rejects_missing_token(token):
+async def test_get_execution_state_rejects_missing_token(token) -> None:
     """The local service client rejects missing state-fetch tokens."""
     client = InMemoryServiceClient(Mock(spec=Scheduler))
 
@@ -71,7 +75,7 @@ async def test_get_execution_state_rejects_missing_token(token):
 
 @patch("async_durable_execution._runner.local.CheckpointValidator")
 @patch("async_durable_execution._runner.local.OperationTransformer")
-def test_process_checkpoint_success(mock_transformer_class, mock_validator):
+def test_process_checkpoint_success(mock_transformer_class, mock_validator) -> None:
     """Test successful checkpoint processing."""
     # Setup mocks
     scheduler = Mock(spec=Scheduler)
@@ -132,7 +136,8 @@ def test_process_checkpoint_success(mock_transformer_class, mock_validator):
 
 
 @patch("async_durable_execution._runner.local.CheckpointValidator")
-def test_process_checkpoint_invalid_token_complete_execution(mock_validator):
+@no_type_check
+def test_process_checkpoint_invalid_token_complete_execution(mock_validator) -> None:
     """Test checkpoint processing with complete execution."""
     scheduler = Mock(spec=Scheduler)
     client = InMemoryServiceClient(scheduler)
@@ -162,7 +167,8 @@ def test_process_checkpoint_invalid_token_complete_execution(mock_validator):
 
 
 @patch("async_durable_execution._runner.local.CheckpointValidator")
-def test_process_checkpoint_invalid_token_sequence(mock_validator):
+@no_type_check
+def test_process_checkpoint_invalid_token_sequence(mock_validator) -> None:
     """Test checkpoint processing with invalid token sequence."""
     scheduler = Mock(spec=Scheduler)
     client = InMemoryServiceClient(scheduler)
@@ -195,7 +201,7 @@ def test_process_checkpoint_invalid_token_sequence(mock_validator):
 @patch("async_durable_execution._runner.local.OperationTransformer")
 def test_process_checkpoint_updates_execution_state(
     mock_transformer_class, mock_validator
-):
+) -> None:
     """Test that checkpoint processing updates execution state correctly."""
     scheduler = Mock(spec=Scheduler)
     mock_transformer_instance = Mock()
@@ -247,7 +253,7 @@ def test_process_checkpoint_updates_execution_state(
     assert len(execution.updates) == len(all_updates)
 
 
-async def test_get_execution_state():
+async def test_get_execution_state() -> None:
     """Test getting execution state."""
     scheduler = Mock(spec=Scheduler)
     client = InMemoryServiceClient(scheduler)
@@ -282,7 +288,7 @@ async def test_get_execution_state():
     assert result.next_marker is None
 
 
-async def test_get_execution_state_default_max_items():
+async def test_get_execution_state_default_max_items() -> None:
     """Test getting execution state with default max_items."""
     scheduler = Mock(spec=Scheduler)
     client = InMemoryServiceClient(scheduler)
@@ -354,13 +360,13 @@ def _create_test_execution() -> Execution:
     return execution
 
 
-def test_validate_input_empty_updates():
+def test_validate_input_empty_updates() -> None:
     """Test validation with empty updates list."""
     execution = _create_test_execution()
     CheckpointValidator.validate_input([], execution)
 
 
-def test_validate_input_single_valid_update():
+def test_validate_input_single_valid_update() -> None:
     """Test validation with single valid update."""
     execution = _create_test_execution()
     updates = [
@@ -373,7 +379,7 @@ def test_validate_input_single_valid_update():
     CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_conflicting_execution_update_multiple():
+def test_validate_conflicting_execution_update_multiple() -> None:
     """Test validation fails with multiple execution updates."""
     execution = _create_test_execution()
     updates = [
@@ -396,7 +402,7 @@ def test_validate_conflicting_execution_update_multiple():
         CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_conflicting_execution_update_not_last():
+def test_validate_conflicting_execution_update_not_last() -> None:
     """Test validation fails when execution update is not last."""
     execution = _create_test_execution()
     updates = [
@@ -419,7 +425,7 @@ def test_validate_conflicting_execution_update_not_last():
         CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_execution_update_as_last():
+def test_validate_execution_update_as_last() -> None:
     """Test validation passes when execution update is last."""
     execution = _create_test_execution()
     updates = [
@@ -437,7 +443,7 @@ def test_validate_execution_update_as_last():
     CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_payload_sizes_error_too_large():
+def test_validate_payload_sizes_error_too_large() -> None:
     """Test validation fails when error payload is too large."""
     execution = _create_test_execution()
 
@@ -462,7 +468,7 @@ def test_validate_payload_sizes_error_too_large():
         CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_payload_sizes_error_within_limit():
+def test_validate_payload_sizes_error_within_limit() -> None:
     """Test validation passes when error payload is within limit."""
     execution = _create_test_execution()
 
@@ -480,7 +486,7 @@ def test_validate_payload_sizes_error_within_limit():
     CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_duplicate_operation_ids():
+def test_validate_duplicate_operation_ids() -> None:
     """Test validation allows duplicate operation IDs in same batch.
 
     With background batching, the SDK can send multiple updates for the same
@@ -505,7 +511,7 @@ def test_validate_duplicate_operation_ids():
     CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_valid_parent_id_in_execution():
+def test_validate_valid_parent_id_in_execution() -> None:
     """Test validation passes with valid parent ID from execution."""
     execution = _create_test_execution()
 
@@ -527,7 +533,7 @@ def test_validate_valid_parent_id_in_execution():
     CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_valid_parent_id_in_updates():
+def test_validate_valid_parent_id_in_updates() -> None:
     """Test validation passes with valid parent ID from updates."""
     execution = _create_test_execution()
     updates = [
@@ -546,7 +552,7 @@ def test_validate_valid_parent_id_in_updates():
     CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_invalid_parent_id_wrong_type():
+def test_validate_invalid_parent_id_wrong_type() -> None:
     """Test validation fails with parent ID of wrong operation type."""
     execution = _create_test_execution()
 
@@ -572,7 +578,7 @@ def test_validate_invalid_parent_id_wrong_type():
         CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_invalid_parent_id_not_found():
+def test_validate_invalid_parent_id_not_found() -> None:
     """Test validation fails with parent ID that doesn't exist."""
     execution = _create_test_execution()
     updates = [
@@ -590,7 +596,7 @@ def test_validate_invalid_parent_id_not_found():
         CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_no_parent_id():
+def test_validate_no_parent_id() -> None:
     """Test validation passes with no parent ID."""
     execution = _create_test_execution()
     updates = [
@@ -604,7 +610,7 @@ def test_validate_no_parent_id():
     CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_operation_status_transition_step():
+def test_validate_operation_status_transition_step() -> None:
     """Test validation calls step validator for STEP operations."""
     execution = _create_test_execution()
 
@@ -625,7 +631,7 @@ def test_validate_operation_status_transition_step():
     CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_operation_status_transition_context():
+def test_validate_operation_status_transition_context() -> None:
     """Test validation calls context validator for CONTEXT operations."""
     execution = _create_test_execution()
 
@@ -646,7 +652,7 @@ def test_validate_operation_status_transition_context():
     CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_operation_status_transition_wait():
+def test_validate_operation_status_transition_wait() -> None:
     """Test validation calls wait validator for WAIT operations."""
     execution = _create_test_execution()
 
@@ -667,7 +673,7 @@ def test_validate_operation_status_transition_wait():
     CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_operation_status_transition_invoke():
+def test_validate_operation_status_transition_invoke() -> None:
     """Test validation calls invoke validator for INVOKE operations."""
     execution = _create_test_execution()
 
@@ -688,7 +694,7 @@ def test_validate_operation_status_transition_invoke():
     CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_operation_status_transition_execution():
+def test_validate_operation_status_transition_execution() -> None:
     """Test validation calls execution validator for EXECUTION operations."""
     execution = _create_test_execution()
     updates = [
@@ -701,7 +707,7 @@ def test_validate_operation_status_transition_execution():
     CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_inconsistent_operation_type():
+def test_validate_inconsistent_operation_type() -> None:
     """Test validation fails when operation type is inconsistent."""
     execution = _create_test_execution()
 
@@ -728,7 +734,7 @@ def test_validate_inconsistent_operation_type():
         CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_inconsistent_operation_subtype():
+def test_validate_inconsistent_operation_subtype() -> None:
     """Test validation fails when operation subtype is inconsistent."""
     execution = _create_test_execution()
 
@@ -759,7 +765,7 @@ def test_validate_inconsistent_operation_subtype():
         CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_inconsistent_operation_name():
+def test_validate_inconsistent_operation_name() -> None:
     """Test validation fails when operation name is inconsistent."""
     execution = _create_test_execution()
 
@@ -788,7 +794,7 @@ def test_validate_inconsistent_operation_name():
         CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_inconsistent_parent_operation_id():
+def test_validate_inconsistent_parent_operation_id() -> None:
     """Test validation fails when parent operation ID is inconsistent."""
     execution = _create_test_execution()
 
@@ -832,7 +838,7 @@ def test_validate_inconsistent_parent_operation_id():
         CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_invalid_duplicate_wait_operations():
+def test_validate_invalid_duplicate_wait_operations() -> None:
     """Test validation fails with duplicate WAIT operations."""
     execution = _create_test_execution()
 
@@ -857,7 +863,7 @@ def test_validate_invalid_duplicate_wait_operations():
         CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_invalid_duplicate_callback_operations():
+def test_validate_invalid_duplicate_callback_operations() -> None:
     """Test validation fails with duplicate CALLBACK operations."""
     execution = _create_test_execution()
 
@@ -882,7 +888,7 @@ def test_validate_invalid_duplicate_callback_operations():
         CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_invalid_duplicate_invoke_operations():
+def test_validate_invalid_duplicate_invoke_operations() -> None:
     """Test validation fails with duplicate CHAINED_INVOKE operations."""
     execution = _create_test_execution()
 
@@ -907,7 +913,7 @@ def test_validate_invalid_duplicate_invoke_operations():
         CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_invalid_duplicate_execution_operations():
+def test_validate_invalid_duplicate_execution_operations() -> None:
     """Test validation fails with duplicate EXECUTION operations."""
     execution = _create_test_execution()
 
@@ -930,7 +936,7 @@ def test_validate_invalid_duplicate_execution_operations():
         CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_duplicate_context_start_then_succeed():
+def test_validate_duplicate_context_start_then_succeed() -> None:
     """Test validation allows CONTEXT START followed by SUCCEED."""
     execution = _create_test_execution()
 
@@ -952,7 +958,7 @@ def test_validate_duplicate_context_start_then_succeed():
     CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_invalid_duplicate_context_non_start():
+def test_validate_invalid_duplicate_context_non_start() -> None:
     """Test validation fails with duplicate CONTEXT non-START operations."""
     execution = _create_test_execution()
 
@@ -977,7 +983,7 @@ def test_validate_invalid_duplicate_context_non_start():
         CheckpointValidator.validate_input(updates, execution)
 
 
-def test_validate_invalid_duplicate_step_non_start():
+def test_validate_invalid_duplicate_step_non_start() -> None:
     """Test validation fails with duplicate STEP non-START operations."""
     execution = _create_test_execution()
 
@@ -1029,16 +1035,16 @@ from async_durable_execution._runner.exceptions import (
 class MockProcessor(OperationProcessor):
     """Mock processor for testing."""
 
-    def __init__(self, return_value=None):
-        self.return_value = return_value
-        self.process_calls = []
+    def __init__(self, return_value=None) -> None:
+        self.return_value: Any = return_value
+        self.process_calls: list[Any] = []
 
-    def process(self, update, current_op, notifier, execution_arn):
+    def process(self, update, current_op, notifier, execution_arn) -> Any:
         self.process_calls.append((update, current_op, notifier, execution_arn))
         return self.return_value
 
 
-def test_init_with_default_processors():
+def test_init_with_default_processors() -> None:
     """Test initialization with default processors."""
     transformer = OperationTransformer()
 
@@ -1050,7 +1056,8 @@ def test_init_with_default_processors():
     assert OperationType.CHAINED_INVOKE in transformer.processors
 
 
-def test_init_with_custom_processors():
+@no_type_check
+def test_init_with_custom_processors() -> None:
     """Test initialization with custom processors."""
     custom_processors = {OperationType.STEP: MockProcessor()}
     transformer = OperationTransformer(processors=custom_processors)
@@ -1058,7 +1065,7 @@ def test_init_with_custom_processors():
     assert transformer.processors == custom_processors
 
 
-def test_process_updates_empty_lists():
+def test_process_updates_empty_lists() -> None:
     """Test processing with empty updates and operations."""
     transformer = OperationTransformer()
     notifier = Mock()
@@ -1069,7 +1076,7 @@ def test_process_updates_empty_lists():
     assert updates == []
 
 
-def test_process_updates_processor_not_found_raises_error():
+def test_process_updates_processor_not_found_raises_error() -> None:
     """Test that missing processor raises InvalidParameterValueException."""
     transformer = OperationTransformer(processors={OperationType.STEP: MockProcessor()})
     update = OperationUpdate(
@@ -1086,7 +1093,7 @@ def test_process_updates_processor_not_found_raises_error():
         transformer.process_updates([update], [], notifier, "arn:test")
 
 
-def test_process_updates_processor_returns_none():
+def test_process_updates_processor_returns_none() -> None:
     """Test processing when processor returns None."""
     mock_processor = MockProcessor(return_value=None)
     transformer = OperationTransformer(processors={OperationType.STEP: mock_processor})
@@ -1107,7 +1114,7 @@ def test_process_updates_processor_returns_none():
     assert len(mock_processor.process_calls) == 1
 
 
-def test_process_updates_new_operation():
+def test_process_updates_new_operation() -> None:
     """Test processing creates new operation."""
     new_operation = Mock()
     new_operation.operation_id = "new-id"
@@ -1130,7 +1137,7 @@ def test_process_updates_new_operation():
     assert updates == [update]
 
 
-def test_process_updates_existing_operation():
+def test_process_updates_existing_operation() -> None:
     """Test processing updates existing operation."""
     existing_operation = Mock()
     existing_operation.operation_id = "existing-id"
@@ -1156,7 +1163,7 @@ def test_process_updates_existing_operation():
     assert updates == [update]
 
 
-def test_process_updates_multiple_operations_preserve_order():
+def test_process_updates_multiple_operations_preserve_order() -> None:
     """Test processing multiple operations preserves order."""
     op1 = Mock()
     op1.operation_id = "op1"
@@ -1214,7 +1221,7 @@ def test_process_updates_multiple_operations_preserve_order():
     assert operations2[3] == new_op4
 
 
-def test_process_updates_multiple_processors():
+def test_process_updates_multiple_processors() -> None:
     """Test processing with multiple processor types."""
     step_op = Mock()
     step_op.operation_id = "step-id"
@@ -1256,7 +1263,7 @@ def test_process_updates_multiple_processors():
     assert len(wait_processor.process_calls) == 1
 
 
-def test_process_updates_passes_correct_parameters():
+def test_process_updates_passes_correct_parameters() -> None:
     """Test that correct parameters are passed to processor."""
     existing_op = Mock()
     existing_op.operation_id = "test-id"
@@ -1280,7 +1287,7 @@ def test_process_updates_passes_correct_parameters():
     assert call_args[3] == execution_arn
 
 
-def test_process_updates_new_operation_not_in_map():
+def test_process_updates_new_operation_not_in_map() -> None:
     """Test processing creates new operation when operation_id not in current operations."""
     new_operation = Mock()
     new_operation.operation_id = "new-id"
@@ -1309,7 +1316,7 @@ def test_process_updates_new_operation_not_in_map():
     assert updates == [update]
 
 
-def test_process_updates_in_place_update_with_multiple_operations():
+def test_process_updates_in_place_update_with_multiple_operations() -> None:
     """Test in-place update when operation exists in middle of operations list."""
     # Create three operations
     op1 = Mock()
@@ -1347,7 +1354,7 @@ def test_process_updates_in_place_update_with_multiple_operations():
     assert updates == [update]
 
 
-def test_process_updates_in_place_update_break_coverage():
+def test_process_updates_in_place_update_break_coverage() -> None:
     """Test to ensure break statement in in-place update loop is covered."""
     # Create operations where target is first in list to ensure break is hit
     target_op = Mock()
@@ -1377,7 +1384,7 @@ def test_process_updates_in_place_update_break_coverage():
     assert operations[0] == updated_target
 
 
-def test_process_updates_empty_operations_list():
+def test_process_updates_empty_operations_list() -> None:
     """Test for loop exit when result_operations is empty."""
     updated_op = Mock()
     updated_op.operation_id = "test-id"

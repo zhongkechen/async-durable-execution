@@ -9,7 +9,7 @@ from examples.step import (
 )
 
 
-async def test_step_no_name(durable_runner):
+async def test_step_no_name(durable_runner) -> None:
     """Test step without explicit name."""
     async with durable_runner(
         handler=step_no_name.handler, input="test", timeout=10
@@ -26,7 +26,7 @@ async def test_step_no_name(durable_runner):
     assert step_ops[0].name == "unnamed_step"
 
 
-async def test_step_with_name(durable_runner):
+async def test_step_with_name(durable_runner) -> None:
     """Test step with explicit name."""
     async with durable_runner(
         handler=step_with_name.handler, input="test", timeout=10
@@ -43,7 +43,7 @@ async def test_step_with_name(durable_runner):
     assert step_ops[0].name == "custom_step"
 
 
-async def test_step_with_exponential_backoff(durable_runner):
+async def test_step_with_exponential_backoff(durable_runner) -> None:
     """Test step with exponential backoff retry strategy."""
     async with durable_runner(
         handler=step_with_exponential_backoff.handler, input="test", timeout=10

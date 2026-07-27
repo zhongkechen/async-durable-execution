@@ -44,7 +44,7 @@ class InvokeOperationExecutor(OperationExecutor[R]):
         serdes_payload: SerDes[P] | None = None,
         serdes_result: SerDes[R] | None = None,
         tenant_id: str | None = None,
-    ):
+    ) -> None:
         """Initialize the invoke operation executor.
 
         Args:

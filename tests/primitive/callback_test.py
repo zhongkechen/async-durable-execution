@@ -1,5 +1,8 @@
 """Unit tests for callback handler."""
 
+from typing import no_type_check
+
+from collections.abc import Iterator
 from contextlib import contextmanager
 import inspect
 import math
@@ -49,6 +52,7 @@ from async_durable_execution import (
     WaitForCallbackContext,
     get_wait_for_callback_context,
 )
+from typing import Any, NoReturn
 
 
 async def create_callback_handler(
@@ -56,7 +60,7 @@ async def create_callback_handler(
     operation_identifier,
     timeout=None,
     heartbeat_timeout=None,
-):
+) -> Any:
     """Test helper that wraps CallbackOperationExecutor."""
     executor = CallbackOperationExecutor(
         state=state,
@@ -67,24 +71,24 @@ async def create_callback_handler(
     return await executor.process()
 
 
-def mock_new_callback_checkpoint(mock_state, operation):
+def mock_new_callback_checkpoint(mock_state, operation) -> None:
     """Configure state mocks for a missing callback that checkpoint creation returns."""
     mock_state.operations.get.return_value = None
     mock_state.create_checkpoint.return_value = operation
 
 
-def test_create_callback_name_is_keyword_only():
+def test_create_callback_name_is_keyword_only() -> None:
     """create_callback operation name must be passed as a keyword."""
     parameters = inspect.signature(create_callback).parameters
 
     assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
-def test_callback_error_is_defined_by_callback_module():
+def test_callback_error_is_defined_by_callback_module() -> None:
     assert CallbackError.__module__ == "async_durable_execution._primitive.callback"
 
 
-def test_callback_error_control_codec_preserves_callback_id():
+def test_callback_error_control_codec_preserves_callback_id() -> None:
     source = CallbackError("Callback failed", callback_id="callback-123")
 
     data = _encode_sdk_control_error_data(source)
@@ -98,7 +102,7 @@ def test_callback_error_control_codec_preserves_callback_id():
     assert restored.callback_id == "callback-123"
 
 
-def test_wait_for_callback_name_is_keyword_only():
+def test_wait_for_callback_name_is_keyword_only() -> None:
     """wait_for_callback operation name must be passed as a keyword."""
     parameters = inspect.signature(wait_for_callback).parameters
 
@@ -106,7 +110,7 @@ def test_wait_for_callback_name_is_keyword_only():
     assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
-def test_get_wait_for_callback_context_returns_bound_callback_context():
+def test_get_wait_for_callback_context_returns_bound_callback_context() -> None:
     context = WaitForCallbackContext(
         execution_state=Mock(spec=ExecutionState),
         operation_identifier=OperationIdentifier(
@@ -124,7 +128,7 @@ def test_get_wait_for_callback_context_returns_bound_callback_context():
     assert callback_context.callback_id == "callback-123"
 
 
-def test_get_wait_for_callback_context_rejects_non_callback_context():
+def test_get_wait_for_callback_context_rejects_non_callback_context() -> None:
     with (
         bind_current_context(
             StepContext(
@@ -144,7 +148,7 @@ def test_get_wait_for_callback_context_rejects_non_callback_context():
         get_wait_for_callback_context()
 
 
-async def execute_step_with_mock_context(func):
+async def execute_step_with_mock_context(func) -> Any:
     step_context = Mock(spec=StepContext)
     step_context.execution_state = Mock()
     step_context.operation_identifier = OperationIdentifier(
@@ -160,7 +164,9 @@ async def execute_step_with_mock_context(func):
 
 
 @contextmanager
-def patch_wait_for_callback_ops(mock_callback, *, step_side_effect=None):
+def patch_wait_for_callback_ops(
+    mock_callback, *, step_side_effect=None
+) -> Iterator[tuple[AsyncMock, AsyncMock]]:
     create_callback_mock = AsyncMock(return_value=mock_callback)
     step_mock = AsyncMock()
     if step_side_effect is not None:
@@ -176,11 +182,11 @@ def patch_wait_for_callback_ops(mock_callback, *, step_side_effect=None):
         yield create_callback_mock, step_mock
 
 
-async def run_wait_for_callback_handler(*args, **kwargs):
+async def run_wait_for_callback_handler(*args, **kwargs) -> Any:
     return await wait_for_callback_handler(*args, **kwargs)()
 
 
-async def test_create_callback_handler_new_operation_with_config():
+async def test_create_callback_handler_new_operation_with_config() -> None:
     """Test create_callback_handler creates new checkpoint when operation doesn't exist."""
     mock_state = Mock(spec=ExecutionState)
 
@@ -221,7 +227,7 @@ async def test_create_callback_handler_new_operation_with_config():
     mock_state.operations.get.assert_called_once_with("callback1")
 
 
-async def test_create_callback_handler_accepts_int_seconds_config():
+async def test_create_callback_handler_accepts_int_seconds_config() -> None:
     """Test create_callback_handler timeout fields accept integer seconds."""
     mock_state = Mock(spec=ExecutionState)
 
@@ -261,7 +267,7 @@ async def test_create_callback_handler_accepts_int_seconds_config():
     mock_state.operations.get.assert_called_once_with("callback1")
 
 
-async def test_create_callback_handler_new_operation_without_config():
+async def test_create_callback_handler_new_operation_without_config() -> None:
     """Test create_callback_handler creates new checkpoint without config."""
     mock_state = Mock(spec=ExecutionState)
 
@@ -296,7 +302,7 @@ async def test_create_callback_handler_new_operation_without_config():
     )
 
 
-async def test_create_callback_handler_existing_started_operation():
+async def test_create_callback_handler_existing_started_operation() -> None:
     """Test create_callback_handler returns existing callback_id for started operation."""
     mock_state = Mock(spec=ExecutionState)
     callback_details = CallbackDetails(callback_id="existing_cb123")
@@ -322,7 +328,7 @@ async def test_create_callback_handler_existing_started_operation():
     mock_state.operations.get.assert_called_once_with("callback3")
 
 
-async def test_create_callback_handler_existing_failed_operation():
+async def test_create_callback_handler_existing_failed_operation() -> None:
     """Test create_callback_handler returns callback_id for failed operation (deferred error)."""
     # CRITICAL: create_callback_handler should NOT raise on FAILED
     # Errors are deferred to Callback.result() for deterministic replay
@@ -348,7 +354,9 @@ async def test_create_callback_handler_existing_failed_operation():
     mock_state.create_checkpoint.assert_not_called()
 
 
-async def test_create_callback_handler_existing_started_missing_callback_details():
+async def test_create_callback_handler_existing_started_missing_callback_details() -> (
+    None
+):
     """Test create_callback_handler raises error when existing started operation has no callback details."""
     mock_state = Mock(spec=ExecutionState)
     operation = Operation(
@@ -369,7 +377,9 @@ async def test_create_callback_handler_existing_started_missing_callback_details
         )
 
 
-async def test_create_callback_handler_new_operation_missing_callback_details_after_checkpoint():
+async def test_create_callback_handler_new_operation_missing_callback_details_after_checkpoint() -> (
+    None
+):
     """Test create_callback_handler raises error when new operation has no callback details after checkpoint."""
     mock_state = Mock(spec=ExecutionState)
     operation = Operation(
@@ -389,7 +399,9 @@ async def test_create_callback_handler_new_operation_missing_callback_details_af
         )
 
 
-async def test_create_callback_handler_new_operation_missing_checkpoint_result():
+async def test_create_callback_handler_new_operation_missing_checkpoint_result() -> (
+    None
+):
     """Test create_callback_handler raises when checkpoint creation returns no operation."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.operations.get.return_value = None
@@ -404,7 +416,7 @@ async def test_create_callback_handler_new_operation_missing_checkpoint_result()
         )
 
 
-async def test_callback_executor_execute_without_operation_raises():
+async def test_callback_executor_execute_without_operation_raises() -> None:
     mock_state = Mock(spec=ExecutionState)
     executor = CallbackOperationExecutor(
         state=mock_state,
@@ -417,7 +429,7 @@ async def test_callback_executor_execute_without_operation_raises():
         await executor.execute(None)
 
 
-async def test_create_callback_handler_existing_timed_out_operation():
+async def test_create_callback_handler_existing_timed_out_operation() -> None:
     """Test create_callback_handler returns existing callback_id for timed out operation."""
     mock_state = Mock(spec=ExecutionState)
     callback_details = CallbackDetails(callback_id="timed_out_cb123")
@@ -441,7 +453,9 @@ async def test_create_callback_handler_existing_timed_out_operation():
     mock_state.create_checkpoint.assert_not_called()
 
 
-async def test_create_callback_handler_existing_timed_out_missing_callback_details():
+async def test_create_callback_handler_existing_timed_out_missing_callback_details() -> (
+    None
+):
     """Test create_callback_handler raises error when timed out operation has no callback details."""
     mock_state = Mock(spec=ExecutionState)
     operation = Operation(
@@ -462,7 +476,7 @@ async def test_create_callback_handler_existing_timed_out_missing_callback_detai
         )
 
 
-async def test_wait_for_callback_handler_basic():
+async def test_wait_for_callback_handler_basic() -> None:
     """Test wait_for_callback_handler with basic parameters."""
     mock_callback = Mock()
     mock_callback.callback_id = "callback789"
@@ -477,7 +491,7 @@ async def test_wait_for_callback_handler_basic():
     mock_callback.result.assert_called_once()
 
 
-async def test_wait_for_callback_handler_with_name_and_config():
+async def test_wait_for_callback_handler_with_name_and_config() -> None:
     """Test wait_for_callback_handler with name and fields."""
     mock_callback = Mock()
     mock_callback.callback_id = "callback999"
@@ -500,7 +514,10 @@ async def test_wait_for_callback_handler_with_name_and_config():
     step_mock.assert_called_once()
 
 
-async def test_wait_for_callback_handler_submitter_reads_callback_id_from_context():
+@no_type_check
+async def test_wait_for_callback_handler_submitter_reads_callback_id_from_context() -> (
+    None
+):
     """Test wait_for_callback_handler exposes callback_id through current context."""
     mock_callback = Mock()
     mock_callback.callback_id = "callback_test_id"
@@ -508,11 +525,11 @@ async def test_wait_for_callback_handler_submitter_reads_callback_id_from_contex
 
     captured_callback_id = None
 
-    async def mock_submitter():
+    async def mock_submitter() -> None:
         nonlocal captured_callback_id
         captured_callback_id = get_current_context().callback_id
 
-    async def capture_step_call(func, name, **_kwargs):
+    async def capture_step_call(func, name, **_kwargs) -> None:
         # Execute the step callable to verify submitter is called correctly
         await execute_step_with_mock_context(func)
 
@@ -525,7 +542,7 @@ async def test_wait_for_callback_handler_submitter_reads_callback_id_from_contex
     assert captured_callback_id == "callback_test_id"
 
 
-async def test_create_callback_handler_with_none_operation_in_result():
+async def test_create_callback_handler_with_none_operation_in_result() -> None:
     """Test create_callback_handler when callback details are missing."""
     mock_state = Mock(spec=ExecutionState)
     operation = Operation(
@@ -546,7 +563,7 @@ async def test_create_callback_handler_with_none_operation_in_result():
         )
 
 
-async def test_create_callback_handler_with_negative_timeouts():
+async def test_create_callback_handler_with_negative_timeouts() -> None:
     """Test create_callback_handler with negative timeout values."""
     with pytest.raises(ValidationError, match="timeout must be non-negative"):
         await create_callback_handler(
@@ -559,7 +576,7 @@ async def test_create_callback_handler_with_negative_timeouts():
         )
 
 
-async def test_wait_for_callback_handler_with_none_callback_id():
+async def test_wait_for_callback_handler_with_none_callback_id() -> None:
     """Test wait_for_callback_handler when callback has None callback_id."""
     mock_callback = Mock()
     mock_callback.callback_id = None
@@ -567,7 +584,7 @@ async def test_wait_for_callback_handler_with_none_callback_id():
 
     mock_submitter = AsyncMock(return_value=None)
 
-    async def execute_step(func, name, **_kwargs):
+    async def execute_step(func, name, **_kwargs) -> Any:
         return await execute_step_with_mock_context(func)
 
     with patch_wait_for_callback_ops(
@@ -583,7 +600,7 @@ async def test_wait_for_callback_handler_with_none_callback_id():
     assert len(call_args) == 0
 
 
-async def test_wait_for_callback_handler_with_empty_string_callback_id():
+async def test_wait_for_callback_handler_with_empty_string_callback_id() -> None:
     """Test wait_for_callback_handler when callback has empty string callback_id."""
     mock_callback = Mock()
     mock_callback.callback_id = ""
@@ -591,7 +608,7 @@ async def test_wait_for_callback_handler_with_empty_string_callback_id():
 
     mock_submitter = AsyncMock(return_value=None)
 
-    async def execute_step(func, name, **_kwargs):
+    async def execute_step(func, name, **_kwargs) -> Any:
         return await execute_step_with_mock_context(func)
 
     with patch_wait_for_callback_ops(
@@ -607,7 +624,7 @@ async def test_wait_for_callback_handler_with_empty_string_callback_id():
     assert len(call_args) == 0
 
 
-async def test_wait_for_callback_handler_with_large_data():
+async def test_wait_for_callback_handler_with_large_data() -> None:
     """Test wait_for_callback_handler with large result data."""
     mock_callback = Mock()
     mock_callback.callback_id = "large_data_cb"
@@ -626,7 +643,7 @@ async def test_wait_for_callback_handler_with_large_data():
     assert len(result["data"]) == 1000
 
 
-async def test_wait_for_callback_handler_with_unicode_names():
+async def test_wait_for_callback_handler_with_unicode_names() -> None:
     """Test wait_for_callback_handler with unicode characters in names."""
     unicode_names = ["测试回调", "コールバック", "🔄 callback test 🚀"]
 
@@ -649,7 +666,7 @@ async def test_wait_for_callback_handler_with_unicode_names():
         )
 
 
-async def test_create_callback_handler_existing_succeeded_operation():
+async def test_create_callback_handler_existing_succeeded_operation() -> None:
     """Test create_callback_handler returns existing callback_id for succeeded operation."""
     mock_state = Mock(spec=ExecutionState)
     callback_details = CallbackDetails(callback_id="succeeded_cb123")
@@ -673,7 +690,9 @@ async def test_create_callback_handler_existing_succeeded_operation():
     mock_state.create_checkpoint.assert_not_called()
 
 
-async def test_create_callback_handler_existing_succeeded_missing_callback_details():
+async def test_create_callback_handler_existing_succeeded_missing_callback_details() -> (
+    None
+):
     """Test create_callback_handler raises error when succeeded operation has no callback details."""
     mock_state = Mock(spec=ExecutionState)
     operation = Operation(
@@ -694,7 +713,7 @@ async def test_create_callback_handler_existing_succeeded_missing_callback_detai
         )
 
 
-async def test_create_callback_handler_config_with_zero_timeouts():
+async def test_create_callback_handler_config_with_zero_timeouts() -> None:
     """Test create_callback_handler with config having zero timeout values."""
     mock_state = Mock(spec=ExecutionState)
     callback_details = CallbackDetails(callback_id="cb_zero_timeout")
@@ -732,7 +751,7 @@ async def test_create_callback_handler_config_with_zero_timeouts():
     )
 
 
-async def test_create_callback_handler_config_with_large_timeouts():
+async def test_create_callback_handler_config_with_large_timeouts() -> None:
     """Test create_callback_handler with large timeout values."""
     mock_state = Mock(spec=ExecutionState)
     callback_details = CallbackDetails(callback_id="cb_large_timeout")
@@ -770,7 +789,7 @@ async def test_create_callback_handler_config_with_large_timeouts():
     )
 
 
-async def test_create_callback_handler_empty_operation_id():
+async def test_create_callback_handler_empty_operation_id() -> None:
     """Test create_callback_handler with empty operation_id."""
     mock_state = Mock(spec=ExecutionState)
     callback_details = CallbackDetails(callback_id="cb_empty_id")
@@ -790,17 +809,17 @@ async def test_create_callback_handler_empty_operation_id():
     assert result == "cb_empty_id"
 
 
-async def test_wait_for_callback_handler_submitter_exception_handling():
+async def test_wait_for_callback_handler_submitter_exception_handling() -> None:
     """Test wait_for_callback_handler when submitter raises exception."""
     mock_callback = Mock()
     mock_callback.callback_id = "callback_exception"
     mock_callback.result = AsyncMock(return_value="exception_result")
 
-    async def failing_submitter():
+    async def failing_submitter() -> NoReturn:
         msg = "Submitter failed"
         raise ValueError(msg)
 
-    async def step_side_effect(func, name, **_kwargs):
+    async def step_side_effect(func, name, **_kwargs) -> None:
         await execute_step_with_mock_context(func)
 
     with patch_wait_for_callback_ops(
@@ -811,7 +830,7 @@ async def test_wait_for_callback_handler_submitter_exception_handling():
             await run_wait_for_callback_handler(failing_submitter, "test")
 
 
-async def test_wait_for_callback_handler_callback_result_exception():
+async def test_wait_for_callback_handler_callback_result_exception() -> None:
     """Test wait_for_callback_handler when callback.result() raises exception."""
     mock_callback = Mock()
     mock_callback.callback_id = "callback_result_exception"
@@ -823,7 +842,7 @@ async def test_wait_for_callback_handler_callback_result_exception():
             await run_wait_for_callback_handler(mock_submitter, "test")
 
 
-async def test_wait_for_callback_handler_empty_name_handling():
+async def test_wait_for_callback_handler_empty_name_handling() -> None:
     """Test wait_for_callback_handler with empty string name."""
     mock_callback = Mock()
     mock_callback.callback_id = "callback_empty_name"
@@ -837,7 +856,7 @@ async def test_wait_for_callback_handler_empty_name_handling():
     step_mock.assert_called_once()
 
 
-async def test_wait_for_callback_handler_complex_callback_result():
+async def test_wait_for_callback_handler_complex_callback_result() -> None:
     """Test wait_for_callback_handler with complex callback result."""
     mock_callback = Mock()
     mock_callback.callback_id = "callback_complex"
@@ -856,7 +875,7 @@ async def test_wait_for_callback_handler_complex_callback_result():
     mock_callback.result.assert_called_once()
 
 
-async def test_wait_for_callback_handler_step_name_formatting():
+async def test_wait_for_callback_handler_step_name_formatting() -> None:
     """Test wait_for_callback_handler step name formatting with various inputs."""
     mock_callback = Mock()
     mock_callback.callback_id = "callback_name_format"
@@ -872,7 +891,7 @@ async def test_wait_for_callback_handler_step_name_formatting():
     assert kwargs["name"] == "test with spaces-submitter"
 
 
-async def test_wait_for_callback_handler_config_propagation():
+async def test_wait_for_callback_handler_config_propagation() -> None:
     """Test wait_for_callback_handler properly passes fields to create_callback."""
     mock_callback = Mock()
     mock_callback.callback_id = "callback_config_prop"
@@ -899,7 +918,7 @@ async def test_wait_for_callback_handler_config_propagation():
     )
 
 
-async def test_wait_for_callback_handler_accepts_int_seconds_config():
+async def test_wait_for_callback_handler_accepts_int_seconds_config() -> None:
     """Test wait_for_callback_handler timeout fields accept integer seconds."""
     mock_callback = Mock()
     mock_callback.callback_id = "callback_config_prop"
@@ -923,14 +942,14 @@ async def test_wait_for_callback_handler_accepts_int_seconds_config():
     )
 
 
-async def test_wait_for_callback_handler_step_config_propagation():
+async def test_wait_for_callback_handler_step_config_propagation() -> None:
     """Test wait_for_callback_handler properly passes retry_strategy and serdes to step config."""
     mock_callback = Mock()
     mock_callback.callback_id = "step_config_test"
     mock_callback.result = AsyncMock(return_value="step_config_result")
     mock_submitter = AsyncMock(return_value=None)
 
-    def test_retry_strategy(exception, attempt):
+    def test_retry_strategy(exception, attempt) -> int:
         return 1
 
     mock_serdes = Mock(spec=SerDes)
@@ -953,7 +972,8 @@ async def test_wait_for_callback_handler_step_config_propagation():
     assert call_args.kwargs["serdes"] == mock_serdes
 
 
-async def test_wait_for_callback_handler_with_various_result_types():
+@no_type_check
+async def test_wait_for_callback_handler_with_various_result_types() -> None:
     """Test wait_for_callback_handler with various result types."""
     result_types = [None, True, False, 0, math.pi, "", "string", [], {"key": "value"}]
 
@@ -972,7 +992,7 @@ async def test_wait_for_callback_handler_with_various_result_types():
         assert type(result) is type(expected_result)
 
 
-async def test_callback_lifecycle_complete_flow():
+async def test_callback_lifecycle_complete_flow() -> None:
     """Test complete callback lifecycle from creation to completion."""
     mock_state = Mock(spec=ExecutionState)
     callback_details = CallbackDetails(callback_id="lifecycle_cb123")
@@ -1002,13 +1022,13 @@ async def test_callback_lifecycle_complete_flow():
 
     assert callback_id == "lifecycle_cb123"
 
-    async def mock_submitter():
+    async def mock_submitter() -> str:
         callback_context = get_current_context()
         assert isinstance(callback_context, WaitForCallbackContext)
         assert callback_context.callback_id == "lifecycle_cb123"
         return "submitted"
 
-    async def execute_step(func, name, **_kwargs):
+    async def execute_step(func, name, **_kwargs) -> Any:
         return await execute_step_with_mock_context(func)
 
     with patch_wait_for_callback_ops(
@@ -1026,7 +1046,7 @@ async def test_callback_lifecycle_complete_flow():
     assert result == {"status": "completed", "data": "test_data"}
 
 
-async def test_callback_retry_scenario():
+async def test_callback_retry_scenario() -> None:
     """Test callback behavior during retry scenarios."""
     mock_state = Mock(spec=ExecutionState)
     callback_details = CallbackDetails(callback_id="retry_cb456")
@@ -1056,7 +1076,7 @@ async def test_callback_retry_scenario():
     mock_state.create_checkpoint.assert_not_called()
 
 
-async def test_callback_timeout_configuration():
+async def test_callback_timeout_configuration() -> None:
     """Test callback with various timeout configurations."""
     test_cases = [(0, 0), (30, 10), (3600, 300), (86400, 3600)]
 
@@ -1083,7 +1103,7 @@ async def test_callback_timeout_configuration():
         assert callback_id == f"timeout_cb_{timeout_seconds}"
 
 
-async def test_callback_error_propagation():
+async def test_callback_error_propagation() -> None:
     """Test error propagation through callback operations."""
     # CRITICAL: create_callback_handler should NOT raise on FAILED
     # Errors are deferred to Callback.result() for deterministic replay
@@ -1117,7 +1137,8 @@ async def test_callback_error_propagation():
             )
 
 
-async def test_callback_with_complex_submitter():
+@no_type_check
+async def test_callback_with_complex_submitter() -> None:
     """Test callback with complex submitter logic."""
     mock_callback = Mock()
     mock_callback.callback_id = "complex_cb789"
@@ -1125,7 +1146,7 @@ async def test_callback_with_complex_submitter():
 
     submission_log = []
 
-    async def complex_submitter():
+    async def complex_submitter() -> Any:
         callback_id = get_current_context().callback_id
         submission_log.append(f"received_id: {callback_id}")
         if callback_id == "complex_cb789":
@@ -1136,7 +1157,7 @@ async def test_callback_with_complex_submitter():
         msg = "Invalid callback ID"
         raise ValueError(msg)
 
-    async def execute_step(func, name, **_kwargs):
+    async def execute_step(func, name, **_kwargs) -> Any:
         return await execute_step_with_mock_context(func)
 
     with patch_wait_for_callback_ops(
@@ -1149,7 +1170,7 @@ async def test_callback_with_complex_submitter():
     assert submission_log == ["received_id: complex_cb789", "api_call_success"]
 
 
-async def test_callback_state_consistency():
+async def test_callback_state_consistency() -> None:
     """Test callback state consistency across multiple operations."""
     mock_state = Mock(spec=ExecutionState)
 
@@ -1189,7 +1210,7 @@ async def test_callback_state_consistency():
     assert callback_id_1 == callback_id_2 == "consistent_cb"
 
 
-async def test_callback_name_variations():
+async def test_callback_name_variations() -> None:
     """Test callback operations with various name formats."""
     name_test_cases = [
         None,
@@ -1222,7 +1243,7 @@ async def test_callback_name_variations():
 
 
 @patch("async_durable_execution._primitive.callback.OperationUpdate")
-async def test_callback_operation_update_creation(mock_operation_update):
+async def test_callback_operation_update_creation(mock_operation_update) -> None:
     """Test that OperationUpdate.create_callback is called with correct parameters."""
     mock_state = Mock(spec=ExecutionState)
     callback_details = CallbackDetails(callback_id="update_test_cb")
@@ -1252,7 +1273,7 @@ async def test_callback_operation_update_creation(mock_operation_update):
     )
 
 
-async def test_callback_immediate_response_uses_checkpoint_return_value():
+async def test_callback_immediate_response_uses_checkpoint_return_value() -> None:
     """Test that callback start uses the operation returned from checkpoint creation."""
     mock_state = Mock(spec=ExecutionState)
 
@@ -1277,7 +1298,9 @@ async def test_callback_immediate_response_uses_checkpoint_return_value():
     mock_state.operations.get.assert_called_once_with("callback_immediate_1")
 
 
-async def test_callback_immediate_response_create_checkpoint_with_is_sync_true():
+async def test_callback_immediate_response_create_checkpoint_with_is_sync_true() -> (
+    None
+):
     """Test that create_checkpoint is called with is_sync=True."""
     mock_state = Mock(spec=ExecutionState)
 
@@ -1305,7 +1328,7 @@ async def test_callback_immediate_response_create_checkpoint_with_is_sync_true()
     # We just verify the checkpoint was created
 
 
-async def test_callback_immediate_response_immediate_success():
+async def test_callback_immediate_response_immediate_success() -> None:
     """Test immediate success: checkpoint returns SUCCEEDED operation.
 
     When checkpoint creation returns SUCCEEDED, operation returns callback_id
@@ -1336,7 +1359,7 @@ async def test_callback_immediate_response_immediate_success():
     mock_state.operations.get.assert_called_once_with("callback_immediate_3")
 
 
-async def test_callback_immediate_response_immediate_failure_deferred():
+async def test_callback_immediate_response_immediate_failure_deferred() -> None:
     """Test immediate failure deferred: checkpoint returns FAILED operation.
 
     CRITICAL: When checkpoint creation returns FAILED, create_callback()
@@ -1369,7 +1392,8 @@ async def test_callback_immediate_response_immediate_failure_deferred():
     mock_state.operations.get.assert_called_once_with("callback_immediate_4")
 
 
-async def test_callback_result_raises_error_for_failed_callbacks():
+@no_type_check
+async def test_callback_result_raises_error_for_failed_callbacks() -> None:
     """Test that Callback.result() raises error for FAILED callbacks (deferred error handling).
 
     This test verifies that errors are properly deferred to Callback.result() rather
@@ -1407,7 +1431,10 @@ async def test_callback_result_raises_error_for_failed_callbacks():
         await callback.result()
 
 
-async def test_callback_result_failed_without_error_details_uses_default_message():
+@no_type_check
+async def test_callback_result_failed_without_error_details_uses_default_message() -> (
+    None
+):
     mock_state = Mock(spec=ExecutionState)
     failed_op = Operation(
         operation_id="callback_failed_no_details",
@@ -1428,7 +1455,8 @@ async def test_callback_result_failed_without_error_details_uses_default_message
         await callback.result()
 
 
-async def test_callback_result_raises_error_for_timed_out_callbacks():
+@no_type_check
+async def test_callback_result_raises_error_for_timed_out_callbacks() -> None:
     """Test that Callback.result() raises error for TIMED_OUT callbacks."""
 
     mock_state = Mock(spec=ExecutionState)
@@ -1464,7 +1492,8 @@ async def test_callback_result_raises_error_for_timed_out_callbacks():
         await callback.result()
 
 
-async def test_callback_result_appends_timeout_type_from_error_metadata():
+@no_type_check
+async def test_callback_result_appends_timeout_type_from_error_metadata() -> None:
     """Test that timeout subtype is preserved when only ErrorType carries it."""
 
     mock_state = Mock(spec=ExecutionState)
@@ -1497,7 +1526,8 @@ async def test_callback_result_appends_timeout_type_from_error_metadata():
         await callback.result()
 
 
-async def test_callback_result_does_not_duplicate_timeout_type_in_message():
+@no_type_check
+async def test_callback_result_does_not_duplicate_timeout_type_in_message() -> None:
     """Test that timeout subtype is not appended twice."""
 
     mock_state = Mock(spec=ExecutionState)
@@ -1530,7 +1560,7 @@ async def test_callback_result_does_not_duplicate_timeout_type_in_message():
         await callback.result()
 
 
-async def test_callback_immediate_response_no_immediate_response():
+async def test_callback_immediate_response_no_immediate_response() -> None:
     """Test no immediate response: checkpoint returns STARTED operation.
 
     When checkpoint creation returns STARTED, operation returns callback_id
@@ -1561,7 +1591,7 @@ async def test_callback_immediate_response_no_immediate_response():
     mock_state.operations.get.assert_called_once_with("callback_immediate_5")
 
 
-async def test_callback_immediate_response_already_completed():
+async def test_callback_immediate_response_already_completed() -> None:
     """Test already completed: checkpoint exists on first check.
 
     When checkpoint is already SUCCEEDED on first check, no checkpoint is created
@@ -1595,7 +1625,7 @@ async def test_callback_immediate_response_already_completed():
     assert mock_state.operations.get.call_count == 1
 
 
-async def test_callback_immediate_response_already_failed():
+async def test_callback_immediate_response_already_failed() -> None:
     """Test already failed: checkpoint is already FAILED on first check.
 
     When checkpoint is already FAILED on first check, no checkpoint is created
@@ -1630,7 +1660,10 @@ async def test_callback_immediate_response_already_failed():
     assert mock_state.operations.get.call_count == 1
 
 
-async def test_callback_deferred_error_handling_code_execution_between_create_and_result():
+@no_type_check
+async def test_callback_deferred_error_handling_code_execution_between_create_and_result() -> (
+    None
+):
     """Test callback deferred error handling with code execution between create_callback() and callback.result().
 
     This test verifies that code between create_callback() and callback.result() executes
@@ -1687,7 +1720,7 @@ async def test_callback_deferred_error_handling_code_execution_between_create_an
     ]
 
 
-async def test_callback_immediate_response_with_config():
+async def test_callback_immediate_response_with_config() -> None:
     """Test immediate response with callback configuration."""
     mock_state = Mock(spec=ExecutionState)
 
@@ -1719,7 +1752,7 @@ async def test_callback_immediate_response_with_config():
     assert operation_update.callback_options.heartbeat_timeout_seconds == 60
 
 
-async def test_callback_returns_id_when_checkpoint_returns_started():
+async def test_callback_returns_id_when_checkpoint_returns_started() -> None:
     """Test when checkpoint creation returns
     STARTED (not terminal), the callback operation returns callback_id normally.
     """
@@ -1747,7 +1780,7 @@ async def test_callback_returns_id_when_checkpoint_returns_started():
     mock_state.create_checkpoint.assert_called_once()  # START checkpoint created
 
 
-async def test_callback_returns_id_when_checkpoint_returns_started_duplicate():
+async def test_callback_returns_id_when_checkpoint_returns_started_duplicate() -> None:
     """Test when checkpoint creation returns
     STARTED (not terminal), the callback operation returns callback_id normally.
     """

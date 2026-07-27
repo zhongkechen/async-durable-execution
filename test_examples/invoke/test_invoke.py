@@ -12,7 +12,7 @@ from examples.invoke import invoke
 CHILD_HANDLER = "examples.invoke.price_order_child.handler"
 
 
-async def test_invoke_uses_mocked_child_result(durable_runner, request):
+async def test_invoke_uses_mocked_child_result(durable_runner, request) -> None:
     child_result = {"price": 42, "currency": "USD"}
     runner_mode = request.config.getoption("--runner-mode")
     child_function_name = _get_child_function_name(runner_mode)

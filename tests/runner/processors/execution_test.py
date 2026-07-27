@@ -1,5 +1,7 @@
 """Tests for execution operation processor."""
 
+from typing import Any, no_type_check
+
 from unittest.mock import Mock
 
 from async_durable_execution._core.models import (
@@ -16,26 +18,26 @@ from async_durable_execution._runner.local.processors.execution import (
 class MockNotifier:
     """Mock notifier for testing."""
 
-    def __init__(self):
-        self.completed_calls = []
-        self.failed_calls = []
-        self.wait_timer_calls = []
-        self.step_retry_calls = []
+    def __init__(self) -> None:
+        self.completed_calls: list[Any] = []
+        self.failed_calls: list[Any] = []
+        self.wait_timer_calls: list[Any] = []
+        self.step_retry_calls: list[Any] = []
 
-    def complete_execution(self, execution_arn, result=None):
+    def complete_execution(self, execution_arn, result=None) -> None:
         self.completed_calls.append((execution_arn, result))
 
-    def fail_execution(self, execution_arn, error):
+    def fail_execution(self, execution_arn, error) -> None:
         self.failed_calls.append((execution_arn, error))
 
-    def schedule_wait_timer(self, execution_arn, operation_id, delay):
+    def schedule_wait_timer(self, execution_arn, operation_id, delay) -> None:
         self.wait_timer_calls.append((execution_arn, operation_id, delay))
 
-    def schedule_step_retry(self, execution_arn, operation_id, delay):
+    def schedule_step_retry(self, execution_arn, operation_id, delay) -> None:
         self.step_retry_calls.append((execution_arn, operation_id, delay))
 
 
-def test_process_succeed_action():
+def test_process_succeed_action() -> None:
     processor = ExecutionProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -55,7 +57,7 @@ def test_process_succeed_action():
     assert len(notifier.failed_calls) == 0
 
 
-def test_process_succeed_action_with_current_operation():
+def test_process_succeed_action_with_current_operation() -> None:
     processor = ExecutionProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -76,7 +78,7 @@ def test_process_succeed_action_with_current_operation():
     assert notifier.completed_calls[0] == (execution_arn, "success-result")
 
 
-def test_process_succeed_action_without_payload():
+def test_process_succeed_action_without_payload() -> None:
     processor = ExecutionProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -94,7 +96,7 @@ def test_process_succeed_action_without_payload():
     assert notifier.completed_calls[0] == (execution_arn, None)
 
 
-def test_process_fail_action_with_error():
+def test_process_fail_action_with_error() -> None:
     processor = ExecutionProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -115,7 +117,7 @@ def test_process_fail_action_with_error():
     assert len(notifier.completed_calls) == 0
 
 
-def test_process_fail_action_without_error():
+def test_process_fail_action_without_error() -> None:
     processor = ExecutionProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -139,7 +141,7 @@ def test_process_fail_action_without_error():
     )
 
 
-def test_process_start_action():
+def test_process_start_action() -> None:
     processor = ExecutionProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -159,7 +161,7 @@ def test_process_start_action():
     assert isinstance(error_arg, ErrorObject)
 
 
-def test_process_retry_action():
+def test_process_retry_action() -> None:
     processor = ExecutionProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -179,7 +181,7 @@ def test_process_retry_action():
     assert isinstance(error_arg, ErrorObject)
 
 
-def test_process_cancel_action():
+def test_process_cancel_action() -> None:
     processor = ExecutionProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -199,7 +201,7 @@ def test_process_cancel_action():
     assert isinstance(error_arg, ErrorObject)
 
 
-def test_process_with_current_operation_and_error():
+def test_process_with_current_operation_and_error() -> None:
     processor = ExecutionProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -221,7 +223,7 @@ def test_process_with_current_operation_and_error():
     assert notifier.failed_calls[0] == (execution_arn, error)
 
 
-def test_no_wait_timer_or_step_retry_calls():
+def test_no_wait_timer_or_step_retry_calls() -> None:
     processor = ExecutionProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -259,7 +261,7 @@ from async_durable_execution._runner.exceptions import (
 )
 
 
-def test_validate_succeed_action():
+def test_validate_succeed_action() -> None:
     """Test SUCCEED action validation."""
     update = OperationUpdate(
         operation_id="test-id",
@@ -270,7 +272,7 @@ def test_validate_succeed_action():
     ExecutionProcessor.validate(None, update)
 
 
-def test_validate_fail_action():
+def test_validate_fail_action() -> None:
     """Test FAIL action validation."""
     update = OperationUpdate(
         operation_id="test-id",
@@ -283,7 +285,7 @@ def test_validate_fail_action():
     ExecutionProcessor.validate(None, update)
 
 
-def test_validate_succeed_action_with_error():
+def test_validate_succeed_action_with_error() -> None:
     """Test SUCCEED action with error raises error."""
     update = OperationUpdate(
         operation_id="test-id",
@@ -301,7 +303,7 @@ def test_validate_succeed_action_with_error():
         ExecutionProcessor.validate(None, update)
 
 
-def test_validate_fail_action_with_payload():
+def test_validate_fail_action_with_payload() -> None:
     """Test FAIL action with payload raises error."""
     update = OperationUpdate(
         operation_id="test-id",
@@ -316,7 +318,7 @@ def test_validate_fail_action_with_payload():
         ExecutionProcessor.validate(None, update)
 
 
-def test_validate_invalid_action():
+def test_validate_invalid_action() -> None:
     """Test invalid action raises error."""
     update = OperationUpdate(
         operation_id="test-id",
@@ -331,7 +333,7 @@ def test_validate_invalid_action():
         ExecutionProcessor.validate(None, update)
 
 
-def test_validate_fail_action_without_error():
+def test_validate_fail_action_without_error() -> None:
     """Test FAIL action without error passes validation."""
     update = OperationUpdate(
         operation_id="test-id",
@@ -341,7 +343,7 @@ def test_validate_fail_action_without_error():
     ExecutionProcessor.validate(None, update)
 
 
-def test_validate_succeed_action_without_payload():
+def test_validate_succeed_action_without_payload() -> None:
     """Test SUCCEED action without payload passes validation."""
     update = OperationUpdate(
         operation_id="test-id",

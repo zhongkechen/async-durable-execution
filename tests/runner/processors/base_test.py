@@ -1,5 +1,9 @@
 """Tests for base operation processor."""
 
+from typing import no_type_check
+
+from typing import Any
+
 import datetime
 from datetime import timedelta
 from unittest.mock import Mock
@@ -28,7 +32,7 @@ from async_durable_execution._runner.local.processors.base import (
 )
 
 
-def test_process_not_implemented():
+def test_process_not_implemented() -> None:
     processor = OperationProcessor()
     update = OperationUpdate(
         operation_id="test-id",
@@ -46,45 +50,45 @@ def test_process_not_implemented():
 class MockProcessor(OperationProcessor):
     """Mock processor for testing base functionality."""
 
-    def process(self, update, current_op, notifier, execution_arn):
+    def process(self, update, current_op, notifier, execution_arn) -> Any:
         return self._translate_update_to_operation(
             update, current_op, OperationStatus.STARTED
         )
 
-    def translate_update(self, update, current_op, status):
+    def translate_update(self, update, current_op, status) -> Any:
         """Public method to access _translate_update_to_operation for testing."""
         return self._translate_update_to_operation(update, current_op, status)
 
-    def get_end_time(self, current_op, status):
+    def get_end_time(self, current_op, status) -> Any:
         """Public method to access _get_end_time for testing."""
         return self._get_end_time(current_op, status)
 
-    def create_execution_details(self, update):
+    def create_execution_details(self, update) -> Any:
         """Public method to access _create_execution_details for testing."""
         return self._create_execution_details(update)
 
-    def create_context_details(self, update):
+    def create_context_details(self, update) -> Any:
         """Public method to access _create_context_details for testing."""
         return self._create_context_details(update)
 
-    def create_step_details(self, update, current_operation):
+    def create_step_details(self, update, current_operation) -> Any:
         """Public method to access _create_step_details for testing."""
         return self._create_step_details(update, current_operation)
 
-    def create_callback_details(self, update):
+    def create_callback_details(self, update) -> Any:
         """Public method to access _create_callback_details for testing."""
         return self._create_callback_details(update)
 
-    def create_invoke_details(self, update):
+    def create_invoke_details(self, update) -> Any:
         """Public method to access _create_invoke_details for testing."""
         return self._create_invoke_details(update)
 
-    def create_wait_details(self, update, current_op):
+    def create_wait_details(self, update, current_op) -> Any:
         """Public method to access _create_wait_details for testing."""
         return self._create_wait_details(update, current_op)
 
 
-def test_get_end_time_with_existing_end_timestamp():
+def test_get_end_time_with_existing_end_timestamp() -> None:
     processor = MockProcessor()
     end_time = datetime.datetime.now(tz=datetime.timezone.utc)
     current_op = Mock()
@@ -95,7 +99,7 @@ def test_get_end_time_with_existing_end_timestamp():
     assert result == end_time
 
 
-def test_get_end_time_with_terminal_status():
+def test_get_end_time_with_terminal_status() -> None:
     processor = MockProcessor()
     current_op = Mock()
     current_op.end_timestamp = None
@@ -106,7 +110,7 @@ def test_get_end_time_with_terminal_status():
     assert isinstance(result, datetime.datetime)
 
 
-def test_get_end_time_with_non_terminal_status():
+def test_get_end_time_with_non_terminal_status() -> None:
     processor = MockProcessor()
     current_op = Mock()
     current_op.end_timestamp = None
@@ -116,7 +120,7 @@ def test_get_end_time_with_non_terminal_status():
     assert result is None
 
 
-def test_create_execution_details():
+def test_create_execution_details() -> None:
     processor = MockProcessor()
     update = OperationUpdate(
         operation_id="test-id",
@@ -131,7 +135,7 @@ def test_create_execution_details():
     assert result.input_payload == "test-payload"
 
 
-def test_create_execution_details_non_execution_type():
+def test_create_execution_details_non_execution_type() -> None:
     processor = MockProcessor()
     update = OperationUpdate(
         operation_id="test-id",
@@ -145,7 +149,7 @@ def test_create_execution_details_non_execution_type():
     assert result is None
 
 
-def test_create_context_details():
+def test_create_context_details() -> None:
     processor = MockProcessor()
     error = ErrorObject.from_message("test error")
     update = OperationUpdate(
@@ -163,7 +167,7 @@ def test_create_context_details():
     assert result.error == error
 
 
-def test_create_context_details_non_context_type():
+def test_create_context_details_non_context_type() -> None:
     processor = MockProcessor()
     update = OperationUpdate(
         operation_id="test-id",
@@ -177,7 +181,7 @@ def test_create_context_details_non_context_type():
     assert result is None
 
 
-def test_create_step_details():
+def test_create_step_details() -> None:
     processor = MockProcessor()
     error = ErrorObject.from_message("test error")
     update = OperationUpdate(
@@ -199,7 +203,7 @@ def test_create_step_details():
     assert result.error == error
 
 
-def test_create_context_details_with_replay_children():
+def test_create_context_details_with_replay_children() -> None:
     processor = MockProcessor()
     update = OperationUpdate(
         operation_id="test-id",
@@ -216,7 +220,7 @@ def test_create_context_details_with_replay_children():
     assert result.replay_children == True
 
 
-def test_create_step_details_non_step_type():
+def test_create_step_details_non_step_type() -> None:
     processor = MockProcessor()
     update = OperationUpdate(
         operation_id="test-id",
@@ -234,7 +238,7 @@ def test_create_step_details_non_step_type():
     assert result is None
 
 
-def test_create_step_details_without_current_operation():
+def test_create_step_details_without_current_operation() -> None:
     processor = MockProcessor()
     error = ErrorObject.from_message("test error")
     update = OperationUpdate(
@@ -253,7 +257,7 @@ def test_create_step_details_without_current_operation():
     assert result.attempt == 0
 
 
-def test_create_callback_details():
+def test_create_callback_details() -> None:
     processor = MockProcessor()
     error = ErrorObject.from_message("test error")
     update = OperationUpdate(
@@ -272,7 +276,7 @@ def test_create_callback_details():
     assert result.error == error
 
 
-def test_create_callback_details_non_callback_type():
+def test_create_callback_details_non_callback_type() -> None:
     processor = MockProcessor()
     update = OperationUpdate(
         operation_id="test-id",
@@ -286,7 +290,7 @@ def test_create_callback_details_non_callback_type():
     assert result is None
 
 
-def test_create_invoke_details():
+def test_create_invoke_details() -> None:
     processor = MockProcessor()
     error = ErrorObject.from_message("test error")
     invoke_options = ChainedInvokeOptions(function_name="test-function")
@@ -306,7 +310,7 @@ def test_create_invoke_details():
     assert result.error == error
 
 
-def test_create_invoke_details_non_invoke_type():
+def test_create_invoke_details_non_invoke_type() -> None:
     processor = MockProcessor()
     update = OperationUpdate(
         operation_id="test-id",
@@ -320,7 +324,7 @@ def test_create_invoke_details_non_invoke_type():
     assert result is None
 
 
-def test_create_invoke_details_no_options():
+def test_create_invoke_details_no_options() -> None:
     processor = MockProcessor()
     update = OperationUpdate(
         operation_id="test-id",
@@ -334,7 +338,7 @@ def test_create_invoke_details_no_options():
     assert result is None
 
 
-def test_create_wait_details_with_current_operation():
+def test_create_wait_details_with_current_operation() -> None:
     processor = MockProcessor()
     scheduled_end_timestamp = datetime.datetime.now(tz=datetime.timezone.utc)
     current_op = Mock()
@@ -356,7 +360,8 @@ def test_create_wait_details_with_current_operation():
     assert result.scheduled_end_timestamp == scheduled_end_timestamp
 
 
-def test_create_wait_details_without_current_operation():
+@no_type_check
+def test_create_wait_details_without_current_operation() -> None:
     processor = MockProcessor()
     wait_options = WaitOptions(wait_seconds=30)
     update = OperationUpdate(
@@ -374,7 +379,7 @@ def test_create_wait_details_without_current_operation():
     )
 
 
-def test_create_wait_details_non_wait_type():
+def test_create_wait_details_non_wait_type() -> None:
     processor = MockProcessor()
     update = OperationUpdate(
         operation_id="test-id",
@@ -387,7 +392,8 @@ def test_create_wait_details_non_wait_type():
     assert result is None
 
 
-def test_translate_update_to_operation_with_current_operation():
+@no_type_check
+def test_translate_update_to_operation_with_current_operation() -> None:
     processor = MockProcessor()
     start_time = datetime.datetime.now(tz=datetime.timezone.utc) - timedelta(minutes=5)
     current_op = Mock()
@@ -414,7 +420,7 @@ def test_translate_update_to_operation_with_current_operation():
     assert result.sub_type == "test-subtype"
 
 
-def test_translate_update_to_operation_without_current_operation():
+def test_translate_update_to_operation_without_current_operation() -> None:
     processor = MockProcessor()
     update = OperationUpdate(
         operation_id="test-id",
@@ -435,7 +441,7 @@ def test_translate_update_to_operation_without_current_operation():
     assert result.status == OperationStatus.STARTED
 
 
-def test_translate_update_to_operation_with_terminal_status():
+def test_translate_update_to_operation_with_terminal_status() -> None:
     processor = MockProcessor()
     update = OperationUpdate(
         operation_id="test-id",

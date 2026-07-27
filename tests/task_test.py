@@ -3,7 +3,7 @@ import asyncio
 from async_durable_execution._core.task import create_eager_task
 
 
-async def test_create_eager_task_fallback_uses_lazy_task(monkeypatch):
+async def test_create_eager_task_fallback_uses_lazy_task(monkeypatch) -> None:
     monkeypatch.setattr(asyncio, "eager_task_factory", None, raising=False)
     started = []
 
@@ -21,7 +21,9 @@ async def test_create_eager_task_fallback_uses_lazy_task(monkeypatch):
     assert started == ["after-call", "operation"]
 
 
-async def test_create_eager_task_uses_eager_task_factory_when_available(monkeypatch):
+async def test_create_eager_task_uses_eager_task_factory_when_available(
+    monkeypatch,
+) -> None:
     started = []
 
     def task_factory(

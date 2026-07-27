@@ -1,13 +1,15 @@
 """Focused tests for flow definition validation and result helpers."""
 
 from __future__ import annotations
+from typing import no_type_check
 
 import asyncio
 import builtins
 import json
 from collections import deque
+from collections.abc import Generator
 from dataclasses import dataclass
-from typing import Any, NamedTuple, cast
+from typing import Any, NamedTuple, cast, NoReturn
 from unittest.mock import Mock
 
 import pytest
@@ -96,7 +98,7 @@ class _FatalFlowSignal(BaseException):
 
 
 class _CustomInvocationError(InvocationError):
-    def __init__(self, message: str, *, retryable: bool):
+    def __init__(self, message: str, *, retryable: bool) -> None:
         super().__init__(message, TerminationReason.STEP_INTERRUPTED)
         self._retryable = retryable
 
@@ -112,7 +114,7 @@ class _CustomSerDesError(SerDesError):
     pass
 
 
-def test_flow_result_helpers_preserve_selected_output_arity():
+def test_flow_result_helpers_preserve_selected_output_arity() -> None:
     first = FlowNodeResult.succeeded("first")
     second = FlowNodeResult.succeeded("second")
 
@@ -132,7 +134,7 @@ def test_flow_result_helpers_preserve_selected_output_arity():
     assert FlowResult.from_dict(multiple.to_dict()) == multiple
 
 
-async def test_dependency_results_are_cloned_per_consumer():
+async def test_dependency_results_are_cloned_per_consumer() -> None:
     builder = _FlowBuilder()
     source = builder.add_node(return_name(), "source")
     original = FlowNodeResult.succeeded(
@@ -164,8 +166,10 @@ async def test_dependency_results_are_cloned_per_consumer():
     assert second_result.outcome == original.outcome
 
 
-async def test_dependency_result_clone_rejects_invalid_decoded_value(monkeypatch):
-    async def deserialize_invalid_value(self, data):
+async def test_dependency_result_clone_rejects_invalid_decoded_value(
+    monkeypatch,
+) -> None:
+    async def deserialize_invalid_value(self, data) -> str:
         return "invalid"
 
     monkeypatch.setattr(
@@ -183,7 +187,7 @@ async def test_dependency_result_clone_rejects_invalid_decoded_value(monkeypatch
         await _clone_dependency_results({source: FlowNodeResult.succeeded("original")})
 
 
-async def test_flow_node_arguments_are_cloned_as_one_complete_graph():
+async def test_flow_node_arguments_are_cloned_as_one_complete_graph() -> None:
     class Metadata(NamedTuple):
         label: str
         values: dict[str, str]
@@ -209,8 +213,8 @@ async def test_flow_node_arguments_are_cloned_as_one_complete_graph():
 async def test_flow_node_argument_clone_rejects_invalid_structure(
     monkeypatch,
     invalid_value,
-):
-    async def deserialize_invalid_value(self, data):
+) -> None:
+    async def deserialize_invalid_value(self, data) -> Any:
         return invalid_value
 
     monkeypatch.setattr(
@@ -226,7 +230,7 @@ async def test_flow_node_argument_clone_rejects_invalid_structure(
         await _clone_flow_node_arguments((), {}, {})
 
 
-def test_flow_result_projection_serialization_and_validation():
+def test_flow_result_projection_serialization_and_validation() -> None:
     first = FlowNodeResult.succeeded("first")
     legacy = {
         "results": {"first": first.to_dict()},
@@ -272,11 +276,11 @@ def test_flow_result_projection_serialization_and_validation():
         )
 
 
-def test_flow_node_result_is_rejected_outside_node_execution():
+def test_flow_node_result_is_rejected_outside_node_execution() -> None:
     captured = {}
 
     @durable_dag
-    def graph():
+    def graph() -> None:
         captured["source"] = node(return_name(), name="source")
 
     _evaluate_definition(graph())
@@ -296,7 +300,8 @@ def test_flow_node_result_is_rejected_outside_node_execution():
             _ = captured["source"].result
 
 
-async def test_flow_serdes_reject_non_mapping_payloads():
+@no_type_check
+async def test_flow_serdes_reject_non_mapping_payloads() -> None:
     delegate = ExtendedTypeSerDes()
     extended_payload = await delegate.serialize("not-a-mapping")
     flow_payload = await _NodeExecutionSerDes().delegate.serialize("not-a-mapping")
@@ -309,7 +314,7 @@ async def test_flow_serdes_reject_non_mapping_payloads():
         await _FlowResultSerDes().deserialize(flow_payload)
 
 
-async def test_flow_serdes_preserve_batch_result_outcomes():
+async def test_flow_serdes_preserve_batch_result_outcomes() -> None:
     batch_result = BatchResult(
         all=[
             BatchItem(
@@ -352,7 +357,8 @@ async def test_flow_serdes_preserve_batch_result_outcomes():
     assert projected_result.outcome == batch_result
 
 
-async def test_flow_serdes_preserve_flow_owned_outcomes_and_user_dicts():
+@no_type_check
+async def test_flow_serdes_preserve_flow_owned_outcomes_and_user_dicts() -> None:
     error = ErrorObject.from_message("failed")
     failed = FlowNodeResult.failed(error)
     nested_flow = FlowResult(
@@ -392,7 +398,8 @@ async def test_flow_serdes_preserve_flow_owned_outcomes_and_user_dicts():
     assert restored_outcome["user_dict"] == user_dict
 
 
-def test_flow_value_encoding_rejects_circular_containers():
+@no_type_check
+def test_flow_value_encoding_rejects_circular_containers() -> None:
     circular = []
     circular.append(circular)
 
@@ -449,31 +456,31 @@ def test_flow_value_encoding_rejects_circular_containers():
         ),
     ],
 )
-def test_flow_value_decoding_rejects_malformed_envelopes(value, match):
+def test_flow_value_decoding_rejects_malformed_envelopes(value, match) -> None:
     with pytest.raises(SerDesError, match=match):
         _decode_flow_value(value)
 
 
-def test_durable_dag_supports_class_and_static_method_decorator_orders():
+def test_durable_dag_supports_class_and_static_method_decorator_orders() -> None:
     class Definitions:
         @classmethod
         @durable_dag
-        def class_inside(cls, value: str):
+        def class_inside(cls, value: str) -> Any:
             return value
 
         @durable_dag
         @classmethod
-        def class_outside(cls, value: str):
+        def class_outside(cls, value: str) -> Any:
             return value
 
         @staticmethod
         @durable_dag
-        def static_inside(value: str):
+        def static_inside(value: str) -> Any:
             return value
 
         @durable_dag
         @staticmethod
-        def static_outside(value: str):
+        def static_outside(value: str) -> Any:
             return value
 
     for bound in (
@@ -485,26 +492,26 @@ def test_durable_dag_supports_class_and_static_method_decorator_orders():
         assert getattr(bound, "_durable_dag_definition")
 
 
-def test_durable_node_supports_class_and_static_method_decorator_orders():
+def test_durable_node_supports_class_and_static_method_decorator_orders() -> None:
     class Nodes:
         @classmethod
         @durable_node
-        async def class_inside(cls, value: str):
+        async def class_inside(cls, value: str) -> Any:
             return value
 
         @durable_node
         @classmethod
-        async def class_outside(cls, value: str):
+        async def class_outside(cls, value: str) -> Any:
             return value
 
         @staticmethod
         @durable_node
-        async def static_inside(value: str):
+        async def static_inside(value: str) -> Any:
             return value
 
         @durable_node
         @staticmethod
-        async def static_outside(value: str):
+        async def static_outside(value: str) -> Any:
             return value
 
     for bound in (
@@ -516,10 +523,10 @@ def test_durable_node_supports_class_and_static_method_decorator_orders():
         assert getattr(bound, "_durable_node_callable")
 
 
-def test_definition_returning_awaitable_is_rejected_and_closed():
+def test_definition_returning_awaitable_is_rejected_and_closed() -> None:
     @durable_dag
-    def invalid_graph():
-        async def asynchronous_definition():
+    def invalid_graph() -> Any:
+        async def asynchronous_definition() -> None:
             return None
 
         return asynchronous_definition()
@@ -528,30 +535,31 @@ def test_definition_returning_awaitable_is_rejected_and_closed():
         _evaluate_definition(invalid_graph())
 
 
-def test_definition_returning_noncoroutine_awaitable_is_rejected():
+def test_definition_returning_noncoroutine_awaitable_is_rejected() -> None:
     class CustomAwaitable:
-        def __await__(self):
+        def __await__(self) -> Generator[None, None, None]:
             yield
 
     @durable_dag
-    def invalid_graph():
+    def invalid_graph() -> Any:
         return CustomAwaitable()
 
     with pytest.raises(FlowDefinitionError, match="synchronously"):
         _evaluate_definition(invalid_graph())
 
 
-def test_dependency_expression_rejects_empty_invalid_and_foreign_targets():
+@no_type_check
+def test_dependency_expression_rejects_empty_invalid_and_foreign_targets() -> None:
     captured = {}
 
     @durable_dag
-    def first_graph():
+    def first_graph() -> None:
         captured["foreign"] = node(return_name(), name="foreign")
 
     _evaluate_definition(first_graph())
 
     @durable_dag
-    def empty_target_graph():
+    def empty_target_graph() -> None:
         source = node(return_name(), name="source")
         source >> ()
 
@@ -559,7 +567,7 @@ def test_dependency_expression_rejects_empty_invalid_and_foreign_targets():
         _evaluate_definition(empty_target_graph())
 
     @durable_dag
-    def invalid_target_graph():
+    def invalid_target_graph() -> None:
         source = node(return_name(), name="source")
         source.succeeded >> ("invalid",)
 
@@ -567,7 +575,7 @@ def test_dependency_expression_rejects_empty_invalid_and_foreign_targets():
         _evaluate_definition(invalid_target_graph())
 
     @durable_dag
-    def foreign_target_graph():
+    def foreign_target_graph() -> None:
         source = node(return_name(), name="source")
         source >> captured["foreign"]
 
@@ -575,11 +583,12 @@ def test_dependency_expression_rejects_empty_invalid_and_foreign_targets():
         _evaluate_definition(foreign_target_graph())
 
 
-def test_nodes_and_expressions_cannot_cross_definition_boundaries():
+@no_type_check
+def test_nodes_and_expressions_cannot_cross_definition_boundaries() -> None:
     captured = {}
 
     @durable_dag
-    def first_graph():
+    def first_graph() -> Any:
         source = node(return_name(), name="source")
         captured["source"] = source
         captured["expression"] = source.succeeded
@@ -588,7 +597,7 @@ def test_nodes_and_expressions_cannot_cross_definition_boundaries():
     _evaluate_definition(first_graph())
 
     @durable_dag
-    def mixed_expression_graph():
+    def mixed_expression_graph() -> None:
         local = node(return_name(), name="local")
         local.succeeded & captured["expression"]
 
@@ -596,7 +605,7 @@ def test_nodes_and_expressions_cannot_cross_definition_boundaries():
         _evaluate_definition(mixed_expression_graph())
 
     @durable_dag
-    def foreign_output_graph():
+    def foreign_output_graph() -> Any:
         node(return_name(), name="local")
         return captured["source"].outcome
 
@@ -607,11 +616,11 @@ def test_nodes_and_expressions_cannot_cross_definition_boundaries():
         captured["expression"] >> captured["source"]
 
 
-def test_frozen_builder_rejects_late_mutation():
+def test_frozen_builder_rejects_late_mutation() -> None:
     captured = {}
 
     @durable_dag
-    def graph():
+    def graph() -> Any:
         source = node(return_name(), name="source")
         captured["source"] = source
         return source.outcome
@@ -626,16 +635,17 @@ def test_frozen_builder_rejects_late_mutation():
         builder.add_dependency(source, source.succeeded)
 
 
-def test_validation_rejects_noncallable_and_unknown_dependency():
+@no_type_check
+def test_validation_rejects_noncallable_and_unknown_dependency() -> None:
     @durable_dag
-    def noncallable_graph():
+    def noncallable_graph() -> None:
         node(None, name="invalid")
 
     with pytest.raises(FlowDefinitionError, match="callable"):
         _evaluate_definition(noncallable_graph())
 
     @durable_dag
-    def unknown_dependency_graph():
+    def unknown_dependency_graph() -> None:
         source = node(return_name(), name="source")
         target = node(return_name(), name="target")
         ghost = FlowNode(source._builder, 99, return_name(), "ghost")
@@ -645,7 +655,8 @@ def test_validation_rejects_noncallable_and_unknown_dependency():
         _evaluate_definition(unknown_dependency_graph())
 
 
-def test_builder_validation_rejects_tampered_node_callable():
+@no_type_check
+def test_builder_validation_rejects_tampered_node_callable() -> None:
     builder = _FlowBuilder()
     flow_node = builder.add_node(return_name(), "invalid")
     flow_node._func = None
@@ -654,18 +665,18 @@ def test_builder_validation_rejects_tampered_node_callable():
         builder.freeze(None)
 
 
-def test_validation_rejects_dependency_owned_by_another_builder():
+def test_validation_rejects_dependency_owned_by_another_builder() -> None:
     captured = {}
 
     @durable_dag
-    def first_graph():
+    def first_graph() -> None:
         source = node(return_name(), name="source")
         captured["expression"] = source.succeeded
 
     _evaluate_definition(first_graph())
 
     @durable_dag
-    def second_graph():
+    def second_graph() -> None:
         target = node(return_name(), name="target")
         target._dependency = captured["expression"]
 
@@ -673,7 +684,8 @@ def test_validation_rejects_dependency_owned_by_another_builder():
         _evaluate_definition(second_graph())
 
 
-def test_coerce_expression_rejects_invalid_values():
+@no_type_check
+def test_coerce_expression_rejects_invalid_values() -> None:
     with pytest.raises(FlowDefinitionError, match="Dependencies"):
         _coerce_expression("invalid")
 
@@ -695,7 +707,7 @@ def test_coerce_expression_rejects_invalid_values():
         ),
     ],
 )
-def test_sdk_error_data_rejects_invalid_envelopes(data):
+def test_sdk_error_data_rejects_invalid_envelopes(data) -> None:
     assert _decode_sdk_error_data(data, InvocationError) == (False, None)
 
 
@@ -824,7 +836,7 @@ def test_callable_runtime_error_control_classification(
     error_type,
     data,
     expected_type,
-):
+) -> None:
     error = CallableRuntimeError(
         message="failure",
         error_type=error_type,
@@ -840,7 +852,7 @@ def test_callable_runtime_error_control_classification(
 
 
 @pytest.mark.parametrize("retryable", [False, True])
-def test_replayed_custom_invocation_error_preserves_retry_behavior(retryable):
+def test_replayed_custom_invocation_error_preserves_retry_behavior(retryable) -> None:
     source = _CustomInvocationError("custom failure", retryable=retryable)
     data = _encode_sdk_control_error_data(source)
     assert data is not None
@@ -875,7 +887,7 @@ def test_replayed_custom_invocation_error_preserves_retry_behavior(retryable):
     assert _sdk_error_type_name(reclassified) == "_CustomInvocationError"
 
 
-async def test_replayed_non_retryable_boto_error_remains_non_retryable():
+async def test_replayed_non_retryable_boto_error_remains_non_retryable() -> None:
     source = BotoClientError(
         "KMS access denied",
         error_category=DurableApiErrorCategory.EXECUTION,
@@ -938,7 +950,7 @@ async def test_replayed_non_retryable_boto_error_remains_non_retryable():
 async def test_replayed_custom_execution_control_error_preserves_category(
     source,
     expected_reason,
-):
+) -> None:
     data = _encode_sdk_control_error_data(source)
     assert data is not None
 
@@ -975,7 +987,7 @@ async def test_replayed_custom_execution_control_error_preserves_category(
     assert output.error.type == type(source).__name__
 
 
-def test_replayed_legacy_execution_error_preserves_termination_reason():
+def test_replayed_legacy_execution_error_preserves_termination_reason() -> None:
     classified = _find_control_error(
         CallableRuntimeError(
             message="legacy execution failure",
@@ -1008,7 +1020,7 @@ def test_replayed_legacy_execution_error_preserves_termination_reason():
         ),
     ],
 )
-def test_invalid_execution_error_payload_uses_safe_defaults(payload):
+def test_invalid_execution_error_payload_uses_safe_defaults(payload) -> None:
     classified = _find_control_error(
         CallableRuntimeError(
             message="execution failure",
@@ -1027,7 +1039,7 @@ def test_invalid_execution_error_payload_uses_safe_defaults(payload):
     not hasattr(builtins, "ExceptionGroup"),
     reason="ExceptionGroup requires Python 3.11 or newer",
 )
-def test_control_error_is_found_in_nested_exception_group():
+def test_control_error_is_found_in_nested_exception_group() -> None:
     group_type = getattr(builtins, "ExceptionGroup")
     source = _CustomExecutionError(
         "nested control failure",
@@ -1039,14 +1051,14 @@ def test_control_error_is_found_in_nested_exception_group():
     assert _find_control_error(outer) is source
 
 
-def test_control_error_search_handles_cyclic_cause_chain():
+def test_control_error_search_handles_cyclic_cause_chain() -> None:
     error = RuntimeError("cyclic")
     error.__cause__ = error
 
     assert _find_control_error(error) is None
 
 
-def test_invocation_error_payload_drops_unserializable_boto_diagnostics():
+def test_invocation_error_payload_drops_unserializable_boto_diagnostics() -> None:
     source = BotoClientError(
         "invalid diagnostics",
         error_category=DurableApiErrorCategory.EXECUTION,
@@ -1092,7 +1104,7 @@ def test_invocation_error_payload_drops_unserializable_boto_diagnostics():
         ),
     ],
 )
-def test_invalid_invocation_error_payload_fails_closed(payload):
+def test_invalid_invocation_error_payload_fails_closed(payload) -> None:
     classified = _find_control_error(
         CallableRuntimeError(
             message="legacy failure",
@@ -1109,7 +1121,7 @@ def test_invalid_invocation_error_payload_fails_closed(payload):
     assert classified.build_logger_extras() == {}
 
 
-def test_callable_runtime_error_preserves_original_error_details():
+def test_callable_runtime_error_preserves_original_error_details() -> None:
     from async_durable_execution._extension.flow import _callable_error_object
 
     error = CallableRuntimeError(
@@ -1127,11 +1139,12 @@ def test_callable_runtime_error_preserves_original_error_details():
     )
 
 
-def test_flow_node_repr_and_flat_expression_construction():
+@no_type_check
+def test_flow_node_repr_and_flat_expression_construction() -> None:
     captured = {}
 
     @durable_dag
-    def graph():
+    def graph() -> Any:
         a = node(return_name(), name="A")
         b = node(return_name(), name="B")
         c = node(return_name(), name="C")
@@ -1159,7 +1172,7 @@ def test_flow_node_repr_and_flat_expression_construction():
     assert len(captured["d"]._dependency.children) == 3
 
 
-def test_flow_builder_defensive_cycle_error():
+def test_flow_builder_defensive_cycle_error() -> None:
     builder = _FlowBuilder()
     first = builder.add_node(return_name(), "first")
     second = builder.add_node(return_name(), "second")
@@ -1176,11 +1189,12 @@ def test_flow_builder_defensive_cycle_error():
         builder._find_cycle(adjacency, {first, second, third})
 
 
-def test_composite_expression_default_state_and_all_unmatched():
+@no_type_check
+def test_composite_expression_default_state_and_all_unmatched() -> None:
     captured = {}
 
     @durable_dag
-    def graph():
+    def graph() -> Any:
         a = node(return_name(), name="A")
         b = node(return_name(), name="B")
         c = node(return_name(), name="C")
@@ -1201,7 +1215,8 @@ def test_composite_expression_default_state_and_all_unmatched():
     assert captured["d"]._dependency.evaluate({}).status.value == "PENDING"
 
 
-def test_flow_node_input_resolution_and_container_helpers():
+@no_type_check
+def test_flow_node_input_resolution_and_container_helpers() -> None:
     builder = _FlowBuilder()
     source = builder.add_node(return_name(), "source")
     outcome_input = _FlowNodeInput(source, _FlowNodeInputKind.OUTCOME)
@@ -1297,7 +1312,8 @@ def test_flow_node_input_resolution_and_container_helpers():
     assert _flow_node_inputs(recursive_payload) == ()
 
 
-def test_node_inputs_reject_foreign_nodes_and_form_all_dependencies():
+@no_type_check
+def test_node_inputs_reject_foreign_nodes_and_form_all_dependencies() -> None:
     captured = {}
 
     @durable_node
@@ -1305,20 +1321,20 @@ def test_node_inputs_reject_foreign_nodes_and_form_all_dependencies():
         _ = values
 
     @durable_dag
-    def first_graph():
+    def first_graph() -> None:
         captured["foreign"] = node(return_name(), name="foreign")
 
     _evaluate_definition(first_graph())
 
     @durable_dag
-    def invalid_graph():
+    def invalid_graph() -> None:
         node(consume(captured["foreign"].outcome), name="target")
 
     with pytest.raises(InvalidStateError, match="current flow definition"):
         _evaluate_definition(invalid_graph())
 
     @durable_dag
-    def all_graph():
+    def all_graph() -> None:
         first = node(return_name(), name="first")
         second = node(return_name(), name="second")
         captured["target"] = node(
@@ -1331,7 +1347,7 @@ def test_node_inputs_reject_foreign_nodes_and_form_all_dependencies():
     assert [leaf.node.name for leaf in dependency.leaves()] == ["first", "second"]
 
 
-def test_cycle_search_skips_nonremaining_targets_and_backtracks():
+def test_cycle_search_skips_nonremaining_targets_and_backtracks() -> None:
     builder = _FlowBuilder()
     a = builder.add_node(return_name(), "A")
     branch = builder.add_node(return_name(), "branch")
@@ -1349,11 +1365,12 @@ def test_cycle_search_skips_nonremaining_targets_and_backtracks():
     assert [flow_node.name for flow_node in cycle] == ["A", "B", "A"]
 
 
-async def test_dependency_resolution_propagates_unclassified_task_error():
+@no_type_check
+async def test_dependency_resolution_propagates_unclassified_task_error() -> None:
     captured = {}
 
     @durable_dag
-    def graph():
+    def graph() -> Any:
         a = node(return_name(), name="A")
         b = node(return_name(), name="B")
         a >> b
@@ -1362,7 +1379,7 @@ async def test_dependency_resolution_propagates_unclassified_task_error():
 
     _evaluate_definition(graph())
 
-    async def fail():
+    async def fail() -> NoReturn:
         msg = "unexpected dependency failure"
         raise ValueError(msg)
 
@@ -1376,11 +1393,12 @@ async def test_dependency_resolution_propagates_unclassified_task_error():
         )
 
 
-async def test_all_dependency_resolution_returns_unmatched_child_results():
+@no_type_check
+async def test_all_dependency_resolution_returns_unmatched_child_results() -> None:
     captured = {}
 
     @durable_dag
-    def graph():
+    def graph() -> None:
         first = node(return_name(), name="first")
         second = node(return_name(), name="second")
         target = node(return_name(), name="target")
@@ -1427,11 +1445,14 @@ async def test_all_dependency_resolution_returns_unmatched_child_results():
         (ValueError("ordinary"), ValueError),
     ],
 )
-async def test_await_resolver_resolution_propagates_task_errors(error, expected):
+@no_type_check
+async def test_await_resolver_resolution_propagates_task_errors(
+    error, expected
+) -> None:
     captured = {}
 
     @durable_dag
-    def graph():
+    def graph() -> None:
         source = node(return_name(), name="source")
         target = node(return_name(), name="target")
         source >> target
@@ -1439,7 +1460,7 @@ async def test_await_resolver_resolution_propagates_task_errors(error, expected)
 
     _evaluate_definition(graph())
 
-    async def fail():
+    async def fail() -> NoReturn:
         raise error
 
     task = asyncio.create_task(fail())
@@ -1452,7 +1473,8 @@ async def test_await_resolver_resolution_propagates_task_errors(error, expected)
         assert isinstance(raised.value.error, ExecutionError)
 
 
-def test_raise_task_error_preserves_control_and_ordinary_failures():
+@no_type_check
+def test_raise_task_error_preserves_control_and_ordinary_failures() -> None:
     signal = _FlowControlSignal(ValueError("control"))
     with pytest.raises(_FlowControlSignal) as raised:
         _raise_task_error(signal)
@@ -1468,12 +1490,13 @@ def test_raise_task_error_preserves_control_and_ordinary_failures():
     assert raised.value is ordinary
 
 
-async def test_any_resolution_propagates_child_control_signal():
+@no_type_check
+async def test_any_resolution_propagates_child_control_signal() -> None:
     captured = {}
     blocker = asyncio.Event()
 
     @durable_dag
-    def graph():
+    def graph() -> None:
         first = node(return_name(), name="first")
         second = node(return_name(), name="second")
         target = node(return_name(), name="target")
@@ -1484,10 +1507,10 @@ async def test_any_resolution_propagates_child_control_signal():
 
     signal = _FlowControlSignal(ValueError("control"))
 
-    async def fail():
+    async def fail() -> NoReturn:
         raise signal
 
-    async def wait_forever():
+    async def wait_forever() -> Any:
         await blocker.wait()
         return _NodeExecution(FlowNodeResult.succeeded("late"))
 
@@ -1505,11 +1528,12 @@ async def test_any_resolution_propagates_child_control_signal():
     assert raised.value is signal
 
 
-def _any_resolution_nodes():
+@no_type_check
+def _any_resolution_nodes() -> Any:
     captured = {}
 
     @durable_dag
-    def graph():
+    def graph() -> None:
         first = node(return_name(), name="first")
         second = node(return_name(), name="second")
         target = node(return_name(), name="target")
@@ -1520,13 +1544,13 @@ def _any_resolution_nodes():
     return captured["first"], captured["second"], captured["target"]
 
 
-async def test_any_resolution_preserves_reverse_completion_order(monkeypatch):
+async def test_any_resolution_preserves_reverse_completion_order(monkeypatch) -> None:
     first, second, target = _any_resolution_nodes()
     expression = cast(Any, target._dependency)
     release_first = asyncio.Event()
     first_finished = asyncio.Event()
 
-    async def resolve_child(_target, child, _tasks, _resolver_tasks):
+    async def resolve_child(_target, child, _tasks, _resolver_tasks) -> Any:
         if child is expression.children[0]:
             await release_first.wait()
             first_finished.set()
@@ -1540,7 +1564,7 @@ async def test_any_resolution_preserves_reverse_completion_order(monkeypatch):
             results={second: FlowNodeResult.succeeded("completion-first")},
         )
 
-    def create_normal_task(coro_factory):
+    def create_normal_task(coro_factory) -> Any:
         return asyncio.create_task(coro_factory())
 
     monkeypatch.setattr(
@@ -1558,14 +1582,14 @@ async def test_any_resolution_preserves_reverse_completion_order(monkeypatch):
     assert resolution.selected_nodes == ("second",)
 
 
-async def test_any_resolution_continues_after_suspended_candidate():
+async def test_any_resolution_continues_after_suspended_candidate() -> None:
     first, second, target = _any_resolution_nodes()
     suspension = SuspendExecution("waiting for callback")
 
-    async def suspend():
+    async def suspend() -> NoReturn:
         raise suspension
 
-    async def succeed():
+    async def succeed() -> Any:
         return _NodeExecution(FlowNodeResult.succeeded("winner"))
 
     resolution = await _resolve_any_expression(
@@ -1582,14 +1606,14 @@ async def test_any_resolution_continues_after_suspended_candidate():
     assert resolution.selected_nodes == ("second",)
 
 
-async def test_any_resolution_suspends_when_no_candidate_can_match():
+async def test_any_resolution_suspends_when_no_candidate_can_match() -> None:
     first, second, target = _any_resolution_nodes()
     suspension = SuspendExecution("waiting for callback")
 
-    async def suspend():
+    async def suspend() -> NoReturn:
         raise suspension
 
-    async def fail():
+    async def fail() -> Any:
         return _NodeExecution(FlowNodeResult.failed(ErrorObject.from_message("failed")))
 
     with pytest.raises(SuspendExecution) as raised:
@@ -1605,12 +1629,12 @@ async def test_any_resolution_suspends_when_no_candidate_can_match():
     assert raised.value is suspension
 
 
-async def test_any_resolution_uses_earliest_timed_suspension():
+async def test_any_resolution_uses_earliest_timed_suspension() -> None:
     first, second, target = _any_resolution_nodes()
     later = TimedSuspendExecution("later", 20)
     earlier = TimedSuspendExecution("earlier", 10)
 
-    async def suspend(error: TimedSuspendExecution):
+    async def suspend(error: TimedSuspendExecution) -> NoReturn:
         raise error
 
     with pytest.raises(TimedSuspendExecution) as raised:
@@ -1626,7 +1650,7 @@ async def test_any_resolution_uses_earliest_timed_suspension():
     assert raised.value is earlier
 
 
-def test_flow_node_context_reuses_existing_step_counter():
+def test_flow_node_context_reuses_existing_step_counter() -> None:
     state = Mock(spec=ExecutionState)
     fresh_context = DurableContext(
         execution_state=state,
@@ -1655,18 +1679,18 @@ def test_flow_node_context_reuses_existing_step_counter():
     assert flow_context.step_counter is counter
 
 
-async def test_execute_flow_wraps_unclassified_child_error(monkeypatch):
+async def test_execute_flow_wraps_unclassified_child_error(monkeypatch) -> None:
     @durable_dag
-    def graph():
+    def graph() -> Any:
         return node(return_name(), name="A").outcome
 
     frozen = _evaluate_definition(graph())
 
-    async def fail():
+    async def fail() -> NoReturn:
         msg = "unexpected child failure"
         raise ValueError(msg)
 
-    def fake_child(*args, **kwargs):
+    def fake_child(*args, **kwargs) -> Any:
         return asyncio.create_task(fail())
 
     monkeypatch.setattr(
@@ -1681,9 +1705,9 @@ async def test_execute_flow_wraps_unclassified_child_error(monkeypatch):
 
 async def test_execute_flow_prioritizes_resolver_error_over_node_suspension(
     monkeypatch,
-):
+) -> None:
     @durable_dag
-    def graph():
+    def graph() -> Any:
         first = node(return_name(), name="first")
         second = node(return_name(), name="second")
         target = node(return_name(), name="target")
@@ -1694,13 +1718,13 @@ async def test_execute_flow_prioritizes_resolver_error_over_node_suspension(
     suspension = TimedSuspendExecution("node suspended", 100)
     control_error = _FlowControlSignal(InvocationError("checkpoint failed"))
 
-    async def succeed():
+    async def succeed() -> Any:
         return _NodeExecution(FlowNodeResult.succeeded("ok"))
 
-    async def fail(error: BaseException):
+    async def fail(error: BaseException) -> NoReturn:
         raise error
 
-    def fake_child(func, *, name, **kwargs):
+    def fake_child(func, *, name, **kwargs) -> Any:
         _ = func, kwargs
         if name == "first":
             return asyncio.create_task(fail(suspension))
@@ -1718,9 +1742,9 @@ async def test_execute_flow_prioritizes_resolver_error_over_node_suspension(
     assert raised.value is control_error
 
 
-async def test_execute_flow_uses_earliest_timed_suspension(monkeypatch):
+async def test_execute_flow_uses_earliest_timed_suspension(monkeypatch) -> None:
     @durable_dag
-    def graph():
+    def graph() -> Any:
         first = node(return_name(), name="first")
         second = node(return_name(), name="second")
         third = node(return_name(), name="third")
@@ -1736,10 +1760,10 @@ async def test_execute_flow_uses_earliest_timed_suspension(monkeypatch):
         "third": earlier,
     }
 
-    async def fail(error: BaseException):
+    async def fail(error: BaseException) -> NoReturn:
         raise error
 
-    def fake_child(func, *, name, **kwargs):
+    def fake_child(func, *, name, **kwargs) -> Any:
         _ = func, kwargs
         return asyncio.create_task(fail(errors[name]))
 
@@ -1753,7 +1777,7 @@ async def test_execute_flow_uses_earliest_timed_suspension(monkeypatch):
     assert raised.value is earlier
 
 
-def test_collected_task_errors_use_indefinite_suspension_as_fallback():
+def test_collected_task_errors_use_indefinite_suspension_as_fallback() -> None:
     suspension = SuspendExecution("waiting for callback")
 
     with pytest.raises(SuspendExecution) as raised:
@@ -1774,9 +1798,9 @@ async def test_execute_flow_propagates_resolver_task_errors(
     monkeypatch,
     resolver_error,
     expected,
-):
+) -> None:
     @durable_dag
-    def graph():
+    def graph() -> Any:
         first = node(return_name(), name="first")
         second = node(return_name(), name="second")
         target = node(return_name(), name="target")
@@ -1785,13 +1809,13 @@ async def test_execute_flow_propagates_resolver_task_errors(
 
     frozen = _evaluate_definition(graph())
 
-    async def succeed():
+    async def succeed() -> Any:
         return _NodeExecution(FlowNodeResult.succeeded("ok"))
 
-    async def fail():
+    async def fail() -> NoReturn:
         raise resolver_error
 
-    def fake_child(func, *, name, **kwargs):
+    def fake_child(func, *, name, **kwargs) -> Any:
         _ = func, kwargs
         coroutine = fail() if name.startswith("flow-any-resolution-") else succeed()
         return asyncio.create_task(coroutine)
@@ -1829,15 +1853,15 @@ async def test_flow_boundary_classifies_child_task_errors(
     monkeypatch,
     child_error,
     expected_error,
-):
+) -> None:
     @durable_dag
-    def graph():
+    def graph() -> None:
         return None
 
-    async def fail():
+    async def fail() -> NoReturn:
         raise child_error
 
-    def fake_child(*args, **kwargs):
+    def fake_child(*args, **kwargs) -> Any:
         return asyncio.create_task(fail())
 
     state = Mock(spec=ExecutionState)

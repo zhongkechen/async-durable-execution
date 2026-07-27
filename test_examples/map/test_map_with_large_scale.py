@@ -4,7 +4,7 @@ from async_durable_execution import InvocationStatus
 from examples.map import map_with_large_scale
 
 
-async def test_handle_50_items_with_100kb_each_using_map(durable_runner):
+async def test_handle_50_items_with_100kb_each_using_map(durable_runner) -> None:
     """Test handling 50 items with 100KB each using map."""
     async with durable_runner(
         handler=map_with_large_scale.handler, input=None, timeout=60

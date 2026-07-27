@@ -58,7 +58,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
         serdes: SerDes | None = None,
         summary_generator: SummaryGenerator | None = None,
         is_virtual: bool = False,
-    ):
+    ) -> None:
         """Initialize the child operation executor.
 
         Args:
@@ -413,7 +413,7 @@ async def _run_child_context(
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
 ) -> T:
-    async def callable_with_child_context():
+    async def callable_with_child_context() -> T:
         with bind_current_context(child_context):
             return await func()
 

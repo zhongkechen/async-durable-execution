@@ -8,7 +8,7 @@ from async_durable_execution import (
 from examples.flow import flow_with_durable_operations
 
 
-async def test_flow_with_durable_operations(durable_runner):
+async def test_flow_with_durable_operations(durable_runner) -> None:
     """Verify step and wait operations use each node's child context."""
     async with durable_runner(
         handler=flow_with_durable_operations.handler,

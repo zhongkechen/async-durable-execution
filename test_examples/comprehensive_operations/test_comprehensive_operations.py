@@ -6,7 +6,7 @@ from examples.comprehensive_operations import (
 )
 
 
-async def test_execute_all_operations_successfully(durable_runner):
+async def test_execute_all_operations_successfully(durable_runner) -> None:
     """Test that all operations execute successfully."""
     async with durable_runner(
         handler=comprehensive_operations.handler, input={"message": "test"}, timeout=30

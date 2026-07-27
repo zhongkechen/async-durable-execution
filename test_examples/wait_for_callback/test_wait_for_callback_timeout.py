@@ -4,7 +4,7 @@ from async_durable_execution import InvocationStatus
 from examples.wait_for_callback import wait_for_callback_timeout
 
 
-async def test_handle_wait_for_callback_timeout_scenarios(durable_runner):
+async def test_handle_wait_for_callback_timeout_scenarios(durable_runner) -> None:
     """Test waitForCallback timeout scenarios."""
     test_payload = {"test": "timeout-scenario"}
 

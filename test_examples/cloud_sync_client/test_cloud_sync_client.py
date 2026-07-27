@@ -5,14 +5,14 @@ from async_durable_execution._core.client import lambda_api_client_is_async
 from examples.cloud_sync_client import cloud_sync_client
 
 
-def test_cloud_sync_client_example_configures_sync_lambda_client():
+def test_cloud_sync_client_example_configures_sync_lambda_client() -> None:
     client = cloud_sync_client.handler._durable_execution_boto3_client
 
     assert client is not None
     assert not lambda_api_client_is_async(client)
 
 
-async def test_cloud_sync_client_example(durable_runner):
+async def test_cloud_sync_client_example(durable_runner) -> None:
     async with durable_runner(
         handler=cloud_sync_client.handler,
         input={"name": "sync-cloud"},

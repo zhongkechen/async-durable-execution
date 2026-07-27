@@ -7,7 +7,7 @@ from async_durable_execution import InvocationStatus
 from examples.callback import callback_heartbeat
 
 
-async def test_handle_callback_operations_with_failure_uncaught(durable_runner):
+async def test_handle_callback_operations_with_failure_uncaught(durable_runner) -> None:
     """Test handling callback operations with failure."""
     test_payload = {"shouldCatchError": False}
 

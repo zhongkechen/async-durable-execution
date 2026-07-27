@@ -1,5 +1,9 @@
 """Tests for public package exports and module-level operation helpers."""
 
+from typing import no_type_check
+
+from typing import Any
+
 from collections.abc import Callable
 from datetime import timedelta
 from typing import get_origin
@@ -77,13 +81,13 @@ from async_durable_execution._core.serdes import ExtendedTypeSerDes
 from async_durable_execution._core.client import DurableServiceClient
 
 
-def make_async_executor(result):
+def make_async_executor(result) -> Any:
     mock_executor = MagicMock()
     mock_executor.process = AsyncMock(return_value=result)
     return mock_executor
 
 
-def test_additional_public_types_importable_from_package_root():
+def test_additional_public_types_importable_from_package_root() -> None:
     """Supporting public types remain available from the package root."""
     import async_durable_execution as ade
 
@@ -145,7 +149,7 @@ def test_additional_public_types_importable_from_package_root():
         assert name in ade.__all__
 
 
-def test_core_public_api_is_reexported_from_core_package():
+def test_core_public_api_is_reexported_from_core_package() -> None:
     """Core public symbols are available from both supported package facades."""
     import async_durable_execution as ade
     import async_durable_execution._core as core
@@ -186,12 +190,12 @@ def test_core_public_api_is_reexported_from_core_package():
         assert getattr(core, name) is getattr(ade, name)
 
 
-def test_summary_generator_is_callable_type_alias():
+def test_summary_generator_is_callable_type_alias() -> None:
     """SummaryGenerator is a callable interface, not a protocol class."""
     assert get_origin(SummaryGenerator) is Callable
 
 
-def test_internal_model_types_not_exported_from_package_root():
+def test_internal_model_types_not_exported_from_package_root() -> None:
     """Internal construction models stay in async_durable_execution._core.models."""
     import async_durable_execution as ade
 
@@ -199,7 +203,7 @@ def test_internal_model_types_not_exported_from_package_root():
     assert "OperationIdentifier" not in ade.__all__
 
 
-def test_merged_retry_presets_not_exported_from_package_root():
+def test_merged_retry_presets_not_exported_from_package_root() -> None:
     """Retry preset factories live on RetryStrategy."""
     import async_durable_execution as ade
 
@@ -209,7 +213,7 @@ def test_merged_retry_presets_not_exported_from_package_root():
     assert "RetryPresets" not in ade.__all__
 
 
-def test_wait_for_condition_decision_not_exported_from_package_root():
+def test_wait_for_condition_decision_not_exported_from_package_root() -> None:
     """wait_for_condition checks return state directly."""
     import async_durable_execution as ade
 
@@ -217,7 +221,7 @@ def test_wait_for_condition_decision_not_exported_from_package_root():
     assert "WaitForConditionDecision" not in ade.__all__
 
 
-def test_polling_strategy_builder_not_exported_from_package_root():
+def test_polling_strategy_builder_not_exported_from_package_root() -> None:
     """PollingStrategy is directly callable without a builder."""
     import async_durable_execution as ade
 
@@ -227,7 +231,7 @@ def test_polling_strategy_builder_not_exported_from_package_root():
     assert "WaitStrategyBuilder" not in ade.__all__
 
 
-def test_get_attempt_not_exported_from_package_root():
+def test_get_attempt_not_exported_from_package_root() -> None:
     """Step attempts are available from get_step_context().attempt."""
     import async_durable_execution as ade
 
@@ -235,7 +239,8 @@ def test_get_attempt_not_exported_from_package_root():
     assert "get_attempt" not in ade.__all__
 
 
-async def test_module_level_operations_delegate_to_mock_context_methods():
+@no_type_check
+async def test_module_level_operations_delegate_to_mock_context_methods() -> None:
     """Module-level operations use durable-context helper paths."""
     mock_state = Mock()
     mock_state.durable_execution_arn = (
@@ -249,10 +254,10 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
         ),
     )
 
-    async def test_callable():
+    async def test_callable() -> str:
         return "result"
 
-    async def submitter():
+    async def submitter() -> str:
         return "submitted"
 
     mock_wait = AsyncMock(return_value=None)
@@ -358,15 +363,15 @@ async def test_module_level_operations_delegate_to_mock_context_methods():
     mock_parallel_child.assert_awaited_once()
 
 
-async def test_concrete_callback_implementation():
+async def test_concrete_callback_implementation() -> None:
     """Test a concrete implementation of Callback protocol."""
 
     class ConcreteCallback:
-        def __init__(self, callback_id: str):
+        def __init__(self, callback_id: str) -> None:
             self.callback_id = callback_id
             self._result = None
 
-        async def result(self):
+        async def result(self) -> Any:
             return self._result
 
     callback = ConcreteCallback("test-123")

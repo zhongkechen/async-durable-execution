@@ -68,7 +68,7 @@ class Executor:
         scheduler: Scheduler,
         invoker: Invoker,
         service_client: InMemoryServiceClient,
-    ):
+    ) -> None:
         self._scheduler = scheduler
         self._invoker = invoker
         self._service_client = service_client
@@ -572,7 +572,7 @@ class Executor:
         execution_arn: str,
         response: DurableExecutionInvocationOutput,
         execution: Execution,
-    ):
+    ) -> None:
         """Validate response status and apply the resulting execution changes.
 
         Raises:
@@ -761,7 +761,7 @@ class Executor:
 
     def _complete_workflow(
         self, execution_arn: str, result: str | None, error: ErrorObject | None
-    ):
+    ) -> None:
         """Complete workflow - handles both success and failure with terminal state validation."""
         execution = self.get_execution(execution_arn)
 
@@ -775,7 +775,7 @@ class Executor:
         else:
             self.complete_execution(execution_arn, result)
 
-    def _fail_workflow(self, execution_arn: str, error: ErrorObject):
+    def _fail_workflow(self, execution_arn: str, error: ErrorObject) -> None:
         """Fail workflow with terminal state validation."""
         execution = self.get_execution(execution_arn)
 
@@ -786,7 +786,7 @@ class Executor:
 
         self.fail_execution(execution_arn, error)
 
-    def _retry_invocation(self, execution: Execution, error: ErrorObject):
+    def _retry_invocation(self, execution: Execution, error: ErrorObject) -> None:
         """Handle retry logic or fail execution if retries exhausted."""
         if (
             execution.consecutive_failed_invocation_attempts
@@ -805,7 +805,7 @@ class Executor:
                 delay=self.RETRY_BACKOFF_SECONDS,
             )
 
-    def _complete_events(self, execution_arn: str):
+    def _complete_events(self, execution_arn: str) -> None:
         self._validate_current_execution(execution_arn)
         # complete doesn't actually checkpoint explicitly
         if self._completion_event:

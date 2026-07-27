@@ -1,5 +1,7 @@
 """Tests for step operation processor."""
 
+from typing import Any, no_type_check
+
 from datetime import datetime, timezone
 from unittest.mock import Mock
 
@@ -26,26 +28,26 @@ from async_durable_execution._runner.exceptions import (
 class MockNotifier:
     """Mock notifier for testing."""
 
-    def __init__(self):
-        self.completed_calls = []
-        self.failed_calls = []
-        self.wait_timer_calls = []
-        self.step_retry_calls = []
+    def __init__(self) -> None:
+        self.completed_calls: list[Any] = []
+        self.failed_calls: list[Any] = []
+        self.wait_timer_calls: list[Any] = []
+        self.step_retry_calls: list[Any] = []
 
-    def complete_execution(self, execution_arn, result=None):
+    def complete_execution(self, execution_arn, result=None) -> None:
         self.completed_calls.append((execution_arn, result))
 
-    def fail_execution(self, execution_arn, error):
+    def fail_execution(self, execution_arn, error) -> None:
         self.failed_calls.append((execution_arn, error))
 
-    def schedule_wait_timer(self, execution_arn, operation_id, delay):
+    def schedule_wait_timer(self, execution_arn, operation_id, delay) -> None:
         self.wait_timer_calls.append((execution_arn, operation_id, delay))
 
-    def schedule_step_retry(self, execution_arn, operation_id, delay):
+    def schedule_step_retry(self, execution_arn, operation_id, delay) -> None:
         self.step_retry_calls.append((execution_arn, operation_id, delay))
 
 
-def test_process_start_action():
+def test_process_start_action() -> None:
     processor = StepProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -67,7 +69,7 @@ def test_process_start_action():
     assert result.step_details is not None
 
 
-def test_process_start_action_with_current_operation():
+def test_process_start_action_with_current_operation() -> None:
     processor = StepProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -87,7 +89,8 @@ def test_process_start_action_with_current_operation():
     assert result.start_timestamp == current_op.start_timestamp
 
 
-def test_process_retry_action():
+@no_type_check
+def test_process_retry_action() -> None:
     processor = StepProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -123,7 +126,8 @@ def test_process_retry_action():
     assert notifier.step_retry_calls[0] == (execution_arn, "step-123", 30)
 
 
-def test_process_retry_action_scales_delay(monkeypatch):
+@no_type_check
+def test_process_retry_action_scales_delay(monkeypatch) -> None:
     monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.1")
 
     processor = StepProcessor()
@@ -153,7 +157,8 @@ def test_process_retry_action_scales_delay(monkeypatch):
     assert notifier.step_retry_calls[0] == (execution_arn, "step-123", 3.0)
 
 
-def test_process_retry_action_without_step_options():
+@no_type_check
+def test_process_retry_action_without_step_options() -> None:
     processor = StepProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -181,7 +186,8 @@ def test_process_retry_action_without_step_options():
     assert notifier.step_retry_calls[0] == (execution_arn, "step-123", 0)
 
 
-def test_process_retry_action_without_current_operation():
+@no_type_check
+def test_process_retry_action_without_current_operation() -> None:
     processor = StepProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -202,7 +208,8 @@ def test_process_retry_action_without_current_operation():
     assert result.step_details.error is None
 
 
-def test_process_retry_action_without_current_step_details():
+@no_type_check
+def test_process_retry_action_without_current_step_details() -> None:
     processor = StepProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -230,7 +237,8 @@ def test_process_retry_action_without_current_step_details():
     assert result.step_details.attempt == 1
 
 
-def test_process_succeed_action():
+@no_type_check
+def test_process_succeed_action() -> None:
     processor = StepProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -251,7 +259,8 @@ def test_process_succeed_action():
     assert result.step_details.result == "success-result"
 
 
-def test_process_succeed_action_with_current_operation():
+@no_type_check
+def test_process_succeed_action_with_current_operation() -> None:
     processor = StepProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -275,7 +284,8 @@ def test_process_succeed_action_with_current_operation():
     assert result.step_details.attempt == 1
 
 
-def test_process_fail_action():
+@no_type_check
+def test_process_fail_action() -> None:
     processor = StepProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -297,7 +307,8 @@ def test_process_fail_action():
     assert result.step_details.error == error
 
 
-def test_process_fail_action_with_current_operation():
+@no_type_check
+def test_process_fail_action_with_current_operation() -> None:
     processor = StepProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -322,7 +333,7 @@ def test_process_fail_action_with_current_operation():
     assert result.step_details.attempt == 1
 
 
-def test_process_invalid_action():
+def test_process_invalid_action() -> None:
     processor = StepProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -340,7 +351,7 @@ def test_process_invalid_action():
         processor.process(update, None, notifier, execution_arn)
 
 
-def test_process_with_parent_id():
+def test_process_with_parent_id() -> None:
     processor = StepProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -358,7 +369,8 @@ def test_process_with_parent_id():
     assert result.parent_id == "parent-456"
 
 
-def test_process_with_sub_type():
+@no_type_check
+def test_process_with_sub_type() -> None:
     processor = StepProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -376,7 +388,8 @@ def test_process_with_sub_type():
     assert result.sub_type == "lambda"
 
 
-def test_retry_preserves_current_operation_details():
+@no_type_check
+def test_retry_preserves_current_operation_details() -> None:
     processor = StepProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -413,7 +426,7 @@ def test_retry_preserves_current_operation_details():
     assert result.chained_invoke_details == current_op.chained_invoke_details
 
 
-def test_no_completed_or_failed_calls_for_non_execution_actions():
+def test_no_completed_or_failed_calls_for_non_execution_actions() -> None:
     processor = StepProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -432,7 +445,7 @@ def test_no_completed_or_failed_calls_for_non_execution_actions():
     assert len(notifier.wait_timer_calls) == 0
 
 
-def test_no_step_retry_calls_for_non_retry_actions():
+def test_no_step_retry_calls_for_non_retry_actions() -> None:
     processor = StepProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -472,7 +485,7 @@ from async_durable_execution._runner.exceptions import (
 )
 
 
-def test_validate_with_no_current_state():
+def test_validate_with_no_current_state() -> None:
     """Test validation with no current state."""
     update = OperationUpdate(
         operation_id="test-id",
@@ -482,7 +495,7 @@ def test_validate_with_no_current_state():
     StepProcessor.validate(None, update)
 
 
-def test_validate_start_action_with_ready_state():
+def test_validate_start_action_with_ready_state() -> None:
     """Test START action with READY state."""
     current_state = Operation(
         operation_id="test-id",
@@ -497,7 +510,7 @@ def test_validate_start_action_with_ready_state():
     StepProcessor.validate(current_state, update)
 
 
-def test_validate_start_action_with_invalid_state():
+def test_validate_start_action_with_invalid_state() -> None:
     """Test START action with invalid state raises error."""
     current_state = Operation(
         operation_id="test-id",
@@ -516,7 +529,8 @@ def test_validate_start_action_with_invalid_state():
         StepProcessor.validate(current_state, update)
 
 
-def test_validate_succeed_action_with_started_state():
+@no_type_check
+def test_validate_succeed_action_with_started_state() -> None:
     """Test SUCCEED action with STARTED state."""
     current_state = Operation(
         operation_id="test-id",
@@ -532,7 +546,7 @@ def test_validate_succeed_action_with_started_state():
     StepProcessor.validate(current_state, update)
 
 
-def test_validate_fail_action_with_ready_state():
+def test_validate_fail_action_with_ready_state() -> None:
     """Test FAIL action with READY state."""
     current_state = Operation(
         operation_id="test-id",
@@ -550,7 +564,7 @@ def test_validate_fail_action_with_ready_state():
     StepProcessor.validate(current_state, update)
 
 
-def test_validate_fail_action_with_invalid_state():
+def test_validate_fail_action_with_invalid_state() -> None:
     """Test FAIL action with invalid state raises error."""
     current_state = Operation(
         operation_id="test-id",
@@ -569,7 +583,8 @@ def test_validate_fail_action_with_invalid_state():
         StepProcessor.validate(current_state, update)
 
 
-def test_validate_fail_action_with_payload():
+@no_type_check
+def test_validate_fail_action_with_payload() -> None:
     """Test FAIL action with payload raises error."""
     current_state = Operation(
         operation_id="test-id",
@@ -589,7 +604,7 @@ def test_validate_fail_action_with_payload():
         StepProcessor.validate(current_state, update)
 
 
-def test_validate_succeed_action_with_error():
+def test_validate_succeed_action_with_error() -> None:
     """Test SUCCEED action with error raises error."""
     current_state = Operation(
         operation_id="test-id",
@@ -612,7 +627,7 @@ def test_validate_succeed_action_with_error():
         StepProcessor.validate(current_state, update)
 
 
-def test_validate_retry_action_with_started_state():
+def test_validate_retry_action_with_started_state() -> None:
     """Test RETRY action with STARTED state."""
     current_state = Operation(
         operation_id="test-id",
@@ -628,7 +643,7 @@ def test_validate_retry_action_with_started_state():
     StepProcessor.validate(current_state, update)
 
 
-def test_validate_retry_action_with_ready_state():
+def test_validate_retry_action_with_ready_state() -> None:
     """Test RETRY action with READY state."""
     current_state = Operation(
         operation_id="test-id",
@@ -644,7 +659,7 @@ def test_validate_retry_action_with_ready_state():
     StepProcessor.validate(current_state, update)
 
 
-def test_validate_retry_action_with_invalid_state():
+def test_validate_retry_action_with_invalid_state() -> None:
     """Test RETRY action with invalid state raises error."""
     current_state = Operation(
         operation_id="test-id",
@@ -664,7 +679,7 @@ def test_validate_retry_action_with_invalid_state():
         StepProcessor.validate(current_state, update)
 
 
-def test_validate_retry_action_without_step_options():
+def test_validate_retry_action_without_step_options() -> None:
     """Test RETRY action without step options raises error."""
     current_state = Operation(
         operation_id="test-id",
@@ -683,7 +698,8 @@ def test_validate_retry_action_without_step_options():
         StepProcessor.validate(current_state, update)
 
 
-def test_validate_retry_action_with_both_error_and_payload():
+@no_type_check
+def test_validate_retry_action_with_both_error_and_payload() -> None:
     """Test RETRY action with both error and payload raises error."""
     current_state = Operation(
         operation_id="test-id",
@@ -708,7 +724,7 @@ def test_validate_retry_action_with_both_error_and_payload():
         StepProcessor.validate(current_state, update)
 
 
-def test_validate_invalid_action():
+def test_validate_invalid_action() -> None:
     """Test invalid action raises error."""
     current_state = Operation(
         operation_id="test-id",

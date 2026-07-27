@@ -2,7 +2,7 @@ from async_durable_execution import InvocationStatus
 from examples.wait_for_callback import wait_for_callback
 
 
-async def test_wait_for_callback_success(durable_runner):
+async def test_wait_for_callback_success(durable_runner) -> None:
     async with durable_runner(
         handler=wait_for_callback.handler, input="test", timeout=30
     ) as runner:

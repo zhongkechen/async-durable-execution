@@ -1,6 +1,7 @@
 """Unit tests for invoke handler."""
 
 from __future__ import annotations
+from typing import Any
 
 import inspect
 import json
@@ -52,7 +53,7 @@ async def invoke_handler(
     serdes_payload=None,
     serdes_result=None,
     tenant_id=None,
-):
+) -> Any:
     """Test helper that wraps InvokeOperationExecutor."""
     executor = InvokeOperationExecutor(
         function_name=function_name,
@@ -66,7 +67,7 @@ async def invoke_handler(
     return await executor.process()
 
 
-def test_invoke_name_is_keyword_only():
+def test_invoke_name_is_keyword_only() -> None:
     """invoke operation name must be passed as a keyword."""
     parameters = inspect.signature(invoke).parameters
 
@@ -75,7 +76,7 @@ def test_invoke_name_is_keyword_only():
     assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
-def test_recurse_name_and_function_name_are_keyword_only():
+def test_recurse_name_and_function_name_are_keyword_only() -> None:
     """recurse resolves the target from context unless explicitly overridden."""
     parameters = inspect.signature(recurse).parameters
 
@@ -106,7 +107,7 @@ def create_recursive_test_context(lambda_context, input_event=None) -> DurableCo
     )
 
 
-async def run_recurse_with_context(context: DurableContext, **kwargs):
+async def run_recurse_with_context(context: DurableContext, **kwargs) -> Any:
     executor = Mock()
     executor.process = AsyncMock(return_value="recursive-result")
 
@@ -123,7 +124,7 @@ async def run_recurse_with_context(context: DurableContext, **kwargs):
     return result, mock_executor, executor
 
 
-async def test_recurse_uses_current_invoked_function_arn():
+async def test_recurse_uses_current_invoked_function_arn() -> None:
     """recurse invokes the current qualified Lambda ARN by default."""
     lambda_context = Mock()
     lambda_context.invoked_function_arn = (
@@ -155,7 +156,7 @@ async def test_recurse_uses_current_invoked_function_arn():
     executor.process.assert_awaited_once()
 
 
-async def test_recurse_appends_function_version_to_unqualified_arn():
+async def test_recurse_appends_function_version_to_unqualified_arn() -> None:
     """A local or unqualified ARN is made qualified when the context has a version."""
     lambda_context = Mock()
     lambda_context.invoked_function_arn = (
@@ -179,7 +180,7 @@ async def test_recurse_appends_function_version_to_unqualified_arn():
     assert mock_executor.call_args.kwargs["tenant_id"] == "tenant-override"
 
 
-async def test_recurse_falls_back_to_context_function_name():
+async def test_recurse_falls_back_to_context_function_name() -> None:
     """Short function names are qualified with function_version when possible."""
     lambda_context = Mock()
     lambda_context.invoked_function_arn = None
@@ -196,7 +197,7 @@ async def test_recurse_falls_back_to_context_function_name():
     assert mock_executor.call_args.kwargs["function_name"] == "test-function:prod"
 
 
-async def test_recurse_explicit_function_name_does_not_need_lambda_context():
+async def test_recurse_explicit_function_name_does_not_need_lambda_context() -> None:
     """Explicit function_name is an escape hatch for unusual runtimes and tests."""
     context = create_recursive_test_context(lambda_context=None)
 
@@ -209,7 +210,7 @@ async def test_recurse_explicit_function_name_does_not_need_lambda_context():
     assert mock_executor.call_args.kwargs["function_name"] == "test-function:prod"
 
 
-async def test_recurse_adds_recursive_level_to_payload():
+async def test_recurse_adds_recursive_level_to_payload() -> None:
     """The first recursive call gets __recursive_level=1."""
     context = create_recursive_test_context(
         lambda_context=None,
@@ -229,7 +230,7 @@ async def test_recurse_adds_recursive_level_to_payload():
     }
 
 
-async def test_recurse_increments_existing_recursive_level():
+async def test_recurse_increments_existing_recursive_level() -> None:
     """Nested recursive calls increment from the current context level."""
     context = create_recursive_test_context(
         lambda_context=None,
@@ -249,7 +250,7 @@ async def test_recurse_increments_existing_recursive_level():
     }
 
 
-async def test_recurse_rejects_recursive_level_for_non_dict_payload():
+async def test_recurse_rejects_recursive_level_for_non_dict_payload() -> None:
     """recursive_level can only be inserted into dict payloads."""
     context = create_recursive_test_context(
         lambda_context=None,
@@ -268,7 +269,7 @@ async def test_recurse_rejects_recursive_level_for_non_dict_payload():
         reset_current_context(token)
 
 
-async def test_recurse_rejects_same_payload_as_execution_input():
+async def test_recurse_rejects_same_payload_as_execution_input() -> None:
     """recurse must make progress by changing the payload it sends."""
     current_input = {"n": 4}
     context = create_recursive_test_context(
@@ -284,7 +285,7 @@ async def test_recurse_rejects_same_payload_as_execution_input():
         reset_current_context(token)
 
 
-async def test_recurse_requires_resolvable_function_name():
+async def test_recurse_requires_resolvable_function_name() -> None:
     """Missing Lambda function metadata produces a clear error."""
     lambda_context = Mock()
     lambda_context.invoked_function_arn = None
@@ -301,7 +302,7 @@ async def test_recurse_requires_resolvable_function_name():
         reset_current_context(token)
 
 
-async def test_invoke_handler_already_succeeded():
+async def test_invoke_handler_already_succeeded() -> None:
     """Test invoke_handler when operation already succeeded."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -328,7 +329,7 @@ async def test_invoke_handler_already_succeeded():
     mock_state.create_checkpoint.assert_not_called()
 
 
-async def test_invoke_handler_already_succeeded_none_result():
+async def test_invoke_handler_already_succeeded_none_result() -> None:
     """Test invoke_handler when operation succeeded with None result."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -354,7 +355,7 @@ async def test_invoke_handler_already_succeeded_none_result():
     assert result is None
 
 
-async def test_invoke_handler_already_succeeded_no_chained_invoke_details():
+async def test_invoke_handler_already_succeeded_no_chained_invoke_details() -> None:
     """Test invoke_handler when operation succeeded but has no chained_invoke_details."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -383,7 +384,7 @@ async def test_invoke_handler_already_succeeded_no_chained_invoke_details():
 @pytest.mark.parametrize(
     "kind", [OperationStatus.FAILED, OperationStatus.STOPPED, OperationStatus.TIMED_OUT]
 )
-async def test_invoke_handler_already_terminated(kind: OperationStatus):
+async def test_invoke_handler_already_terminated(kind: OperationStatus) -> None:
     """Test invoke_handler when operation already failed."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -411,7 +412,7 @@ async def test_invoke_handler_already_terminated(kind: OperationStatus):
         )
 
 
-async def test_invoke_handler_already_timed_out():
+async def test_invoke_handler_already_timed_out() -> None:
     """Test invoke_handler when operation already timed out."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -439,7 +440,7 @@ async def test_invoke_handler_already_timed_out():
         )
 
 
-async def test_invoke_handler_terminal_without_error_object():
+async def test_invoke_handler_terminal_without_error_object() -> None:
     """Terminal invoke checkpoints without an ErrorObject surface an unknown error."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -467,7 +468,7 @@ async def test_invoke_handler_terminal_without_error_object():
 
 
 @pytest.mark.parametrize("status", [OperationStatus.STARTED])
-async def test_invoke_handler_already_started(status):
+async def test_invoke_handler_already_started(status) -> None:
     """Test invoke_handler when operation is already started."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -495,7 +496,7 @@ async def test_invoke_handler_already_started(status):
 
 
 @pytest.mark.parametrize("status", [OperationStatus.STARTED, OperationStatus.PENDING])
-async def test_invoke_handler_already_started_with_timeout(status):
+async def test_invoke_handler_already_started_with_timeout(status) -> None:
     """Test invoke_handler when operation is already started."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -519,7 +520,7 @@ async def test_invoke_handler_already_started_with_timeout(status):
         )
 
 
-async def test_invoke_handler_new_operation():
+async def test_invoke_handler_new_operation() -> None:
     """Test invoke_handler when starting a new operation."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -557,7 +558,7 @@ async def test_invoke_handler_new_operation():
     assert operation_update.chained_invoke_options.function_name == "test_function"
 
 
-async def test_invoke_handler_new_operation_with_direct_defaults():
+async def test_invoke_handler_new_operation_with_direct_defaults() -> None:
     """Test invoke_handler when starting a new operation with direct defaults."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -581,7 +582,7 @@ async def test_invoke_handler_new_operation_with_direct_defaults():
         )
 
 
-async def test_invoke_handler_new_operation_default_fields():
+async def test_invoke_handler_new_operation_default_fields() -> None:
     """Test invoke_handler when starting a new operation with default fields."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -605,7 +606,7 @@ async def test_invoke_handler_new_operation_default_fields():
         )
 
 
-async def test_invoke_handler_no_optional_fields():
+async def test_invoke_handler_no_optional_fields() -> None:
     """Test invoke_handler when no optional fields is provided."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -637,7 +638,7 @@ async def test_invoke_handler_no_optional_fields():
     assert "TenantId" not in chained_invoke_options
 
 
-async def test_invoke_handler_custom_serdes():
+async def test_invoke_handler_custom_serdes() -> None:
     """Test invoke_handler with custom serialization."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -671,7 +672,7 @@ async def test_invoke_handler_custom_serdes():
     assert result == {"key": "value", "number": 42, "list": [1, 2, 3]}
 
 
-async def test_invoke_handler_custom_serdes_new_operation():
+async def test_invoke_handler_custom_serdes_new_operation() -> None:
     """Test invoke_handler with custom serialization for new operation."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -707,7 +708,7 @@ async def test_invoke_handler_custom_serdes_new_operation():
     assert operation_update.payload == expected_serialized
 
 
-async def test_suspend_with_optional_resume_delay_with_timeout():
+async def test_suspend_with_optional_resume_delay_with_timeout() -> None:
     """Test suspend_with_optional_resume_delay with timeout."""
     with pytest.raises(TimedSuspendExecution) as exc_info:
         suspend_with_optional_resume_delay("test message", 30)
@@ -715,7 +716,7 @@ async def test_suspend_with_optional_resume_delay_with_timeout():
     assert "test message" in str(exc_info.value)
 
 
-async def test_suspend_with_optional_resume_delay_no_timeout():
+async def test_suspend_with_optional_resume_delay_no_timeout() -> None:
     """Test suspend_with_optional_resume_delay without timeout."""
     with pytest.raises(SuspendExecution) as exc_info:
         suspend_with_optional_resume_delay("test message", None)
@@ -723,7 +724,7 @@ async def test_suspend_with_optional_resume_delay_no_timeout():
     assert "test message" in str(exc_info.value)
 
 
-async def test_suspend_with_optional_resume_delay_zero_timeout():
+async def test_suspend_with_optional_resume_delay_zero_timeout() -> None:
     """Test suspend_with_optional_resume_delay with zero timeout."""
     with pytest.raises(SuspendExecution) as exc_info:
         suspend_with_optional_resume_delay("test message", 0)
@@ -731,7 +732,7 @@ async def test_suspend_with_optional_resume_delay_zero_timeout():
     assert "test message" in str(exc_info.value)
 
 
-async def test_suspend_with_optional_resume_delay_negative_timeout():
+async def test_suspend_with_optional_resume_delay_negative_timeout() -> None:
     """Test suspend_with_optional_resume_delay with negative timeout."""
     with pytest.raises(SuspendExecution) as exc_info:
         suspend_with_optional_resume_delay("test message", -5)
@@ -740,7 +741,7 @@ async def test_suspend_with_optional_resume_delay_negative_timeout():
 
 
 @pytest.mark.parametrize("status", [OperationStatus.STARTED, OperationStatus.PENDING])
-async def test_invoke_handler_with_operation_name(status: OperationStatus):
+async def test_invoke_handler_with_operation_name(status: OperationStatus) -> None:
     """Test invoke_handler uses operation name in logs when available."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -766,7 +767,7 @@ async def test_invoke_handler_with_operation_name(status: OperationStatus):
 
 
 @pytest.mark.parametrize("status", [OperationStatus.STARTED, OperationStatus.PENDING])
-async def test_invoke_handler_without_operation_name(status: OperationStatus):
+async def test_invoke_handler_without_operation_name(status: OperationStatus) -> None:
     """Test invoke_handler uses function name in logs when no operation name."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -791,7 +792,7 @@ async def test_invoke_handler_without_operation_name(status: OperationStatus):
         )
 
 
-async def test_invoke_handler_with_none_payload():
+async def test_invoke_handler_with_none_payload() -> None:
     """Test invoke_handler when payload is None."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -821,7 +822,7 @@ async def test_invoke_handler_with_none_payload():
     assert operation_update.payload == "null"  # JSON serialization of None
 
 
-async def test_invoke_handler_already_succeeded_with_none_payload():
+async def test_invoke_handler_already_succeeded_with_none_payload() -> None:
     """Test invoke_handler when operation succeeded and original payload was None."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -849,7 +850,7 @@ async def test_invoke_handler_already_succeeded_with_none_payload():
 
 
 @patch("async_durable_execution._primitive.invoke.suspend_with_optional_resume_delay")
-async def test_invoke_handler_suspend_does_not_raise(mock_suspend):
+async def test_invoke_handler_suspend_does_not_raise(mock_suspend) -> None:
     """Test invoke_handler when suspend_with_optional_resume_delay doesn't raise an exception."""
 
     mock_state = Mock(spec=ExecutionState)
@@ -883,7 +884,7 @@ async def test_invoke_handler_suspend_does_not_raise(mock_suspend):
     mock_suspend.assert_called_once()
 
 
-async def test_invoke_handler_with_tenant_id():
+async def test_invoke_handler_with_tenant_id() -> None:
     """Test invoke_handler passes tenant_id to checkpoint."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -916,7 +917,7 @@ async def test_invoke_handler_with_tenant_id():
     assert chained_invoke_options["TenantId"] == "test-tenant-123"
 
 
-async def test_invoke_handler_without_tenant_id():
+async def test_invoke_handler_without_tenant_id() -> None:
     """Test invoke_handler without tenant_id doesn't include it in checkpoint."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -948,7 +949,7 @@ async def test_invoke_handler_without_tenant_id():
     assert "TenantId" not in chained_invoke_options
 
 
-async def test_invoke_handler_default_fields_no_tenant_id():
+async def test_invoke_handler_default_fields_no_tenant_id() -> None:
     """Test invoke_handler with default fields has no tenant_id."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -980,7 +981,7 @@ async def test_invoke_handler_default_fields_no_tenant_id():
     assert "TenantId" not in chained_invoke_options
 
 
-async def test_invoke_handler_defaults_to_json_serdes():
+async def test_invoke_handler_defaults_to_json_serdes() -> None:
     """Test invoke_handler uses DEFAULT_JSON_SERDES when no serdes fields are provided."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -1011,7 +1012,7 @@ async def test_invoke_handler_defaults_to_json_serdes():
     assert operation_update.payload == json.dumps(payload)
 
 
-async def test_invoke_handler_result_defaults_to_json_serdes():
+async def test_invoke_handler_result_defaults_to_json_serdes() -> None:
     """Test invoke_handler uses DEFAULT_JSON_SERDES for result deserialization."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -1044,7 +1045,7 @@ async def test_invoke_handler_result_defaults_to_json_serdes():
 # ============================================================================
 
 
-async def test_invoke_start_direct_state_lookup_called_once():
+async def test_invoke_start_direct_state_lookup_called_once() -> None:
     """Test start creates checkpoint then suspends without reloading it."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -1068,7 +1069,7 @@ async def test_invoke_start_direct_state_lookup_called_once():
     mock_state.create_checkpoint.assert_called_once()
 
 
-async def test_invoke_start_create_checkpoint_with_is_sync_true():
+async def test_invoke_start_create_checkpoint_with_is_sync_true() -> None:
     """Test that create_checkpoint is called with is_sync=True."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -1094,7 +1095,7 @@ async def test_invoke_start_create_checkpoint_with_is_sync_true():
     assert call_kwargs["is_sync"] is True
 
 
-async def test_invoke_immediate_response_already_completed():
+async def test_invoke_immediate_response_already_completed() -> None:
     """Test already completed: checkpoint is already SUCCEEDED on first check.
 
     When checkpoint is already SUCCEEDED on first check, no checkpoint is created

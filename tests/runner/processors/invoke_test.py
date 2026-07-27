@@ -1,5 +1,7 @@
 """Unit tests for invoke operation validator."""
 
+from typing import no_type_check
+
 import pytest
 
 from async_durable_execution._core.models import (
@@ -18,7 +20,7 @@ from async_durable_execution._runner.exceptions import (
 )
 
 
-def test_validate_start_action_with_no_current_state():
+def test_validate_start_action_with_no_current_state() -> None:
     """Test START action with no current state."""
     update = OperationUpdate(
         operation_id="test-id",
@@ -28,7 +30,7 @@ def test_validate_start_action_with_no_current_state():
     ChainedInvokeProcessor.validate(None, update)
 
 
-def test_validate_start_action_with_existing_state():
+def test_validate_start_action_with_existing_state() -> None:
     """Test START action with existing state raises error."""
     current_state = Operation(
         operation_id="test-id",
@@ -48,7 +50,7 @@ def test_validate_start_action_with_existing_state():
         ChainedInvokeProcessor.validate(current_state, update)
 
 
-def test_validate_cancel_action_with_started_state():
+def test_validate_cancel_action_with_started_state() -> None:
     """Test CANCEL action with STARTED state."""
     current_state = Operation(
         operation_id="test-id",
@@ -63,7 +65,7 @@ def test_validate_cancel_action_with_started_state():
     ChainedInvokeProcessor.validate(current_state, update)
 
 
-def test_validate_cancel_action_with_no_current_state():
+def test_validate_cancel_action_with_no_current_state() -> None:
     """Test CANCEL action with no current state raises error."""
     update = OperationUpdate(
         operation_id="test-id",
@@ -78,7 +80,7 @@ def test_validate_cancel_action_with_no_current_state():
         ChainedInvokeProcessor.validate(None, update)
 
 
-def test_validate_cancel_action_with_completed_state():
+def test_validate_cancel_action_with_completed_state() -> None:
     """Test CANCEL action with completed state raises error."""
     current_state = Operation(
         operation_id="test-id",
@@ -98,7 +100,7 @@ def test_validate_cancel_action_with_completed_state():
         ChainedInvokeProcessor.validate(current_state, update)
 
 
-def test_validate_invalid_action():
+def test_validate_invalid_action() -> None:
     """Test invalid action raises error."""
     update = OperationUpdate(
         operation_id="test-id",
@@ -113,7 +115,8 @@ def test_validate_invalid_action():
         ChainedInvokeProcessor.validate(None, update)
 
 
-def test_process_start_without_mock_result_starts_invoke():
+@no_type_check
+def test_process_start_without_mock_result_starts_invoke() -> None:
     """Test START action creates a started invoke when no mock result is registered."""
     processor = ChainedInvokeProcessor()
     update = OperationUpdate(
@@ -133,7 +136,8 @@ def test_process_start_without_mock_result_starts_invoke():
     assert result.chained_invoke_details.result is None
 
 
-def test_process_start_with_mock_result_succeeds_invoke():
+@no_type_check
+def test_process_start_with_mock_result_succeeds_invoke() -> None:
     """Test START action returns the registered local mock result."""
     processor = ChainedInvokeProcessor()
     processor.mock_result("mocked-function", {"ok": True})
@@ -150,7 +154,7 @@ def test_process_start_with_mock_result_succeeds_invoke():
     assert result.chained_invoke_details.result == '{"ok": true}'
 
 
-def test_process_cancel_translates_to_cancelled_invoke():
+def test_process_cancel_translates_to_cancelled_invoke() -> None:
     """Test CANCEL action marks a started invoke as cancelled."""
     processor = ChainedInvokeProcessor()
     current_state = Operation(
@@ -174,7 +178,7 @@ def test_process_cancel_translates_to_cancelled_invoke():
     assert result.end_timestamp is not None
 
 
-def test_process_invalid_action_raises():
+def test_process_invalid_action_raises() -> None:
     """Test process rejects non-START/CANCEL invoke updates."""
     processor = ChainedInvokeProcessor()
     update = OperationUpdate(

@@ -1,5 +1,7 @@
 """Tests for context operation processor."""
 
+from typing import Any, no_type_check
+
 from datetime import datetime, timezone
 from unittest.mock import Mock
 
@@ -24,26 +26,26 @@ from async_durable_execution._runner.exceptions import (
 class MockNotifier:
     """Mock notifier for testing."""
 
-    def __init__(self):
-        self.completed_calls = []
-        self.failed_calls = []
-        self.wait_timer_calls = []
-        self.step_retry_calls = []
+    def __init__(self) -> None:
+        self.completed_calls: list[Any] = []
+        self.failed_calls: list[Any] = []
+        self.wait_timer_calls: list[Any] = []
+        self.step_retry_calls: list[Any] = []
 
-    def complete_execution(self, execution_arn, result=None):
+    def complete_execution(self, execution_arn, result=None) -> None:
         self.completed_calls.append((execution_arn, result))
 
-    def fail_execution(self, execution_arn, error):
+    def fail_execution(self, execution_arn, error) -> None:
         self.failed_calls.append((execution_arn, error))
 
-    def schedule_wait_timer(self, execution_arn, operation_id, delay):
+    def schedule_wait_timer(self, execution_arn, operation_id, delay) -> None:
         self.wait_timer_calls.append((execution_arn, operation_id, delay))
 
-    def schedule_step_retry(self, execution_arn, operation_id, delay):
+    def schedule_step_retry(self, execution_arn, operation_id, delay) -> None:
         self.step_retry_calls.append((execution_arn, operation_id, delay))
 
 
-def test_process_start_action():
+def test_process_start_action() -> None:
     processor = ContextProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -65,7 +67,7 @@ def test_process_start_action():
     assert result.context_details is not None
 
 
-def test_process_start_action_with_current_operation():
+def test_process_start_action_with_current_operation() -> None:
     processor = ContextProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -86,7 +88,8 @@ def test_process_start_action_with_current_operation():
     assert result.status == OperationStatus.STARTED
 
 
-def test_process_succeed_action():
+@no_type_check
+def test_process_succeed_action() -> None:
     processor = ContextProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -108,7 +111,7 @@ def test_process_succeed_action():
     assert result.context_details.error is None
 
 
-def test_process_succeed_action_with_current_operation():
+def test_process_succeed_action_with_current_operation() -> None:
     processor = ContextProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -130,7 +133,8 @@ def test_process_succeed_action_with_current_operation():
     assert result.status == OperationStatus.SUCCEEDED
 
 
-def test_process_fail_action():
+@no_type_check
+def test_process_fail_action() -> None:
     processor = ContextProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -153,7 +157,7 @@ def test_process_fail_action():
     assert result.context_details.result is None
 
 
-def test_process_fail_action_with_current_operation():
+def test_process_fail_action_with_current_operation() -> None:
     processor = ContextProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -176,7 +180,8 @@ def test_process_fail_action_with_current_operation():
     assert result.status == OperationStatus.FAILED
 
 
-def test_process_fail_action_with_payload_and_error():
+@no_type_check
+def test_process_fail_action_with_payload_and_error() -> None:
     processor = ContextProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -197,7 +202,7 @@ def test_process_fail_action_with_payload_and_error():
     assert result.context_details.error == error
 
 
-def test_process_invalid_action():
+def test_process_invalid_action() -> None:
     processor = ContextProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -215,7 +220,7 @@ def test_process_invalid_action():
         processor.process(update, None, notifier, execution_arn)
 
 
-def test_process_cancel_action():
+def test_process_cancel_action() -> None:
     processor = ContextProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -233,7 +238,7 @@ def test_process_cancel_action():
         processor.process(update, None, notifier, execution_arn)
 
 
-def test_process_with_parent_id():
+def test_process_with_parent_id() -> None:
     processor = ContextProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -251,7 +256,8 @@ def test_process_with_parent_id():
     assert result.parent_id == "parent-456"
 
 
-def test_process_with_sub_type():
+@no_type_check
+def test_process_with_sub_type() -> None:
     processor = ContextProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -269,7 +275,8 @@ def test_process_with_sub_type():
     assert result.sub_type == "parallel"
 
 
-def test_process_start_without_payload():
+@no_type_check
+def test_process_start_without_payload() -> None:
     processor = ContextProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -287,7 +294,8 @@ def test_process_start_without_payload():
     assert result.context_details.error is None
 
 
-def test_process_succeed_without_payload():
+@no_type_check
+def test_process_succeed_without_payload() -> None:
     processor = ContextProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -305,7 +313,8 @@ def test_process_succeed_without_payload():
     assert result.context_details.error is None
 
 
-def test_process_fail_without_error():
+@no_type_check
+def test_process_fail_without_error() -> None:
     processor = ContextProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -323,7 +332,7 @@ def test_process_fail_without_error():
     assert result.context_details.error is None
 
 
-def test_no_notifier_calls():
+def test_no_notifier_calls() -> None:
     processor = ContextProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -343,7 +352,7 @@ def test_no_notifier_calls():
     assert len(notifier.step_retry_calls) == 0
 
 
-def test_end_timestamp_set_for_terminal_states():
+def test_end_timestamp_set_for_terminal_states() -> None:
     processor = ContextProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -360,7 +369,7 @@ def test_end_timestamp_set_for_terminal_states():
     assert result.end_timestamp is not None
 
 
-def test_end_timestamp_not_set_for_non_terminal_states():
+def test_end_timestamp_not_set_for_non_terminal_states() -> None:
     processor = ContextProcessor()
     notifier = MockNotifier()
     execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
@@ -400,7 +409,7 @@ from async_durable_execution._runner.exceptions import (
 )
 
 
-def test_valid_actions_for_context():
+def test_valid_actions_for_context() -> None:
     """Test that VALID_ACTIONS_FOR_CONTEXT contains expected actions."""
     expected_actions = {
         OperationAction.START,
@@ -410,7 +419,7 @@ def test_valid_actions_for_context():
     assert expected_actions == VALID_ACTIONS_FOR_CONTEXT
 
 
-def test_validate_start_action_with_no_current_state():
+def test_validate_start_action_with_no_current_state() -> None:
     """Test START action validation when no current state exists."""
     update = OperationUpdate(
         operation_id="test-id",
@@ -422,7 +431,7 @@ def test_validate_start_action_with_no_current_state():
     ContextProcessor.validate(None, update)
 
 
-def test_validate_start_action_with_existing_state():
+def test_validate_start_action_with_existing_state() -> None:
     """Test START action validation when current state already exists."""
     current_state = Operation(
         operation_id="test-id",
@@ -442,7 +451,7 @@ def test_validate_start_action_with_existing_state():
         ContextProcessor.validate(current_state, update)
 
 
-def test_validate_succeed_action_with_started_state():
+def test_validate_succeed_action_with_started_state() -> None:
     """Test SUCCEED action validation with STARTED state."""
     current_state = Operation(
         operation_id="test-id",
@@ -460,7 +469,7 @@ def test_validate_succeed_action_with_started_state():
     ContextProcessor.validate(current_state, update)
 
 
-def test_validate_fail_action_with_started_state():
+def test_validate_fail_action_with_started_state() -> None:
     """Test FAIL action validation with STARTED state."""
     current_state = Operation(
         operation_id="test-id",
@@ -481,7 +490,7 @@ def test_validate_fail_action_with_started_state():
     ContextProcessor.validate(current_state, update)
 
 
-def test_validate_succeed_action_with_invalid_status():
+def test_validate_succeed_action_with_invalid_status() -> None:
     """Test SUCCEED action validation with invalid status."""
     invalid_statuses = [
         OperationStatus.PENDING,
@@ -513,7 +522,7 @@ def test_validate_succeed_action_with_invalid_status():
             ContextProcessor.validate(current_state, update)
 
 
-def test_validate_fail_action_with_invalid_status():
+def test_validate_fail_action_with_invalid_status() -> None:
     """Test FAIL action validation with invalid status."""
     invalid_statuses = [
         OperationStatus.PENDING,
@@ -549,7 +558,7 @@ def test_validate_fail_action_with_invalid_status():
             ContextProcessor.validate(current_state, update)
 
 
-def test_validate_fail_action_with_payload():
+def test_validate_fail_action_with_payload() -> None:
     """Test FAIL action validation when payload is provided."""
     current_state = Operation(
         operation_id="test-id",
@@ -570,7 +579,7 @@ def test_validate_fail_action_with_payload():
         ContextProcessor.validate(current_state, update)
 
 
-def test_validate_succeed_action_with_error():
+def test_validate_succeed_action_with_error() -> None:
     """Test SUCCEED action validation when error is provided."""
     current_state = Operation(
         operation_id="test-id",
@@ -594,7 +603,7 @@ def test_validate_succeed_action_with_error():
         ContextProcessor.validate(current_state, update)
 
 
-def test_validate_close_actions_with_no_current_state():
+def test_validate_close_actions_with_no_current_state() -> None:
     """Test SUCCEED and FAIL actions validation when no current state exists."""
     # SUCCEED with no current state should pass
     succeed_update = OperationUpdate(
@@ -618,7 +627,7 @@ def test_validate_close_actions_with_no_current_state():
     ContextProcessor.validate(None, fail_update)
 
 
-def test_validate_invalid_action():
+def test_validate_invalid_action() -> None:
     """Test validation with invalid action."""
     invalid_actions = [
         OperationAction.RETRY,

@@ -158,7 +158,7 @@ async def map_handler(
     summary_generator: SummaryGenerator | None = MapSummaryGenerator(),
     nesting_type: NestingType = NestingType.NESTED,
     item_namer: Callable[[T, int], str] | None = None,
-):
+) -> BatchResult[R]:
     """Execute a callable for each item through the parallel handler."""
     handler = parallel_handler(
         callables=_create_map_branches(items, func),

@@ -5,6 +5,8 @@ AWS Durable Execution SDK Python Testing framework, including validation
 of boto3 compatibility for proper AWS service integration.
 """
 
+from typing import no_type_check
+
 import json
 
 import pytest
@@ -440,7 +442,7 @@ def test_execution_conflict_exception() -> None:
 # =============================================================================
 
 
-def test_base_exception_hierarchy():
+def test_base_exception_hierarchy() -> None:
     """Test that all AWS exceptions inherit from the correct base classes."""
     # Test base hierarchy
     assert issubclass(
@@ -466,7 +468,7 @@ def test_base_exception_hierarchy():
         assert issubclass(exception_class, exceptions.AwsApiException)
 
 
-def test_aws_api_exception_abstract_to_dict():
+def test_aws_api_exception_abstract_to_dict() -> None:
     """Test that AwsApiException.to_dict() raises NotImplementedError."""
     exception = exceptions.AwsApiException("test message")
 
@@ -477,7 +479,7 @@ def test_aws_api_exception_abstract_to_dict():
 class TestSmithyMappedExceptions:
     """Test Smithy-mapped exceptions (defined in Smithy models)."""
 
-    def test_invalid_parameter_value_exception(self):
+    def test_invalid_parameter_value_exception(self) -> None:
         """Test InvalidParameterValueException serialization and properties."""
         message = "Invalid parameter"
         exception = exceptions.InvalidParameterValueException(message)
@@ -491,7 +493,7 @@ class TestSmithyMappedExceptions:
         expected_json = {"Type": "InvalidParameterValueException", "message": message}
         assert exception.to_dict() == expected_json
 
-    def test_resource_not_found_exception(self):
+    def test_resource_not_found_exception(self) -> None:
         """Test ResourceNotFoundException serialization and properties."""
         message = "Resource not found"
         exception = exceptions.ResourceNotFoundException(message)
@@ -505,7 +507,7 @@ class TestSmithyMappedExceptions:
         expected_json = {"Type": "ResourceNotFoundException", "Message": message}
         assert exception.to_dict() == expected_json
 
-    def test_service_exception(self):
+    def test_service_exception(self) -> None:
         """Test ServiceException serialization and properties."""
         message = "Service error"
         exception = exceptions.ServiceException(message)
@@ -519,7 +521,7 @@ class TestSmithyMappedExceptions:
         expected_json = {"Type": "ServiceException", "Message": message}
         assert exception.to_dict() == expected_json
 
-    def test_execution_already_started_exception(self):
+    def test_execution_already_started_exception(self) -> None:
         """Test ExecutionAlreadyStartedException serialization and properties."""
         message = "Execution already started"
         arn = "arn:aws:lambda:us-east-1:123456789012:function:test"
@@ -535,7 +537,7 @@ class TestSmithyMappedExceptions:
         expected_json = {"message": message, "DurableExecutionArn": arn}
         assert exception.to_dict() == expected_json
 
-    def test_callback_timeout_exception(self):
+    def test_callback_timeout_exception(self) -> None:
         """Test CallbackTimeoutException serialization and properties."""
         message = "Callback timed out"
         exception = exceptions.CallbackTimeoutException(message)
@@ -549,7 +551,7 @@ class TestSmithyMappedExceptions:
         expected_json = {"Type": "CallbackTimeoutException", "message": message}
         assert exception.to_dict() == expected_json
 
-    def test_too_many_requests_exception(self):
+    def test_too_many_requests_exception(self) -> None:
         """Test TooManyRequestsException serialization and properties."""
         message = "Too many requests"
         exception = exceptions.TooManyRequestsException(message)
@@ -563,7 +565,7 @@ class TestSmithyMappedExceptions:
         expected_json = {"Type": "TooManyRequestsException", "message": message}
         assert exception.to_dict() == expected_json
 
-    def test_execution_conflict_exception(self):
+    def test_execution_conflict_exception(self) -> None:
         """Test ExecutionConflictException serialization and properties."""
         message = "Execution conflict"
         exception = exceptions.ExecutionConflictException(message)
@@ -581,7 +583,7 @@ class TestSmithyMappedExceptions:
 class TestUnmappedExceptions:
     """Test unmapped exceptions (thrown by services but not in Smithy)."""
 
-    def test_illegal_state_exception(self):
+    def test_illegal_state_exception(self) -> None:
         """Test IllegalStateException maps to ServiceException when serialized."""
         message = "Invalid state"
         exception = exceptions.IllegalStateException(message)
@@ -595,7 +597,7 @@ class TestUnmappedExceptions:
         expected_json = {"Type": "ServiceException", "Message": message}
         assert exception.to_dict() == expected_json
 
-    def test_runtime_exception(self):
+    def test_runtime_exception(self) -> None:
         """Test RuntimeException maps to ServiceException when serialized."""
         message = "Runtime error"
         exception = exceptions.RuntimeException(message)
@@ -609,7 +611,7 @@ class TestUnmappedExceptions:
         expected_json = {"Type": "ServiceException", "Message": message}
         assert exception.to_dict() == expected_json
 
-    def test_illegal_argument_exception(self):
+    def test_illegal_argument_exception(self) -> None:
         """Test IllegalArgumentException maps to InvalidParameterValueException when serialized."""
         message = "Invalid argument"
         exception = exceptions.IllegalArgumentException(message)
@@ -627,7 +629,7 @@ class TestUnmappedExceptions:
 class TestHttpStatusCodes:
     """Test HTTP status codes match Smithy @httpError annotations."""
 
-    def test_client_error_status_codes(self):
+    def test_client_error_status_codes(self) -> None:
         """Test client error (4xx) status codes."""
         assert exceptions.InvalidParameterValueException("test").http_status_code == 400
         assert exceptions.ResourceNotFoundException("test").http_status_code == 404
@@ -640,7 +642,7 @@ class TestHttpStatusCodes:
         assert exceptions.TooManyRequestsException("test").http_status_code == 429
         assert exceptions.IllegalArgumentException("test").http_status_code == 400
 
-    def test_server_error_status_codes(self):
+    def test_server_error_status_codes(self) -> None:
         """Test server error (5xx) status codes."""
         assert exceptions.ServiceException("test").http_status_code == 500
         assert exceptions.IllegalStateException("test").http_status_code == 500
@@ -650,7 +652,7 @@ class TestHttpStatusCodes:
 class TestFieldNameCasing:
     """Test field name casing matches Smithy definitions."""
 
-    def test_lowercase_message_fields(self):
+    def test_lowercase_message_fields(self) -> None:
         """Test exceptions that use lowercase 'message' field."""
         # These use lowercase 'message' per Smithy definitions
         exceptions_with_lowercase_message = [
@@ -668,7 +670,8 @@ class TestFieldNameCasing:
             if hasattr(exception, "message"):
                 assert exception.message == "test"
 
-    def test_uppercase_message_fields(self):
+    @no_type_check
+    def test_uppercase_message_fields(self) -> None:
         """Test exceptions that use uppercase 'Message' field."""
         # These use uppercase 'Message' per Smithy definitions
         exceptions_with_uppercase_message = [
@@ -683,7 +686,7 @@ class TestFieldNameCasing:
 class TestBoto3Compatibility:
     """Test boto3 compatibility and JSON structure validation."""
 
-    def test_json_structure_matches_boto3_expectations(self):
+    def test_json_structure_matches_boto3_expectations(self) -> None:
         """Test that JSON output matches what boto3 error factory expects."""
         # Test that all exceptions produce valid JSON structures
         test_cases = [
@@ -725,7 +728,7 @@ class TestBoto3Compatibility:
             json_str = json.dumps(actual_json)
             assert json.loads(json_str) == actual_json
 
-    def test_type_field_values_match_exception_names(self):
+    def test_type_field_values_match_exception_names(self) -> None:
         """Test that Type field values match what boto3 expects for exception names."""
         type_field_mappings = [
             (
@@ -756,7 +759,7 @@ class TestBoto3Compatibility:
             ):  # ExecutionAlreadyStartedException doesn't have Type field
                 assert json_output["Type"] == expected_type
 
-    def test_execution_already_started_exception_special_case(self):
+    def test_execution_already_started_exception_special_case(self) -> None:
         """Test ExecutionAlreadyStartedException special case (no Type field)."""
         exception = exceptions.ExecutionAlreadyStartedException(
             "test message", "test-arn"
@@ -772,7 +775,7 @@ class TestBoto3Compatibility:
         assert json_output["message"] == "test message"
         assert json_output["DurableExecutionArn"] == "test-arn"
 
-    def test_message_field_casing_compatibility(self):
+    def test_message_field_casing_compatibility(self) -> None:
         """Test message field casing compatibility with boto3 deserialization."""
         # Test lowercase 'message' field exceptions
         lowercase_exceptions = [
@@ -806,7 +809,7 @@ class TestBoto3Compatibility:
 class TestEdgeCases:
     """Test edge cases and error conditions."""
 
-    def test_empty_message_handling(self):
+    def test_empty_message_handling(self) -> None:
         """Test handling of empty messages."""
         exceptions_list = [
             exceptions.InvalidParameterValueException(""),
@@ -825,7 +828,7 @@ class TestEdgeCases:
             json_output = exception.to_dict()
             assert isinstance(json_output, dict)
 
-    def test_special_characters_in_messages(self):
+    def test_special_characters_in_messages(self) -> None:
         """Test handling of special characters in messages."""
         special_message = 'Test with "quotes", newlines\n, and unicode: 🚀'
 
@@ -841,7 +844,7 @@ class TestEdgeCases:
             message_field = "Message" if hasattr(exception, "Message") else "message"
             assert json_output[message_field] == special_message
 
-    def test_execution_already_started_with_empty_arn(self):
+    def test_execution_already_started_with_empty_arn(self) -> None:
         """Test ExecutionAlreadyStartedException with empty ARN."""
         exception = exceptions.ExecutionAlreadyStartedException("test", "")
         json_output = exception.to_dict()
@@ -850,7 +853,8 @@ class TestEdgeCases:
         assert json_output["message"] == "test"
 
 
-def test_exception_test_cases_data_structure():
+@no_type_check
+def test_exception_test_cases_data_structure() -> None:
     """Test that we can create a comprehensive test data structure for all exceptions."""
     # This validates the test data structure mentioned in the design document
     exception_test_cases = [

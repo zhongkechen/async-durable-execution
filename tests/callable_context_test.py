@@ -1,3 +1,4 @@
+from typing import no_type_check
 from unittest.mock import Mock
 
 from async_durable_execution import DurableContext, durable_callable
@@ -10,7 +11,8 @@ from async_durable_execution._primitive.step import StepContext
 from async_durable_execution._core.state import ExecutionState
 
 
-async def test_bind_current_context_sets_context_for_invocation():
+@no_type_check
+async def test_bind_current_context_sets_context_for_invocation() -> None:
     state = Mock(spec=ExecutionState)
     state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
@@ -30,7 +32,8 @@ async def test_bind_current_context_sets_context_for_invocation():
         assert await async_callable() is context
 
 
-async def test_bind_current_context_accepts_step_context():
+@no_type_check
+async def test_bind_current_context_accepts_step_context() -> None:
     state = Mock(spec=ExecutionState)
     state.durable_execution_arn = (
         "arn:aws:durable:us-east-1:123456789012:execution/test"
@@ -51,9 +54,9 @@ async def test_bind_current_context_accepts_step_context():
         assert await async_callable() is context
 
 
-async def test_durable_callable_supports_instance_methods():
+async def test_durable_callable_supports_instance_methods() -> None:
     class Greeter:
-        def __init__(self, prefix: str):
+        def __init__(self, prefix: str) -> None:
             self.prefix = prefix
 
         @durable_callable
@@ -67,7 +70,7 @@ async def test_durable_callable_supports_instance_methods():
     assert await bound_greet() == "hello, Ada"
 
 
-async def test_durable_callable_supports_classmethod_inside_order():
+async def test_durable_callable_supports_classmethod_inside_order() -> None:
     class Greeter:
         prefix = "hello"
 
@@ -81,7 +84,7 @@ async def test_durable_callable_supports_classmethod_inside_order():
     assert await bound_greet() == "hello, Ada"
 
 
-async def test_durable_callable_supports_classmethod_outside_order():
+async def test_durable_callable_supports_classmethod_outside_order() -> None:
     class Greeter:
         prefix = "hello"
 
@@ -95,7 +98,7 @@ async def test_durable_callable_supports_classmethod_outside_order():
     assert await bound_greet() == "hello, Ada"
 
 
-async def test_durable_callable_supports_staticmethod_orders():
+async def test_durable_callable_supports_staticmethod_orders() -> None:
     class Greeter:
         @staticmethod
         @durable_callable

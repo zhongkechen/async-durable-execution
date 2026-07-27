@@ -8,7 +8,7 @@ from async_durable_execution import (
 from examples.parallel import parallel_with_bound_callables
 
 
-async def test_parallel_with_bound_callables(durable_runner):
+async def test_parallel_with_bound_callables(durable_runner) -> None:
     """Test parallel example with bound durable callables."""
     async with durable_runner(
         handler=parallel_with_bound_callables.handler,

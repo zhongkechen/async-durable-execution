@@ -5,7 +5,7 @@ from async_durable_execution import OperationStatus
 from examples.map import map_with_min_successful
 
 
-async def test_map_with_min_successful(durable_runner):
+async def test_map_with_min_successful(durable_runner) -> None:
     """Test map with min_successful threshold."""
     async with durable_runner(
         handler=map_with_min_successful.handler, input="test", timeout=10

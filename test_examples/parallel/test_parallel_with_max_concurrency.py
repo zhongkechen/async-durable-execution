@@ -5,7 +5,7 @@ from async_durable_execution import OperationStatus
 from examples.parallel import parallel_with_max_concurrency
 
 
-async def test_parallel_with_max_concurrency(durable_runner):
+async def test_parallel_with_max_concurrency(durable_runner) -> None:
     """Test parallel with maxConcurrency limit."""
     async with durable_runner(
         handler=parallel_with_max_concurrency.handler, input="test", timeout=10

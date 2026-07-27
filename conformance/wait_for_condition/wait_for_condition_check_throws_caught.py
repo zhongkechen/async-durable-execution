@@ -1,13 +1,13 @@
 """6-8: Wait-for-condition check failure caught by the handler."""
 
-from typing import Any
+from typing import Any, NoReturn
 
 from async_durable_execution import durable_execution, wait_for_condition
 
 
 @durable_execution
 async def handler(_event: Any) -> str:
-    async def check(_state: None):
+    async def check(_state: None) -> NoReturn:
         raise RuntimeError("check function failed")
 
     try:

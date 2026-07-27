@@ -1,5 +1,7 @@
 """Unit tests for execution module."""
 
+from typing import no_type_check
+
 from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
@@ -25,7 +27,8 @@ from async_durable_execution._runner.local.execution import Execution
 from async_durable_execution._runner.local.model import StartDurableExecutionInput
 
 
-def test_execution_init():
+@no_type_check
+def test_execution_init() -> None:
     """Test Execution initialization."""
     arn = "test-arn"
     start_input = StartDurableExecutionInput(
@@ -52,7 +55,7 @@ def test_execution_init():
 
 
 @patch("async_durable_execution._runner.local.execution.uuid4")
-def test_execution_new(mock_uuid4):
+def test_execution_new(mock_uuid4) -> None:
     """Test Execution.new static method."""
     mock_uuid = "test-uuid-123"
     mock_uuid4.return_value = mock_uuid
@@ -77,7 +80,8 @@ def test_execution_new(mock_uuid4):
 
 
 @patch("async_durable_execution._runner.local.execution.datetime")
-def test_execution_start(mock_datetime):
+@no_type_check
+def test_execution_start(mock_datetime) -> None:
     """Test Execution.start method."""
     mock_now = datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     mock_datetime.now.return_value = mock_now
@@ -107,7 +111,7 @@ def test_execution_start(mock_datetime):
     assert operation.execution_details.input_payload == '{"key": "value"}'
 
 
-def test_get_operation_execution_started():
+def test_get_operation_execution_started() -> None:
     """Test get_operation_execution_started method."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -127,7 +131,7 @@ def test_get_operation_execution_started():
     assert result.operation_type == OperationType.EXECUTION
 
 
-def test_get_operation_execution_started_not_started():
+def test_get_operation_execution_started_not_started() -> None:
     """Test get_operation_execution_started raises error when not started."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -144,7 +148,7 @@ def test_get_operation_execution_started_not_started():
         execution.get_operation_execution_started()
 
 
-def test_get_new_checkpoint_token():
+def test_get_new_checkpoint_token() -> None:
     """Test get_new_checkpoint_token method."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -166,7 +170,7 @@ def test_get_new_checkpoint_token():
     assert token1 != token2
 
 
-def test_get_navigable_operations():
+def test_get_navigable_operations() -> None:
     """Test get_navigable_operations method."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -194,7 +198,7 @@ def test_get_navigable_operations():
     assert result == operations
 
 
-def test_get_assertable_operations():
+def test_get_assertable_operations() -> None:
     """Test get_assertable_operations method."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -230,7 +234,7 @@ def test_get_assertable_operations():
     assert result[0] == step_op
 
 
-def test_has_pending_operations_with_pending_step():
+def test_has_pending_operations_with_pending_step() -> None:
     """Test has_pending_operations returns True for pending STEP operations."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -258,7 +262,7 @@ def test_has_pending_operations_with_pending_step():
     assert result is True
 
 
-def test_has_pending_operations_with_started_wait():
+def test_has_pending_operations_with_started_wait() -> None:
     """Test has_pending_operations returns True for started WAIT operations."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -286,7 +290,7 @@ def test_has_pending_operations_with_started_wait():
     assert result is True
 
 
-def test_has_pending_operations_with_started_callback():
+def test_has_pending_operations_with_started_callback() -> None:
     """Test has_pending_operations returns True for started CALLBACK operations."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -314,7 +318,7 @@ def test_has_pending_operations_with_started_callback():
     assert result is True
 
 
-def test_has_pending_operations_with_started_invoke():
+def test_has_pending_operations_with_started_invoke() -> None:
     """Test has_pending_operations returns True for started INVOKE operations."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -342,7 +346,7 @@ def test_has_pending_operations_with_started_invoke():
     assert result is True
 
 
-def test_has_pending_operations_no_pending():
+def test_has_pending_operations_no_pending() -> None:
     """Test has_pending_operations returns False when no pending operations."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -370,7 +374,8 @@ def test_has_pending_operations_no_pending():
     assert result is False
 
 
-def test_complete_success_with_string_result():
+@no_type_check
+def test_complete_success_with_string_result() -> None:
     """Test complete_success method with string result."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -390,7 +395,8 @@ def test_complete_success_with_string_result():
     assert execution.result.result == "success result"
 
 
-def test_complete_success_with_none_result():
+@no_type_check
+def test_complete_success_with_none_result() -> None:
     """Test complete_success method with None result."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -410,7 +416,8 @@ def test_complete_success_with_none_result():
     assert execution.result.result is None
 
 
-def test_complete_fail():
+@no_type_check
+def test_complete_fail() -> None:
     """Test complete_fail method."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -431,7 +438,7 @@ def test_complete_fail():
     assert execution.result.error == error
 
 
-def test_find_operation_exists():
+def test_find_operation_exists() -> None:
     """Test find_operation method when operation exists."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -458,7 +465,7 @@ def test_find_operation_exists():
     assert found_operation == operation
 
 
-def test_find_operation_not_exists():
+def test_find_operation_not_exists() -> None:
     """Test find_operation method when operation doesn't exist."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -478,7 +485,7 @@ def test_find_operation_not_exists():
 
 
 @patch("async_durable_execution._runner.local.execution.datetime")
-def test_complete_wait_success(mock_datetime):
+def test_complete_wait_success(mock_datetime) -> None:
     """Test complete_wait method successful completion."""
     mock_now = datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     mock_datetime.now.return_value = mock_now
@@ -510,7 +517,7 @@ def test_complete_wait_success(mock_datetime):
     assert execution.operations[0] == result
 
 
-def test_complete_wait_wrong_status():
+def test_complete_wait_wrong_status() -> None:
     """Test complete_wait method with wrong operation status."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -537,7 +544,7 @@ def test_complete_wait_wrong_status():
         execution.complete_wait("wait-op-id")
 
 
-def test_complete_wait_wrong_type():
+def test_complete_wait_wrong_type() -> None:
     """Test complete_wait method with wrong operation type."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -562,7 +569,8 @@ def test_complete_wait_wrong_type():
         execution.complete_wait("step-op-id")
 
 
-def test_complete_retry_success():
+@no_type_check
+def test_complete_retry_success() -> None:
     """Test complete_retry method successful completion."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -596,7 +604,7 @@ def test_complete_retry_success():
     assert execution.operations[0] == result
 
 
-def test_complete_retry_no_step_details():
+def test_complete_retry_no_step_details() -> None:
     """Test complete_retry method with no step_details."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -624,7 +632,7 @@ def test_complete_retry_no_step_details():
     assert execution.token_sequence == 1
 
 
-def test_complete_retry_wrong_status():
+def test_complete_retry_wrong_status() -> None:
     """Test complete_retry method with wrong operation status."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -651,7 +659,7 @@ def test_complete_retry_wrong_status():
         execution.complete_retry("step-op-id")
 
 
-def test_complete_retry_wrong_type():
+def test_complete_retry_wrong_type() -> None:
     """Test complete_retry method with wrong operation type."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -676,7 +684,7 @@ def test_complete_retry_wrong_type():
         execution.complete_retry("wait-op-id")
 
 
-def test_status_running():
+def test_status_running() -> None:
     """Test status property returns RUNNING for incomplete execution."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -692,7 +700,7 @@ def test_status_running():
     assert execution.current_status().value == "RUNNING"
 
 
-def test_status_succeeded():
+def test_status_succeeded() -> None:
     """Test status property returns SUCCEEDED for successful execution."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -709,7 +717,7 @@ def test_status_succeeded():
     assert execution.current_status().value == "SUCCEEDED"
 
 
-def test_status_failed():
+def test_status_failed() -> None:
     """Test status property returns FAILED for failed execution."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -727,7 +735,7 @@ def test_status_failed():
     assert execution.current_status().value == "FAILED"
 
 
-def test_status_timed_out():
+def test_status_timed_out() -> None:
     """Test status property returns TIMED_OUT for timeout errors."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -747,7 +755,7 @@ def test_status_timed_out():
     assert execution.current_status().value == "TIMED_OUT"
 
 
-def test_status_stopped():
+def test_status_stopped() -> None:
     """Test status property returns STOPPED for stop errors."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -767,7 +775,7 @@ def test_status_stopped():
     assert execution.current_status().value == "STOPPED"
 
 
-def test_status_no_result():
+def test_status_no_result() -> None:
     """Test status property returns FAILED for completed execution with no result."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -788,7 +796,8 @@ def test_status_no_result():
         execution.current_status()
 
 
-def test_complete_retry_with_step_details():
+@no_type_check
+def test_complete_retry_with_step_details() -> None:
     """Test complete_retry with operation that has step_details."""
     step_details = StepDetails(
         attempt=1, next_attempt_timestamp=datetime.now(timezone.utc)
@@ -807,7 +816,7 @@ def test_complete_retry_with_step_details():
     assert result.step_details.next_attempt_timestamp is None
 
 
-def test_complete_retry_without_step_details():
+def test_complete_retry_without_step_details() -> None:
     """Test complete_retry with operation that has no step_details."""
     step_op = Operation(
         operation_id="op-1",
@@ -823,7 +832,7 @@ def test_complete_retry_without_step_details():
     assert result.step_details is None
 
 
-def test_from_dict_with_none_result():
+def test_from_dict_with_none_result() -> None:
     """Test from_dict with None result."""
     data = {
         "DurableExecutionArn": "test-arn",
@@ -846,7 +855,7 @@ def test_from_dict_with_none_result():
         assert execution.result is None
 
 
-def test_find_callback_operation_not_found():
+def test_find_callback_operation_not_found() -> None:
     """Test find_callback_operation raises exception when callback not found."""
     execution = Execution("test-arn", Mock(), [])
 
@@ -857,7 +866,7 @@ def test_find_callback_operation_not_found():
         execution.find_callback_operation("nonexistent")
 
 
-def test_complete_callback_success_not_started():
+def test_complete_callback_success_not_started() -> None:
     """Test complete_callback_success raises exception when callback not in STARTED state."""
     # Create callback operation in wrong state
     callback_op = Operation(
@@ -876,7 +885,7 @@ def test_complete_callback_success_not_started():
         execution.complete_callback_success("test-id")
 
 
-def test_complete_callback_failure_not_started():
+def test_complete_callback_failure_not_started() -> None:
     """Test complete_callback_failure raises exception when callback not in STARTED state."""
     # Create callback operation in wrong state
     callback_op = Operation(
@@ -896,7 +905,7 @@ def test_complete_callback_failure_not_started():
         execution.complete_callback_failure("test-id", error)
 
 
-def test_complete_callback_success_no_callback_details():
+def test_complete_callback_success_no_callback_details() -> None:
     """Test complete_callback_success with operation that has no callback_details."""
     callback_details = CallbackDetails(callback_id="test-id")
     callback_op = Operation(
@@ -913,7 +922,7 @@ def test_complete_callback_success_no_callback_details():
     assert result.status == OperationStatus.SUCCEEDED
 
 
-def test_complete_callback_failure_no_callback_details():
+def test_complete_callback_failure_no_callback_details() -> None:
     """Test complete_callback_failure with operation that has no callback_details."""
     callback_details = CallbackDetails(callback_id="test-id")
     callback_op = Operation(
@@ -931,7 +940,8 @@ def test_complete_callback_failure_no_callback_details():
     assert result.status == OperationStatus.FAILED
 
 
-def test_complete_callback_success_with_none_callback_details():
+@no_type_check
+def test_complete_callback_success_with_none_callback_details() -> None:
     """Test complete_callback_success when operation has None callback_details."""
     callback_op = Operation(
         operation_id="op-1",
@@ -950,7 +960,8 @@ def test_complete_callback_success_with_none_callback_details():
     assert result.callback_details is None
 
 
-def test_complete_callback_failure_with_none_callback_details():
+@no_type_check
+def test_complete_callback_failure_with_none_callback_details() -> None:
     """Test complete_callback_failure when operation has None callback_details."""
     callback_op = Operation(
         operation_id="op-1",
@@ -970,7 +981,8 @@ def test_complete_callback_failure_with_none_callback_details():
     assert result.callback_details is None
 
 
-def test_complete_callback_success_with_bytes_result():
+@no_type_check
+def test_complete_callback_success_with_bytes_result() -> None:
     """Test complete_callback_success with bytes result that gets decoded."""
     callback_details = CallbackDetails(callback_id="test-id")
     callback_op = Operation(
@@ -987,7 +999,8 @@ def test_complete_callback_success_with_bytes_result():
     assert result.callback_details.result == "test result"
 
 
-def test_complete_callback_success_with_none_result():
+@no_type_check
+def test_complete_callback_success_with_none_result() -> None:
     """Test complete_callback_success with None result."""
     callback_details = CallbackDetails(callback_id="test-id")
     callback_op = Operation(
@@ -1004,7 +1017,7 @@ def test_complete_callback_success_with_none_result():
     assert result.callback_details.result is None
 
 
-def test_start_requires_invocation_id():
+def test_start_requires_invocation_id() -> None:
     """Test start rejects input without an invocation id."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -1023,7 +1036,10 @@ def test_start_requires_invocation_id():
         execution.start()
 
 
-def test_execution_to_json_dict_and_from_json_dict_round_trip_completed_execution():
+@no_type_check
+def test_execution_to_json_dict_and_from_json_dict_round_trip_completed_execution() -> (
+    None
+):
     """Test completed executions serialize and hydrate runner-only fields."""
     start_input = StartDurableExecutionInput(
         account_id="123456789012",
@@ -1060,7 +1076,8 @@ def test_execution_to_json_dict_and_from_json_dict_round_trip_completed_executio
     assert restored.invocation_completions[0].request_id == "request-1"
 
 
-def test_complete_callback_timeout_success():
+@no_type_check
+def test_complete_callback_timeout_success() -> None:
     """Test callback timeout updates operation details and token sequence."""
     callback_details = CallbackDetails(callback_id="test-id")
     callback_op = Operation(
@@ -1080,7 +1097,7 @@ def test_complete_callback_timeout_success():
     assert execution.token_sequence == 1
 
 
-def test_complete_callback_timeout_not_started():
+def test_complete_callback_timeout_not_started() -> None:
     """Test callback timeout rejects callbacks outside STARTED state."""
     callback_op = Operation(
         operation_id="op-1",

@@ -4,7 +4,7 @@ from async_durable_execution import InvocationStatus
 from examples.step import step_with_retry
 
 
-async def test_step_with_retry(durable_runner):
+async def test_step_with_retry(durable_runner) -> None:
     """Test step with retry configuration.
 
     With counter-based deterministic behavior:

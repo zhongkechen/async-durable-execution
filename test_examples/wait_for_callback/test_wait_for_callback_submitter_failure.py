@@ -8,7 +8,7 @@ from examples.wait_for_callback import (
 
 async def test_fail_after_exhausting_retries_when_submitter_always_fails(
     durable_runner,
-):
+) -> None:
     """Test that execution fails after exhausting retries when submitter always fails."""
     test_payload = {"shouldFail": True}
 

@@ -10,7 +10,7 @@ from async_durable_execution import (
 
 @durable_execution
 async def handler(_event: Any) -> int:
-    async def check(state: int | None):
+    async def check(state: int | None) -> int:
         return (state or 0) + 1
 
     def polling_strategy(_state: int, attempt: int) -> int:

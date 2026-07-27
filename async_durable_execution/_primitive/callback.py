@@ -44,7 +44,7 @@ _LEGACY_CALLBACK_ERROR_TYPE_NAMES = (
 class CallbackError(ExecutionError):
     """Error in callback handling."""
 
-    def __init__(self, message: str, callback_id: str | None = None):
+    def __init__(self, message: str, callback_id: str | None = None) -> None:
         super().__init__(message, TerminationReason.CALLBACK_ERROR)
         self.callback_id = callback_id
 
@@ -80,7 +80,7 @@ class CallbackOperationExecutor(OperationExecutor[str]):
         operation_identifier: OperationIdentifier,
         timeout: Duration | None = None,
         heartbeat_timeout: Duration | None = None,
-    ):
+    ) -> None:
         """Initialize the callback operation executor.
 
         Args:
@@ -222,7 +222,7 @@ class Callback(Generic[T]):  # noqa: PYI059
         operation_id: str,
         state: ExecutionState,
         serdes: SerDes[T] | None = None,
-    ):
+    ) -> None:
         self.callback_id: str = callback_id
         self.operation_id: str = operation_id
         self.state: ExecutionState = state

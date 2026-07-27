@@ -83,7 +83,7 @@ class DurableFunctionLocalTestRunner:
         function_name: str = "test-function",
         execution_name: str = "execution-name",
         account_id: str = "123456789012",
-    ):
+    ) -> None:
         self._scheduler: Scheduler = Scheduler()
         self.mode = "local"
         self.poll_interval = poll_interval
@@ -110,7 +110,7 @@ class DurableFunctionLocalTestRunner:
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
 
-    def close(self):
+    def close(self) -> None:
         self._scheduler.stop()
 
     async def run(
@@ -208,7 +208,9 @@ class DurableFunctionLocalTestRunner:
 
 
 class InProcessInvoker(Invoker):
-    def __init__(self, handler: Callable, service_client: InMemoryServiceClient):
+    def __init__(
+        self, handler: Callable, service_client: InMemoryServiceClient
+    ) -> None:
         self.handler = _bind_service_client_to_handler(handler, service_client)
         self.service_client = service_client
 
@@ -286,7 +288,7 @@ def create_test_lambda_context() -> LambdaContext:
 class InMemoryServiceClient(DurableServiceClient):
     """An in-memory service client, that can replace the boto lambda service client."""
 
-    def __init__(self, scheduler: Scheduler):
+    def __init__(self, scheduler: Scheduler) -> None:
         self._scheduler = scheduler
         self._executor = None
         self._transformer = OperationTransformer()

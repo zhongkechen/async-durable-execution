@@ -36,7 +36,7 @@ async def test_flow_complex_dependencies(
     overrides,
     expected_decision,
     expected_risk_status,
-):
+) -> None:
     event = {
         "orderId": "order-123",
         "paymentApproved": True,

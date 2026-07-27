@@ -238,7 +238,7 @@ class DurableExecutionsError(Exception):
 class UnrecoverableError(DurableExecutionsError):
     """Base class for errors that terminate execution."""
 
-    def __init__(self, message: str, termination_reason: TerminationReason):
+    def __init__(self, message: str, termination_reason: TerminationReason) -> None:
         super().__init__(message)
         self.termination_reason = termination_reason
 
@@ -250,7 +250,7 @@ class ExecutionError(UnrecoverableError):
         self,
         message: str,
         termination_reason: TerminationReason = TerminationReason.EXECUTION_ERROR,
-    ):
+    ) -> None:
         super().__init__(message, termination_reason)
 
 
@@ -263,7 +263,7 @@ class _RestoredExecutionError(ExecutionError):
         *,
         original_error_type: str,
         termination_reason: TerminationReason,
-    ):
+    ) -> None:
         super().__init__(message, termination_reason)
         self.original_error_type = original_error_type
 
@@ -275,7 +275,7 @@ class InvocationError(UnrecoverableError):
         self,
         message: str,
         termination_reason: TerminationReason = TerminationReason.INVOCATION_ERROR,
-    ):
+    ) -> None:
         super().__init__(message, termination_reason)
 
     def is_retryable(self) -> bool:
@@ -318,7 +318,7 @@ class BotoClientError(InvocationError):
         error: AwsErrorObj | None = None,
         response_metadata: AwsErrorMetadata | None = None,
         termination_reason=TerminationReason.INVOCATION_ERROR,
-    ):
+    ) -> None:
         super().__init__(message=message, termination_reason=termination_reason)
         self.error: AwsErrorObj | None = error
         self.response_metadata: AwsErrorMetadata | None = response_metadata
@@ -409,7 +409,7 @@ class _RestoredInvocationError(InvocationError):
         error_category: DurableApiErrorCategory | None = None,
         error: AwsErrorObj | None = None,
         response_metadata: AwsErrorMetadata | None = None,
-    ):
+    ) -> None:
         super().__init__(message, termination_reason)
         self.original_error_type = original_error_type
         self.retryable = retryable
@@ -643,7 +643,7 @@ def _restore_sdk_control_error(
 class NonDeterministicExecutionError(ExecutionError):
     """Error when execution is non-deterministic."""
 
-    def __init__(self, message: str, step_id: str | None = None):
+    def __init__(self, message: str, step_id: str | None = None) -> None:
         super().__init__(message, TerminationReason.NON_DETERMINISTIC_EXECUTION)
         self.step_id = step_id
 
@@ -657,7 +657,7 @@ class CheckpointError(BotoClientError):
         error_category: DurableApiErrorCategory = DurableApiErrorCategory.INVOCATION,
         error: AwsErrorObj | None = None,
         response_metadata: AwsErrorMetadata | None = None,
-    ):
+    ) -> None:
         super().__init__(
             message,
             error_category,
@@ -680,7 +680,7 @@ class GetExecutionStateError(BotoClientError):
         error_category: DurableApiErrorCategory = DurableApiErrorCategory.INVOCATION,
         error: AwsErrorObj | None = None,
         response_metadata: AwsErrorMetadata | None = None,
-    ):
+    ) -> None:
         super().__init__(
             message,
             error_category,
@@ -740,7 +740,7 @@ class BackgroundThreadError(BaseException):
         source_exception: The original exception from the background thread
     """
 
-    def __init__(self, message: str, source_exception: Exception):
+    def __init__(self, message: str, source_exception: Exception) -> None:
         super().__init__(message)
         self.source_exception = source_exception
 
@@ -752,7 +752,7 @@ class OrphanedChildException(BaseException):
     with broad exception handlers like ``except Exception``.
     """
 
-    def __init__(self, message: str, operation_id: str):
+    def __init__(self, message: str, operation_id: str) -> None:
         super().__init__(message)
         self.operation_id = operation_id
 
@@ -764,7 +764,7 @@ class SuspendExecution(BaseException):
     KeyboardInterrupt or SystemExit.
     """
 
-    def __init__(self, message: str):
+    def __init__(self, message: str) -> None:
         super().__init__(message)
 
 
@@ -777,7 +777,7 @@ class TimedSuspendExecution(SuspendExecution):
         scheduled_timestamp (float): Unix timestamp in seconds at which to resume.
     """
 
-    def __init__(self, message: str, scheduled_timestamp: float):
+    def __init__(self, message: str, scheduled_timestamp: float) -> None:
         super().__init__(message)
         self.scheduled_timestamp = scheduled_timestamp
 

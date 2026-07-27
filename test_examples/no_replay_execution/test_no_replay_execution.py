@@ -4,7 +4,7 @@ from async_durable_execution import InvocationStatus
 from examples.no_replay_execution import no_replay_execution
 
 
-async def test_handle_step_operations_when_no_replay_occurs(durable_runner):
+async def test_handle_step_operations_when_no_replay_occurs(durable_runner) -> None:
     """Test step operations when no replay occurs."""
     async with durable_runner(
         handler=no_replay_execution.handler, input=None, timeout=10

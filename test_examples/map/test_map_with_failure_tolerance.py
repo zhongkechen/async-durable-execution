@@ -5,7 +5,7 @@ from async_durable_execution import OperationStatus
 from examples.map import map_with_failure_tolerance
 
 
-async def test_map_with_failure_tolerance(durable_runner):
+async def test_map_with_failure_tolerance(durable_runner) -> None:
     """Test map with failure tolerance."""
     async with durable_runner(
         handler=map_with_failure_tolerance.handler, input="test", timeout=10

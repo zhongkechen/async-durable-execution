@@ -103,7 +103,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         operation_identifier: OperationIdentifier,
         polling_strategy: PollingStrategyFunction[T] | None = None,
         serdes: SerDes | None = None,
-    ):
+    ) -> None:
         """Initialize the wait_for_condition executor.
 
         Args:

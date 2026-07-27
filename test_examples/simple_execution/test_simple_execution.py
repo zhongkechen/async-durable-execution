@@ -4,7 +4,7 @@ from async_durable_execution import InvocationStatus
 from examples.simple_execution import simple_execution
 
 
-async def test_execute_simple_handler_without_operations(durable_runner):
+async def test_execute_simple_handler_without_operations(durable_runner) -> None:
     """Test simple handler execution without operations."""
     test_payload = {
         "userId": "test-user",

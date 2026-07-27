@@ -3,11 +3,17 @@
 import inspect
 import logging
 import os
+from collections.abc import Callable
 from enum import Enum
 from typing import Any
 
 import pytest
-from async_durable_execution import create_cloud_runner, create_local_runner
+from async_durable_execution import (
+    DurableFunctionCloudTestRunner,
+    DurableFunctionLocalTestRunner,
+    create_cloud_runner,
+    create_local_runner,
+)
 from examples.function_naming import to_function_name_suffix
 
 
@@ -25,7 +31,7 @@ class RunnerMode(str, Enum):
     CLOUD = "cloud"
 
 
-def pytest_addoption(parser):
+def pytest_addoption(parser) -> None:
     """Add custom command line options for test execution."""
     parser.addoption(
         "--runner-mode",
@@ -37,7 +43,12 @@ def pytest_addoption(parser):
 
 
 @pytest.fixture
-def durable_runner(request, monkeypatch):
+def durable_runner(
+    request, monkeypatch
+) -> Callable[
+    ...,
+    DurableFunctionCloudTestRunner | DurableFunctionLocalTestRunner,
+]:
     """Pytest fixture that provides a test runner based on configuration.
 
     Configuration for cloud mode:
@@ -75,7 +86,7 @@ def durable_runner(request, monkeypatch):
         input: Any = None,  # noqa: A002
         timeout: int = 60,
         time_scale: str | None = None,
-    ):
+    ) -> DurableFunctionCloudTestRunner | DurableFunctionLocalTestRunner:
         """Create a configured runner for a durable handler."""
         handler_identifier = _get_handler_identifier(handler)
 

@@ -1,7 +1,7 @@
 """Tests for DurableExecutionsPythonLanguageSDK module."""
 
 
-def test_version_is_accessible():
+def test_version_is_accessible() -> None:
     """Test __version__ is accessible from package root."""
     import async_durable_execution  # noqa: PLC0415
     from async_durable_execution import __about__  # noqa: PLC0415

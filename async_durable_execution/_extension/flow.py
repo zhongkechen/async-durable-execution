@@ -52,7 +52,7 @@ class FlowDefinitionError(ValidationError):
 class FlowExecutionError(DurableExecutionsError):
     """Raised after a flow checkpoints a result with unhandled node failures."""
 
-    def __init__(self, message: str, result: Any):
+    def __init__(self, message: str, result: Any) -> None:
         super().__init__(message)
         self.result = result
 
@@ -1432,7 +1432,7 @@ async def _clone_dependency_results(
 class _FlowControlSignal(BaseException):
     """Carry SDK control failures through child executors without checkpointing."""
 
-    def __init__(self, error: Exception):
+    def __init__(self, error: Exception) -> None:
         super().__init__(str(error))
         self.error = error
 

@@ -5,7 +5,7 @@ from async_durable_execution import OperationStatus
 from examples.map import map_operations_flat
 
 
-async def test_map_operations_flat(durable_runner):
+async def test_map_operations_flat(durable_runner) -> None:
     """Test map_operations example using map()."""
     async with durable_runner(
         handler=map_operations_flat.handler, input="test", timeout=10

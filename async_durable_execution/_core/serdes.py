@@ -218,7 +218,7 @@ class ContainerCodec(Codec):
         self._dispatcher = dispatcher
 
     @property
-    def dispatcher(self):
+    def dispatcher(self) -> TypeCodec:
         """Get the dispatcher, raising error if not set."""
         if self._dispatcher is None:
             msg = "ContainerCodec not linked to a TypeCodec dispatcher."
@@ -296,7 +296,7 @@ class TypeCodec(Codec):
     def __init__(
         self,
         extensions: tuple[TypeCodecExtension, ...] = (),
-    ):
+    ) -> None:
         built_in_tags = {tag.value for tag in TypeTag}
         extension_tags = [extension.tag for extension in extensions]
         if len(extension_tags) != len(set(extension_tags)):
@@ -454,7 +454,7 @@ class ExtendedTypeSerDes(SerDes[T]):
     def __init__(
         self,
         type_codecs: tuple[TypeCodecExtension, ...] = (),
-    ):
+    ) -> None:
         self._codec = TypeCodec(type_codecs) if type_codecs else TYPE_CODEC
 
     async def serialize(self, value: Any) -> str:

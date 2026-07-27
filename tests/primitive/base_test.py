@@ -1,6 +1,7 @@
 """Unit tests for OperationExecutor base helpers."""
 
 from __future__ import annotations
+from typing import no_type_check
 
 import pytest
 from abc import ABC
@@ -23,7 +24,7 @@ from async_durable_execution._core.serdes import DEFAULT_JSON_SERDES
 class ConcreteOperationExecutor(OperationExecutor[str]):
     """Concrete implementation for testing the abstract base class."""
 
-    def __init__(self, state=None, operation_identifier=None):
+    def __init__(self, state=None, operation_identifier=None) -> None:
         if state is None:
             state = Mock()
             state.durable_execution_arn = "test-arn"
@@ -63,7 +64,7 @@ def create_mock_operation(status: OperationStatus) -> Operation:
     )
 
 
-async def test_operation_executor_common_properties():
+async def test_operation_executor_common_properties() -> None:
     """Test OperationExecutor exposes shared fields."""
     state = Mock()
     state.durable_execution_arn = "arn:aws:lambda:us-west-2:123:function:test"
@@ -79,7 +80,7 @@ async def test_operation_executor_common_properties():
     assert executor.durable_execution_arn == state.durable_execution_arn
 
 
-async def test_operation_executor_common_serialization_helpers():
+async def test_operation_executor_common_serialization_helpers() -> None:
     """Test OperationExecutor serializes and deserializes with shared metadata."""
     executor = ConcreteOperationExecutor()
 
@@ -90,7 +91,7 @@ async def test_operation_executor_common_serialization_helpers():
     assert deserialized == {"hello": "world"}
 
 
-async def test_operation_executor_create_checkpoint_uses_default_signature():
+async def test_operation_executor_create_checkpoint_uses_default_signature() -> None:
     """Test create_checkpoint omits is_sync when using the default behavior."""
     state = Mock()
     state.durable_execution_arn = "test-arn"
@@ -103,7 +104,7 @@ async def test_operation_executor_create_checkpoint_uses_default_signature():
     state.create_checkpoint.assert_called_once_with(operation_update=operation_update)
 
 
-async def test_operation_executor_create_checkpoint_passes_is_sync_override():
+async def test_operation_executor_create_checkpoint_passes_is_sync_override() -> None:
     """Test create_checkpoint forwards explicit is_sync overrides."""
     state = Mock()
     state.durable_execution_arn = "test-arn"
@@ -119,7 +120,9 @@ async def test_operation_executor_create_checkpoint_passes_is_sync_override():
     )
 
 
-async def test_operation_executor_process_dispatches_to_start_for_new_operations():
+async def test_operation_executor_process_dispatches_to_start_for_new_operations() -> (
+    None
+):
     """Test base process dispatches to start when no checkpoint exists."""
     state = Mock()
     state.durable_execution_arn = "test-arn"
@@ -134,7 +137,9 @@ async def test_operation_executor_process_dispatches_to_start_for_new_operations
     assert executor.execute_called == 0
 
 
-async def test_operation_executor_process_dispatches_to_replay_for_existing_operations():
+async def test_operation_executor_process_dispatches_to_replay_for_existing_operations() -> (
+    None
+):
     """Test base process dispatches to replay when a checkpoint exists."""
     state = Mock()
     state.durable_execution_arn = "test-arn"
@@ -149,7 +154,8 @@ async def test_operation_executor_process_dispatches_to_replay_for_existing_oper
     assert executor.execute_called == 1
 
 
-def test_operation_executor_requires_subclass_start_and_replay():
+@no_type_check
+def test_operation_executor_requires_subclass_start_and_replay() -> None:
     """Test OperationExecutor remains abstract for start and replay."""
 
     class IncompleteOperationExecutor(OperationExecutor[str], ABC):
@@ -167,7 +173,7 @@ def test_operation_executor_requires_subclass_start_and_replay():
         )
 
 
-async def test_operation_executor_execute_is_not_abstract():
+async def test_operation_executor_execute_is_not_abstract() -> None:
     """Test execute is not required for subclasses that implement start and replay."""
 
     class MinimalOperationExecutor(OperationExecutor[str]):

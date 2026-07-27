@@ -7,7 +7,7 @@ from async_durable_execution import (
 from examples.map import map_with_item_namer
 
 
-async def test_map_with_item_namer(durable_runner):
+async def test_map_with_item_namer(durable_runner) -> None:
     """Test map example with custom item_namer for iteration naming."""
     async with durable_runner(
         handler=map_with_item_namer.handler, input="test", timeout=10

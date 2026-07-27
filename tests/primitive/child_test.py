@@ -1,6 +1,7 @@
 """Unit tests for child handler."""
 
 from __future__ import annotations
+from typing import Any
 
 import asyncio
 import hashlib
@@ -43,11 +44,11 @@ from async_durable_execution._core.state import ExecutionState
 from ..serdes_test import CustomDictSerDes
 
 
-def _asyncify(func):
+def _asyncify(func) -> Any:
     if inspect.iscoroutinefunction(func):
         return func
 
-    async def wrapper(*args, **kwargs):
+    async def wrapper(*args, **kwargs) -> Any:
         return func(*args, **kwargs)
 
     return wrapper
@@ -61,7 +62,7 @@ class UppercaseSerDes(SerDes[str]):
         return data
 
 
-async def child_handler(*args, **kwargs):
+async def child_handler(*args, **kwargs) -> Any:
     func = _asyncify(args[0] if args else kwargs.pop("func"))
     state = args[1] if len(args) > 1 else kwargs.pop("state")
     operation_identifier = (
@@ -96,7 +97,7 @@ def create_test_context(
     )
 
 
-def test_run_in_child_context_name_is_keyword_only():
+def test_run_in_child_context_name_is_keyword_only() -> None:
     """run_in_child_context operation name must be passed as a keyword."""
     parameters = inspect.signature(run_in_child_context).parameters
 
@@ -104,14 +105,14 @@ def test_run_in_child_context_name_is_keyword_only():
     assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
-async def test_internal_run_in_child_context_uses_custom_sub_type():
+async def test_internal_run_in_child_context_uses_custom_sub_type() -> None:
     """Internal helper records the caller-supplied operation subtype."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
     mock_state.operations.get.return_value = None
     context = create_test_context(state=mock_state, parent_id="parent")
 
-    async def child_func():
+    async def child_func() -> str:
         return "custom_result"
 
     with bind_current_context(context):
@@ -142,7 +143,7 @@ async def test_internal_run_in_child_context_uses_custom_sub_type():
 )
 async def test_child_handler_not_started(
     expected_sub_type: OperationSubType,
-):
+) -> None:
     """Test child_handler when operation not started.
 
     Verifies:
@@ -199,7 +200,7 @@ async def test_child_handler_not_started(
     mock_callable.assert_called_once()
 
 
-async def test_child_handler_already_succeeded():
+async def test_child_handler_already_succeeded() -> None:
     """Test child_handler when operation already succeeded without replay_children.
 
     Verifies:
@@ -236,7 +237,7 @@ async def test_child_handler_already_succeeded():
     assert mock_state.operations.get.call_count == 1
 
 
-async def test_child_handler_already_succeeded_none_result():
+async def test_child_handler_already_succeeded_none_result() -> None:
     """Test child_handler when operation succeeded with None result."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -262,7 +263,7 @@ async def test_child_handler_already_succeeded_none_result():
     mock_callable.assert_not_called()
 
 
-async def test_child_handler_already_succeeded_missing_context_details():
+async def test_child_handler_already_succeeded_missing_context_details() -> None:
     """A succeeded child checkpoint without details replays as a None result."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -290,7 +291,7 @@ async def test_child_handler_already_succeeded_missing_context_details():
     mock_callable.assert_not_called()
 
 
-async def test_child_handler_already_failed():
+async def test_child_handler_already_failed() -> None:
     """Test child_handler when operation already failed.
 
     Verifies:
@@ -325,7 +326,7 @@ async def test_child_handler_already_failed():
         )
 
 
-async def test_child_handler_already_failed_missing_error_details():
+async def test_child_handler_already_failed_missing_error_details() -> None:
     """A failed child checkpoint without an ErrorObject raises an unknown error."""
     mock_state = Mock(spec=ExecutionState)
     operation = Operation(
@@ -352,7 +353,7 @@ async def test_child_handler_already_failed_missing_error_details():
     mock_callable.assert_not_called()
 
 
-async def test_child_handler_callback_error_checkpoints_callback_id():
+async def test_child_handler_callback_error_checkpoints_callback_id() -> None:
     """A callback failure persists its callback id at the child boundary."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -398,7 +399,9 @@ async def test_child_handler_callback_error_checkpoints_callback_id():
         "async_durable_execution.exceptions.CallbackError",
     ],
 )
-async def test_child_handler_replays_callback_error_with_callback_id(exception_type):
+async def test_child_handler_replays_callback_error_with_callback_id(
+    exception_type,
+) -> None:
     """Current and legacy callback metadata reconstruct the callback id."""
     mock_state = Mock(spec=ExecutionState)
     operation = Operation(
@@ -440,7 +443,7 @@ async def test_child_handler_replays_callback_error_with_callback_id(exception_t
     mock_state.create_checkpoint.assert_not_called()
 
 
-async def test_child_handler_does_not_replay_user_callback_error_as_sdk_error():
+async def test_child_handler_does_not_replay_user_callback_error_as_sdk_error() -> None:
     """A same-named user exception remains a generic callable failure on replay."""
     user_callback_error = type("CallbackError", (Exception,), {})("User failure")
     initial_state = Mock(spec=ExecutionState)
@@ -490,7 +493,7 @@ async def test_child_handler_does_not_replay_user_callback_error_as_sdk_error():
     replay_callable.assert_not_called()
 
 
-async def test_should_use_step_id_prefix_when_generating_step_ids():
+async def test_should_use_step_id_prefix_when_generating_step_ids() -> None:
     """Step ids derive from the step_id_prefix, not parent_id.
 
     For virtual contexts this is load-bearing: step ids must stay stable
@@ -515,7 +518,7 @@ async def test_should_use_step_id_prefix_when_generating_step_ids():
     assert virtual.step_counter._create_step_id_for_logical_step(1) == expected_prefixed  # noqa: SLF001
 
 
-async def test_should_use_parent_id_as_step_prefix_when_non_virtual():
+async def test_should_use_parent_id_as_step_prefix_when_non_virtual() -> None:
     """Non-virtual contexts prefix step ids with parent_id (default fallback).
 
     For the non-virtual case `step_id_prefix` is not passed explicitly;
@@ -542,7 +545,7 @@ async def test_should_use_parent_id_as_step_prefix_when_non_virtual():
     assert non_virtual.is_virtual is False
 
 
-async def test_should_create_non_virtual_child_when_is_virtual_false():
+async def test_should_create_non_virtual_child_when_is_virtual_false() -> None:
     """create_child_context(op_id) returns a non-virtual child."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
@@ -557,7 +560,7 @@ async def test_should_create_non_virtual_child_when_is_virtual_false():
     assert child.is_virtual is False
 
 
-async def test_should_create_virtual_child_that_propagates_grandparent_id():
+async def test_should_create_virtual_child_that_propagates_grandparent_id() -> None:
     """create_child_context(op_id, is_virtual=True) propagates the grandparent as parent_id."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = (
@@ -572,7 +575,9 @@ async def test_should_create_virtual_child_that_propagates_grandparent_id():
     assert child.is_virtual is True
 
 
-async def test_should_create_virtual_child_with_none_parent_when_parent_is_root():
+async def test_should_create_virtual_child_with_none_parent_when_parent_is_root() -> (
+    None
+):
     """Virtual child of a root context (parent_id=None) keeps parent_id=None.
 
     Inner operations then report at the top level; step ids still prefix
@@ -595,7 +600,9 @@ async def test_should_create_virtual_child_with_none_parent_when_parent_is_root(
     assert child.step_counter._create_step_id_for_logical_step(1) == expected  # noqa: SLF001
 
 
-async def test_next_operation_is_terminal_checkpoint_returns_false_when_missing():
+async def test_next_operation_is_terminal_checkpoint_returns_false_when_missing() -> (
+    None
+):
     """Replay lookahead treats a missing next operation as non-terminal."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.operations.get.return_value = None
@@ -604,7 +611,9 @@ async def test_next_operation_is_terminal_checkpoint_returns_false_when_missing(
     assert context._next_operation_is_terminal_checkpoint() is False  # noqa: SLF001
 
 
-async def test_should_propagate_outer_parent_id_when_virtual_is_nested_in_virtual():
+async def test_should_propagate_outer_parent_id_when_virtual_is_nested_in_virtual() -> (
+    None
+):
     """A virtual child of a virtual parent still reports to the outer non-virtual ancestor.
 
     Nested concurrency is a real scenario: e.g. a FLAT `map` inside a
@@ -643,7 +652,7 @@ async def test_should_propagate_outer_parent_id_when_virtual_is_nested_in_virtua
 )
 async def test_child_handler_already_started(
     expected_sub_type: OperationSubType,
-):
+) -> None:
     """Test child_handler when operation already started.
 
     Verifies:
@@ -691,7 +700,7 @@ async def test_child_handler_already_started(
 )
 async def test_child_handler_callable_exception(
     expected_sub_type: OperationSubType,
-):
+) -> None:
     """Test child_handler when callable raises exception.
 
     Verifies:
@@ -743,7 +752,7 @@ async def test_child_handler_callable_exception(
     assert fail_operation.error == ErrorObject.from_exception(ValueError("Test error"))
 
 
-async def test_child_handler_error_wrapped():
+async def test_child_handler_error_wrapped() -> None:
     """Test child_handler wraps regular errors as CallableRuntimeError.
 
     Verifies:
@@ -773,7 +782,7 @@ async def test_child_handler_error_wrapped():
     assert mock_state.create_checkpoint.call_count == 2  # start and fail
 
 
-async def test_child_handler_checkpoints_sdk_error_metadata():
+async def test_child_handler_checkpoints_sdk_error_metadata() -> None:
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
     mock_state.operations.get.return_value = None
@@ -801,7 +810,7 @@ async def test_child_handler_checkpoints_sdk_error_metadata():
     assert is_sdk_error
 
 
-async def test_child_handler_retryable_invocation_error_replays_without_fail():
+async def test_child_handler_retryable_invocation_error_replays_without_fail() -> None:
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
     mock_state.operations.get.return_value = None
@@ -847,7 +856,7 @@ async def test_child_handler_retryable_invocation_error_replays_without_fail():
     assert success_operation.action is OperationAction.SUCCEED
 
 
-async def test_child_handler_non_retryable_invocation_error_checkpoints_fail():
+async def test_child_handler_non_retryable_invocation_error_checkpoints_fail() -> None:
     class NonRetryableInvocationError(InvocationError):
         def is_retryable(self) -> bool:
             return False
@@ -876,7 +885,7 @@ async def test_child_handler_non_retryable_invocation_error_checkpoints_fail():
     assert fail_operation.action is OperationAction.FAIL
 
 
-async def test_child_handler_with_config():
+async def test_child_handler_with_config() -> None:
     """Test child_handler with direct field parameters."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -901,7 +910,7 @@ async def test_child_handler_with_config():
     assert mock_state.operations.get.call_count == 1
 
 
-async def test_child_handler_default_serialization():
+async def test_child_handler_default_serialization() -> None:
     """Test child_handler properly serializes complex result."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -1134,7 +1143,7 @@ async def test_child_handler_replay_children_mode() -> None:
     assert mock_state.operations.get.call_count == 1
 
 
-async def test_small_payload_with_summary_generator():
+async def test_small_payload_with_summary_generator() -> None:
     """Test: Small payload with summary_generator -> replay_children = False
 
     Verifies:
@@ -1179,7 +1188,7 @@ async def test_small_payload_with_summary_generator():
     assert success_operation.payload == '"small_payload"'  # JSON serialized
 
 
-async def test_small_payload_without_summary_generator():
+async def test_small_payload_without_summary_generator() -> None:
     """Test: small payload without summary_generator -> replay_children=False.
 
     Restored from pre-PR #351. For small payloads we always checkpoint
@@ -1221,7 +1230,7 @@ async def test_small_payload_without_summary_generator():
     assert success_operation.payload == '"small_payload"'
 
 
-async def test_child_handler_is_virtual_no_start():
+async def test_child_handler_is_virtual_no_start() -> None:
     """Skip the START checkpoint when is_virtual=True.
 
     A virtual branch is a logical scope for step-id prefixing but does
@@ -1257,7 +1266,7 @@ async def test_child_handler_is_virtual_no_start():
     mock_callable.assert_called_once()
 
 
-async def test_child_handler_is_virtual_no_succeed():
+async def test_child_handler_is_virtual_no_succeed() -> None:
     """Skip the SUCCEED checkpoint when is_virtual=True.
 
     A virtual branch is not represented in the execution history; its
@@ -1291,7 +1300,7 @@ async def test_child_handler_is_virtual_no_succeed():
     mock_callable.assert_called_once()
 
 
-async def test_child_handler_not_is_virtual_finish_mode():
+async def test_child_handler_not_is_virtual_finish_mode() -> None:
     """Create START + SUCCEED checkpoints when is_virtual=False."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -1331,7 +1340,7 @@ async def test_child_handler_not_is_virtual_finish_mode():
     mock_callable.assert_called_once()
 
 
-async def test_child_handler_is_virtual_with_exception():
+async def test_child_handler_is_virtual_with_exception() -> None:
     """Skip the FAIL checkpoint when is_virtual=True and the user function raises.
 
     A virtual branch emits no lifecycle entries in the execution
@@ -1367,7 +1376,7 @@ async def test_child_handler_is_virtual_with_exception():
     mock_callable.assert_called_once()
 
 
-async def test_child_handler_not_is_virtual_with_exception():
+async def test_child_handler_not_is_virtual_with_exception() -> None:
     """Create a FAIL checkpoint when is_virtual=False and the user function raises."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -1401,7 +1410,7 @@ async def test_child_handler_not_is_virtual_with_exception():
     mock_callable.assert_called_once()
 
 
-async def test_child_handler_is_virtual_comparison():
+async def test_child_handler_is_virtual_comparison() -> None:
     """Compare checkpoint counts between is_virtual=True and is_virtual=False for success.
 
     - is_virtual=False: 2 checkpoints (START + SUCCEED)
@@ -1409,7 +1418,7 @@ async def test_child_handler_is_virtual_comparison():
     """
 
     # Setup common mocks
-    def setup_mocks():
+    def setup_mocks() -> Any:
         mock_state = Mock(spec=ExecutionState)
         mock_state.durable_execution_arn = "test_arn"
         mock_result = Mock()

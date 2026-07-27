@@ -4,7 +4,7 @@ from async_durable_execution import InvocationStatus
 from examples.wait import wait
 
 
-async def test_wait(durable_runner):
+async def test_wait(durable_runner) -> None:
     """Test wait example."""
     async with durable_runner(handler=wait.handler, input="test", timeout=10) as runner:
         result = await runner.run()

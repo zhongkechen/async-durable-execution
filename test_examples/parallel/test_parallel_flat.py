@@ -8,7 +8,7 @@ from async_durable_execution import (
 from examples.parallel import parallel_flat
 
 
-async def test_parallel_flat(durable_runner):
+async def test_parallel_flat(durable_runner) -> None:
     """Test parallel example using parallel()."""
     async with durable_runner(
         handler=parallel_flat.handler, input="test", timeout=100

@@ -234,7 +234,7 @@ class DurableFunctionCloudTestRunner:
         poll_interval: float = 1.0,
         input: Any = None,  # noqa: A002
         timeout: int = 60,
-    ):
+    ) -> None:
         """Initialize cloud test runner."""
         self.mode = "cloud"
         self.function_name = function_name

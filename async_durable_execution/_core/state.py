@@ -94,7 +94,7 @@ class ExecutionState:
         lambda_context: LambdaContext | None = None,
         batcher_config: CheckpointBatcherConfig | None = None,
         operations: MutableMapping[str, Operation] | None = None,
-    ):
+    ) -> None:
         self.operations: MutableMapping[str, Operation] = dict(operations or {})
         self.durable_execution_arn: str = durable_execution_arn
         self.lambda_context: LambdaContext | None = lambda_context
@@ -118,7 +118,7 @@ class ExecutionState:
         # Operations whose parent has completed
         self._parent_done: set[str] = set()
 
-    async def initialize(self, invocation_input):
+    async def initialize(self, invocation_input) -> None:
         await self.fetch_paginated_operations(
             invocation_input.initial_execution_state.operations,
             invocation_input.checkpoint_token,
@@ -182,7 +182,7 @@ class ExecutionState:
             return None
         return execution_details.input_payload
 
-    def get_input_event(self):
+    def get_input_event(self) -> Any:
         # Python RIC LambdaMarshaller just uses standard json deserialization for event
         # https://github.com/aws/aws-lambda-python-runtime-interface-client/blob/main/awslambdaric/lambda_runtime_marshaller.py#L46
         raw_input_payload: str | None = self.get_raw_input_payload()
@@ -416,7 +416,7 @@ class ExecutionState:
                 self.checkpoint_batches_forever()
             )
 
-    async def checkpoint_batches_forever(self):
+    async def checkpoint_batches_forever(self) -> None:
         """Background coroutine that batches operations and processes results.
 
         Runs until shutdown is signaled. This method processes checkpoint operations
@@ -555,7 +555,7 @@ class ExecutionState:
         if self._checkpointing_task is not None and not self._checkpoint_queue.full():
             self._checkpoint_queue.put_nowait(None)
 
-    async def _collect_checkpoint_batch(self):
+    async def _collect_checkpoint_batch(self) -> list[QueuedOperation]:
         """Collect multiple checkpoint operations into a batch for API efficiency.
 
         Processes overflow queue first to maintain FIFO order, then collects from main queue.
@@ -718,5 +718,5 @@ class ExecutionState:
         if self._checkpointing_task is not None:
             await self._checkpointing_task
 
-    def close(self):
+    def close(self) -> None:
         self.stop_checkpointing()

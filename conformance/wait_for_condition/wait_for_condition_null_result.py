@@ -7,7 +7,7 @@ from async_durable_execution import durable_execution, wait_for_condition
 
 @durable_execution
 async def handler(_event: Any) -> None:
-    async def check(_state: None):
+    async def check(_state: None) -> None:
         return None
 
     return await wait_for_condition(

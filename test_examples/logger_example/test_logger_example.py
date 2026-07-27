@@ -5,7 +5,7 @@ from async_durable_execution import OperationType
 from examples.logger_example import logger_example
 
 
-async def test_logger_example(durable_runner):
+async def test_logger_example(durable_runner) -> None:
     """Test logger example."""
     async with durable_runner(
         handler=logger_example.handler, input={"id": "test-123"}, timeout=10

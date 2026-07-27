@@ -49,7 +49,7 @@ class Execution:
         durable_execution_arn: str,
         start_input: StartDurableExecutionInput,
         operations: list[Operation],
-    ):
+    ) -> None:
         self.durable_execution_arn: str = durable_execution_arn
         # operation is frozen, it won't mutate - no need to clone/deep-copy
         self.start_input: StartDurableExecutionInput = start_input

@@ -10,7 +10,7 @@ from async_durable_execution._core.exceptions import (
 )
 
 
-def test_suspend_optional_timestamp_with_none():
+def test_suspend_optional_timestamp_with_none() -> None:
     with pytest.raises(
         SuspendExecution,
         match="No timestamp provided. Suspending without retry timestamp.",
@@ -21,7 +21,7 @@ def test_suspend_optional_timestamp_with_none():
         )
 
 
-def test_suspend_optional_timestamp_with_past():
+def test_suspend_optional_timestamp_with_past() -> None:
     with pytest.raises(SuspendExecution, match="Invalid timestamp"):
         suspend_with_optional_resume_timestamp(
             "test",
@@ -30,7 +30,7 @@ def test_suspend_optional_timestamp_with_past():
         )
 
 
-def test_suspend_optional_timestamp_with_future():
+def test_suspend_optional_timestamp_with_future() -> None:
     with pytest.raises(TimedSuspendExecution, match="test"):
         suspend_with_optional_resume_timestamp(
             "test",
@@ -39,7 +39,7 @@ def test_suspend_optional_timestamp_with_future():
         )
 
 
-def test_suspend_optional_timeout_with_none():
+def test_suspend_optional_timeout_with_none() -> None:
     with pytest.raises(SuspendExecution, match="suspending without retry timestamp"):
         suspend_with_optional_resume_delay(
             "test",
@@ -47,7 +47,7 @@ def test_suspend_optional_timeout_with_none():
         )
 
 
-def test_suspend_optional_timeout_with_negative():
+def test_suspend_optional_timeout_with_negative() -> None:
     with pytest.raises(
         SuspendExecution, match="Invalid delay_seconds -1, suspending with delay 0"
     ):
@@ -57,7 +57,7 @@ def test_suspend_optional_timeout_with_negative():
         )
 
 
-def test_suspend_optional_timeout_with_positive():
+def test_suspend_optional_timeout_with_positive() -> None:
     with pytest.raises(TimedSuspendExecution, match="test"):
         suspend_with_optional_resume_delay(
             "test",

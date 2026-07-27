@@ -6,7 +6,7 @@ from examples.run_in_child_context import (
 )
 
 
-async def test_many_async_child_context(durable_runner):
+async def test_many_async_child_context(durable_runner) -> None:
     """Test many child context tasks collected with asyncio.gather."""
     async with durable_runner(
         handler=many_async_child_context.handler,
@@ -22,7 +22,7 @@ async def test_many_async_child_context(durable_runner):
     assert result_data["result"] == 249500
 
 
-async def test_many_async_child_context_with_multiplier_one(durable_runner):
+async def test_many_async_child_context_with_multiplier_one(durable_runner) -> None:
     """Test the 500-child-context sum with multiplier one."""
     async with durable_runner(
         handler=many_async_child_context.handler,
@@ -36,7 +36,7 @@ async def test_many_async_child_context_with_multiplier_one(durable_runner):
     assert result.get_deserialized_result()["result"] == 124750
 
 
-async def test_many_async_child_context_operations_are_tracked(durable_runner):
+async def test_many_async_child_context_operations_are_tracked(durable_runner) -> None:
     """Test representative child contexts and replay operations are tracked."""
     async with durable_runner(
         handler=many_async_child_context.handler,

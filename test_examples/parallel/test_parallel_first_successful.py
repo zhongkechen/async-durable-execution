@@ -5,7 +5,7 @@ from async_durable_execution import OperationStatus
 from examples.parallel import parallel_first_successful
 
 
-async def test_parallel_first_successful(durable_runner):
+async def test_parallel_first_successful(durable_runner) -> None:
     """Test parallel with first_successful completion strategy."""
     async with durable_runner(
         handler=parallel_first_successful.handler, input="test", timeout=10

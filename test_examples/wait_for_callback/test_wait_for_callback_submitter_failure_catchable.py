@@ -7,7 +7,7 @@ from examples.wait_for_callback import (
 
 async def test_handle_wait_for_callback_with_failing_submitter_function_errors(
     durable_runner,
-):
+) -> None:
     """Test waitForCallback with failing submitter function errors."""
     async with durable_runner(
         handler=wait_for_callback_submitter_failure_catchable.handler,

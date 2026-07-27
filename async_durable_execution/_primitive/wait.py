@@ -34,7 +34,7 @@ class WaitOperationExecutor(OperationExecutor[None]):
         seconds: int,
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
-    ):
+    ) -> None:
         """Initialize the wait operation executor.
 
         Args:

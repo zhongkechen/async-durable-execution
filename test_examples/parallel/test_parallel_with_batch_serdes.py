@@ -5,7 +5,7 @@ from async_durable_execution import OperationStatus
 from examples.parallel import parallel_with_batch_serdes
 
 
-async def test_parallel_with_batch_serdes(durable_runner):
+async def test_parallel_with_batch_serdes(durable_runner) -> None:
     """Test parallel with custom batch-level serialization."""
     async with durable_runner(
         handler=parallel_with_batch_serdes.handler, input="test", timeout=10
