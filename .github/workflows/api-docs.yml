@@ -59,7 +59,7 @@ jobs:
           cp -R build/docs/. site/
           test -f site/api/primitive/step.html
           test -f site/api/extension/flow.html
-          test -f site/api/core/config.html
+          test -f site/api/core.html
 
       - name: Build HTML coverage report
         run: hatch run test:cov-html
