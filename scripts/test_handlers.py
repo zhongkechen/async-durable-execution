@@ -26,7 +26,7 @@ def load_test_handlers_from_file(path: Path) -> set[str]:
             if not node.module.startswith(EXAMPLES_IMPORT_PREFIX):
                 continue
             for alias in node.names:
-                # Example: from examples.step import step
+                # Example: from examples.primitive.step import step
                 imported_modules[alias.asname or alias.name] = (
                     f"{node.module}.{alias.name}{HANDLER_SUFFIX}"
                 )

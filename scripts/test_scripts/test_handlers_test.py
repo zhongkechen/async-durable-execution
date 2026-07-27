@@ -9,8 +9,8 @@ def test_load_test_handlers_from_file_extracts_marker_handlers(tmp_path: Path) -
     test_file.write_text(
         """
 import pytest
-from examples.step import step as step_example
-from examples.wait import wait
+from examples.primitive.step import step as step_example
+from examples.primitive.wait import wait
 from unrelated import module
 
 pytestmark = pytest.mark.durable_execution(handler=step_example.handler)
@@ -23,8 +23,8 @@ pytest.mark.durable_execution(handler="not-an-attribute")
     )
 
     assert load_test_handlers_from_file(test_file) == {
-        "examples.step.step.handler",
-        "examples.wait.wait.handler",
+        "examples.primitive.step.step.handler",
+        "examples.primitive.wait.wait.handler",
     }
 
 
@@ -34,7 +34,7 @@ def test_load_test_handlers_scans_test_files_only(tmp_path: Path) -> None:
     (package_dir / "test_one.py").write_text(
         """
 import pytest
-from examples.parallel import parallel
+from examples.extension.parallel import parallel
 
 pytest.mark.durable_execution(handler=parallel.handler)
 """,
@@ -43,11 +43,13 @@ pytest.mark.durable_execution(handler=parallel.handler)
     (package_dir / "helper.py").write_text(
         """
 import pytest
-from examples.step import step
+from examples.primitive.step import step
 
 pytest.mark.durable_execution(handler=step.handler)
 """,
         encoding="utf-8",
     )
 
-    assert load_test_handlers(tmp_path) == {"examples.parallel.parallel.handler"}
+    assert load_test_handlers(tmp_path) == {
+        "examples.extension.parallel.parallel.handler"
+    }

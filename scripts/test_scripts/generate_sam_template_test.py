@@ -33,9 +33,23 @@ def test_first_line_returns_first_non_empty_docstring_line() -> None:
 
 
 def test_to_example_name_removes_repeated_prefix_words() -> None:
-    assert to_example_name(Path("wait_for_callback/wait_for_callback_timeout.py")) == (
-        "Wait For Callback Timeout"
+    assert (
+        to_example_name(
+            Path(
+                "extension/wait_for_callback/wait_for_callback_timeout.py",
+            )
+        )
+        == "Wait For Callback Timeout"
     )
+
+
+def test_to_example_name_preserves_names_after_reorganization() -> None:
+    assert to_example_name(Path("core/hello_world.py")) == "Hello World"
+    assert (
+        to_example_name(Path("primitive/child/run_in_child_context.py"))
+        == "Run In Child Context"
+    )
+    assert to_example_name(Path("extension/recurse/recurse.py")) == "Invoke Recurse"
 
 
 def test_find_handler_node_finds_sync_or_async_handler() -> None:
@@ -78,7 +92,7 @@ def test_get_description_prefers_handler_docstring_then_module_docstring() -> No
 
 def test_build_example_entry_reads_handler_metadata(tmp_path: Path) -> None:
     source_root = tmp_path / sam_module.PACKAGE_PREFIX
-    module_path = source_root / "logger_example" / "logger_example.py"
+    module_path = source_root / "core" / "logger_example" / "logger_example.py"
     write_module(
         module_path,
         """
@@ -94,16 +108,18 @@ async def handler(event):
     assert entry == {
         "name": "Logger Example",
         "description": "Log durable execution details.",
-        "handler": ("examples.logger_example.logger_example.handler"),
+        "handler": ("examples.core.logger_example.logger_example.handler"),
         "integration": True,
         "durableConfig": DEFAULT_DURABLE_CONFIG,
-        "path": ("./examples/logger_example/logger_example.py"),
+        "path": ("./examples/core/logger_example/logger_example.py"),
         "loggingConfig": {"ApplicationLogLevel": "INFO", "LogFormat": "JSON"},
     }
     assert entry["durableConfig"] is not DEFAULT_DURABLE_CONFIG
     assert (
         entry["loggingConfig"]
-        is not sam_module.SPECIAL_LOGGING_CONFIG["logger_example/logger_example.py"]
+        is not sam_module.SPECIAL_LOGGING_CONFIG[
+            "core/logger_example/logger_example.py"
+        ]
     )
 
 
@@ -125,7 +141,7 @@ def test_build_examples_catalog_scans_package_source(
     write_module(source_root / "__init__.py", "")
     write_module(source_root / "__about__.py", "__version__ = '1.0.0'\n")
     write_module(
-        source_root / "step" / "step.py",
+        source_root / "primitive" / "step" / "step.py",
         '"""Step module docs."""\nasync def handler(event):\n    return event\n',
     )
     write_module(source_root / "no_handler.py", "VALUE = 1\n")
@@ -140,10 +156,10 @@ def test_build_examples_catalog_scans_package_source(
         {
             "name": "Step",
             "description": "Step module docs.",
-            "handler": "examples.step.step.handler",
+            "handler": "examples.primitive.step.step.handler",
             "integration": True,
             "durableConfig": DEFAULT_DURABLE_CONFIG,
-            "path": "./examples/step/step.py",
+            "path": "./examples/primitive/step/step.py",
         }
     ]
 
@@ -163,7 +179,7 @@ def test_build_template_adds_layer_role_and_functions() -> None:
     template = build_template(
         [
             {
-                "handler": "examples.step.step.handler",
+                "handler": "examples.primitive.step.step.handler",
                 "description": "Step example.",
                 "durableConfig": {"ExecutionTimeout": 10},
             }
@@ -181,7 +197,7 @@ def test_build_template_adds_layer_role_and_functions() -> None:
     function = template["Resources"]["AsyncDurableExecutionExamplesStepStep"][
         "Properties"
     ]
-    assert function["Handler"] == "examples.step.step.handler"
+    assert function["Handler"] == "examples.primitive.step.step.handler"
     assert function["DurableConfig"] == {"ExecutionTimeout": 10}
     assert function["FunctionName"] == {"Fn::Sub": "${FunctionNamePrefix}StepStep"}
 
@@ -190,7 +206,7 @@ def test_build_template_preserves_deployed_handler_error_logical_id() -> None:
     template = build_template(
         [
             {
-                "handler": "examples.handler_error.handler_error.handler",
+                "handler": "examples.core.handler_error.handler_error.handler",
                 "description": "Handler error example.",
             }
         ]
@@ -211,11 +227,11 @@ def test_validate_catalog_test_coverage_accepts_known_handlers(
     monkeypatch.setattr(
         sam_module,
         "load_test_handlers",
-        Mock(return_value={"examples.step.step.handler"}),
+        Mock(return_value={"examples.primitive.step.step.handler"}),
     )
 
     validate_catalog_test_coverage(
-        {"examples": [{"handler": "examples.step.step.handler"}]}
+        {"examples": [{"handler": "examples.primitive.step.step.handler"}]}
     )
 
 
@@ -230,7 +246,7 @@ def test_validate_catalog_test_coverage_reports_missing_handlers(
     monkeypatch.setattr(
         sam_module,
         "load_test_handlers",
-        Mock(return_value={"examples.step.step.handler"}),
+        Mock(return_value={"examples.primitive.step.step.handler"}),
     )
 
     with pytest.raises(SystemExit, match="missing from the generated examples catalog"):
@@ -243,7 +259,7 @@ def test_generate_sam_template_writes_template(
     catalog = {
         "examples": [
             {
-                "handler": "examples.step.step.handler",
+                "handler": "examples.primitive.step.step.handler",
                 "description": "Step example.",
                 "durableConfig": {"ExecutionTimeout": 10},
             }
@@ -272,12 +288,12 @@ def test_generate_sam_template_selects_named_example(
         "examples": [
             {
                 "name": "Hello World",
-                "handler": "examples.hello_world.handler",
+                "handler": "examples.core.hello_world.handler",
                 "description": "Hello World example.",
             },
             {
                 "name": "Step",
-                "handler": "examples.step.step.handler",
+                "handler": "examples.primitive.step.step.handler",
                 "description": "Step example.",
             },
         ]
@@ -302,7 +318,7 @@ def test_generate_sam_template_rejects_unknown_example(
         "examples": [
             {
                 "name": "Hello World",
-                "handler": "examples.hello_world.handler",
+                "handler": "examples.core.hello_world.handler",
                 "description": "Hello World example.",
             }
         ]

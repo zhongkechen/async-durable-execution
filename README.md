@@ -197,14 +197,18 @@ async def test_order_workflow_in_cloud() -> None:
 
 ## 🧩 Examples
 
-Example durable functions live in `examples/`. Start with `hello_world.py` for the smallest complete handler.
+Example durable functions live in `examples/`. Start with
+`core/hello_world.py` for the smallest complete handler. The layout mirrors
+the API reference:
 
-The example tests in `test_examples/` are also useful as executable recipes. Browse them by operation or pattern:
+- `primitive/` contains callback, child context, invoke, step, and wait examples.
+- `extension/` contains flow, map, parallel, recursive invocation,
+  wait-for-callback, wait-for-condition, and retry examples.
+- `core/` contains execution, client, error, and logging examples.
 
-- `step/`, `wait/`, `wait_for_callback/`, and `wait_for_condition/` for core durable operations
-- `step/steps_with_gather.py` for starting multiple step tasks and awaiting them together with `asyncio.gather`
-- `flow/`, `map/`, `parallel/`, and `run_in_child_context/` for composition patterns
-- `invoke/`, including `invoke/recurse.py`, `with_retry/`, `callback/`, and `logger_example/` for integrations and operational behavior
+`test_examples/` mirrors the same categories and provides executable recipes.
+For example, `primitive/step/steps_with_gather.py` shows how to start multiple
+step tasks and await them together with `asyncio.gather`.
 
 For the developer workflow to run or deploy example integration tests, see the [Contributing Guide](https://github.com/zhongkechen/async-durable-execution/blob/main/CONTRIBUTING.md#example-integration-tests-and-deployment).
 

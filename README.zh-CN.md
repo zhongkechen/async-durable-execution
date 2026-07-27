@@ -195,14 +195,17 @@ async def test_order_workflow_in_cloud() -> None:
 
 ## 🧩 示例
 
-Lambda 持久性函数示例位于 `examples/`。可以从 `hello_world.py` 开始，它是最小的完整事件处理程序。
+Lambda 持久性函数示例位于 `examples/`。可以从 `core/hello_world.py`
+开始，它是最小的完整事件处理程序。目录结构与 API 参考保持一致：
 
-`test_examples/` 中的示例测试也很适合作为可执行的模板参考。可按操作或模式浏览：
+- `primitive/` 包含 callback、child context、invoke、step 和 wait 示例。
+- `extension/` 包含 flow、map、parallel、递归调用、wait-for-callback、
+  wait-for-condition 和 retry 示例。
+- `core/` 包含执行、客户端、错误和日志示例。
 
-- `step/`、`wait/`、`wait_for_callback/` 与 `wait_for_condition/` 用于核心持久操作
-- `step/steps_with_gather.py` 展示如何启动多个步骤任务，并通过 `asyncio.gather` 一起等待
-- `flow/`、`map/`、`parallel/` 与 `run_in_child_context/` 用于组合模式
-- `invoke/`（包括 `invoke/recurse.py`）、`with_retry/`、`callback/` 与 `logger_example/` 用于集成与运行行为
+`test_examples/` 使用相同的分类，并提供可执行的模板。例如，
+`primitive/step/steps_with_gather.py` 展示如何启动多个步骤任务，并通过
+`asyncio.gather` 一起等待。
 
 如需了解运行或部署示例集成测试的开发者工作流，请参阅[贡献指南](https://github.com/zhongkechen/async-durable-execution/blob/main/CONTRIBUTING.md#example-integration-tests-and-deployment)。
 
