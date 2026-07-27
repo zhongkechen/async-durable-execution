@@ -7,7 +7,7 @@ from async_durable_execution import (
     durable_callable,
     step,
     durable_execution,
-    get_current_context,
+    get_wait_for_callback_context,
     wait,
     wait_for_callback,
 )
@@ -23,7 +23,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     @durable_callable
     async def first_submitter() -> None:
         """Submitter for first callback."""
-        callback_id = get_current_context().callback_id
+        callback_id = get_wait_for_callback_context().callback_id
         print(f"First callback submitted with ID: {callback_id}")
 
     callback_result_1: str = await wait_for_callback(
@@ -47,7 +47,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     @durable_callable
     async def second_submitter() -> None:
         """Submitter for second callback."""
-        callback_id = get_current_context().callback_id
+        callback_id = get_wait_for_callback_context().callback_id
         print(f"Second callback submitted with ID: {callback_id}")
 
     callback_result_2: str = await wait_for_callback(

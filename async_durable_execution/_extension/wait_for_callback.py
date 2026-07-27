@@ -18,7 +18,7 @@ from .._core import (
 )
 from .._primitive.callback import Callback, create_callback
 from .._primitive.child import _create_child_context_task
-from .._primitive.step import step
+from .._primitive.step import get_step_context, step
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -46,7 +46,7 @@ async def wait_for_callback_handler(
     )
 
     async def submitter_step():
-        step_context = get_current_context()
+        step_context = get_step_context()
         callback_context = WaitForCallbackContext(
             callback_id=callback.callback_id,
             execution_state=step_context.execution_state,
@@ -77,8 +77,8 @@ def wait_for_callback(
     """Create a callback, run a submitter, then suspend until the callback resolves.
 
     Args:
-        submitter: Async callable. Use get_current_context().callback_id inside the
-            submitter to access the callback id.
+        submitter: Async callable. Use get_wait_for_callback_context().callback_id
+            inside the submitter to access the callback id.
         name: Optional durable operation name.
         timeout: Optional maximum time to wait for callback completion.
         heartbeat_timeout: Optional maximum time to wait between callback heartbeats.
@@ -108,3 +108,15 @@ class WaitForCallbackContext(OperationContext):
     """Context available during wait_for_callback submitter execution."""
 
     callback_id: str = ""
+
+
+def get_wait_for_callback_context() -> WaitForCallbackContext:
+    """Return the active `WaitForCallbackContext`."""
+    current_context = get_current_context()
+    if not isinstance(current_context, WaitForCallbackContext):
+        msg = (
+            "get_wait_for_callback_context() can only be used while a "
+            "wait_for_callback submitter is executing."
+        )
+        raise RuntimeError(msg)
+    return current_context

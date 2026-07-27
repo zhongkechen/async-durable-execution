@@ -5,7 +5,7 @@ from typing import Any
 
 from async_durable_execution import (
     durable_callable,
-    get_current_context,
+    get_map_item_context,
     step,
     durable_execution,
     map,
@@ -24,7 +24,7 @@ async def handler(event: dict[str, Any]) -> dict[str, Any]:
         return "Step 1 completed successfully"
 
     async def map_item(item: int) -> int:
-        map_context = get_current_context()
+        map_context = get_map_item_context()
 
         @durable_callable
         async def get_item() -> int:

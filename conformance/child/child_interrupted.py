@@ -5,7 +5,7 @@ from async_durable_execution import (
     RetryStrategy,
     durable_callable,
     durable_execution,
-    get_current_context,
+    get_durable_context,
     run_in_child_context,
     step,
 )
@@ -26,7 +26,7 @@ async def crashable_step(*, should_crash: bool, value: str) -> str:
 @durable_callable
 async def interrupted_child(*, value: str) -> str:
     # Capture child replay state before step() binds its own operation context.
-    should_crash = not get_current_context().is_replaying()
+    should_crash = not get_durable_context().is_replaying()
     return await step(
         crashable_step(should_crash=should_crash, value=value),
         retry_strategy=RetryStrategy.none(),

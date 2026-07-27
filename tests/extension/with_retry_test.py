@@ -13,6 +13,7 @@ import pytest
 
 from async_durable_execution import (
     WithRetryContext,
+    get_with_retry_context,
     with_retry,
     with_retry as imported_with_retry,
 )
@@ -23,6 +24,7 @@ from async_durable_execution._core.config import (
 )
 from async_durable_execution._core.context import (
     DurableContext,
+    bind_current_context,
     get_current_context,
     reset_current_context,
     set_current_context,
@@ -49,9 +51,33 @@ def _make_durable_context() -> DurableContext:
 
 
 def _current_attempt() -> int:
-    context = get_current_context()
-    assert isinstance(context, WithRetryContext)
-    return context.attempt
+    return get_with_retry_context().attempt
+
+
+def test_get_with_retry_context_returns_bound_retry_context():
+    durable_context = _make_durable_context()
+    retry_context = WithRetryContext(
+        execution_state=durable_context.execution_state,
+        operation_identifier=durable_context.operation_identifier,
+        attempt=3,
+    )
+
+    with bind_current_context(retry_context):
+        context = get_with_retry_context()
+
+    assert context is retry_context
+    assert context.attempt == 3
+
+
+def test_get_with_retry_context_rejects_non_retry_context():
+    with (
+        bind_current_context(_make_durable_context()),
+        pytest.raises(
+            RuntimeError,
+            match=r"get_with_retry_context\(\) can only be used while a with_retry body is executing\.",
+        ),
+    ):
+        get_with_retry_context()
 
 
 @dataclass

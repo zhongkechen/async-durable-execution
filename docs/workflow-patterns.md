@@ -75,10 +75,9 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    WaitForCallbackContext,
     durable_callable,
     durable_execution,
-    get_current_context,
+    get_wait_for_callback_context,
     step,
     wait_for_callback,
 )
@@ -94,8 +93,7 @@ async def submit_approval(
     approver_email: str,
     plan: dict[str, Any],
 ) -> None:
-    context = get_current_context()
-    assert isinstance(context, WaitForCallbackContext)
+    context = get_wait_for_callback_context()
     await approval_service.send(
         approver_email=approver_email,
         plan=plan,

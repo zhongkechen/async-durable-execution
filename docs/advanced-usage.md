@@ -237,13 +237,13 @@ operation as `invoke()`.
 ```python
 from typing import Any
 
-from async_durable_execution import durable_execution, get_current_context, recurse
+from async_durable_execution import durable_execution, get_durable_context, recurse
 
 
 @durable_execution
 async def handler(event: dict[str, Any]) -> dict[str, Any]:
     values = [int(value) for value in event["values"]]
-    recursive_level = get_current_context().recursive_level
+    recursive_level = get_durable_context().recursive_level
 
     if len(values) <= 1:
         return {
@@ -303,7 +303,7 @@ alias, or `$LATEST`.
 keeps accidental self-invocation loops from repeatedly starting the same execution
 input. When `with_recursive_level=True`, the payload must be a `dict`; the SDK copies
 it and writes an internal `__recursive_level` field. User code should read the public
-`get_current_context().recursive_level` property rather than reading that field
+`get_durable_context().recursive_level` property rather than reading that field
 directly. The first recursive call has `recursive_level == 1`.
 
 AWS Lambda recursion protection counts the original invocation as part of the invoke

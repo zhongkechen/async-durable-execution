@@ -9,4 +9,5 @@ operations.
     options:
       members:
         - WithRetryContext
+        - get_with_retry_context
         - with_retry

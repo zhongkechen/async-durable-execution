@@ -49,9 +49,11 @@ from `async_durable_execution`.
 | `context.logger` or `step_context.logger` | standard `logging.getLogger(__name__)` |
 
 This SDK binds the active durable context internally while your async callable runs. If
-you need execution metadata, call `get_current_context()` and read fields such as
+you need execution metadata, use the getter for that callable's scope, such as
+`get_durable_context()` or `get_step_context()`, and read fields such as
 `durable_execution_arn`, `operation_id`, `operation_name`, `lambda_context`, or
-`is_replaying()`.
+`is_replaying()`. Specific getters validate the active scope and provide concrete
+return types without a cast.
 
 Durable operation helpers return `asyncio.Task` objects. You can keep the simple
 `await step(...)` style during migration, or start multiple independent operations
@@ -232,17 +234,15 @@ For the combined submit-and-wait pattern, make the submitter a durable callable:
 from datetime import timedelta
 
 from async_durable_execution import (
-    WaitForCallbackContext,
     durable_callable,
-    get_current_context,
+    get_wait_for_callback_context,
     wait_for_callback,
 )
 
 
 @durable_callable
 async def submit_approval() -> None:
-    callback_context = get_current_context()
-    assert isinstance(callback_context, WaitForCallbackContext)
+    callback_context = get_wait_for_callback_context()
     send_approval_request(callback_context.callback_id)
 
 
@@ -383,8 +383,8 @@ assertions can use `result.get_step("my-step")` instead of depending on operatio
    `@durable_dag` definitions synchronous.
 3. Replace `DurableContext` method calls with awaited top-level operations.
 4. Replace `@durable_step` with `@durable_callable`.
-5. Remove explicit `DurableContext` and `StepContext` parameters unless you are reading
-   metadata through `get_current_context()`.
+5. Remove explicit `DurableContext` and `StepContext` parameters. Use the context
+   getter for the active scope when you need metadata.
 6. Replace `Duration` with `datetime.timedelta`.
 7. Move all nondeterministic work and side effects into steps.
 8. Replace context loggers with standard `logging` loggers.

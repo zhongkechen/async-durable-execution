@@ -2,13 +2,13 @@
 
 from typing import Any
 
-from async_durable_execution import durable_execution, get_current_context, recurse
+from async_durable_execution import durable_execution, get_durable_context, recurse
 
 
 @durable_execution
 async def handler(event: dict[str, Any]) -> dict[str, Any]:
     values = [int(value) for value in event["values"]]
-    recursive_level = get_current_context().recursive_level
+    recursive_level = get_durable_context().recursive_level
 
     if len(values) <= 1:
         return {

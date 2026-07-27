@@ -33,7 +33,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, Generic, Protocol, TypeVar, cast
 
-from .context import bind_current_context
+from .context import bind_current_context, get_current_context
 from .exceptions import (
     DurableExecutionsError,
     ExecutionError,
@@ -391,6 +391,18 @@ class SerDesContext:
     durable_execution_arn: str = ""
 
     recursive_level: int = 0
+
+
+def get_serdes_context() -> SerDesContext:
+    """Return the active `SerDesContext`."""
+    current_context = get_current_context()
+    if not isinstance(current_context, SerDesContext):
+        msg = (
+            "get_serdes_context() can only be used while a SerDes operation "
+            "is executing."
+        )
+        raise RuntimeError(msg)
+    return current_context
 
 
 class SerDes(ABC, Generic[T]):

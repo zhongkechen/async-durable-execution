@@ -203,10 +203,9 @@ import asyncio
 from datetime import timedelta
 
 from async_durable_execution import (
-    WaitForCallbackContext,
     durable_callable,
     durable_execution,
-    get_current_context,
+    get_wait_for_callback_context,
     wait_for_callback,
 )
 
@@ -217,8 +216,7 @@ def submit_approval_sync(callback_id: str, approver_email: str) -> None:
 
 @durable_callable
 async def submit_approval(approver_email: str) -> None:
-    callback_context = get_current_context()
-    assert isinstance(callback_context, WaitForCallbackContext)
+    callback_context = get_wait_for_callback_context()
     await asyncio.to_thread(
         submit_approval_sync,
         callback_context.callback_id,

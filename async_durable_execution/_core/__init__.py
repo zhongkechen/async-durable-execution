@@ -91,6 +91,7 @@ from .serdes import (
     TypeCodecExtension,
     TypeTag,
     deserialize,
+    get_serdes_context,
     serialize,
 )
 from .state import RECURSIVE_LEVEL_INPUT_FIELD, ExecutionState
@@ -123,4 +124,6 @@ __all__ = [
     "durable_callable",
     "durable_execution",
     "get_current_context",
+    "get_durable_context",
+    "get_serdes_context",
 ]

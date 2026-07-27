@@ -9,4 +9,5 @@ policies, and aggregated results.
     options:
       members:
         - MapItemContext
+        - get_map_item_context
         - map

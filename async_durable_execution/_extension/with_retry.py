@@ -10,6 +10,7 @@ from .._core import (
     RetryStrategy,
     SerDes,
     bind_current_context,
+    get_current_context,
     get_durable_context,
 )
 from .._primitive.child import run_in_child_context
@@ -28,6 +29,18 @@ class WithRetryContext(DurableContext):
     attempt: int = 1
 
 
+def get_with_retry_context() -> WithRetryContext:
+    """Return the active `WithRetryContext`."""
+    current_context = get_current_context()
+    if not isinstance(current_context, WithRetryContext):
+        msg = (
+            "get_with_retry_context() can only be used while a with_retry body "
+            "is executing."
+        )
+        raise RuntimeError(msg)
+    return current_context
+
+
 def with_retry(
     func: Callable[[], Awaitable[T]],
     *,
@@ -40,7 +53,7 @@ def with_retry(
     """Retry a block of durable logic with configurable backoff.
 
     Args:
-        func: Async callable to retry. Use get_current_context().attempt inside
+        func: Async callable to retry. Use get_with_retry_context().attempt inside
             the callable to access the current attempt number.
         name: Optional durable operation name.
         retry_strategy: Optional strategy that returns a retry delay or None to stop.

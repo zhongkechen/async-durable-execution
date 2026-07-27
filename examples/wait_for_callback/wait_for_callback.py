@@ -3,10 +3,9 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    WaitForCallbackContext,
     durable_callable,
     durable_execution,
-    get_current_context,
+    get_wait_for_callback_context,
     wait_for_callback,
 )
 
@@ -15,8 +14,7 @@ from async_durable_execution import (
 async def external_system_call() -> None:
     """Simulate calling an external system with callback ID."""
     await asyncio.sleep(0)
-    callback_context = get_current_context()
-    assert isinstance(callback_context, WaitForCallbackContext)
+    callback_context = get_wait_for_callback_context()
     assert callback_context.callback_id
     # In real usage, this would make an API call to an external system
     # passing the callback_id for the system to call back when done

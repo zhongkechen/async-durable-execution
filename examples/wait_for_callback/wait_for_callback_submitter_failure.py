@@ -6,7 +6,7 @@ from typing import Any
 from async_durable_execution import (
     durable_callable,
     durable_execution,
-    get_current_context,
+    get_wait_for_callback_context,
     RetryStrategy,
     wait_for_callback,
 )
@@ -19,7 +19,7 @@ async def handler(event: dict[str, Any]) -> dict[str, Any]:
     @durable_callable
     async def submitter() -> None:
         """Submitter function that can fail based on event parameter."""
-        callback_id = get_current_context().callback_id
+        callback_id = get_wait_for_callback_context().callback_id
         print(f"Submitting callback to external system - callbackId: {callback_id}")
         raise Exception("Simulated submitter failure")
 

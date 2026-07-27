@@ -28,6 +28,7 @@ from async_durable_execution._core.models import (
     OperationType,
 )
 from async_durable_execution._core.context import (
+    bind_current_context,
     get_current_context,
     reset_current_context,
     set_current_context,
@@ -43,6 +44,7 @@ from async_durable_execution._extension.map import (
     MapSummaryGenerator,
     _bind_map_item_to_branch,
     _create_map_branch_namer,
+    get_map_item_context,
     map_handler,
 )
 from async_durable_execution._extension.parallel import ParallelExecutor
@@ -102,6 +104,33 @@ def create_mock_child_context(state):
         ),
         step_id_prefix="test_parent",
     )
+
+
+def test_get_map_item_context_returns_bound_map_item_context():
+    durable_context = create_test_context()
+    map_context = MapItemContext(
+        execution_state=durable_context.execution_state,
+        operation_identifier=durable_context.operation_identifier,
+        index=2,
+        items=("a", "b", "c"),
+    )
+
+    with bind_current_context(map_context):
+        context = get_map_item_context()
+
+    assert context is map_context
+    assert context.index == 2
+
+
+def test_get_map_item_context_rejects_non_map_context():
+    with (
+        bind_current_context(create_test_context()),
+        pytest.raises(
+            RuntimeError,
+            match=r"get_map_item_context\(\) can only be used while a map item function is executing\.",
+        ),
+    ):
+        get_map_item_context()
 
 
 def create_map_executor(**kwargs):
