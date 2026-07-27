@@ -8,6 +8,7 @@ from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
 from async_durable_execution._core.context import (
+    bind_current_context,
     reset_current_context,
     set_current_context,
     get_current_context,
@@ -43,7 +44,11 @@ from async_durable_execution._extension.wait_for_callback import (
 )
 from async_durable_execution._core.serdes import SerDes
 from async_durable_execution._core.state import ExecutionState
-from async_durable_execution import WaitForCallbackContext, StepContext
+from async_durable_execution import (
+    StepContext,
+    WaitForCallbackContext,
+    get_wait_for_callback_context,
+)
 
 
 async def create_callback_handler(
@@ -99,6 +104,44 @@ def test_wait_for_callback_name_is_keyword_only():
 
     assert parameters["submitter"].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
     assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+def test_get_wait_for_callback_context_returns_bound_callback_context():
+    context = WaitForCallbackContext(
+        execution_state=Mock(spec=ExecutionState),
+        operation_identifier=OperationIdentifier(
+            "submitter-step",
+            OperationSubType.STEP,
+            None,
+        ),
+        callback_id="callback-123",
+    )
+
+    with bind_current_context(context):
+        callback_context = get_wait_for_callback_context()
+
+    assert callback_context is context
+    assert callback_context.callback_id == "callback-123"
+
+
+def test_get_wait_for_callback_context_rejects_non_callback_context():
+    with (
+        bind_current_context(
+            StepContext(
+                execution_state=Mock(spec=ExecutionState),
+                operation_identifier=OperationIdentifier(
+                    "step",
+                    OperationSubType.STEP,
+                    None,
+                ),
+            )
+        ),
+        pytest.raises(
+            RuntimeError,
+            match=r"get_wait_for_callback_context\(\) can only be used while a wait_for_callback submitter is executing\.",
+        ),
+    ):
+        get_wait_for_callback_context()
 
 
 async def execute_step_with_mock_context(func):

@@ -4,10 +4,9 @@ from datetime import timedelta
 from typing import Any
 
 from async_durable_execution import (
-    MapItemContext,
     durable_callable,
     durable_execution,
-    get_current_context,
+    get_map_item_context,
     map,
     step,
     wait,
@@ -20,7 +19,7 @@ async def return_value(value: str) -> str:
 
 
 async def map_fn(item: str) -> str:
-    context: MapItemContext = get_current_context()
+    context = get_map_item_context()
     if context.index == 1:
         await wait(timedelta(seconds=1))
     return await step(return_value(item))

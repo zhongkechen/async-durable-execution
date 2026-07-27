@@ -31,6 +31,7 @@ from .._core import (
     bind_current_context,
     create_eager_task,
     duration_to_seconds,
+    get_current_context,
     get_durable_context,
     suspend_with_optional_resume_delay,
     suspend_with_optional_resume_timestamp,
@@ -411,3 +412,15 @@ class WaitForConditionCheckContext(StepContext):
     """Context available during wait_for_condition checker execution."""
 
     pass
+
+
+def get_wait_for_condition_check_context() -> WaitForConditionCheckContext:
+    """Return the active `WaitForConditionCheckContext`."""
+    current_context = get_current_context()
+    if not isinstance(current_context, WaitForConditionCheckContext):
+        msg = (
+            "get_wait_for_condition_check_context() can only be used while a "
+            "wait_for_condition check is executing."
+        )
+        raise RuntimeError(msg)
+    return current_context

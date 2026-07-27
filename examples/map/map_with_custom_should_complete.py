@@ -11,7 +11,7 @@ from async_durable_execution import (
     RetryStrategy,
     durable_callable,
     durable_execution,
-    get_current_context,
+    get_map_item_context,
     map,
     step,
 )
@@ -41,7 +41,7 @@ async def handler(event: dict[str, Any] | None) -> dict[str, Any]:
         return CompletionDecision.continue_execution()
 
     async def query_provider(provider: str) -> str:
-        map_context = get_current_context()
+        map_context = get_map_item_context()
 
         @durable_callable
         async def run() -> str:

@@ -10,10 +10,10 @@ from typing import Any
 
 from async_durable_execution import (
     RetryStrategy,
-    WithRetryContext,
     durable_callable,
     durable_execution,
-    get_current_context,
+    get_wait_for_callback_context,
+    get_with_retry_context,
     with_retry,
     wait_for_callback,
 )
@@ -31,13 +31,12 @@ async def handler(_event: Any) -> dict[str, Any]:
     @durable_callable
     async def retryable_callback_flow() -> str:
         """The retryable block: create a callback and wait for the result."""
-        retry_context = get_current_context()
-        assert isinstance(retry_context, WithRetryContext)
+        retry_context = get_with_retry_context()
 
         @durable_callable
         async def submitter() -> None:
             """Submit the callback ID to an external system."""
-            callback_id = get_current_context().callback_id
+            callback_id = get_wait_for_callback_context().callback_id
             del callback_id
             # In real usage, this would send the callback_id to an external
             # system (e.g., via API call, SQS message, etc.)

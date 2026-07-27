@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 
 from async_durable_execution._core.context import (
+    bind_current_context,
     get_current_context,
     reset_current_context,
     set_current_context,
@@ -35,6 +36,7 @@ from async_durable_execution._core.serdes import (
     TypeTag,
     UuidCodec,
     deserialize,
+    get_serdes_context,
     serialize,
 )
 
@@ -233,6 +235,24 @@ async def test_context_propagation():
     assert serialized == "data" + "test-arn"
     deserialized = await deserialize(serdes, serialized, "test-op", "test-arn")
     assert deserialized == "data" + "test-arn" + "test-op"
+
+
+def test_get_serdes_context_returns_bound_serdes_context():
+    context = SerDesContext("test-op", "test-arn")
+
+    with bind_current_context(context):
+        assert get_serdes_context() is context
+
+
+def test_get_serdes_context_rejects_non_serdes_context():
+    with (
+        bind_current_context(object()),
+        pytest.raises(
+            RuntimeError,
+            match=r"get_serdes_context\(\) can only be used while a SerDes operation is executing\.",
+        ),
+    ):
+        get_serdes_context()
 
 
 async def test_serdes_context_exposes_recursive_level():

@@ -157,6 +157,13 @@ def test_get_durable_context_has_no_parameters():
     assert not inspect.signature(get_durable_context).parameters
 
 
+def test_get_durable_context_returns_bound_durable_context():
+    context = create_test_context()
+
+    with bind_current_context(context):
+        assert get_durable_context() is context
+
+
 def test_get_durable_context_uses_current_operation_name_in_error():
     state = Mock(spec=ExecutionState)
     context = StepContext(

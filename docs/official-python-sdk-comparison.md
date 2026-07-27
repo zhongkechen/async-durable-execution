@@ -113,7 +113,7 @@ written around that contract.
 | Concern | Official Python SDK | `async-durable-execution` |
 | --- | --- | --- |
 | Operation access | Methods on `DurableContext` | Top-level helpers imported from `async_durable_execution` |
-| Context metadata | `DurableContext` and `StepContext` parameters | `get_current_context()` when metadata is needed |
+| Context metadata | `DurableContext` and `StepContext` parameters | Typed context getters such as `get_durable_context()` and `get_step_context()` |
 | Durations | SDK duration wrapper objects | Standard `datetime.timedelta` |
 | Operation names | Usually passed through operation config or context APIs | Keyword-only `name=...` arguments |
 | Retry configuration | SDK retry config objects | `RetryStrategy(...)` passed to operations |

@@ -31,11 +31,17 @@ from ._core import (
     durable_callable,
     durable_execution,
     get_current_context,
+    get_durable_context,
+    get_serdes_context,
 )
 
 # Durable operations
-from ._extension.with_retry import WithRetryContext, with_retry
-from ._extension.map import MapItemContext, map
+from ._extension.with_retry import (
+    WithRetryContext,
+    get_with_retry_context,
+    with_retry,
+)
+from ._extension.map import MapItemContext, get_map_item_context, map
 from ._extension.flow import (
     FlowDefinitionError,
     FlowExecutionError,
@@ -64,6 +70,7 @@ from ._extension.wait_for_condition import (
     PollingStrategy,
     WaitForConditionCheckContext,
     WaitForConditionError,
+    get_wait_for_condition_check_context,
     wait_for_condition,
 )
 from ._primitive.invoke import invoke
@@ -77,8 +84,9 @@ from ._primitive.callback import (
     create_callback,
 )
 from ._extension.wait_for_callback import (
-    wait_for_callback,
     WaitForCallbackContext,
+    get_wait_for_callback_context,
+    wait_for_callback,
 )
 from ._primitive.child import SummaryGenerator, run_in_child_context
 from ._primitive.step import (
@@ -110,8 +118,14 @@ __all__ = [
     "durable_node",
     "flow",
     "get_current_context",
+    "get_durable_context",
+    "get_map_item_context",
     "get_node_context",
+    "get_serdes_context",
     "get_step_context",
+    "get_wait_for_callback_context",
+    "get_wait_for_condition_check_context",
+    "get_with_retry_context",
     "invoke",
     "map",
     "now",

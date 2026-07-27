@@ -34,7 +34,7 @@ async def test_interrupted_child_crashes_only_before_replay(
 ) -> None:
     context = Mock()
     context.is_replaying.return_value = is_replaying
-    monkeypatch.setattr(child_interrupted, "get_current_context", lambda: context)
+    monkeypatch.setattr(child_interrupted, "get_durable_context", lambda: context)
 
     def fake_crashable_step(
         *,

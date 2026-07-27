@@ -8,11 +8,10 @@ from typing import Any
 
 from async_durable_execution import (
     durable_execution,
-    get_current_context,
+    get_wait_for_condition_check_context,
     JitterStrategy,
     SerDes,
     PollingStrategy,
-    WaitForConditionCheckContext,
     wait_for_condition,
 )
 
@@ -61,8 +60,7 @@ async def handler(_event: Any) -> dict[str, Any]:
     async def check_function(_state: JobStatus | None) -> JobStatus:
         """Return a JobStatus whose __bool__ determines polling completion."""
         await asyncio.sleep(0)
-        context = get_current_context()
-        assert isinstance(context, WaitForConditionCheckContext)
+        context = get_wait_for_condition_check_context()
         attempt = context.attempt or 1
         return JobStatus(
             job_id="job-123",

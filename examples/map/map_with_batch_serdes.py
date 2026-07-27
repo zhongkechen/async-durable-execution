@@ -6,7 +6,7 @@ from typing import Any
 
 from async_durable_execution import (
     durable_callable,
-    get_current_context,
+    get_map_item_context,
     step,
     BatchItem,
     BatchItemStatus,
@@ -83,7 +83,7 @@ async def handler(_event: Any) -> dict[str, Any]:
 
     async def process_item(item: int) -> int:
         await asyncio.sleep(0)
-        map_context = get_current_context()
+        map_context = get_map_item_context()
 
         @durable_callable
         async def double() -> int:

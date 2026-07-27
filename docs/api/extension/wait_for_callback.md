@@ -10,3 +10,4 @@ for an external result as one reusable operation.
       members:
         - wait_for_callback
         - WaitForCallbackContext
+        - get_wait_for_callback_context

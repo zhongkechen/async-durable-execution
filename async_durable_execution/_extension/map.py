@@ -33,6 +33,7 @@ from .._core import (
     SerDes,
     bind_current_context,
     durable_callable,
+    get_current_context,
     get_durable_context,
 )
 from .._primitive.child import (
@@ -65,6 +66,18 @@ class MapItemContext(DurableContext, Generic[T]):
 
     index: int = 0
     items: Sequence[T] = field(default_factory=tuple)
+
+
+def get_map_item_context() -> MapItemContext[Any]:
+    """Return the active `MapItemContext`."""
+    current_context = get_current_context()
+    if not isinstance(current_context, MapItemContext):
+        msg = (
+            "get_map_item_context() can only be used while a map item "
+            "function is executing."
+        )
+        raise RuntimeError(msg)
+    return current_context
 
 
 def _bind_map_item_to_branch(

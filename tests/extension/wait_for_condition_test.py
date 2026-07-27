@@ -11,6 +11,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from async_durable_execution._core.context import (
+    bind_current_context,
     get_current_context,
 )
 from async_durable_execution._core.exceptions import (
@@ -40,7 +41,11 @@ from async_durable_execution._extension.wait_for_condition import (
     wait_for_condition,
 )
 from async_durable_execution._core.state import ExecutionState
-from async_durable_execution import WaitForConditionCheckContext
+from async_durable_execution import (
+    StepContext,
+    WaitForConditionCheckContext,
+    get_wait_for_condition_check_context,
+)
 from async_durable_execution._core.config import JitterStrategy
 from async_durable_execution._extension.wait_for_condition import PollingStrategy
 from async_durable_execution._core.serdes import SerDes
@@ -91,6 +96,45 @@ def test_wait_for_condition_signature_requires_keyword_only_options():
     assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
     assert parameters["polling_strategy"].kind is inspect.Parameter.KEYWORD_ONLY
     assert parameters["serdes"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+def test_get_wait_for_condition_check_context_returns_bound_check_context():
+    context = WaitForConditionCheckContext(
+        execution_state=Mock(spec=ExecutionState),
+        operation_identifier=OperationIdentifier(
+            "condition",
+            OperationSubType.WAIT_FOR_CONDITION,
+            None,
+        ),
+        attempt=4,
+    )
+
+    with bind_current_context(context):
+        check_context = get_wait_for_condition_check_context()
+
+    assert check_context is context
+    assert check_context.attempt == 4
+
+
+def test_get_wait_for_condition_check_context_rejects_other_step_context():
+    context = StepContext(
+        execution_state=Mock(spec=ExecutionState),
+        operation_identifier=OperationIdentifier(
+            "step",
+            OperationSubType.STEP,
+            None,
+        ),
+        attempt=1,
+    )
+
+    with (
+        bind_current_context(context),
+        pytest.raises(
+            RuntimeError,
+            match=r"get_wait_for_condition_check_context\(\) can only be used while a wait_for_condition check is executing\.",
+        ),
+    ):
+        get_wait_for_condition_check_context()
 
 
 async def test_wait_for_condition_requires_check_callable():
