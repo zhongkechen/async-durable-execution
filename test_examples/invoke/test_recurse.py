@@ -7,6 +7,8 @@ from examples.invoke import recurse
 LOCAL_RECURSE_FUNCTION_NAME = (
     "arn:aws:lambda:us-west-2:123456789012:function:test-function"
 )
+
+
 def _middle_pivot_chain_values(count: int, start: int = 1) -> list[int]:
     if count <= 0:
         return []
