@@ -21,7 +21,7 @@ OperationPayload: TypeAlias = str
 TimeoutSeconds: TypeAlias = int
 
 
-class LambdaContext(Protocol):  # pragma: no cover
+class LambdaContext(Protocol):
     """Minimal AWS Lambda context surface used by the SDK."""
 
     aws_request_id: str
