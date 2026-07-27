@@ -3,8 +3,8 @@
 from unittest.mock import Mock
 
 from async_durable_execution import DurableContext
-from async_durable_execution.execution import ExecutionState
-from async_durable_execution.models import OperationIdentifier, OperationSubType
+from async_durable_execution._core.execution import ExecutionState
+from async_durable_execution._core.models import OperationIdentifier, OperationSubType
 
 
 def operation_id_sequence(parent_id: str | None = None):

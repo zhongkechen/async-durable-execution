@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     Operation,
     OperationAction,
     OperationStatus,
@@ -13,10 +13,10 @@ from async_durable_execution.models import (
     OperationUpdate,
     WaitOptions,
 )
-from async_durable_execution.runner.local.processors.wait import (
+from async_durable_execution._runner.local.processors.wait import (
     WaitProcessor,
 )
-from async_durable_execution.runner.exceptions import (
+from async_durable_execution._runner.exceptions import (
     InvalidParameterValueException,
 )
 
@@ -337,17 +337,17 @@ def test_cancel_no_timer_scheduled():
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     Operation,
     OperationAction,
     OperationStatus,
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.runner.local.processors.wait import (
+from async_durable_execution._runner.local.processors.wait import (
     WaitProcessor,
 )
-from async_durable_execution.runner.exceptions import (
+from async_durable_execution._runner.exceptions import (
     InvalidParameterValueException,
 )
 

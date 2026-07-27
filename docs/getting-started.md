@@ -136,8 +136,8 @@ nondeterministic work that should be checkpointed atomically.
 
 ## Continue
 
-- [Durable operations](api/operations.md)
-- [Declarative DAG workflows](api/dag.md)
+- [API reference](async_durable_execution.md)
+- [Declarative DAG workflows](api/extension/flow.md)
 - [Workflow patterns](workflow-patterns.md)
 - [Deploy and invoke](deployment.md)
 - [Background tasks and advanced patterns](advanced-usage.md)

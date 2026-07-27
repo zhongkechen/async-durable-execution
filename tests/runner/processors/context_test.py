@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     ErrorObject,
     Operation,
     OperationAction,
@@ -13,10 +13,10 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.runner.local.processors.context import (
+from async_durable_execution._runner.local.processors.context import (
     ContextProcessor,
 )
-from async_durable_execution.runner.exceptions import (
+from async_durable_execution._runner.exceptions import (
     InvalidParameterValueException,
 )
 
@@ -383,7 +383,7 @@ def test_end_timestamp_not_set_for_non_terminal_states():
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     ErrorObject,
     Operation,
     OperationAction,
@@ -391,11 +391,11 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.runner.local.processors.context import (
+from async_durable_execution._runner.local.processors.context import (
     VALID_ACTIONS_FOR_CONTEXT,
     ContextProcessor,
 )
-from async_durable_execution.runner.exceptions import (
+from async_durable_execution._runner.exceptions import (
     InvalidParameterValueException,
 )
 

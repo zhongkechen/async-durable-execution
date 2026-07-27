@@ -9,24 +9,17 @@ from typing import Any
 
 import pytest
 
-from async_durable_execution.context import (
+from async_durable_execution._core.context import (
     get_current_context,
     reset_current_context,
     set_current_context,
 )
-from async_durable_execution.extension.parallel import (
-    BatchItem,
-    BatchItemStatus,
-    BatchResult,
-    CompletionReason,
-)
-from async_durable_execution.exceptions import (
+from async_durable_execution._core.exceptions import (
     DurableExecutionsError,
     ExecutionError,
     SerDesError,
 )
-from async_durable_execution.models import ErrorObject
-from async_durable_execution.serdes import (
+from async_durable_execution._core.serdes import (
     BytesCodec,
     ContainerCodec,
     DateTimeCodec,
@@ -941,82 +934,3 @@ async def test_all_t_v_nested_dicts():
     serialized = await serdes.serialize(val)
     deserialized = await serdes.deserialize(serialized)
     assert deserialized == val
-
-
-# to_dict() support tests
-async def test_default_serdes_supports_to_dict_objects():
-    """Test that default serdes automatically handles BatchResult serialization/deserialization."""
-
-    result = BatchResult(
-        all=[BatchItem(0, BatchItemStatus.SUCCEEDED, result="test")],
-        completion_reason=CompletionReason.ALL_COMPLETED,
-    )
-
-    # Default serdes should automatically handle BatchResult
-    serialized = await serialize(
-        serdes=None,
-        value=result,
-        operation_id="test_op",
-        durable_execution_arn="arn:test",
-    )
-
-    # Deserialize returns BatchResult (not dict)
-    deserialized = await deserialize(
-        serdes=None,
-        data=serialized,
-        operation_id="test_op",
-        durable_execution_arn="arn:test",
-    )
-
-    assert isinstance(deserialized, BatchResult)
-    assert deserialized.completion_reason == CompletionReason.ALL_COMPLETED
-    assert len(deserialized.all) == 1
-    assert deserialized.all[0].result == "test"
-
-
-async def test_to_dict_output_is_serializable():
-    """Test that to_dict() output is serializable by default serdes."""
-
-    result = BatchResult(
-        all=[
-            BatchItem(0, BatchItemStatus.SUCCEEDED, result={"key": "value"}),
-            BatchItem(
-                1,
-                BatchItemStatus.FAILED,
-                error=ErrorObject(
-                    message="error", type="TestError", data=None, stack_trace=[]
-                ),
-            ),
-        ],
-        completion_reason=CompletionReason.ALL_COMPLETED,
-    )
-
-    # Convert to dict
-    result_dict = result.to_dict()
-
-    # Dict should be serializable
-    serialized = await serialize(
-        serdes=None,
-        value=result_dict,
-        operation_id="test_op",
-        durable_execution_arn="arn:test",
-    )
-
-    # Deserialize
-    deserialized_dict = await deserialize(
-        serdes=None,
-        data=serialized,
-        operation_id="test_op",
-        durable_execution_arn="arn:test",
-    )
-
-    # Verify structure preserved
-    assert deserialized_dict["completionReason"] == "ALL_COMPLETED"
-    assert len(deserialized_dict["all"]) == 2
-    assert deserialized_dict["all"][0]["result"] == {"key": "value"}
-    assert deserialized_dict["all"][1]["error"]["ErrorType"] == "TestError"
-
-    # Can reconstruct BatchResult
-    reconstructed = BatchResult.from_dict(deserialized_dict)
-    assert len(reconstructed.all) == 2
-    assert reconstructed.completion_reason == CompletionReason.ALL_COMPLETED

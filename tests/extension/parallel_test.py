@@ -9,7 +9,11 @@ from typing import Any
 from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
-from async_durable_execution.extension.parallel import (
+import async_durable_execution._core.context as context_module
+import async_durable_execution._primitive.child as child
+from async_durable_execution._extension.parallel import (
+    _BATCH_RESULT_SERDES,
+    _BatchResultSerDes,
     BatchItem,
     BatchItemStatus,
     BatchResult,
@@ -18,25 +22,28 @@ from async_durable_execution.extension.parallel import (
 )
 
 # Mock the executor.execute method to return a BatchResult
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     ContextDetails,
     Operation,
     OperationStatus,
     OperationType,
 )
-from async_durable_execution.context import reset_current_context, set_current_context
+from async_durable_execution._core.context import (
+    reset_current_context,
+    set_current_context,
+)
 from async_durable_execution import durable_callable, parallel, DurableContext
-from async_durable_execution.models import OperationIdentifier
-from async_durable_execution.models import OperationSubType
-from async_durable_execution.primitive import child
-from async_durable_execution.extension.parallel import CompletionConfig, NestingType
-from async_durable_execution.extension.parallel import (
+from async_durable_execution._core.models import OperationIdentifier
+from async_durable_execution._core.models import OperationSubType
+from async_durable_execution._extension.parallel import CompletionConfig, NestingType
+from async_durable_execution._extension.parallel import (
     ParallelExecutor,
     ParallelSummaryGenerator,
     parallel_handler,
 )
-from async_durable_execution.serdes import serialize
-from async_durable_execution.state import ExecutionState
+from async_durable_execution._core.exceptions import SerDesError
+from async_durable_execution._core.serdes import ExtendedTypeSerDes, serialize
+from async_durable_execution._core.state import ExecutionState
 
 from ..serdes_test import CustomStrSerDes
 
@@ -55,7 +62,7 @@ def create_test_context(
             "arn:aws:durable:us-east-1:123456789012:execution/test"
         )
 
-    return child.DurableContext(
+    return DurableContext(
         execution_state=state,
         operation_identifier=OperationIdentifier(
             operation_id=None,
@@ -196,7 +203,7 @@ def test_parallel_signature_requires_keyword_only_options():
     assert parameters["nesting_type"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
-@patch("async_durable_execution.extension.parallel.parallel_handler")
+@patch("async_durable_execution._extension.parallel.parallel_handler")
 async def test_parallel_passes_config_fields_to_handler(
     mock_parallel_handler,
 ):
@@ -242,7 +249,7 @@ async def test_parallel_passes_config_fields_to_handler(
     assert kwargs["nesting_type"] is NestingType.FLAT
 
 
-@patch("async_durable_execution.extension.parallel.parallel_handler")
+@patch("async_durable_execution._extension.parallel.parallel_handler")
 async def test_parallel_passes_default_summary_generator(
     mock_parallel_handler,
 ):
@@ -295,7 +302,7 @@ def test_parallel_summary_generator_returns_compact_json_payload():
     }
 
 
-@patch("async_durable_execution.extension.parallel._run_in_child_context")
+@patch("async_durable_execution._extension.parallel._run_in_child_context")
 async def test_parallel_raises_when_child_operation_id_is_missing(
     mock_run_in_child_context,
 ):
@@ -317,7 +324,7 @@ async def test_parallel_raises_when_child_operation_id_is_missing(
         await run_with_context(context, lambda: parallel([branch_a]))
 
 
-@patch("async_durable_execution.extension.parallel.parallel_handler")
+@patch("async_durable_execution._extension.parallel.parallel_handler")
 async def test_parallel_accepts_one_shot_branch_iterable(
     mock_parallel_handler,
 ):
@@ -571,7 +578,7 @@ async def test_parallel_handler_creates_executor_with_correct_config():
     executor_context.create_child_context = lambda *args, **kwargs: Mock()
 
     with patch(
-        "async_durable_execution.extension.parallel.ParallelExecutor"
+        "async_durable_execution._extension.parallel.ParallelExecutor"
     ) as mock_executor_class:
         mock_batch_result = Mock(spec=BatchResult)
         mock_executor = Mock()
@@ -633,7 +640,7 @@ async def test_parallel_handler_creates_executor_with_default_fields():
     executor_context.create_child_context = lambda *args, **kwargs: Mock()
 
     with patch(
-        "async_durable_execution.extension.parallel.ParallelExecutor"
+        "async_durable_execution._extension.parallel.ParallelExecutor"
     ) as mock_executor_class:
         mock_batch_result = Mock(spec=BatchResult)
         mock_executor = Mock()
@@ -1118,10 +1125,10 @@ async def test_parallel_handler_first_execution_then_replay():
 
     with (
         patch(
-            "async_durable_execution.extension.parallel.ParallelExecutor.execute"
+            "async_durable_execution._extension.parallel.ParallelExecutor.execute"
         ) as mock_execute,
         patch(
-            "async_durable_execution.extension.parallel.ParallelExecutor.replay_completed"
+            "async_durable_execution._extension.parallel.ParallelExecutor.replay_completed"
         ) as mock_replay,
     ):
         mock_execute.return_value = Mock()  # Mock BatchResult
@@ -1160,8 +1167,8 @@ async def test_parallel_handler_first_execution_then_replay():
         (Mock(), None),
     ],
 )
-@patch("async_durable_execution.primitive.child.deserialize")
-@patch("async_durable_execution.primitive.child.serialize")
+@patch("async_durable_execution._primitive.child.deserialize")
+@patch("async_durable_execution._primitive.child.serialize")
 async def test_parallel_item_serialize(
     mock_serialize, mock_deserialize, item_serdes, batch_serdes
 ):
@@ -1205,7 +1212,9 @@ async def test_parallel_item_serialize(
         )
 
     with patch.object(
-        child.OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+        context_module.OperationIdGenerator,
+        "_create_step_id_for_logical_step",
+        create_id,
     ):
         context = create_test_context(state=mock_state)
 
@@ -1230,7 +1239,10 @@ async def test_parallel_item_serialize(
     assert set(calls_by_operation_id) == {"child-0", "child-1", "parent"}
     assert calls_by_operation_id["child-0"]["serdes"] is expected
     assert calls_by_operation_id["child-1"]["serdes"] is expected
-    assert calls_by_operation_id["parent"]["serdes"] is batch_serdes
+    expected_parent_serdes = (
+        batch_serdes if batch_serdes is not None else _BATCH_RESULT_SERDES
+    )
+    assert calls_by_operation_id["parent"]["serdes"] is expected_parent_serdes
 
 
 @pytest.mark.parametrize(
@@ -1241,7 +1253,7 @@ async def test_parallel_item_serialize(
         (Mock(), None),
     ],
 )
-@patch("async_durable_execution.primitive.child.deserialize")
+@patch("async_durable_execution._primitive.child.deserialize")
 async def test_parallel_item_deserialize(mock_deserialize, item_serdes, batch_serdes):
     """Test parallel deserializes branches with item_serdes or fallback."""
     mock_deserialize.return_value = "deserialized"
@@ -1284,7 +1296,9 @@ async def test_parallel_item_deserialize(mock_deserialize, item_serdes, batch_se
         )
 
     with patch.object(
-        child.OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+        context_module.OperationIdGenerator,
+        "_create_step_id_for_logical_step",
+        create_id,
     ):
         context = create_test_context(state=mock_state)
 
@@ -1376,12 +1390,68 @@ async def test_parallel_result_serialization_roundtrip():
     assert all(item.status == BatchItemStatus.SUCCEEDED for item in deserialized.all)
 
 
+async def test_batch_result_serdes_owns_type_roundtrip():
+    """BatchResult serialization is implemented by the parallel operation."""
+    nested = BatchResult(
+        all=[BatchItem(0, BatchItemStatus.SUCCEEDED, result=b"nested")],
+        completion_reason=CompletionReason.ALL_COMPLETED,
+    )
+    reserved_key_dict = {
+        "__async_durable_execution_batch_result__": "user value",
+        "nested": nested,
+    }
+    result = BatchResult(
+        all=[BatchItem(0, BatchItemStatus.SUCCEEDED, result=reserved_key_dict)],
+        completion_reason=CompletionReason.ALL_COMPLETED,
+    )
+
+    serdes = _BatchResultSerDes()
+    serialized = await serdes.serialize(result)
+    restored = await serdes.deserialize(serialized)
+
+    assert json.loads(serialized)["t"] == "br"
+    assert isinstance(restored, BatchResult)
+    assert restored == result
+    restored_value = restored.all[0].result
+    assert isinstance(restored_value, dict)
+    restored_nested = restored_value["nested"]
+    assert isinstance(restored_nested, BatchResult)
+
+
+async def test_core_serdes_does_not_know_batch_result():
+    """Generic core serialization does not depend on operation-specific types."""
+    result = BatchResult(
+        all=[],
+        completion_reason=CompletionReason.ALL_COMPLETED,
+    )
+
+    with pytest.raises(SerDesError, match="Unsupported type"):
+        await ExtendedTypeSerDes().serialize(result)
+
+
+async def test_batch_result_serdes_preserves_legacy_wire_format():
+    """Existing BatchResult checkpoints remain readable and stable."""
+    legacy_payload = (
+        '{"t":"br","v":{"all":{"t":"l","v":[]},'
+        '"completionReason":{"t":"s","v":"ALL_COMPLETED"}}}'
+    )
+    expected = BatchResult(
+        all=[],
+        completion_reason=CompletionReason.ALL_COMPLETED,
+    )
+
+    serdes = _BatchResultSerDes()
+
+    assert await serdes.deserialize(legacy_payload) == expected
+    assert await serdes.serialize(expected) == legacy_payload
+
+
 async def test_parallel_handler_serializes_batch_result():
     """Verify parallel_handler serializes BatchResult at parent level."""
     try:
         with (
-            patch("async_durable_execution.serdes.serialize") as mock_serdes_serialize,
-            patch("async_durable_execution.serdes.deserialize") as mock_deserialize,
+            patch("async_durable_execution._core.serialize") as mock_serdes_serialize,
+            patch("async_durable_execution._core.deserialize") as mock_deserialize,
         ):
             configure_mock_child_serdes_roundtrip(
                 mock_serdes_serialize, mock_deserialize
@@ -1423,7 +1493,7 @@ async def test_parallel_handler_serializes_batch_result():
                 )
 
             with patch.object(
-                child.OperationIdGenerator,
+                context_module.OperationIdGenerator,
                 "_create_step_id_for_logical_step",
                 create_id,
             ):
@@ -1450,7 +1520,7 @@ async def test_parallel_default_serdes_serializes_batch_result():
     """Verify default serdes automatically serializes BatchResult."""
     try:
         with patch(
-            "async_durable_execution.serdes.serialize", wraps=serialize
+            "async_durable_execution._core.serialize", wraps=serialize
         ) as mock_serialize:
             importlib.reload(child)
 
@@ -1489,7 +1559,7 @@ async def test_parallel_default_serdes_serializes_batch_result():
                 )
 
             with patch.object(
-                child.OperationIdGenerator,
+                context_module.OperationIdGenerator,
                 "_create_step_id_for_logical_step",
                 create_id,
             ):
@@ -1508,7 +1578,7 @@ async def test_parallel_default_serdes_serializes_batch_result():
             assert isinstance(result, BatchResult)
             assert len(mock_serialize.call_args_list) == 3
             parent_call = mock_serialize.call_args_list[2]
-            assert parent_call[1]["serdes"] is None
+            assert parent_call[1]["serdes"] is _BATCH_RESULT_SERDES
             assert isinstance(parent_call[1]["value"], BatchResult)
             assert parent_call[1]["value"] == result
     finally:
@@ -1522,8 +1592,8 @@ async def test_parallel_custom_serdes_serializes_batch_result():
 
     try:
         with (
-            patch("async_durable_execution.serdes.serialize") as mock_serialize,
-            patch("async_durable_execution.serdes.deserialize") as mock_deserialize,
+            patch("async_durable_execution._core.serialize") as mock_serialize,
+            patch("async_durable_execution._core.deserialize") as mock_deserialize,
         ):
             configure_mock_child_serdes_roundtrip(mock_serialize, mock_deserialize)
             importlib.reload(child)
@@ -1563,7 +1633,7 @@ async def test_parallel_custom_serdes_serializes_batch_result():
                 )
 
             with patch.object(
-                child.OperationIdGenerator,
+                context_module.OperationIdGenerator,
                 "_create_step_id_for_logical_step",
                 create_id,
             ):

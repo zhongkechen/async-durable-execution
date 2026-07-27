@@ -6,11 +6,11 @@ from unittest.mock import DEFAULT, AsyncMock, Mock, patch
 
 import pytest
 
-from async_durable_execution.execution import (
+from async_durable_execution._core.execution import (
     DurableExecutionInvocationOutput,
     InvocationStatus,
 )
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     CallbackDetails,
     CallbackOptions,
     ErrorObject,
@@ -20,22 +20,22 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.primitive.invoke import invoke
-from async_durable_execution.runner.exceptions import (
+from async_durable_execution._primitive.invoke import invoke
+from async_durable_execution._runner.exceptions import (
     IllegalStateException,
     InvalidParameterValueException,
     ResourceNotFoundException,
 )
-from async_durable_execution.runner.local.execution import (
+from async_durable_execution._runner.local.execution import (
     Execution,
     ExecutionStatus,
 )
-from async_durable_execution.runner.local import Executor
-from async_durable_execution.runner.model import (
+from async_durable_execution._runner.local import Executor
+from async_durable_execution._runner.model import (
     InvokeResponse,
     InvocationCompletedDetails,
 )
-from async_durable_execution.runner.local.model import (
+from async_durable_execution._runner.local.model import (
     CallbackToken,
     SendDurableExecutionCallbackFailureResponse,
     SendDurableExecutionCallbackHeartbeatResponse,
@@ -156,7 +156,7 @@ async def test_init(mock_scheduler, mock_invoker, mock_service_client):
     # This will be covered by other tests that exercise the executor's functionality
 
 
-@patch("async_durable_execution.runner.local.executor.Execution")
+@patch("async_durable_execution._runner.local.executor.Execution")
 async def test_start_execution(
     mock_execution_class, executor, start_input, mock_store, mock_scheduler
 ):
@@ -211,7 +211,7 @@ async def test_start_execution(
     mock_event.wait_async.assert_called_once_with(1)
 
 
-@patch("async_durable_execution.runner.local.executor.Execution")
+@patch("async_durable_execution._runner.local.executor.Execution")
 async def test_start_execution_with_provided_invocation_id(
     mock_execution_class, executor, mock_store, mock_scheduler
 ):
@@ -293,7 +293,7 @@ async def test_should_complete_workflow_with_error_when_invocation_fails(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         mock_store.load.return_value = mock_execution
@@ -339,7 +339,7 @@ async def test_should_complete_workflow_with_result_when_invocation_succeeds(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         mock_store.load.return_value = mock_execution
@@ -384,7 +384,7 @@ async def test_should_handle_pending_status_when_operations_exist(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         mock_store.load.return_value = mock_execution
@@ -424,7 +424,7 @@ async def test_should_ignore_response_when_execution_already_complete(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         mock_store.load.return_value = mock_execution
@@ -467,7 +467,7 @@ async def test_should_retry_when_response_has_no_status(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         mock_store.load.return_value = mock_execution
@@ -512,7 +512,7 @@ async def test_should_retry_when_failed_response_has_result(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         mock_store.load.return_value = mock_execution
@@ -558,7 +558,7 @@ async def test_should_retry_when_success_response_has_error(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         mock_store.load.return_value = mock_execution
@@ -602,7 +602,7 @@ async def test_should_retry_when_pending_response_has_no_operations(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         mock_store.load.return_value = mock_execution
@@ -647,7 +647,7 @@ async def test_invoke_handler_success(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         mock_store.load.return_value = mock_execution
@@ -686,7 +686,7 @@ async def test_invoke_handler_execution_already_complete(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         mock_store.load.return_value = mock_execution
@@ -733,7 +733,7 @@ async def test_invoke_handler_execution_completed_during_invocation(
 
     # Mock execution creation
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
 
@@ -767,7 +767,7 @@ async def test_invoke_handler_resource_not_found(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         mock_store.load.return_value = mock_execution
@@ -810,7 +810,7 @@ async def test_invoke_handler_general_exception(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         mock_store.load.return_value = mock_execution
@@ -840,7 +840,7 @@ async def test_invoke_execution_through_start_execution(
     mock_scheduler.create_event.return_value = mock_event
 
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution = Mock()
         mock_execution.durable_execution_arn = "test-arn"
@@ -929,7 +929,7 @@ async def test_should_fail_execution_when_function_not_found(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         mock_store.load.return_value = mock_execution
@@ -972,7 +972,7 @@ async def test_should_fail_execution_when_retries_exhausted(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         mock_store.load.return_value = mock_execution
@@ -1019,7 +1019,7 @@ async def test_should_prevent_multiple_workflow_failures_on_complete_execution(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         # First load returns incomplete, second load (in _fail_workflow) returns complete
@@ -1071,7 +1071,7 @@ async def test_should_retry_invocation_when_under_limit_through_public_api(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         mock_store.load.return_value = mock_execution
@@ -1122,7 +1122,7 @@ async def test_should_fail_workflow_when_retry_limit_exceeded(
 
     # Mock execution creation
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
 
@@ -1165,7 +1165,7 @@ async def test_complete_events_through_complete_execution(
     mock_scheduler.call_later.return_value = mock_timeout_future
 
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_exec = Mock()
         mock_exec.durable_execution_arn = "test-arn"
@@ -1202,7 +1202,7 @@ async def test_wait_until_complete_success(executor, mock_scheduler):
 
     # Set up completion event through start_execution
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution = Mock()
         mock_execution.durable_execution_arn = "test-arn"
@@ -1226,7 +1226,7 @@ async def test_wait_until_complete_timeout(executor, mock_scheduler):
 
     # Set up completion event through start_execution
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution = Mock()
         mock_execution.durable_execution_arn = "test-arn"
@@ -1279,7 +1279,7 @@ async def test_should_schedule_wait_timer_correctly(executor, mock_scheduler):
 
     # Set up completion event through start_execution
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution = Mock()
         mock_execution.durable_execution_arn = "test-arn"
@@ -1403,7 +1403,7 @@ async def test_schedule_wait_timer(executor, mock_scheduler):
 
     # Set up completion event through start_execution
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution = Mock()
         mock_execution.durable_execution_arn = "test-arn"
@@ -1450,7 +1450,7 @@ async def test_should_retry_when_response_has_unexpected_status(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         mock_store.load.return_value = mock_execution
@@ -1499,7 +1499,7 @@ async def test_invoke_handler_execution_completed_during_invocation_async(
 
     # Mock execution creation
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = incomplete_execution
 
@@ -1533,7 +1533,7 @@ async def test_invoke_handler_resource_not_found_async(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         mock_store.load.return_value = mock_execution
@@ -1587,7 +1587,7 @@ async def test_invoke_handler_general_exception_async(
 
     # Mock execution creation and store behavior
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution_class.new.return_value = mock_execution
         mock_store.load.return_value = mock_execution
@@ -1616,7 +1616,7 @@ async def test_invoke_execution_with_delay_through_wait_timer(executor, mock_sch
 
     # Set up completion event through start_execution
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution = Mock()
         mock_execution.durable_execution_arn = "test-arn"
@@ -1646,7 +1646,7 @@ async def test_invoke_execution_no_delay_through_start_execution(
 
     # Test no delay behavior through start_execution
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution = Mock()
         mock_execution.durable_execution_arn = "test-arn"
@@ -1670,7 +1670,7 @@ async def test_schedule_step_retry(executor, mock_scheduler):
 
     # Set up completion event through start_execution
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution = Mock()
         mock_execution.durable_execution_arn = "test-arn"
@@ -1700,7 +1700,7 @@ async def test_wait_handler_execution(executor, mock_scheduler):
 
     # Set up completion event through start_execution
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution = Mock()
         mock_execution.durable_execution_arn = "test-arn"
@@ -1732,7 +1732,7 @@ async def test_retry_handler_execution(executor, mock_scheduler):
 
     # Set up completion event through start_execution
     with patch(
-        "async_durable_execution.runner.local.executor.Execution"
+        "async_durable_execution._runner.local.executor.Execution"
     ) as mock_execution_class:
         mock_execution = Mock()
         mock_execution.durable_execution_arn = "test-arn"
@@ -1833,7 +1833,7 @@ async def test_get_execution_history(executor, mock_store):
 
 async def test_get_execution_history_with_events(executor, mock_store):
     """Test get_execution_history with actual events."""
-    from async_durable_execution.models import StepDetails
+    from async_durable_execution._core.models import StepDetails
 
     # Create operations that will generate events
     op1 = Operation(
@@ -1996,7 +1996,7 @@ async def test_checkpoint_execution_invalid_token(executor, mock_store):
 
 async def test_send_callback_success(executor, mock_store):
     """Test send_callback_success method."""
-    from async_durable_execution.runner.local.model import CallbackToken
+    from async_durable_execution._runner.local.model import CallbackToken
 
     # Create valid callback token
     callback_token = CallbackToken(execution_arn="test-arn", operation_id="op-123")
@@ -2035,7 +2035,7 @@ async def test_send_callback_success_none_callback_id(executor):
 
 async def test_send_callback_success_with_result(executor, mock_store):
     """Test send_callback_success with result data."""
-    from async_durable_execution.runner.local.model import CallbackToken
+    from async_durable_execution._runner.local.model import CallbackToken
 
     # Create valid callback token
     callback_token = CallbackToken(execution_arn="test-arn", operation_id="op-123")
@@ -2060,7 +2060,7 @@ async def test_send_callback_success_with_result(executor, mock_store):
 
 async def test_send_callback_failure(executor, mock_store):
     """Test send_callback_failure method."""
-    from async_durable_execution.runner.local.model import CallbackToken
+    from async_durable_execution._runner.local.model import CallbackToken
 
     # Create valid callback token
     callback_token = CallbackToken(execution_arn="test-arn", operation_id="op-123")
@@ -2518,7 +2518,7 @@ async def test_stop_execution(executor):
     mock_fail.assert_called_once_with("test-arn", error)
 
 
-@patch("async_durable_execution.runner.local.executor.Execution")
+@patch("async_durable_execution._runner.local.executor.Execution")
 async def test_start_execution_timeout_handler_notifies_timed_out(
     mock_execution_class, executor, start_input, mock_scheduler
 ):

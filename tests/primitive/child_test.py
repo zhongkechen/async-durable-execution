@@ -10,16 +10,18 @@ from typing import cast
 from unittest.mock import Mock
 
 import pytest
-from async_durable_execution.context import bind_current_context
-from async_durable_execution.exceptions import (
-    CallbackError,
+from async_durable_execution._core.context import (
+    DurableContext,
+    bind_current_context,
+)
+from async_durable_execution._core.exceptions import (
     CallableRuntimeError,
     ExecutionError,
     InvocationError,
     _decode_sdk_error_data,
 )
-from async_durable_execution.models import OperationIdentifier
-from async_durable_execution.models import (
+from async_durable_execution._core.models import OperationIdentifier
+from async_durable_execution._core.models import (
     ContextDetails,
     ErrorObject,
     Operation,
@@ -28,18 +30,15 @@ from async_durable_execution.models import (
     OperationSubType,
     OperationType,
 )
-from async_durable_execution.primitive.child import (
+from async_durable_execution._primitive.child import (
     ChildOperationExecutor,
-    DurableContext,
-    OrphanedChildException,
+    SummaryGenerator,
     _run_in_child_context,
-    get_durable_context,
     run_in_child_context,
 )
-from async_durable_execution.primitive.step import StepContext
-from async_durable_execution.serdes import SerDes
-from async_durable_execution.state import ExecutionState
-from async_durable_execution.extension.parallel import SummaryGenerator
+from async_durable_execution._primitive.callback import CallbackError
+from async_durable_execution._core.serdes import SerDes
+from async_durable_execution._core.state import ExecutionState
 
 from ..serdes_test import CustomDictSerDes
 
@@ -77,41 +76,6 @@ async def child_handler(*args, **kwargs):
     return await executor.process()
 
 
-def test_orphaned_child_exception_is_base_exception():
-    """OrphanedChildException is owned by the child operation module."""
-    assert issubclass(OrphanedChildException, BaseException)
-    assert not issubclass(OrphanedChildException, Exception)
-
-
-def test_orphaned_child_exception_bypasses_user_exception_handler():
-    """OrphanedChildException is not caught by broad user exception handlers."""
-    caught_by_exception = False
-    caught_by_base_exception = False
-    exception_instance = None
-
-    try:
-        msg = "test message"
-        raise OrphanedChildException(msg, operation_id="test_op_123")
-    except Exception:  # noqa: BLE001
-        caught_by_exception = True
-    except BaseException as e:  # noqa: BLE001
-        caught_by_base_exception = True
-        exception_instance = e
-
-    assert not caught_by_exception
-    assert caught_by_base_exception
-    assert isinstance(exception_instance, OrphanedChildException)
-    assert exception_instance.operation_id == "test_op_123"
-    assert str(exception_instance) == "test message"
-
-
-def test_orphaned_child_exception_with_operation_id():
-    """OrphanedChildException stores operation_id correctly."""
-    exception = OrphanedChildException("parent completed", operation_id="child_op_456")
-    assert exception.operation_id == "child_op_456"
-    assert str(exception) == "parent completed"
-
-
 def create_test_context(
     state: ExecutionState | None = None, parent_id: str | None = None
 ) -> DurableContext:
@@ -138,31 +102,6 @@ def test_run_in_child_context_name_is_keyword_only():
 
     assert parameters["func"].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
     assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
-
-
-def test_get_durable_context_has_no_parameters():
-    assert not inspect.signature(get_durable_context).parameters
-
-
-def test_get_durable_context_uses_current_operation_name_in_error():
-    state = Mock(spec=ExecutionState)
-    context = StepContext(
-        execution_state=state,
-        operation_identifier=OperationIdentifier(
-            operation_id="step-op",
-            sub_type=OperationSubType.STEP,
-            name="current-step",
-        ),
-    )
-
-    with (
-        bind_current_context(context),
-        pytest.raises(
-            RuntimeError,
-            match="current-step can only be used while a durable function or child context is executing\\.",
-        ),
-    ):
-        get_durable_context()
 
 
 async def test_internal_run_in_child_context_uses_custom_sub_type():
@@ -441,15 +380,26 @@ async def test_child_handler_callback_error_checkpoints_callback_id():
     assert fail_operation.action is OperationAction.FAIL
     assert fail_operation.error.message == "Callback failed"
     assert fail_operation.error.type == "CallbackError"
+    expected_exception_type = (
+        "async_durable_execution._primitive.callback.CallbackError"
+    )
     assert json.loads(fail_operation.error.data) == {
         "__async_durable_execution_error__": 1,
-        "exception_type": "async_durable_execution.exceptions.CallbackError",
+        "exception_type": expected_exception_type,
         "payload": "callback-123",
     }
 
 
-async def test_child_handler_replays_callback_error_with_callback_id():
-    """A replayed callback failure reconstructs its callback id."""
+@pytest.mark.parametrize(
+    "exception_type",
+    [
+        "async_durable_execution._primitive.callback.CallbackError",
+        "async_durable_execution.primitive.callback.CallbackError",
+        "async_durable_execution.exceptions.CallbackError",
+    ],
+)
+async def test_child_handler_replays_callback_error_with_callback_id(exception_type):
+    """Current and legacy callback metadata reconstruct the callback id."""
     mock_state = Mock(spec=ExecutionState)
     operation = Operation(
         operation_id="wait-for-callback",
@@ -463,9 +413,7 @@ async def test_child_handler_replays_callback_error_with_callback_id():
                 data=json.dumps(
                     {
                         "__async_durable_execution_error__": 1,
-                        "exception_type": (
-                            "async_durable_execution.exceptions.CallbackError"
-                        ),
+                        "exception_type": exception_type,
                         "payload": "callback-123",
                     }
                 ),
@@ -830,7 +778,7 @@ async def test_child_handler_checkpoints_sdk_error_metadata():
     mock_state.durable_execution_arn = "test_arn"
     mock_state.operations.get.return_value = None
 
-    with pytest.raises(CallableRuntimeError, match="Execution failed"):
+    with pytest.raises(ExecutionError, match="Execution failed"):
         await child_handler(
             Mock(side_effect=ExecutionError("Execution failed")),
             mock_state,

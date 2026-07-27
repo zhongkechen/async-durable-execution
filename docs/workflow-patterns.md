@@ -189,4 +189,4 @@ reconciliation.
 For simpler sequential workflows, start with the
 [getting-started example](getting-started.md#create-a-workflow). For static
 acyclic workflows with conditional failure routes, use
-[DAG workflows](api/dag.md).
+[flow and DAG workflows](api/extension/flow.md).

@@ -59,6 +59,26 @@ order-workflow
 The same qualification rule applies to `invoke()`, `recurse()`, and the cloud
 test runner.
 
+## Execution Version Pinning
+
+When Lambda creates a durable execution, it resolves the qualified function
+identifier to a specific published function version. The execution and its
+persisted durable state remain associated with that immutable version for the
+execution's lifetime. Every replay or resume therefore uses the same handler
+artifact and bundled SDK version that created its checkpoints.
+
+Deploying updated code or an updated SDK publishes a new function version.
+Moving an alias to that version affects only durable executions created after
+the alias update. Existing executions continue on their original version, so
+the new SDK version is not used to deserialize their checkpoint data. Account
+for this version isolation when evaluating serialization compatibility across
+SDK releases. Compatibility is still required within one deployed artifact and
+for data explicitly exchanged across versioned functions.
+
+`$LATEST` is the exception because it is mutable. Updating `$LATEST` can make an
+in-flight execution replay with different handler code or a different SDK
+version. Do not use `$LATEST` for production durable executions.
+
 ## Invoke from the AWS CLI
 
 A synchronous invocation waits for the result and is limited to 15 minutes:

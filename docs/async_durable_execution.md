@@ -1,32 +1,45 @@
 # API Reference
 
-The package exports the supported public API from `async_durable_execution`.
-Start with the handler decorators and context helpers below, then use the
-task-oriented API sections.
+Import the supported public symbols from `async_durable_execution`. The
+reference pages below are grouped by responsibility. Operation pages correspond
+to their implementation modules; supporting APIs are grouped by package.
 
-- [Durable operations](api/operations.md)
-- [DAG workflows](api/dag.md)
-- [Composition](api/composition.md)
-- [Configuration and serialization](api/configuration.md)
-- [Testing](async_durable_execution/runner.md)
+The implementation packages are private. Import every supported symbol from
+`async_durable_execution`.
 
-## Handler Input Deserialization
+## Primitive Operations
 
-Handler input is deserialized from the durable execution payload before user
-code runs. Empty or whitespace payloads are normalized to `{}`, and malformed
-JSON fails the invocation before the handler executes.
+These operations map directly to durable execution backend operations.
 
-::: async_durable_execution
-    options:
-      members:
-        - durable_execution
-        - durable_callable
-        - get_current_context
-        - get_node_context
-        - get_step_context
-        - DurableContext
-        - StepContext
-        - MapItemContext
-        - WaitForCallbackContext
-        - WaitForConditionCheckContext
-        - WithRetryContext
+- [Step](api/primitive/step.md)
+- [Wait](api/primitive/wait.md)
+- [Invoke](api/primitive/invoke.md)
+- [Child context](api/primitive/child.md)
+- [Callback](api/primitive/callback.md)
+
+## Extension Operations
+
+These SDK operations are implemented on top of primitive operations or SDK
+checkpoint conventions.
+
+- [Flow and DAG workflows](api/extension/flow.md)
+- [Map](api/extension/map.md)
+- [Parallel](api/extension/parallel.md)
+- [Wait for callback](api/extension/wait_for_callback.md)
+- [Wait for condition](api/extension/wait_for_condition.md)
+- [Retry durable work](api/extension/with_retry.md)
+- [Recursive invocation](api/extension/recurse.md)
+- [Replay-safe values](api/extension/replay_safe.md)
+
+## Core API
+
+- [Execution, context, configuration, serialization, models, exceptions, and
+  service client](api/core.md)
+
+## Runner API
+
+- [Local runner, cloud runner, and test results](api/runner.md)
+
+## Package Metadata
+
+- [Version](api/about.md)

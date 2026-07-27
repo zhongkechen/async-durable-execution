@@ -1,7 +1,7 @@
 """Single-threaded state transition tests for Execution class."""
 
-from async_durable_execution.runner.local.execution import Execution
-from async_durable_execution.runner.local.model import StartDurableExecutionInput
+from async_durable_execution._runner.local.execution import Execution
+from async_durable_execution._runner.local.model import StartDurableExecutionInput
 
 
 def test_checkpoint_token_generation_sequence():

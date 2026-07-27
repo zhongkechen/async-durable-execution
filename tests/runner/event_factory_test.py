@@ -8,7 +8,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     ErrorObject,
     OperationAction,
     OperationStatus,
@@ -18,10 +18,10 @@ from async_durable_execution.models import (
     StepDetails,
     StepOptions,
 )
-from async_durable_execution.runner.exceptions import (
+from async_durable_execution._runner.exceptions import (
     InvalidParameterValueException,
 )
-from async_durable_execution.runner.model import (
+from async_durable_execution._runner.model import (
     Event,
     EventCreationContext,
     EventError,
@@ -29,7 +29,7 @@ from async_durable_execution.runner.model import (
     EventResult,
     ExecutionStartedDetails,
 )
-from async_durable_execution.runner.local.model import (
+from async_durable_execution._runner.local.model import (
     LambdaContext,
     StartDurableExecutionInput,
 )
@@ -60,7 +60,7 @@ def create_mock_operation(
 def test_create_execution_started():
     from unittest.mock import Mock
 
-    from async_durable_execution.models import ExecutionDetails
+    from async_durable_execution._core.models import ExecutionDetails
 
     operation = Mock()
     operation.operation_id = "op-1"
@@ -96,7 +96,7 @@ def test_create_execution_started():
 
 
 def test_create_execution_succeeded():
-    from async_durable_execution.execution import (
+    from async_durable_execution._core.execution import (
         DurableExecutionInvocationOutput,
         InvocationStatus,
     )
@@ -129,7 +129,7 @@ def test_create_execution_succeeded():
 
 
 def test_create_execution_failed():
-    from async_durable_execution.execution import (
+    from async_durable_execution._core.execution import (
         DurableExecutionInvocationOutput,
         InvocationStatus,
     )
@@ -163,7 +163,7 @@ def test_create_execution_failed():
 
 
 def test_create_execution_timed_out():
-    from async_durable_execution.execution import (
+    from async_durable_execution._core.execution import (
         DurableExecutionInvocationOutput,
         InvocationStatus,
     )
@@ -199,7 +199,7 @@ def test_create_execution_timed_out():
 
 
 def test_create_execution_stopped():
-    from async_durable_execution.execution import (
+    from async_durable_execution._core.execution import (
         DurableExecutionInvocationOutput,
         InvocationStatus,
     )
@@ -874,7 +874,7 @@ def test_start_durable_execution_input_to_dict_with_optionals():
 
 
 def test_event_input_from_details():
-    from async_durable_execution.models import ExecutionDetails
+    from async_durable_execution._core.models import ExecutionDetails
 
     details = ExecutionDetails(input_payload='{"test": "data"}')
     event_input = EventInput.from_details(details, include=True)
@@ -887,7 +887,7 @@ def test_event_input_from_details():
 
 
 def test_event_result_from_details():
-    from async_durable_execution.models import StepDetails
+    from async_durable_execution._core.models import StepDetails
 
     details = StepDetails(result='{"result": "success"}')
     event_result = EventResult.from_details(details, include=True)
@@ -896,7 +896,7 @@ def test_event_result_from_details():
 
 
 def test_event_error_from_details():
-    from async_durable_execution.models import StepDetails
+    from async_durable_execution._core.models import StepDetails
 
     error_obj = ErrorObject.from_message("Test error")
     details = StepDetails(error=error_obj)

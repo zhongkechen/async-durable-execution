@@ -2,8 +2,8 @@
 
 import logging
 
-from async_durable_execution.runner.local.time_scale import scale_delay
-from async_durable_execution.runner.local.time_scale import get_time_scale
+from async_durable_execution._runner.local.time_scale import scale_delay
+from async_durable_execution._runner.local.time_scale import get_time_scale
 
 
 def test_get_time_scale_defaults_to_one(monkeypatch):

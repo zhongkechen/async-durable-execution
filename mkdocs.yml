@@ -52,11 +52,25 @@ nav:
       - Runner Architecture: runner-architecture.md
   - API Reference:
       - Overview: async_durable_execution.md
-      - Durable Operations: api/operations.md
-      - DAG Workflows: api/dag.md
-      - Composition: api/composition.md
-      - Configuration and Serialization: api/configuration.md
-      - Testing: async_durable_execution/runner.md
+      - Primitive Operations:
+          - Step: api/primitive/step.md
+          - Wait: api/primitive/wait.md
+          - Invoke: api/primitive/invoke.md
+          - Child Context: api/primitive/child.md
+          - Callback: api/primitive/callback.md
+      - Extension Operations:
+          - Flow and DAG Workflows: api/extension/flow.md
+          - Map: api/extension/map.md
+          - Parallel: api/extension/parallel.md
+          - Wait for Callback: api/extension/wait_for_callback.md
+          - Wait for Condition: api/extension/wait_for_condition.md
+          - Retry Durable Work: api/extension/with_retry.md
+          - Recursive Invocation: api/extension/recurse.md
+          - Replay-Safe Values: api/extension/replay_safe.md
+      - Core API: api/core.md
+      - Runner API: api/runner.md
+      - Package Metadata:
+          - Version: api/about.md
 
 plugins:
   - search

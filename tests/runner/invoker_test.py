@@ -14,33 +14,33 @@ from async_durable_execution import (
     DurableContext,
     durable_execution,
 )
-from async_durable_execution.context import get_current_context
-from async_durable_execution.execution import (
+from async_durable_execution._core.context import get_current_context
+from async_durable_execution._core.execution import (
     DurableExecutionInvocationInput,
     DurableExecutionInvocationOutput,
     InitialExecutionState,
     InvocationStatus,
 )
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     ExecutionDetails,
     Operation,
     OperationStatus,
     OperationType,
 )
-from async_durable_execution.runner.local.execution import Execution
-from async_durable_execution.runner import cloud as cloud_module
-from async_durable_execution.runner.cloud import (
+from async_durable_execution._runner.local.execution import Execution
+from async_durable_execution._runner import cloud as cloud_module
+from async_durable_execution._runner.cloud import (
     AsyncCloudLambdaClient,
     _LAMBDA_CLIENT_CONFIG,
     LambdaInvoker,
     ThreadedSyncCloudLambdaClient,
     create_lambda_client,
 )
-from async_durable_execution.runner.local import (
+from async_durable_execution._runner.local import (
     InProcessInvoker,
     create_test_lambda_context,
 )
-from async_durable_execution.runner.local.model import (
+from async_durable_execution._runner.local.model import (
     LambdaContext,
     StartDurableExecutionInput,
 )
@@ -177,7 +177,7 @@ def test_lambda_invoker_init():
 
 def test_lambda_invoker_create():
     """Test creating LambdaInvoker with botocore client."""
-    with patch("async_durable_execution.runner.cloud.get_session") as mock_boto3:
+    with patch("async_durable_execution._runner.cloud.get_session") as mock_boto3:
         mock_client = Mock()
         mock_boto3.return_value.create_client.return_value = mock_client
 
@@ -248,7 +248,7 @@ async def test_lambda_invoker_invoke_success():
 
 async def test_lambda_invoker_invoke_failure():
     """Test lambda invocation failure."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
     )
 
@@ -307,7 +307,7 @@ async def test_in_process_invoker_invoke_with_execution_operations():
 
 async def test_lambda_invoker_invoke_empty_function_name():
     """Test lambda invocation with empty function name."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         InvalidParameterValueException,
     )
 
@@ -328,7 +328,7 @@ async def test_lambda_invoker_invoke_empty_function_name():
 
 async def test_lambda_invoker_invoke_whitespace_function_name():
     """Test lambda invocation with whitespace-only function name."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         InvalidParameterValueException,
     )
 
@@ -379,7 +379,7 @@ async def test_lambda_invoker_invoke_status_202():
 
 async def test_lambda_invoker_invoke_function_error():
     """Test lambda invocation with function error."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
     )
 
@@ -456,7 +456,7 @@ def _create_mock_lambda_client_with_exceptions():
 
 async def test_lambda_invoker_invoke_resource_not_found():
     """Test lambda invocation with ResourceNotFoundException."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         ResourceNotFoundException,
     )
 
@@ -488,7 +488,7 @@ async def test_lambda_invoker_invoke_resource_not_found():
 
 async def test_lambda_invoker_invoke_invalid_parameter():
     """Test lambda invocation with InvalidParameterValueException."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         InvalidParameterValueException,
     )
 
@@ -520,7 +520,7 @@ async def test_lambda_invoker_invoke_invalid_parameter():
 
 async def test_lambda_invoker_invoke_service_exception():
     """Test lambda invocation with ServiceException."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
     )
 
@@ -548,7 +548,7 @@ async def test_lambda_invoker_invoke_service_exception():
 
 async def test_lambda_invoker_invoke_ec2_exception():
     """Test lambda invocation with EC2 exception."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
     )
 
@@ -576,7 +576,7 @@ async def test_lambda_invoker_invoke_ec2_exception():
 
 async def test_lambda_invoker_invoke_kms_exception():
     """Test lambda invocation with KMS exception."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
     )
 
@@ -604,7 +604,7 @@ async def test_lambda_invoker_invoke_kms_exception():
 
 async def test_lambda_invoker_invoke_durable_execution_already_started():
     """Test lambda invocation with DurableExecutionAlreadyStartedException."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
     )
 
@@ -637,7 +637,7 @@ async def test_lambda_invoker_invoke_durable_execution_already_started():
 
 async def test_lambda_invoker_invoke_unexpected_exception():
     """Test lambda invocation with unexpected exception."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
     )
 
@@ -660,7 +660,7 @@ async def test_lambda_invoker_invoke_unexpected_exception():
 
 def test_create_lambda_client_uses_configured_timeout():
     """Test create_lambda_client passes the durable test runner config to botocore."""
-    with patch("async_durable_execution.runner.cloud.get_session") as mock_session:
+    with patch("async_durable_execution._runner.cloud.get_session") as mock_session:
         mock_client = Mock()
         mock_session.return_value.create_client.return_value = mock_client
 
@@ -676,14 +676,12 @@ def test_create_lambda_client_uses_configured_timeout():
     )
 
 
-@patch("async_durable_execution.runner.cloud.importlib.import_module")
+@patch("async_durable_execution._runner.cloud.importlib.import_module")
 def test_create_lambda_client_prefers_async_when_aioboto_installed(
     mock_import_module, monkeypatch
 ):
     """Test create_lambda_client prefers an aioboto client when available."""
-    monkeypatch.setattr(
-        cloud_module.durable_client, "aioboto_is_installed", lambda: True
-    )
+    monkeypatch.setattr(cloud_module, "aioboto_is_installed", lambda: True)
     mock_context = MagicMock()
     mock_session = Mock()
     mock_session.create_client.return_value = mock_context
@@ -723,7 +721,7 @@ def test_lambda_invoker_update_endpoint_reuses_cached_client():
     invoker = LambdaInvoker(initial_client)
 
     with patch(
-        "async_durable_execution.runner.cloud.create_lambda_client",
+        "async_durable_execution._runner.cloud.create_lambda_client",
         return_value=endpoint_client,
     ) as mock_create_client:
         invoker.update_endpoint("http://localhost:3001", "us-west-2")
@@ -742,7 +740,7 @@ def test_lambda_invoker_get_client_for_explicit_endpoint_creates_client():
     invoker = LambdaInvoker(initial_client)
 
     with patch(
-        "async_durable_execution.runner.cloud.create_lambda_client",
+        "async_durable_execution._runner.cloud.create_lambda_client",
         return_value=endpoint_client,
     ) as mock_create_client:
         first = invoker._get_client_for_execution(
@@ -795,7 +793,7 @@ async def test_lambda_invoker_invoke_generates_request_id_when_header_missing():
         initial_execution_state=InitialExecutionState(operations=[], next_marker=""),
     )
 
-    with patch("async_durable_execution.runner.cloud.uuid4", return_value="uuid-123"):
+    with patch("async_durable_execution._runner.cloud.uuid4", return_value="uuid-123"):
         response = await invoker.invoke("test-function", input_data)
 
     assert response.request_id == "local-uuid-123"

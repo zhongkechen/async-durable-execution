@@ -2,15 +2,15 @@
 
 from unittest.mock import Mock, patch
 
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     CheckpointOutput,
     OperationAction,
     OperationType,
     OperationUpdate,
     StateOutput,
 )
-from async_durable_execution.runner.local import InMemoryServiceClient
-from async_durable_execution.runner.local.model import CheckpointToken
+from async_durable_execution._runner.local import InMemoryServiceClient
+from async_durable_execution._runner.local.model import CheckpointToken
 
 
 async def test_checkpoint():

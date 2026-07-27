@@ -18,7 +18,7 @@ from async_durable_execution import (
     create_cloud_runner,
     create_local_runner,
 )
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     CallbackDetails,
     ChainedInvokeDetails,
     ContextDetails,
@@ -26,16 +26,16 @@ from async_durable_execution.models import (
     OperationType,
     StepDetails,
 )
-from async_durable_execution.models import Operation
-from async_durable_execution.runner.exceptions import (
+from async_durable_execution._core.models import Operation
+from async_durable_execution._runner.exceptions import (
     DurableFunctionsTestError,
     ResourceNotFoundException,
 )
-from async_durable_execution.runner.local.execution import Execution
-from async_durable_execution.runner.model import (
+from async_durable_execution._runner.local.execution import Execution
+from async_durable_execution._runner.model import (
     GetDurableExecutionHistoryResponse,
 )
-from async_durable_execution.runner.local.model import (
+from async_durable_execution._runner.local.model import (
     StartDurableExecutionInput,
     StartDurableExecutionOutput,
 )
@@ -285,10 +285,10 @@ async def test_durable_function_test_result_get_deserialized_result():
     assert result.get_deserialized_result() == {"status": "ok"}
 
 
-@patch("async_durable_execution.runner.local.Scheduler")
-@patch("async_durable_execution.runner.local.InMemoryServiceClient")
-@patch("async_durable_execution.runner.local.InProcessInvoker")
-@patch("async_durable_execution.runner.local.Executor")
+@patch("async_durable_execution._runner.local.Scheduler")
+@patch("async_durable_execution._runner.local.InMemoryServiceClient")
+@patch("async_durable_execution._runner.local.InProcessInvoker")
+@patch("async_durable_execution._runner.local.Executor")
 async def test_durable_function_test_runner_init(
     mock_executor, mock_invoker, mock_client, mock_scheduler
 ):
@@ -340,7 +340,7 @@ async def test_durable_function_cloud_test_runner_context_manager():
             mock_aclose.assert_awaited_once()
 
 
-@patch("async_durable_execution.runner.local.DurableFunctionLocalTestRunner")
+@patch("async_durable_execution._runner.local.DurableFunctionLocalTestRunner")
 async def test_create_local_runner_uses_configured_defaults(mock_local_runner_class):
     """Test create_local_runner builds a local runner with default run values."""
     handler = Mock()
@@ -363,7 +363,7 @@ async def test_create_local_runner_uses_configured_defaults(mock_local_runner_cl
     )
 
 
-@patch("async_durable_execution.runner.cloud.DurableFunctionCloudTestRunner")
+@patch("async_durable_execution._runner.cloud.DurableFunctionCloudTestRunner")
 async def test_create_cloud_runner_uses_configured_defaults(mock_cloud_runner_class):
     """Test create_cloud_runner builds a cloud runner with default async values."""
     mock_cloud_runner = Mock()
@@ -390,7 +390,7 @@ async def test_create_cloud_runner_uses_configured_defaults(mock_cloud_runner_cl
 
 
 async def test_async_cloud_lambda_client_direct_client_delegates_all_methods():
-    from async_durable_execution.runner.cloud import AsyncCloudLambdaClient
+    from async_durable_execution._runner.cloud import AsyncCloudLambdaClient
 
     raw_client = AsyncLambdaClientStub()
     client = AsyncCloudLambdaClient(raw_client)
@@ -433,7 +433,7 @@ async def test_async_cloud_lambda_client_direct_client_delegates_all_methods():
 
 
 async def test_async_cloud_lambda_client_enters_context_on_first_call():
-    from async_durable_execution.runner.cloud import AsyncCloudLambdaClient
+    from async_durable_execution._runner.cloud import AsyncCloudLambdaClient
 
     raw_client = AsyncLambdaClientStub()
     context = AsyncLambdaClientContextStub(raw_client)
@@ -455,7 +455,7 @@ async def test_async_cloud_lambda_client_enters_context_on_first_call():
 
 
 async def test_read_payload_handles_sync_read_returning_awaitable():
-    from async_durable_execution.runner.cloud import _read_payload
+    from async_durable_execution._runner.cloud import _read_payload
 
     class Payload:
         def read(self):
@@ -468,7 +468,7 @@ async def test_read_payload_handles_sync_read_returning_awaitable():
 
 
 def test_threaded_sync_cloud_lambda_client_close_delegates_to_client():
-    from async_durable_execution.runner.cloud import ThreadedSyncCloudLambdaClient
+    from async_durable_execution._runner.cloud import ThreadedSyncCloudLambdaClient
 
     raw_client = Mock()
     client = ThreadedSyncCloudLambdaClient(raw_client)
@@ -478,7 +478,7 @@ def test_threaded_sync_cloud_lambda_client_close_delegates_to_client():
     raw_client.close.assert_called_once()
 
 
-@patch("async_durable_execution.runner.local.Scheduler")
+@patch("async_durable_execution._runner.local.Scheduler")
 async def test_durable_function_test_runner_close(mock_scheduler):
     """Test DurableFunctionLocalTestRunner close method."""
     handler = Mock()
@@ -494,7 +494,7 @@ async def test_durable_function_test_runner_close(mock_scheduler):
     mock_scheduler_instance.stop.assert_called_once()
 
 
-@patch("async_durable_execution.runner.local.Executor")
+@patch("async_durable_execution._runner.local.Executor")
 async def test_durable_function_test_runner_run(mock_executor_class):
     """Test DurableFunctionLocalTestRunner run method."""
     handler = Mock()
@@ -540,7 +540,7 @@ async def test_durable_function_test_runner_run(mock_executor_class):
     assert result.status is InvocationStatus.SUCCEEDED
 
 
-@patch("async_durable_execution.runner.local.Executor")
+@patch("async_durable_execution._runner.local.Executor")
 async def test_durable_function_test_runner_run_with_custom_params(mock_executor_class):
     """Test DurableFunctionLocalTestRunner run method with custom parameters."""
     handler = Mock()
@@ -587,7 +587,7 @@ async def test_durable_function_test_runner_run_with_custom_params(mock_executor
     assert result.status is InvocationStatus.SUCCEEDED
 
 
-@patch("async_durable_execution.runner.local.Executor")
+@patch("async_durable_execution._runner.local.Executor")
 async def test_durable_function_test_runner_run_timeout(mock_executor_class):
     """Test DurableFunctionLocalTestRunner run method with timeout."""
     handler = Mock()
@@ -666,14 +666,14 @@ async def test_durable_function_test_result_from_execution_history():
     import datetime
 
     from async_durable_execution import InvocationStatus
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         Event,
         EventResult,
         GetDurableExecutionHistoryResponse,
         GetDurableExecutionResponse,
         StepSucceededDetails,
     )
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         DurableFunctionTestResult,
     )
 
@@ -734,10 +734,10 @@ async def test_durable_function_test_result_from_execution_history():
     assert result.operations[0].name == "test-step"
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_init(mock_boto3):
     """Test DurableFunctionCloudTestRunner initialization."""
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -756,11 +756,11 @@ async def test_cloud_runner_init(mock_boto3):
     mock_boto3.return_value.create_client.assert_called_once()
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_run_success(mock_boto3):
     """Test DurableFunctionCloudTestRunner.run with successful execution."""
     from async_durable_execution import InvocationStatus
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -811,7 +811,7 @@ async def test_cloud_runner_run_success(mock_boto3):
     )
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_fetch_execution_history_paginates(mock_boto3):
     """Test cloud history fetching follows NextMarker until all events are loaded."""
     mock_client = Mock()
@@ -855,7 +855,7 @@ async def test_cloud_runner_fetch_execution_history_paginates(mock_boto3):
     }
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_fetch_execution_history_rejects_repeated_marker(mock_boto3):
     """Test cloud history fetching fails if pagination does not advance."""
     mock_client = Mock()
@@ -871,13 +871,13 @@ async def test_cloud_runner_fetch_execution_history_rejects_repeated_marker(mock
         await runner._fetch_execution_history("test-arn")
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_run_invoke_failure(mock_boto3):
     """Test DurableFunctionCloudTestRunner.run with invoke failure."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
     )
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -896,11 +896,11 @@ async def test_cloud_runner_run_invoke_failure(mock_boto3):
         await runner.run()
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
-@patch("async_durable_execution.runner.cloud.time")
+@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.time")
 async def test_cloud_runner_wait_for_completion_timeout(mock_time, mock_boto3):
     """Test DurableFunctionCloudTestRunner._wait_for_completion with timeout."""
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -929,12 +929,12 @@ async def test_durable_function_test_result_from_execution_history_with_exceptio
     import datetime
 
     from async_durable_execution import InvocationStatus
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         Event,
         GetDurableExecutionHistoryResponse,
         GetDurableExecutionResponse,
     )
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         DurableFunctionTestResult,
     )
 
@@ -968,10 +968,10 @@ async def test_durable_function_test_result_from_execution_history_with_exceptio
     assert len(result.operations) == 0
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_wait_for_completion_failed_status(mock_boto3):
     """Test DurableFunctionCloudTestRunner._wait_for_completion with FAILED status."""
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -994,13 +994,13 @@ async def test_cloud_runner_wait_for_completion_failed_status(mock_boto3):
     assert result.status == "FAILED"
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_run_bad_status_code(mock_boto3):
     """Test DurableFunctionCloudTestRunner.run with bad HTTP status code."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
     )
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1023,10 +1023,10 @@ async def test_cloud_runner_run_bad_status_code(mock_boto3):
         await runner.run()
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_run_failed_execution(mock_boto3):
     """Test DurableFunctionCloudTestRunner.run with a failed execution."""
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1066,13 +1066,13 @@ async def test_cloud_runner_run_failed_execution(mock_boto3):
     assert result.status is InvocationStatus.FAILED
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_run_missing_execution_arn(mock_boto3):
     """Test DurableFunctionCloudTestRunner.run with missing execution ARN."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
     )
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1095,13 +1095,13 @@ async def test_cloud_runner_run_missing_execution_arn(mock_boto3):
         await runner.run()
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_wait_for_completion_get_execution_failure(mock_boto3):
     """Test DurableFunctionCloudTestRunner._wait_for_completion with API failure."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
     )
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1117,15 +1117,15 @@ async def test_cloud_runner_wait_for_completion_get_execution_failure(mock_boto3
         await runner._wait_for_completion("test-arn", timeout=10)
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
-@patch("async_durable_execution.runner.cloud.asyncio.sleep", new_callable=AsyncMock)
+@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.asyncio.sleep", new_callable=AsyncMock)
 async def test_cloud_runner_wait_for_completion_retries_resource_not_found(
     mock_sleep, mock_boto3
 ):
     """Test _wait_for_completion retries until async execution is visible."""
     from botocore.exceptions import ClientError
 
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1161,12 +1161,12 @@ async def test_durable_function_test_result_from_execution_history_filters_execu
     """Test from_execution_history filters out EXECUTION type operations."""
     import datetime
 
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         Event,
         GetDurableExecutionHistoryResponse,
         GetDurableExecutionResponse,
     )
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         DurableFunctionTestResult,
     )
 
@@ -1204,11 +1204,11 @@ async def test_durable_function_test_result_from_execution_history_unknown_statu
     import datetime
 
     from async_durable_execution import InvocationStatus
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         GetDurableExecutionHistoryResponse,
         GetDurableExecutionResponse,
     )
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         DurableFunctionTestResult,
     )
 
@@ -1235,12 +1235,12 @@ async def test_durable_function_test_result_from_execution_history_with_parent_o
     """Test from_execution_history filters operations with parent_id."""
     import datetime
 
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         Event,
         GetDurableExecutionHistoryResponse,
         GetDurableExecutionResponse,
     )
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         DurableFunctionTestResult,
     )
 
@@ -1289,12 +1289,12 @@ async def test_durable_function_test_result_from_execution_history_failed():
     import datetime
 
     from async_durable_execution import InvocationStatus
-    from async_durable_execution.models import ErrorObject
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._core.models import ErrorObject
+    from async_durable_execution._runner.model import (
         GetDurableExecutionHistoryResponse,
         GetDurableExecutionResponse,
     )
-    from async_durable_execution.runner.model import (
+    from async_durable_execution._runner.model import (
         DurableFunctionTestResult,
     )
 
@@ -1324,10 +1324,10 @@ async def test_durable_function_test_result_from_execution_history_failed():
     assert result.error.message == "execution failed"
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_wait_for_completion_timed_out_status(mock_boto3):
     """Test DurableFunctionCloudTestRunner._wait_for_completion with TIMED_OUT status."""
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1349,10 +1349,10 @@ async def test_cloud_runner_wait_for_completion_timed_out_status(mock_boto3):
     assert result.status == "TIMED_OUT"
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_wait_for_completion_aborted_status(mock_boto3):
     """Test DurableFunctionCloudTestRunner._wait_for_completion with ABORTED status."""
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1374,10 +1374,10 @@ async def test_cloud_runner_wait_for_completion_aborted_status(mock_boto3):
     assert result.status == "ABORTED"
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_run_async_success(mock_boto3):
     """Test DurableFunctionCloudTestRunner.run_async with successful invocation."""
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1407,10 +1407,10 @@ async def test_cloud_runner_run_async_success(mock_boto3):
     )
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_run_async_with_400(mock_boto3):
     """Test DurableFunctionCloudTestRunner.run_async with successful invocation."""
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1433,13 +1433,13 @@ async def test_cloud_runner_run_async_with_400(mock_boto3):
         await runner.run_async()
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_run_async_failure(mock_boto3):
     """Test DurableFunctionCloudTestRunner.run_async with invocation failure."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
     )
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1458,10 +1458,10 @@ async def test_cloud_runner_run_async_failure(mock_boto3):
         await runner.run_async()
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_send_callback_success(mock_boto3):
     """Test DurableFunctionCloudTestRunner.send_callback_success."""
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1476,10 +1476,10 @@ async def test_cloud_runner_send_callback_success(mock_boto3):
     )
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_send_callback_failure(mock_boto3):
     """Test DurableFunctionCloudTestRunner.send_callback_failure."""
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1494,10 +1494,10 @@ async def test_cloud_runner_send_callback_failure(mock_boto3):
     )
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_send_callback_heartbeat(mock_boto3):
     """Test DurableFunctionCloudTestRunner.send_callback_heartbeat."""
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1512,13 +1512,13 @@ async def test_cloud_runner_send_callback_heartbeat(mock_boto3):
     )
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_send_callback_error(mock_boto3):
     """Test DurableFunctionCloudTestRunner callback methods with API errors."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
     )
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1536,10 +1536,10 @@ async def test_cloud_runner_send_callback_error(mock_boto3):
         await runner.send_callback_success("callback-123")
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_wait_for_callback_success(mock_boto3):
     """Test DurableFunctionCloudTestRunner.wait_for_callback success."""
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1572,10 +1572,10 @@ async def test_cloud_runner_wait_for_callback_success(mock_boto3):
     assert callback_id == "callback-123"
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_wait_for_callback_none(mock_boto3):
     """Test DurableFunctionCloudTestRunner.wait_for_callback none."""
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1606,10 +1606,10 @@ async def test_cloud_runner_wait_for_callback_none(mock_boto3):
         await runner.wait_for_callback("test-arn", name="test-callback1", timeout=2)
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_wait_for_callback_success_without_name(mock_boto3):
     """Test DurableFunctionCloudTestRunner.wait_for_callback success."""
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1640,12 +1640,12 @@ async def test_cloud_runner_wait_for_callback_success_without_name(mock_boto3):
     assert callback_id == "callback-123"
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_wait_for_callback_waits_for_creator_completion(
     mock_boto3,
 ):
     """Test that wait_for_callback waits until the callback creator settles."""
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1683,10 +1683,10 @@ async def test_cloud_runner_wait_for_callback_waits_for_creator_completion(
     assert mock_client.get_durable_execution_history.call_count == 2
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_wait_for_callback_all_done_without_name(mock_boto3):
     """Test DurableFunctionCloudTestRunner.wait_for_callback all_done_without_name."""
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1718,7 +1718,7 @@ async def test_cloud_runner_wait_for_callback_all_done_without_name(mock_boto3):
         await runner.wait_for_callback("test-arn", timeout=2)
 
 
-@patch("async_durable_execution.runner.local.Executor")
+@patch("async_durable_execution._runner.local.Executor")
 async def test_local_runner_wait_for_callback_all_done_without_name(
     mock_executor_class,
 ):
@@ -1753,7 +1753,7 @@ async def test_local_runner_wait_for_callback_all_done_without_name(
         await runner.wait_for_callback("test-arn", timeout=2)
 
 
-@patch("async_durable_execution.runner.local.Executor")
+@patch("async_durable_execution._runner.local.Executor")
 async def test_local_runner_wait_for_callback_with_exception(mock_executor_class):
     """Test DurableFunctionLocalTestRunner.wait_for_callback with exception."""
     handler = Mock()
@@ -1768,7 +1768,7 @@ async def test_local_runner_wait_for_callback_with_exception(mock_executor_class
         await runner.wait_for_callback("test-arn", timeout=10)
 
 
-@patch("async_durable_execution.runner.local.Executor")
+@patch("async_durable_execution._runner.local.Executor")
 async def test_local_runner_wait_for_callback_with_resource_not_found_exception(
     mock_executor_class,
 ):
@@ -1783,11 +1783,11 @@ async def test_local_runner_wait_for_callback_with_resource_not_found_exception(
         await runner.wait_for_callback("test-arn", timeout=2)
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
-@patch("async_durable_execution.runner.cloud.time")
+@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.time")
 async def test_cloud_runner_wait_for_callback_timeout(mock_time, mock_boto3):
     """Test DurableFunctionCloudTestRunner.wait_for_callback timeout."""
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1805,10 +1805,10 @@ async def test_cloud_runner_wait_for_callback_timeout(mock_time, mock_boto3):
         await runner.wait_for_callback("test-arn", timeout=2)
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_wait_for_callback_already_completed(mock_boto3):
     """Test DurableFunctionCloudTestRunner.wait_for_callback already completed."""
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1843,12 +1843,12 @@ async def test_cloud_runner_wait_for_callback_already_completed(mock_boto3):
         await runner.wait_for_callback("test-arn", "test-callback", timeout=2)
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_wait_for_callback_client_error_retryable(mock_boto3):
     """Test wait_for_callback with retryable ClientError."""
     from botocore.exceptions import ClientError
 
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1888,17 +1888,17 @@ async def test_cloud_runner_wait_for_callback_client_error_retryable(mock_boto3)
     assert callback_id == "callback-123"
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_wait_for_callback_client_error_non_retryable(
     mock_boto3,
 ):
     """Test wait_for_callback with non-retryable ClientError."""
     from botocore.exceptions import ClientError
 
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
     )
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1918,13 +1918,13 @@ async def test_cloud_runner_wait_for_callback_client_error_non_retryable(
         await runner.wait_for_callback("test-arn", timeout=10)
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_wait_for_callback_generic_exception(mock_boto3):
     """Test wait_for_callback with generic Exception."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
     )
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1941,13 +1941,13 @@ async def test_cloud_runner_wait_for_callback_generic_exception(mock_boto3):
         await runner.wait_for_callback("test-arn", timeout=10)
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_wait_for_result_fetch_history_exception(mock_boto3):
     """Test wait_for_result with exception in _fetch_execution_history."""
-    from async_durable_execution.runner.exceptions import (
+    from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
     )
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1972,11 +1972,11 @@ async def test_cloud_runner_wait_for_result_fetch_history_exception(mock_boto3):
         await runner.wait_for_result("test-arn", timeout=60)
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_wait_for_result_success(mock_boto3):
     """Test wait_for_result successful execution."""
     from async_durable_execution import InvocationStatus
-    from async_durable_execution.runner.cloud import (
+    from async_durable_execution._runner.cloud import (
         DurableFunctionCloudTestRunner,
     )
 
@@ -1995,7 +1995,7 @@ async def test_cloud_runner_wait_for_result_success(mock_boto3):
 
     # Mock the from_execution_history method
     with patch(
-        "async_durable_execution.runner.model.DurableFunctionTestResult.from_execution_history"
+        "async_durable_execution._runner.model.DurableFunctionTestResult.from_execution_history"
     ) as mock_from_history:
         mock_result = Mock()
         mock_result.status = InvocationStatus.SUCCEEDED
@@ -2136,7 +2136,7 @@ async def test_local_runner_async_context_manager_closes():
 
 async def test_local_runner_run_async_requires_execution_arn():
     """Test local run_async rejects missing execution ARN from executor."""
-    with patch("async_durable_execution.runner.local.Executor") as mock_executor_class:
+    with patch("async_durable_execution._runner.local.Executor") as mock_executor_class:
         mock_executor = Mock()
         mock_executor.start_execution.return_value = StartDurableExecutionOutput(
             execution_arn=None
@@ -2189,7 +2189,7 @@ def test_cloud_runner_close_calls_client_close():
     runner.lambda_client.close.assert_called_once()
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_send_callback_failure_error(mock_boto3):
     """Test callback failure API errors are wrapped."""
     mock_client = Mock()
@@ -2205,7 +2205,7 @@ async def test_cloud_runner_send_callback_failure_error(mock_boto3):
         await runner.send_callback_failure("callback-123")
 
 
-@patch("async_durable_execution.runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.get_session")
 async def test_cloud_runner_send_callback_heartbeat_error(mock_boto3):
     """Test callback heartbeat API errors are wrapped."""
     mock_client = Mock()

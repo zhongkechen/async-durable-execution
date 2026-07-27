@@ -17,7 +17,7 @@ commands in this repository are run through Hatch from the repository root.
 The SDK, examples, and their tests all live at the repository root:
 
 ```text
-async_durable_execution/  # Core SDK plus local/cloud runner helpers
+async_durable_execution/  # Primitive, extension, core, and runner packages
 tests/                    # SDK and runner tests
 examples/                 # Example durable functions
 test_examples/            # Local and cloud example tests
@@ -133,7 +133,7 @@ hatch run test:all --pdb
 
 - `TimeoutError: Execution did not complete within 60s` - Increase the runner
   timeout, for example `timeout=120`.
-- `ModuleNotFoundError: No module named 'async_durable_execution.runner'` - Run
+- `ModuleNotFoundError: No module named 'async_durable_execution._runner'` - Run
   through Hatch, such as `hatch run test:examples`, so the local SDK is
   installed automatically.
 
@@ -141,10 +141,9 @@ hatch run test:all --pdb
 
 - Put tests in the test directory that matches the code you are changing. For
   the SDK package, mirror the source layout under `tests/`: primitive
-  operation tests live in
-  `primitive/`, extension operation tests live in `extension/`, and shared model
-  or package-level behavior stays at the `tests/` root. Runner tests live
-  under `tests/runner/`.
+  operation tests live in `primitive/`, extension operation tests live in
+  `extension/`, and shared core or package-level behavior stays at the
+  `tests/` root. Runner tests live under `tests/runner/`.
 - Use filenames ending in `_test.py`.
 - Prefer adding focused unit tests near the affected area, and add integration
   coverage when behavior spans multiple components.

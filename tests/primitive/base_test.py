@@ -6,15 +6,15 @@ import pytest
 from abc import ABC
 from unittest.mock import AsyncMock, Mock
 
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     Operation,
     OperationStatus,
     OperationSubType,
     OperationType,
     OperationIdentifier,
 )
-from async_durable_execution.primitive.base import OperationExecutor
-from async_durable_execution.serdes import DEFAULT_JSON_SERDES
+from async_durable_execution._primitive.base import OperationExecutor
+from async_durable_execution._core.serdes import DEFAULT_JSON_SERDES
 
 
 # Test fixtures and helpers

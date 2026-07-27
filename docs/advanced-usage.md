@@ -55,7 +55,7 @@ acyclic workflow with declarative dependencies. Both decorators bind arguments
 without running user code. `flow()` synchronously evaluates and validates the
 complete graph before creating its durable child context.
 
-See the [DAG workflow API reference](api/dag.md) for dependency syntax, input
+See the [flow API reference](api/extension/flow.md) for dependency syntax, input
 projections, failure handling, result access, and execution pruning.
 
 ```python

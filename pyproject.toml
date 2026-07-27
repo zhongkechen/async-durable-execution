@@ -77,7 +77,7 @@ cov-html = "pytest --cov-report=term-missing --cov-report=html:site/coverage --c
 sdk = "pytest tests {args}"
 sdk-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=async_durable_execution --cov-fail-under=98 tests {args}"
 runner = "pytest tests/runner {args}"
-runner-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=async_durable_execution/runner --cov-fail-under=95 tests/runner {args}"
+runner-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=async_durable_execution/_runner --cov-fail-under=95 tests/runner {args}"
 examples = "pytest test_examples {args}"
 examples-integration = "pytest --runner-mode=cloud test_examples -v {args}"
 typecheck = "mypy --install-types --non-interactive --warn-unused-ignores {args:async_durable_execution tests scripts}"

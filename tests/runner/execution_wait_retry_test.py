@@ -2,14 +2,14 @@
 
 from datetime import datetime, timezone
 
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     Operation,
     OperationStatus,
     OperationType,
     StepDetails,
 )
-from async_durable_execution.runner.local.execution import Execution
-from async_durable_execution.runner.local.model import StartDurableExecutionInput
+from async_durable_execution._runner.local.execution import Execution
+from async_durable_execution._runner.local.model import StartDurableExecutionInput
 
 
 def test_wait_and_retry_completion_sequence():

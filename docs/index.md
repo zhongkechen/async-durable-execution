@@ -41,7 +41,7 @@ running again.
   functions, and condition checks use `async def`.
 - **Durable primitives**: compose checkpointed steps, waits, callbacks, child
   contexts, invokes, maps, and parallel branches.
-- **[Declarative DAG workflows](api/dag.md)**: define validated acyclic graphs
+- **[Declarative DAG workflows](api/extension/flow.md)**: define validated acyclic graphs
   with typed inputs, conditional dependencies, failure routes, and durable node
   bodies.
 - **Normal asyncio composition**: durable operations return `asyncio.Task`
@@ -107,6 +107,6 @@ clock reads, and other side effects inside checkpointed steps. Standard
 - Apply common [workflow patterns](workflow-patterns.md).
 - [Deploy and invoke](deployment.md) a durable Lambda function.
 - Learn the [advanced asyncio patterns](advanced-usage.md).
-- Define a [durable DAG workflow](api/dag.md).
-- Browse the [durable operations API](api/operations.md).
-- Test locally with the [runner API](async_durable_execution/runner.md).
+- Define a [durable DAG workflow](api/extension/flow.md).
+- Browse the [API reference](async_durable_execution.md).
+- Test locally with the [runner API](api/runner.md).

@@ -4,17 +4,17 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     Operation,
     OperationAction,
     OperationStatus,
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.runner.local.processors.callback import (
+from async_durable_execution._runner.local.processors.callback import (
     CallbackProcessor,
 )
-from async_durable_execution.runner.exceptions import (
+from async_durable_execution._runner.exceptions import (
     InvalidParameterValueException,
 )
 
@@ -269,17 +269,17 @@ def test_notifier_not_called_for_start():
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     Operation,
     OperationAction,
     OperationStatus,
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.runner.local.processors.callback import (
+from async_durable_execution._runner.local.processors.callback import (
     CallbackProcessor,
 )
-from async_durable_execution.runner.exceptions import (
+from async_durable_execution._runner.exceptions import (
     InvalidParameterValueException,
 )
 

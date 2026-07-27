@@ -9,7 +9,7 @@ import json
 
 import pytest
 
-from async_durable_execution.runner import exceptions
+from async_durable_execution._runner import exceptions
 
 
 # =============================================================================

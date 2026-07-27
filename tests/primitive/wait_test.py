@@ -6,9 +6,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.exceptions import SuspendExecution
-from async_durable_execution.models import OperationIdentifier
-from async_durable_execution.models import (
+from async_durable_execution._core.exceptions import SuspendExecution
+from async_durable_execution._core.models import OperationIdentifier
+from async_durable_execution._core.models import (
     Operation,
     OperationAction,
     OperationStatus,
@@ -17,8 +17,8 @@ from async_durable_execution.models import (
     OperationUpdate,
     WaitOptions,
 )
-from async_durable_execution.primitive.wait import WaitOperationExecutor, wait
-from async_durable_execution.state import ExecutionState
+from async_durable_execution._primitive.wait import WaitOperationExecutor, wait
+from async_durable_execution._core.state import ExecutionState
 
 
 async def run_async(awaitable):

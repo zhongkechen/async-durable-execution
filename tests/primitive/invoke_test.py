@@ -7,8 +7,12 @@ import json
 from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
-from async_durable_execution.context import reset_current_context, set_current_context
-from async_durable_execution.exceptions import (
+from async_durable_execution._core.context import (
+    DurableContext,
+    reset_current_context,
+    set_current_context,
+)
+from async_durable_execution._core.exceptions import (
     CallableRuntimeError,
     ExecutionError,
     SuspendExecution,
@@ -16,8 +20,8 @@ from async_durable_execution.exceptions import (
     ValidationError,
     suspend_with_optional_resume_delay,
 )
-from async_durable_execution.models import OperationIdentifier
-from async_durable_execution.models import (
+from async_durable_execution._core.models import OperationIdentifier
+from async_durable_execution._core.models import (
     ChainedInvokeDetails,
     ErrorObject,
     Operation,
@@ -26,13 +30,15 @@ from async_durable_execution.models import (
     OperationSubType,
     OperationType,
 )
-from async_durable_execution.primitive.invoke import (
+from async_durable_execution._primitive.invoke import (
     InvokeOperationExecutor,
     invoke,
 )
-from async_durable_execution.extension.recurse import recurse
-from async_durable_execution.primitive.child import DurableContext
-from async_durable_execution.state import RECURSIVE_LEVEL_INPUT_FIELD, ExecutionState
+from async_durable_execution._extension.recurse import recurse
+from async_durable_execution._core.state import (
+    RECURSIVE_LEVEL_INPUT_FIELD,
+    ExecutionState,
+)
 
 from ..serdes_test import CustomDictSerDes
 
@@ -107,7 +113,7 @@ async def run_recurse_with_context(context: DurableContext, **kwargs):
     token = set_current_context(context)
     try:
         with patch(
-            "async_durable_execution.primitive.invoke.InvokeOperationExecutor",
+            "async_durable_execution._primitive.invoke.InvokeOperationExecutor",
             return_value=executor,
         ) as mock_executor:
             result = await recurse(**kwargs)
@@ -842,7 +848,7 @@ async def test_invoke_handler_already_succeeded_with_none_payload():
     mock_state.create_checkpoint.assert_not_called()
 
 
-@patch("async_durable_execution.primitive.invoke.suspend_with_optional_resume_delay")
+@patch("async_durable_execution._primitive.invoke.suspend_with_optional_resume_delay")
 async def test_invoke_handler_suspend_does_not_raise(mock_suspend):
     """Test invoke_handler when suspend_with_optional_resume_delay doesn't raise an exception."""
 

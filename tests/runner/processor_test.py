@@ -4,8 +4,11 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from async_durable_execution.exceptions import CheckpointError, GetExecutionStateError
-from async_durable_execution.models import (
+from async_durable_execution._core.exceptions import (
+    CheckpointError,
+    GetExecutionStateError,
+)
+from async_durable_execution._core.models import (
     CheckpointOutput,
     CheckpointUpdatedExecutionState,
     OperationAction,
@@ -13,12 +16,12 @@ from async_durable_execution.models import (
     OperationUpdate,
     StateOutput,
 )
-from async_durable_execution.runner.local import InMemoryServiceClient
-from async_durable_execution.runner.exceptions import (
+from async_durable_execution._runner.local import InMemoryServiceClient
+from async_durable_execution._runner.exceptions import (
     InvalidParameterValueException,
 )
-from async_durable_execution.runner.local.execution import Execution
-from async_durable_execution.runner.local.scheduler import Scheduler
+from async_durable_execution._runner.local.execution import Execution
+from async_durable_execution._runner.local.scheduler import Scheduler
 
 
 def test_init():
@@ -66,8 +69,8 @@ async def test_get_execution_state_rejects_missing_token(token):
         await client.get_execution_state("arn", token, "")
 
 
-@patch("async_durable_execution.runner.local.CheckpointValidator")
-@patch("async_durable_execution.runner.local.OperationTransformer")
+@patch("async_durable_execution._runner.local.CheckpointValidator")
+@patch("async_durable_execution._runner.local.OperationTransformer")
 def test_process_checkpoint_success(mock_transformer_class, mock_validator):
     """Test successful checkpoint processing."""
     # Setup mocks
@@ -128,7 +131,7 @@ def test_process_checkpoint_success(mock_transformer_class, mock_validator):
     assert isinstance(result.new_execution_state, CheckpointUpdatedExecutionState)
 
 
-@patch("async_durable_execution.runner.local.CheckpointValidator")
+@patch("async_durable_execution._runner.local.CheckpointValidator")
 def test_process_checkpoint_invalid_token_complete_execution(mock_validator):
     """Test checkpoint processing with complete execution."""
     scheduler = Mock(spec=Scheduler)
@@ -158,7 +161,7 @@ def test_process_checkpoint_invalid_token_complete_execution(mock_validator):
             client.process_checkpoint(checkpoint_token, updates, "client-token")
 
 
-@patch("async_durable_execution.runner.local.CheckpointValidator")
+@patch("async_durable_execution._runner.local.CheckpointValidator")
 def test_process_checkpoint_invalid_token_sequence(mock_validator):
     """Test checkpoint processing with invalid token sequence."""
     scheduler = Mock(spec=Scheduler)
@@ -188,8 +191,8 @@ def test_process_checkpoint_invalid_token_sequence(mock_validator):
             client.process_checkpoint(checkpoint_token, updates, "client-token")
 
 
-@patch("async_durable_execution.runner.local.CheckpointValidator")
-@patch("async_durable_execution.runner.local.OperationTransformer")
+@patch("async_durable_execution._runner.local.CheckpointValidator")
+@patch("async_durable_execution._runner.local.OperationTransformer")
 def test_process_checkpoint_updates_execution_state(
     mock_transformer_class, mock_validator
 ):
@@ -312,7 +315,7 @@ import json
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     ErrorObject,
     Operation,
     OperationAction,
@@ -320,15 +323,15 @@ from async_durable_execution.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.runner.local.processor import (
+from async_durable_execution._runner.local.processor import (
     MAX_ERROR_PAYLOAD_SIZE_BYTES,
     CheckpointValidator,
 )
-from async_durable_execution.runner.exceptions import (
+from async_durable_execution._runner.exceptions import (
     InvalidParameterValueException,
 )
-from async_durable_execution.runner.local.execution import Execution
-from async_durable_execution.runner.local.model import (
+from async_durable_execution._runner.local.execution import Execution
+from async_durable_execution._runner.local.model import (
     StartDurableExecutionInput,
     CheckpointToken,
 )
@@ -730,7 +733,7 @@ def test_validate_inconsistent_operation_subtype():
     execution = _create_test_execution()
 
     # Add existing operation with subtype
-    from async_durable_execution.models import OperationSubType
+    from async_durable_execution._core.models import OperationSubType
 
     context_op = Operation(
         operation_id="op-1",
@@ -1007,18 +1010,18 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     OperationAction,
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.runner.local.processors.base import (
+from async_durable_execution._runner.local.processors.base import (
     OperationProcessor,
 )
-from async_durable_execution.runner.local.processor import (
+from async_durable_execution._runner.local.processor import (
     OperationTransformer,
 )
-from async_durable_execution.runner.exceptions import (
+from async_durable_execution._runner.exceptions import (
     InvalidParameterValueException,
 )
 

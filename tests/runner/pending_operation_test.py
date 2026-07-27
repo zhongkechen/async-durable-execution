@@ -3,13 +3,13 @@
 # from datetime import datetime, timezone
 # from unittest.mock import Mock
 #
-# from async_durable_execution.models import (
+# from async_durable_execution._core.models import (
 #     OperationStatus,
 #     OperationType,
 # )
 #
-# from async_durable_execution.runner.local.executor import Executor
-# from async_durable_execution.runner.model import StartDurableExecutionInput
+# from async_durable_execution._runner.local.executor import Executor
+# from async_durable_execution._runner.model import StartDurableExecutionInput
 #
 #
 # def test_get_execution_history_with_pending_chained_invoke():

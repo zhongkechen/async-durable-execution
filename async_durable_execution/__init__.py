@@ -3,23 +3,42 @@
 # Package metadata
 from .__about__ import __version__
 
-# Main context - used in every durable function
-# Helper decorators - commonly used for step functions
-# Concurrency
-from .models import (
+# Core runtime and supporting public APIs
+from ._core import (
+    CallableRuntimeError,
+    DurableContext,
+    DurableExecutionsError,
+    DurableServiceClient,
+    ErrorObject,
+    ExecutionError,
+    ExtendedTypeSerDes,
+    InvalidStateError,
+    InvocationError,
     InvocationStatus,
+    JitterStrategy,
+    JsonSerDes,
     LambdaContext,
+    OperationStatus,
     OperationSubType,
     OperationType,
-    OperationStatus,
-)
-from .config import JitterStrategy, RetryStrategy
-from .context import (
+    RetryStrategy,
+    SerDes,
+    SerDesContext,
+    SerDesError,
+    UserlandError,
+    ValidationError,
+    create_default_sync_client,
+    durable_callable,
+    durable_execution,
     get_current_context,
 )
-from .extension.with_retry import WithRetryContext, with_retry
-from .extension.map import MapItemContext, map
-from .extension.flow import (
+
+# Durable operations
+from ._extension.with_retry import WithRetryContext, with_retry
+from ._extension.map import MapItemContext, map
+from ._extension.flow import (
+    FlowDefinitionError,
+    FlowExecutionError,
     FlowNode,
     FlowNodeContext,
     FlowNodeResult,
@@ -31,7 +50,7 @@ from .extension.flow import (
     get_node_context,
     node,
 )
-from .extension.parallel import (
+from ._extension.parallel import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
@@ -40,62 +59,38 @@ from .extension.parallel import (
     CompletionReason,
     CompletionStatus,
     NestingType,
-    SummaryGenerator,
 )
-from .extension.wait_for_condition import (
+from ._extension.wait_for_condition import (
     PollingStrategy,
-    wait_for_condition,
     WaitForConditionCheckContext,
+    WaitForConditionError,
+    wait_for_condition,
 )
-from .primitive.invoke import invoke
-from .extension.recurse import recurse
-from .extension.parallel import (
+from ._primitive.invoke import invoke
+from ._extension.recurse import recurse
+from ._extension.parallel import (
     parallel,
 )
-from .primitive.callback import (
-    create_callback,
+from ._primitive.callback import (
     Callback,
+    CallbackError,
+    create_callback,
 )
-from .extension.wait_for_callback import (
+from ._extension.wait_for_callback import (
     wait_for_callback,
     WaitForCallbackContext,
 )
-from .primitive.child import (
-    run_in_child_context,
-    DurableContext,
-)
-from .primitive.step import (
+from ._primitive.child import SummaryGenerator, run_in_child_context
+from ._primitive.step import (
     StepContext,
     StepInterruptedError,
     StepSemantics,
     get_step_context,
     step,
 )
-from .extension.replay_safe import now, random, timestamp, uuid
-from .models import ErrorObject
-
-# User-facing exception types.
-from .exceptions import (
-    CallbackError,
-    CallableRuntimeError,
-    DurableExecutionsError,
-    ExecutionError,
-    FlowDefinitionError,
-    FlowExecutionError,
-    InvalidStateError,
-    InvocationError,
-    SerDesError,
-    UserlandError,
-    ValidationError,
-    WaitForConditionError,
-)
-
-# Core decorator - used in every durable function
-from .execution import durable_callable, durable_execution
-from .primitive.wait import wait
-from .serdes import ExtendedTypeSerDes, JsonSerDes, SerDes, SerDesContext
-from .client import DurableServiceClient, create_default_sync_client
-from .runner import (
+from ._extension.replay_safe import now, random, timestamp, uuid
+from ._primitive.wait import wait
+from ._runner import (
     DurableFunctionCloudTestRunner,
     DurableFunctionLocalTestRunner,
     DurableFunctionTestResult,

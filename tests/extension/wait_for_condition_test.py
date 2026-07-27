@@ -10,10 +10,10 @@ from typing import Any, cast
 from unittest.mock import Mock, patch
 
 import pytest
-from async_durable_execution.context import (
+from async_durable_execution._core.context import (
     get_current_context,
 )
-from async_durable_execution.exceptions import (
+from async_durable_execution._core.exceptions import (
     CallableRuntimeError,
     ExecutionError,
     InvocationError,
@@ -21,11 +21,10 @@ from async_durable_execution.exceptions import (
     SuspendExecution,
     TerminationReason,
     ValidationError,
-    WaitForConditionError,
     _sdk_error_type_name,
 )
-from async_durable_execution.models import OperationIdentifier
-from async_durable_execution.models import (
+from async_durable_execution._core.models import OperationIdentifier
+from async_durable_execution._core.models import (
     ErrorObject,
     Operation,
     OperationAction,
@@ -35,15 +34,16 @@ from async_durable_execution.models import (
     StepDetails,
 )
 import logging
-from async_durable_execution.extension.wait_for_condition import (
+from async_durable_execution._extension.wait_for_condition import (
+    WaitForConditionError,
     WaitForConditionOperationExecutor,
     wait_for_condition,
 )
-from async_durable_execution.state import ExecutionState
+from async_durable_execution._core.state import ExecutionState
 from async_durable_execution import WaitForConditionCheckContext
-from async_durable_execution.config import JitterStrategy
-from async_durable_execution.extension.wait_for_condition import PollingStrategy
-from async_durable_execution.serdes import SerDes
+from async_durable_execution._core.config import JitterStrategy
+from async_durable_execution._extension.wait_for_condition import PollingStrategy
+from async_durable_execution._core.serdes import SerDes
 
 from ..serdes_test import CustomDictSerDes
 
@@ -72,6 +72,13 @@ def test_wait_for_condition_signature_accepts_config_fields_directly():
     assert "config" not in parameters
     assert "polling_strategy" in parameters
     assert "serdes" in parameters
+
+
+def test_wait_for_condition_error_is_defined_by_operation_module():
+    assert (
+        WaitForConditionError.__module__
+        == "async_durable_execution._extension.wait_for_condition"
+    )
 
 
 def test_wait_for_condition_signature_requires_keyword_only_options():
@@ -114,7 +121,7 @@ async def test_wait_for_condition_public_wrapper_builds_executor_from_context():
 
     with (
         patch(
-            "async_durable_execution.extension.wait_for_condition.get_durable_context",
+            "async_durable_execution._extension.wait_for_condition.get_durable_context",
             return_value=context,
         ),
         patch.object(
@@ -463,6 +470,9 @@ async def test_wait_for_condition_replays_exhaustion_error():
     ]
     assert fail_operation.error.type == "WaitForConditionError"
     assert fail_operation.error.data is not None
+    assert json.loads(fail_operation.error.data)["exception_type"] == (
+        "async_durable_execution._extension.wait_for_condition.WaitForConditionError"
+    )
 
     replay_state = Mock(spec=ExecutionState)
     replay_state.operations.get.return_value = Operation(
@@ -470,6 +480,52 @@ async def test_wait_for_condition_replays_exhaustion_error():
         operation_type=OperationType.STEP,
         status=OperationStatus.FAILED,
         step_details=StepDetails(error=fail_operation.error),
+    )
+    check_func = Mock(side_effect=AssertionError("check should not run"))
+
+    with pytest.raises(WaitForConditionError, match="exhausted 1 attempts"):
+        await wait_for_condition_handler(
+            state=replay_state,
+            operation_identifier=op_id,
+            check=check_func,
+        )
+
+    check_func.assert_not_called()
+    replay_state.create_checkpoint.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "exception_type",
+    [
+        "async_durable_execution.extension.wait_for_condition.WaitForConditionError",
+        "async_durable_execution.exceptions.WaitForConditionError",
+    ],
+)
+async def test_wait_for_condition_replays_legacy_exhaustion_error_metadata(
+    exception_type,
+):
+    """Replay accepts checkpoints written before the exception moved modules."""
+    op_id = OperationIdentifier(
+        "op1", OperationSubType.WAIT_FOR_CONDITION, None, "test_wait"
+    )
+    replay_state = Mock(spec=ExecutionState)
+    replay_state.operations.get.return_value = Operation(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.FAILED,
+        step_details=StepDetails(
+            error=ErrorObject(
+                message="wait_for_condition exhausted 1 attempts",
+                type="WaitForConditionError",
+                data=json.dumps(
+                    {
+                        "__async_durable_execution_error__": 1,
+                        "exception_type": exception_type,
+                        "payload": None,
+                    }
+                ),
+            )
+        ),
     )
     check_func = Mock(side_effect=AssertionError("check should not run"))
 

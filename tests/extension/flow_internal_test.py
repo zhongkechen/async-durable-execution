@@ -30,7 +30,7 @@ from async_durable_execution import (
     get_node_context,
     node,
 )
-from async_durable_execution.extension.flow import (
+from async_durable_execution._extension.flow import (
     FlowNode,
     _DependencyResolution,
     _FlowBuilder,
@@ -59,10 +59,9 @@ from async_durable_execution.extension.flow import (
     _resolve_flow_node_inputs,
     _resolve_dependency_expression,
 )
-from async_durable_execution.context import bind_current_context
-from async_durable_execution.exceptions import (
+from async_durable_execution._core.context import bind_current_context
+from async_durable_execution._core.exceptions import (
     BotoClientError,
-    CallbackError,
     CallableRuntimeError,
     DurableApiErrorCategory,
     ExecutionError,
@@ -76,14 +75,15 @@ from async_durable_execution.exceptions import (
     _encode_sdk_error_data,
     _sdk_error_type_name,
 )
-from async_durable_execution.execution import handle_user_function_exception
-from async_durable_execution.models import (
+from async_durable_execution._primitive.callback import CallbackError
+from async_durable_execution._core.execution import handle_user_function_exception
+from async_durable_execution._core.models import (
     InvocationStatus,
     OperationIdentifier,
     OperationSubType,
 )
-from async_durable_execution.serdes import ExtendedTypeSerDes
-from async_durable_execution.state import ExecutionState
+from async_durable_execution._core.serdes import ExtendedTypeSerDes
+from async_durable_execution._core.state import ExecutionState
 
 
 @durable_node
@@ -688,7 +688,7 @@ def test_coerce_expression_rejects_invalid_values():
             {
                 "__async_durable_execution_error__": 1,
                 "exception_type": (
-                    "async_durable_execution.exceptions.InvocationError"
+                    "async_durable_execution._core.exceptions.InvocationError"
                 ),
                 "payload": {},
             }
@@ -720,6 +720,95 @@ def test_sdk_error_data_rejects_invalid_envelopes(data):
         (
             "CallbackError",
             _encode_sdk_error_data(CallbackError),
+            ExecutionError,
+        ),
+        (
+            "CallbackError",
+            json.dumps(
+                {
+                    "__async_durable_execution_error__": 1,
+                    "exception_type": (
+                        "async_durable_execution.exceptions.CallbackError"
+                    ),
+                    "payload": None,
+                }
+            ),
+            ExecutionError,
+        ),
+        (
+            "InvocationError",
+            json.dumps(
+                {
+                    "__async_durable_execution_error__": 1,
+                    "exception_type": (
+                        "async_durable_execution.exceptions.InvocationError"
+                    ),
+                    "payload": None,
+                }
+            ),
+            InvocationError,
+        ),
+        (
+            "InvocationError",
+            json.dumps(
+                {
+                    "__async_durable_execution_error__": 1,
+                    "exception_type": (
+                        "async_durable_execution.core.exceptions.InvocationError"
+                    ),
+                    "payload": None,
+                }
+            ),
+            InvocationError,
+        ),
+        (
+            "ExecutionError",
+            json.dumps(
+                {
+                    "__async_durable_execution_error__": 1,
+                    "exception_type": (
+                        "async_durable_execution.exceptions.ExecutionError"
+                    ),
+                    "payload": None,
+                }
+            ),
+            ExecutionError,
+        ),
+        (
+            "ExecutionError",
+            json.dumps(
+                {
+                    "__async_durable_execution_error__": 1,
+                    "exception_type": (
+                        "async_durable_execution.core.exceptions.ExecutionError"
+                    ),
+                    "payload": None,
+                }
+            ),
+            ExecutionError,
+        ),
+        (
+            "SerDesError",
+            json.dumps(
+                {
+                    "__async_durable_execution_error__": 1,
+                    "exception_type": "async_durable_execution.exceptions.SerDesError",
+                    "payload": None,
+                }
+            ),
+            ExecutionError,
+        ),
+        (
+            "SerDesError",
+            json.dumps(
+                {
+                    "__async_durable_execution_error__": 1,
+                    "exception_type": (
+                        "async_durable_execution.core.exceptions.SerDesError"
+                    ),
+                    "payload": None,
+                }
+            ),
             ExecutionError,
         ),
         ("ExecutionError", None, type(None)),
@@ -1021,7 +1110,7 @@ def test_invalid_invocation_error_payload_fails_closed(payload):
 
 
 def test_callable_runtime_error_preserves_original_error_details():
-    from async_durable_execution.extension.flow import _callable_error_object
+    from async_durable_execution._extension.flow import _callable_error_object
 
     error = CallableRuntimeError(
         message="failure",
@@ -1455,11 +1544,11 @@ async def test_any_resolution_preserves_reverse_completion_order(monkeypatch):
         return asyncio.create_task(coro_factory())
 
     monkeypatch.setattr(
-        "async_durable_execution.extension.flow._resolve_dependency_expression",
+        "async_durable_execution._extension.flow._resolve_dependency_expression",
         resolve_child,
     )
     monkeypatch.setattr(
-        "async_durable_execution.extension.flow.create_eager_task",
+        "async_durable_execution._extension.flow.create_eager_task",
         create_normal_task,
     )
 
@@ -1581,7 +1670,7 @@ async def test_execute_flow_wraps_unclassified_child_error(monkeypatch):
         return asyncio.create_task(fail())
 
     monkeypatch.setattr(
-        "async_durable_execution.extension.flow.run_in_child_context",
+        "async_durable_execution._extension.flow.run_in_child_context",
         fake_child,
     )
 
@@ -1620,7 +1709,7 @@ async def test_execute_flow_prioritizes_resolver_error_over_node_suspension(
         return asyncio.create_task(succeed())
 
     monkeypatch.setattr(
-        "async_durable_execution.extension.flow.run_in_child_context",
+        "async_durable_execution._extension.flow.run_in_child_context",
         fake_child,
     )
 
@@ -1655,7 +1744,7 @@ async def test_execute_flow_uses_earliest_timed_suspension(monkeypatch):
         return asyncio.create_task(fail(errors[name]))
 
     monkeypatch.setattr(
-        "async_durable_execution.extension.flow.run_in_child_context",
+        "async_durable_execution._extension.flow.run_in_child_context",
         fake_child,
     )
 
@@ -1708,7 +1797,7 @@ async def test_execute_flow_propagates_resolver_task_errors(
         return asyncio.create_task(coroutine)
 
     monkeypatch.setattr(
-        "async_durable_execution.extension.flow.run_in_child_context",
+        "async_durable_execution._extension.flow.run_in_child_context",
         fake_child,
     )
 
@@ -1761,7 +1850,7 @@ async def test_flow_boundary_classifies_child_task_errors(
         ),
     )
     monkeypatch.setattr(
-        "async_durable_execution.extension.flow.run_in_child_context",
+        "async_durable_execution._extension.flow.run_in_child_context",
         fake_child,
     )
 

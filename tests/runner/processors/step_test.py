@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     ErrorObject,
     Operation,
     OperationAction,
@@ -15,10 +15,10 @@ from async_durable_execution.models import (
     StepDetails,
     StepOptions,
 )
-from async_durable_execution.runner.local.processors.step import (
+from async_durable_execution._runner.local.processors.step import (
     StepProcessor,
 )
-from async_durable_execution.runner.exceptions import (
+from async_durable_execution._runner.exceptions import (
     InvalidParameterValueException,
 )
 
@@ -455,7 +455,7 @@ def test_no_step_retry_calls_for_non_retry_actions():
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     ErrorObject,
     Operation,
     OperationAction,
@@ -464,10 +464,10 @@ from async_durable_execution.models import (
     OperationUpdate,
     StepOptions,
 )
-from async_durable_execution.runner.local.processors.step import (
+from async_durable_execution._runner.local.processors.step import (
     StepProcessor,
 )
-from async_durable_execution.runner.exceptions import (
+from async_durable_execution._runner.exceptions import (
     InvalidParameterValueException,
 )
 

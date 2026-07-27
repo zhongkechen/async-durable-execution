@@ -2,13 +2,13 @@
 
 from unittest.mock import Mock
 
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     ErrorObject,
     OperationAction,
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.runner.local.processors.execution import (
+from async_durable_execution._runner.local.processors.execution import (
     ExecutionProcessor,
 )
 
@@ -245,16 +245,16 @@ def test_no_wait_timer_or_step_retry_calls():
 
 import pytest
 
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     ErrorObject,
     OperationAction,
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution.runner.local.processors.execution import (
+from async_durable_execution._runner.local.processors.execution import (
     ExecutionProcessor,
 )
-from async_durable_execution.runner.exceptions import (
+from async_durable_execution._runner.exceptions import (
     InvalidParameterValueException,
 )
 

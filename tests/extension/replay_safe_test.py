@@ -16,7 +16,7 @@ from async_durable_execution import (
     uuid,
     wait,
 )
-from async_durable_execution.serdes import ExtendedTypeSerDes
+from async_durable_execution._core.serdes import ExtendedTypeSerDes
 
 
 def test_replay_safe_helper_signatures_use_keyword_only_names():
@@ -49,18 +49,18 @@ async def test_replay_safe_helpers_use_default_step_names(monkeypatch):
 
     with (
         patch(
-            "async_durable_execution.extension.replay_safe._random.random",
+            "async_durable_execution._extension.replay_safe._random.random",
             return_value=0.25,
         ),
         patch(
-            "async_durable_execution.extension.replay_safe.datetime",
+            "async_durable_execution._extension.replay_safe.datetime",
         ) as mock_datetime,
         patch(
-            "async_durable_execution.extension.replay_safe._timestamp_value",
+            "async_durable_execution._extension.replay_safe._timestamp_value",
             return_value=1783821723.5,
         ),
         patch(
-            "async_durable_execution.extension.replay_safe._uuid.uuid4",
+            "async_durable_execution._extension.replay_safe._uuid.uuid4",
             return_value=expected_uuid,
         ),
     ):
@@ -143,18 +143,18 @@ async def test_replay_safe_helpers_reuse_checkpointed_values_after_replay(monkey
 
     with (
         patch(
-            "async_durable_execution.extension.replay_safe._random.random",
+            "async_durable_execution._extension.replay_safe._random.random",
             side_effect=[0.125, 0.875],
         ) as mock_random,
         patch(
-            "async_durable_execution.extension.replay_safe.datetime",
+            "async_durable_execution._extension.replay_safe.datetime",
         ) as mock_datetime,
         patch(
-            "async_durable_execution.extension.replay_safe._timestamp_value",
+            "async_durable_execution._extension.replay_safe._timestamp_value",
             side_effect=[1783818000.0, 1783821600.0],
         ) as mock_timestamp,
         patch(
-            "async_durable_execution.extension.replay_safe._uuid.uuid4",
+            "async_durable_execution._extension.replay_safe._uuid.uuid4",
             side_effect=uuid_values,
         ) as mock_uuid4,
     ):

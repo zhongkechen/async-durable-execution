@@ -9,33 +9,35 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+import async_durable_execution._core.context as context_module
+import async_durable_execution._primitive.child as child
 
 # Mock the executor.execute method
-from async_durable_execution.extension.parallel import (
+from async_durable_execution._extension.parallel import (
+    _BATCH_RESULT_SERDES,
     BatchItem,
     BatchItemStatus,
     BatchResult,
     CompletionReason,
     Executable,
 )
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     ContextDetails,
     Operation,
     OperationStatus,
     OperationType,
 )
-from async_durable_execution.context import (
+from async_durable_execution._core.context import (
     get_current_context,
     reset_current_context,
     set_current_context,
 )
-from async_durable_execution.exceptions import ValidationError
+from async_durable_execution._core.exceptions import ValidationError
 from async_durable_execution import map as map_operation, DurableContext
-from async_durable_execution.models import OperationIdentifier
-from async_durable_execution.models import OperationSubType
-from async_durable_execution.primitive import child  # PLC0415
-from async_durable_execution.extension.parallel import CompletionConfig, NestingType
-from async_durable_execution.extension.map import (
+from async_durable_execution._core.models import OperationIdentifier
+from async_durable_execution._core.models import OperationSubType
+from async_durable_execution._extension.parallel import CompletionConfig, NestingType
+from async_durable_execution._extension.map import (
     BatchedInput,
     MapItemContext,
     MapSummaryGenerator,
@@ -43,9 +45,9 @@ from async_durable_execution.extension.map import (
     _create_map_branch_namer,
     map_handler,
 )
-from async_durable_execution.extension.parallel import ParallelExecutor
-from async_durable_execution.serdes import serialize
-from async_durable_execution.state import ExecutionState
+from async_durable_execution._extension.parallel import ParallelExecutor
+from async_durable_execution._core.serdes import serialize
+from async_durable_execution._core.state import ExecutionState
 
 from ..serdes_test import CustomStrSerDes
 
@@ -70,7 +72,7 @@ def create_test_context(
             "arn:aws:durable:us-east-1:123456789012:execution/test"
         )
 
-    return child.DurableContext(
+    return DurableContext(
         execution_state=state,
         operation_identifier=OperationIdentifier(
             operation_id=None,
@@ -91,7 +93,7 @@ def create_mock_execution_state():
 
 
 def create_mock_child_context(state):
-    return child.DurableContext(
+    return DurableContext(
         execution_state=state,
         operation_identifier=OperationIdentifier(
             operation_id=None,
@@ -262,7 +264,7 @@ async def test_map_executor_init_default_config():
     assert executor.nesting_type is NestingType.NESTED
 
 
-@patch("async_durable_execution.extension.map.logger")
+@patch("async_durable_execution._extension.map.logger")
 async def test_map_executor_execute_item(mock_logger):
     """Test map branch executor execute_item method with logging."""
     items = ["hello", "world"]
@@ -584,7 +586,7 @@ async def test_map_handler_passes_default_fields():
         return mock_batch_result
 
     with patch(
-        "async_durable_execution.extension.map.parallel_handler",
+        "async_durable_execution._extension.map.parallel_handler",
         return_value=handler_result,
     ) as mock_parallel_handler:
         executor_context = Mock()
@@ -1013,7 +1015,7 @@ async def test_map_handler_replay_with_replay_children():
         assert result == expected_batch_result
 
 
-@patch("async_durable_execution.extension.map._run_in_child_context")
+@patch("async_durable_execution._extension.map._run_in_child_context")
 async def test_map_iterates_items_iterable_once(mock_handler):
     """Test map materializes one-shot items iterables exactly once."""
     mock_handler.return_value = "map_result"
@@ -1078,8 +1080,8 @@ def test_map_summary_generator_returns_compact_json_payload():
     }
 
 
-@patch("async_durable_execution.extension.map.map_handler")
-@patch("async_durable_execution.extension.map._run_in_child_context")
+@patch("async_durable_execution._extension.map.map_handler")
+@patch("async_durable_execution._extension.map._run_in_child_context")
 async def test_map_passes_default_summary_generator_to_handler(
     mock_run_in_child_context,
     mock_map_handler,
@@ -1114,7 +1116,7 @@ async def test_map_passes_default_summary_generator_to_handler(
     )
 
 
-@patch("async_durable_execution.extension.map._run_in_child_context")
+@patch("async_durable_execution._extension.map._run_in_child_context")
 async def test_map_raises_when_child_operation_id_is_missing(mock_run_in_child_context):
     """The public wrapper fails clearly if no child operation id is available."""
 
@@ -1188,10 +1190,10 @@ async def test_map_handler_first_execution_then_replay_integration():
 
     with (
         patch(
-            "async_durable_execution.extension.parallel.ParallelExecutor.execute"
+            "async_durable_execution._extension.parallel.ParallelExecutor.execute"
         ) as mock_execute,
         patch(
-            "async_durable_execution.extension.parallel.ParallelExecutor.replay_completed"
+            "async_durable_execution._extension.parallel.ParallelExecutor.replay_completed"
         ) as mock_replay,
     ):
         mock_execute.return_value = Mock()  # Mock BatchResult
@@ -1230,8 +1232,8 @@ async def test_map_handler_first_execution_then_replay_integration():
         (Mock(), None),
     ],
 )
-@patch("async_durable_execution.primitive.child.deserialize")
-@patch("async_durable_execution.primitive.child.serialize")
+@patch("async_durable_execution._primitive.child.deserialize")
+@patch("async_durable_execution._primitive.child.serialize")
 async def test_map_item_serialize(
     mock_serialize, mock_deserialize, item_serdes, batch_serdes
 ):
@@ -1275,7 +1277,9 @@ async def test_map_item_serialize(
         )
 
     with patch.object(
-        child.OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+        context_module.OperationIdGenerator,
+        "_create_step_id_for_logical_step",
+        create_id,
     ):
         context = create_test_context(state=mock_state)
 
@@ -1297,7 +1301,10 @@ async def test_map_item_serialize(
 
     assert call_kwargs["child-0"]["serdes"] is expected
     assert call_kwargs["child-1"]["serdes"] is expected
-    assert call_kwargs["parent"]["serdes"] is batch_serdes
+    expected_parent_serdes = (
+        batch_serdes if batch_serdes is not None else _BATCH_RESULT_SERDES
+    )
+    assert call_kwargs["parent"]["serdes"] is expected_parent_serdes
 
 
 @pytest.mark.parametrize(
@@ -1308,7 +1315,7 @@ async def test_map_item_serialize(
         (Mock(), None),
     ],
 )
-@patch("async_durable_execution.primitive.child.deserialize")
+@patch("async_durable_execution._primitive.child.deserialize")
 async def test_map_item_deserialize(mock_deserialize, item_serdes, batch_serdes):
     """Test map deserializes items with item_serdes or fallback."""
     mock_deserialize.return_value = "deserialized"
@@ -1351,7 +1358,9 @@ async def test_map_item_deserialize(mock_deserialize, item_serdes, batch_serdes)
         )
 
     with patch.object(
-        child.OperationIdGenerator, "_create_step_id_for_logical_step", create_id
+        context_module.OperationIdGenerator,
+        "_create_step_id_for_logical_step",
+        create_id,
     ):
         context = create_test_context(state=mock_state)
 
@@ -1436,8 +1445,8 @@ async def test_map_handler_serializes_batch_result():
     """Verify map_handler serializes BatchResult at parent level."""
     try:
         with (
-            patch("async_durable_execution.serdes.serialize") as mock_serdes_serialize,
-            patch("async_durable_execution.serdes.deserialize") as mock_deserialize,
+            patch("async_durable_execution._core.serialize") as mock_serdes_serialize,
+            patch("async_durable_execution._core.deserialize") as mock_deserialize,
         ):
             configure_mock_child_serdes_roundtrip(
                 mock_serdes_serialize, mock_deserialize
@@ -1479,7 +1488,7 @@ async def test_map_handler_serializes_batch_result():
                 )
 
             with patch.object(
-                child.OperationIdGenerator,
+                context_module.OperationIdGenerator,
                 "_create_step_id_for_logical_step",
                 create_id,
             ):
@@ -1503,7 +1512,7 @@ async def test_map_default_serdes_serializes_batch_result():
     """Verify default serdes automatically serializes BatchResult."""
     try:
         with patch(
-            "async_durable_execution.serdes.serialize", wraps=serialize
+            "async_durable_execution._core.serialize", wraps=serialize
         ) as mock_serialize:
             importlib.reload(child)
 
@@ -1542,7 +1551,7 @@ async def test_map_default_serdes_serializes_batch_result():
                 )
 
             with patch.object(
-                child.OperationIdGenerator,
+                context_module.OperationIdGenerator,
                 "_create_step_id_for_logical_step",
                 create_id,
             ):
@@ -1558,7 +1567,7 @@ async def test_map_default_serdes_serializes_batch_result():
             assert isinstance(result, BatchResult)
             assert len(mock_serialize.call_args_list) == 3
             parent_call = mock_serialize.call_args_list[2]
-            assert parent_call[1]["serdes"] is None
+            assert parent_call[1]["serdes"] is _BATCH_RESULT_SERDES
             assert isinstance(parent_call[1]["value"], BatchResult)
             assert parent_call[1]["value"] == result
     finally:
@@ -1572,8 +1581,8 @@ async def test_map_custom_serdes_serializes_batch_result():
 
     try:
         with (
-            patch("async_durable_execution.serdes.serialize") as mock_serialize,
-            patch("async_durable_execution.serdes.deserialize") as mock_deserialize,
+            patch("async_durable_execution._core.serialize") as mock_serialize,
+            patch("async_durable_execution._core.deserialize") as mock_deserialize,
         ):
             configure_mock_child_serdes_roundtrip(mock_serialize, mock_deserialize)
             importlib.reload(child)
@@ -1613,7 +1622,7 @@ async def test_map_custom_serdes_serializes_batch_result():
                 )
 
             with patch.object(
-                child.OperationIdGenerator,
+                context_module.OperationIdGenerator,
                 "_create_step_id_for_logical_step",
                 create_id,
             ):

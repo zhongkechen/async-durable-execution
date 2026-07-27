@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from async_durable_execution.extension.parallel import (
+from async_durable_execution._extension.parallel import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
@@ -29,14 +29,15 @@ from async_durable_execution.extension.parallel import (
     parallel,
 )
 from async_durable_execution import DurableContext, get_current_context
-from async_durable_execution.exceptions import (
+from async_durable_execution._core.exceptions import (
     CallableRuntimeError,
     InvalidStateError,
+    OrphanedChildException,
     SuspendExecution,
     TimedSuspendExecution,
     ValidationError,
 )
-from async_durable_execution.models import (
+from async_durable_execution._core.models import (
     ContextDetails,
     ErrorObject,
     Operation,
@@ -45,9 +46,8 @@ from async_durable_execution.models import (
     OperationSubType,
     OperationType,
 )
-from async_durable_execution.extension.map import _bind_map_item_to_branch
-from async_durable_execution.primitive.base import OperationExecutor
-from async_durable_execution.primitive.child import OrphanedChildException
+from async_durable_execution._extension.map import _bind_map_item_to_branch
+from async_durable_execution._primitive.base import OperationExecutor
 
 
 async def run_async(awaitable):
@@ -575,7 +575,7 @@ async def test_batch_result_from_dict_default_completion_reason():
         # No completionReason provided
     }
 
-    with patch("async_durable_execution.extension.parallel.logger") as mock_logger:
+    with patch("async_durable_execution._extension.parallel.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.ALL_COMPLETED
         # Verify warning was logged
@@ -593,7 +593,7 @@ async def test_batch_result_from_dict_infer_all_completed_all_succeeded():
         # No completionReason provided
     }
 
-    with patch("async_durable_execution.extension.parallel.logger") as mock_logger:
+    with patch("async_durable_execution._extension.parallel.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.ALL_COMPLETED
         mock_logger.warning.assert_called_once()
@@ -616,7 +616,7 @@ async def test_batch_result_from_dict_infer_failure_tolerance_exceeded_all_faile
     }
 
     # With no completion config and failures, should fail-fast
-    with patch("async_durable_execution.extension.parallel.logger") as mock_logger:
+    with patch("async_durable_execution._extension.parallel.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
         mock_logger.warning.assert_called_once()
@@ -640,7 +640,7 @@ async def test_batch_result_from_dict_infer_all_completed_mixed_success_failure(
     }
 
     # With no config and with failures, fail-fast
-    with patch("async_durable_execution.extension.parallel.logger") as mock_logger:
+    with patch("async_durable_execution._extension.parallel.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
         mock_logger.warning.assert_called_once()
@@ -657,7 +657,7 @@ async def test_batch_result_from_dict_infers_min_successful_with_started_items()
         # No completionReason provided
     }
 
-    with patch("async_durable_execution.extension.parallel.logger") as mock_logger:
+    with patch("async_durable_execution._extension.parallel.logger") as mock_logger:
         result = BatchResult.from_dict(data, CompletionConfig(1))
         assert result.completion_reason == CompletionReason.MIN_SUCCESSFUL_REACHED
         mock_logger.warning.assert_called_once()
@@ -670,7 +670,7 @@ async def test_batch_result_from_dict_infer_empty_items():
         # No completionReason provided
     }
 
-    with patch("async_durable_execution.extension.parallel.logger") as mock_logger:
+    with patch("async_durable_execution._extension.parallel.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.ALL_COMPLETED
         mock_logger.warning.assert_called_once()
@@ -685,7 +685,7 @@ async def test_batch_result_from_dict_with_explicit_completion_reason():
         "completionReason": "MIN_SUCCESSFUL_REACHED",
     }
 
-    with patch("async_durable_execution.extension.parallel.logger") as mock_logger:
+    with patch("async_durable_execution._extension.parallel.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.MIN_SUCCESSFUL_REACHED
         # No warning should be logged when completionReason is provided
@@ -2863,7 +2863,7 @@ async def test_batch_result_from_dict_with_completion_config():
     # With started items, should infer MIN_SUCCESSFUL_REACHED
     completion_config = CompletionConfig(min_successful=1)
 
-    with patch("async_durable_execution.extension.parallel.logger") as mock_logger:
+    with patch("async_durable_execution._extension.parallel.logger") as mock_logger:
         result = BatchResult.from_dict(data, completion_config)
         assert result.completion_reason == CompletionReason.MIN_SUCCESSFUL_REACHED
         mock_logger.warning.assert_called_once()
@@ -2890,7 +2890,7 @@ async def test_batch_result_from_dict_all_completed():
     }
 
     # With no config and failures, fail-fast
-    with patch("async_durable_execution.extension.parallel.logger") as mock_logger:
+    with patch("async_durable_execution._extension.parallel.logger") as mock_logger:
         result = BatchResult.from_dict(data)
         assert result.completion_reason == CompletionReason.FAILURE_TOLERANCE_EXCEEDED
         mock_logger.warning.assert_called_once()
@@ -3031,7 +3031,7 @@ async def test_operation_id_determinism_across_shuffles():
         executor_context.create_child_context = create_child_context
 
         with patch(
-            "async_durable_execution.extension.parallel.ChildOperationExecutor",
+            "async_durable_execution._extension.parallel.ChildOperationExecutor",
             patched_child_handler,
         ):
             await run_async(executor.execute())
