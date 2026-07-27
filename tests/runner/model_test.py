@@ -1,6 +1,7 @@
 """Tests for model serialization dataclasses."""
 
 from __future__ import annotations
+from typing import no_type_check
 
 import datetime
 import json
@@ -89,7 +90,7 @@ DEFAULT_START_DURABLE_EXECUTION_INPUT_DATA = {
 }
 
 
-def test_start_durable_execution_input_serialization():
+def test_start_durable_execution_input_serialization() -> None:
     """Test StartDurableExecutionInput from_dict/to_dict round-trip."""
     data = DEFAULT_START_DURABLE_EXECUTION_INPUT_DATA
 
@@ -115,7 +116,7 @@ def test_start_durable_execution_input_serialization():
     assert round_trip == input_obj
 
 
-def test_start_durable_execution_input_get_input_json_input():
+def test_start_durable_execution_input_get_input_json_input() -> None:
     """Test StartDurableExecutionInput from_dict/to_dict round-trip."""
     data = DEFAULT_START_DURABLE_EXECUTION_INPUT_DATA
     data["Input"] = '{"message": "hello"}'
@@ -124,7 +125,7 @@ def test_start_durable_execution_input_get_input_json_input():
     assert input_obj.get_normalized_input() == '{"message": "hello"}'
 
 
-def test_start_durable_execution_input_get_input_str_non_json_input():
+def test_start_durable_execution_input_get_input_str_non_json_input() -> None:
     """Test StartDurableExecutionInput from_dict/to_dict round-trip."""
     data = DEFAULT_START_DURABLE_EXECUTION_INPUT_DATA
     data["Input"] = "hello"
@@ -133,7 +134,7 @@ def test_start_durable_execution_input_get_input_str_non_json_input():
     assert input_obj.get_normalized_input() == '"hello"'
 
 
-def test_start_durable_execution_input_get_input_str_json_input():
+def test_start_durable_execution_input_get_input_str_json_input() -> None:
     """Test StartDurableExecutionInput from_dict/to_dict round-trip."""
     data = DEFAULT_START_DURABLE_EXECUTION_INPUT_DATA
     data["Input"] = '"hello"'
@@ -142,7 +143,7 @@ def test_start_durable_execution_input_get_input_str_json_input():
     assert input_obj.get_normalized_input() == '"hello"'
 
 
-def test_start_durable_execution_input_get_input_list_json_input():
+def test_start_durable_execution_input_get_input_list_json_input() -> None:
     """Test StartDurableExecutionInput from_dict/to_dict round-trip."""
     data = DEFAULT_START_DURABLE_EXECUTION_INPUT_DATA
     data["Input"] = "[1,2,3]"
@@ -151,7 +152,7 @@ def test_start_durable_execution_input_get_input_list_json_input():
     assert input_obj.get_normalized_input() == "[1,2,3]"
 
 
-def test_start_durable_execution_input_minimal():
+def test_start_durable_execution_input_minimal() -> None:
     """Test StartDurableExecutionInput with only required fields."""
     data = {
         "AccountId": "123456789012",
@@ -172,7 +173,7 @@ def test_start_durable_execution_input_minimal():
     assert result_data == data
 
 
-def test_start_durable_execution_output_serialization():
+def test_start_durable_execution_output_serialization() -> None:
     """Test StartDurableExecutionOutput from_dict/to_dict round-trip."""
     data = {
         "ExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test"
@@ -192,7 +193,8 @@ def test_start_durable_execution_output_serialization():
     assert round_trip == output_obj
 
 
-def test_start_durable_execution_output_empty():
+@no_type_check
+def test_start_durable_execution_output_empty() -> None:
     """Test StartDurableExecutionOutput with empty data."""
     data = {}
 
@@ -203,7 +205,8 @@ def test_start_durable_execution_output_empty():
     assert result_data == {}
 
 
-def test_get_durable_execution_response_serialization():
+@no_type_check
+def test_get_durable_execution_response_serialization() -> None:
     """Test GetDurableExecutionResponse from_dict/to_dict round-trip."""
     data = {
         "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
@@ -244,7 +247,7 @@ def test_get_durable_execution_response_serialization():
     assert round_trip == response_obj
 
 
-def test_get_durable_execution_response_minimal():
+def test_get_durable_execution_response_minimal() -> None:
     """Test GetDurableExecutionResponse with only required fields."""
     data = {
         "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
@@ -265,7 +268,7 @@ def test_get_durable_execution_response_minimal():
     assert result_data == data
 
 
-def test_get_durable_execution_state_response_serialization():
+def test_get_durable_execution_state_response_serialization() -> None:
     """Test GetDurableExecutionStateResponse from_dict/to_dict round-trip."""
     data = {
         "Operations": [
@@ -291,7 +294,8 @@ def test_get_durable_execution_state_response_serialization():
     assert round_trip == response_obj
 
 
-def test_get_durable_execution_state_response_empty():
+@no_type_check
+def test_get_durable_execution_state_response_empty() -> None:
     """Test GetDurableExecutionStateResponse with empty operations."""
     data = {"Operations": []}
 
@@ -303,7 +307,8 @@ def test_get_durable_execution_state_response_empty():
     assert result_data == {"Operations": []}
 
 
-def test_execution_event_serialization():
+@no_type_check
+def test_execution_event_serialization() -> None:
     """Test Event from_dict/to_dict round-trip."""
     data = {
         "EventType": "ExecutionStarted",
@@ -339,7 +344,7 @@ def test_execution_event_serialization():
     assert round_trip == event_obj
 
 
-def test_execution_event_minimal():
+def test_execution_event_minimal() -> None:
     """Test Event with only required fields."""
     data = {
         "EventType": "ExecutionStarted",
@@ -364,7 +369,8 @@ def test_execution_event_minimal():
     assert result_data == expected_data
 
 
-def test_get_durable_execution_history_response_serialization():
+@no_type_check
+def test_get_durable_execution_history_response_serialization() -> None:
     """Test GetDurableExecutionHistoryResponse from_dict/to_dict round-trip."""
     data = {
         "Events": [
@@ -403,7 +409,8 @@ def test_get_durable_execution_history_response_serialization():
     assert round_trip == response_obj
 
 
-def test_get_durable_execution_history_response_empty():
+@no_type_check
+def test_get_durable_execution_history_response_empty() -> None:
     """Test GetDurableExecutionHistoryResponse with empty events."""
     data = {"Events": []}
 
@@ -415,25 +422,25 @@ def test_get_durable_execution_history_response_empty():
     assert result_data == {"Events": []}
 
 
-def test_send_durable_execution_callback_success_response_creation():
+def test_send_durable_execution_callback_success_response_creation() -> None:
     """Test SendDurableExecutionCallbackSuccessResponse creation."""
     response_obj = SendDurableExecutionCallbackSuccessResponse()
     assert isinstance(response_obj, SendDurableExecutionCallbackSuccessResponse)
 
 
-def test_send_durable_execution_callback_failure_response_creation():
+def test_send_durable_execution_callback_failure_response_creation() -> None:
     """Test SendDurableExecutionCallbackFailureResponse creation."""
     response_obj = SendDurableExecutionCallbackFailureResponse()
     assert isinstance(response_obj, SendDurableExecutionCallbackFailureResponse)
 
 
-def test_send_durable_execution_callback_heartbeat_response_creation():
+def test_send_durable_execution_callback_heartbeat_response_creation() -> None:
     """Test SendDurableExecutionCallbackHeartbeatResponse creation."""
     response_obj = SendDurableExecutionCallbackHeartbeatResponse()
     assert isinstance(response_obj, SendDurableExecutionCallbackHeartbeatResponse)
 
 
-def test_checkpoint_durable_execution_response_serialization():
+def test_checkpoint_durable_execution_response_serialization() -> None:
     """Test CheckpointDurableExecutionResponse from_dict/to_dict round-trip."""
     data = {
         "CheckpointToken": "new-checkpoint-123",
@@ -458,7 +465,7 @@ def test_checkpoint_durable_execution_response_serialization():
     assert round_trip == response_obj
 
 
-def test_checkpoint_durable_execution_response_minimal():
+def test_checkpoint_durable_execution_response_minimal() -> None:
     """Test CheckpointDurableExecutionResponse with only required fields."""
     data = {"CheckpointToken": "new-checkpoint-123"}
 
@@ -469,7 +476,7 @@ def test_checkpoint_durable_execution_response_minimal():
     assert result_data == data
 
 
-def test_checkpoint_durable_execution_response_without_token():
+def test_checkpoint_durable_execution_response_without_token() -> None:
     """Terminal checkpoint responses may omit the checkpoint token."""
     response_obj = CheckpointDurableExecutionResponse.from_dict({})
 
@@ -478,7 +485,7 @@ def test_checkpoint_durable_execution_response_without_token():
 
 
 # Tests for missing coverage in StartDurableExecutionInput
-def test_start_durable_execution_input_missing_required_fields():
+def test_start_durable_execution_input_missing_required_fields() -> None:
     """Test StartDurableExecutionInput validation with missing required fields."""
     # Test missing AccountId
     data = {
@@ -560,7 +567,7 @@ def test_start_durable_execution_input_missing_required_fields():
 
 
 # Tests for EventInput
-def test_event_input_serialization():
+def test_event_input_serialization() -> None:
     """Test EventInput from_dict/to_dict round-trip."""
     data = {
         "Payload": "test-payload",
@@ -575,7 +582,8 @@ def test_event_input_serialization():
     assert result_data == data
 
 
-def test_event_input_minimal():
+@no_type_check
+def test_event_input_minimal() -> None:
     """Test EventInput with minimal data."""
     data = {}
 
@@ -587,7 +595,7 @@ def test_event_input_minimal():
     assert result_data == {"Truncated": False}
 
 
-def test_event_input_with_payload_only():
+def test_event_input_with_payload_only() -> None:
     """Test EventInput with payload but default truncated."""
     data = {"Payload": "test-payload"}
 
@@ -600,7 +608,7 @@ def test_event_input_with_payload_only():
 
 
 # Tests for EventResult
-def test_event_result_serialization():
+def test_event_result_serialization() -> None:
     """Test EventResult from_dict/to_dict round-trip."""
     data = {
         "Payload": "test-result",
@@ -615,7 +623,8 @@ def test_event_result_serialization():
     assert result_data == data
 
 
-def test_event_result_minimal():
+@no_type_check
+def test_event_result_minimal() -> None:
     """Test EventResult with minimal data."""
     data = {}
 
@@ -628,7 +637,8 @@ def test_event_result_minimal():
 
 
 # Tests for EventError
-def test_event_error_serialization():
+@no_type_check
+def test_event_error_serialization() -> None:
     """Test EventError from_dict/to_dict round-trip."""
     data = {
         "Payload": {"ErrorMessage": "test error"},
@@ -643,7 +653,8 @@ def test_event_error_serialization():
     assert result_data == data
 
 
-def test_event_error_minimal():
+@no_type_check
+def test_event_error_minimal() -> None:
     """Test EventError with minimal data."""
     data = {}
 
@@ -655,7 +666,8 @@ def test_event_error_minimal():
     assert result_data == {"Truncated": False}
 
 
-def test_event_error_with_payload_only():
+@no_type_check
+def test_event_error_with_payload_only() -> None:
     """Test EventError with payload but default truncated."""
     data = {"Payload": {"ErrorMessage": "test error"}}
 
@@ -671,7 +683,7 @@ def test_event_error_with_payload_only():
 
 
 # Tests for RetryDetails
-def test_retry_details_serialization():
+def test_retry_details_serialization() -> None:
     """Test RetryDetails from_dict/to_dict round-trip."""
     data = {
         "CurrentAttempt": 3,
@@ -686,7 +698,8 @@ def test_retry_details_serialization():
     assert result_data == data
 
 
-def test_retry_details_minimal():
+@no_type_check
+def test_retry_details_minimal() -> None:
     """Test RetryDetails with minimal data."""
     data = {}
 
@@ -698,7 +711,7 @@ def test_retry_details_minimal():
     assert result_data == {"CurrentAttempt": 0}
 
 
-def test_retry_details_with_current_attempt_only():
+def test_retry_details_with_current_attempt_only() -> None:
     """Test RetryDetails with current attempt but no delay."""
     data = {"CurrentAttempt": 2}
 
@@ -711,7 +724,8 @@ def test_retry_details_with_current_attempt_only():
 
 
 # Tests for ExecutionStartedDetails
-def test_execution_started_details_serialization():
+@no_type_check
+def test_execution_started_details_serialization() -> None:
     """Test ExecutionStartedDetails from_dict/to_dict round-trip."""
     data = {
         "Input": {"Payload": "test-input", "Truncated": False},
@@ -726,7 +740,8 @@ def test_execution_started_details_serialization():
     assert result_data == data
 
 
-def test_execution_started_details_minimal():
+@no_type_check
+def test_execution_started_details_minimal() -> None:
     """Test ExecutionStartedDetails with minimal data."""
     data = {}
 
@@ -738,7 +753,8 @@ def test_execution_started_details_minimal():
     assert result_data == {}
 
 
-def test_execution_started_details_with_input_only():
+@no_type_check
+def test_execution_started_details_with_input_only() -> None:
     """Test ExecutionStartedDetails with input but no timeout."""
     data = {"Input": {"Payload": "test-input", "Truncated": False}}
 
@@ -751,7 +767,8 @@ def test_execution_started_details_with_input_only():
 
 
 # Tests for ExecutionSucceededDetails
-def test_execution_succeeded_details_serialization():
+@no_type_check
+def test_execution_succeeded_details_serialization() -> None:
     """Test ExecutionSucceededDetails from_dict/to_dict round-trip."""
     data = {
         "Result": {"Payload": "success-result", "Truncated": False},
@@ -764,7 +781,8 @@ def test_execution_succeeded_details_serialization():
     assert result_data == data
 
 
-def test_execution_succeeded_details_minimal():
+@no_type_check
+def test_execution_succeeded_details_minimal() -> None:
     """Test ExecutionSucceededDetails with minimal data."""
     data = {}
 
@@ -776,7 +794,8 @@ def test_execution_succeeded_details_minimal():
 
 
 # Tests for ExecutionFailedDetails
-def test_execution_failed_details_serialization():
+@no_type_check
+def test_execution_failed_details_serialization() -> None:
     """Test ExecutionFailedDetails from_dict/to_dict round-trip."""
     data = {
         "Error": {"Payload": {"ErrorMessage": "execution failed"}, "Truncated": False},
@@ -789,7 +808,8 @@ def test_execution_failed_details_serialization():
     assert result_data == data
 
 
-def test_execution_failed_details_minimal():
+@no_type_check
+def test_execution_failed_details_minimal() -> None:
     """Test ExecutionFailedDetails with minimal data."""
     data = {}
 
@@ -801,7 +821,8 @@ def test_execution_failed_details_minimal():
 
 
 # Tests for ExecutionTimedOutDetails
-def test_execution_timed_out_details_serialization():
+@no_type_check
+def test_execution_timed_out_details_serialization() -> None:
     """Test ExecutionTimedOutDetails from_dict/to_dict round-trip."""
     data = {
         "Error": {
@@ -817,7 +838,8 @@ def test_execution_timed_out_details_serialization():
     assert result_data == data
 
 
-def test_execution_timed_out_details_minimal():
+@no_type_check
+def test_execution_timed_out_details_minimal() -> None:
     """Test ExecutionTimedOutDetails with minimal data."""
     data = {}
 
@@ -829,7 +851,8 @@ def test_execution_timed_out_details_minimal():
 
 
 # Tests for ExecutionStoppedDetails
-def test_execution_stopped_details_serialization():
+@no_type_check
+def test_execution_stopped_details_serialization() -> None:
     """Test ExecutionStoppedDetails from_dict/to_dict round-trip."""
     data = {
         "Error": {"Payload": {"ErrorMessage": "execution stopped"}, "Truncated": False},
@@ -842,7 +865,8 @@ def test_execution_stopped_details_serialization():
     assert result_data == data
 
 
-def test_execution_stopped_details_minimal():
+@no_type_check
+def test_execution_stopped_details_minimal() -> None:
     """Test ExecutionStoppedDetails with minimal data."""
     data = {}
 
@@ -854,7 +878,7 @@ def test_execution_stopped_details_minimal():
 
 
 # Tests for ContextStartedDetails
-def test_context_started_details_serialization():
+def test_context_started_details_serialization() -> None:
     """Test ContextStartedDetails from_dict/to_dict round-trip."""
     # ContextStartedDetails ignores input data and always returns empty dict
     data = {"dummy": "value"}  # Can provide any data
@@ -867,7 +891,8 @@ def test_context_started_details_serialization():
 
 
 # Tests for ContextSucceededDetails
-def test_context_succeeded_details_serialization():
+@no_type_check
+def test_context_succeeded_details_serialization() -> None:
     """Test ContextSucceededDetails from_dict/to_dict round-trip."""
     data = {
         "Result": {"Payload": "context-result", "Truncated": False},
@@ -880,7 +905,8 @@ def test_context_succeeded_details_serialization():
     assert result_data == data
 
 
-def test_context_succeeded_details_minimal():
+@no_type_check
+def test_context_succeeded_details_minimal() -> None:
     """Test ContextSucceededDetails with minimal data."""
     data = {}
 
@@ -892,7 +918,8 @@ def test_context_succeeded_details_minimal():
 
 
 # Tests for ContextFailedDetails
-def test_context_failed_details_serialization():
+@no_type_check
+def test_context_failed_details_serialization() -> None:
     """Test ContextFailedDetails from_dict/to_dict round-trip."""
     data = {
         "Error": {"Payload": {"ErrorMessage": "context failed"}, "Truncated": False},
@@ -905,7 +932,8 @@ def test_context_failed_details_serialization():
     assert result_data == data
 
 
-def test_context_failed_details_minimal():
+@no_type_check
+def test_context_failed_details_minimal() -> None:
     """Test ContextFailedDetails with minimal data."""
     data = {}
 
@@ -917,7 +945,7 @@ def test_context_failed_details_minimal():
 
 
 # Tests for WaitStartedDetails
-def test_wait_started_details_serialization():
+def test_wait_started_details_serialization() -> None:
     """Test WaitStartedDetails from_dict/to_dict round-trip."""
     data = {
         "Duration": 60,
@@ -932,7 +960,8 @@ def test_wait_started_details_serialization():
     assert result_data == data
 
 
-def test_wait_started_details_minimal():
+@no_type_check
+def test_wait_started_details_minimal() -> None:
     """Test WaitStartedDetails with minimal data."""
     data = {}
 
@@ -944,7 +973,7 @@ def test_wait_started_details_minimal():
     assert result_data == {}
 
 
-def test_wait_started_details_with_duration_only():
+def test_wait_started_details_with_duration_only() -> None:
     """Test WaitStartedDetails with duration but no timestamp."""
     data = {"Duration": 30}
 
@@ -957,7 +986,7 @@ def test_wait_started_details_with_duration_only():
 
 
 # Tests for WaitSucceededDetails
-def test_wait_succeeded_details_serialization():
+def test_wait_succeeded_details_serialization() -> None:
     """Test WaitSucceededDetails from_dict/to_dict round-trip."""
     data = {"Duration": 60}
 
@@ -968,7 +997,8 @@ def test_wait_succeeded_details_serialization():
     assert result_data == data
 
 
-def test_wait_succeeded_details_minimal():
+@no_type_check
+def test_wait_succeeded_details_minimal() -> None:
     """Test WaitSucceededDetails with minimal data."""
     data = {}
 
@@ -980,7 +1010,8 @@ def test_wait_succeeded_details_minimal():
 
 
 # Tests for WaitCancelledDetails
-def test_wait_cancelled_details_serialization():
+@no_type_check
+def test_wait_cancelled_details_serialization() -> None:
     """Test WaitCancelledDetails from_dict/to_dict round-trip."""
     data = {
         "Error": {"Payload": {"ErrorMessage": "wait cancelled"}, "Truncated": False},
@@ -993,7 +1024,8 @@ def test_wait_cancelled_details_serialization():
     assert result_data == data
 
 
-def test_wait_cancelled_details_minimal():
+@no_type_check
+def test_wait_cancelled_details_minimal() -> None:
     """Test WaitCancelledDetails with minimal data."""
     data = {}
 
@@ -1005,7 +1037,7 @@ def test_wait_cancelled_details_minimal():
 
 
 # Tests for StepStartedDetails
-def test_step_started_details_serialization():
+def test_step_started_details_serialization() -> None:
     """Test StepStartedDetails from_dict/to_dict round-trip."""
     # StepStartedDetails ignores input data and always returns empty dict
     data = {"dummy": "value"}  # Can provide any data
@@ -1018,7 +1050,8 @@ def test_step_started_details_serialization():
 
 
 # Tests for StepSucceededDetails
-def test_step_succeeded_details_serialization():
+@no_type_check
+def test_step_succeeded_details_serialization() -> None:
     """Test StepSucceededDetails from_dict/to_dict round-trip."""
     data = {
         "Result": {"Payload": "step-result", "Truncated": False},
@@ -1033,7 +1066,8 @@ def test_step_succeeded_details_serialization():
     assert result_data == data
 
 
-def test_step_succeeded_details_minimal():
+@no_type_check
+def test_step_succeeded_details_minimal() -> None:
     """Test StepSucceededDetails with minimal data."""
     data = {}
 
@@ -1045,7 +1079,8 @@ def test_step_succeeded_details_minimal():
     assert result_data == {}
 
 
-def test_step_succeeded_details_with_result_only():
+@no_type_check
+def test_step_succeeded_details_with_result_only() -> None:
     """Test StepSucceededDetails with result but no retry details."""
     data = {"Result": {"Payload": "step-result", "Truncated": False}}
 
@@ -1058,7 +1093,8 @@ def test_step_succeeded_details_with_result_only():
 
 
 # Tests for StepFailedDetails
-def test_step_failed_details_serialization():
+@no_type_check
+def test_step_failed_details_serialization() -> None:
     """Test StepFailedDetails from_dict/to_dict round-trip."""
     data = {
         "Error": {"Payload": {"ErrorMessage": "step failed"}, "Truncated": False},
@@ -1073,7 +1109,8 @@ def test_step_failed_details_serialization():
     assert result_data == data
 
 
-def test_step_failed_details_minimal():
+@no_type_check
+def test_step_failed_details_minimal() -> None:
     """Test StepFailedDetails with minimal data."""
     data = {}
 
@@ -1085,7 +1122,8 @@ def test_step_failed_details_minimal():
     assert result_data == {}
 
 
-def test_step_failed_details_with_error_only():
+@no_type_check
+def test_step_failed_details_with_error_only() -> None:
     """Test StepFailedDetails with error but no retry details."""
     data = {"Error": {"Payload": {"ErrorMessage": "step failed"}, "Truncated": False}}
 
@@ -1100,7 +1138,7 @@ def test_step_failed_details_with_error_only():
 
 
 # Tests for ChainedInvokeStartedDetails
-def test_invoke_started_details_serialization():
+def test_invoke_started_details_serialization() -> None:
     """Test ChainedInvokeStartedDetails from_dict/to_dict round-trip."""
     data = {
         "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:my-function:execution:test",
@@ -1116,7 +1154,8 @@ def test_invoke_started_details_serialization():
     assert result_data == data
 
 
-def test_invoke_started_details_minimal():
+@no_type_check
+def test_invoke_started_details_minimal() -> None:
     """Test ChainedInvokeStartedDetails with minimal data."""
     data = {}
 
@@ -1127,14 +1166,15 @@ def test_invoke_started_details_minimal():
     assert result_data == {}
 
 
-def test_invoke_started_details_partial():
+@no_type_check
+def test_invoke_started_details_partial() -> None:
     """Test ChainedInvokeStartedDetails with partial data."""
     data = {}
     details = ChainedInvokeStartedDetails.from_dict(data)
     assert details.durable_execution_arn is None
 
 
-def test_chained_invoke_pending_details_to_dict_with_all_fields():
+def test_chained_invoke_pending_details_to_dict_with_all_fields() -> None:
     details = ChainedInvokePendingDetails(
         input=EventInput(payload="test-input", truncated=False),
         function_name="child-function:prod",
@@ -1147,7 +1187,8 @@ def test_chained_invoke_pending_details_to_dict_with_all_fields():
 
 
 # Tests for ChainedInvokeSucceededDetails
-def test_invoke_succeeded_details_serialization():
+@no_type_check
+def test_invoke_succeeded_details_serialization() -> None:
     """Test ChainedInvokeSucceededDetails from_dict/to_dict round-trip."""
     data = {
         "Result": {"Payload": "invoke-result", "Truncated": False},
@@ -1160,7 +1201,8 @@ def test_invoke_succeeded_details_serialization():
     assert result_data == data
 
 
-def test_invoke_succeeded_details_minimal():
+@no_type_check
+def test_invoke_succeeded_details_minimal() -> None:
     """Test ChainedInvokeSucceededDetails with minimal data."""
     data = {}
 
@@ -1172,7 +1214,8 @@ def test_invoke_succeeded_details_minimal():
 
 
 # Tests for ChainedInvokeFailedDetails
-def test_invoke_failed_details_serialization():
+@no_type_check
+def test_invoke_failed_details_serialization() -> None:
     """Test ChainedInvokeFailedDetails from_dict/to_dict round-trip."""
     data = {
         "Error": {"Payload": {"ErrorMessage": "invoke failed"}, "Truncated": False},
@@ -1185,7 +1228,8 @@ def test_invoke_failed_details_serialization():
     assert result_data == data
 
 
-def test_invoke_failed_details_minimal():
+@no_type_check
+def test_invoke_failed_details_minimal() -> None:
     """Test ChainedInvokeFailedDetails with minimal data."""
     data = {}
 
@@ -1197,7 +1241,8 @@ def test_invoke_failed_details_minimal():
 
 
 # Tests for ChainedInvokeTimedOutDetails
-def test_invoke_timed_out_details_serialization():
+@no_type_check
+def test_invoke_timed_out_details_serialization() -> None:
     """Test ChainedInvokeTimedOutDetails from_dict/to_dict round-trip."""
     data = {
         "Error": {"Payload": {"ErrorMessage": "invoke timed out"}, "Truncated": False},
@@ -1210,7 +1255,8 @@ def test_invoke_timed_out_details_serialization():
     assert result_data == data
 
 
-def test_invoke_timed_out_details_minimal():
+@no_type_check
+def test_invoke_timed_out_details_minimal() -> None:
     """Test ChainedInvokeTimedOutDetails with minimal data."""
     data = {}
 
@@ -1222,7 +1268,8 @@ def test_invoke_timed_out_details_minimal():
 
 
 # Tests for ChainedInvokeStoppedDetails
-def test_invoke_stopped_details_serialization():
+@no_type_check
+def test_invoke_stopped_details_serialization() -> None:
     """Test ChainedInvokeStoppedDetails from_dict/to_dict round-trip."""
     data = {
         "Error": {"Payload": {"ErrorMessage": "invoke stopped"}, "Truncated": False},
@@ -1235,7 +1282,8 @@ def test_invoke_stopped_details_serialization():
     assert result_data == data
 
 
-def test_invoke_stopped_details_minimal():
+@no_type_check
+def test_invoke_stopped_details_minimal() -> None:
     """Test ChainedInvokeStoppedDetails with minimal data."""
     data = {}
 
@@ -1247,7 +1295,7 @@ def test_invoke_stopped_details_minimal():
 
 
 # Tests for CallbackStartedDetails
-def test_callback_started_details_serialization():
+def test_callback_started_details_serialization() -> None:
     """Test CallbackStartedDetails from_dict/to_dict round-trip."""
     data = {
         "CallbackId": "callback-123",
@@ -1264,7 +1312,8 @@ def test_callback_started_details_serialization():
     assert result_data == data
 
 
-def test_callback_started_details_minimal():
+@no_type_check
+def test_callback_started_details_minimal() -> None:
     """Test CallbackStartedDetails with minimal data."""
     data = {}
 
@@ -1277,7 +1326,7 @@ def test_callback_started_details_minimal():
     assert result_data == {}
 
 
-def test_callback_started_details_partial():
+def test_callback_started_details_partial() -> None:
     """Test CallbackStartedDetails with partial data."""
     data = {
         "CallbackId": "callback-123",
@@ -1294,7 +1343,8 @@ def test_callback_started_details_partial():
 
 
 # Tests for CallbackSucceededDetails
-def test_callback_succeeded_details_serialization():
+@no_type_check
+def test_callback_succeeded_details_serialization() -> None:
     """Test CallbackSucceededDetails from_dict/to_dict round-trip."""
     data = {
         "Result": {"Payload": "callback-result", "Truncated": False},
@@ -1307,7 +1357,8 @@ def test_callback_succeeded_details_serialization():
     assert result_data == data
 
 
-def test_callback_succeeded_details_minimal():
+@no_type_check
+def test_callback_succeeded_details_minimal() -> None:
     """Test CallbackSucceededDetails with minimal data."""
     data = {}
 
@@ -1319,7 +1370,8 @@ def test_callback_succeeded_details_minimal():
 
 
 # Tests for CallbackFailedDetails
-def test_callback_failed_details_serialization():
+@no_type_check
+def test_callback_failed_details_serialization() -> None:
     """Test CallbackFailedDetails from_dict/to_dict round-trip."""
     data = {
         "Error": {"Payload": {"ErrorMessage": "callback failed"}, "Truncated": False},
@@ -1332,7 +1384,8 @@ def test_callback_failed_details_serialization():
     assert result_data == data
 
 
-def test_callback_failed_details_minimal():
+@no_type_check
+def test_callback_failed_details_minimal() -> None:
     """Test CallbackFailedDetails with minimal data."""
     data = {}
 
@@ -1344,7 +1397,8 @@ def test_callback_failed_details_minimal():
 
 
 # Tests for CallbackTimedOutDetails
-def test_callback_timed_out_details_serialization():
+@no_type_check
+def test_callback_timed_out_details_serialization() -> None:
     """Test CallbackTimedOutDetails from_dict/to_dict round-trip."""
     data = {
         "Error": {
@@ -1360,7 +1414,8 @@ def test_callback_timed_out_details_serialization():
     assert result_data == data
 
 
-def test_callback_timed_out_details_minimal():
+@no_type_check
+def test_callback_timed_out_details_minimal() -> None:
     """Test CallbackTimedOutDetails with minimal data."""
     data = {}
 
@@ -1372,7 +1427,8 @@ def test_callback_timed_out_details_minimal():
 
 
 # Tests for Event class with all detail types
-def test_event_with_execution_succeeded_details():
+@no_type_check
+def test_event_with_execution_succeeded_details() -> None:
     """Test Event with ExecutionSucceededDetails."""
     data = {
         "EventType": "ExecutionSucceeded",
@@ -1399,7 +1455,8 @@ def test_event_with_execution_succeeded_details():
     assert result_data == expected_data
 
 
-def test_event_with_execution_failed_details():
+@no_type_check
+def test_event_with_execution_failed_details() -> None:
     """Test Event with ExecutionFailedDetails."""
     data = {
         "EventType": "ExecutionFailed",
@@ -1434,7 +1491,8 @@ def test_event_with_execution_failed_details():
     assert result_data == expected_data
 
 
-def test_event_with_execution_timed_out_details():
+@no_type_check
+def test_event_with_execution_timed_out_details() -> None:
     """Test Event with ExecutionTimedOutDetails."""
     data = {
         "EventType": "ExecutionTimedOut",
@@ -1470,7 +1528,8 @@ def test_event_with_execution_timed_out_details():
     assert result_data == expected_data
 
 
-def test_event_with_execution_stopped_details():
+@no_type_check
+def test_event_with_execution_stopped_details() -> None:
     """Test Event with ExecutionStoppedDetails."""
     data = {
         "EventType": "ExecutionStopped",
@@ -1505,7 +1564,7 @@ def test_event_with_execution_stopped_details():
     assert result_data == expected_data
 
 
-def test_event_with_context_started_details():
+def test_event_with_context_started_details() -> None:
     """Test Event with ContextStartedDetails."""
     # Since ContextStartedDetails has no fields and empty dict is falsy,
     # we need to provide a non-empty dict or test without the key
@@ -1529,7 +1588,8 @@ def test_event_with_context_started_details():
     assert result_data == expected_data
 
 
-def test_event_with_context_succeeded_details():
+@no_type_check
+def test_event_with_context_succeeded_details() -> None:
     """Test Event with ContextSucceededDetails."""
     data = {
         "EventType": "ContextSucceeded",
@@ -1556,7 +1616,8 @@ def test_event_with_context_succeeded_details():
     assert result_data == expected_data
 
 
-def test_event_with_context_failed_details():
+@no_type_check
+def test_event_with_context_failed_details() -> None:
     """Test Event with ContextFailedDetails."""
     data = {
         "EventType": "ContextFailed",
@@ -1583,7 +1644,7 @@ def test_event_with_context_failed_details():
     assert result_data == expected_data
 
 
-def test_event_with_wait_started_details():
+def test_event_with_wait_started_details() -> None:
     """Test Event with WaitStartedDetails."""
     data = {
         "EventType": "WaitStarted",
@@ -1612,7 +1673,7 @@ def test_event_with_wait_started_details():
     assert result_data == expected_data
 
 
-def test_event_with_wait_succeeded_details():
+def test_event_with_wait_succeeded_details() -> None:
     """Test Event with WaitSucceededDetails."""
     data = {
         "EventType": "WaitSucceeded",
@@ -1635,7 +1696,8 @@ def test_event_with_wait_succeeded_details():
     assert result_data == expected_data
 
 
-def test_event_with_wait_cancelled_details():
+@no_type_check
+def test_event_with_wait_cancelled_details() -> None:
     """Test Event with WaitCancelledDetails."""
     data = {
         "EventType": "WaitCancelled",
@@ -1662,7 +1724,7 @@ def test_event_with_wait_cancelled_details():
     assert result_data == expected_data
 
 
-def test_event_with_step_started_details():
+def test_event_with_step_started_details() -> None:
     """Test Event with StepStartedDetails."""
     # Since StepStartedDetails has no fields and empty dict is falsy,
     # we need to provide a non-empty dict or test without the key
@@ -1686,7 +1748,8 @@ def test_event_with_step_started_details():
     assert result_data == expected_data
 
 
-def test_event_with_step_succeeded_details():
+@no_type_check
+def test_event_with_step_succeeded_details() -> None:
     """Test Event with StepSucceededDetails."""
     data = {
         "EventType": "StepSucceeded",
@@ -1715,7 +1778,8 @@ def test_event_with_step_succeeded_details():
     assert result_data == expected_data
 
 
-def test_event_with_step_failed_details():
+@no_type_check
+def test_event_with_step_failed_details() -> None:
     """Test Event with StepFailedDetails."""
     data = {
         "EventType": "StepFailed",
@@ -1744,7 +1808,7 @@ def test_event_with_step_failed_details():
     assert result_data == expected_data
 
 
-def test_event_with_invoke_started_details():
+def test_event_with_invoke_started_details() -> None:
     """Test Event with ChainedInvokeStartedDetails."""
     data = {
         "EventType": "ChainedInvokeStarted",
@@ -1770,7 +1834,8 @@ def test_event_with_invoke_started_details():
     assert result_data == expected_data
 
 
-def test_event_with_invoke_succeeded_details():
+@no_type_check
+def test_event_with_invoke_succeeded_details() -> None:
     """Test Event with ChainedInvokeSucceededDetails."""
     data = {
         "EventType": "ChainedInvokeSucceeded",
@@ -1797,7 +1862,8 @@ def test_event_with_invoke_succeeded_details():
     assert result_data == expected_data
 
 
-def test_event_with_invoke_failed_details():
+@no_type_check
+def test_event_with_invoke_failed_details() -> None:
     """Test Event with ChainedInvokeFailedDetails."""
     data = {
         "EventType": "ChainedInvokeFailed",
@@ -1826,7 +1892,8 @@ def test_event_with_invoke_failed_details():
     assert result_data == expected_data
 
 
-def test_event_with_invoke_timed_out_details():
+@no_type_check
+def test_event_with_invoke_timed_out_details() -> None:
     """Test Event with ChainedInvokeTimedOutDetails."""
     data = {
         "EventType": "ChainedInvokeTimedOut",
@@ -1862,7 +1929,8 @@ def test_event_with_invoke_timed_out_details():
     assert result_data == expected_data
 
 
-def test_event_with_invoke_stopped_details():
+@no_type_check
+def test_event_with_invoke_stopped_details() -> None:
     """Test Event with ChainedInvokeStoppedDetails."""
     data = {
         "EventType": "ChainedInvokeStopped",
@@ -1892,7 +1960,7 @@ def test_event_with_invoke_stopped_details():
     assert result_data == expected_data
 
 
-def test_event_with_callback_started_details():
+def test_event_with_callback_started_details() -> None:
     """Test Event with CallbackStartedDetails."""
     data = {
         "EventType": "CallbackStarted",
@@ -1923,7 +1991,8 @@ def test_event_with_callback_started_details():
     assert result_data == expected_data
 
 
-def test_event_with_callback_succeeded_details():
+@no_type_check
+def test_event_with_callback_succeeded_details() -> None:
     """Test Event with CallbackSucceededDetails."""
     data = {
         "EventType": "CallbackSucceeded",
@@ -1950,7 +2019,8 @@ def test_event_with_callback_succeeded_details():
     assert result_data == expected_data
 
 
-def test_event_with_callback_failed_details():
+@no_type_check
+def test_event_with_callback_failed_details() -> None:
     """Test Event with CallbackFailedDetails."""
     data = {
         "EventType": "CallbackFailed",
@@ -1983,7 +2053,8 @@ def test_event_with_callback_failed_details():
     assert result_data == expected_data
 
 
-def test_event_with_callback_timed_out_details():
+@no_type_check
+def test_event_with_callback_timed_out_details() -> None:
     """Test Event with CallbackTimedOutDetails."""
     data = {
         "EventType": "CallbackTimedOut",
@@ -2020,7 +2091,7 @@ def test_event_with_callback_timed_out_details():
 
 
 # Test for missing branch coverage in CheckpointDurableExecutionResponse
-def test_checkpoint_updated_execution_state_with_next_marker():
+def test_checkpoint_updated_execution_state_with_next_marker() -> None:
     """Test CheckpointUpdatedExecutionState to_dict with next_marker."""
     from async_durable_execution._core.models import (
         Operation,
@@ -2050,7 +2121,7 @@ def test_checkpoint_updated_execution_state_with_next_marker():
 # Tests for events_to_operations function
 
 
-def test_events_to_operations_empty_list():
+def test_events_to_operations_empty_list() -> None:
     """Test events_to_operations with empty event list."""
     from async_durable_execution._runner.model import events_to_operations
 
@@ -2058,7 +2129,8 @@ def test_events_to_operations_empty_list():
     assert operations == []
 
 
-def test_events_to_operations_execution_started():
+@no_type_check
+def test_events_to_operations_execution_started() -> None:
     """Test events_to_operations with ExecutionStarted event."""
     event = Event(
         event_type="ExecutionStarted",
@@ -2081,7 +2153,8 @@ def test_events_to_operations_execution_started():
     assert operations[0].execution_details.input_payload == "test-input"
 
 
-def test_events_to_operations_callback_lifecycle():
+@no_type_check
+def test_events_to_operations_callback_lifecycle() -> None:
     """Test events_to_operations with complete callback lifecycle."""
 
     started_event = Event(
@@ -2117,7 +2190,8 @@ def test_events_to_operations_callback_lifecycle():
     assert operations[0].callback_details.error is None
 
 
-def test_events_to_operations_missing_event_type():
+@no_type_check
+def test_events_to_operations_missing_event_type() -> None:
     """Test events_to_operations raises error for missing event_type."""
     event = Event(
         event_type=None,
@@ -2132,7 +2206,7 @@ def test_events_to_operations_missing_event_type():
         events_to_operations([event])
 
 
-def test_events_to_operations_unknown_event_type():
+def test_events_to_operations_unknown_event_type() -> None:
     """Test events_to_operations raises error for unknown event type."""
     event = Event(
         event_type="UnknownEventType",
@@ -2148,7 +2222,7 @@ def test_events_to_operations_unknown_event_type():
         events_to_operations([event])
 
 
-def test_events_to_operations_missing_operation_id():
+def test_events_to_operations_missing_operation_id() -> None:
     """Test events_to_operations raises error for missing operation_id."""
     event = Event(
         event_type="StepStarted",
@@ -2164,7 +2238,8 @@ def test_events_to_operations_missing_operation_id():
         events_to_operations([event])
 
 
-def test_events_to_operations_step_with_retry():
+@no_type_check
+def test_events_to_operations_step_with_retry() -> None:
     """Test events_to_operations with step retry details."""
     import datetime
 
@@ -2202,7 +2277,8 @@ def test_events_to_operations_step_with_retry():
     assert operations[0].step_details.attempt == 2
 
 
-def test_events_to_operations_step_failed_with_next_attempt():
+@no_type_check
+def test_events_to_operations_step_failed_with_next_attempt() -> None:
     """Test events_to_operations with failed step and next attempt timestamp."""
     import datetime
 
@@ -2245,7 +2321,8 @@ def test_events_to_operations_step_failed_with_next_attempt():
     assert operations[0].step_details.next_attempt_timestamp == expected_next_attempt
 
 
-def test_events_to_operations_context_succeeded():
+@no_type_check
+def test_events_to_operations_context_succeeded() -> None:
     """Test events_to_operations with successful context."""
     import datetime
 
@@ -2281,7 +2358,8 @@ def test_events_to_operations_context_succeeded():
     assert operations[0].context_details.error is None
 
 
-def test_events_to_operations_chained_invoke_succeeded():
+@no_type_check
+def test_events_to_operations_chained_invoke_succeeded() -> None:
     """Test events_to_operations with successful chained invoke."""
     import datetime
 
@@ -2317,7 +2395,7 @@ def test_events_to_operations_chained_invoke_succeeded():
     assert operations[0].chained_invoke_details.error is None
 
 
-def test_events_to_operations_skips_invocation_completed():
+def test_events_to_operations_skips_invocation_completed() -> None:
     """Test events_to_operations skips InvocationCompleted events."""
     invocation_event = Event(
         event_type="InvocationCompleted",
@@ -2331,7 +2409,8 @@ def test_events_to_operations_skips_invocation_completed():
     assert len(operations) == 0
 
 
-def test_events_to_operations_callback_failed():
+@no_type_check
+def test_events_to_operations_callback_failed() -> None:
     """Test events_to_operations with failed callback."""
     import datetime
 
@@ -2379,7 +2458,8 @@ def test_events_to_operations_callback_failed():
     assert operations[0].callback_details.result is None
 
 
-def test_events_to_operations_callback_timed_out():
+@no_type_check
+def test_events_to_operations_callback_timed_out() -> None:
     """Test events_to_operations with timed out callback."""
     import datetime
 
@@ -2426,7 +2506,8 @@ def test_events_to_operations_callback_timed_out():
     assert operations[0].callback_details.error.message == "callback timed out"
 
 
-def test_events_to_operations_wait_started():
+@no_type_check
+def test_events_to_operations_wait_started() -> None:
     """Test events_to_operations with wait operation."""
     import datetime
 
@@ -2463,7 +2544,8 @@ def test_events_to_operations_wait_started():
     assert operations[0].wait_details.scheduled_end_timestamp == scheduled_time
 
 
-def test_events_to_operations_context_failed():
+@no_type_check
+def test_events_to_operations_context_failed() -> None:
     """Test events_to_operations with failed context."""
     import datetime
 
@@ -2501,7 +2583,8 @@ def test_events_to_operations_context_failed():
     assert operations[0].context_details.result is None
 
 
-def test_events_to_operations_chained_invoke_failed():
+@no_type_check
+def test_events_to_operations_chained_invoke_failed() -> None:
     """Test events_to_operations with failed chained invoke."""
     import datetime
 
@@ -2539,7 +2622,7 @@ def test_events_to_operations_chained_invoke_failed():
     assert operations[0].chained_invoke_details.result is None
 
 
-def test_events_to_operations_multiple_operations():
+def test_events_to_operations_multiple_operations() -> None:
     """Test events_to_operations with multiple different operations."""
     import datetime
 
@@ -2598,7 +2681,7 @@ def test_events_to_operations_multiple_operations():
     assert wait_op.name == "wait-one"
 
 
-def test_events_to_operations_merges_timestamps():
+def test_events_to_operations_merges_timestamps() -> None:
     """Test events_to_operations correctly merges start and end timestamps."""
     import datetime
 
@@ -2635,7 +2718,7 @@ def test_events_to_operations_merges_timestamps():
     assert operations[0].end_timestamp == end_time
 
 
-def test_events_to_operations_preserves_parent_id():
+def test_events_to_operations_preserves_parent_id() -> None:
     """Test events_to_operations preserves parent_id from events."""
     event = Event(
         event_type="StepStarted",
@@ -2653,7 +2736,7 @@ def test_events_to_operations_preserves_parent_id():
     assert operations[0].parent_id == "parent-ctx"
 
 
-def test_events_to_operations_preserves_sub_type():
+def test_events_to_operations_preserves_sub_type() -> None:
     """Test events_to_operations preserves sub_type from events."""
     event = Event(
         event_type="StepStarted",
@@ -2671,7 +2754,7 @@ def test_events_to_operations_preserves_sub_type():
     assert operations[0].sub_type.value == "Step"
 
 
-def test_events_to_operations_invalid_sub_type():
+def test_events_to_operations_invalid_sub_type() -> None:
     """Test events_to_operations raises InvalidParameterValueException when sub_type is invalid."""
     invalid_sub_type: str = "INVALID_SUB_TYPE"
     event = Event(
@@ -2690,7 +2773,7 @@ def test_events_to_operations_invalid_sub_type():
         events_to_operations([event])
 
 
-def test_invocation_completed_details_to_json_dict():
+def test_invocation_completed_details_to_json_dict() -> None:
     """Test InvocationCompletedDetails.to_json_dict() converts datetime to Unix milliseconds."""
     start_time = datetime.datetime(
         2023, 1, 1, 0, 0, 0, 123456, tzinfo=datetime.timezone.utc
@@ -2715,7 +2798,7 @@ def test_invocation_completed_details_to_json_dict():
     assert json_str is not None
 
 
-def test_invocation_completed_details_from_json_dict():
+def test_invocation_completed_details_from_json_dict() -> None:
     """Test InvocationCompletedDetails.from_json_dict() converts Unix milliseconds to datetime."""
     json_dict = {
         "StartTimestamp": 1672531200123,
@@ -2735,7 +2818,7 @@ def test_invocation_completed_details_from_json_dict():
     assert details.request_id == "req-456"
 
 
-def test_invocation_completed_details_json_round_trip():
+def test_invocation_completed_details_json_round_trip() -> None:
     """Test InvocationCompletedDetails to_json_dict/from_json_dict round-trip."""
     original = InvocationCompletedDetails(
         start_timestamp=datetime.datetime(
@@ -2759,7 +2842,7 @@ def test_invocation_completed_details_json_round_trip():
     assert restored.request_id == original.request_id
 
 
-def test_invocation_completed_details_to_dict_preserves_datetime():
+def test_invocation_completed_details_to_dict_preserves_datetime() -> None:
     """Test InvocationCompletedDetails.to_dict() preserves datetime objects (not converted)."""
     start_time = datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
     end_time = datetime.datetime(2023, 1, 1, 0, 1, 0, tzinfo=datetime.timezone.utc)
@@ -2777,7 +2860,7 @@ def test_invocation_completed_details_to_dict_preserves_datetime():
     assert isinstance(regular_dict["EndTimestamp"], datetime.datetime)
 
 
-def test_invocation_completed_details_from_json_dict_invalid_timestamp():
+def test_invocation_completed_details_from_json_dict_invalid_timestamp() -> None:
     """Test InvocationCompletedDetails.from_json_dict() raises error for invalid timestamps."""
     # Test with invalid timestamp that would return None
     json_dict = {

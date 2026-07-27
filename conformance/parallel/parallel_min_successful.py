@@ -1,5 +1,6 @@
 """8-8: Parallel minimum-successful early completion."""
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from async_durable_execution import CompletionConfig, durable_execution, parallel
@@ -7,7 +8,7 @@ from async_durable_execution import CompletionConfig, durable_execution, paralle
 from parallel._helpers import summary
 
 
-def branch(value: str):
+def branch(value: str) -> Callable[[], Awaitable[str]]:
     async def run() -> str:
         return value
 

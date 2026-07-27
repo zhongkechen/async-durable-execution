@@ -1,5 +1,7 @@
 """Tests for execution."""
 
+from typing import no_type_check
+
 import asyncio
 import datetime
 import json
@@ -8,7 +10,7 @@ import os
 import time
 from datetime import timedelta
 from functools import partial
-from typing import Any, cast
+from typing import Any, cast, NoReturn
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -71,7 +73,7 @@ LARGE_RESULT = "large_success" * 1024 * 1024
 os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
 
 
-async def run_handler(handler, event, lambda_context, service_client=None):
+async def run_handler(handler, event, lambda_context, service_client=None) -> Any:
     if service_client is not None:
         handler = _bind_service_client_to_handler(handler, service_client)
     if isinstance(event, DurableExecutionInvocationInput):
@@ -79,7 +81,7 @@ async def run_handler(handler, event, lambda_context, service_client=None):
     return await asyncio.to_thread(handler, event, lambda_context)
 
 
-async def test_durable_execution_invocation_input_from_dict():
+async def test_durable_execution_invocation_input_from_dict() -> None:
     """Test that DurableExecutionInvocationInput.from_dict works correctly"""
     input_dict = {
         "DurableExecutionArn": "9692ca80-399d-4f52-8d0a-41acc9cd0492/9692ca80-399d-4f52-8d0a-41acc9cd0492",
@@ -116,7 +118,7 @@ async def test_durable_execution_invocation_input_from_dict():
     )
 
 
-async def test_initial_execution_state_from_dict_minimal():
+async def test_initial_execution_state_from_dict_minimal() -> None:
     """Test that InitialExecutionState.from_dict works correctly"""
     input_dict = {
         "Operations": [
@@ -136,7 +138,7 @@ async def test_initial_execution_state_from_dict_minimal():
     assert result.operations[0].operation_id == "9692ca80-399d-4f52-8d0a-41acc9cd0492"
 
 
-async def test_initial_execution_state_from_dict_no_operations():
+async def test_initial_execution_state_from_dict_no_operations() -> None:
     """Test that InitialExecutionState.from_dict handles missing Operations key."""
     input_dict = {"NextMarker": "test-marker"}
 
@@ -146,7 +148,7 @@ async def test_initial_execution_state_from_dict_no_operations():
     assert result.next_marker == "test-marker"
 
 
-async def test_initial_execution_state_from_dict_empty_operations():
+async def test_initial_execution_state_from_dict_empty_operations() -> None:
     """Test that InitialExecutionState.from_dict handles empty Operations list."""
     input_dict = {"Operations": [], "NextMarker": "test-marker"}
 
@@ -156,7 +158,7 @@ async def test_initial_execution_state_from_dict_empty_operations():
     assert result.next_marker == "test-marker"
 
 
-async def test_initial_execution_state_to_dict():
+async def test_initial_execution_state_to_dict() -> None:
     """Test InitialExecutionState.to_dict method."""
     operation = Operation(
         operation_id="op1",
@@ -173,7 +175,7 @@ async def test_initial_execution_state_to_dict():
     assert result == expected
 
 
-async def test_initial_execution_state_to_dict_empty():
+async def test_initial_execution_state_to_dict_empty() -> None:
     """Test InitialExecutionState.to_dict with empty operations."""
     state = InitialExecutionState(operations=[], next_marker="")
 
@@ -183,7 +185,7 @@ async def test_initial_execution_state_to_dict_empty():
     assert result == expected
 
 
-async def test_durable_execution_invocation_input_to_dict():
+async def test_durable_execution_invocation_input_to_dict() -> None:
     """Test DurableExecutionInvocationInput.to_dict method."""
     operation = Operation(
         operation_id="exec1",
@@ -211,7 +213,7 @@ async def test_durable_execution_invocation_input_to_dict():
     assert result == expected
 
 
-async def test_durable_execution_invocation_input_to_dict_not_local():
+async def test_durable_execution_invocation_input_to_dict_not_local() -> None:
     initial_state = InitialExecutionState(operations=[], next_marker="")
 
     invocation_input = DurableExecutionInvocationInput(
@@ -230,7 +232,7 @@ async def test_durable_execution_invocation_input_to_dict_not_local():
     assert result == expected
 
 
-async def test_operation_to_dict_complete():
+async def test_operation_to_dict_complete() -> None:
     """Test Operation.to_dict with all fields populated."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
     end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.timezone.utc)
@@ -261,7 +263,7 @@ async def test_operation_to_dict_complete():
     assert result == expected
 
 
-async def test_operation_to_dict_minimal():
+async def test_operation_to_dict_minimal() -> None:
     """Test Operation.to_dict with minimal required fields."""
     operation = Operation(
         operation_id="minimal_op",
@@ -279,7 +281,7 @@ async def test_operation_to_dict_minimal():
     assert result == expected
 
 
-async def test_durable_execution_invocation_output_from_dict():
+async def test_durable_execution_invocation_output_from_dict() -> None:
     """Test DurableExecutionInvocationOutput.from_dict method."""
     data = {
         "Status": "SUCCEEDED",
@@ -296,7 +298,7 @@ async def test_durable_execution_invocation_output_from_dict():
     assert result.error.message == "Test error"
 
 
-async def test_durable_execution_invocation_output_from_dict_no_error():
+async def test_durable_execution_invocation_output_from_dict_no_error() -> None:
     """Test DurableExecutionInvocationOutput.from_dict without error."""
     data = {"Status": "SUCCEEDED", "Result": '{"key": "value"}'}
 
@@ -307,7 +309,7 @@ async def test_durable_execution_invocation_output_from_dict_no_error():
     assert result.error is None
 
 
-async def test_durable_execution_invocation_output_from_dict_no_result():
+async def test_durable_execution_invocation_output_from_dict_no_result() -> None:
     """Test DurableExecutionInvocationOutput.from_dict without result."""
     data = {"Status": "PENDING"}
 
@@ -318,7 +320,7 @@ async def test_durable_execution_invocation_output_from_dict_no_result():
     assert result.error is None
 
 
-async def test_durable_execution_client_selection_env_normal_result():
+async def test_durable_execution_client_selection_env_normal_result() -> None:
     """Test durable_execution selects correct client from environment."""
     mock_lambda_api_client = Mock()
     with (
@@ -377,7 +379,7 @@ async def test_durable_execution_client_selection_env_normal_result():
         mock_client.checkpoint.assert_not_called()
 
 
-async def test_durable_execution_defers_default_client_until_invocation():
+async def test_durable_execution_defers_default_client_until_invocation() -> None:
     """Decorating a handler must not require AWS environment configuration."""
     with patch(
         "async_durable_execution._core.execution.ThreadedSyncLambdaClient"
@@ -391,7 +393,7 @@ async def test_durable_execution_defers_default_client_until_invocation():
         mock_lambda_client.assert_not_called()
 
 
-async def test_durable_execution_client_selection_env_large_result():
+async def test_durable_execution_client_selection_env_large_result() -> None:
     """Test durable_execution selects correct client from environment."""
     mock_lambda_api_client = Mock()
     with (
@@ -450,7 +452,7 @@ async def test_durable_execution_client_selection_env_large_result():
         mock_client.checkpoint.assert_called_once()
 
 
-async def test_durable_execution_with_injected_client_success_normal_result():
+async def test_durable_execution_with_injected_client_success_normal_result() -> None:
     """Test durable_execution uses injected DurableServiceClient for successful execution."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -498,7 +500,7 @@ async def test_durable_execution_with_injected_client_success_normal_result():
     mock_client.checkpoint.assert_not_called()
 
 
-async def test_durable_execution_with_injected_client_success_large_result():
+async def test_durable_execution_with_injected_client_success_large_result() -> None:
     """Test durable_execution uses injected DurableServiceClient for successful execution."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -554,7 +556,7 @@ async def test_durable_execution_with_injected_client_success_large_result():
     assert json.loads(updates[0].payload) == {"result": LARGE_RESULT}
 
 
-async def test_durable_execution_with_injected_client_failure():
+async def test_durable_execution_with_injected_client_failure() -> None:
     """Test durable_execution uses injected DurableServiceClient for failed execution."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -604,7 +606,7 @@ async def test_durable_execution_with_injected_client_failure():
     assert not mock_client.checkpoint.called
 
 
-async def test_durable_execution_with_large_error_payload():
+async def test_durable_execution_with_large_error_payload() -> None:
     """Test that large error payloads trigger checkpoint."""
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
@@ -656,7 +658,7 @@ async def test_durable_execution_with_large_error_payload():
     assert updates[0].error.message == LARGE_RESULT
 
 
-async def test_durable_execution_fatal_error_handling():
+async def test_durable_execution_fatal_error_handling() -> None:
     """Test durable_execution handles FatalError correctly."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -695,7 +697,7 @@ async def test_durable_execution_fatal_error_handling():
         )
 
 
-async def test_durable_execution_execution_error_handling():
+async def test_durable_execution_execution_error_handling() -> None:
     """Test durable_execution handles InvocationError correctly."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -740,7 +742,7 @@ async def test_durable_execution_execution_error_handling():
     assert error_data["ErrorType"] == "ExecutionError"
 
 
-async def test_durable_execution_client_selection_default():
+async def test_durable_execution_client_selection_default() -> None:
     """Test durable_execution selects correct client using default initialization."""
     mock_lambda_api_client = Mock()
     with (
@@ -797,14 +799,16 @@ async def test_durable_execution_client_selection_default():
         mock_lambda_client.assert_called_once_with(client=mock_lambda_api_client)
 
 
-async def test_durable_execution_reuses_default_async_client_on_warm_invocations():
+async def test_durable_execution_reuses_default_async_client_on_warm_invocations() -> (
+    None
+):
     """Test default async clients are cached with the warm handler event loop."""
 
     class StubAsyncLambdaApiClient:
-        async def checkpoint_durable_execution(self, **_kwargs):
+        async def checkpoint_durable_execution(self, **_kwargs) -> Any:
             return {}
 
-        async def get_durable_execution_state(self, **_kwargs):
+        async def get_durable_execution_state(self, **_kwargs) -> Any:
             return {}
 
     class LoopTrackingServiceClient:
@@ -896,7 +900,7 @@ async def test_durable_execution_reuses_default_async_client_on_warm_invocations
         assert not service_client.closed
 
 
-async def test_durable_handler_empty_input_payload():
+async def test_durable_handler_empty_input_payload() -> None:
     """Test durable_handler handles empty input payload correctly."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -936,7 +940,7 @@ async def test_durable_handler_empty_input_payload():
     assert result["Result"] == '{"result": "success"}'
 
 
-async def test_durable_handler_whitespace_input_payload():
+async def test_durable_handler_whitespace_input_payload() -> None:
     """Test durable_handler handles whitespace-only input payload correctly."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -976,7 +980,7 @@ async def test_durable_handler_whitespace_input_payload():
     assert result["Result"] == '{"result": "success"}'
 
 
-async def test_durable_handler_invalid_json_input_payload():
+async def test_durable_handler_invalid_json_input_payload() -> None:
     """Test invalid JSON input payloads fail the invocation with a decode error."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -1016,12 +1020,12 @@ async def test_durable_handler_invalid_json_input_payload():
     assert result["Error"]["ErrorType"] == "JSONDecodeError"
 
 
-async def test_durable_handler_background_thread_failure():
+async def test_durable_handler_background_thread_failure() -> None:
     """Test durable_handler returns FAILED when checkpointing fails."""
     mock_client = Mock(spec=DurableServiceClient)
 
     # Make checkpoint_batches_forever raise an error immediately
-    def failing_checkpoint(*args, **kwargs):
+    def failing_checkpoint(*args, **kwargs) -> NoReturn:
         msg = "Background checkpoint failed"
         raise RuntimeError(msg)
 
@@ -1068,7 +1072,7 @@ async def test_durable_handler_background_thread_failure():
     assert response["Error"]["ErrorType"] == "RuntimeError"
 
 
-async def test_durable_execution_suspend_execution():
+async def test_durable_execution_suspend_execution() -> None:
     """Test durable_execution handles SuspendExecution correctly."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -1109,7 +1113,7 @@ async def test_durable_execution_suspend_execution():
     assert "Error" not in result
 
 
-async def test_durable_execution_checkpoint_error_in_background_thread():
+async def test_durable_execution_checkpoint_error_in_background_thread() -> None:
     """Test durable_execution propagates CheckpointError from background thread.
 
     This test simulates a CheckpointError occurring in the background checkpointing
@@ -1118,7 +1122,7 @@ async def test_durable_execution_checkpoint_error_in_background_thread():
     mock_client = Mock(spec=DurableServiceClient)
 
     # Make the background checkpoint thread fail immediately
-    def failing_checkpoint(*args, **kwargs):
+    def failing_checkpoint(*args, **kwargs) -> NoReturn:
         msg = "Background checkpoint failed"
         raise CheckpointError(msg, error_category=CheckpointErrorCategory.EXECUTION)
 
@@ -1164,7 +1168,7 @@ async def test_durable_execution_checkpoint_error_in_background_thread():
     assert response["Error"]["ErrorType"] == "CheckpointError"
 
 
-async def test_durable_execution_checkpoint_execution_error_stops_background():
+async def test_durable_execution_checkpoint_execution_error_stops_background() -> None:
     """Test that CheckpointError handler stops background checkpointing.
 
     When user code raises CheckpointError, the handler should stop the background
@@ -1208,7 +1212,7 @@ async def test_durable_execution_checkpoint_execution_error_stops_background():
     assert response["Error"]["ErrorType"] == "CheckpointError"
 
 
-async def test_durable_execution_checkpoint_invocation_error_retries():
+async def test_durable_execution_checkpoint_invocation_error_retries() -> None:
     """Test that CheckpointError with INVOCATION category re-raises to trigger Lambda retry."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -1247,11 +1251,13 @@ async def test_durable_execution_checkpoint_invocation_error_retries():
         )
 
 
-async def test_durable_execution_background_thread_execution_error_returns_failed():
+async def test_durable_execution_background_thread_execution_error_returns_failed() -> (
+    None
+):
     """Test that background thread Execution errors return FAILED (permanent, no retry)."""
     mock_client = Mock(spec=DurableServiceClient)
 
-    def failing_checkpoint(*args, **kwargs):
+    def failing_checkpoint(*args, **kwargs) -> NoReturn:
         msg = "Background checkpoint failed"
         raise CheckpointError(msg, error_category=CheckpointErrorCategory.EXECUTION)
 
@@ -1295,11 +1301,11 @@ async def test_durable_execution_background_thread_execution_error_returns_faile
     assert response["Error"]["ErrorType"] == "CheckpointError"
 
 
-async def test_durable_execution_background_thread_invocation_error_retries():
+async def test_durable_execution_background_thread_invocation_error_retries() -> None:
     """Test that background thread Invocation errors re-raise to trigger Lambda retry."""
     mock_client = Mock(spec=DurableServiceClient)
 
-    def failing_checkpoint(*args, **kwargs):
+    def failing_checkpoint(*args, **kwargs) -> NoReturn:
         msg = "Background checkpoint failed"
         raise CheckpointError(msg, error_category=CheckpointErrorCategory.INVOCATION)
 
@@ -1342,11 +1348,13 @@ async def test_durable_execution_background_thread_invocation_error_retries():
         )
 
 
-async def test_durable_execution_final_success_checkpoint_execution_error_returns_failed():
+async def test_durable_execution_final_success_checkpoint_execution_error_returns_failed() -> (
+    None
+):
     """Test that execution errors on final success checkpoint return FAILED (permanent, no retry)."""
     mock_client = Mock(spec=DurableServiceClient)
 
-    def failing_final_checkpoint(*args, **kwargs):
+    def failing_final_checkpoint(*args, **kwargs) -> NoReturn:
         raise CheckpointError(  # noqa TRY003
             "Final checkpoint failed",  # noqa EM101
             error_category=CheckpointErrorCategory.EXECUTION,
@@ -1388,11 +1396,13 @@ async def test_durable_execution_final_success_checkpoint_execution_error_return
     assert response["Error"]["ErrorType"] == "CheckpointError"
 
 
-async def test_durable_execution_final_success_checkpoint_invocation_error_retries():
+async def test_durable_execution_final_success_checkpoint_invocation_error_retries() -> (
+    None
+):
     """Test that invocation errors on final success checkpoint re-raise to trigger Lambda retry."""
     mock_client = Mock(spec=DurableServiceClient)
 
-    def failing_final_checkpoint(*args, **kwargs):
+    def failing_final_checkpoint(*args, **kwargs) -> NoReturn:
         raise CheckpointError(  # noqa TRY003
             "Final checkpoint failed",  # noqa EM101
             error_category=CheckpointErrorCategory.INVOCATION,
@@ -1434,11 +1444,13 @@ async def test_durable_execution_final_success_checkpoint_invocation_error_retri
         )
 
 
-async def test_durable_execution_final_failure_checkpoint_execution_error_returns_failed():
+async def test_durable_execution_final_failure_checkpoint_execution_error_returns_failed() -> (
+    None
+):
     """Test that execution errors on final failure checkpoint return FAILED (permanent, no retry)."""
     mock_client = Mock(spec=DurableServiceClient)
 
-    def failing_final_checkpoint(*args, **kwargs):
+    def failing_final_checkpoint(*args, **kwargs) -> NoReturn:
         raise CheckpointError(  # noqa TRY003
             "Final checkpoint failed",  # noqa EM101
             error_category=CheckpointErrorCategory.EXECUTION,
@@ -1482,11 +1494,13 @@ async def test_durable_execution_final_failure_checkpoint_execution_error_return
     assert response["Error"]["ErrorType"] == "CheckpointError"
 
 
-async def test_durable_execution_final_failure_checkpoint_invocation_error_retries():
+async def test_durable_execution_final_failure_checkpoint_invocation_error_retries() -> (
+    None
+):
     """Test that invocation errors on final failure checkpoint re-raise to trigger Lambda retry."""
     mock_client = Mock(spec=DurableServiceClient)
 
-    def failing_final_checkpoint(*args, **kwargs):
+    def failing_final_checkpoint(*args, **kwargs) -> NoReturn:
         raise CheckpointError(  # noqa TRY003
             "Final checkpoint failed",  # noqa EM101
             error_category=CheckpointErrorCategory.INVOCATION,
@@ -1529,7 +1543,9 @@ async def test_durable_execution_final_failure_checkpoint_invocation_error_retri
         )
 
 
-async def test_durable_handler_background_thread_failure_on_succeed_checkpoint():
+async def test_durable_handler_background_thread_failure_on_succeed_checkpoint() -> (
+    None
+):
     """Test durable_handler handles background thread failure on SUCCEED checkpoint.
 
     This test allows the START checkpoint to succeed but fails on the SUCCEED checkpoint,
@@ -1623,7 +1639,7 @@ async def test_durable_handler_background_thread_failure_on_succeed_checkpoint()
     assert succeed_update.action is OperationAction.SUCCEED
 
 
-async def test_durable_handler_background_thread_failure_on_start_checkpoint():
+async def test_durable_handler_background_thread_failure_on_start_checkpoint() -> None:
     """Test durable_handler handles background thread failure on START checkpoint.
 
     This test fails on the START checkpoint, which should prevent the step from executing
@@ -1723,7 +1739,9 @@ async def test_durable_handler_background_thread_failure_on_start_checkpoint():
     assert len(succeed_updates) == 0
 
 
-async def test_durable_handler_background_thread_failure_on_large_result_checkpoint():
+async def test_durable_handler_background_thread_failure_on_large_result_checkpoint() -> (
+    None
+):
     """Test durable_handler handles background thread failure on large result checkpoint.
 
     This test verifies that when a large result checkpoint fails due to background thread
@@ -1794,7 +1812,7 @@ async def test_durable_handler_background_thread_failure_on_large_result_checkpo
     assert response["Error"]["ErrorType"] == "RuntimeError"
 
 
-async def test_durable_handler_background_thread_failure_on_error_checkpoint():
+async def test_durable_handler_background_thread_failure_on_error_checkpoint() -> None:
     """Test durable_handler handles background thread failure on error checkpoint.
 
     This test verifies that when an error checkpoint fails due to background thread
@@ -1865,7 +1883,10 @@ async def test_durable_handler_background_thread_failure_on_error_checkpoint():
     assert resp["Status"] == InvocationStatus.FAILED.value
 
 
-async def test_durable_execution_logs_checkpoint_error_extras_from_background_thread():
+@no_type_check
+async def test_durable_execution_logs_checkpoint_error_extras_from_background_thread() -> (
+    None
+):
     """Test that CheckpointError extras are logged when raised from background thread."""
     mock_client = Mock(spec=DurableServiceClient)
     mock_logger = Mock()
@@ -1873,7 +1894,7 @@ async def test_durable_execution_logs_checkpoint_error_extras_from_background_th
     error_obj = {"Code": "TestError", "Message": "Test checkpoint error"}
     metadata_obj = {"RequestId": "test-request-id"}
 
-    def failing_checkpoint(*args, **kwargs):
+    def failing_checkpoint(*args, **kwargs) -> NoReturn:
         raise CheckpointError(  # noqa TRY003
             "Checkpoint failed",  # noqa EM101
             error_category=CheckpointErrorCategory.EXECUTION,
@@ -1929,7 +1950,10 @@ async def test_durable_execution_logs_checkpoint_error_extras_from_background_th
     assert first_call[1]["extra"]["ResponseMetadata"] == metadata_obj
 
 
-async def test_durable_execution_logs_boto_client_error_extras_from_background_thread():
+@no_type_check
+async def test_durable_execution_logs_boto_client_error_extras_from_background_thread() -> (
+    None
+):
     """Test that BotoClientError extras are logged when raised from background thread."""
 
     mock_client = Mock(spec=DurableServiceClient)
@@ -1938,7 +1962,7 @@ async def test_durable_execution_logs_boto_client_error_extras_from_background_t
     error_obj = {"Code": "ServiceError", "Message": "Boto3 service error"}
     metadata_obj = {"RequestId": "boto-request-id"}
 
-    def failing_checkpoint(*args, **kwargs):
+    def failing_checkpoint(*args, **kwargs) -> NoReturn:
         raise BotoClientError(  # noqa TRY003
             "Boto3 error",  # noqa EM101
             error=error_obj,
@@ -1996,7 +2020,8 @@ async def test_durable_execution_logs_boto_client_error_extras_from_background_t
     assert "extra" not in call_args[1]
 
 
-async def test_durable_execution_logs_checkpoint_error_extras_from_user_code():
+@no_type_check
+async def test_durable_execution_logs_checkpoint_error_extras_from_user_code() -> None:
     """Test that CheckpointError extras are logged when raised directly from user code."""
     mock_client = Mock(spec=DurableServiceClient)
     mock_logger = Mock()
@@ -2053,7 +2078,8 @@ async def test_durable_execution_logs_checkpoint_error_extras_from_user_code():
     assert call_args[1]["extra"]["ResponseMetadata"] == metadata_obj
 
 
-async def test_durable_execution_with_boto3_client_parameter():
+@no_type_check
+async def test_durable_execution_with_boto3_client_parameter() -> None:
     """Test durable_execution decorator accepts boto3_client parameter."""
     # GIVEN a custom boto3 Lambda client
     mock_boto3_client = Mock()
@@ -2103,7 +2129,8 @@ async def test_durable_execution_with_boto3_client_parameter():
     assert result["Result"] == '{"result": "success"}'
 
 
-async def test_durable_execution_with_service_client_parameter():
+@no_type_check
+async def test_durable_execution_with_service_client_parameter() -> None:
     """Test durable_execution decorator accepts service_client parameter."""
     mock_client = Mock(spec=DurableServiceClient)
 
@@ -2144,7 +2171,7 @@ async def test_durable_execution_with_service_client_parameter():
     assert result["Result"] == '{"result": "success"}'
 
 
-async def test_durable_execution_with_non_durable_payload_raises_error():
+async def test_durable_execution_with_non_durable_payload_raises_error() -> None:
     """Test that invoking a durable function with a regular event raises a helpful error."""
 
     # GIVEN a durable function
@@ -2175,7 +2202,7 @@ async def test_durable_execution_with_non_durable_payload_raises_error():
         await run_handler(test_handler, regular_event, lambda_context)
 
 
-async def test_durable_execution_with_non_dict_event_raises_error():
+async def test_durable_execution_with_non_dict_event_raises_error() -> None:
     """Test that invoking a durable function with a non-dict event raises a helpful error."""
 
     # GIVEN a durable function
@@ -2211,7 +2238,7 @@ async def test_durable_execution_with_non_dict_event_raises_error():
 # =============================================================================
 
 
-async def test_initial_execution_state_to_json_dict_minimal():
+async def test_initial_execution_state_to_json_dict_minimal() -> None:
     """Test InitialExecutionState.to_json_dict with minimal data."""
     operation = Operation(
         operation_id="op1",
@@ -2227,7 +2254,7 @@ async def test_initial_execution_state_to_json_dict_minimal():
     assert result == expected
 
 
-async def test_initial_execution_state_to_json_dict_with_timestamps():
+async def test_initial_execution_state_to_json_dict_with_timestamps() -> None:
     """Test InitialExecutionState.to_json_dict converts datetime objects to millisecond timestamps."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
     end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.timezone.utc)
@@ -2255,7 +2282,7 @@ async def test_initial_execution_state_to_json_dict_with_timestamps():
     assert result["NextMarker"] == "marker123"
 
 
-async def test_initial_execution_state_to_json_dict_empty():
+async def test_initial_execution_state_to_json_dict_empty() -> None:
     """Test InitialExecutionState.to_json_dict with empty operations."""
     state = InitialExecutionState(operations=[], next_marker="")
 
@@ -2265,7 +2292,7 @@ async def test_initial_execution_state_to_json_dict_empty():
     assert result == expected
 
 
-async def test_initial_execution_state_from_json_dict_minimal():
+async def test_initial_execution_state_from_json_dict_minimal() -> None:
     """Test InitialExecutionState.from_json_dict with minimal data."""
     data = {
         "Operations": [
@@ -2287,7 +2314,8 @@ async def test_initial_execution_state_from_json_dict_minimal():
     assert result.operations[0].status is OperationStatus.STARTED
 
 
-async def test_initial_execution_state_from_json_dict_with_timestamps():
+@no_type_check
+async def test_initial_execution_state_from_json_dict_with_timestamps() -> None:
     """Test InitialExecutionState.from_json_dict converts millisecond timestamps to datetime objects."""
     start_ms = 1672574400000  # 2023-01-01 12:00:00 UTC
     end_ms = 1672578000000  # 2023-01-01 13:00:00 UTC
@@ -2320,7 +2348,7 @@ async def test_initial_execution_state_from_json_dict_with_timestamps():
     assert operation.execution_details.input_payload == "test_payload"
 
 
-async def test_initial_execution_state_from_json_dict_no_operations():
+async def test_initial_execution_state_from_json_dict_no_operations() -> None:
     """Test InitialExecutionState.from_json_dict handles missing Operations key."""
     data = {"NextMarker": "test-marker"}
 
@@ -2330,7 +2358,7 @@ async def test_initial_execution_state_from_json_dict_no_operations():
     assert result.next_marker == "test-marker"
 
 
-async def test_initial_execution_state_from_json_dict_empty_operations():
+async def test_initial_execution_state_from_json_dict_empty_operations() -> None:
     """Test InitialExecutionState.from_json_dict handles empty Operations list."""
     data = {"Operations": [], "NextMarker": "test-marker"}
 
@@ -2340,7 +2368,8 @@ async def test_initial_execution_state_from_json_dict_empty_operations():
     assert result.next_marker == "test-marker"
 
 
-async def test_initial_execution_state_json_roundtrip():
+@no_type_check
+async def test_initial_execution_state_json_roundtrip() -> None:
     """Test InitialExecutionState to_json_dict -> from_json_dict roundtrip preserves all data."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
     next_attempt_time = datetime.datetime(
@@ -2401,7 +2430,7 @@ async def test_initial_execution_state_json_roundtrip():
     )
 
 
-async def test_durable_execution_invocation_input_to_json_dict_minimal():
+async def test_durable_execution_invocation_input_to_json_dict_minimal() -> None:
     """Test DurableExecutionInvocationInput.to_json_dict with minimal data."""
     operation = Operation(
         operation_id="exec1",
@@ -2429,7 +2458,9 @@ async def test_durable_execution_invocation_input_to_json_dict_minimal():
     assert result == expected
 
 
-async def test_durable_execution_invocation_input_to_json_dict_with_timestamps():
+async def test_durable_execution_invocation_input_to_json_dict_with_timestamps() -> (
+    None
+):
     """Test DurableExecutionInvocationInput.to_json_dict converts datetime objects to millisecond timestamps."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
     end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.timezone.utc)
@@ -2466,7 +2497,9 @@ async def test_durable_execution_invocation_input_to_json_dict_with_timestamps()
     assert result["CheckpointToken"] == "token123"
 
 
-async def test_durable_execution_invocation_input_to_json_dict_empty_operations():
+async def test_durable_execution_invocation_input_to_json_dict_empty_operations() -> (
+    None
+):
     """Test DurableExecutionInvocationInput.to_json_dict with empty operations."""
     initial_state = InitialExecutionState(operations=[], next_marker="")
 
@@ -2486,7 +2519,7 @@ async def test_durable_execution_invocation_input_to_json_dict_empty_operations(
     assert result == expected
 
 
-async def test_durable_execution_invocation_input_from_json_dict_minimal():
+async def test_durable_execution_invocation_input_from_json_dict_minimal() -> None:
     """Test DurableExecutionInvocationInput.from_json_dict with minimal data."""
     data = {
         "DurableExecutionArn": "arn:test:execution/exec1",
@@ -2513,7 +2546,10 @@ async def test_durable_execution_invocation_input_from_json_dict_minimal():
     assert result.initial_execution_state.operations[0].operation_id == "exec1"
 
 
-async def test_durable_execution_invocation_input_from_json_dict_with_timestamps():
+@no_type_check
+async def test_durable_execution_invocation_input_from_json_dict_with_timestamps() -> (
+    None
+):
     """Test DurableExecutionInvocationInput.from_json_dict converts millisecond timestamps to datetime objects."""
     start_ms = 1672574400000  # 2023-01-01 12:00:00 UTC
     end_ms = 1672578000000  # 2023-01-01 13:00:00 UTC
@@ -2549,7 +2585,9 @@ async def test_durable_execution_invocation_input_from_json_dict_with_timestamps
     assert operation.execution_details.input_payload == "test_payload"
 
 
-async def test_durable_execution_invocation_input_from_json_dict_empty_initial_state():
+async def test_durable_execution_invocation_input_from_json_dict_empty_initial_state() -> (
+    None
+):
     """Test DurableExecutionInvocationInput.from_json_dict handles missing InitialExecutionState."""
     data = {
         "DurableExecutionArn": "arn:test:execution/exec1",
@@ -2565,7 +2603,8 @@ async def test_durable_execution_invocation_input_from_json_dict_empty_initial_s
     assert not result.initial_execution_state.next_marker
 
 
-async def test_durable_execution_invocation_input_json_roundtrip():
+@no_type_check
+async def test_durable_execution_invocation_input_json_roundtrip() -> None:
     """Test DurableExecutionInvocationInput to_json_dict -> from_json_dict roundtrip preserves all data."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
     end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.timezone.utc)
@@ -2678,7 +2717,9 @@ async def test_durable_execution_invocation_input_json_roundtrip():
     )
 
 
-async def test_durable_execution_invocation_input_json_dict_preserves_non_timestamp_fields():
+async def test_durable_execution_invocation_input_json_dict_preserves_non_timestamp_fields() -> (
+    None
+):
     """Test that to_json_dict preserves all non-timestamp fields unchanged."""
 
     context_details = ContextDetails(replay_children=True, result="context_result")
@@ -2723,7 +2764,7 @@ async def test_durable_execution_invocation_input_json_dict_preserves_non_timest
     assert result["InitialExecutionState"]["NextMarker"] == "marker123"
 
 
-async def test_event_parsing_with_unix_millis_timestamps():
+async def test_event_parsing_with_unix_millis_timestamps() -> None:
     """Test that event parsing converts Unix millis timestamps to datetime objects.
 
     This reproduces the production bug where NextAttemptTimestamp was sent as
@@ -2803,7 +2844,7 @@ async def test_event_parsing_with_unix_millis_timestamps():
     assert isinstance(scheduled_end < now or scheduled_end >= now, bool)
 
 
-async def test_from_dict_leaves_timestamps_as_integers():
+async def test_from_dict_leaves_timestamps_as_integers() -> None:
     """Test that from_dict (the bug) leaves timestamps as integers.
 
     This demonstrates the bug behavior for documentation purposes.
@@ -2871,7 +2912,7 @@ async def test_from_dict_leaves_timestamps_as_integers():
 # =============================================================================
 
 
-def _make_invocation_input(next_marker=""):
+def _make_invocation_input(next_marker="") -> Any:
     """Helper to create a standard test invocation input."""
     operation = Operation(
         operation_id="exec1",
@@ -2888,7 +2929,7 @@ def _make_invocation_input(next_marker=""):
     )
 
 
-def _make_lambda_context():
+def _make_lambda_context() -> Any:
     """Helper to create a standard mock Lambda context."""
     ctx = Mock()
     ctx.aws_request_id = "test-request"
@@ -2900,7 +2941,9 @@ def _make_lambda_context():
     return ctx
 
 
-async def test_durable_execution_replays_when_paginated_state_has_prior_operations():
+async def test_durable_execution_replays_when_paginated_state_has_prior_operations() -> (
+    None
+):
     """Test paginated execution state starts in replay mode when prior operations exist."""
     mock_client = Mock(spec=DurableServiceClient)
     step_operation = Operation(
@@ -2937,7 +2980,9 @@ async def test_durable_execution_replays_when_paginated_state_has_prior_operatio
     )
 
 
-async def test_durable_execution_non_retryable_invocation_error_returns_failed():
+async def test_durable_execution_non_retryable_invocation_error_returns_failed() -> (
+    None
+):
     """Test that non-retryable InvocationError returns FAILED instead of retrying."""
     mock_client = Mock(spec=DurableServiceClient)
     non_retryable_error = GetExecutionStateError(
@@ -2961,7 +3006,7 @@ async def test_durable_execution_non_retryable_invocation_error_returns_failed()
     assert result["Error"]["ErrorType"] == "GetExecutionStateError"
 
 
-async def test_durable_execution_retryable_invocation_error_raises():
+async def test_durable_execution_retryable_invocation_error_raises() -> None:
     """Test that retryable InvocationError raises to trigger Lambda retry."""
     mock_client = Mock(spec=DurableServiceClient)
     retryable_error = GetExecutionStateError(
@@ -2983,7 +3028,9 @@ async def test_durable_execution_retryable_invocation_error_raises():
         )
 
 
-async def test_durable_execution_non_retryable_background_thread_error_returns_failed():
+async def test_durable_execution_non_retryable_background_thread_error_returns_failed() -> (
+    None
+):
     """Test that non-retryable error from background thread returns FAILED."""
     mock_client = Mock(spec=DurableServiceClient)
     non_retryable_error = GetExecutionStateError(
@@ -3023,7 +3070,7 @@ async def test_durable_execution_non_retryable_background_thread_error_returns_f
 )
 async def test_durable_execution_non_retryable_initial_pagination_error_returns_failed(
     error_code: str, status_code: int, error_category: DurableApiErrorCategory
-):
+) -> None:
     """Test that non-retryable errors during initial pagination return FAILED."""
     mock_client = Mock(spec=DurableServiceClient)
     non_retryable_error = GetExecutionStateError(
@@ -3048,7 +3095,7 @@ async def test_durable_execution_non_retryable_initial_pagination_error_returns_
     assert result["Error"]["ErrorType"] == "GetExecutionStateError"
 
 
-async def test_durable_execution_retryable_initial_pagination_error_raises():
+async def test_durable_execution_retryable_initial_pagination_error_raises() -> None:
     """Test that retryable error during initial pagination raises to trigger Lambda retry."""
     mock_client = Mock(spec=DurableServiceClient)
     retryable_error = GetExecutionStateError(
@@ -3071,7 +3118,7 @@ async def test_durable_execution_retryable_initial_pagination_error_raises():
         )
 
 
-async def test_durable_execution_supports_async_handler():
+async def test_durable_execution_supports_async_handler() -> None:
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
@@ -3096,7 +3143,9 @@ async def test_durable_execution_supports_async_handler():
     assert json.loads(result["Result"]) == {"result": "async-success"}
 
 
-async def test_durable_execution_handler_can_use_get_current_context_without_parameter():
+async def test_durable_execution_handler_can_use_get_current_context_without_parameter() -> (
+    None
+):
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
@@ -3130,7 +3179,9 @@ async def test_durable_execution_handler_can_use_get_current_context_without_par
     }
 
 
-async def test_durable_execution_handler_can_access_lambda_context_from_current_context():
+async def test_durable_execution_handler_can_access_lambda_context_from_current_context() -> (
+    None
+):
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
@@ -3165,7 +3216,7 @@ async def test_durable_execution_handler_can_access_lambda_context_from_current_
     }
 
 
-async def test_durable_execution_supports_async_steps_inside_async_handler():
+async def test_durable_execution_supports_async_steps_inside_async_handler() -> None:
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
         checkpoint_token="new_token",  # noqa: S106
@@ -3194,7 +3245,7 @@ async def test_durable_execution_supports_async_steps_inside_async_handler():
     assert json.loads(result["Result"]) == {"step_result": "async-step-success"}
 
 
-def create_mock_checkpoint_with_operations():
+def create_mock_checkpoint_with_operations() -> Any:
     """Create a mock checkpoint function that properly tracks operations.
 
     Returns a tuple of (mock_checkpoint_function, checkpoint_calls_list).
@@ -3214,7 +3265,7 @@ def create_mock_checkpoint_with_operations():
         checkpoint_token,
         updates,
         client_token="token",  # noqa: S107
-    ):
+    ) -> Any:
         checkpoint_calls.append(updates)
 
         # Convert updates to Operation objects and add to operations list
@@ -3237,7 +3288,7 @@ def create_mock_checkpoint_with_operations():
     return mock_checkpoint, checkpoint_calls
 
 
-async def test_step_different_ways_to_pass_args():
+async def test_step_different_ways_to_pass_args() -> None:
     async def step_plain() -> str:
         return "from step plain"
 
@@ -3282,7 +3333,7 @@ async def test_step_different_ways_to_pass_args():
             checkpoint_token,
             updates,
             client_token="token",  # noqa: S107
-        ):
+        ) -> Any:
             checkpoint_calls.append(updates)
 
             return CheckpointOutput(
@@ -3340,7 +3391,7 @@ async def test_step_different_ways_to_pass_args():
         assert last_checkpoint.payload == '"from step plain"'
 
 
-async def test_durable_callable_decorator_creates_step_operation():
+async def test_durable_callable_decorator_creates_step_operation() -> None:
     @durable_callable
     async def decorated_step(status_code: int) -> str:
         assert get_current_context() is not None
@@ -3365,7 +3416,7 @@ async def test_durable_callable_decorator_creates_step_operation():
             checkpoint_token,
             updates,
             client_token="token",  # noqa: S107
-        ):
+        ) -> Any:
             checkpoint_calls.append(updates)
 
             return CheckpointOutput(
@@ -3411,14 +3462,14 @@ async def test_durable_callable_decorator_creates_step_operation():
         assert all_operations[1].name == "decorated_step"
 
 
-async def test_step_with_logger():
+async def test_step_with_logger() -> None:
     async def mystep(a: int, b: str) -> str:
         assert get_current_context() is not None
         logging.getLogger(__name__).info("from step %s %s", a, b)
         return "result"
 
     @durable_execution
-    async def my_handler(event):
+    async def my_handler(event) -> None:
         del event
         result: str = await step(partial(mystep, a=123, b="str"))
         assert result == "result"
@@ -3440,7 +3491,7 @@ async def test_step_with_logger():
             checkpoint_token,
             updates,
             client_token="token",  # noqa: S107
-        ):
+        ) -> Any:
             checkpoint_calls.append(updates)
 
             return CheckpointOutput(
@@ -3500,18 +3551,18 @@ async def test_step_with_logger():
         assert succeed_op.operation_id == start_op.operation_id
 
 
-async def test_wait_inside_run_in_childcontext():
+async def test_wait_inside_run_in_childcontext() -> None:
     """A wait inside a child context should suspend the execution."""
 
     mock_inside_child = Mock()
 
-    async def func(a: int, b: int):
+    async def func(a: int, b: int) -> None:
         child_context = cast(DurableContext, get_current_context())
         mock_inside_child(a, b)
         await wait(timedelta(seconds=1))
 
     @durable_execution
-    async def my_handler(event):
+    async def my_handler(event) -> None:
         del event
         await run_in_child_context(partial(func, 10, 20), name="func")
 
@@ -3589,7 +3640,7 @@ class CustomError(Exception):
     """Custom exception for testing."""
 
 
-async def test_step_checkpoint_failure_propagates_error():
+async def test_step_checkpoint_failure_propagates_error() -> None:
     """Test that errors during checkpoint invocation propagate correctly from background thread.
 
     This test demonstrates a bug: when a checkpoint fails in the background thread,
@@ -3602,7 +3653,7 @@ async def test_step_checkpoint_failure_propagates_error():
         return "this should checkpoint but fail"
 
     @durable_execution
-    async def my_handler(event):
+    async def my_handler(event) -> Any:
         del event
         # This step will trigger a checkpoint that fails
         result: str = await step(failing_step)
@@ -3620,7 +3671,7 @@ async def test_step_checkpoint_failure_propagates_error():
             checkpoint_token,
             updates,
             client_token="token",  # noqa: S107
-        ):
+        ) -> NoReturn:
             # Simulate a failure during checkpoint invocation
             msg = "Checkpoint service unavailable"
             raise RuntimeError(msg)
@@ -3661,11 +3712,11 @@ async def test_step_checkpoint_failure_propagates_error():
         assert result["Error"]["ErrorMessage"] == "Checkpoint service unavailable"
 
 
-async def test_wait_not_caught_by_exception():
+async def test_wait_not_caught_by_exception() -> None:
     """Do not catch Suspend exceptions."""
 
     @durable_execution
-    async def my_handler(event: Any):
+    async def my_handler(event: Any) -> None:
         del event
         try:
             await wait(timedelta(seconds=1))
@@ -3728,13 +3779,14 @@ async def test_wait_not_caught_by_exception():
         assert checkpoint.wait_options.wait_seconds == 1
 
 
-async def test_durable_callable_wait_for_callback_submitter():
+@no_type_check
+async def test_durable_callable_wait_for_callback_submitter() -> None:
     """Test durable_callable submitter uses callback_id from current context."""
 
     mock_submitter = Mock()
 
     @durable_callable
-    async def submit_to_external_system(task_name, priority):
+    async def submit_to_external_system(task_name, priority) -> None:
         callback_context = get_current_context()
         callback_id = callback_context.callback_id
         mock_submitter(callback_id, task_name, priority)
@@ -3743,7 +3795,7 @@ async def test_durable_callable_wait_for_callback_submitter():
         )
 
     @durable_execution
-    async def my_handler(event):
+    async def my_handler(event) -> None:
         del event
         await wait_for_callback(submit_to_external_system("my_task", priority=5))
 
@@ -3760,7 +3812,7 @@ async def test_durable_callable_wait_for_callback_submitter():
             checkpoint_token,
             updates,
             client_token="token",  # noqa: S107
-        ):
+        ) -> Any:
             checkpoint_calls.append(updates)
 
             # For CALLBACK operations, return the operation with callback details
@@ -3850,7 +3902,7 @@ async def test_durable_callable_wait_for_callback_submitter():
         assert call_args[2] == 5
 
 
-async def test_end_to_end_step_operation_with_double_check():
+async def test_end_to_end_step_operation_with_double_check() -> None:
     """Test end-to-end step operation execution with double-check pattern.
 
     Verifies that the step executor re-checks state after creating a synchronous
@@ -3909,7 +3961,7 @@ async def test_end_to_end_step_operation_with_double_check():
         assert len(all_operations) == 2
 
 
-async def test_end_to_end_multiple_operations_execute_sequentially():
+async def test_end_to_end_multiple_operations_execute_sequentially() -> None:
     """Test end-to-end execution with multiple operations.
 
     Verifies that multiple operations in a workflow execute correctly
@@ -3970,7 +4022,7 @@ async def test_end_to_end_multiple_operations_execute_sequentially():
         assert len(all_operations) == 4
 
 
-async def test_end_to_end_wait_operation_with_double_check():
+async def test_end_to_end_wait_operation_with_double_check() -> None:
     """Test end-to-end wait operation execution with double-check pattern.
 
     Verifies that wait operations properly use the double-check pattern
@@ -4026,7 +4078,7 @@ async def test_end_to_end_wait_operation_with_double_check():
         assert len(all_operations) >= 1
 
 
-async def test_end_to_end_checkpoint_synchronization_with_operations_list():
+async def test_end_to_end_checkpoint_synchronization_with_operations_list() -> None:
     """Test that synchronous checkpoints properly update operations list.
 
     Verifies that when is_sync=True, the operations list is updated
@@ -4083,7 +4135,7 @@ async def test_end_to_end_checkpoint_synchronization_with_operations_list():
         assert len(all_operations) >= 2  # At least START and SUCCEED
 
 
-async def test_callback_deferred_error_handling_to_result():
+async def test_callback_deferred_error_handling_to_result() -> None:
     """Test callback deferred error handling pattern.
 
     Verifies that callback operations properly return callback_id through
@@ -4124,7 +4176,7 @@ async def test_callback_deferred_error_handling_to_result():
             checkpoint_token,
             updates,
             client_token="token",  # noqa: S107
-        ):
+        ) -> Any:
             checkpoint_calls.append(updates)
 
             # Add operations with proper details
@@ -4189,7 +4241,7 @@ async def test_callback_deferred_error_handling_to_result():
         assert "code_executed_after_callback" in result["Result"]
 
 
-async def test_end_to_end_invoke_operation_with_double_check():
+async def test_end_to_end_invoke_operation_with_double_check() -> None:
     """Test end-to-end invoke operation execution with double-check pattern.
 
     Verifies that invoke operations properly use the double-check pattern
@@ -4197,7 +4249,7 @@ async def test_end_to_end_invoke_operation_with_double_check():
     """
 
     @durable_execution
-    async def my_handler(event):
+    async def my_handler(event) -> None:
         await invoke("my-function", {"data": "test"})
 
     with patch(
@@ -4244,7 +4296,7 @@ async def test_end_to_end_invoke_operation_with_double_check():
         assert len(all_operations) >= 1
 
 
-async def test_end_to_end_child_context_with_async_checkpoint():
+async def test_end_to_end_child_context_with_async_checkpoint() -> None:
     """Test end-to-end child context execution with async checkpoint.
 
     Verifies that child context operations use async checkpoint (is_sync=False)
@@ -4304,7 +4356,7 @@ async def test_end_to_end_child_context_with_async_checkpoint():
         assert len(all_operations) == 2
 
 
-async def test_end_to_end_child_context_replay_children_mode():
+async def test_end_to_end_child_context_replay_children_mode() -> None:
     """Test end-to-end child context with large payload and ReplayChildren mode.
 
     Verifies that child context with large result (>256KB) triggers replay_children mode,
@@ -4348,7 +4400,7 @@ async def test_end_to_end_child_context_replay_children_mode():
             checkpoint_token,
             updates,
             client_token="token",  # noqa: S107
-        ):
+        ) -> Any:
             checkpoint_calls.append(updates)
 
             for update in updates:
@@ -4411,7 +4463,7 @@ async def test_end_to_end_child_context_replay_children_mode():
         assert succeed_updates[0].context_options.replay_children is True
 
 
-async def test_end_to_end_child_context_error_handling():
+async def test_end_to_end_child_context_error_handling() -> None:
     """Test end-to-end child context error handling.
 
     Verifies that child context that raises exception creates FAIL checkpoint
@@ -4477,7 +4529,9 @@ async def test_end_to_end_child_context_error_handling():
         assert len(fail_updates) == 1
 
 
-async def test_end_to_end_child_context_retryable_invocation_error_not_checkpointed():
+async def test_end_to_end_child_context_retryable_invocation_error_not_checkpointed() -> (
+    None
+):
     """Test end-to-end child context InvocationError re-raising.
 
     A retryable InvocationError must not create a terminal child checkpoint, so

@@ -33,7 +33,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, Generic, Protocol, TypeVar, cast
 
-from .context import bind_current_context, get_current_context
+from .context import SerDesContext, bind_current_context, get_current_context
 from .exceptions import (
     DurableExecutionsError,
     ExecutionError,
@@ -218,7 +218,7 @@ class ContainerCodec(Codec):
         self._dispatcher = dispatcher
 
     @property
-    def dispatcher(self):
+    def dispatcher(self) -> TypeCodec:
         """Get the dispatcher, raising error if not set."""
         if self._dispatcher is None:
             msg = "ContainerCodec not linked to a TypeCodec dispatcher."
@@ -296,7 +296,7 @@ class TypeCodec(Codec):
     def __init__(
         self,
         extensions: tuple[TypeCodecExtension, ...] = (),
-    ):
+    ) -> None:
         built_in_tags = {tag.value for tag in TypeTag}
         extension_tags = [extension.tag for extension in extensions]
         if len(extension_tags) != len(set(extension_tags)):
@@ -382,17 +382,6 @@ class TypeCodec(Codec):
 TYPE_CODEC = TypeCodec()
 
 
-@dataclass(frozen=True)
-class SerDesContext:
-    """Context for serialization operations."""
-
-    operation_id: str = ""
-
-    durable_execution_arn: str = ""
-
-    recursive_level: int = 0
-
-
 def get_serdes_context() -> SerDesContext:
     """Return the active `SerDesContext`."""
     current_context = get_current_context()
@@ -454,7 +443,7 @@ class ExtendedTypeSerDes(SerDes[T]):
     def __init__(
         self,
         type_codecs: tuple[TypeCodecExtension, ...] = (),
-    ):
+    ) -> None:
         self._codec = TypeCodec(type_codecs) if type_codecs else TYPE_CODEC
 
     async def serialize(self, value: Any) -> str:

@@ -4,7 +4,7 @@ from async_durable_execution import InvocationStatus
 from examples.step import step
 
 
-async def test_step(durable_runner):
+async def test_step(durable_runner) -> None:
     """Test basic step example."""
     async with durable_runner(handler=step.handler, input="test", timeout=10) as runner:
         result = await runner.run()

@@ -6,7 +6,7 @@ from async_durable_execution import InvocationStatus
 from examples.callback import callback_concurrency
 
 
-async def test_handle_multiple_concurrent_callback_operations(durable_runner):
+async def test_handle_multiple_concurrent_callback_operations(durable_runner) -> None:
     """Test handling multiple concurrent callback operations."""
     async with durable_runner(
         handler=callback_concurrency.handler, input=None, timeout=60

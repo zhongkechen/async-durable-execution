@@ -67,7 +67,7 @@ def _error_object_from_exception(
 class StepInterruptedError(InvocationError):
     """Raised when a step is interrupted before it checkpointed at the end."""
 
-    def __init__(self, message: str, step_id: str | None = None):
+    def __init__(self, message: str, step_id: str | None = None) -> None:
         super().__init__(message, TerminationReason.STEP_INTERRUPTED)
         self.step_id = step_id
 
@@ -90,7 +90,7 @@ class StepOperationExecutor(OperationExecutor[T]):
         retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
         step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
         serdes: SerDes | None = None,
-    ):
+    ) -> None:
         """Initialize the step operation executor.
 
         Args:
@@ -256,7 +256,7 @@ class StepOperationExecutor(OperationExecutor[T]):
         self,
         error: Exception,
         operation: Operation | None,
-    ):
+    ) -> None:
         """Checkpoint and suspend for replay if retry required, otherwise raise error.
 
         Args:

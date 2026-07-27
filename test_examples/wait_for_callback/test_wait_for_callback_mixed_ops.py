@@ -10,7 +10,7 @@ from examples.wait_for_callback import (
 
 async def test_handle_wait_for_callback_mixed_with_steps_waits_and_other_operations(
     durable_runner,
-):
+) -> None:
     """Test waitForCallback mixed with steps, waits, and other operations."""
     async with durable_runner(
         handler=wait_for_callback_mixed_ops.handler, input=None, timeout=30

@@ -4,7 +4,7 @@ from async_durable_execution._runner.local.execution import Execution
 from async_durable_execution._runner.local.model import StartDurableExecutionInput
 
 
-def test_checkpoint_token_generation_sequence():
+def test_checkpoint_token_generation_sequence() -> None:
     """Test checkpoint tokens are generated sequentially."""
     input_data = StartDurableExecutionInput(
         account_id="123456789012",
@@ -26,7 +26,7 @@ def test_checkpoint_token_generation_sequence():
     assert execution.token_sequence == 20
 
 
-def test_operations_modification_sequence():
+def test_operations_modification_sequence() -> None:
     """Test operations can be updated and read in the local runner thread."""
     input_data = StartDurableExecutionInput(
         account_id="123456789012",

@@ -9,7 +9,7 @@ from async_durable_execution import durable_execution, wait_for_condition
 async def handler(event: Any) -> int:
     threshold = int(event)
 
-    async def check(state: int | None):
+    async def check(state: int | None) -> int:
         return (state or 0) + 1
 
     return await wait_for_condition(

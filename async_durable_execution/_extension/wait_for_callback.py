@@ -45,7 +45,7 @@ async def wait_for_callback_handler(
         serdes=serdes,
     )
 
-    async def submitter_step():
+    async def submitter_step() -> Any:
         step_context = get_step_context()
         callback_context = WaitForCallbackContext(
             callback_id=callback.callback_id,

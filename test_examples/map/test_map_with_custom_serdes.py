@@ -5,7 +5,7 @@ from async_durable_execution import OperationStatus
 from examples.map import map_with_custom_serdes
 
 
-async def test_map_with_custom_serdes(durable_runner):
+async def test_map_with_custom_serdes(durable_runner) -> None:
     """Test map with custom item serialization."""
     async with durable_runner(
         handler=map_with_custom_serdes.handler, input="test", timeout=10

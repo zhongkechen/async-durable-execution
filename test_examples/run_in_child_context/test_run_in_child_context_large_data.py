@@ -8,7 +8,7 @@ from examples.run_in_child_context import (
 
 async def test_handle_large_data_exceeding_256k_limit_using_run_in_child_context(
     durable_runner,
-):
+) -> None:
     """Test handling large data exceeding 256k limit using runInChildContext."""
     async with durable_runner(
         handler=run_in_child_context_large_data.handler, input=None, timeout=30

@@ -4,7 +4,7 @@ from async_durable_execution import InvocationStatus
 from examples.block_example import block_example
 
 
-async def test_block_example(durable_runner):
+async def test_block_example(durable_runner) -> None:
     """Test block example with nested child contexts."""
     async with durable_runner(
         handler=block_example.handler, input="test", timeout=10

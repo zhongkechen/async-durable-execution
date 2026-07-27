@@ -3,6 +3,10 @@
 This module tests all the event creation factory methods in the Event class.
 """
 
+from typing import no_type_check
+
+from typing import Any
+
 from datetime import datetime, timezone
 from unittest.mock import Mock
 
@@ -46,7 +50,7 @@ def create_mock_operation(
     name: str = "test_op",
     parent_id=None,
     status: OperationStatus = OperationStatus.STARTED,
-):
+) -> Any:
     from unittest.mock import Mock
 
     op = Mock()
@@ -57,7 +61,8 @@ def create_mock_operation(
     return op
 
 
-def test_create_execution_started():
+@no_type_check
+def test_create_execution_started() -> None:
     from unittest.mock import Mock
 
     from async_durable_execution._core.models import ExecutionDetails
@@ -95,7 +100,8 @@ def test_create_execution_started():
     assert event.execution_started_details.execution_timeout == 300
 
 
-def test_create_execution_succeeded():
+@no_type_check
+def test_create_execution_succeeded() -> None:
     from async_durable_execution._core.execution import (
         DurableExecutionInvocationOutput,
         InvocationStatus,
@@ -128,7 +134,8 @@ def test_create_execution_succeeded():
     assert event.execution_succeeded_details.result.payload == '{"result": "success"}'
 
 
-def test_create_execution_failed():
+@no_type_check
+def test_create_execution_failed() -> None:
     from async_durable_execution._core.execution import (
         DurableExecutionInvocationOutput,
         InvocationStatus,
@@ -162,7 +169,8 @@ def test_create_execution_failed():
     assert event.execution_failed_details.error.payload.message == "Execution failed"
 
 
-def test_create_execution_timed_out():
+@no_type_check
+def test_create_execution_timed_out() -> None:
     from async_durable_execution._core.execution import (
         DurableExecutionInvocationOutput,
         InvocationStatus,
@@ -198,7 +206,8 @@ def test_create_execution_timed_out():
     )
 
 
-def test_create_execution_stopped():
+@no_type_check
+def test_create_execution_stopped() -> None:
     from async_durable_execution._core.execution import (
         DurableExecutionInvocationOutput,
         InvocationStatus,
@@ -232,7 +241,7 @@ def test_create_execution_stopped():
     assert event.execution_stopped_details.error.payload.message == "Execution stopped"
 
 
-def test_create_execution_invalid_status():
+def test_create_execution_invalid_status() -> None:
     operation = create_mock_operation("op-1", status=OperationStatus.CANCELLED)
     context = EventCreationContext.create(
         operation=operation,
@@ -254,7 +263,7 @@ def test_create_execution_invalid_status():
         Event.create_execution_event(context)
 
 
-def test_create_context_started():
+def test_create_context_started() -> None:
     operation = create_mock_operation(
         "ctx-1", "test_context", status=OperationStatus.STARTED
     )
@@ -279,7 +288,8 @@ def test_create_context_started():
     assert event.context_started_details is not None
 
 
-def test_create_context_succeeded():
+@no_type_check
+def test_create_context_succeeded() -> None:
     operation = create_mock_operation("ctx-1", status=OperationStatus.SUCCEEDED)
     operation.context_details = type(
         "MockDetails", (), {"result": '{"context": "result"}', "error": None}
@@ -304,7 +314,8 @@ def test_create_context_succeeded():
     assert event.context_succeeded_details.result.payload == '{"context": "result"}'
 
 
-def test_create_context_failed():
+@no_type_check
+def test_create_context_failed() -> None:
     operation = create_mock_operation("ctx-1", status=OperationStatus.FAILED)
     error_obj = ErrorObject.from_message("Context failed")
     operation.context_details = type(
@@ -329,7 +340,7 @@ def test_create_context_failed():
     assert event.context_failed_details.error.payload.message == "Context failed"
 
 
-def test_create_context_invalid_status():
+def test_create_context_invalid_status() -> None:
     operation = create_mock_operation("ctx-1", status=OperationStatus.TIMED_OUT)
     context = EventCreationContext.create(
         operation=operation,
@@ -351,7 +362,8 @@ def test_create_context_invalid_status():
         Event.create_context_event(context)
 
 
-def test_create_wait_started():
+@no_type_check
+def test_create_wait_started() -> None:
     operation = create_mock_operation("wait-1", status=OperationStatus.STARTED)
     operation.start_timestamp = parse_utc_datetime("2024-01-01T12:00:00Z")
     operation.wait_details = type(
@@ -381,7 +393,8 @@ def test_create_wait_started():
     )
 
 
-def test_create_wait_succeeded():
+@no_type_check
+def test_create_wait_succeeded() -> None:
     operation = create_mock_operation("wait-1", status=OperationStatus.SUCCEEDED)
     operation.start_timestamp = parse_utc_datetime("2024-01-01T12:00:00Z")
     operation.wait_details = type(
@@ -408,7 +421,7 @@ def test_create_wait_succeeded():
     assert event.wait_succeeded_details.duration == 300
 
 
-def test_create_wait_cancelled():
+def test_create_wait_cancelled() -> None:
     operation = create_mock_operation("wait-1", status=OperationStatus.CANCELLED)
     operation.wait_details = None
     mock_operation_update = Mock()
@@ -434,7 +447,7 @@ def test_create_wait_cancelled():
     assert event.wait_cancelled_details is not None
 
 
-def test_create_wait_invalid_status():
+def test_create_wait_invalid_status() -> None:
     operation = create_mock_operation("wait-1", status=OperationStatus.FAILED)
     operation.wait_details.scheduled_end_timestamp = operation.start_timestamp = (
         parse_utc_datetime("2024-01-01T12:00:00Z")
@@ -459,7 +472,7 @@ def test_create_wait_invalid_status():
         Event.create_wait_event(context)
 
 
-def test_create_step_started():
+def test_create_step_started() -> None:
     operation = create_mock_operation(
         "step-1", "test_step", status=OperationStatus.STARTED
     )
@@ -484,7 +497,8 @@ def test_create_step_started():
     assert event.step_started_details is not None
 
 
-def test_create_step_succeeded():
+@no_type_check
+def test_create_step_succeeded() -> None:
     operation = create_mock_operation("step-1", status=OperationStatus.SUCCEEDED)
     operation.step_details = type(
         "MockDetails", (), {"result": '{"step": "result"}', "error": None}
@@ -509,7 +523,8 @@ def test_create_step_succeeded():
     assert event.step_succeeded_details.result.payload == '{"step": "result"}'
 
 
-def test_create_step_failed():
+@no_type_check
+def test_create_step_failed() -> None:
     operation = create_mock_operation("step-1", status=OperationStatus.FAILED)
     error_obj = ErrorObject.from_message("Step failed")
     operation.step_details = type(
@@ -534,7 +549,7 @@ def test_create_step_failed():
     assert event.step_failed_details.error.payload.message == "Step failed"
 
 
-def test_create_step_invalid_status():
+def test_create_step_invalid_status() -> None:
     operation = create_mock_operation("step-1", status=OperationStatus.TIMED_OUT)
     context = EventCreationContext.create(
         operation=operation,
@@ -556,7 +571,7 @@ def test_create_step_invalid_status():
         Event.create_step_event(context)
 
 
-def test_create_chained_invoke_started():
+def test_create_chained_invoke_started() -> None:
     operation = create_mock_operation(
         "invoke-1", "test_invoke", status=OperationStatus.STARTED
     )
@@ -581,7 +596,8 @@ def test_create_chained_invoke_started():
     assert event.chained_invoke_started_details is not None
 
 
-def test_create_chained_invoke_succeeded():
+@no_type_check
+def test_create_chained_invoke_succeeded() -> None:
     operation = create_mock_operation("invoke-1", status=OperationStatus.SUCCEEDED)
     operation.chained_invoke_details = type(
         "MockDetails", (), {"result": '{"invoke": "result"}', "error": None}
@@ -608,7 +624,8 @@ def test_create_chained_invoke_succeeded():
     )
 
 
-def test_create_chained_invoke_failed():
+@no_type_check
+def test_create_chained_invoke_failed() -> None:
     operation = create_mock_operation("invoke-1", status=OperationStatus.FAILED)
     error_obj = ErrorObject.from_message("Invoke failed")
     operation.chained_invoke_details = type(
@@ -633,7 +650,8 @@ def test_create_chained_invoke_failed():
     assert event.chained_invoke_failed_details.error.payload.message == "Invoke failed"
 
 
-def test_create_chained_invoke_timed_out():
+@no_type_check
+def test_create_chained_invoke_timed_out() -> None:
     operation = create_mock_operation("invoke-1", status=OperationStatus.TIMED_OUT)
     error_obj = ErrorObject.from_message("Invoke timed out")
     operation.chained_invoke_details = type(
@@ -661,7 +679,8 @@ def test_create_chained_invoke_timed_out():
     )
 
 
-def test_create_chained_invoke_stopped():
+@no_type_check
+def test_create_chained_invoke_stopped() -> None:
     operation = create_mock_operation("invoke-1", status=OperationStatus.STOPPED)
     error_obj = ErrorObject.from_message("Invoke stopped")
     operation.chained_invoke_details = type(
@@ -688,7 +707,7 @@ def test_create_chained_invoke_stopped():
     )
 
 
-def test_create_chained_invoke_invalid_status():
+def test_create_chained_invoke_invalid_status() -> None:
     operation = create_mock_operation("invoke-1", status=OperationStatus.CANCELLED)
     context = EventCreationContext.create(
         operation=operation,
@@ -710,7 +729,8 @@ def test_create_chained_invoke_invalid_status():
         Event.create_chained_invoke_event(context)
 
 
-def test_create_callback_started():
+@no_type_check
+def test_create_callback_started() -> None:
     operation = create_mock_operation(
         "callback-1", "test_callback", status=OperationStatus.STARTED
     )
@@ -738,7 +758,8 @@ def test_create_callback_started():
     assert event.callback_started_details.callback_id == "cb-123"
 
 
-def test_create_callback_succeeded():
+@no_type_check
+def test_create_callback_succeeded() -> None:
     operation = create_mock_operation("callback-1", status=OperationStatus.SUCCEEDED)
     operation.callback_details = type(
         "MockDetails",
@@ -765,7 +786,8 @@ def test_create_callback_succeeded():
     assert event.callback_succeeded_details.result.payload == '{"callback": "result"}'
 
 
-def test_create_callback_failed():
+@no_type_check
+def test_create_callback_failed() -> None:
     operation = create_mock_operation("callback-1", status=OperationStatus.FAILED)
     error_obj = ErrorObject.from_message("Callback failed")
     operation.callback_details = type(
@@ -790,7 +812,8 @@ def test_create_callback_failed():
     assert event.callback_failed_details.error.payload.message == "Callback failed"
 
 
-def test_create_callback_timed_out():
+@no_type_check
+def test_create_callback_timed_out() -> None:
     operation = create_mock_operation("callback-1", status=OperationStatus.TIMED_OUT)
     error_obj = ErrorObject.from_message("Callback timed out")
     operation.callback_details = type(
@@ -817,7 +840,7 @@ def test_create_callback_timed_out():
     )
 
 
-def test_create_callback_invalid_status():
+def test_create_callback_invalid_status() -> None:
     operation = create_mock_operation("callback-1", status=OperationStatus.STOPPED)
     context = EventCreationContext.create(
         operation=operation,
@@ -839,21 +862,21 @@ def test_create_callback_invalid_status():
         Event.create_callback_event(context)
 
 
-def test_lambda_context():
+def test_lambda_context() -> None:
     context = LambdaContext(aws_request_id="test-123")
     assert context.aws_request_id == "test-123"
     assert context.get_remaining_time_in_millis() == 900000
     context.log("test message")  # Should not raise
 
 
-def test_start_durable_execution_input_missing_field():
+def test_start_durable_execution_input_missing_field() -> None:
     with pytest.raises(
         InvalidParameterValueException, match="Missing required field: AccountId"
     ):
         StartDurableExecutionInput.from_dict({})
 
 
-def test_start_durable_execution_input_to_dict_with_optionals():
+def test_start_durable_execution_input_to_dict_with_optionals() -> None:
     input_obj = StartDurableExecutionInput(
         account_id="123456789",
         function_name="test-func",
@@ -873,7 +896,7 @@ def test_start_durable_execution_input_to_dict_with_optionals():
     assert result["Input"] == '{"test": "data"}'
 
 
-def test_event_input_from_details():
+def test_event_input_from_details() -> None:
     from async_durable_execution._core.models import ExecutionDetails
 
     details = ExecutionDetails(input_payload='{"test": "data"}')
@@ -886,7 +909,7 @@ def test_event_input_from_details():
     assert event_input_truncated.truncated
 
 
-def test_event_result_from_details():
+def test_event_result_from_details() -> None:
     from async_durable_execution._core.models import StepDetails
 
     details = StepDetails(result='{"result": "success"}')
@@ -895,7 +918,8 @@ def test_event_result_from_details():
     assert not event_result.truncated
 
 
-def test_event_error_from_details():
+@no_type_check
+def test_event_error_from_details() -> None:
     from async_durable_execution._core.models import StepDetails
 
     error_obj = ErrorObject.from_message("Test error")
@@ -904,7 +928,7 @@ def test_event_error_from_details():
     assert event_error.payload.message == "Test error"
 
 
-def test_event_from_dict_with_all_details():
+def test_event_from_dict_with_all_details() -> None:
     data = {
         "EventType": "ExecutionStarted",
         "EventTimestamp": parse_utc_datetime("2024-01-01T12:00:00Z"),
@@ -923,7 +947,7 @@ def test_event_from_dict_with_all_details():
     assert event.parent_id == "parent-1"
 
 
-def test_event_to_dict_with_all_details():
+def test_event_to_dict_with_all_details() -> None:
     event = Event(
         event_type="ExecutionStarted",
         event_timestamp=parse_utc_datetime("2024-01-01T12:00:00Z"),
@@ -946,7 +970,8 @@ def test_event_to_dict_with_all_details():
 class TestFromOperationStarted:
     """Tests for Event.from_operation_started method."""
 
-    def test_from_operation_started_execution(self):
+    @no_type_check
+    def test_from_operation_started_execution(self) -> None:
         """Test converting execution operation to started event."""
         operation = Mock()
         operation.operation_id = "exec-123"
@@ -982,7 +1007,8 @@ class TestFromOperationStarted:
         assert event.execution_started_details.input.payload == '{"test": "data"}'
         assert not event.execution_started_details.input.truncated
 
-    def test_from_operation_started_execution_no_data(self):
+    @no_type_check
+    def test_from_operation_started_execution_no_data(self) -> None:
         """Test execution operation with include_execution_data=False."""
         operation = Mock()
         operation.operation_id = "exec-123"
@@ -1015,7 +1041,7 @@ class TestFromOperationStarted:
         assert event.execution_started_details.input.payload is None
         assert event.execution_started_details.input.truncated
 
-    def test_from_operation_started_step(self):
+    def test_from_operation_started_step(self) -> None:
         """Test converting step operation to started event."""
         operation = Mock()
         operation.operation_id = "step-123"
@@ -1045,7 +1071,8 @@ class TestFromOperationStarted:
         assert event.parent_id == "parent-123"
         assert event.step_started_details is not None
 
-    def test_from_operation_started_wait(self):
+    @no_type_check
+    def test_from_operation_started_wait(self) -> None:
         """Test converting wait operation to started event."""
         operation = Mock()
         operation.operation_id = "wait-123"
@@ -1085,7 +1112,8 @@ class TestFromOperationStarted:
             == datetime.fromisoformat("2024-01-01T12:05:00+00:00")
         )
 
-    def test_from_operation_started_callback(self):
+    @no_type_check
+    def test_from_operation_started_callback(self) -> None:
         """Test converting callback operation to started event."""
         operation = Mock()
         operation.operation_id = "callback-123"
@@ -1119,7 +1147,7 @@ class TestFromOperationStarted:
         assert event.parent_id == "parent-123"
         assert event.callback_started_details.callback_id == "cb-456"
 
-    def test_from_operation_started_chained_invoke(self):
+    def test_from_operation_started_chained_invoke(self) -> None:
         """Test converting chained invoke operation to started event."""
         operation = Mock()
         operation.operation_id = "invoke-123"
@@ -1149,7 +1177,7 @@ class TestFromOperationStarted:
         assert event.parent_id == "parent-123"
         assert event.chained_invoke_started_details is not None
 
-    def test_from_operation_started_context(self):
+    def test_from_operation_started_context(self) -> None:
         """Test converting context operation to started event."""
         operation = Mock()
         operation.operation_id = "context-123"
@@ -1179,7 +1207,7 @@ class TestFromOperationStarted:
         assert event.parent_id == "parent-123"
         assert event.context_started_details is not None
 
-    def test_from_operation_started_no_timestamp(self):
+    def test_from_operation_started_no_timestamp(self) -> None:
         """Test error when operation has no start timestamp."""
         operation = Mock()
         operation.start_timestamp = None
@@ -1203,7 +1231,7 @@ class TestFromOperationStarted:
         ):
             Event.create_event_started(context)
 
-    def test_from_operation_started_unknown_type(self):
+    def test_from_operation_started_unknown_type(self) -> None:
         """Test error with unknown operation type."""
         operation = Mock()
         operation.operation_type = "UNKNOWN_TYPE"
@@ -1231,7 +1259,7 @@ class TestFromOperationStarted:
 class TestFromOperationFinished:
     """Tests for Event.from_operation_finished method."""
 
-    def test_from_operation_finished_execution_succeeded(self):
+    def test_from_operation_finished_execution_succeeded(self) -> None:
         """Test converting succeeded execution operation to finished event."""
         operation = Mock()
         operation.operation_id = "exec-123"
@@ -1261,7 +1289,7 @@ class TestFromOperationFinished:
         assert event.name == "test_execution"
         assert event.parent_id == "parent-123"
 
-    def test_from_operation_finished_execution_failed(self):
+    def test_from_operation_finished_execution_failed(self) -> None:
         """Test converting failed execution operation to finished event."""
         operation = Mock()
         operation.operation_id = "exec-123"
@@ -1289,7 +1317,8 @@ class TestFromOperationFinished:
         assert event.event_type == "ExecutionFailed"
         assert event.operation_id == "exec-123"
 
-    def test_from_operation_finished_step_with_result(self):
+    @no_type_check
+    def test_from_operation_finished_step_with_result(self) -> None:
         """Test converting succeeded step operation with result."""
         operation = Mock()
         operation.operation_id = "step-123"
@@ -1324,7 +1353,8 @@ class TestFromOperationFinished:
         assert event.operation_id == "step-123"
         assert event.step_succeeded_details.result.payload == '{"result": "success"}'
 
-    def test_from_operation_finished_step_with_error(self):
+    @no_type_check
+    def test_from_operation_finished_step_with_error(self) -> None:
         """Test converting failed step operation with error."""
         operation = Mock()
         operation.operation_id = "step-123"
@@ -1357,7 +1387,8 @@ class TestFromOperationFinished:
         assert event.event_type == "StepFailed"
         assert event.step_failed_details.error.payload.message == "Step failed"
 
-    def test_from_operation_finished_wait_succeeded(self):
+    @no_type_check
+    def test_from_operation_finished_wait_succeeded(self) -> None:
         """Test converting succeeded wait operation."""
         operation = Mock()
         operation.operation_id = "wait-123"
@@ -1392,7 +1423,7 @@ class TestFromOperationFinished:
         assert event.event_type == "WaitSucceeded"
         assert event.wait_succeeded_details.duration == 300
 
-    def test_from_operation_finished_wait_cancelled(self):
+    def test_from_operation_finished_wait_cancelled(self) -> None:
         """Test converting cancelled wait operation."""
         operation = Mock()
         operation.operation_id = "wait-123"
@@ -1421,7 +1452,8 @@ class TestFromOperationFinished:
         assert event.event_type == "WaitCancelled"
         assert event.wait_cancelled_details is not None
 
-    def test_from_operation_finished_callback_succeeded(self):
+    @no_type_check
+    def test_from_operation_finished_callback_succeeded(self) -> None:
         """Test converting succeeded callback operation."""
         operation = Mock()
         operation.operation_id = "callback-123"
@@ -1457,7 +1489,8 @@ class TestFromOperationFinished:
             event.callback_succeeded_details.result.payload == '{"callback": "result"}'
         )
 
-    def test_from_operation_finished_callback_timed_out(self):
+    @no_type_check
+    def test_from_operation_finished_callback_timed_out(self) -> None:
         """Test converting timed out callback operation."""
         operation = Mock()
         operation.operation_id = "callback-123"
@@ -1493,7 +1526,8 @@ class TestFromOperationFinished:
             == "Callback timed out"
         )
 
-    def test_from_operation_finished_chained_invoke_succeeded(self):
+    @no_type_check
+    def test_from_operation_finished_chained_invoke_succeeded(self) -> None:
         """Test converting succeeded chained invoke operation."""
         operation = Mock()
         operation.operation_id = "invoke-123"
@@ -1530,7 +1564,8 @@ class TestFromOperationFinished:
             == '{"invoke": "result"}'
         )
 
-    def test_from_operation_finished_chained_invoke_stopped(self):
+    @no_type_check
+    def test_from_operation_finished_chained_invoke_stopped(self) -> None:
         """Test converting stopped chained invoke operation."""
         operation = Mock()
         operation.operation_id = "invoke-123"
@@ -1566,7 +1601,8 @@ class TestFromOperationFinished:
             == "Invoke stopped"
         )
 
-    def test_from_operation_finished_context_succeeded(self):
+    @no_type_check
+    def test_from_operation_finished_context_succeeded(self) -> None:
         """Test converting succeeded context operation."""
         operation = Mock()
         operation.operation_id = "context-123"
@@ -1602,7 +1638,8 @@ class TestFromOperationFinished:
         assert event.event_type == "ContextSucceeded"
         assert event.context_succeeded_details.result.payload == '{"context": "result"}'
 
-    def test_from_operation_finished_context_failed(self):
+    @no_type_check
+    def test_from_operation_finished_context_failed(self) -> None:
         """Test converting failed context operation."""
         operation = Mock()
         operation.operation_id = "context-123"
@@ -1637,7 +1674,7 @@ class TestFromOperationFinished:
         assert event.event_type == "ContextFailed"
         assert event.context_failed_details.error.payload.message == "Context failed"
 
-    def test_from_operation_finished_no_end_timestamp(self):
+    def test_from_operation_finished_no_end_timestamp(self) -> None:
         """Test error when operation has no end timestamp."""
         operation = Mock()
         operation.end_timestamp = None
@@ -1661,7 +1698,7 @@ class TestFromOperationFinished:
         ):
             Event.create_event_terminated(context)
 
-    def test_from_operation_finished_invalid_status(self):
+    def test_from_operation_finished_invalid_status(self) -> None:
         """Test error with invalid operation status."""
         operation = Mock()
         operation.status = OperationStatus.STARTED
@@ -1686,7 +1723,7 @@ class TestFromOperationFinished:
         ):
             Event.create_event_terminated(context)
 
-    def test_from_operation_finished_unknown_type(self):
+    def test_from_operation_finished_unknown_type(self) -> None:
         """Test error with unknown operation type."""
         operation = Mock()
         operation.operation_type = "UNKNOWN_TYPE"
@@ -1711,7 +1748,8 @@ class TestFromOperationFinished:
         ):
             Event.create_event_terminated(context)
 
-    def test_from_operation_finished_no_details(self):
+    @no_type_check
+    def test_from_operation_finished_no_details(self) -> None:
         """Test operations with no detail objects."""
         operation = Mock()
         operation.operation_id = "step-123"
@@ -1741,7 +1779,8 @@ class TestFromOperationFinished:
         assert event.step_succeeded_details.result is None
 
 
-def test_chained_invoke_pending_details_from_dict():
+@no_type_check
+def test_chained_invoke_pending_details_from_dict() -> None:
     """Test ChainedInvokePendingDetails parsing in Event.from_dict."""
     data = {
         "EventType": "ChainedInvokeStarted",
@@ -1758,7 +1797,7 @@ def test_chained_invoke_pending_details_from_dict():
     assert event.chained_invoke_pending_details.function_name == "test-function"
 
 
-def test_event_creation_context_sub_type_property():
+def test_event_creation_context_sub_type_property() -> None:
     """Test EventCreationContext.sub_type property with and without sub_type."""
     # Test with sub_type
     operation = Mock()
@@ -1799,7 +1838,7 @@ def test_event_creation_context_sub_type_property():
     assert context.sub_type is None
 
 
-def test_event_creation_context_get_retry_details():
+def test_event_creation_context_get_retry_details() -> None:
     """Test EventCreationContext.get_retry_details method."""
     operation = Mock()
     operation.step_details = StepDetails(attempt=2)
@@ -1871,7 +1910,7 @@ def test_event_creation_context_get_retry_details():
     assert retry_details is None
 
 
-def test_create_chained_invoke_event_pending():
+def test_create_chained_invoke_event_pending() -> None:
     """Test Event.create_chained_invoke_event_pending method."""
     operation = Mock()
     operation.operation_id = "invoke-1"

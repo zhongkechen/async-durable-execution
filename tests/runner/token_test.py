@@ -1,5 +1,7 @@
 """Unit tests for token models."""
 
+from typing import no_type_check
+
 import base64
 import json
 
@@ -8,7 +10,7 @@ import pytest
 from async_durable_execution._runner.local.model import CheckpointToken, CallbackToken
 
 
-def test_checkpoint_token_init():
+def test_checkpoint_token_init() -> None:
     """Test CheckpointToken initialization."""
     token = CheckpointToken("arn:aws:states:us-east-1:123456789012:execution:test", 42)
 
@@ -16,7 +18,7 @@ def test_checkpoint_token_init():
     assert token.token_sequence == 42
 
 
-def test_checkpoint_token_to_str():
+def test_checkpoint_token_to_str() -> None:
     """Test CheckpointToken serialization to string."""
     token = CheckpointToken("arn:aws:states:us-east-1:123456789012:execution:test", 42)
 
@@ -29,7 +31,7 @@ def test_checkpoint_token_to_str():
     assert data["seq"] == 42
 
 
-def test_checkpoint_token_from_str():
+def test_checkpoint_token_from_str() -> None:
     """Test CheckpointToken deserialization from string."""
     data = {"arn": "arn:aws:states:us-east-1:123456789012:execution:test", "seq": 42}
     json_str = json.dumps(data, separators=(",", ":"))
@@ -41,7 +43,7 @@ def test_checkpoint_token_from_str():
     assert token.token_sequence == 42
 
 
-def test_checkpoint_token_round_trip():
+def test_checkpoint_token_round_trip() -> None:
     """Test CheckpointToken serialization and deserialization round trip."""
     original = CheckpointToken(
         "arn:aws:states:us-east-1:123456789012:execution:test", 123
@@ -53,7 +55,8 @@ def test_checkpoint_token_round_trip():
     assert restored == original
 
 
-def test_checkpoint_token_frozen_dataclass():
+@no_type_check
+def test_checkpoint_token_frozen_dataclass() -> None:
     """Test that CheckpointToken is immutable."""
     token = CheckpointToken("arn:aws:states:us-east-1:123456789012:execution:test", 42)
 
@@ -64,7 +67,7 @@ def test_checkpoint_token_frozen_dataclass():
         token.token_sequence = 999
 
 
-def test_callback_token_init():
+def test_callback_token_init() -> None:
     """Test CallbackToken initialization."""
     token = CallbackToken(
         "arn:aws:states:us-east-1:123456789012:execution:test", "op-123"
@@ -74,7 +77,7 @@ def test_callback_token_init():
     assert token.operation_id == "op-123"
 
 
-def test_callback_token_to_str():
+def test_callback_token_to_str() -> None:
     """Test CallbackToken serialization to string."""
     token = CallbackToken(
         "arn:aws:states:us-east-1:123456789012:execution:test", "op-123"
@@ -89,7 +92,7 @@ def test_callback_token_to_str():
     assert data["op"] == "op-123"
 
 
-def test_callback_token_from_str():
+def test_callback_token_from_str() -> None:
     """Test CallbackToken deserialization from string."""
     data = {
         "arn": "arn:aws:states:us-east-1:123456789012:execution:test",
@@ -104,7 +107,7 @@ def test_callback_token_from_str():
     assert token.operation_id == "op-123"
 
 
-def test_callback_token_round_trip():
+def test_callback_token_round_trip() -> None:
     """Test CallbackToken serialization and deserialization round trip."""
     original = CallbackToken(
         "arn:aws:states:us-east-1:123456789012:execution:test", "callback-op"
@@ -116,7 +119,8 @@ def test_callback_token_round_trip():
     assert restored == original
 
 
-def test_callback_token_frozen_dataclass():
+@no_type_check
+def test_callback_token_frozen_dataclass() -> None:
     """Test that CallbackToken is immutable."""
     token = CallbackToken(
         "arn:aws:states:us-east-1:123456789012:execution:test", "op-123"

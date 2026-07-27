@@ -10,7 +10,7 @@ from examples.wait_for_callback import (
 
 async def test_handle_multiple_invocations_tracking_with_wait_for_callback_operations(
     durable_runner,
-):
+) -> None:
     """Test multiple invocations tracking with waitForCallback operations."""
     test_payload = {"test": "multiple-invocations"}
 

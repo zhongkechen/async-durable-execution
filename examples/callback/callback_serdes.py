@@ -14,7 +14,7 @@ from async_durable_execution import (
 class CustomData:
     """Data structure with datetime."""
 
-    def __init__(self, id: int, message: str, timestamp: datetime):
+    def __init__(self, id: int, message: str, timestamp: datetime) -> None:
         self.id = id
         self.message = message
         self.timestamp = timestamp

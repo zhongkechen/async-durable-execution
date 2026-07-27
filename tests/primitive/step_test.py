@@ -1,5 +1,9 @@
 """Unit tests for step handler."""
 
+from typing import no_type_check
+
+from typing import Any
+
 import asyncio
 import datetime
 import inspect
@@ -47,15 +51,15 @@ from async_durable_execution import StepContext
 from ..serdes_test import CustomDictSerDes
 
 
-async def _invoke_maybe_async(result):
+async def _invoke_maybe_async(result) -> Any:
     return await result
 
 
-def _asyncify(func):
+def _asyncify(func) -> Any:
     if inspect.iscoroutinefunction(func):
         return func
 
-    async def wrapper(*args, **kwargs):
+    async def wrapper(*args, **kwargs) -> Any:
         return func(*args, **kwargs)
 
     return wrapper
@@ -77,7 +81,7 @@ async def step_handler(
     retry_strategy=None,
     step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY,
     serdes=None,
-):
+) -> Any:
     """Test helper that wraps StepOperationExecutor."""
     executor = StepOperationExecutor(
         func=_asyncify(func),
@@ -90,13 +94,13 @@ async def step_handler(
     return await _invoke_maybe_async(executor.process())
 
 
-def test_step_semantics_enum():
+def test_step_semantics_enum() -> None:
     """StepSemantics enum values remain stable."""
     assert StepSemantics.AT_MOST_ONCE_PER_RETRY.value == "AT_MOST_ONCE_PER_RETRY"
     assert StepSemantics.AT_LEAST_ONCE_PER_RETRY.value == "AT_LEAST_ONCE_PER_RETRY"
 
 
-def test_step_interrupted_error():
+def test_step_interrupted_error() -> None:
     """StepInterruptedError is owned by the step operation module."""
     error = StepInterruptedError("step interrupted", "step_123")
 
@@ -107,7 +111,7 @@ def test_step_interrupted_error():
     assert error.step_id == "step_123"
 
 
-def test_step_operation_executor_accepts_config_fields_directly():
+def test_step_operation_executor_accepts_config_fields_directly() -> None:
     """StepOperationExecutor stores step options directly."""
     retry_strategy = Mock()
     serdes = Mock()
@@ -128,7 +132,7 @@ def test_step_operation_executor_accepts_config_fields_directly():
     assert executor.serdes is serdes
 
 
-def test_step_signature_accepts_config_fields_directly():
+def test_step_signature_accepts_config_fields_directly() -> None:
     """The public step API exposes step option fields directly."""
     parameters = inspect.signature(step).parameters
 
@@ -138,7 +142,7 @@ def test_step_signature_accepts_config_fields_directly():
     assert "serdes" in parameters
 
 
-def test_step_signature_requires_keyword_only_options():
+def test_step_signature_requires_keyword_only_options() -> None:
     """Only the step callable is positional."""
     parameters = inspect.signature(step).parameters
 
@@ -149,7 +153,7 @@ def test_step_signature_requires_keyword_only_options():
     assert parameters["serdes"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
-def test_step_types_importable_from_package_root():
+def test_step_types_importable_from_package_root() -> None:
     """Step types remain re-exported from the package root."""
     from async_durable_execution import (
         StepSemantics as ImportedStepSemantics,
@@ -158,7 +162,7 @@ def test_step_types_importable_from_package_root():
     assert ImportedStepSemantics is StepSemantics
 
 
-async def test_step_handler_already_succeeded():
+async def test_step_handler_already_succeeded() -> None:
     """Test step_handler when operation already succeeded."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -186,7 +190,7 @@ async def test_step_handler_already_succeeded():
     mock_state.create_checkpoint.assert_not_called()
 
 
-async def test_step_handler_already_succeeded_none_result():
+async def test_step_handler_already_succeeded_none_result() -> None:
     """Test step_handler when operation succeeded with None result."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -213,7 +217,7 @@ async def test_step_handler_already_succeeded_none_result():
     mock_callable.assert_not_called()
 
 
-async def test_step_handler_already_failed():
+async def test_step_handler_already_failed() -> None:
     """Test step_handler when operation already failed."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -246,7 +250,7 @@ async def test_step_handler_already_failed():
 @patch("async_durable_execution._primitive.step.StepOperationExecutor.retry_handler")
 async def test_step_handler_at_most_once_interruption_without_retry_raise(
     mock_retry_handler,
-):
+) -> None:
     """A broken retry handler fallthrough still raises the checkpointed step error."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -271,7 +275,7 @@ async def test_step_handler_at_most_once_interruption_without_retry_raise(
     mock_retry_handler.assert_called_once()
 
 
-async def test_step_handler_started_at_most_once():
+async def test_step_handler_started_at_most_once() -> None:
     """Test step_handler when operation started with AT_MOST_ONCE semantics."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -296,7 +300,7 @@ async def test_step_handler_started_at_most_once():
         )
 
 
-async def test_step_handler_started_at_least_once():
+async def test_step_handler_started_at_least_once() -> None:
     """Test step_handler when operation started with AT_LEAST_ONCE semantics."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -323,7 +327,7 @@ async def test_step_handler_started_at_least_once():
     )
 
 
-async def test_step_handler_success_at_least_once():
+async def test_step_handler_success_at_least_once() -> None:
     """Test step_handler successful execution with AT_LEAST_ONCE semantics."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = None
@@ -362,7 +366,7 @@ async def test_step_handler_success_at_least_once():
     assert success_operation.action is OperationAction.SUCCEED
 
 
-async def test_step_handler_passes_attempt_to_step_context():
+async def test_step_handler_passes_attempt_to_step_context() -> None:
     """Test step execution exposes the current attempt on StepContext."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = None
@@ -370,7 +374,7 @@ async def test_step_handler_passes_attempt_to_step_context():
     mock_state.durable_execution_arn = "test_arn"
     mock_logger = Mock(spec=logging.Logger)
 
-    async def step_callable():
+    async def step_callable() -> Any:
         current_context = get_current_context()
         assert isinstance(current_context, StepContext)
         return current_context.attempt
@@ -385,7 +389,8 @@ async def test_step_handler_passes_attempt_to_step_context():
     assert result == 1
 
 
-async def test_step_handler_passes_lambda_context_to_step_context():
+@no_type_check
+async def test_step_handler_passes_lambda_context_to_step_context() -> None:
     """Step execution exposes the Lambda context on StepContext."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = None
@@ -395,7 +400,7 @@ async def test_step_handler_passes_lambda_context_to_step_context():
     lambda_context.aws_request_id = "request-123"
     mock_state.lambda_context = lambda_context
 
-    async def step_callable():
+    async def step_callable() -> Any:
         current_context = get_current_context()
         assert isinstance(current_context, StepContext)
         return current_context.lambda_context.aws_request_id
@@ -417,7 +422,8 @@ async def test_step_handler_passes_lambda_context_to_step_context():
     assert result == "request-123"
 
 
-async def test_step_handler_get_current_context_returns_step_context():
+@no_type_check
+async def test_step_handler_get_current_context_returns_step_context() -> None:
     """get_current_context() should expose StepContext while a step is executing."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = None
@@ -425,7 +431,7 @@ async def test_step_handler_get_current_context_returns_step_context():
     mock_state.durable_execution_arn = "test_arn"
     mock_logger = Mock(spec=logging.Logger)
 
-    async def step_callable():
+    async def step_callable() -> Any:
         return get_current_context().attempt
 
     result = await step_handler(
@@ -438,14 +444,14 @@ async def test_step_handler_get_current_context_returns_step_context():
     assert result == 1
 
 
-async def test_step_handler_get_step_context_returns_step_context():
+async def test_step_handler_get_step_context_returns_step_context() -> None:
     """get_step_context() should expose StepContext while a step is executing."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = None
     mock_state.operations.get.return_value = mock_result
     mock_state.durable_execution_arn = "test_arn"
 
-    async def step_callable():
+    async def step_callable() -> Any:
         return get_step_context().attempt
 
     result = await step_handler(
@@ -460,7 +466,7 @@ async def test_step_handler_get_step_context_returns_step_context():
     assert result == 1
 
 
-def test_get_current_context_raises_outside_execution():
+def test_get_current_context_raises_outside_execution() -> None:
     with pytest.raises(
         RuntimeError,
         match="get_current_context\\(\\) can only be used while a durable function, step function, flow node, wait_for_callback submitter, or wait_for_condition check, or SerDes operation is executing\\.",
@@ -468,7 +474,7 @@ def test_get_current_context_raises_outside_execution():
         get_current_context()
 
 
-async def test_step_handler_success_at_most_once():
+async def test_step_handler_success_at_most_once() -> None:
     """Test step_handler successful execution with AT_MOST_ONCE semantics."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -516,7 +522,7 @@ async def test_step_handler_success_at_most_once():
     assert success_operation.action is OperationAction.SUCCEED
 
 
-async def test_step_handler_non_retriable_execution_error():
+async def test_step_handler_non_retriable_execution_error() -> None:
     """Test step_handler with ExecutionError exception."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = None
@@ -535,7 +541,7 @@ async def test_step_handler_non_retriable_execution_error():
         )
 
 
-async def test_step_handler_retry_success():
+async def test_step_handler_retry_success() -> None:
     """Test step_handler with retry that succeeds."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = None
@@ -573,7 +579,7 @@ async def test_step_handler_retry_success():
     assert retry_operation.action is OperationAction.RETRY
 
 
-async def test_step_handler_retry_delay_is_clamped_to_minimum():
+async def test_step_handler_retry_delay_is_clamped_to_minimum() -> None:
     """Retry delays below one second are checkpointed with the minimum delay."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.operations.get.return_value = None
@@ -594,7 +600,7 @@ async def test_step_handler_retry_delay_is_clamped_to_minimum():
     assert retry_operation.step_options.next_attempt_delay_seconds == 1
 
 
-async def test_step_handler_retry_exhausted():
+async def test_step_handler_retry_exhausted() -> None:
     """Test step_handler checkpoints retry strategy errors as failures."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = None
@@ -633,7 +639,7 @@ async def test_step_handler_retry_exhausted():
     assert fail_operation.action is OperationAction.FAIL
 
 
-async def test_step_handler_retry_strategy_none_stops_retrying():
+async def test_step_handler_retry_strategy_none_stops_retrying() -> None:
     """A retry strategy returns None to stop retrying and fail with the step error."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.operations.get.return_value = None
@@ -666,7 +672,7 @@ async def test_step_handler_retry_strategy_none_stops_retrying():
     assert fail_operation.error.type == "RuntimeError"
 
 
-async def test_step_handler_checkpoints_sdk_error_metadata():
+async def test_step_handler_checkpoints_sdk_error_metadata() -> None:
     mock_state = Mock(spec=ExecutionState)
     mock_state.operations.get.return_value = None
     mock_state.durable_execution_arn = "test_arn"
@@ -692,7 +698,8 @@ async def test_step_handler_checkpoints_sdk_error_metadata():
 
 
 @pytest.mark.parametrize("failure_source", ["step", "retry-strategy"])
-async def test_terminal_step_invocation_error_is_not_retryable(failure_source):
+@no_type_check
+async def test_terminal_step_invocation_error_is_not_retryable(failure_source) -> None:
     mock_state = Mock(spec=ExecutionState)
     mock_state.operations.get.return_value = None
     mock_state.durable_execution_arn = "test_arn"
@@ -729,7 +736,7 @@ async def test_terminal_step_invocation_error_is_not_retryable(failure_source):
     assert not restored.is_retryable()
 
 
-async def test_step_retry_preserves_retryable_invocation_error_metadata():
+async def test_step_retry_preserves_retryable_invocation_error_metadata() -> None:
     mock_state = Mock(spec=ExecutionState)
     mock_state.operations.get.return_value = None
     mock_state.durable_execution_arn = "test_arn"
@@ -760,7 +767,7 @@ async def test_step_retry_preserves_retryable_invocation_error_metadata():
     assert restored.is_retryable()
 
 
-async def test_step_handler_retry_interrupted_error():
+async def test_step_handler_retry_interrupted_error() -> None:
     """Test step_handler with StepInterruptedError in retry."""
     mock_state = Mock(spec=ExecutionState)
     mock_result = None
@@ -781,7 +788,7 @@ async def test_step_handler_retry_interrupted_error():
         )
 
 
-async def test_step_handler_retry_with_existing_attempts():
+async def test_step_handler_retry_with_existing_attempts() -> None:
     """Test step_handler retry logic with existing attempt count."""
     mock_state = Mock(spec=ExecutionState)
 
@@ -817,7 +824,7 @@ async def test_step_handler_retry_with_existing_attempts():
     mock_retry_strategy.assert_not_called()
 
 
-async def test_step_handler_pending_without_existing_attempts():
+async def test_step_handler_pending_without_existing_attempts() -> None:
     """Test step_handler retry logic with existing attempt count."""
     mock_state = Mock(spec=ExecutionState)
 
@@ -849,7 +856,7 @@ async def test_step_handler_pending_without_existing_attempts():
 
 
 @patch("async_durable_execution._primitive.step.StepOperationExecutor.retry_handler")
-async def test_step_handler_retry_handler_no_exception(mock_retry_handler):
+async def test_step_handler_retry_handler_no_exception(mock_retry_handler) -> None:
     """Test step_handler when retry_handler doesn't raise an exception."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -885,7 +892,7 @@ async def test_step_handler_retry_handler_no_exception(mock_retry_handler):
     mock_retry_handler.assert_called_once()
 
 
-async def test_step_handler_custom_serdes_success():
+async def test_step_handler_custom_serdes_success() -> None:
     mock_state = Mock(spec=ExecutionState)
     mock_result = None
     mock_state.operations.get.return_value = mock_result
@@ -912,7 +919,9 @@ async def test_step_handler_custom_serdes_success():
     assert success_operation.payload == expected_checkpoointed_result
 
 
-async def test_step_handler_returns_deserialized_serialized_custom_serdes_result():
+async def test_step_handler_returns_deserialized_serialized_custom_serdes_result() -> (
+    None
+):
     mock_state = Mock(spec=ExecutionState)
     mock_state.operations.get.return_value = None
     mock_state.durable_execution_arn = "test_arn"
@@ -930,7 +939,7 @@ async def test_step_handler_returns_deserialized_serialized_custom_serdes_result
     assert result == "HELLO"
 
 
-async def test_step_handler_custom_serdes_already_succeeded():
+async def test_step_handler_custom_serdes_already_succeeded() -> None:
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
     operation = Operation(
@@ -960,7 +969,7 @@ async def test_step_handler_custom_serdes_already_succeeded():
 # Tests for start checkpoint refresh handling
 
 
-async def test_step_start_does_not_refresh_checkpoint_after_start():
+async def test_step_start_does_not_refresh_checkpoint_after_start() -> None:
     """Test that start execution does not reread the checkpoint after START."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -986,7 +995,7 @@ async def test_step_start_does_not_refresh_checkpoint_after_start():
     assert result == "success_result"
 
 
-async def test_step_immediate_response_create_checkpoint_sync_at_most_once():
+async def test_step_immediate_response_create_checkpoint_sync_at_most_once() -> None:
     """Test that create_checkpoint is called with is_sync=True for AT_MOST_ONCE semantics."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -1012,7 +1021,7 @@ async def test_step_immediate_response_create_checkpoint_sync_at_most_once():
     assert start_call[1]["is_sync"] is True
 
 
-async def test_step_immediate_response_create_checkpoint_async_at_least_once():
+async def test_step_immediate_response_create_checkpoint_async_at_least_once() -> None:
     """Test that create_checkpoint is called with is_sync=False for AT_LEAST_ONCE semantics."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -1038,7 +1047,7 @@ async def test_step_immediate_response_create_checkpoint_async_at_least_once():
     assert start_call[1]["is_sync"] is False
 
 
-async def test_step_immediate_response_immediate_success():
+async def test_step_immediate_response_immediate_success() -> None:
     """Test successful execution without a checkpoint refresh after START."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -1066,7 +1075,7 @@ async def test_step_immediate_response_immediate_success():
     assert mock_state.create_checkpoint.call_count == 2
 
 
-async def test_step_handler_unrecognized_status_executes_again():
+async def test_step_handler_unrecognized_status_executes_again() -> None:
     """Statuses not handled specially fall through to normal execution."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -1087,7 +1096,7 @@ async def test_step_handler_unrecognized_status_executes_again():
     assert result == "rerun"
 
 
-async def test_step_immediate_response_immediate_failure():
+async def test_step_immediate_response_immediate_failure() -> None:
     """Test step failure without a checkpoint refresh after START."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -1120,7 +1129,7 @@ async def test_step_immediate_response_immediate_failure():
     assert mock_state.create_checkpoint.call_count == 2
 
 
-async def test_step_start_executes_without_second_checkpoint_read():
+async def test_step_start_executes_without_second_checkpoint_read() -> None:
     """Test start execution runs the step function after the initial checkpoint read."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -1148,7 +1157,7 @@ async def test_step_start_executes_without_second_checkpoint_read():
     assert mock_state.create_checkpoint.call_count == 2
 
 
-async def test_step_immediate_response_already_completed():
+async def test_step_immediate_response_already_completed() -> None:
     """Test already completed: checkpoint is already SUCCEEDED on first check, no checkpoint created."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -1183,7 +1192,7 @@ async def test_step_immediate_response_already_completed():
     assert mock_state.operations.get.call_count == 1
 
 
-async def test_step_executes_function_when_second_check_returns_started():
+async def test_step_executes_function_when_second_check_returns_started() -> None:
     """Test backward compatibility: when the second checkpoint check returns
     STARTED (not terminal), the step function executes normally.
     """
@@ -1222,7 +1231,7 @@ async def test_step_executes_function_when_second_check_returns_started():
     assert mock_state.create_checkpoint.call_count == 2  # START + SUCCEED checkpoints
 
 
-async def test_step_creates_start_checkpoint_when_status_is_ready():
+async def test_step_creates_start_checkpoint_when_status_is_ready() -> None:
     """Test that create_checkpoint is called with START action when the step is in READY status."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"

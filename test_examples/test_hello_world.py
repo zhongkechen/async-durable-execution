@@ -4,7 +4,7 @@ from async_durable_execution import InvocationStatus
 from examples import hello_world
 
 
-async def test_hello_world(durable_runner):
+async def test_hello_world(durable_runner) -> None:
     """Test hello world example."""
     async with durable_runner(
         handler=hello_world.handler, input="test", timeout=30

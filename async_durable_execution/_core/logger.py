@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import logging
+from typing import TypeVar
 
 from .context import OperationContext, _current_context
 from .exceptions import ValidationError
+
+_LoggerT = TypeVar("_LoggerT")
 
 
 class DurableContextFilter(logging.Filter):
@@ -54,7 +57,7 @@ def build_context_log_extra(context: OperationContext) -> dict[str, object]:
     return extra
 
 
-def configure_durable_logger(logger):
+def configure_durable_logger(logger: _LoggerT) -> _LoggerT:
     """Attach DurableContextFilter to a stdlib-compatible logger and handlers."""
     add_filter = getattr(logger, "addFilter", None)
     filters = getattr(logger, "filters", ())

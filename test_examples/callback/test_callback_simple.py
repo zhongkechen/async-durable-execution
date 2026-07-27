@@ -4,7 +4,7 @@ from async_durable_execution import InvocationStatus
 from examples.callback import callback_simple
 
 
-async def test_callback_success(durable_runner):
+async def test_callback_success(durable_runner) -> None:
     callback_result = "successful"
 
     async with durable_runner(
@@ -23,7 +23,7 @@ async def test_callback_success(durable_runner):
     assert result_data == callback_result
 
 
-async def test_callback_success_none_result(durable_runner):
+async def test_callback_success_none_result(durable_runner) -> None:
     async with durable_runner(
         handler=callback_simple.handler, input=None, timeout=30
     ) as runner:

@@ -8,7 +8,7 @@ from scripts.generate_coverage_badge import generate_badge
 from scripts.generate_coverage_badge import read_coverage_percent
 
 
-def test_read_coverage_percent_reads_total_from_coverage_json(tmp_path):
+def test_read_coverage_percent_reads_total_from_coverage_json(tmp_path) -> None:
     coverage_json = tmp_path / "coverage.json"
     coverage_json.write_text(
         json.dumps({"totals": {"percent_covered": 98.31}}),
@@ -18,7 +18,7 @@ def test_read_coverage_percent_reads_total_from_coverage_json(tmp_path):
     assert read_coverage_percent(coverage_json) == 98.31
 
 
-def test_read_coverage_percent_requires_totals(tmp_path):
+def test_read_coverage_percent_requires_totals(tmp_path) -> None:
     coverage_json = tmp_path / "coverage.json"
     coverage_json.write_text(json.dumps({}), encoding="utf-8")
 
@@ -26,7 +26,7 @@ def test_read_coverage_percent_requires_totals(tmp_path):
         read_coverage_percent(coverage_json)
 
 
-def test_read_coverage_percent_requires_numeric_percent(tmp_path):
+def test_read_coverage_percent_requires_numeric_percent(tmp_path) -> None:
     coverage_json = tmp_path / "coverage.json"
     coverage_json.write_text(
         json.dumps({"totals": {"percent_covered": "98"}}),
@@ -48,16 +48,16 @@ def test_read_coverage_percent_requires_numeric_percent(tmp_path):
         (59.99, "#e05d44"),
     ],
 )
-def test_badge_color_thresholds(percent, expected):
+def test_badge_color_thresholds(percent, expected) -> None:
     assert badge_color(percent) == expected
 
 
-def test_format_coverage_percent_rounds_to_integer_percent():
+def test_format_coverage_percent_rounds_to_integer_percent() -> None:
     assert format_coverage_percent(98.31) == "98%"
     assert format_coverage_percent(98.5) == "98%"
 
 
-def test_generate_badge_writes_svg_with_current_coverage(tmp_path):
+def test_generate_badge_writes_svg_with_current_coverage(tmp_path) -> None:
     coverage_json = tmp_path / "coverage.json"
     output_path = tmp_path / "coverage" / "badge.svg"
     coverage_json.write_text(

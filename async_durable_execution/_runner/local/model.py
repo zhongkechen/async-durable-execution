@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import json
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from ..._core import (
     CheckpointUpdatedExecutionState,
@@ -106,11 +106,11 @@ class StartDurableExecutionInput:
             result["LambdaEndpoint"] = self.lambda_endpoint
         return result
 
-    def get_normalized_input(self):
+    def get_normalized_input(self) -> str:
         """Normalize input string to be JSON deserializable."""
         try:
-            json.loads(self.input)
-            return self.input
+            json.loads(cast(str, self.input))
+            return cast(str, self.input)
         except (json.JSONDecodeError, TypeError):
             return json.dumps(self.input)
 

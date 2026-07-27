@@ -4,7 +4,7 @@ from async_durable_execution import InvocationStatus
 from examples.run_in_child_context import run_in_child_context
 
 
-async def test_run_in_child_context(durable_runner):
+async def test_run_in_child_context(durable_runner) -> None:
     """Test run_in_child_context example."""
     async with durable_runner(
         handler=run_in_child_context.handler, input="test", timeout=10

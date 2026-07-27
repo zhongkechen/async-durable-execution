@@ -6,7 +6,7 @@ from async_durable_execution import InvocationStatus
 from examples.wait_for_callback import wait_for_callback_child
 
 
-async def test_handle_wait_for_callback_within_child_contexts(durable_runner):
+async def test_handle_wait_for_callback_within_child_contexts(durable_runner) -> None:
     """Test waitForCallback within child contexts."""
     test_payload = {"test": "child-context-callbacks"}
 

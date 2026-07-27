@@ -8,7 +8,7 @@ from async_durable_execution import (
 
 
 class OrderCalculator:
-    def __init__(self, tax_rate: float):
+    def __init__(self, tax_rate: float) -> None:
         self.tax_rate = tax_rate
 
     @durable_callable

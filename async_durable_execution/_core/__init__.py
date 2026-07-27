@@ -15,6 +15,7 @@ from .config import (
 from .context import (
     DurableContext,
     OperationContext,
+    SerDesContext,
     bind_current_context,
     bind_durable_definition,
     ensure_durable_operations_allowed,
@@ -87,7 +88,6 @@ from .serdes import (
     JsonSerDes,
     PassThroughSerDes,
     SerDes,
-    SerDesContext,
     TypeCodecExtension,
     TypeTag,
     deserialize,

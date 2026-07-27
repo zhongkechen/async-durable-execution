@@ -5,7 +5,7 @@ from async_durable_execution import OperationType
 from examples.step import steps_with_retry
 
 
-async def test_steps_with_retry(durable_runner):
+async def test_steps_with_retry(durable_runner) -> None:
     """Test steps_with_retry pattern.
 
     With counter-based deterministic behavior:

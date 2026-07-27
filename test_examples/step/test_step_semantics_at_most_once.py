@@ -5,7 +5,7 @@ from async_durable_execution import OperationType
 from examples.step import step_semantics_at_most_once
 
 
-async def test_step_semantics_at_most_once(durable_runner):
+async def test_step_semantics_at_most_once(durable_runner) -> None:
     """Test step with at-most-once semantics."""
     async with durable_runner(
         handler=step_semantics_at_most_once.handler, input="test", timeout=10

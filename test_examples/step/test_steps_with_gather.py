@@ -4,7 +4,7 @@ from async_durable_execution import InvocationStatus
 from examples.step import steps_with_gather
 
 
-async def test_steps_with_gather(durable_runner):
+async def test_steps_with_gather(durable_runner) -> None:
     """Test multiple step tasks awaited with asyncio.gather."""
     input_items = {
         "items": [

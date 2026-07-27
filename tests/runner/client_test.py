@@ -1,5 +1,7 @@
 """Unit tests for InMemoryServiceClient."""
 
+from typing import no_type_check
+
 from unittest.mock import Mock, patch
 
 from async_durable_execution._core.models import (
@@ -13,7 +15,8 @@ from async_durable_execution._runner.local import InMemoryServiceClient
 from async_durable_execution._runner.local.model import CheckpointToken
 
 
-async def test_checkpoint():
+@no_type_check
+async def test_checkpoint() -> None:
     """Test checkpoint method delegates to the sync checkpoint handler."""
     scheduler = Mock()
     expected_output = CheckpointOutput(
@@ -43,7 +46,7 @@ async def test_checkpoint():
     client.process_checkpoint.assert_called_once_with("token", updates, "client-token")
 
 
-async def test_get_execution_state():
+async def test_get_execution_state() -> None:
     """Test get_execution_state returns navigable operations."""
     scheduler = Mock()
     execution = Mock()
@@ -69,7 +72,7 @@ async def test_get_execution_state():
     executor.get_execution.assert_called_once_with("arn:test")
 
 
-async def test_get_execution_state_default_max_items():
+async def test_get_execution_state_default_max_items() -> None:
     """Test get_execution_state with default max_items."""
     scheduler = Mock()
     execution = Mock()

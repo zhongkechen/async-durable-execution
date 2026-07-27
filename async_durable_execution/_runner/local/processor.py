@@ -37,7 +37,7 @@ class OperationTransformer:
     def __init__(
         self,
         processors: MutableMapping[OperationType, OperationProcessor] | None = None,
-    ):
+    ) -> None:
         self.processors = processors or create_default_processors()
 
     def mock_invoke_result(self, function_name: str, result: object) -> None:

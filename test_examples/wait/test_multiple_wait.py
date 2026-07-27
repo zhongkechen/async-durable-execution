@@ -4,7 +4,7 @@ from async_durable_execution import InvocationStatus
 from examples.wait import multiple_wait
 
 
-async def test_multiple_sequential_wait_operations(durable_runner):
+async def test_multiple_sequential_wait_operations(durable_runner) -> None:
     """Test multiple sequential wait operations."""
     async with durable_runner(
         handler=multiple_wait.handler, input=None, timeout=20

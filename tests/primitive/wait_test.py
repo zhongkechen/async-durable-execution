@@ -1,5 +1,7 @@
 """Unit tests for wait handler."""
 
+from typing import Any
+
 import asyncio
 import inspect
 from unittest.mock import Mock
@@ -21,7 +23,7 @@ from async_durable_execution._primitive.wait import WaitOperationExecutor, wait
 from async_durable_execution._core.state import ExecutionState
 
 
-async def run_async(awaitable):
+async def run_async(awaitable) -> Any:
     return await awaitable
 
 
@@ -36,7 +38,7 @@ async def wait_handler(seconds: int, state, operation_identifier) -> None:
     return await run_async(executor.process())
 
 
-def test_wait_name_is_keyword_only():
+def test_wait_name_is_keyword_only() -> None:
     """wait operation name must be passed as a keyword."""
     parameters = inspect.signature(wait).parameters
 
@@ -44,7 +46,7 @@ def test_wait_name_is_keyword_only():
     assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
-async def test_wait_handler_already_completed():
+async def test_wait_handler_already_completed() -> None:
     """Test wait_handler when operation is already completed."""
     mock_state = Mock(spec=ExecutionState)
     operation = Operation(
@@ -65,7 +67,7 @@ async def test_wait_handler_already_completed():
     mock_state.create_checkpoint.assert_not_called()
 
 
-async def test_wait_handler_not_completed():
+async def test_wait_handler_not_completed() -> None:
     """Test wait_handler when operation is not completed."""
     mock_state = Mock(spec=ExecutionState)
 
@@ -95,7 +97,7 @@ async def test_wait_handler_not_completed():
     )
 
 
-async def test_wait_handler_with_none_name():
+async def test_wait_handler_with_none_name() -> None:
     """Test wait_handler with None name."""
     mock_state = Mock(spec=ExecutionState)
 
@@ -125,7 +127,7 @@ async def test_wait_handler_with_none_name():
     )
 
 
-async def test_wait_handler_with_existent():
+async def test_wait_handler_with_existent() -> None:
     """Test wait_handler with existent operation."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.operations.get.return_value = Operation(
@@ -150,7 +152,7 @@ async def test_wait_handler_with_existent():
 # Start/replay handling tests
 
 
-async def test_wait_starts_without_second_status_evaluation():
+async def test_wait_starts_without_second_status_evaluation() -> None:
     """Test that start creates the checkpoint and suspends without re-reading state."""
     # Arrange
     mock_state = Mock(spec=ExecutionState)
@@ -186,7 +188,7 @@ async def test_wait_starts_without_second_status_evaluation():
     )
 
 
-async def test_wait_new_operation_suspends_after_checkpoint_creation():
+async def test_wait_new_operation_suspends_after_checkpoint_creation() -> None:
     """Test that a new wait suspends immediately after checkpoint creation."""
     # Arrange
     mock_state = Mock(spec=ExecutionState)
@@ -213,7 +215,7 @@ async def test_wait_new_operation_suspends_after_checkpoint_creation():
     mock_state.operations.get.assert_called_once_with("wait_immediate")
 
 
-async def test_wait_no_immediate_response_suspends():
+async def test_wait_no_immediate_response_suspends() -> None:
     """Test that wait suspends after creating a checkpoint."""
     # Arrange
     mock_state = Mock(spec=ExecutionState)
@@ -241,7 +243,7 @@ async def test_wait_no_immediate_response_suspends():
     mock_state.operations.get.assert_called_once_with("wait_suspend")
 
 
-async def test_wait_already_completed_no_checkpoint():
+async def test_wait_already_completed_no_checkpoint() -> None:
     """Test that already completed wait doesn't create checkpoint.
 
     When replaying and the wait is already completed, it should return
@@ -281,7 +283,7 @@ async def test_wait_already_completed_no_checkpoint():
     mock_state.operations.get.assert_called_once_with("wait_replay")
 
 
-async def test_wait_with_various_durations():
+async def test_wait_with_various_durations() -> None:
     """Test wait operations with different durations suspend with the right delay."""
     for seconds in [1, 30, 300, 3600]:
         # Arrange
@@ -312,7 +314,7 @@ async def test_wait_with_various_durations():
         assert call_args[1]["operation_update"].wait_options.wait_seconds == seconds
 
 
-async def test_wait_suspends_without_second_check():
+async def test_wait_suspends_without_second_check() -> None:
     """Test that a new wait suspends without checking the created operation."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"
@@ -334,7 +336,7 @@ async def test_wait_suspends_without_second_check():
     mock_state.create_checkpoint.assert_called_once()
 
 
-async def test_wait_suspends_without_second_check_duplicate():
+async def test_wait_suspends_without_second_check_duplicate() -> None:
     """Test that a new wait suspends without checking the created operation."""
     mock_state = Mock(spec=ExecutionState)
     mock_state.durable_execution_arn = "test_arn"

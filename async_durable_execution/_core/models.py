@@ -10,6 +10,7 @@ from typing import (
     Any,
     Protocol,
     TypeAlias,
+    TypeVar,
     get_args,
     get_origin,
     get_type_hints,
@@ -19,6 +20,7 @@ from typing import (
 ReplayChildren: TypeAlias = bool
 OperationPayload: TypeAlias = str
 TimeoutSeconds: TypeAlias = int
+_SerializableModelT = TypeVar("_SerializableModelT", bound="SerializableModel")
 
 
 class LambdaContext(Protocol):
@@ -171,15 +173,24 @@ class SerializableModel:
     """Dataclass mixin for the SDK's wire-format serialization helpers."""
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any]):
+    def from_dict(
+        cls: type[_SerializableModelT], data: Mapping[str, Any]
+    ) -> _SerializableModelT:
         return cls._from_mapping(data)
 
     @classmethod
-    def from_json_dict(cls, data: Mapping[str, Any]):
+    def from_json_dict(
+        cls: type[_SerializableModelT], data: Mapping[str, Any]
+    ) -> _SerializableModelT:
         return cls._from_mapping(data, json_mode=True)
 
     @classmethod
-    def _from_mapping(cls, data: Mapping[str, Any], *, json_mode: bool = False):
+    def _from_mapping(
+        cls: type[_SerializableModelT],
+        data: Mapping[str, Any],
+        *,
+        json_mode: bool = False,
+    ) -> _SerializableModelT:
         kwargs: dict[str, Any] = {}
         type_hints = get_type_hints(cls)
 
@@ -355,7 +366,7 @@ class OperationIdentifier:
         return self.operation_id
 
     @classmethod
-    def create_execution_op(cls):
+    def create_execution_op(cls) -> OperationIdentifier:
         return cls(None, OperationSubType.EXECUTION, None, None)
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import hashlib
 import logging
+from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
@@ -18,11 +19,19 @@ from .models import (
 
 if TYPE_CHECKING:
     from .models import LambdaContext
-    from .serdes import SerDesContext
     from .state import ExecutionState
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class SerDesContext:
+    """Context for serialization operations."""
+
+    operation_id: str = ""
+    durable_execution_arn: str = ""
+    recursive_level: int = 0
 
 
 class OperationIdGenerator:
@@ -164,7 +173,7 @@ class DurableContext(OperationContext):
         }
 
     @contextmanager
-    def _replay_aware(self, *, executes_user_code: bool = False):
+    def _replay_aware(self, *, executes_user_code: bool = False) -> Iterator[None]:
         """Update this context's replay status around one durable operation."""
         was_replaying = self.is_replaying()
         next_exists = was_replaying and self._next_operation_exists()
@@ -215,7 +224,7 @@ def ensure_durable_operations_allowed(operation_name: str) -> None:
 
 
 @contextmanager
-def bind_durable_definition(operation_name: str):
+def bind_durable_definition(operation_name: str) -> Iterator[None]:
     """Mark a synchronous definition phase in the current context."""
     token = _durable_definition_operation.set(operation_name)
     try:
@@ -234,7 +243,7 @@ def reset_current_context(token: Token) -> None:
     _current_context.reset(token)
 
 
-def get_current_context():
+def get_current_context() -> OperationContext | SerDesContext:
     """Return the currently active durable execution context.
 
     Raises:
@@ -271,7 +280,9 @@ def get_durable_context() -> DurableContext:
 
 
 @contextmanager
-def bind_current_context(context: OperationContext | SerDesContext):
+def bind_current_context(
+    context: OperationContext | SerDesContext,
+) -> Iterator[None]:
     """Temporarily bind the supplied durable context while invoking user code."""
     token = set_current_context(context)
     try:

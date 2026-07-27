@@ -10,7 +10,7 @@ from async_durable_execution import ErrorObject
 from examples.with_retry import with_retry_callback
 
 
-async def test_with_retry_callback_fails_twice_then_succeeds(durable_runner):
+async def test_with_retry_callback_fails_twice_then_succeeds(durable_runner) -> None:
     """Test that with_retry retries the callback flow after failures.
 
     The external system sends callback failure 2 times, then succeeds

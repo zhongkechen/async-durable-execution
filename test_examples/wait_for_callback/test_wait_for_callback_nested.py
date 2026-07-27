@@ -8,7 +8,7 @@ from examples.wait_for_callback import wait_for_callback_nested
 
 async def test_handle_nested_wait_for_callback_operations_in_child_contexts(
     durable_runner,
-):
+) -> None:
     """Test nested waitForCallback operations in child contexts."""
     async with durable_runner(
         handler=wait_for_callback_nested.handler, input=None, timeout=60

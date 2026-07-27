@@ -6,7 +6,7 @@ from examples.map import map_completion
 
 async def test_reproduce_completion_config_behavior_with_detailed_logging(
     durable_runner,
-):
+) -> None:
     """Demonstrates map behavior with minSuccessful and concurrent execution."""
     async with durable_runner(
         handler=map_completion.handler, input=None, timeout=60

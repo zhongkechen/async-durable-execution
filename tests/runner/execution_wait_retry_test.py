@@ -12,7 +12,7 @@ from async_durable_execution._runner.local.execution import Execution
 from async_durable_execution._runner.local.model import StartDurableExecutionInput
 
 
-def test_wait_and_retry_completion_sequence():
+def test_wait_and_retry_completion_sequence() -> None:
     """Test complete_wait and complete_retry operations."""
     input_data = StartDurableExecutionInput(
         account_id="123456789012",

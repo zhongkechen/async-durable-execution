@@ -11,7 +11,7 @@ from examples.wait_for_callback import (
 
 async def test_handle_wait_for_callback_heartbeat_scenarios_during_long_running_submitter(
     durable_runner,
-):
+) -> None:
     """Test waitForCallback heartbeat scenarios during long-running submitter execution."""
 
     async with durable_runner(

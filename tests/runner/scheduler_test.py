@@ -14,7 +14,7 @@ async def async_noop() -> None:
     """Reusable no-op callback for scheduler tests."""
 
 
-def wait_for_condition(condition_func, timeout_iterations=100):
+def wait_for_condition(condition_func, timeout_iterations=100) -> bool:
     """Wait for a condition to become true with polling."""
     loop = asyncio.get_event_loop()
     for _ in range(timeout_iterations):
@@ -24,21 +24,21 @@ def wait_for_condition(condition_func, timeout_iterations=100):
     return False
 
 
-def test_scheduler_init():
+def test_scheduler_init() -> None:
     """Test Scheduler initialization."""
     scheduler = Scheduler()
     assert not scheduler.is_started()
     assert scheduler.event_count() == 0
 
 
-def test_scheduler_context_manager():
+def test_scheduler_context_manager() -> None:
     """Test Scheduler as context manager."""
     with Scheduler() as scheduler:
         assert scheduler.is_started()
     assert not scheduler.is_started()
 
 
-def test_scheduler_start_stop():
+def test_scheduler_start_stop() -> None:
     """Test Scheduler start and stop methods."""
     scheduler = Scheduler()
 
@@ -57,7 +57,7 @@ def test_scheduler_start_stop():
     assert not scheduler.is_started()
 
 
-def test_scheduler_is_started():
+def test_scheduler_is_started() -> None:
     """Test Scheduler is_started method."""
     scheduler = Scheduler()
 
@@ -73,7 +73,7 @@ def test_scheduler_is_started():
     assert not scheduler.is_started()
 
 
-def test_scheduler_event_count():
+def test_scheduler_event_count() -> None:
     """Test Scheduler event_count method."""
     scheduler = Scheduler()
     scheduler.start()
@@ -96,7 +96,7 @@ def test_scheduler_event_count():
     scheduler.stop()
 
 
-def test_scheduler_task_count():
+def test_scheduler_task_count() -> None:
     """Test Scheduler task_count method."""
     scheduler = Scheduler()
 
@@ -125,14 +125,14 @@ def test_scheduler_task_count():
     scheduler.stop()
 
 
-def test_scheduler_call_later_async_function():
+def test_scheduler_call_later_async_function() -> None:
     """Test call_later with async function."""
     scheduler = Scheduler()
     scheduler.start()
 
     result = []
 
-    async def async_func():
+    async def async_func() -> None:
         result.append("async_executed")
 
     future = scheduler.call_later(async_func, delay=0.01)
@@ -145,7 +145,7 @@ def test_scheduler_call_later_async_function():
     scheduler.stop()
 
 
-def test_scheduler_call_later_multiple_count():
+def test_scheduler_call_later_multiple_count() -> None:
     """Test call_later with multiple executions."""
     scheduler = Scheduler()
     scheduler.start()
@@ -166,7 +166,7 @@ def test_scheduler_call_later_multiple_count():
     scheduler.stop()
 
 
-def test_scheduler_call_later_runs_async_functions():
+def test_scheduler_call_later_runs_async_functions() -> None:
     """Test scheduled async functions run."""
     scheduler = Scheduler()
     scheduler.start()
@@ -184,7 +184,7 @@ def test_scheduler_call_later_runs_async_functions():
     scheduler.stop()
 
 
-def test_scheduler_call_later_runs_on_caller_thread():
+def test_scheduler_call_later_runs_on_caller_thread() -> None:
     """Test scheduled callbacks run on the scheduler event loop thread."""
     scheduler = Scheduler()
     scheduler.start()
@@ -203,7 +203,7 @@ def test_scheduler_call_later_runs_on_caller_thread():
     scheduler.stop()
 
 
-def test_scheduler_call_later_infinite_count():
+def test_scheduler_call_later_infinite_count() -> None:
     """Test call_later with infinite count."""
     scheduler = Scheduler()
     scheduler.start()
@@ -224,7 +224,7 @@ def test_scheduler_call_later_infinite_count():
     scheduler.stop()
 
 
-def test_scheduler_call_later_function_exception():
+def test_scheduler_call_later_function_exception() -> None:
     """Test call_later with function that raises exception."""
     scheduler = Scheduler()
     scheduler.start()
@@ -244,7 +244,7 @@ def test_scheduler_call_later_function_exception():
     scheduler.stop()
 
 
-def test_scheduler_create_event():
+def test_scheduler_create_event() -> None:
     """Test create_event method."""
     scheduler = Scheduler()
     scheduler.start()
@@ -257,7 +257,7 @@ def test_scheduler_create_event():
     scheduler.stop()
 
 
-def test_task_cancel():
+def test_task_cancel() -> None:
     """Test Future cancel method."""
     scheduler = Scheduler()
     scheduler.start()
@@ -276,7 +276,7 @@ def test_task_cancel():
     scheduler.stop()
 
 
-def test_task_is_done():
+def test_task_is_done() -> None:
     """Test Future done property."""
     scheduler = Scheduler()
     scheduler.start()
@@ -295,7 +295,7 @@ def test_task_is_done():
     scheduler.stop()
 
 
-def test_task_result():
+def test_task_result() -> None:
     """Test Future result method."""
     scheduler = Scheduler()
     scheduler.start()
@@ -312,7 +312,7 @@ def test_task_result():
     scheduler.stop()
 
 
-def test_task_cancel_method():
+def test_task_cancel_method() -> None:
     """Test Future cancel method."""
     scheduler = Scheduler()
     scheduler.start()
@@ -327,7 +327,7 @@ def test_task_cancel_method():
     scheduler.stop()
 
 
-def test_task_result_completed():
+def test_task_result_completed() -> None:
     """Test Future result method when completed."""
     scheduler = Scheduler()
     scheduler.start()
@@ -344,7 +344,7 @@ def test_task_result_completed():
     scheduler.stop()
 
 
-def test_event_set_and_wait_timeout():
+def test_event_set_and_wait_timeout() -> None:
     """Test Event set and wait with timeout."""
     scheduler = Scheduler()
     scheduler.start()
@@ -365,7 +365,7 @@ def test_event_set_and_wait_timeout():
     scheduler.stop()
 
 
-def test_event_wait_set_by_scheduled_callback():
+def test_event_wait_set_by_scheduled_callback() -> None:
     """Test Event wait when set by a scheduled callback."""
     scheduler = Scheduler()
     scheduler.start()
@@ -382,7 +382,7 @@ def test_event_wait_set_by_scheduled_callback():
     scheduler.stop()
 
 
-def test_event_wait_clear_on_set_false():
+def test_event_wait_clear_on_set_false() -> None:
     """Test Event wait with clear_on_set=False."""
     scheduler = Scheduler()
     scheduler.start()
@@ -397,7 +397,7 @@ def test_event_wait_clear_on_set_false():
     scheduler.stop()
 
 
-def test_event_remove():
+def test_event_remove() -> None:
     """Test Event remove method."""
     scheduler = Scheduler()
     scheduler.start()
@@ -413,7 +413,7 @@ def test_event_remove():
     scheduler.stop()
 
 
-def test_event_wait_removed_event():
+def test_event_wait_removed_event() -> None:
     """Test Event wait on removed event."""
     scheduler = Scheduler()
     scheduler.start()
@@ -428,7 +428,7 @@ def test_event_wait_removed_event():
     scheduler.stop()
 
 
-def test_event_set_removed_event():
+def test_event_set_removed_event() -> None:
     """Test Event set on removed event."""
     scheduler = Scheduler()
     scheduler.start()
@@ -443,7 +443,7 @@ def test_event_set_removed_event():
     scheduler.stop()
 
 
-def test_scheduler_cleanup_on_stop():
+def test_scheduler_cleanup_on_stop() -> None:
     """Test scheduler cleanup when stopped."""
     scheduler = Scheduler()
     scheduler.start()
@@ -461,7 +461,7 @@ def test_scheduler_cleanup_on_stop():
     assert not scheduler.is_started()
 
 
-def test_scheduler_call_later_after_stop_returns_cancelled_future():
+def test_scheduler_call_later_after_stop_returns_cancelled_future() -> None:
     """Test call_later returns a cancelled future after shutdown starts."""
     scheduler = Scheduler()
     scheduler.start()
@@ -473,7 +473,7 @@ def test_scheduler_call_later_after_stop_returns_cancelled_future():
     assert future.cancelled()
 
 
-def test_scheduler_multiple_events():
+def test_scheduler_multiple_events() -> None:
     """Test scheduler with multiple events."""
     scheduler = Scheduler()
     scheduler.start()
@@ -493,7 +493,7 @@ def test_scheduler_multiple_events():
     scheduler.stop()
 
 
-def test_task_properties_after_scheduler_stop():
+def test_task_properties_after_scheduler_stop() -> None:
     """Test Future properties after scheduler is stopped."""
     scheduler = Scheduler()
     scheduler.start()
@@ -510,7 +510,7 @@ def test_task_properties_after_scheduler_stop():
     assert not future.cancelled()
 
 
-def test_event_timeout_handling():
+def test_event_timeout_handling() -> None:
     """Test Event timeout handling."""
     scheduler = Scheduler()
     scheduler.start()
@@ -527,7 +527,7 @@ def test_event_timeout_handling():
     scheduler.stop()
 
 
-def test_scheduler_call_later_zero_delay():
+def test_scheduler_call_later_zero_delay() -> None:
     """Test call_later with zero delay."""
     scheduler = Scheduler()
     scheduler.start()
@@ -546,7 +546,7 @@ def test_scheduler_call_later_zero_delay():
     scheduler.stop()
 
 
-def test_scheduler_call_later_default_parameters():
+def test_scheduler_call_later_default_parameters() -> None:
     """Test call_later with default parameters."""
     scheduler = Scheduler()
     scheduler.start()
@@ -565,7 +565,7 @@ def test_scheduler_call_later_default_parameters():
     scheduler.stop()
 
 
-def test_task_result_with_exception():
+def test_task_result_with_exception() -> None:
     """Test Future result method when function raises exception."""
     scheduler = Scheduler()
     scheduler.start()
@@ -591,7 +591,7 @@ def test_task_result_with_exception():
     scheduler.stop()
 
 
-def test_get_task_result_exception_handling():
+def test_get_task_result_exception_handling() -> None:
     """Test Future result exception handling."""
     scheduler = Scheduler()
     scheduler.start()
@@ -609,14 +609,14 @@ def test_get_task_result_exception_handling():
     scheduler.stop()
 
 
-def test_call_later_with_async_function():
+def test_call_later_with_async_function() -> None:
     """Test call_later runs async functions."""
     scheduler = Scheduler()
     scheduler.start()
 
     result = []
 
-    async def async_function():
+    async def async_function() -> None:
         result.append("async_executed")
 
     future = scheduler.call_later(async_function, delay=0.01)
@@ -628,7 +628,7 @@ def test_call_later_with_async_function():
     scheduler.stop()
 
 
-def test_event_set_exception():
+def test_event_set_exception() -> None:
     """Test Event set_exception method."""
     scheduler = Scheduler()
     scheduler.start()
@@ -644,7 +644,7 @@ def test_event_set_exception():
     scheduler.stop()
 
 
-def test_call_later_with_completion_event_exception():
+def test_call_later_with_completion_event_exception() -> None:
     """Test call_later with completion_event when function raises exception."""
     scheduler = Scheduler()
     scheduler.start()
@@ -665,7 +665,7 @@ def test_call_later_with_completion_event_exception():
     scheduler.stop()
 
 
-def test_call_later_multiple_iterations():
+def test_call_later_multiple_iterations() -> None:
     """Test call_later with multiple count iterations."""
     scheduler = Scheduler()
     scheduler.start()
@@ -690,7 +690,7 @@ def test_call_later_multiple_iterations():
     scheduler.stop()
 
 
-def test_wait_for_event_timeout_exception():
+def test_wait_for_event_timeout_exception() -> None:
     """Test _wait_for_event with timeout exception handling."""
     scheduler = Scheduler()
     scheduler.start()
@@ -704,7 +704,7 @@ def test_wait_for_event_timeout_exception():
     scheduler.stop()
 
 
-def test_call_later_loop_exit_condition():
+def test_call_later_loop_exit_condition() -> None:
     """Test call_later loop exit condition with count=0."""
     scheduler = Scheduler()
     scheduler.start()

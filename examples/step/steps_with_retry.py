@@ -50,7 +50,9 @@ async def handler(event: Any) -> dict[str, Any]:
             poll_count += 1
 
             @durable_callable
-            async def get_item(item_name: str = name):
+            async def get_item(
+                item_name: str = name,
+            ) -> dict[str, Any] | None:
                 return await simulated_get_item(item_name, poll_count)
 
             # Try to get the item with retry

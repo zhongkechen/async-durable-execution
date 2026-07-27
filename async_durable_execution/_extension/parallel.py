@@ -443,7 +443,9 @@ class BatchResult(SerializableModel, Generic[R]):  # noqa: PYI059
     def from_dict(
         cls, data: Mapping[str, Any], completion_config: CompletionConfig | None = None
     ) -> BatchResult[R]:
-        batch_items = [BatchItem.from_dict(item) for item in data["all"]]
+        batch_items: list[BatchItem[R]] = [
+            BatchItem.from_dict(item) for item in data["all"]
+        ]
 
         completion_reason_value = data.get("completionReason")
         if completion_reason_value is None:
@@ -733,7 +735,7 @@ class BranchStatus(Enum):
 class ExecutableWithState(Generic[CallableType, ResultType]):
     """Manages the execution state and lifecycle of an executable."""
 
-    def __init__(self, executable: Executable[CallableType]):
+    def __init__(self, executable: Executable[CallableType]) -> None:
         self.executable = executable
         self._status = BranchStatus.NOT_STARTED
         self._future: asyncio.Task[ResultType] | None = None
@@ -828,7 +830,7 @@ class ExecutionCounters:
         self,
         total_tasks: int,
         completion_config: CompletionConfig,
-    ):
+    ) -> None:
         self.total_tasks = total_tasks
         self.completion_config = completion_config
         self.success_count = 0
@@ -976,7 +978,7 @@ class ParallelExecutor(
         summary_generator: SummaryGenerator | None = None,
         nesting_type: NestingType = NestingType.NESTED,
         branch_namer: Callable[[int], str] | None = None,
-    ):
+    ) -> None:
         super().__init__(
             state=execution_state,
             operation_identifier=operation_identifier,
@@ -1375,7 +1377,7 @@ async def parallel_handler(
     iteration_sub_type: OperationSubType = OperationSubType.PARALLEL_BRANCH,
     name_prefix: str = "parallel-branch-",
     branch_namer: Callable[[int], str] | None = None,
-):
+) -> BatchResult[R]:
     """Execute multiple operations in parallel."""
     # Summary Generator Construction (matches TypeScript implementation):
     # Construct the summary generator at the handler level, just like TypeScript does in parallel-handler.ts.

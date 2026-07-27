@@ -85,7 +85,7 @@ class _DelayStrategy:
     jitter_strategy: JitterStrategy = field(default=JitterStrategy.FULL)
     increment: Duration | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.initial_delay = duration_to_seconds(self.initial_delay, "initial_delay")
         self.max_delay = duration_to_seconds(self.max_delay, "max_delay")
         if self.increment is not None:

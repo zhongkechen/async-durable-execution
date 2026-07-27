@@ -19,7 +19,7 @@ async def multiply(value: int) -> int:
 async def handler(event: Any) -> int:
     threshold = int(event)
 
-    async def check(state: int | None):
+    async def check(state: int | None) -> int:
         return (state or 0) + 1
 
     result = await wait_for_condition(

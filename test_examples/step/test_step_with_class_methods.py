@@ -4,7 +4,7 @@ from async_durable_execution import InvocationStatus
 from examples.step import step_with_class_methods
 
 
-async def test_step_with_class_methods(durable_runner):
+async def test_step_with_class_methods(durable_runner) -> None:
     """Test durable callable instance, class, and static methods."""
     async with durable_runner(
         handler=step_with_class_methods.handler,

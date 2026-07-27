@@ -10,7 +10,7 @@ from pathlib import Path
 PACKAGE_ROOT = Path(__file__).parents[1] / "async_durable_execution"
 
 
-def test_non_core_packages_import_core_through_package_facade():
+def test_non_core_packages_import_core_through_package_facade() -> None:
     """Sibling packages must depend on the core package interface."""
     violations: list[str] = []
 
@@ -44,7 +44,7 @@ def test_non_core_packages_import_core_through_package_facade():
     )
 
 
-def test_implementation_packages_are_not_public_import_paths():
+def test_implementation_packages_are_not_public_import_paths() -> None:
     """Only underscore-prefixed implementation package names are available."""
     for package_name in ("core", "runner", "primitive", "extension"):
         assert (

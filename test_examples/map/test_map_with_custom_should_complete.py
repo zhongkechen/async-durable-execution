@@ -5,7 +5,7 @@ from async_durable_execution import OperationStatus
 from examples.map import map_with_custom_should_complete
 
 
-async def test_map_with_custom_should_complete_succeeds(durable_runner):
+async def test_map_with_custom_should_complete_succeeds(durable_runner) -> None:
     """Custom completion can stop the map after enough successful items."""
     async with durable_runner(
         handler=map_with_custom_should_complete.handler,
@@ -34,7 +34,9 @@ async def test_map_with_custom_should_complete_succeeds(durable_runner):
     assert map_op.status is OperationStatus.SUCCEEDED
 
 
-async def test_map_with_custom_should_complete_can_complete_as_failed(durable_runner):
+async def test_map_with_custom_should_complete_can_complete_as_failed(
+    durable_runner,
+) -> None:
     """Custom completion can stop the map with failed completion semantics."""
     async with durable_runner(
         handler=map_with_custom_should_complete.handler,

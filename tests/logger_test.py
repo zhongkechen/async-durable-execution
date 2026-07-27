@@ -1,6 +1,7 @@
 """Unit tests for logger module."""
 
 from __future__ import annotations
+from typing import no_type_check
 
 import logging
 from collections.abc import Mapping
@@ -126,7 +127,7 @@ def create_durable_context(
     )
 
 
-def test_powertools_logger_compatibility():
+def test_powertools_logger_compatibility() -> None:
     """The public logger protocol should still accept Powertools-style loggers."""
     powertools_logger = PowertoolsLoggerStub()
 
@@ -144,7 +145,7 @@ def test_powertools_logger_compatibility():
     )
 
 
-def test_build_context_log_extra_for_durable_context():
+def test_build_context_log_extra_for_durable_context() -> None:
     context = create_durable_context(
         parent_id="parent-1",
         operation_id="context-op",
@@ -159,7 +160,7 @@ def test_build_context_log_extra_for_durable_context():
     }
 
 
-def test_build_context_log_extra_for_step_context():
+def test_build_context_log_extra_for_step_context() -> None:
     step_context = StepContext(
         attempt=2,
         execution_state=EXECUTION_STATE,
@@ -180,7 +181,7 @@ def test_build_context_log_extra_for_step_context():
     }
 
 
-def test_build_context_log_extra_includes_callback_id():
+def test_build_context_log_extra_includes_callback_id() -> None:
     callback_context = Mock(
         durable_execution_arn="arn:aws:test",
         parent_id=None,
@@ -196,7 +197,7 @@ def test_build_context_log_extra_includes_callback_id():
     }
 
 
-def test_filter_allows_logs_without_active_context():
+def test_filter_allows_logs_without_active_context() -> None:
     record = logging.LogRecord(
         name="test",
         level=logging.INFO,
@@ -210,7 +211,7 @@ def test_filter_allows_logs_without_active_context():
     assert DurableContextFilter().filter(record) is True
 
 
-def test_filter_allows_context_without_execution_state():
+def test_filter_allows_context_without_execution_state() -> None:
     record = logging.LogRecord(
         name="test",
         level=logging.INFO,
@@ -229,7 +230,7 @@ def test_filter_allows_context_without_execution_state():
         reset_current_context(token)
 
 
-def test_filter_raises_when_execution_state_is_none():
+def test_filter_raises_when_execution_state_is_none() -> None:
     record = logging.LogRecord(
         name="test",
         level=logging.INFO,
@@ -255,13 +256,14 @@ def test_filter_raises_when_execution_state_is_none():
         reset_current_context(token)
 
 
-def test_configure_durable_logger_ignores_objects_without_add_filter():
+def test_configure_durable_logger_ignores_objects_without_add_filter() -> None:
     logger = object()
 
     assert configure_durable_logger(logger) is logger
 
 
-def test_filter_adds_fields_from_active_context():
+@no_type_check
+def test_filter_adds_fields_from_active_context() -> None:
     record = logging.LogRecord(
         name="test",
         level=logging.INFO,
@@ -285,7 +287,8 @@ def test_filter_adds_fields_from_active_context():
     assert record.operationId == "context-op"
 
 
-def test_filter_preserves_existing_extra_fields():
+@no_type_check
+def test_filter_preserves_existing_extra_fields() -> None:
     record = logging.LogRecord(
         name="test",
         level=logging.INFO,
@@ -321,7 +324,7 @@ def test_filter_preserves_existing_extra_fields():
     assert record.attempt == 4
 
 
-def test_filter_suppresses_logs_during_replay():
+def test_filter_suppresses_logs_during_replay() -> None:
     operation = Operation(
         operation_id="op1",
         operation_type=OperationType.STEP,
@@ -361,7 +364,7 @@ def test_filter_suppresses_logs_during_replay():
     assert allowed is False
 
 
-def test_configure_durable_logger_is_idempotent_for_logger_and_handlers():
+def test_configure_durable_logger_is_idempotent_for_logger_and_handlers() -> None:
     logger = logging.getLogger("async_durable_execution.tests.logger")
     logger.handlers = []
     handler = logging.StreamHandler()

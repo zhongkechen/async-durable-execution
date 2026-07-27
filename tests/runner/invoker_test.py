@@ -46,7 +46,7 @@ from async_durable_execution._runner.local.model import (
 )
 
 
-def create_invocation_input(invoker, execution: Execution):
+def create_invocation_input(invoker, execution: Execution) -> Any:
     return invoker.create_invocation_input(
         start_input=execution.start_input,
         durable_execution_arn=execution.durable_execution_arn,
@@ -55,7 +55,7 @@ def create_invocation_input(invoker, execution: Execution):
     )
 
 
-def test_create_test_lambda_context():
+def test_create_test_lambda_context() -> None:
     """Test creating a test lambda context."""
     context = create_test_lambda_context()
 
@@ -67,7 +67,7 @@ def test_create_test_lambda_context():
     assert context.client_context is not None
 
 
-def test_in_process_invoker_init():
+def test_in_process_invoker_init() -> None:
     """Test InProcessInvoker initialization."""
     handler = Mock()
     service_client = Mock()
@@ -78,7 +78,7 @@ def test_in_process_invoker_init():
     assert invoker.service_client is service_client
 
 
-def test_in_process_invoker_create_invocation_input():
+def test_in_process_invoker_create_invocation_input() -> None:
     """Test creating invocation input for in-process invoker."""
     handler = Mock()
     service_client = Mock()
@@ -103,7 +103,7 @@ def test_in_process_invoker_create_invocation_input():
     assert isinstance(invocation_input.initial_execution_state, InitialExecutionState)
 
 
-async def test_in_process_invoker_invoke():
+async def test_in_process_invoker_invoke() -> None:
     """Test invoking function with in-process invoker."""
     # Mock handler that returns a valid response
     handler = Mock()
@@ -132,7 +132,7 @@ async def test_in_process_invoker_invoke():
     assert isinstance(call_args[1], LambdaContext)
 
 
-async def test_in_process_invoker_binds_service_client_to_decorated_handler():
+async def test_in_process_invoker_binds_service_client_to_decorated_handler() -> None:
     """Test in-process invoker rebinds decorated handlers to the runner client."""
     service_client = Mock()
 
@@ -165,7 +165,7 @@ async def test_in_process_invoker_binds_service_client_to_decorated_handler():
     assert response.invocation_output.result == '{"result": "test-result"}'
 
 
-def test_lambda_invoker_init():
+def test_lambda_invoker_init() -> None:
     """Test LambdaInvoker initialization."""
     lambda_client = Mock()
 
@@ -175,7 +175,7 @@ def test_lambda_invoker_init():
     assert invoker.lambda_client.client is lambda_client
 
 
-def test_lambda_invoker_create():
+def test_lambda_invoker_create() -> None:
     """Test creating LambdaInvoker with botocore client."""
     with patch("async_durable_execution._runner.cloud.get_session") as mock_boto3:
         mock_client = Mock()
@@ -194,7 +194,7 @@ def test_lambda_invoker_create():
         )
 
 
-async def test_lambda_invoker_invoke_success():
+async def test_lambda_invoker_invoke_success() -> None:
     """Test successful lambda invocation."""
     lambda_client = Mock()
 
@@ -246,7 +246,7 @@ async def test_lambda_invoker_invoke_success():
     )
 
 
-async def test_lambda_invoker_invoke_failure():
+async def test_lambda_invoker_invoke_failure() -> None:
     """Test lambda invocation failure."""
     from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
@@ -276,7 +276,7 @@ async def test_lambda_invoker_invoke_failure():
         await invoker.invoke("test-function", input_data)
 
 
-async def test_in_process_invoker_invoke_with_execution_operations():
+async def test_in_process_invoker_invoke_with_execution_operations() -> None:
     """Test in-process invoker with execution that has operations."""
     handler = Mock()
     handler.return_value = {"Status": "SUCCEEDED", "Result": None}
@@ -305,7 +305,7 @@ async def test_in_process_invoker_invoke_with_execution_operations():
     assert len(invocation_input.initial_execution_state.operations) > 0
 
 
-async def test_lambda_invoker_invoke_empty_function_name():
+async def test_lambda_invoker_invoke_empty_function_name() -> None:
     """Test lambda invocation with empty function name."""
     from async_durable_execution._runner.exceptions import (
         InvalidParameterValueException,
@@ -326,7 +326,7 @@ async def test_lambda_invoker_invoke_empty_function_name():
         await invoker.invoke("", input_data)
 
 
-async def test_lambda_invoker_invoke_whitespace_function_name():
+async def test_lambda_invoker_invoke_whitespace_function_name() -> None:
     """Test lambda invocation with whitespace-only function name."""
     from async_durable_execution._runner.exceptions import (
         InvalidParameterValueException,
@@ -347,7 +347,7 @@ async def test_lambda_invoker_invoke_whitespace_function_name():
         await invoker.invoke("   ", input_data)
 
 
-async def test_lambda_invoker_invoke_status_202():
+async def test_lambda_invoker_invoke_status_202() -> None:
     """Test lambda invocation with status code 202."""
     lambda_client = Mock()
 
@@ -377,7 +377,7 @@ async def test_lambda_invoker_invoke_status_202():
     assert response.request_id == "test-request-id-202"
 
 
-async def test_lambda_invoker_invoke_function_error():
+async def test_lambda_invoker_invoke_function_error() -> None:
     """Test lambda invocation with function error."""
     from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
@@ -408,7 +408,7 @@ async def test_lambda_invoker_invoke_function_error():
         await invoker.invoke("test-function", input_data)
 
 
-def _create_mock_lambda_client_with_exceptions():
+def _create_mock_lambda_client_with_exceptions() -> Any:
     """Helper to create mock lambda client with all exception types."""
     lambda_client = Mock()
 
@@ -454,7 +454,7 @@ def _create_mock_lambda_client_with_exceptions():
     return lambda_client, MockException
 
 
-async def test_lambda_invoker_invoke_resource_not_found():
+async def test_lambda_invoker_invoke_resource_not_found() -> None:
     """Test lambda invocation with ResourceNotFoundException."""
     from async_durable_execution._runner.exceptions import (
         ResourceNotFoundException,
@@ -486,7 +486,7 @@ async def test_lambda_invoker_invoke_resource_not_found():
         await invoker.invoke("test-function", input_data)
 
 
-async def test_lambda_invoker_invoke_invalid_parameter():
+async def test_lambda_invoker_invoke_invalid_parameter() -> None:
     """Test lambda invocation with InvalidParameterValueException."""
     from async_durable_execution._runner.exceptions import (
         InvalidParameterValueException,
@@ -518,7 +518,7 @@ async def test_lambda_invoker_invoke_invalid_parameter():
         await invoker.invoke("test-function", input_data)
 
 
-async def test_lambda_invoker_invoke_service_exception():
+async def test_lambda_invoker_invoke_service_exception() -> None:
     """Test lambda invocation with ServiceException."""
     from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
@@ -546,7 +546,7 @@ async def test_lambda_invoker_invoke_service_exception():
         await invoker.invoke("test-function", input_data)
 
 
-async def test_lambda_invoker_invoke_ec2_exception():
+async def test_lambda_invoker_invoke_ec2_exception() -> None:
     """Test lambda invocation with EC2 exception."""
     from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
@@ -574,7 +574,7 @@ async def test_lambda_invoker_invoke_ec2_exception():
         await invoker.invoke("test-function", input_data)
 
 
-async def test_lambda_invoker_invoke_kms_exception():
+async def test_lambda_invoker_invoke_kms_exception() -> None:
     """Test lambda invocation with KMS exception."""
     from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
@@ -602,7 +602,7 @@ async def test_lambda_invoker_invoke_kms_exception():
         await invoker.invoke("test-function", input_data)
 
 
-async def test_lambda_invoker_invoke_durable_execution_already_started():
+async def test_lambda_invoker_invoke_durable_execution_already_started() -> None:
     """Test lambda invocation with DurableExecutionAlreadyStartedException."""
     from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
@@ -635,7 +635,7 @@ async def test_lambda_invoker_invoke_durable_execution_already_started():
         await invoker.invoke("test-function", input_data)
 
 
-async def test_lambda_invoker_invoke_unexpected_exception():
+async def test_lambda_invoker_invoke_unexpected_exception() -> None:
     """Test lambda invocation with unexpected exception."""
     from async_durable_execution._runner.exceptions import (
         DurableFunctionsTestError,
@@ -658,7 +658,7 @@ async def test_lambda_invoker_invoke_unexpected_exception():
         await invoker.invoke("test-function", input_data)
 
 
-def test_create_lambda_client_uses_configured_timeout():
+def test_create_lambda_client_uses_configured_timeout() -> None:
     """Test create_lambda_client passes the durable test runner config to botocore."""
     with patch("async_durable_execution._runner.cloud.get_session") as mock_session:
         mock_client = Mock()
@@ -679,7 +679,7 @@ def test_create_lambda_client_uses_configured_timeout():
 @patch("async_durable_execution._runner.cloud.importlib.import_module")
 def test_create_lambda_client_prefers_async_when_aioboto_installed(
     mock_import_module, monkeypatch
-):
+) -> None:
     """Test create_lambda_client prefers an aioboto client when available."""
     monkeypatch.setattr(cloud_module, "aioboto_is_installed", lambda: True)
     mock_context = MagicMock()
@@ -702,7 +702,7 @@ def test_create_lambda_client_prefers_async_when_aioboto_installed(
     )
 
 
-async def test_async_cloud_lambda_client_invokes_async_client():
+async def test_async_cloud_lambda_client_invokes_async_client() -> None:
     """Test AsyncCloudLambdaClient awaits async Lambda operations."""
     raw_client = Mock()
     raw_client.invoke = AsyncMock(return_value={"StatusCode": 202})
@@ -714,7 +714,7 @@ async def test_async_cloud_lambda_client_invokes_async_client():
     raw_client.invoke.assert_awaited_once_with(FunctionName="test-function")
 
 
-def test_lambda_invoker_update_endpoint_reuses_cached_client():
+def test_lambda_invoker_update_endpoint_reuses_cached_client() -> None:
     """Test update_endpoint creates a client once per endpoint."""
     initial_client = Mock()
     endpoint_client = Mock()
@@ -733,7 +733,7 @@ def test_lambda_invoker_update_endpoint_reuses_cached_client():
     mock_create_client.assert_called_once_with("http://localhost:3001", "us-west-2")
 
 
-def test_lambda_invoker_get_client_for_explicit_endpoint_creates_client():
+def test_lambda_invoker_get_client_for_explicit_endpoint_creates_client() -> None:
     """Test explicit per-invocation endpoint selection creates and caches a client."""
     initial_client = Mock()
     endpoint_client = Mock()
@@ -760,7 +760,7 @@ def test_lambda_invoker_get_client_for_explicit_endpoint_creates_client():
     mock_create_client.assert_called_once_with("http://localhost:3002", "us-west-2")
 
 
-def test_lambda_invoker_get_client_for_execution_uses_current_endpoint():
+def test_lambda_invoker_get_client_for_execution_uses_current_endpoint() -> None:
     """Test executions are pinned to the current cached endpoint."""
     initial_client = Mock()
     endpoint_client = Mock()
@@ -774,7 +774,7 @@ def test_lambda_invoker_get_client_for_execution_uses_current_endpoint():
     assert invoker._execution_endpoints["execution-arn"] == "http://localhost:3003"
 
 
-async def test_lambda_invoker_invoke_generates_request_id_when_header_missing():
+async def test_lambda_invoker_invoke_generates_request_id_when_header_missing() -> None:
     """Test Lambda invoke falls back to a generated request id."""
     lambda_client = Mock()
     lambda_client.invoke.return_value = {

@@ -40,7 +40,7 @@ async def test_flow_failure_recovery(
     approved,
     expected_statuses,
     expected_outcomes,
-):
+) -> None:
     """Verify success and failure conditions select the expected branch."""
     async with durable_runner(
         handler=flow_failure_recovery.handler,

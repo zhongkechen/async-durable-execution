@@ -8,7 +8,7 @@ from examples.callback import callback_mixed_ops
 
 async def test_handle_callback_operations_mixed_with_other_operation_types(
     durable_runner,
-):
+) -> None:
     """Test callback operations mixed with other operation types."""
     async with durable_runner(
         handler=callback_mixed_ops.handler, input=None, timeout=30

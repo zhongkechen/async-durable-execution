@@ -1,5 +1,7 @@
 """Unit tests for exceptions module."""
 
+from typing import no_type_check
+
 import time
 from unittest.mock import patch
 
@@ -33,7 +35,7 @@ from async_durable_execution._primitive.callback import CallbackError
 from async_durable_execution._primitive.step import StepInterruptedError
 
 
-def test_user_facing_exceptions_importable_from_package_root():
+def test_user_facing_exceptions_importable_from_package_root() -> None:
     """User-facing exception types are re-exported from the package root."""
     import async_durable_execution as ade
 
@@ -55,7 +57,7 @@ def test_user_facing_exceptions_importable_from_package_root():
         assert name in ade.__all__
 
 
-def test_internal_exceptions_not_exported_from_package_root():
+def test_internal_exceptions_not_exported_from_package_root() -> None:
     """Internal control-flow and transport exceptions stay out of root exports."""
     import async_durable_execution as ade
 
@@ -76,7 +78,7 @@ def test_internal_exceptions_not_exported_from_package_root():
         assert name not in ade.__all__
 
 
-def test_orphaned_child_exception_bypasses_user_exception_handler():
+def test_orphaned_child_exception_bypasses_user_exception_handler() -> None:
     """Orphaned child control flow bypasses broad user exception handlers."""
     caught_by_exception = False
     caught_by_base_exception = False
@@ -98,21 +100,21 @@ def test_orphaned_child_exception_bypasses_user_exception_handler():
     assert str(exception_instance) == "test message"
 
 
-def test_orphaned_child_exception_with_operation_id():
+def test_orphaned_child_exception_with_operation_id() -> None:
     """OrphanedChildException stores operation_id correctly."""
     exception = OrphanedChildException("parent completed", operation_id="child_op_456")
     assert exception.operation_id == "child_op_456"
     assert str(exception) == "parent completed"
 
 
-def test_durable_executions_error():
+def test_durable_executions_error() -> None:
     """Test DurableExecutionsError base exception."""
     error = DurableExecutionsError("test message")
     assert str(error) == "test message"
     assert isinstance(error, Exception)
 
 
-def test_invocation_error():
+def test_invocation_error() -> None:
     """Test InvocationError exception."""
     error = InvocationError("invocation error")
     assert str(error) == "invocation error"
@@ -121,28 +123,28 @@ def test_invocation_error():
     assert error.termination_reason == TerminationReason.INVOCATION_ERROR
 
 
-def test_invocation_error_default_retry_metadata():
+def test_invocation_error_default_retry_metadata() -> None:
     error = InvocationError("temporary")
 
     assert error.is_retryable()
     assert error.build_logger_extras() == {}
 
 
-def test_non_deterministic_execution_error_sets_step_id():
+def test_non_deterministic_execution_error_sets_step_id() -> None:
     error = NonDeterministicExecutionError("replay mismatch", step_id="step-1")
 
     assert error.termination_reason == TerminationReason.NON_DETERMINISTIC_EXECUTION
     assert error.step_id == "step-1"
 
 
-def test_background_thread_error_preserves_source_exception():
+def test_background_thread_error_preserves_source_exception() -> None:
     source = RuntimeError("background failed")
     error = BackgroundThreadError("checkpoint thread failed", source)
 
     assert error.source_exception is source
 
 
-def test_checkpoint_error():
+def test_checkpoint_error() -> None:
     """Test CheckpointError exception."""
     error = CheckpointError(
         "checkpoint failed", error_category=CheckpointErrorCategory.EXECUTION
@@ -153,7 +155,8 @@ def test_checkpoint_error():
     assert error.termination_reason == TerminationReason.CHECKPOINT_FAILED
 
 
-def test_checkpoint_error_classification_invalid_token_invocation():
+@no_type_check
+def test_checkpoint_error_classification_invalid_token_invocation() -> None:
     """Test 4xx InvalidParameterValueException with Invalid Checkpoint Token is invocation error."""
     error_response = {
         "Error": {
@@ -170,7 +173,8 @@ def test_checkpoint_error_classification_invalid_token_invocation():
     assert result.is_retryable()
 
 
-def test_checkpoint_error_classification_payload_size_exceeded_execution():
+@no_type_check
+def test_checkpoint_error_classification_payload_size_exceeded_execution() -> None:
     """Test 4xx InvalidParameterValueException with STEP output payload size limit exceeded is execution error."""
     error_response = {
         "Error": {
@@ -187,7 +191,10 @@ def test_checkpoint_error_classification_payload_size_exceeded_execution():
     assert not result.is_retryable()
 
 
-def test_checkpoint_error_classification_invalid_param_without_token_execution():
+@no_type_check
+def test_checkpoint_error_classification_invalid_param_without_token_execution() -> (
+    None
+):
     """Test 4xx InvalidParameterValueException without Invalid Checkpoint Token is execution error."""
     error_response = {
         "Error": {
@@ -222,7 +229,7 @@ def test_checkpoint_error_classification_invalid_param_without_token_execution()
 )
 def test_durable_api_error_non_retryable_customer_error_codes(
     error_cls, error_code: str
-):
+) -> None:
     """Test that non-retryable customer error codes (HTTP 502) are classified as EXECUTION."""
     error_response = {
         "Error": {"Code": error_code, "Message": f"{error_code} error"},
@@ -235,7 +242,8 @@ def test_durable_api_error_non_retryable_customer_error_codes(
 
 
 @pytest.mark.parametrize("error_cls", [CheckpointError, GetExecutionStateError])
-def test_durable_api_error_4xx_non_retryable(error_cls):
+@no_type_check
+def test_durable_api_error_4xx_non_retryable(error_cls) -> None:
     """Test 4xx errors are classified as EXECUTION (non-retryable)."""
     error_response = {
         "Error": {"Code": "ValidationException", "Message": "Invalid parameter"},
@@ -248,7 +256,8 @@ def test_durable_api_error_4xx_non_retryable(error_cls):
 
 
 @pytest.mark.parametrize("error_cls", [CheckpointError, GetExecutionStateError])
-def test_durable_api_error_429_retryable(error_cls):
+@no_type_check
+def test_durable_api_error_429_retryable(error_cls) -> None:
     """Test 429 errors are classified as INVOCATION (retryable)."""
     error_response = {
         "Error": {"Code": "TooManyRequestsException", "Message": "Rate limit exceeded"},
@@ -261,7 +270,8 @@ def test_durable_api_error_429_retryable(error_cls):
 
 
 @pytest.mark.parametrize("error_cls", [CheckpointError, GetExecutionStateError])
-def test_durable_api_error_5xx_retryable(error_cls):
+@no_type_check
+def test_durable_api_error_5xx_retryable(error_cls) -> None:
     """Test 5xx errors are classified as INVOCATION (retryable)."""
     error_response = {
         "Error": {"Code": "InternalServerError", "Message": "Service unavailable"},
@@ -274,7 +284,8 @@ def test_durable_api_error_5xx_retryable(error_cls):
 
 
 @pytest.mark.parametrize("error_cls", [CheckpointError, GetExecutionStateError])
-def test_durable_api_error_retryable_502(error_cls):
+@no_type_check
+def test_durable_api_error_retryable_502(error_cls) -> None:
     """Test that 502 errors with unrecognized error codes are retryable."""
     error_response = {
         "Error": {
@@ -290,28 +301,28 @@ def test_durable_api_error_retryable_502(error_cls):
 
 
 @pytest.mark.parametrize("error_cls", [CheckpointError, GetExecutionStateError])
-def test_durable_api_error_unknown_retryable(error_cls):
+def test_durable_api_error_unknown_retryable(error_cls) -> None:
     """Test unknown errors (no HTTP response) are classified as INVOCATION (retryable)."""
     result = error_cls.from_exception(Exception("Network timeout"))
     assert result.error_category == DurableApiErrorCategory.INVOCATION
     assert result.is_retryable()
 
 
-def test_validation_error():
+def test_validation_error() -> None:
     """Test ValidationError exception."""
     error = ValidationError("validation failed")
     assert str(error) == "validation failed"
     assert isinstance(error, DurableExecutionsError)
 
 
-def test_userland_error():
+def test_userland_error() -> None:
     """Test UserlandError exception."""
     error = UserlandError("userland error")
     assert str(error) == "userland error"
     assert isinstance(error, DurableExecutionsError)
 
 
-def test_callable_runtime_error():
+def test_callable_runtime_error() -> None:
     """Test CallableRuntimeError exception."""
     error = CallableRuntimeError(
         "runtime error", "ValueError", "error data", ["line1", "line2"]
@@ -323,7 +334,7 @@ def test_callable_runtime_error():
     assert isinstance(error, UserlandError)
 
 
-def test_callable_runtime_error_with_none_values():
+def test_callable_runtime_error_with_none_values() -> None:
     """Test CallableRuntimeError with None values."""
     error = CallableRuntimeError(None, None, None, None)
     assert error.message is None
@@ -331,14 +342,14 @@ def test_callable_runtime_error_with_none_values():
     assert error.data is None
 
 
-def test_suspend_execution():
+def test_suspend_execution() -> None:
     """Test SuspendExecution exception."""
     error = SuspendExecution("suspend execution")
     assert str(error) == "suspend execution"
     assert isinstance(error, BaseException)
 
 
-def test_callable_runtime_error_serializable_details_from_exception():
+def test_callable_runtime_error_serializable_details_from_exception() -> None:
     """Test CallableRuntimeErrorSerializableDetails.from_exception."""
     exception = ValueError("test error")
     details = CallableRuntimeErrorSerializableDetails.from_exception(exception)
@@ -346,20 +357,21 @@ def test_callable_runtime_error_serializable_details_from_exception():
     assert details.message == "test error"
 
 
-def test_callable_runtime_error_serializable_details_str():
+def test_callable_runtime_error_serializable_details_str() -> None:
     """Test CallableRuntimeErrorSerializableDetails.__str__."""
     details = CallableRuntimeErrorSerializableDetails("TypeError", "type error message")
     assert str(details) == "TypeError: type error message"
 
 
-def test_callable_runtime_error_serializable_details_frozen():
+@no_type_check
+def test_callable_runtime_error_serializable_details_frozen() -> None:
     """Test CallableRuntimeErrorSerializableDetails is frozen."""
     details = CallableRuntimeErrorSerializableDetails("Error", "message")
     with pytest.raises(AttributeError):
         details.type = "NewError"
 
 
-def test_timed_suspend_execution():
+def test_timed_suspend_execution() -> None:
     """Test TimedSuspendExecution exception."""
     scheduled_time = 1234567890.0
     error = TimedSuspendExecution("timed suspend", scheduled_time)
@@ -369,7 +381,7 @@ def test_timed_suspend_execution():
     assert isinstance(error, BaseException)
 
 
-def test_timed_suspend_execution_from_delay():
+def test_timed_suspend_execution_from_delay() -> None:
     """Test TimedSuspendExecution.from_delay factory method."""
     message = "Waiting for callback"
     delay_seconds = 30
@@ -384,7 +396,7 @@ def test_timed_suspend_execution_from_delay():
     assert isinstance(error, SuspendExecution)
 
 
-def test_timed_suspend_execution_from_delay_zero_delay():
+def test_timed_suspend_execution_from_delay_zero_delay() -> None:
     """Test TimedSuspendExecution.from_delay with zero delay."""
     message = "Immediate suspension"
     delay_seconds = 0
@@ -397,7 +409,7 @@ def test_timed_suspend_execution_from_delay_zero_delay():
     assert isinstance(error, TimedSuspendExecution)
 
 
-def test_timed_suspend_execution_from_delay_negative_delay():
+def test_timed_suspend_execution_from_delay_negative_delay() -> None:
     """Test TimedSuspendExecution.from_delay with negative delay."""
     message = "Past suspension"
     delay_seconds = -10
@@ -410,7 +422,7 @@ def test_timed_suspend_execution_from_delay_negative_delay():
     assert isinstance(error, TimedSuspendExecution)
 
 
-def test_timed_suspend_execution_from_delay_large_delay():
+def test_timed_suspend_execution_from_delay_large_delay() -> None:
     """Test TimedSuspendExecution.from_delay with large delay."""
     message = "Long suspension"
     delay_seconds = 3600  # 1 hour
@@ -423,7 +435,7 @@ def test_timed_suspend_execution_from_delay_large_delay():
     assert isinstance(error, TimedSuspendExecution)
 
 
-def test_timed_suspend_execution_from_delay_calculation_accuracy():
+def test_timed_suspend_execution_from_delay_calculation_accuracy() -> None:
     """Test that TimedSuspendExecution.from_delay calculates time accurately."""
     message = "Accurate timing test"
     delay_seconds = 42
@@ -443,7 +455,7 @@ def test_timed_suspend_execution_from_delay_calculation_accuracy():
     assert isinstance(error, TimedSuspendExecution)
 
 
-def test_unrecoverable_error():
+def test_unrecoverable_error() -> None:
     """Test UnrecoverableError base class."""
     error = UnrecoverableError("unrecoverable error", TerminationReason.EXECUTION_ERROR)
     assert str(error) == "unrecoverable error"
@@ -451,7 +463,7 @@ def test_unrecoverable_error():
     assert isinstance(error, DurableExecutionsError)
 
 
-def test_execution_error():
+def test_execution_error() -> None:
     """Test ExecutionError exception."""
     error = ExecutionError("execution error")
     assert str(error) == "execution error"
@@ -460,7 +472,7 @@ def test_execution_error():
     assert error.termination_reason == TerminationReason.EXECUTION_ERROR
 
 
-def test_execution_error_with_custom_termination_reason():
+def test_execution_error_with_custom_termination_reason() -> None:
     """Test ExecutionError with custom termination reason."""
     error = ExecutionError("custom error", TerminationReason.SERIALIZATION_ERROR)
     assert str(error) == "custom error"
@@ -477,7 +489,7 @@ def test_execution_error_with_custom_termination_reason():
 )
 def test_boto_client_error_is_retryable(
     error_code: str, status_code: int, expected_retryable: bool
-):
+) -> None:
     """Test BotoClientError.is_retryable() classification."""
     error_response = {
         "Error": {"Code": error_code, "Message": "test error"},
@@ -488,7 +500,7 @@ def test_boto_client_error_is_retryable(
     assert result.is_retryable() == expected_retryable
 
 
-def test_boto_client_error_is_retryable_no_error():
+def test_boto_client_error_is_retryable_no_error() -> None:
     """Test BotoClientError.is_retryable() returns True with no error info."""
     result = BotoClientError.from_exception(Exception("network error"))
     assert result.is_retryable()
@@ -499,7 +511,7 @@ def test_boto_client_error_is_retryable_no_error():
 # =============================================================================
 
 
-def test_durable_api_error_category_backward_compatible_alias():
+def test_durable_api_error_category_backward_compatible_alias() -> None:
     """Test CheckpointErrorCategory is a backward-compatible alias for DurableApiErrorCategory."""
     assert CheckpointErrorCategory is DurableApiErrorCategory
     assert CheckpointErrorCategory.INVOCATION is DurableApiErrorCategory.INVOCATION
@@ -511,7 +523,7 @@ def test_durable_api_error_category_backward_compatible_alias():
 # =============================================================================
 
 
-def test_invocation_error_is_retryable_default():
+def test_invocation_error_is_retryable_default() -> None:
     """Test InvocationError.is_retryable() returns True by default."""
     error = InvocationError("some error")
     assert error.is_retryable()

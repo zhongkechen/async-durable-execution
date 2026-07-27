@@ -20,11 +20,11 @@ class Event:
         self._event: asyncio.Event = event
         self._exception: Exception | None = None
 
-    def set(self):
+    def set(self) -> None:
         """Set the event with this to unblock wait."""
         self._scheduler.set_event(self._event)
 
-    def set_exception(self, exception: Exception):
+    def set_exception(self, exception: Exception) -> None:
         """Set exception and unblock waiters."""
         self._exception = exception
         self._scheduler.set_event(self._event)
@@ -50,7 +50,7 @@ class Event:
             self.wait_async(timeout=timeout, clear_on_set=clear_on_set)
         )
 
-    def remove(self):
+    def remove(self) -> None:
         """Remove the event from the Scheduler."""
         self._scheduler.remove_event(self._event)
 
@@ -66,21 +66,21 @@ class Scheduler:
         self._running_tasks: dict[asyncio.Future[Any], asyncio.Task[Any]] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
 
-    def __enter__(self):
+    def __enter__(self) -> Scheduler:
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.stop()
 
-    def start(self):
+    def start(self) -> None:
         """Start the scheduler. Not thread-safe."""
         if self._running:
             return
         self._loop = self._get_or_create_loop()
         self._running = True
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the scheduler, releasing resources. Not thread-safe."""
         if not self._running:
             return
@@ -194,13 +194,13 @@ class Scheduler:
             return False
         return event in self._events
 
-    def set_event(self, event: asyncio.Event):
+    def set_event(self, event: asyncio.Event) -> None:
         """Set event if it is still tracked by the Scheduler."""
         should_set = event in self._events
         if should_set:
             event.set()
 
-    def remove_event(self, event: asyncio.Event):
+    def remove_event(self, event: asyncio.Event) -> None:
         """Remove event from Scheduler."""
         self._events.discard(event)
         event.set()

@@ -11,7 +11,7 @@ from examples.wait_for_callback.wait_for_callback_serdes import (
 
 async def test_handle_wait_for_callback_with_custom_serdes_configuration(
     durable_runner,
-):
+) -> None:
     """Test waitForCallback with custom serdes configuration."""
     async with durable_runner(
         handler=wait_for_callback_serdes.handler, input=None, timeout=30

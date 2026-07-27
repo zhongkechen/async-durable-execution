@@ -1,7 +1,10 @@
 """Tests for the service module."""
 
+from typing import no_type_check
+
 import asyncio
 import datetime
+from collections.abc import Iterator
 from datetime import timezone
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -58,7 +61,7 @@ from async_durable_execution._core.client import DurableServiceClient
 
 
 @pytest.fixture
-def reset_lambda_client_cache():
+def reset_lambda_client_cache() -> Iterator[None]:
     """Reset the class-level botocore client cache before and after each test."""
     ThreadedSyncLambdaClient._cached_boto_client = None  # noqa: SLF001
     yield
@@ -66,7 +69,7 @@ def reset_lambda_client_cache():
 
 
 @patch("async_durable_execution._core.client.get_session")
-async def test_lambda_client_checkpoint(_mock_get_session):
+async def test_lambda_client_checkpoint(_mock_get_session) -> None:
     """Test ThreadedSyncLambdaClient.checkpoint method."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
@@ -93,7 +96,7 @@ async def test_lambda_client_checkpoint(_mock_get_session):
 
 
 @pytest.mark.parametrize("token", [None, ""])
-async def test_lambda_client_checkpoint_rejects_missing_token(token):
+async def test_lambda_client_checkpoint_rejects_missing_token(token) -> None:
     """Sync-backed checkpoint calls reject missing tokens before the API call."""
     mock_client = Mock()
     lambda_client = ThreadedSyncLambdaClient(mock_client)
@@ -107,7 +110,7 @@ async def test_lambda_client_checkpoint_rejects_missing_token(token):
 
 
 @pytest.mark.parametrize("token", [None, ""])
-async def test_lambda_client_get_execution_state_rejects_missing_token(token):
+async def test_lambda_client_get_execution_state_rejects_missing_token(token) -> None:
     """Sync-backed state calls reject missing tokens before the API call."""
     mock_client = Mock()
     lambda_client = ThreadedSyncLambdaClient(mock_client)
@@ -121,7 +124,7 @@ async def test_lambda_client_get_execution_state_rejects_missing_token(token):
     mock_client.get_durable_execution_state.assert_not_called()
 
 
-async def test_lambda_client_checkpoint_with_client_token():
+async def test_lambda_client_checkpoint_with_client_token() -> None:
     """Test ThreadedSyncLambdaClient.checkpoint method with client_token."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
@@ -150,7 +153,7 @@ async def test_lambda_client_checkpoint_with_client_token():
     assert result.checkpoint_token == "new_token"  # noqa: S105
 
 
-async def test_lambda_client_checkpoint_with_explicit_none_client_token():
+async def test_lambda_client_checkpoint_with_explicit_none_client_token() -> None:
     """Test ThreadedSyncLambdaClient.checkpoint method with explicit None client_token - should not pass ClientToken."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
@@ -176,7 +179,7 @@ async def test_lambda_client_checkpoint_with_explicit_none_client_token():
     assert result.checkpoint_token == "new_token"  # noqa: S105
 
 
-async def test_lambda_client_checkpoint_with_empty_string_client_token():
+async def test_lambda_client_checkpoint_with_empty_string_client_token() -> None:
     """Test ThreadedSyncLambdaClient.checkpoint method with empty string client_token - should pass empty string."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
@@ -203,7 +206,7 @@ async def test_lambda_client_checkpoint_with_empty_string_client_token():
     assert result.checkpoint_token == "new_token"  # noqa: S105
 
 
-async def test_lambda_client_checkpoint_with_string_value_client_token():
+async def test_lambda_client_checkpoint_with_string_value_client_token() -> None:
     """Test ThreadedSyncLambdaClient.checkpoint method with string value client_token - should pass the value."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
@@ -232,7 +235,7 @@ async def test_lambda_client_checkpoint_with_string_value_client_token():
     assert result.checkpoint_token == "new_token"  # noqa: S105
 
 
-async def test_lambda_client_checkpoint_with_exception():
+async def test_lambda_client_checkpoint_with_exception() -> None:
     """Test ThreadedSyncLambdaClient.checkpoint method with exception."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.side_effect = Exception("API Error")
@@ -249,7 +252,8 @@ async def test_lambda_client_checkpoint_with_exception():
 
 
 @patch("async_durable_execution._core.client.logger")
-async def test_lambda_client_checkpoint_logs_response_metadata(mock_logger):
+@no_type_check
+async def test_lambda_client_checkpoint_logs_response_metadata(mock_logger) -> None:
     """Test ThreadedSyncLambdaClient.checkpoint logs ResponseMetadata from boto3 exception."""
     mock_client = Mock()
     boto_error = Exception("API Error")
@@ -285,7 +289,10 @@ async def test_lambda_client_checkpoint_logs_response_metadata(mock_logger):
 
 
 @patch("async_durable_execution._core.client.logger")
-async def test_lambda_client_get_execution_state_logs_response_metadata(mock_logger):
+@no_type_check
+async def test_lambda_client_get_execution_state_logs_response_metadata(
+    mock_logger,
+) -> None:
     """Test ThreadedSyncLambdaClient.get_execution_state logs ResponseMetadata from boto3 exception."""
     mock_client = Mock()
     boto_error = Exception("API Error")
@@ -322,7 +329,8 @@ async def test_lambda_client_get_execution_state_logs_response_metadata(mock_log
     )
 
 
-async def test_durable_service_client_protocol_checkpoint():
+@no_type_check
+async def test_durable_service_client_protocol_checkpoint() -> None:
     """Test DurableServiceClient protocol checkpoint method signature."""
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = CheckpointOutput(
@@ -350,14 +358,14 @@ async def test_durable_service_client_protocol_checkpoint():
 # =============================================================================
 
 
-async def test_lambda_client_constructor():
+async def test_lambda_client_constructor() -> None:
     """Test ThreadedSyncLambdaClient constructor to cover lines 931-945."""
     mock_client = Mock()
     client = ThreadedSyncLambdaClient(mock_client)
     assert isinstance(client, ThreadedSyncLambdaClient)
 
 
-async def test_async_lambda_client_checkpoint():
+async def test_async_lambda_client_checkpoint() -> None:
     """Test AsyncLambdaClient.checkpoint method."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution = AsyncMock(
@@ -384,7 +392,7 @@ async def test_async_lambda_client_checkpoint():
     assert result.checkpoint_token == "new_token"  # noqa: S105
 
 
-async def test_async_lambda_client_get_execution_state():
+async def test_async_lambda_client_get_execution_state() -> None:
     """Test AsyncLambdaClient.get_execution_state method."""
     mock_client = Mock()
     mock_client.get_durable_execution_state = AsyncMock(
@@ -405,7 +413,7 @@ async def test_async_lambda_client_get_execution_state():
 
 
 @pytest.mark.parametrize("token", [None, ""])
-async def test_async_lambda_client_checkpoint_rejects_missing_token(token):
+async def test_async_lambda_client_checkpoint_rejects_missing_token(token) -> None:
     """Async checkpoint calls reject missing tokens before the API call."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution = AsyncMock()
@@ -420,7 +428,9 @@ async def test_async_lambda_client_checkpoint_rejects_missing_token(token):
 
 
 @pytest.mark.parametrize("token", [None, ""])
-async def test_async_lambda_client_get_execution_state_rejects_missing_token(token):
+async def test_async_lambda_client_get_execution_state_rejects_missing_token(
+    token,
+) -> None:
     """Async state calls reject missing tokens before the API call."""
     mock_client = Mock()
     mock_client.get_durable_execution_state = AsyncMock()
@@ -439,7 +449,7 @@ async def test_async_lambda_client_get_execution_state_rejects_missing_token(tok
 @patch("async_durable_execution._core.client.get_session")
 async def test_create_default_sync_client_builds_lambda_client_with_expected_config(
     mock_get_session, reset_lambda_client_cache
-):
+) -> None:
     """Test create_default_sync_client builds a lambda botocore client with expected config."""
     mock_client = Mock()
     mock_get_session.return_value.create_client.return_value = mock_client
@@ -465,7 +475,7 @@ async def test_create_default_sync_client_builds_lambda_client_with_expected_con
 async def test_create_default_client_uses_async_client_when_aioboto_is_installed(
     _mock_aioboto_is_installed,
     mock_create_default_async_client,
-):
+) -> None:
     """Test create_default_client prefers the async Lambda client when available."""
     mock_client = Mock()
     mock_create_default_async_client.return_value = mock_client
@@ -481,7 +491,7 @@ async def test_create_default_client_uses_async_client_when_aioboto_is_installed
 async def test_create_default_client_uses_sync_client_when_aioboto_is_missing(
     _mock_aioboto_is_installed,
     mock_create_default_sync_client,
-):
+) -> None:
     """Test create_default_client falls back to the sync Lambda client."""
     mock_client = Mock()
     mock_create_default_sync_client.return_value = mock_client
@@ -493,9 +503,10 @@ async def test_create_default_client_uses_sync_client_when_aioboto_is_missing(
 
 
 @patch("async_durable_execution._core.client.importlib.import_module")
+@no_type_check
 async def test_create_default_async_client_builds_lambda_client_with_expected_config(
     mock_import_module,
-):
+) -> None:
     """Test create_default_async_client builds a lambda aioboto client."""
     mock_client = Mock()
     mock_session = Mock()
@@ -521,7 +532,7 @@ async def test_create_default_async_client_builds_lambda_client_with_expected_co
     assert client._client_context is mock_client  # noqa: SLF001
 
 
-async def test_aiobotocore_lambda_api_client_closes_entered_context():
+async def test_aiobotocore_lambda_api_client_closes_entered_context() -> None:
     """Test aiobotocore client context is exited after async client use."""
     entered_client = Mock()
     entered_client.checkpoint_durable_execution = AsyncMock(
@@ -543,7 +554,9 @@ async def test_aiobotocore_lambda_api_client_closes_entered_context():
     assert client._client is None  # noqa: SLF001
 
 
-async def test_aiobotocore_lambda_api_client_reuses_context_for_state_requests():
+async def test_aiobotocore_lambda_api_client_reuses_context_for_state_requests() -> (
+    None
+):
     entered_client = Mock()
     entered_client.get_durable_execution_state = AsyncMock(
         return_value={"Operations": []}
@@ -561,7 +574,7 @@ async def test_aiobotocore_lambda_api_client_reuses_context_for_state_requests()
     client_context.__aenter__.assert_awaited_once_with()
 
 
-async def test_aiobotocore_lambda_api_client_close_before_enter_is_noop():
+async def test_aiobotocore_lambda_api_client_close_before_enter_is_noop() -> None:
     client_context = Mock()
     client_context.__aexit__ = AsyncMock()
     client = _AiobotocoreLambdaApiClient(client_context)
@@ -571,7 +584,7 @@ async def test_aiobotocore_lambda_api_client_close_before_enter_is_noop():
     client_context.__aexit__.assert_not_called()
 
 
-async def test_async_lambda_client_closes_wrapped_client():
+async def test_async_lambda_client_closes_wrapped_client() -> None:
     """Test AsyncLambdaClient closes wrapped SDK-owned async clients."""
     wrapped_client = Mock()
     wrapped_client.aclose = AsyncMock()
@@ -582,14 +595,14 @@ async def test_async_lambda_client_closes_wrapped_client():
     wrapped_client.aclose.assert_awaited_once_with()
 
 
-async def test_async_lambda_client_aclose_without_close_method_is_noop():
+async def test_async_lambda_client_aclose_without_close_method_is_noop() -> None:
     wrapped_client = Mock(spec=[])
     client = AsyncLambdaClient(wrapped_client)
 
     await client.aclose()
 
 
-async def test_async_lambda_client_checkpoint_passes_client_token():
+async def test_async_lambda_client_checkpoint_passes_client_token() -> None:
     mock_client = Mock()
     mock_client.checkpoint_durable_execution = AsyncMock(
         return_value={
@@ -617,7 +630,7 @@ async def test_async_lambda_client_checkpoint_passes_client_token():
     assert result.checkpoint_token == "new_token"  # noqa: S105
 
 
-async def test_async_lambda_client_checkpoint_wraps_errors():
+async def test_async_lambda_client_checkpoint_wraps_errors() -> None:
     mock_client = Mock()
     mock_client.checkpoint_durable_execution = AsyncMock(
         side_effect=RuntimeError("bad")
@@ -633,7 +646,7 @@ async def test_async_lambda_client_checkpoint_wraps_errors():
         await lambda_client.checkpoint("arn123", "token123", [update], None)
 
 
-async def test_async_lambda_client_get_execution_state_wraps_errors():
+async def test_async_lambda_client_get_execution_state_wraps_errors() -> None:
     mock_client = Mock()
     mock_client.get_durable_execution_state = AsyncMock(side_effect=RuntimeError("bad"))
     lambda_client = AsyncLambdaClient(mock_client)
@@ -642,7 +655,7 @@ async def test_async_lambda_client_get_execution_state_wraps_errors():
         await lambda_client.get_execution_state("arn123", "token123", "marker")
 
 
-def test_lambda_api_client_is_async_detects_sync_and_async_methods():
+def test_lambda_api_client_is_async_detects_sync_and_async_methods() -> None:
     sync_client = Mock()
 
     async_client = Mock()
@@ -660,7 +673,7 @@ def test_aioboto_is_installed_checks_for_aiobotocore(
     mock_find_spec,
     find_spec_result,
     expected,
-):
+) -> None:
     mock_find_spec.return_value = find_spec_result
 
     assert aioboto_is_installed() is expected
@@ -672,7 +685,7 @@ def test_aioboto_is_installed_checks_for_aiobotocore(
 async def test_create_default_service_client_uses_aioboto_when_installed(
     _mock_aioboto_is_installed,
     mock_create_default_client,
-):
+) -> None:
     """Test create_default_service_client uses aioboto by default when installed."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution = AsyncMock()
@@ -688,7 +701,7 @@ async def test_create_default_service_client_uses_aioboto_when_installed(
 @patch("async_durable_execution._core.client.aioboto_is_installed", return_value=True)
 async def test_create_default_service_client_uses_explicit_botocore_client(
     _mock_aioboto_is_installed,
-):
+) -> None:
     """Test explicit botocore clients keep using the sync adapter."""
     mock_client = Mock()
 
@@ -703,7 +716,7 @@ async def test_create_default_service_client_uses_explicit_botocore_client(
 async def test_create_default_service_client_uses_sync_client_when_aioboto_missing(
     _mock_aioboto_is_installed,
     mock_create_default_client,
-):
+) -> None:
     """Test default service client falls back to botocore when aioboto is missing."""
     mock_client = Mock()
     mock_create_default_client.return_value = mock_client
@@ -718,7 +731,7 @@ async def test_create_default_service_client_uses_sync_client_when_aioboto_missi
 @patch("async_durable_execution._core.client.aioboto_is_installed", return_value=False)
 async def test_create_default_service_client_uses_explicit_async_client(
     _mock_aioboto_is_installed,
-):
+) -> None:
     """Test explicit async Lambda clients use the async adapter."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution = AsyncMock()
@@ -733,7 +746,7 @@ async def test_create_default_service_client_uses_explicit_async_client(
 @patch("async_durable_execution._core.client.get_session")
 async def test_create_default_sync_client_builds_botocore_client_with_lambda_endpoint_env(
     mock_get_session, reset_lambda_client_cache
-):
+) -> None:
     """Test create_default_sync_client delegates endpoint handling to botocore."""
     mock_client = Mock()
     mock_get_session.return_value.create_client.return_value = mock_client
@@ -754,7 +767,7 @@ async def test_create_default_sync_client_builds_botocore_client_with_lambda_end
     assert client is mock_client
 
 
-async def test_lambda_client_get_execution_state():
+async def test_lambda_client_get_execution_state() -> None:
     """Test ThreadedSyncLambdaClient.get_execution_state method."""
     mock_client = Mock()
     mock_client.get_durable_execution_state.return_value = {
@@ -775,7 +788,7 @@ async def test_lambda_client_get_execution_state():
     assert len(result.operations) == 1
 
 
-async def test_durable_service_client_protocol_get_execution_state():
+async def test_durable_service_client_protocol_get_execution_state() -> None:
     """Test DurableServiceClient protocol get_execution_state method signature."""
     mock_client = Mock(spec=DurableServiceClient)
     mock_output = StateOutput(operations=[], next_marker="marker")
@@ -792,7 +805,7 @@ async def test_durable_service_client_protocol_get_execution_state():
 @patch("async_durable_execution._core.client.create_default_sync_client")
 async def test_lambda_client_constructor_uses_default_factory_when_client_is_none(
     mock_create_default_sync_client,
-):
+) -> None:
     """Test constructor uses create_default_sync_client when no client is provided."""
     mock_client = Mock()
     mock_create_default_sync_client.return_value = mock_client
@@ -803,7 +816,7 @@ async def test_lambda_client_constructor_uses_default_factory_when_client_is_non
     assert client.client is mock_client
 
 
-async def test_checkpoint_error_handling():
+async def test_checkpoint_error_handling() -> None:
     """Test CheckpointError exception handling in ThreadedSyncLambdaClient.checkpoint."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.side_effect = Exception("API Error")
@@ -822,7 +835,7 @@ async def test_checkpoint_error_handling():
 @patch("async_durable_execution._core.client.create_default_sync_client")
 async def test_lambda_client_constructor_uses_provided_client_without_default_factory(
     mock_create_default_sync_client,
-):
+) -> None:
     """Test constructor keeps a provided client and skips create_default_sync_client."""
     mock_client = Mock()
 
@@ -832,7 +845,7 @@ async def test_lambda_client_constructor_uses_provided_client_without_default_fa
     assert client.client is mock_client
 
 
-async def test_lambda_client_checkpoint_with_non_none_client_token():
+async def test_lambda_client_checkpoint_with_non_none_client_token() -> None:
     """Test ThreadedSyncLambdaClient.checkpoint with non-None client_token."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
@@ -861,7 +874,7 @@ async def test_lambda_client_checkpoint_with_non_none_client_token():
 @patch("async_durable_execution._core.client.create_default_sync_client")
 async def test_lambda_client_constructor_calls_default_factory_per_instance(
     mock_create_default_sync_client,
-):
+) -> None:
     """Test each client(None) construction uses the default client factory."""
     mock_client_1 = Mock()
     mock_client_2 = Mock()

@@ -27,7 +27,9 @@ def _middle_pivot_chain_values(count: int, start: int = 1) -> list[int]:
 THIRTY_ONE_VALUES = _middle_pivot_chain_values(31)
 
 
-async def test_recurse_base_case_returns_current_recursive_level(durable_runner):
+async def test_recurse_base_case_returns_current_recursive_level(
+    durable_runner,
+) -> None:
     async with durable_runner(
         handler=recurse.handler,
         input={"values": [7]},
@@ -46,7 +48,7 @@ async def test_recurse_base_case_returns_current_recursive_level(durable_runner)
 async def test_recurse_31_values_does_not_trigger_lambda_recursion_protection(
     durable_runner,
     request,
-):
+) -> None:
     runner_mode = request.config.getoption("--runner-mode")
 
     async with durable_runner(

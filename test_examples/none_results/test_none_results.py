@@ -6,7 +6,7 @@ from examples.none_results import none_results
 
 async def test_handle_step_operations_with_undefined_result_after_replay(
     durable_runner,
-):
+) -> None:
     """Test handling of step operations with undefined result after replay."""
     async with durable_runner(
         handler=none_results.handler, input=None, timeout=10

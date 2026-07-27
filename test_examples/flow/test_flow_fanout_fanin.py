@@ -4,7 +4,7 @@ from async_durable_execution import InvocationStatus, OperationStatus
 from examples.flow import flow_fanout_fanin
 
 
-async def test_flow_fanout_fanin(durable_runner):
+async def test_flow_fanout_fanin(durable_runner) -> None:
     """Run two dependent branches and join their results."""
     async with durable_runner(
         handler=flow_fanout_fanin.handler,
