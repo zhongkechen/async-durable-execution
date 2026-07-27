@@ -8,6 +8,7 @@ from examples.function_naming import HASH_LENGTH
 from examples.function_naming import HANDLER_PACKAGE_PREFIX
 from examples.function_naming import LEGACY_HANDLER_PACKAGE_PREFIX
 from examples.function_naming import to_function_name_suffix
+from examples.function_naming import to_legacy_handler_name
 from examples.function_naming import to_logical_id
 
 
@@ -18,10 +19,43 @@ def test_to_logical_id_removes_handler_suffix_and_separators() -> None:
 def test_to_function_name_suffix_strips_example_package_prefix() -> None:
     assert (
         to_function_name_suffix(
-            f"{HANDLER_PACKAGE_PREFIX}wait_for_callback.wait_for_callback.handler"
+            f"{HANDLER_PACKAGE_PREFIX}"
+            "extension.wait_for_callback.wait_for_callback.handler"
         )
         == "WaitForCallbackWaitForCallback"
     )
+
+
+@pytest.mark.parametrize(
+    ("handler_name", "expected"),
+    [
+        (
+            "examples.core.hello_world.handler",
+            "async_durable_execution_examples.hello_world.handler",
+        ),
+        (
+            "examples.primitive.step.step.handler",
+            "async_durable_execution_examples.step.step.handler",
+        ),
+        (
+            "examples.primitive.child.run_in_child_context.handler",
+            "async_durable_execution_examples.run_in_child_context."
+            "run_in_child_context.handler",
+        ),
+        (
+            "examples.primitive.child.block_example.handler",
+            "async_durable_execution_examples.block_example.block_example.handler",
+        ),
+        (
+            "examples.extension.recurse.recurse.handler",
+            "async_durable_execution_examples.invoke.recurse.handler",
+        ),
+    ],
+)
+def test_to_legacy_handler_name_preserves_preorganization_path(
+    handler_name: str, expected: str
+) -> None:
+    assert to_legacy_handler_name(handler_name) == expected
 
 
 def test_to_function_name_suffix_truncates_with_stable_hash() -> None:
@@ -42,11 +76,11 @@ def test_to_function_name_suffix_truncates_with_stable_hash() -> None:
     ("handler_name", "expected"),
     [
         (
-            "examples.wait_for_callback.wait_for_callback_multiple_invocations.handler",
+            "examples.extension.wait_for_callback.wait_for_callback_multiple_invocations.handler",
             "WaitForCallbackWaitForCallbackMultipleI-dcfc7f44",
         ),
         (
-            "examples.wait_for_callback."
+            "examples.extension.wait_for_callback."
             "wait_for_callback_submitter_failure_catchable.handler",
             "WaitForCallbackWaitForCallbackSubmitter-5fe5aebf",
         ),

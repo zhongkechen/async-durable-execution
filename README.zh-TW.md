@@ -195,14 +195,17 @@ async def test_order_workflow_in_cloud() -> None:
 
 ## 🧩 範例
 
-Lambda 耐用函數範例位於 `examples/`。可以從 `hello_world.py` 開始，它是最小的完整事件處理常式。
+Lambda 耐用函數範例位於 `examples/`。可以從 `core/hello_world.py`
+開始，它是最小的完整事件處理常式。目錄結構與 API 參考保持一致：
 
-`test_examples/` 中的範例測試也很適合作為可執行的範本參考。可依操作或模式瀏覽：
+- `primitive/` 包含 callback、child context、invoke、step 和 wait 範例。
+- `extension/` 包含 flow、map、parallel、遞迴呼叫、wait-for-callback、
+  wait-for-condition 和 retry 範例。
+- `core/` 包含執行、用戶端、錯誤和日誌範例。
 
-- `step/`、`wait/`、`wait_for_callback/` 與 `wait_for_condition/` 用於核心耐用操作
-- `step/steps_with_gather.py` 展示如何啟動多個步驟任務，並透過 `asyncio.gather` 一起等待
-- `flow/`、`map/`、`parallel/` 與 `run_in_child_context/` 用於組合模式
-- `invoke/`（包括 `invoke/recurse.py`）、`with_retry/`、`callback/` 與 `logger_example/` 用於整合與執行行為
+`test_examples/` 使用相同的分類，並提供可執行的範本。例如，
+`primitive/step/steps_with_gather.py` 展示如何啟動多個步驟工作，並透過
+`asyncio.gather` 一起等待。
 
 如需了解執行或部署範例整合測試的開發者工作流程，請參閱[貢獻指南](https://github.com/zhongkechen/async-durable-execution/blob/main/CONTRIBUTING.md#example-integration-tests-and-deployment)。
 

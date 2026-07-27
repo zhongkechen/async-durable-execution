@@ -19,8 +19,8 @@ The SDK, examples, and their tests all live at the repository root:
 ```text
 async_durable_execution/  # Primitive, extension, core, and runner packages
 tests/                    # SDK and runner tests
-examples/                 # Example durable functions
-test_examples/            # Local and cloud example tests
+examples/                 # Primitive, extension, and core examples
+test_examples/            # Example tests mirroring the examples layout
 ```
 
 The root `pyproject.toml` contains the SDK package metadata and all Hatch,
@@ -220,7 +220,7 @@ Example tests use the `durable_runner` pytest fixture as a factory context manag
 
 ```python
 from async_durable_execution import InvocationStatus
-from examples import hello_world
+from examples.core import hello_world
 
 
 async def test_hello_world(durable_runner):

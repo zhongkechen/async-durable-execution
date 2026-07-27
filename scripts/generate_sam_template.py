@@ -10,8 +10,10 @@ from typing import Any
 if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from examples.function_naming import LEGACY_HANDLER_PACKAGE_PREFIX
-from examples.function_naming import to_function_name_suffix, to_logical_id
+from examples.function_naming import to_function_name_suffix
+from examples.function_naming import to_legacy_handler_name
+from examples.function_naming import to_legacy_relative_name
+from examples.function_naming import to_logical_id
 from scripts.test_handlers import load_test_handlers
 
 PACKAGE_NAME = "DurableExecutionsPythonExamples-1.0"
@@ -26,11 +28,11 @@ DEFAULT_DURABLE_CONFIG = {
     "ExecutionTimeout": 300,
 }
 SPECIAL_LOGGING_CONFIG = {
-    "callback/callback_concurrency.py": {
+    "primitive/callback/callback_concurrency.py": {
         "ApplicationLogLevel": "DEBUG",
         "LogFormat": "JSON",
     },
-    "logger_example/logger_example.py": {
+    "core/logger_example/logger_example.py": {
         "ApplicationLogLevel": "INFO",
         "LogFormat": "JSON",
     },
@@ -122,7 +124,8 @@ def first_line(docstring: str) -> str:
 
 def to_example_name(relative_path: Path) -> str:
     """Convert a module path to a human-readable example name."""
-    parts = list(relative_path.with_suffix("").parts)
+    relative_name = ".".join(relative_path.with_suffix("").parts)
+    parts = to_legacy_relative_name(relative_name).split(".")
     words: list[str] = []
     previous_part_words: list[str] = []
     for part in parts:
@@ -223,10 +226,7 @@ def build_template(
     }
 
     for example in examples:
-        handler_without_package = example["handler"].removeprefix(f"{PACKAGE_PREFIX}.")
-        stable_handler_name = (
-            f"{LEGACY_HANDLER_PACKAGE_PREFIX}{handler_without_package}"
-        )
+        stable_handler_name = to_legacy_handler_name(example["handler"])
         logical_id = to_logical_id(stable_handler_name)
         function_name_suffix = to_function_name_suffix(example["handler"])
         properties: dict[str, Any] = {
