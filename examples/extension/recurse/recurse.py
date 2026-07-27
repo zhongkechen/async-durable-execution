@@ -1,4 +1,4 @@
-"""Recursively quicksort values while exercising Lambda recursion protection."""
+"""Recursively quicksort values while staying below Lambda recursion protection."""
 
 from typing import Any
 

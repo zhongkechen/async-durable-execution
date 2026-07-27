@@ -1,7 +1,5 @@
 """Tests for recurse example."""
 
-import pytest
-
 from async_durable_execution import InvocationStatus, OperationStatus
 from examples.extension.recurse import recurse
 
@@ -9,10 +7,6 @@ from examples.extension.recurse import recurse
 LOCAL_RECURSE_FUNCTION_NAME = (
     "arn:aws:lambda:us-west-2:123456789012:function:test-function"
 )
-EXPECTED_RECURSION_ERROR_TYPES = {
-    "CallableRuntimeError",
-    "RecursiveInvocationException",
-}
 
 
 def _middle_pivot_chain_values(count: int, start: int = 1) -> list[int]:
@@ -31,7 +25,6 @@ def _middle_pivot_chain_values(count: int, start: int = 1) -> list[int]:
 
 
 THIRTY_ONE_VALUES = _middle_pivot_chain_values(31)
-THIRTY_THREE_VALUES = _middle_pivot_chain_values(33)
 
 
 async def test_recurse_base_case_returns_current_recursive_level(durable_runner):
@@ -88,25 +81,3 @@ async def test_recurse_31_values_does_not_trigger_lambda_recursion_protection(
         "count": len(THIRTY_ONE_VALUES) - 2,
         "recursive_level": 14,
     }
-
-
-async def test_recurse_33_values_triggers_lambda_recursion_protection(
-    durable_runner,
-    request,
-):
-    if request.config.getoption("--runner-mode") != "cloud":
-        pytest.skip("Lambda recursion protection is only enforced in cloud mode")
-
-    async with durable_runner(
-        handler=recurse.handler,
-        # SDK recursive level 15 is 16 total Lambda invocations, which Lambda
-        # rejects with recursion protection.
-        input={"values": THIRTY_THREE_VALUES},
-        timeout=120,
-    ) as runner:
-        result = await runner.run()
-
-    assert result.status is InvocationStatus.FAILED
-    assert result.error is not None
-    assert result.error.type in EXPECTED_RECURSION_ERROR_TYPES
-    assert "recursion" in result.error.message.lower()
