@@ -123,7 +123,7 @@ class Scheduler:
         self,
         func: Callable[[], Awaitable[Any]],
         delay: float = 0,
-        count: int | None = 1,  # noqa: ARG002
+        count: int | None = 1,
         completion_event: Event | None = None,
     ) -> asyncio.Future[Any]:
         """Call func after the delay."""

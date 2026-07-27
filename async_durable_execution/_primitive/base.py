@@ -86,12 +86,12 @@ class OperationExecutor(ABC, Generic[T]):
     @abstractmethod
     async def start(self) -> T:
         """Start a new operation with no existing checkpoint."""
-        ...  # pragma: no cover
+        ...
 
     @abstractmethod
     async def replay(self, operation: Operation) -> T:
         """Replay an operation from an existing checkpoint."""
-        ...  # pragma: no cover
+        ...
 
     async def process(self) -> T:
         """Process the operation, including replay and checkpoint handling."""
