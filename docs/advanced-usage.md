@@ -310,12 +310,9 @@ AWS Lambda recursion protection counts the original invocation as part of the in
 lineage. Because the SDK's `recursive_level` starts at the first recursive call, the
 example test uses deterministic input where the middle pivot peels off one singleton
 side at each level. A 31-item list reaches `recursive_level == 14` and should not
-trigger protection. A similar 33-item list attempts `recursive_level == 15`, which is
-16 total Lambda invocations and is expected to fail with Lambda's maximum recursion
-depth protection. See
-`examples/invoke/recurse.py`
-for an executable example that verifies the computed result and covers both recursion
-protection cases.
+trigger protection. See `examples/invoke/recurse.py` for the executable workflow and
+`test_examples/invoke/test_recurse.py` for coverage that verifies the computed result
+below the recursion protection threshold.
 
 ## Wait For Condition Results
 
