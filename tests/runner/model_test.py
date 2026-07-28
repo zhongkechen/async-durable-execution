@@ -4,11 +4,11 @@ from __future__ import annotations
 from typing import no_type_check
 
 import datetime
-import json
 
 import pytest
 
 from async_durable_execution._core.models import (
+    BotoSerializableModel,
     CheckpointUpdatedExecutionState,
     OperationStatus,
     OperationType,
@@ -88,6 +88,60 @@ DEFAULT_START_DURABLE_EXECUTION_INPUT_DATA = {
     "TenantId": "tenant-123",
     "Input": "test-input",
 }
+
+
+@pytest.mark.parametrize(
+    "model_type",
+    [
+        GetDurableExecutionResponse,
+        EventInput,
+        EventResult,
+        EventError,
+        RetryDetails,
+        ExecutionStartedDetails,
+        ExecutionSucceededDetails,
+        ExecutionFailedDetails,
+        ExecutionTimedOutDetails,
+        ExecutionStoppedDetails,
+        ContextStartedDetails,
+        ContextSucceededDetails,
+        ContextFailedDetails,
+        WaitStartedDetails,
+        WaitSucceededDetails,
+        WaitCancelledDetails,
+        StepStartedDetails,
+        StepSucceededDetails,
+        StepFailedDetails,
+        ChainedInvokePendingDetails,
+        ChainedInvokeStartedDetails,
+        ChainedInvokeSucceededDetails,
+        ChainedInvokeFailedDetails,
+        ChainedInvokeTimedOutDetails,
+        ChainedInvokeStoppedDetails,
+        CallbackStartedDetails,
+        CallbackSucceededDetails,
+        CallbackFailedDetails,
+        CallbackTimedOutDetails,
+        InvocationCompletedDetails,
+        Event,
+        GetDurableExecutionHistoryResponse,
+        StartDurableExecutionInput,
+        StartDurableExecutionOutput,
+        GetDurableExecutionStateResponse,
+        SendDurableExecutionCallbackSuccessResponse,
+        SendDurableExecutionCallbackFailureResponse,
+        SendDurableExecutionCallbackHeartbeatResponse,
+        CheckpointDurableExecutionResponse,
+    ],
+)
+def test_runner_boto_models_use_shared_serialization(model_type) -> None:
+    assert issubclass(model_type, BotoSerializableModel)
+    assert hasattr(model_type, "from_dict")
+    assert hasattr(model_type, "to_dict")
+    assert not hasattr(model_type, "from_boto")
+    assert not hasattr(model_type, "to_boto")
+    assert not hasattr(model_type, "from_json_dict")
+    assert not hasattr(model_type, "to_json_dict")
 
 
 def test_start_durable_execution_input_serialization() -> None:
@@ -2092,7 +2146,7 @@ def test_event_with_callback_timed_out_details() -> None:
 
 # Test for missing branch coverage in CheckpointDurableExecutionResponse
 def test_checkpoint_updated_execution_state_with_next_marker() -> None:
-    """Test CheckpointUpdatedExecutionState to_dict with next_marker."""
+    """Test CheckpointUpdatedExecutionState.to_dict with next_marker."""
     from async_durable_execution._core.models import (
         Operation,
         OperationStatus,
@@ -2773,77 +2827,8 @@ def test_events_to_operations_invalid_sub_type() -> None:
         events_to_operations([event])
 
 
-def test_invocation_completed_details_to_json_dict() -> None:
-    """Test InvocationCompletedDetails.to_json_dict() converts datetime to Unix milliseconds."""
-    start_time = datetime.datetime(
-        2023, 1, 1, 0, 0, 0, 123456, tzinfo=datetime.timezone.utc
-    )
-    end_time = datetime.datetime(
-        2023, 1, 1, 0, 1, 0, 456789, tzinfo=datetime.timezone.utc
-    )
-
-    details = InvocationCompletedDetails(
-        start_timestamp=start_time, end_timestamp=end_time, request_id="req-123"
-    )
-
-    json_dict = details.to_json_dict()
-
-    # Verify timestamps are converted to Unix milliseconds (integers)
-    assert json_dict["StartTimestamp"] == 1672531200123
-    assert json_dict["EndTimestamp"] == 1672531260456
-    assert json_dict["RequestId"] == "req-123"
-
-    # Verify all values are JSON-serializable
-    json_str = json.dumps(json_dict)
-    assert json_str is not None
-
-
-def test_invocation_completed_details_from_json_dict() -> None:
-    """Test InvocationCompletedDetails.from_json_dict() converts Unix milliseconds to datetime."""
-    json_dict = {
-        "StartTimestamp": 1672531200123,
-        "EndTimestamp": 1672531260456,
-        "RequestId": "req-456",
-    }
-
-    details = InvocationCompletedDetails.from_json_dict(json_dict)
-
-    # Verify timestamps are converted to datetime objects
-    assert details.start_timestamp == datetime.datetime(
-        2023, 1, 1, 0, 0, 0, 123000, tzinfo=datetime.timezone.utc
-    )
-    assert details.end_timestamp == datetime.datetime(
-        2023, 1, 1, 0, 1, 0, 456000, tzinfo=datetime.timezone.utc
-    )
-    assert details.request_id == "req-456"
-
-
-def test_invocation_completed_details_json_round_trip() -> None:
-    """Test InvocationCompletedDetails to_json_dict/from_json_dict round-trip."""
-    original = InvocationCompletedDetails(
-        start_timestamp=datetime.datetime(
-            2023, 6, 15, 12, 30, 45, 678000, tzinfo=datetime.timezone.utc
-        ),
-        end_timestamp=datetime.datetime(
-            2023, 6, 15, 12, 31, 50, 123000, tzinfo=datetime.timezone.utc
-        ),
-        request_id="round-trip-test",
-    )
-
-    # Serialize to JSON dict
-    json_dict = original.to_json_dict()
-
-    # Deserialize back
-    restored = InvocationCompletedDetails.from_json_dict(json_dict)
-
-    # Verify round-trip preserves data
-    assert restored.start_timestamp == original.start_timestamp
-    assert restored.end_timestamp == original.end_timestamp
-    assert restored.request_id == original.request_id
-
-
 def test_invocation_completed_details_to_dict_preserves_datetime() -> None:
-    """Test InvocationCompletedDetails.to_dict() preserves datetime objects (not converted)."""
+    """Boto serialization preserves datetime objects."""
     start_time = datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
     end_time = datetime.datetime(2023, 1, 1, 0, 1, 0, tzinfo=datetime.timezone.utc)
 
@@ -2853,24 +2838,8 @@ def test_invocation_completed_details_to_dict_preserves_datetime() -> None:
 
     regular_dict = details.to_dict()
 
-    # Verify to_dict() preserves datetime objects (not converted to Unix milliseconds)
     assert regular_dict["StartTimestamp"] == start_time
     assert regular_dict["EndTimestamp"] == end_time
     assert isinstance(regular_dict["StartTimestamp"], datetime.datetime)
     assert isinstance(regular_dict["EndTimestamp"], datetime.datetime)
-
-
-def test_invocation_completed_details_from_json_dict_invalid_timestamp() -> None:
-    """Test InvocationCompletedDetails.from_json_dict() raises error for invalid timestamps."""
-    # Test with invalid timestamp that would return None
-    json_dict = {
-        "StartTimestamp": None,
-        "EndTimestamp": 1672531260456,
-        "RequestId": "req-error",
-    }
-
-    with pytest.raises(
-        InvalidParameterValueException,
-        match="StartTimestamp and EndTimestamp cannot be null",
-    ):
-        InvocationCompletedDetails.from_json_dict(json_dict)
+    assert InvocationCompletedDetails.from_dict(regular_dict) == details

@@ -238,7 +238,7 @@ class InProcessInvoker(Invoker):
         endpoint_url: str | None = None,  # noqa: ARG002
     ) -> InvokeResponse:
         context = create_test_lambda_context()
-        payload = input.to_json_dict()
+        payload = input.to_dict()
         async_handler = getattr(self.handler, "_async_handler", None)
         handler_result = (
             async_handler(payload, context)

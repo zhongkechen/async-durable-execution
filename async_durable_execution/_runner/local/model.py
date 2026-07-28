@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import base64
 import json
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Any, Protocol, cast
 
 from ..._core import (
+    BotoSerializableModel,
     CheckpointUpdatedExecutionState,
     DurableExecutionInvocationInput,
     LambdaContext as LambdaContextProtocol,
@@ -40,23 +42,29 @@ class LambdaContext(LambdaContextProtocol):
 
 
 @dataclass(frozen=True)
-class StartDurableExecutionInput:
+class StartDurableExecutionInput(BotoSerializableModel):
     """Input for starting a local durable execution."""
 
-    account_id: str
-    function_name: str
-    function_qualifier: str
-    execution_name: str
-    execution_timeout_seconds: int
-    execution_retention_period_days: int
-    invocation_id: str | None = None
-    trace_fields: dict | None = None
-    tenant_id: str | None = None
-    input: str | None = None
-    lambda_endpoint: str | None = None
+    account_id: str = field(metadata={"alias": "AccountId"})
+    function_name: str = field(metadata={"alias": "FunctionName"})
+    function_qualifier: str = field(metadata={"alias": "FunctionQualifier"})
+    execution_name: str = field(metadata={"alias": "ExecutionName"})
+    execution_timeout_seconds: int = field(
+        metadata={"alias": "ExecutionTimeoutSeconds"}
+    )
+    execution_retention_period_days: int = field(
+        metadata={"alias": "ExecutionRetentionPeriodDays"}
+    )
+    invocation_id: str | None = field(default=None, metadata={"alias": "InvocationId"})
+    trace_fields: dict | None = field(default=None, metadata={"alias": "TraceFields"})
+    tenant_id: str | None = field(default=None, metadata={"alias": "TenantId"})
+    input: str | None = field(default=None, metadata={"alias": "Input"})
+    lambda_endpoint: str | None = field(
+        default=None, metadata={"alias": "LambdaEndpoint"}
+    )
 
     @classmethod
-    def from_dict(cls, data: dict) -> StartDurableExecutionInput:
+    def from_dict(cls, data: Mapping[str, Any]) -> StartDurableExecutionInput:
         required_fields = [
             "AccountId",
             "FunctionName",
@@ -71,40 +79,7 @@ class StartDurableExecutionInput:
                 msg = f"Missing required field: {field}"
                 raise InvalidParameterValueException(msg)
 
-        return cls(
-            account_id=data["AccountId"],
-            function_name=data["FunctionName"],
-            function_qualifier=data["FunctionQualifier"],
-            execution_name=data["ExecutionName"],
-            execution_timeout_seconds=data["ExecutionTimeoutSeconds"],
-            execution_retention_period_days=data["ExecutionRetentionPeriodDays"],
-            invocation_id=data.get("InvocationId"),
-            trace_fields=data.get("TraceFields"),
-            tenant_id=data.get("TenantId"),
-            input=data.get("Input"),
-            lambda_endpoint=data.get("LambdaEndpoint"),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result = {
-            "AccountId": self.account_id,
-            "FunctionName": self.function_name,
-            "FunctionQualifier": self.function_qualifier,
-            "ExecutionName": self.execution_name,
-            "ExecutionTimeoutSeconds": self.execution_timeout_seconds,
-            "ExecutionRetentionPeriodDays": self.execution_retention_period_days,
-        }
-        if self.invocation_id is not None:
-            result["InvocationId"] = self.invocation_id
-        if self.trace_fields is not None:
-            result["TraceFields"] = self.trace_fields
-        if self.tenant_id is not None:
-            result["TenantId"] = self.tenant_id
-        if self.input is not None:
-            result["Input"] = self.input
-        if self.lambda_endpoint is not None:
-            result["LambdaEndpoint"] = self.lambda_endpoint
-        return result
+        return super().from_dict(data)
 
     def get_normalized_input(self) -> str:
         """Normalize input string to be JSON deserializable."""
@@ -116,88 +91,47 @@ class StartDurableExecutionInput:
 
 
 @dataclass(frozen=True)
-class StartDurableExecutionOutput:
+class StartDurableExecutionOutput(BotoSerializableModel):
     """Output from starting a local durable execution."""
 
-    execution_arn: str | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> StartDurableExecutionOutput:
-        return cls(execution_arn=data.get("ExecutionArn"))
-
-    def to_dict(self) -> dict[str, Any]:
-        result = {}
-        if self.execution_arn is not None:
-            result["ExecutionArn"] = self.execution_arn
-        return result
+    execution_arn: str | None = field(default=None, metadata={"alias": "ExecutionArn"})
 
 
 @dataclass(frozen=True)
-class GetDurableExecutionStateResponse:
+class GetDurableExecutionStateResponse(BotoSerializableModel):
     """Local response containing durable execution state operations."""
 
-    operations: list[Operation]
-    next_marker: str | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> GetDurableExecutionStateResponse:
-        operations = [
-            Operation.from_dict(op_data) for op_data in data.get("Operations", [])
-        ]
-        return cls(
-            operations=operations,
-            next_marker=data.get("NextMarker"),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {
-            "Operations": [op.to_dict() for op in self.operations]
-        }
-        if self.next_marker is not None:
-            result["NextMarker"] = self.next_marker
-        return result
+    operations: list[Operation] = field(
+        default_factory=list, metadata={"alias": "Operations"}
+    )
+    next_marker: str | None = field(default=None, metadata={"alias": "NextMarker"})
 
 
 @dataclass(frozen=True)
-class SendDurableExecutionCallbackSuccessResponse:
+class SendDurableExecutionCallbackSuccessResponse(BotoSerializableModel):
     """Response from sending local callback success."""
 
 
 @dataclass(frozen=True)
-class SendDurableExecutionCallbackFailureResponse:
+class SendDurableExecutionCallbackFailureResponse(BotoSerializableModel):
     """Response from sending local callback failure."""
 
 
 @dataclass(frozen=True)
-class SendDurableExecutionCallbackHeartbeatResponse:
+class SendDurableExecutionCallbackHeartbeatResponse(BotoSerializableModel):
     """Response from sending local callback heartbeat."""
 
 
 @dataclass(frozen=True)
-class CheckpointDurableExecutionResponse:
+class CheckpointDurableExecutionResponse(BotoSerializableModel):
     """Local response from checkpointing a durable execution."""
 
-    checkpoint_token: str | None
-    new_execution_state: CheckpointUpdatedExecutionState | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> CheckpointDurableExecutionResponse:
-        new_execution_state = None
-        if state_data := data.get("NewExecutionState"):
-            new_execution_state = CheckpointUpdatedExecutionState.from_dict(state_data)
-
-        return cls(
-            checkpoint_token=data.get("CheckpointToken"),
-            new_execution_state=new_execution_state,
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.checkpoint_token is not None:
-            result["CheckpointToken"] = self.checkpoint_token
-        if self.new_execution_state is not None:
-            result["NewExecutionState"] = self.new_execution_state.to_dict()
-        return result
+    checkpoint_token: str | None = field(
+        default=None, metadata={"alias": "CheckpointToken"}
+    )
+    new_execution_state: CheckpointUpdatedExecutionState | None = field(
+        default=None, metadata={"alias": "NewExecutionState"}
+    )
 
 
 class Invoker(Protocol):

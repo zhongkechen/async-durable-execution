@@ -27,12 +27,11 @@ from .._core import (
     OrphanedChildException,
     SerDes,
     SerDesError,
-    SerializableModel,
     SuspendExecution,
     TimedSuspendExecution,
     TypeTag,
     ValidationError,
-    _metadata,
+    MappingModel,
     bind_current_context,
     deserialize,
     durable_callable,
@@ -416,27 +415,28 @@ class SuspendResult:
 
 
 @dataclass(frozen=True)
-class BatchItem(SerializableModel, Generic[R]):
+class BatchItem(MappingModel, Generic[R]):
     """Result record for one branch or iteration in `BatchResult`."""
 
     index: int
     status: BatchItemStatus
     result: R | None = dataclass_field(
-        default=None, metadata=_metadata(alias="result", omit_if_none=False)
+        default=None,
+        metadata={"omit_if_none": False},
     )
     error: ErrorObject | None = dataclass_field(
         default=None,
-        metadata=_metadata(alias="error", omit_if_none=False),
+        metadata={"omit_if_none": False},
     )
 
 
 @dataclass(frozen=True)
-class BatchResult(SerializableModel, Generic[R]):
+class BatchResult(MappingModel, Generic[R]):
     """Aggregated outcome of a `map()` or `parallel()` operation."""
 
     all: list[BatchItem[R]]
     completion_reason: CompletionReason = dataclass_field(
-        metadata=_metadata(alias="completionReason")
+        metadata={"alias": "completionReason"}
     )
 
     @classmethod

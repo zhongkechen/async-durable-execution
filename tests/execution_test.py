@@ -73,163 +73,26 @@ LARGE_RESULT = "large_success" * 1024 * 1024
 os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
 
 
+@pytest.mark.parametrize(
+    "model_type", [InitialExecutionState, DurableExecutionInvocationInput]
+)
+def test_invocation_models_only_expose_dict_serialization(model_type) -> None:
+    assert hasattr(model_type, "from_dict")
+    assert hasattr(model_type, "to_dict")
+    assert not hasattr(model_type, "from_boto")
+    assert not hasattr(model_type, "to_boto")
+    assert not hasattr(model_type, "from_json_dict")
+    assert not hasattr(model_type, "to_json_dict")
+    assert not hasattr(model_type, "from_mapping")
+    assert not hasattr(model_type, "to_mapping")
+
+
 async def run_handler(handler, event, lambda_context, service_client=None) -> Any:
     if service_client is not None:
         handler = _bind_service_client_to_handler(handler, service_client)
     if isinstance(event, DurableExecutionInvocationInput):
-        event = event.to_json_dict()
+        event = event.to_dict()
     return await asyncio.to_thread(handler, event, lambda_context)
-
-
-async def test_durable_execution_invocation_input_from_dict() -> None:
-    """Test that DurableExecutionInvocationInput.from_dict works correctly"""
-    input_dict = {
-        "DurableExecutionArn": "9692ca80-399d-4f52-8d0a-41acc9cd0492/9692ca80-399d-4f52-8d0a-41acc9cd0492",
-        "CheckpointToken": "9692ca80-399d-4f52-8d0a-41acc9cd0492",
-        "InitialExecutionState": {
-            "Operations": [
-                {
-                    "Id": "9692ca80-399d-4f52-8d0a-41acc9cd0492",
-                    "ParentId": None,
-                    "Name": None,
-                    "Type": "EXECUTION",
-                    "StartTimestamp": 1751414445.691,
-                    "Status": "STARTED",
-                    "ExecutionDetails": {"inputPayload": "{}"},
-                }
-            ],
-            "NextMarker": "",
-        },
-    }
-
-    result = DurableExecutionInvocationInput.from_dict(input_dict)
-
-    assert (
-        result.durable_execution_arn
-        == "9692ca80-399d-4f52-8d0a-41acc9cd0492/9692ca80-399d-4f52-8d0a-41acc9cd0492"
-    )
-    assert result.checkpoint_token == "9692ca80-399d-4f52-8d0a-41acc9cd0492"  # noqa: S105
-    assert isinstance(result.initial_execution_state, InitialExecutionState)
-    assert len(result.initial_execution_state.operations) == 1
-    assert not result.initial_execution_state.next_marker
-    assert (
-        result.initial_execution_state.operations[0].operation_id
-        == "9692ca80-399d-4f52-8d0a-41acc9cd0492"
-    )
-
-
-async def test_initial_execution_state_from_dict_minimal() -> None:
-    """Test that InitialExecutionState.from_dict works correctly"""
-    input_dict = {
-        "Operations": [
-            {
-                "Id": "9692ca80-399d-4f52-8d0a-41acc9cd0492",
-                "Type": "EXECUTION",
-                "Status": "STARTED",
-            }
-        ],
-        "NextMarker": "test-marker",
-    }
-
-    result = InitialExecutionState.from_dict(input_dict)
-
-    assert len(result.operations) == 1
-    assert result.next_marker == "test-marker"
-    assert result.operations[0].operation_id == "9692ca80-399d-4f52-8d0a-41acc9cd0492"
-
-
-async def test_initial_execution_state_from_dict_no_operations() -> None:
-    """Test that InitialExecutionState.from_dict handles missing Operations key."""
-    input_dict = {"NextMarker": "test-marker"}
-
-    result = InitialExecutionState.from_dict(input_dict)
-
-    assert len(result.operations) == 0
-    assert result.next_marker == "test-marker"
-
-
-async def test_initial_execution_state_from_dict_empty_operations() -> None:
-    """Test that InitialExecutionState.from_dict handles empty Operations list."""
-    input_dict = {"Operations": [], "NextMarker": "test-marker"}
-
-    result = InitialExecutionState.from_dict(input_dict)
-
-    assert len(result.operations) == 0
-    assert result.next_marker == "test-marker"
-
-
-async def test_initial_execution_state_to_dict() -> None:
-    """Test InitialExecutionState.to_dict method."""
-    operation = Operation(
-        operation_id="op1",
-        operation_type=OperationType.EXECUTION,
-        status=OperationStatus.STARTED,
-        execution_details=ExecutionDetails(input_payload="test_payload"),
-    )
-
-    state = InitialExecutionState(operations=[operation], next_marker="marker123")
-
-    result = state.to_dict()
-    expected = {"Operations": [operation.to_dict()], "NextMarker": "marker123"}
-
-    assert result == expected
-
-
-async def test_initial_execution_state_to_dict_empty() -> None:
-    """Test InitialExecutionState.to_dict with empty operations."""
-    state = InitialExecutionState(operations=[], next_marker="")
-
-    result = state.to_dict()
-    expected = {"Operations": [], "NextMarker": ""}
-
-    assert result == expected
-
-
-async def test_durable_execution_invocation_input_to_dict() -> None:
-    """Test DurableExecutionInvocationInput.to_dict method."""
-    operation = Operation(
-        operation_id="exec1",
-        operation_type=OperationType.EXECUTION,
-        status=OperationStatus.STARTED,
-    )
-
-    initial_state = InitialExecutionState(
-        operations=[operation], next_marker="test_marker"
-    )
-
-    invocation_input = DurableExecutionInvocationInput(
-        durable_execution_arn="arn:test:execution/exec1",
-        checkpoint_token="token123",  # noqa: S106
-        initial_execution_state=initial_state,
-    )
-
-    result = invocation_input.to_dict()
-    expected = {
-        "DurableExecutionArn": "arn:test:execution/exec1",
-        "CheckpointToken": "token123",
-        "InitialExecutionState": initial_state.to_dict(),
-    }
-
-    assert result == expected
-
-
-async def test_durable_execution_invocation_input_to_dict_not_local() -> None:
-    initial_state = InitialExecutionState(operations=[], next_marker="")
-
-    invocation_input = DurableExecutionInvocationInput(
-        durable_execution_arn="arn:test:execution/exec1",
-        checkpoint_token="token123",  # noqa: S106
-        initial_execution_state=initial_state,
-    )
-
-    result = invocation_input.to_dict()
-    expected = {
-        "DurableExecutionArn": "arn:test:execution/exec1",
-        "CheckpointToken": "token123",
-        "InitialExecutionState": initial_state.to_dict(),
-    }
-
-    assert result == expected
 
 
 async def test_operation_to_dict_complete() -> None:
@@ -2238,8 +2101,8 @@ async def test_durable_execution_with_non_dict_event_raises_error() -> None:
 # =============================================================================
 
 
-async def test_initial_execution_state_to_json_dict_minimal() -> None:
-    """Test InitialExecutionState.to_json_dict with minimal data."""
+async def test_initial_execution_state_to_dict_minimal() -> None:
+    """Test InitialExecutionState.to_dict with minimal data."""
     operation = Operation(
         operation_id="op1",
         operation_type=OperationType.EXECUTION,
@@ -2248,14 +2111,23 @@ async def test_initial_execution_state_to_json_dict_minimal() -> None:
 
     state = InitialExecutionState(operations=[operation], next_marker="marker123")
 
-    result = state.to_json_dict()
-    expected = {"Operations": [operation.to_json_dict()], "NextMarker": "marker123"}
+    result = state.to_dict()
+    expected = {
+        "Operations": [
+            {
+                "Id": "op1",
+                "Type": "EXECUTION",
+                "Status": "STARTED",
+            }
+        ],
+        "NextMarker": "marker123",
+    }
 
     assert result == expected
 
 
-async def test_initial_execution_state_to_json_dict_with_timestamps() -> None:
-    """Test InitialExecutionState.to_json_dict converts datetime objects to millisecond timestamps."""
+async def test_initial_execution_state_to_dict_with_timestamps() -> None:
+    """Test InitialExecutionState.to_dict converts datetime objects to millisecond timestamps."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
     end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.timezone.utc)
 
@@ -2270,7 +2142,7 @@ async def test_initial_execution_state_to_json_dict_with_timestamps() -> None:
 
     state = InitialExecutionState(operations=[operation], next_marker="marker123")
 
-    result = state.to_json_dict()
+    result = state.to_dict()
 
     # Verify that timestamps are converted to milliseconds in the operation
     operation_result = result["Operations"][0]
@@ -2282,18 +2154,18 @@ async def test_initial_execution_state_to_json_dict_with_timestamps() -> None:
     assert result["NextMarker"] == "marker123"
 
 
-async def test_initial_execution_state_to_json_dict_empty() -> None:
-    """Test InitialExecutionState.to_json_dict with empty operations."""
+async def test_initial_execution_state_to_dict_empty() -> None:
+    """Test InitialExecutionState.to_dict with empty operations."""
     state = InitialExecutionState(operations=[], next_marker="")
 
-    result = state.to_json_dict()
+    result = state.to_dict()
     expected = {"Operations": [], "NextMarker": ""}
 
     assert result == expected
 
 
-async def test_initial_execution_state_from_json_dict_minimal() -> None:
-    """Test InitialExecutionState.from_json_dict with minimal data."""
+async def test_initial_execution_state_from_dict_minimal() -> None:
+    """Test InitialExecutionState.from_dict with minimal data."""
     data = {
         "Operations": [
             {
@@ -2305,7 +2177,7 @@ async def test_initial_execution_state_from_json_dict_minimal() -> None:
         "NextMarker": "test-marker",
     }
 
-    result = InitialExecutionState.from_json_dict(data)
+    result = InitialExecutionState.from_dict(data)
 
     assert len(result.operations) == 1
     assert result.next_marker == "test-marker"
@@ -2315,8 +2187,8 @@ async def test_initial_execution_state_from_json_dict_minimal() -> None:
 
 
 @no_type_check
-async def test_initial_execution_state_from_json_dict_with_timestamps() -> None:
-    """Test InitialExecutionState.from_json_dict converts millisecond timestamps to datetime objects."""
+async def test_initial_execution_state_from_dict_with_timestamps() -> None:
+    """Test InitialExecutionState.from_dict converts millisecond timestamps to datetime objects."""
     start_ms = 1672574400000  # 2023-01-01 12:00:00 UTC
     end_ms = 1672578000000  # 2023-01-01 13:00:00 UTC
 
@@ -2334,7 +2206,7 @@ async def test_initial_execution_state_from_json_dict_with_timestamps() -> None:
         "NextMarker": "test-marker",
     }
 
-    result = InitialExecutionState.from_json_dict(data)
+    result = InitialExecutionState.from_dict(data)
 
     expected_start = datetime.datetime(
         2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc
@@ -2348,21 +2220,21 @@ async def test_initial_execution_state_from_json_dict_with_timestamps() -> None:
     assert operation.execution_details.input_payload == "test_payload"
 
 
-async def test_initial_execution_state_from_json_dict_no_operations() -> None:
-    """Test InitialExecutionState.from_json_dict handles missing Operations key."""
+async def test_initial_execution_state_from_dict_no_operations() -> None:
+    """Test InitialExecutionState.from_dict handles missing Operations key."""
     data = {"NextMarker": "test-marker"}
 
-    result = InitialExecutionState.from_json_dict(data)
+    result = InitialExecutionState.from_dict(data)
 
     assert len(result.operations) == 0
     assert result.next_marker == "test-marker"
 
 
-async def test_initial_execution_state_from_json_dict_empty_operations() -> None:
-    """Test InitialExecutionState.from_json_dict handles empty Operations list."""
+async def test_initial_execution_state_from_dict_empty_operations() -> None:
+    """Test InitialExecutionState.from_dict handles empty Operations list."""
     data = {"Operations": [], "NextMarker": "test-marker"}
 
-    result = InitialExecutionState.from_json_dict(data)
+    result = InitialExecutionState.from_dict(data)
 
     assert len(result.operations) == 0
     assert result.next_marker == "test-marker"
@@ -2370,7 +2242,7 @@ async def test_initial_execution_state_from_json_dict_empty_operations() -> None
 
 @no_type_check
 async def test_initial_execution_state_json_roundtrip() -> None:
-    """Test InitialExecutionState to_json_dict -> from_json_dict roundtrip preserves all data."""
+    """Test InitialExecutionState to_dict -> from_dict roundtrip preserves all data."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
     next_attempt_time = datetime.datetime(
         2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc
@@ -2403,8 +2275,8 @@ async def test_initial_execution_state_json_roundtrip() -> None:
     original = InitialExecutionState(operations=[operation], next_marker="marker123")
 
     # Convert to JSON dict and back
-    json_data = original.to_json_dict()
-    restored = InitialExecutionState.from_json_dict(json_data)
+    json_data = original.to_dict()
+    restored = InitialExecutionState.from_dict(json_data)
 
     # Verify all fields are preserved
     assert len(restored.operations) == len(original.operations)
@@ -2430,8 +2302,8 @@ async def test_initial_execution_state_json_roundtrip() -> None:
     )
 
 
-async def test_durable_execution_invocation_input_to_json_dict_minimal() -> None:
-    """Test DurableExecutionInvocationInput.to_json_dict with minimal data."""
+async def test_durable_execution_invocation_input_to_dict_minimal() -> None:
+    """Test DurableExecutionInvocationInput.to_dict with minimal data."""
     operation = Operation(
         operation_id="exec1",
         operation_type=OperationType.EXECUTION,
@@ -2448,20 +2320,18 @@ async def test_durable_execution_invocation_input_to_json_dict_minimal() -> None
         initial_execution_state=initial_state,
     )
 
-    result = invocation_input.to_json_dict()
+    result = invocation_input.to_dict()
     expected = {
         "DurableExecutionArn": "arn:test:execution/exec1",
         "CheckpointToken": "token123",
-        "InitialExecutionState": initial_state.to_json_dict(),
+        "InitialExecutionState": initial_state.to_dict(),
     }
 
     assert result == expected
 
 
-async def test_durable_execution_invocation_input_to_json_dict_with_timestamps() -> (
-    None
-):
-    """Test DurableExecutionInvocationInput.to_json_dict converts datetime objects to millisecond timestamps."""
+async def test_durable_execution_invocation_input_to_dict_with_timestamps() -> None:
+    """Test DurableExecutionInvocationInput.to_dict converts datetime objects to millisecond timestamps."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
     end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.timezone.utc)
 
@@ -2484,7 +2354,7 @@ async def test_durable_execution_invocation_input_to_json_dict_with_timestamps()
         initial_execution_state=initial_state,
     )
 
-    result = invocation_input.to_json_dict()
+    result = invocation_input.to_dict()
 
     # Verify that timestamps are converted to milliseconds in nested operations
     operation_result = result["InitialExecutionState"]["Operations"][0]
@@ -2497,10 +2367,8 @@ async def test_durable_execution_invocation_input_to_json_dict_with_timestamps()
     assert result["CheckpointToken"] == "token123"
 
 
-async def test_durable_execution_invocation_input_to_json_dict_empty_operations() -> (
-    None
-):
-    """Test DurableExecutionInvocationInput.to_json_dict with empty operations."""
+async def test_durable_execution_invocation_input_to_dict_empty_operations() -> None:
+    """Test DurableExecutionInvocationInput.to_dict with empty operations."""
     initial_state = InitialExecutionState(operations=[], next_marker="")
 
     invocation_input = DurableExecutionInvocationInput(
@@ -2509,7 +2377,7 @@ async def test_durable_execution_invocation_input_to_json_dict_empty_operations(
         initial_execution_state=initial_state,
     )
 
-    result = invocation_input.to_json_dict()
+    result = invocation_input.to_dict()
     expected = {
         "DurableExecutionArn": "arn:test:execution/exec1",
         "CheckpointToken": "token123",
@@ -2519,8 +2387,8 @@ async def test_durable_execution_invocation_input_to_json_dict_empty_operations(
     assert result == expected
 
 
-async def test_durable_execution_invocation_input_from_json_dict_minimal() -> None:
-    """Test DurableExecutionInvocationInput.from_json_dict with minimal data."""
+async def test_durable_execution_invocation_input_from_dict_minimal() -> None:
+    """Test DurableExecutionInvocationInput.from_dict with minimal data."""
     data = {
         "DurableExecutionArn": "arn:test:execution/exec1",
         "CheckpointToken": "token123",
@@ -2536,7 +2404,7 @@ async def test_durable_execution_invocation_input_from_json_dict_minimal() -> No
         },
     }
 
-    result = DurableExecutionInvocationInput.from_json_dict(data)
+    result = DurableExecutionInvocationInput.from_dict(data)
 
     assert result.durable_execution_arn == "arn:test:execution/exec1"
     assert result.checkpoint_token == "token123"  # noqa: S105
@@ -2547,10 +2415,8 @@ async def test_durable_execution_invocation_input_from_json_dict_minimal() -> No
 
 
 @no_type_check
-async def test_durable_execution_invocation_input_from_json_dict_with_timestamps() -> (
-    None
-):
-    """Test DurableExecutionInvocationInput.from_json_dict converts millisecond timestamps to datetime objects."""
+async def test_durable_execution_invocation_input_from_dict_with_timestamps() -> None:
+    """Test DurableExecutionInvocationInput.from_dict converts millisecond timestamps to datetime objects."""
     start_ms = 1672574400000  # 2023-01-01 12:00:00 UTC
     end_ms = 1672578000000  # 2023-01-01 13:00:00 UTC
 
@@ -2572,7 +2438,7 @@ async def test_durable_execution_invocation_input_from_json_dict_with_timestamps
         },
     }
 
-    result = DurableExecutionInvocationInput.from_json_dict(data)
+    result = DurableExecutionInvocationInput.from_dict(data)
 
     expected_start = datetime.datetime(
         2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc
@@ -2585,16 +2451,16 @@ async def test_durable_execution_invocation_input_from_json_dict_with_timestamps
     assert operation.execution_details.input_payload == "test_payload"
 
 
-async def test_durable_execution_invocation_input_from_json_dict_empty_initial_state() -> (
+async def test_durable_execution_invocation_input_from_dict_empty_initial_state() -> (
     None
 ):
-    """Test DurableExecutionInvocationInput.from_json_dict handles missing InitialExecutionState."""
+    """Test DurableExecutionInvocationInput.from_dict handles missing InitialExecutionState."""
     data = {
         "DurableExecutionArn": "arn:test:execution/exec1",
         "CheckpointToken": "token123",
     }
 
-    result = DurableExecutionInvocationInput.from_json_dict(data)
+    result = DurableExecutionInvocationInput.from_dict(data)
 
     assert result.durable_execution_arn == "arn:test:execution/exec1"
     assert result.checkpoint_token == "token123"  # noqa: S105
@@ -2605,7 +2471,7 @@ async def test_durable_execution_invocation_input_from_json_dict_empty_initial_s
 
 @no_type_check
 async def test_durable_execution_invocation_input_json_roundtrip() -> None:
-    """Test DurableExecutionInvocationInput to_json_dict -> from_json_dict roundtrip preserves all data."""
+    """Test DurableExecutionInvocationInput to_dict -> from_dict roundtrip preserves all data."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
     end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.timezone.utc)
     next_attempt_time = datetime.datetime(
@@ -2659,8 +2525,8 @@ async def test_durable_execution_invocation_input_json_roundtrip() -> None:
     )
 
     # Convert to JSON dict and back
-    json_data = original.to_json_dict()
-    restored = DurableExecutionInvocationInput.from_json_dict(json_data)
+    json_data = original.to_dict()
+    restored = DurableExecutionInvocationInput.from_dict(json_data)
 
     # Verify all top-level fields are preserved
     assert restored.durable_execution_arn == original.durable_execution_arn
@@ -2720,7 +2586,7 @@ async def test_durable_execution_invocation_input_json_roundtrip() -> None:
 async def test_durable_execution_invocation_input_json_dict_preserves_non_timestamp_fields() -> (
     None
 ):
-    """Test that to_json_dict preserves all non-timestamp fields unchanged."""
+    """Test that to_dict preserves all non-timestamp fields unchanged."""
 
     context_details = ContextDetails(replay_children=True, result="context_result")
 
@@ -2746,7 +2612,7 @@ async def test_durable_execution_invocation_input_json_dict_preserves_non_timest
         initial_execution_state=initial_state,
     )
 
-    result = invocation_input.to_json_dict()
+    result = invocation_input.to_dict()
 
     # Verify non-timestamp fields are unchanged
     operation_result = result["InitialExecutionState"]["Operations"][0]
@@ -2772,7 +2638,7 @@ async def test_event_parsing_with_unix_millis_timestamps() -> None:
 
     Regression test for: TypeError: '<' not supported between instances of 'int' and 'datetime.datetime'
 
-    Tests all timestamp fields handled by from_json_dict:
+    Tests all timestamp fields handled by from_dict:
     - StartTimestamp
     - EndTimestamp
     - StepDetails.NextAttemptTimestamp
@@ -2816,8 +2682,8 @@ async def test_event_parsing_with_unix_millis_timestamps() -> None:
         },
     }
 
-    # Parse using from_json_dict (the fix)
-    invocation_input = DurableExecutionInvocationInput.from_json_dict(event)
+    # Parse using from_dict (the fix)
+    invocation_input = DurableExecutionInvocationInput.from_dict(event)
     operations = invocation_input.initial_execution_state.operations
 
     # Verify EXECUTION operation timestamps
@@ -2842,69 +2708,6 @@ async def test_event_parsing_with_unix_millis_timestamps() -> None:
     now = datetime.datetime.now(tz=datetime.timezone.utc)
     assert isinstance(next_attempt < now or next_attempt >= now, bool)
     assert isinstance(scheduled_end < now or scheduled_end >= now, bool)
-
-
-async def test_from_dict_leaves_timestamps_as_integers() -> None:
-    """Test that from_dict (the bug) leaves timestamps as integers.
-
-    This demonstrates the bug behavior for documentation purposes.
-    """
-    event = {
-        "DurableExecutionArn": "arn:test",
-        "CheckpointToken": "token",
-        "InitialExecutionState": {
-            "Operations": [
-                {
-                    "Id": "step-id",
-                    "Type": "STEP",
-                    "SubType": "WaitForCondition",
-                    "StartTimestamp": 1769481309631,
-                    "EndTimestamp": 1769481319631,
-                    "Status": "PENDING",
-                    "StepDetails": {
-                        "Attempt": 1,
-                        "NextAttemptTimestamp": 1769481369631,  # Unix millis (int)
-                    },
-                },
-                {
-                    "Id": "wait-id",
-                    "Type": "WAIT",
-                    "StartTimestamp": 1769481309631,
-                    "Status": "PENDING",
-                    "WaitDetails": {
-                        "ScheduledEndTimestamp": 1769481399631  # Unix millis (int)
-                    },
-                },
-            ]
-        },
-    }
-
-    # Using from_dict leaves timestamps as integers
-    invocation_input = DurableExecutionInvocationInput.from_dict(event)
-    operations = invocation_input.initial_execution_state.operations
-
-    # All timestamps remain as integers (the bug)
-    assert isinstance(operations[0].start_timestamp, int)
-    assert isinstance(operations[0].end_timestamp, int)
-    assert isinstance(operations[0].step_details.next_attempt_timestamp, int)
-    assert isinstance(operations[1].wait_details.scheduled_end_timestamp, int)
-
-    # These comparisons would cause TypeError
-    with pytest.raises(
-        TypeError,
-        match="'<' not supported between instances of 'int' and 'datetime.datetime'",
-    ):
-        _ = operations[0].step_details.next_attempt_timestamp < datetime.datetime.now(
-            tz=datetime.timezone.utc
-        )
-
-    with pytest.raises(
-        TypeError,
-        match="'<' not supported between instances of 'int' and 'datetime.datetime'",
-    ):
-        _ = operations[1].wait_details.scheduled_end_timestamp < datetime.datetime.now(
-            tz=datetime.timezone.utc
-        )
 
 
 # =============================================================================
@@ -3333,7 +3136,7 @@ async def test_step_different_ways_to_pass_args() -> None:
             checkpoint_token,
             updates,
             client_token="token",  # noqa: S107
-        ) -> Any:
+        ):
             checkpoint_calls.append(updates)
 
             return CheckpointOutput(
@@ -3416,7 +3219,7 @@ async def test_durable_callable_decorator_creates_step_operation() -> None:
             checkpoint_token,
             updates,
             client_token="token",  # noqa: S107
-        ) -> Any:
+        ):
             checkpoint_calls.append(updates)
 
             return CheckpointOutput(
@@ -3491,7 +3294,7 @@ async def test_step_with_logger() -> None:
             checkpoint_token,
             updates,
             client_token="token",  # noqa: S107
-        ) -> Any:
+        ):
             checkpoint_calls.append(updates)
 
             return CheckpointOutput(
@@ -3671,7 +3474,7 @@ async def test_step_checkpoint_failure_propagates_error() -> None:
             checkpoint_token,
             updates,
             client_token="token",  # noqa: S107
-        ) -> NoReturn:
+        ):
             # Simulate a failure during checkpoint invocation
             msg = "Checkpoint service unavailable"
             raise RuntimeError(msg)
@@ -3812,7 +3615,7 @@ async def test_durable_callable_wait_for_callback_submitter() -> None:
             checkpoint_token,
             updates,
             client_token="token",  # noqa: S107
-        ) -> Any:
+        ):
             checkpoint_calls.append(updates)
 
             # For CALLBACK operations, return the operation with callback details
@@ -4176,7 +3979,7 @@ async def test_callback_deferred_error_handling_to_result() -> None:
             checkpoint_token,
             updates,
             client_token="token",  # noqa: S107
-        ) -> Any:
+        ):
             checkpoint_calls.append(updates)
 
             # Add operations with proper details
@@ -4400,7 +4203,7 @@ async def test_end_to_end_child_context_replay_children_mode() -> None:
             checkpoint_token,
             updates,
             client_token="token",  # noqa: S107
-        ) -> Any:
+        ):
             checkpoint_calls.append(updates)
 
             for update in updates:

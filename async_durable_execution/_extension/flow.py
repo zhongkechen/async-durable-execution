@@ -24,10 +24,10 @@ from .._core import (
     InvocationError,
     SerDes,
     SerDesError,
-    SerializableModel,
     SuspendExecution,
     TimedSuspendExecution,
     ValidationError,
+    MappingModel,
     _restore_sdk_control_error,
     bind_current_context,
     bind_durable_definition,
@@ -66,7 +66,7 @@ class FlowNodeStatus(Enum):
 
 
 @dataclass(frozen=True)
-class FlowNodeResult(SerializableModel, Generic[T]):
+class FlowNodeResult(MappingModel, Generic[T]):
     """Logical result of one flow node."""
 
     status: FlowNodeStatus

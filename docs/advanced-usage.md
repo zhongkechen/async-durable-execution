@@ -388,6 +388,13 @@ result = await wait_for_condition(
 )
 ```
 
+## AWS Model Mappings
+
+Core durable dataclass models expose `to_dict()` and `from_dict()`. AWS service
+models preserve botocore-native values, while Lambda invocation input models
+encode timestamps as Unix milliseconds. Invocation state serializers recursively
+convert their nested `Operation` models using the JSON representation.
+
 ## Lambda Client Selection
 
 The SDK chooses a Lambda API client for durable checkpoint and state APIs based on the installed dependencies.

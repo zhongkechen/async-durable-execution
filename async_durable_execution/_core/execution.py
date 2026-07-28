@@ -23,7 +23,7 @@ from .models import (
     Operation,
     OperationUpdate,
     OperationIdentifier,
-    SerializableModel,
+    JsonSerializableModel,
 )
 from .client import (
     AsyncLambdaClient,
@@ -80,7 +80,7 @@ def durable_callable(
 
 
 @dataclass(frozen=True)
-class InitialExecutionState(SerializableModel):
+class InitialExecutionState(JsonSerializableModel):
     """Initial page of operation history included with an invocation event."""
 
     operations: list[Operation] = field(
@@ -91,7 +91,7 @@ class InitialExecutionState(SerializableModel):
 
 
 @dataclass(frozen=True)
-class DurableExecutionInvocationInput(SerializableModel):
+class DurableExecutionInvocationInput(JsonSerializableModel):
     """Event payload delivered to a durable Lambda invocation."""
 
     durable_execution_arn: str = field(metadata={"alias": "DurableExecutionArn"})
@@ -261,7 +261,7 @@ def _run_on_event_loop(
 def deserialize_input(event: Any) -> DurableExecutionInvocationInput:
     try:
         logger.debug("durableExecutionArn: %s", event.get("DurableExecutionArn"))
-        return DurableExecutionInvocationInput.from_json_dict(event)
+        return DurableExecutionInvocationInput.from_dict(event)
     except (KeyError, TypeError, AttributeError) as e:
         msg = (
             "Unexpected payload provided to start the durable execution. "

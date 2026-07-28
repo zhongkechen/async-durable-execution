@@ -128,7 +128,7 @@ async def test_in_process_invoker_invoke() -> None:
     # Verify handler was called with correct arguments
     handler.assert_called_once()
     call_args = handler.call_args[0]
-    assert call_args[0] == input_data.to_json_dict()
+    assert call_args[0] == input_data.to_dict()
     assert isinstance(call_args[1], LambdaContext)
 
 
@@ -242,7 +242,7 @@ async def test_lambda_invoker_invoke_success() -> None:
     lambda_client.invoke.assert_called_once_with(
         FunctionName="test-function",
         InvocationType="RequestResponse",
-        Payload=json.dumps(input_data.to_json_dict()),
+        Payload=json.dumps(input_data.to_dict()),
     )
 
 

@@ -51,6 +51,7 @@ from .execution import (
     durable_execution,
 )
 from .models import (
+    BotoSerializableModel,
     CallbackDetails,
     CallbackOptions,
     CallbackTimeoutType,
@@ -65,6 +66,7 @@ from .models import (
     ExecutionDetails,
     InvocationStatus,
     LambdaContext,
+    MappingModel,
     Operation,
     OperationAction,
     OperationIdentifier,
@@ -73,13 +75,11 @@ from .models import (
     OperationSubType,
     OperationType,
     OperationUpdate,
-    SerializableModel,
     StateOutput,
     StepDetails,
     TimestampConverter,
     WaitDetails,
     WaitOptions,
-    _metadata,
 )
 from .serdes import (
     DEFAULT_JSON_SERDES,

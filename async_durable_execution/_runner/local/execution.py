@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
 from uuid import uuid4
 
 from ..._core import (
@@ -57,7 +56,6 @@ class Execution:
         self.updates: list[OperationUpdate] = []
         self.invocation_completions: list[InvocationCompletedDetails] = []
         self.used_tokens: set[str] = set()
-        # TODO: this will need to persist/rehydrate depending on inmemory vs sqllite store
         self._token_sequence: int = 0
         self.is_complete: bool = False
         self.result: DurableExecutionInvocationOutput | None = None
@@ -92,68 +90,6 @@ class Execution:
             start_input=input,
             operations=[],
         )
-
-    def to_json_dict(self) -> dict[str, Any]:
-        """Serialize execution to JSON-serializable dictionary"""
-        return {
-            "DurableExecutionArn": self.durable_execution_arn,
-            "StartInput": self.start_input.to_dict(),
-            "Operations": [op.to_json_dict() for op in self.operations],
-            "Updates": [update.to_dict() for update in self.updates],
-            "InvocationCompletions": [
-                completion.to_json_dict() for completion in self.invocation_completions
-            ],
-            "UsedTokens": list(self.used_tokens),
-            "TokenSequence": self._token_sequence,
-            "IsComplete": self.is_complete,
-            "Result": self.result.to_dict() if self.result else None,
-            "ConsecutiveFailedInvocationAttempts": self.consecutive_failed_invocation_attempts,
-            "CloseStatus": self.close_status.value if self.close_status else None,
-        }
-
-    @classmethod
-    def from_json_dict(cls, data: dict[str, Any]) -> Execution:
-        """Deserialize execution from dictionary."""
-        # Reconstruct start_input
-        start_input = StartDurableExecutionInput.from_dict(data["StartInput"])
-
-        # Reconstruct operations
-        operations = [
-            Operation.from_json_dict(op_data) for op_data in data["Operations"]
-        ]
-
-        # Create execution
-        execution = cls(
-            durable_execution_arn=data["DurableExecutionArn"],
-            start_input=start_input,
-            operations=operations,
-        )
-
-        # Set additional fields
-        execution.updates = [
-            OperationUpdate.from_dict(update_data) for update_data in data["Updates"]
-        ]
-        execution.invocation_completions = [
-            InvocationCompletedDetails.from_json_dict(item)
-            for item in data.get("InvocationCompletions", [])
-        ]
-        execution.used_tokens = set(data["UsedTokens"])
-        execution._token_sequence = data["TokenSequence"]
-        execution.is_complete = data["IsComplete"]
-        execution.result = (
-            DurableExecutionInvocationOutput.from_dict(data["Result"])
-            if data["Result"]
-            else None
-        )
-        execution.consecutive_failed_invocation_attempts = data[
-            "ConsecutiveFailedInvocationAttempts"
-        ]
-        close_status_str = data.get("CloseStatus")
-        execution.close_status = (
-            ExecutionStatus(close_status_str) if close_status_str else None
-        )
-
-        return execution
 
     def start(self) -> None:
         if self.start_input.invocation_id is None:

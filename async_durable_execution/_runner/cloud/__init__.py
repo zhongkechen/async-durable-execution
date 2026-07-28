@@ -654,7 +654,7 @@ class LambdaInvoker:
             response = await client.invoke(
                 FunctionName=function_name,
                 InvocationType="RequestResponse",  # Synchronous invocation
-                Payload=json.dumps(input.to_json_dict()),
+                Payload=json.dumps(input.to_dict()),
             )
 
             # Check HTTP status code

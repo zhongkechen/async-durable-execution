@@ -7,10 +7,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from async_durable_execution._core.execution import (
-    DurableExecutionInvocationOutput,
-    InvocationStatus,
-)
+from async_durable_execution._core.execution import InvocationStatus
 from async_durable_execution._core.models import (
     CallbackDetails,
     ErrorObject,
@@ -832,29 +829,6 @@ def test_complete_retry_without_step_details() -> None:
     assert result.step_details is None
 
 
-def test_from_dict_with_none_result() -> None:
-    """Test from_dict with None result."""
-    data = {
-        "DurableExecutionArn": "test-arn",
-        "StartInput": {"function_name": "test"},
-        "Operations": [],
-        "Updates": [],
-        "UsedTokens": [],
-        "TokenSequence": 0,
-        "IsComplete": False,
-        "Result": None,  # None result
-        "ConsecutiveFailedInvocationAttempts": 0,
-        "CloseStatus": None,
-    }
-
-    with patch(
-        "async_durable_execution._runner.local.model.StartDurableExecutionInput.from_dict"
-    ) as mock_from_dict:
-        mock_from_dict.return_value = Mock()
-        execution = Execution.from_json_dict(data)
-        assert execution.result is None
-
-
 def test_find_callback_operation_not_found() -> None:
     """Test find_callback_operation raises exception when callback not found."""
     execution = Execution("test-arn", Mock(), [])
@@ -1034,46 +1008,6 @@ def test_start_requires_invocation_id() -> None:
         InvalidParameterValueException, match="invocation_id is required"
     ):
         execution.start()
-
-
-@no_type_check
-def test_execution_to_json_dict_and_from_json_dict_round_trip_completed_execution() -> (
-    None
-):
-    """Test completed executions serialize and hydrate runner-only fields."""
-    start_input = StartDurableExecutionInput(
-        account_id="123456789012",
-        function_name="test-function",
-        function_qualifier="$LATEST",
-        execution_name="test-execution",
-        execution_timeout_seconds=300,
-        execution_retention_period_days=7,
-        invocation_id="test-invocation-id",
-        input='{"hello": "world"}',
-    )
-    execution = Execution("test-arn", start_input, [])
-    execution.start()
-    token = execution.get_new_checkpoint_token()
-    execution.record_invocation_completion(
-        start_timestamp=datetime(2023, 1, 1, 0, 0, tzinfo=timezone.utc),
-        end_timestamp=datetime(2023, 1, 1, 0, 1, tzinfo=timezone.utc),
-        request_id="request-1",
-    )
-    execution.complete_success('{"ok": true}')
-
-    restored = Execution.from_json_dict(execution.to_json_dict())
-
-    assert restored.durable_execution_arn == "test-arn"
-    assert restored.used_tokens == {token}
-    assert restored.token_sequence == 1
-    assert restored.is_complete is True
-    assert restored.close_status.value == "SUCCEEDED"
-    assert restored.result == DurableExecutionInvocationOutput(
-        status=InvocationStatus.SUCCEEDED,
-        result='{"ok": true}',
-    )
-    assert len(restored.invocation_completions) == 1
-    assert restored.invocation_completions[0].request_id == "request-1"
 
 
 @no_type_check
