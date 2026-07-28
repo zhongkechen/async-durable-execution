@@ -30,10 +30,7 @@ from async_durable_execution._runner.exceptions import (
     InvalidParameterValueException,
     ResourceNotFoundException,
 )
-from async_durable_execution._runner.local.execution import (
-    Execution,
-    ExecutionStatus,
-)
+from async_durable_execution._runner.local.execution import Execution
 from async_durable_execution._runner.local import Executor
 from async_durable_execution._runner.model import (
     InvokeResponse,
@@ -1976,33 +1973,6 @@ async def test_get_execution_history_invalid_marker(executor, mock_store) -> Non
     assert result.next_marker is None
 
 
-async def test_checkpoint_execution(executor, mock_store) -> None:
-    """Test checkpoint_execution method."""
-    mock_execution = Mock()
-    mock_execution.used_tokens = {"token1", "token2"}
-    mock_execution.get_new_checkpoint_token.return_value = "new-token"
-    mock_store.load.return_value = mock_execution
-
-    result = executor.checkpoint_execution("test-arn", "token1")
-
-    assert result.checkpoint_token == "new-token"  # noqa: S105
-    assert result.new_execution_state is None
-    mock_store.load.assert_called_once_with("test-arn")
-    mock_execution.get_new_checkpoint_token.assert_called_once()
-
-
-async def test_checkpoint_execution_invalid_token(executor, mock_store) -> None:
-    """Test checkpoint_execution with invalid checkpoint token."""
-    mock_execution = Mock()
-    mock_execution.used_tokens = {"token1", "token2"}
-    mock_store.load.return_value = mock_execution
-
-    with pytest.raises(
-        InvalidParameterValueException, match="Invalid checkpoint token"
-    ):
-        executor.checkpoint_execution("test-arn", "invalid-token")
-
-
 # Callback method tests
 
 
@@ -2526,18 +2496,7 @@ async def test_timeout_execution(executor, mock_store) -> None:
     assert executor.get_execution("test-arn") is execution
     mock_complete_events.assert_called_once_with(execution_arn="test-arn")
     assert execution.is_complete is True
-    assert execution.close_status == ExecutionStatus.TIMED_OUT
     assert execution.result.error == error
-
-
-async def test_stop_execution(executor) -> None:
-    """Test stop_execution method."""
-    error = ErrorObject.from_message("Execution stopped")
-
-    with patch.object(executor, "fail_execution") as mock_fail:
-        executor.stop_execution("test-arn", error)
-
-    mock_fail.assert_called_once_with("test-arn", error)
 
 
 @patch("async_durable_execution._runner.local.executor.Execution")
@@ -2653,45 +2612,6 @@ async def test_get_execution_history_reverse_pagination_next_marker(
     assert result.next_marker == str(result.events[-1].event_id)
 
 
-async def test_checkpoint_execution_with_updates_returns_new_state(
-    executor, mock_store, mock_service_client
-) -> None:
-    operation = Operation(
-        operation_id="op-1",
-        operation_type=OperationType.STEP,
-        status=OperationStatus.STARTED,
-    )
-    update = OperationUpdate(
-        operation_id="op-1",
-        operation_type=OperationType.STEP,
-        action=OperationAction.START,
-    )
-    checkpoint_output = Mock()
-    checkpoint_output.checkpoint_token = "token-2"  # noqa: S105
-    checkpoint_output.new_execution_state.operations = [operation]
-    checkpoint_output.new_execution_state.next_marker = "next"
-    mock_service_client.process_checkpoint.return_value = checkpoint_output
-    mock_execution = Mock()
-    mock_execution.used_tokens = {"token-1"}
-    mock_store.load.return_value = mock_execution
-
-    result = executor.checkpoint_execution(
-        "test-arn",
-        "token-1",  # noqa: S106
-        updates=[update],
-        client_token="client-token",  # noqa: S106
-    )
-
-    mock_service_client.process_checkpoint.assert_called_once_with(
-        checkpoint_token="token-1",  # noqa: S106
-        updates=[update],
-        client_token="client-token",  # noqa: S106
-    )
-    assert result.checkpoint_token == "token-2"  # noqa: S105
-    assert result.new_execution_state.operations == [operation]
-    assert result.new_execution_state.next_marker == "next"
-
-
 async def test_validate_invocation_response_rejects_completed_execution(
     executor, mock_execution
 ) -> None:
@@ -2713,7 +2633,7 @@ async def test_callback_resume_is_coalesced_while_invocation_active(
 
     with patch.object(executor, "_invoke_execution") as mock_invoke:
         executor._mark_invocation_started("test-arn")
-        executor._schedule_callback_resume("test-arn")
+        executor._schedule_resume("test-arn")
 
         assert executor._pending_resume is True
         mock_invoke.assert_not_called()

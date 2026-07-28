@@ -175,25 +175,6 @@ def test_lambda_invoker_init() -> None:
     assert invoker.lambda_client.client is lambda_client
 
 
-def test_lambda_invoker_create() -> None:
-    """Test creating LambdaInvoker with botocore client."""
-    with patch("async_durable_execution._runner.cloud.get_session") as mock_boto3:
-        mock_client = Mock()
-        mock_boto3.return_value.create_client.return_value = mock_client
-
-        invoker = LambdaInvoker.create("http://localhost:3001", "us-west-2")
-
-        assert isinstance(invoker, LambdaInvoker)
-        assert isinstance(invoker.lambda_client, ThreadedSyncCloudLambdaClient)
-        assert invoker.lambda_client.client is mock_client
-        mock_boto3.return_value.create_client.assert_called_once_with(
-            "lambda",
-            endpoint_url="http://localhost:3001",
-            region_name="us-west-2",
-            config=_LAMBDA_CLIENT_CONFIG,
-        )
-
-
 async def test_lambda_invoker_invoke_success() -> None:
     """Test successful lambda invocation."""
     lambda_client = Mock()
@@ -712,25 +693,6 @@ async def test_async_cloud_lambda_client_invokes_async_client() -> None:
 
     assert result == {"StatusCode": 202}
     raw_client.invoke.assert_awaited_once_with(FunctionName="test-function")
-
-
-def test_lambda_invoker_update_endpoint_reuses_cached_client() -> None:
-    """Test update_endpoint creates a client once per endpoint."""
-    initial_client = Mock()
-    endpoint_client = Mock()
-    invoker = LambdaInvoker(initial_client)
-
-    with patch(
-        "async_durable_execution._runner.cloud.create_lambda_client",
-        return_value=endpoint_client,
-    ) as mock_create_client:
-        invoker.update_endpoint("http://localhost:3001", "us-west-2")
-        invoker.update_endpoint("http://localhost:3001", "us-west-2")
-
-    assert isinstance(invoker.lambda_client, ThreadedSyncCloudLambdaClient)
-    assert invoker.lambda_client.client is endpoint_client
-    assert invoker._current_endpoint == "http://localhost:3001"
-    mock_create_client.assert_called_once_with("http://localhost:3001", "us-west-2")
 
 
 def test_lambda_invoker_get_client_for_explicit_endpoint_creates_client() -> None:

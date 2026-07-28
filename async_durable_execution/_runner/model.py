@@ -403,27 +403,6 @@ class EventCreationContext:
     operation_update: OperationUpdate | None = None
     include_execution_data: bool = False
 
-    @classmethod
-    def create(
-        cls,
-        operation: Operation,
-        event_id: int,
-        durable_execution_arn: str,
-        start_input: StartDurableExecutionInput,
-        result: DurableExecutionInvocationOutput | None = None,
-        operation_update: OperationUpdate | None = None,
-        include_execution_data: bool = False,  # noqa: FBT001, FBT002
-    ) -> EventCreationContext:
-        return cls(
-            operation=operation,
-            event_id=event_id,
-            durable_execution_arn=durable_execution_arn,
-            start_durable_execution_input=start_input,
-            durable_execution_invocation_output=result,
-            operation_update=operation_update,
-            include_execution_data=include_execution_data,
-        )
-
     @property
     def sub_type(self) -> str | None:
         return self.operation.sub_type.value if self.operation.sub_type else None

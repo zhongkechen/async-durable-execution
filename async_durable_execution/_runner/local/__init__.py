@@ -252,9 +252,6 @@ class InProcessInvoker(Invoker):
             invocation_output=output, request_id=context.aws_request_id
         )
 
-    def update_endpoint(self, endpoint_url: str, region_name: str) -> None:
-        """No-op for in-process invoker."""
-
 
 def create_test_lambda_context() -> LambdaContext:
     # Create client context as a dictionary, not as objects

@@ -151,8 +151,6 @@ class Invoker(Protocol):
         endpoint_url: str | None = None,
     ) -> InvokeResponse: ...
 
-    def update_endpoint(self, endpoint_url: str, region_name: str) -> None: ...
-
 
 @dataclass(frozen=True)
 class CheckpointToken:

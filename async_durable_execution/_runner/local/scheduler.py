@@ -40,20 +40,6 @@ class Event:
             raise self._exception
         return result
 
-    def wait(self, timeout: float | None = None, *, clear_on_set: bool = True) -> bool:
-        """Synchronously wait for compatibility with scheduler unit tests."""
-        loop = self._scheduler.get_loop()
-        if loop.is_running():
-            msg = "Event.wait() cannot block a running event loop; use wait_async()."
-            raise RuntimeError(msg)
-        return loop.run_until_complete(
-            self.wait_async(timeout=timeout, clear_on_set=clear_on_set)
-        )
-
-    def remove(self) -> None:
-        """Remove the event from the Scheduler."""
-        self._scheduler.remove_event(self._event)
-
 
 class Scheduler:
     """A Scheduler to run callables later on one asyncio event loop."""
@@ -106,18 +92,6 @@ class Scheduler:
         if self._loop is None or self._loop.is_closed():
             self._loop = self._get_or_create_loop()
         return self._loop
-
-    def is_started(self) -> bool:
-        """Return True if the scheduler is started."""
-        return self._running
-
-    def event_count(self) -> int:
-        """Return the number of events in the scheduler."""
-        return len(self._events)
-
-    def task_count(self) -> int:
-        """Return the number of scheduled tasks that are not done."""
-        return sum(1 for task in self._tasks if not task.done())
 
     def call_later(
         self,

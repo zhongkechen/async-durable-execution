@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 from ..._core import (
     CallbackOptions,
     CallbackTimeoutType,
-    CheckpointUpdatedExecutionState,
     DurableExecutionInvocationInput,
     DurableExecutionInvocationOutput,
     ErrorObject,
@@ -35,7 +34,6 @@ from ..model import (
 )
 from .model import (
     CallbackToken,
-    CheckpointDurableExecutionResponse,
     GetDurableExecutionStateResponse,
     Invoker,
     SendDurableExecutionCallbackFailureResponse,
@@ -396,63 +394,6 @@ class Executor:
             events=paginated_events, next_marker=next_marker
         )
 
-    def checkpoint_execution(
-        self,
-        execution_arn: str,
-        checkpoint_token: str,
-        updates: list[OperationUpdate] | None = None,
-        client_token: str | None = None,
-    ) -> CheckpointDurableExecutionResponse:
-        """Process checkpoint for an execution.
-
-        Args:
-            execution_arn: The execution ARN
-            checkpoint_token: Current checkpoint token
-            updates: List of operation updates to process
-            client_token: Client token for idempotency
-
-        Returns:
-            CheckpointDurableExecutionResponse: Updated checkpoint token and state
-
-        Raises:
-            ResourceNotFoundException: If execution does not exist
-            InvalidParameterValueException: If checkpoint token is invalid
-        """
-        execution = self.get_execution(execution_arn)
-
-        # Validate checkpoint token
-        if checkpoint_token not in execution.used_tokens:
-            msg: str = f"Invalid checkpoint token: {checkpoint_token}"
-            raise InvalidParameterValueException(msg)
-
-        if updates:
-            checkpoint_output = self._service_client.process_checkpoint(
-                checkpoint_token=checkpoint_token,
-                updates=updates,
-                client_token=client_token,
-            )
-
-            new_execution_state = None
-            if checkpoint_output.new_execution_state:
-                new_execution_state = CheckpointUpdatedExecutionState(
-                    operations=checkpoint_output.new_execution_state.operations,
-                    next_marker=checkpoint_output.new_execution_state.next_marker,
-                )
-
-            return CheckpointDurableExecutionResponse(
-                checkpoint_token=checkpoint_output.checkpoint_token,
-                new_execution_state=new_execution_state,
-            )
-
-        # Save execution state after generating new token
-        new_checkpoint_token = execution.get_new_checkpoint_token()
-        self._update_execution(execution)
-
-        return CheckpointDurableExecutionResponse(
-            checkpoint_token=new_checkpoint_token,
-            new_execution_state=None,
-        )
-
     def send_callback_success(
         self,
         callback_id: str,
@@ -711,13 +652,6 @@ class Executor:
 
         return invoke
 
-    def _schedule_callback_resume(self, execution_arn: str) -> None:
-        """Schedule a callback-triggered resume.
-
-        Kept as a named wrapper for tests and callers that exercise callback behavior.
-        """
-        self._schedule_resume(execution_arn)
-
     def _schedule_resume(self, execution_arn: str) -> None:
         """Coalesce external resumes to avoid overlapping replays."""
         self._validate_current_execution(execution_arn)
@@ -961,10 +895,6 @@ class Executor:
         execution.complete_timeout(error=error)  # Sets CloseStatus.TIMED_OUT
         self._update_execution(execution)
         self._complete_events(execution_arn=execution_arn)
-
-    def stop_execution(self, execution_arn: str, error: ErrorObject) -> None:
-        """Handle execution stop."""
-        self.fail_execution(execution_arn, error)
 
     def schedule_wait_timer(
         self, execution_arn: str, operation_id: str, delay: float

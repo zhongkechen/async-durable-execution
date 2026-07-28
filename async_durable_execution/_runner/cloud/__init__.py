@@ -572,24 +572,6 @@ class LambdaInvoker:
         self._endpoint_clients: dict[str, Any] = {}
         self._current_endpoint: str = ""  # Track current endpoint for new executions
 
-    @staticmethod
-    def create(endpoint_url: str, region_name: str) -> LambdaInvoker:
-        """Create with the boto lambda client."""
-        invoker = LambdaInvoker(create_lambda_client(endpoint_url, region_name))
-        invoker._current_endpoint = endpoint_url
-        invoker._endpoint_clients[endpoint_url] = invoker.lambda_client
-        return invoker
-
-    def update_endpoint(self, endpoint_url: str, region_name: str) -> None:
-        """Update the Lambda client endpoint."""
-        # Cache client by endpoint to reuse across executions
-        if endpoint_url not in self._endpoint_clients:
-            self._endpoint_clients[endpoint_url] = adapt_lambda_client(
-                create_lambda_client(endpoint_url, region_name)
-            )
-        self.lambda_client = self._endpoint_clients[endpoint_url]
-        self._current_endpoint = endpoint_url
-
     def _get_client_for_execution(
         self,
         durable_execution_arn: str,
