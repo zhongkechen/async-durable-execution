@@ -77,11 +77,11 @@ def test_create_execution_started() -> None:
     operation.sub_type = None
     operation.execution_details = ExecutionDetails(input_payload='{"test": "data"}')
 
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=1,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -113,11 +113,11 @@ def test_create_execution_succeeded() -> None:
     result = DurableExecutionInvocationOutput(
         status=InvocationStatus.SUCCEEDED, result='{"result": "success"}'
     )
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=2,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -125,7 +125,7 @@ def test_create_execution_succeeded() -> None:
             execution_timeout_seconds=300,
             execution_retention_period_days=7,
         ),
-        result=result,
+        durable_execution_invocation_output=result,
         include_execution_data=True,
     )
     event = Event.create_execution_event(context)
@@ -148,11 +148,11 @@ def test_create_execution_failed() -> None:
         status=InvocationStatus.FAILED,
         error=ErrorObject.from_message("Execution failed"),
     )
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=3,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -160,7 +160,7 @@ def test_create_execution_failed() -> None:
             execution_timeout_seconds=300,
             execution_retention_period_days=7,
         ),
-        result=error_result,
+        durable_execution_invocation_output=error_result,
         include_execution_data=True,
     )
     event = Event.create_execution_event(context)
@@ -183,11 +183,11 @@ def test_create_execution_timed_out() -> None:
         status=InvocationStatus.FAILED,
         error=ErrorObject.from_message("Execution timed out"),
     )
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=4,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -195,7 +195,7 @@ def test_create_execution_timed_out() -> None:
             execution_timeout_seconds=300,
             execution_retention_period_days=7,
         ),
-        result=error_result,
+        durable_execution_invocation_output=error_result,
         include_execution_data=True,
     )
     event = Event.create_execution_event(context)
@@ -220,11 +220,11 @@ def test_create_execution_stopped() -> None:
         status=InvocationStatus.FAILED,
         error=ErrorObject.from_message("Execution stopped"),
     )
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=5,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -232,7 +232,7 @@ def test_create_execution_stopped() -> None:
             execution_timeout_seconds=300,
             execution_retention_period_days=7,
         ),
-        result=error_result,
+        durable_execution_invocation_output=error_result,
         include_execution_data=True,
     )
     event = Event.create_execution_event(context)
@@ -243,11 +243,11 @@ def test_create_execution_stopped() -> None:
 
 def test_create_execution_invalid_status() -> None:
     operation = create_mock_operation("op-1", status=OperationStatus.CANCELLED)
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=1,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -267,11 +267,11 @@ def test_create_context_started() -> None:
     operation = create_mock_operation(
         "ctx-1", "test_context", status=OperationStatus.STARTED
     )
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=1,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -294,11 +294,11 @@ def test_create_context_succeeded() -> None:
     operation.context_details = type(
         "MockDetails", (), {"result": '{"context": "result"}', "error": None}
     )()
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=2,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -321,11 +321,11 @@ def test_create_context_failed() -> None:
     operation.context_details = type(
         "MockDetails", (), {"result": None, "error": error_obj}
     )()
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=3,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -342,11 +342,11 @@ def test_create_context_failed() -> None:
 
 def test_create_context_invalid_status() -> None:
     operation = create_mock_operation("ctx-1", status=OperationStatus.TIMED_OUT)
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=1,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -371,11 +371,11 @@ def test_create_wait_started() -> None:
         (),
         {"scheduled_end_timestamp": parse_utc_datetime("2024-01-01T12:05:00Z")},
     )()
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=1,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -402,11 +402,11 @@ def test_create_wait_succeeded() -> None:
         (),
         {"scheduled_end_timestamp": parse_utc_datetime("2024-01-01T12:05:00Z")},
     )()
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=2,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -427,11 +427,11 @@ def test_create_wait_cancelled() -> None:
     mock_operation_update = Mock()
     mock_operation_update.operation_type = OperationType.WAIT
     mock_operation_update.operation_update.action = OperationAction.CANCEL
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=3,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -452,11 +452,11 @@ def test_create_wait_invalid_status() -> None:
     operation.wait_details.scheduled_end_timestamp = operation.start_timestamp = (
         parse_utc_datetime("2024-01-01T12:00:00Z")
     )
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=1,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -476,11 +476,11 @@ def test_create_step_started() -> None:
     operation = create_mock_operation(
         "step-1", "test_step", status=OperationStatus.STARTED
     )
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=1,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -503,11 +503,11 @@ def test_create_step_succeeded() -> None:
     operation.step_details = type(
         "MockDetails", (), {"result": '{"step": "result"}', "error": None}
     )()
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=2,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -530,11 +530,11 @@ def test_create_step_failed() -> None:
     operation.step_details = type(
         "MockDetails", (), {"result": None, "error": error_obj}
     )()
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=3,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -551,11 +551,11 @@ def test_create_step_failed() -> None:
 
 def test_create_step_invalid_status() -> None:
     operation = create_mock_operation("step-1", status=OperationStatus.TIMED_OUT)
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=1,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -575,11 +575,11 @@ def test_create_chained_invoke_started() -> None:
     operation = create_mock_operation(
         "invoke-1", "test_invoke", status=OperationStatus.STARTED
     )
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=1,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -602,11 +602,11 @@ def test_create_chained_invoke_succeeded() -> None:
     operation.chained_invoke_details = type(
         "MockDetails", (), {"result": '{"invoke": "result"}', "error": None}
     )()
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=2,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -631,11 +631,11 @@ def test_create_chained_invoke_failed() -> None:
     operation.chained_invoke_details = type(
         "MockDetails", (), {"result": None, "error": error_obj}
     )()
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=3,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -657,11 +657,11 @@ def test_create_chained_invoke_timed_out() -> None:
     operation.chained_invoke_details = type(
         "MockDetails", (), {"result": None, "error": error_obj}
     )()
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=4,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -686,11 +686,11 @@ def test_create_chained_invoke_stopped() -> None:
     operation.chained_invoke_details = type(
         "MockDetails", (), {"result": None, "error": error_obj}
     )()
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=5,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -709,11 +709,11 @@ def test_create_chained_invoke_stopped() -> None:
 
 def test_create_chained_invoke_invalid_status() -> None:
     operation = create_mock_operation("invoke-1", status=OperationStatus.CANCELLED)
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=1,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -737,11 +737,11 @@ def test_create_callback_started() -> None:
     operation.callback_details = type(
         "MockDetails", (), {"callback_id": "cb-123", "result": None, "error": None}
     )()
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=1,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -766,11 +766,11 @@ def test_create_callback_succeeded() -> None:
         (),
         {"callback_id": None, "result": '{"callback": "result"}', "error": None},
     )()
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=2,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -793,11 +793,11 @@ def test_create_callback_failed() -> None:
     operation.callback_details = type(
         "MockDetails", (), {"callback_id": None, "result": None, "error": error_obj}
     )()
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=3,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -819,11 +819,11 @@ def test_create_callback_timed_out() -> None:
     operation.callback_details = type(
         "MockDetails", (), {"callback_id": None, "result": None, "error": error_obj}
     )()
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=4,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -842,11 +842,11 @@ def test_create_callback_timed_out() -> None:
 
 def test_create_callback_invalid_status() -> None:
     operation = create_mock_operation("callback-1", status=OperationStatus.STOPPED)
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=1,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -984,11 +984,11 @@ class TestFromOperationStarted:
         execution_details.input_payload = '{"test": "data"}'
         operation.execution_details = execution_details
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=1,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1021,11 +1021,11 @@ class TestFromOperationStarted:
         execution_details.input_payload = '{"test": "data"}'
         operation.execution_details = execution_details
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=1,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1050,11 +1050,11 @@ class TestFromOperationStarted:
         operation.operation_type = OperationType.STEP
         operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=2,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1087,11 +1087,11 @@ class TestFromOperationStarted:
         )
         operation.wait_details = wait_details
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=3,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1126,11 +1126,11 @@ class TestFromOperationStarted:
         callback_details.callback_id = "cb-456"
         operation.callback_details = callback_details
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=4,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1156,11 +1156,11 @@ class TestFromOperationStarted:
         operation.operation_type = OperationType.CHAINED_INVOKE
         operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=5,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1186,11 +1186,11 @@ class TestFromOperationStarted:
         operation.operation_type = OperationType.CONTEXT
         operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=6,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1212,11 +1212,11 @@ class TestFromOperationStarted:
         operation = Mock()
         operation.start_timestamp = None
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=1,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1237,11 +1237,11 @@ class TestFromOperationStarted:
         operation.operation_type = "UNKNOWN_TYPE"
         operation.start_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=1,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1269,11 +1269,11 @@ class TestFromOperationFinished:
         operation.status = OperationStatus.SUCCEEDED
         operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=1,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1299,11 +1299,11 @@ class TestFromOperationFinished:
         operation.status = OperationStatus.FAILED
         operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=1,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1333,11 +1333,11 @@ class TestFromOperationFinished:
         step_details.error = None
         operation.step_details = step_details
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=2,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1369,11 +1369,11 @@ class TestFromOperationFinished:
         step_details.error = ErrorObject.from_message("Step failed")
         operation.step_details = step_details
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=2,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1405,11 +1405,11 @@ class TestFromOperationFinished:
         )
         operation.wait_details = wait_details
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=3,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1434,11 +1434,11 @@ class TestFromOperationFinished:
         operation.end_timestamp = datetime(2024, 1, 1, 12, 3, 0, tzinfo=timezone.utc)
         operation.wait_details = None
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=3,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1468,11 +1468,11 @@ class TestFromOperationFinished:
         callback_details.error = None
         operation.callback_details = callback_details
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=4,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1505,11 +1505,11 @@ class TestFromOperationFinished:
         callback_details.error = ErrorObject.from_message("Callback timed out")
         operation.callback_details = callback_details
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=4,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1542,11 +1542,11 @@ class TestFromOperationFinished:
         chained_invoke_details.error = None
         operation.chained_invoke_details = chained_invoke_details
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=5,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1580,11 +1580,11 @@ class TestFromOperationFinished:
         chained_invoke_details.error = ErrorObject.from_message("Invoke stopped")
         operation.chained_invoke_details = chained_invoke_details
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=5,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1619,11 +1619,11 @@ class TestFromOperationFinished:
         operation.result = None
         operation.error = None
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=6,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1656,11 +1656,11 @@ class TestFromOperationFinished:
         operation.result = None
         operation.error = None
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=6,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1679,11 +1679,11 @@ class TestFromOperationFinished:
         operation = Mock()
         operation.end_timestamp = None
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=1,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1704,11 +1704,11 @@ class TestFromOperationFinished:
         operation.status = OperationStatus.STARTED
         operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=1,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1730,11 +1730,11 @@ class TestFromOperationFinished:
         operation.status = OperationStatus.SUCCEEDED
         operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=1,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1760,11 +1760,11 @@ class TestFromOperationFinished:
         operation.end_timestamp = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
         operation.step_details = None
 
-        context = EventCreationContext.create(
+        context = EventCreationContext(
             operation=operation,
             event_id=2,
             durable_execution_arn="arn:test",
-            start_input=StartDurableExecutionInput(
+            start_durable_execution_input=StartDurableExecutionInput(
                 account_id="123",
                 function_name="test",
                 function_qualifier="$LATEST",
@@ -1803,11 +1803,11 @@ def test_event_creation_context_sub_type_property() -> None:
     operation = Mock()
     operation.sub_type = OperationSubType.STEP
 
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=1,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -1821,11 +1821,11 @@ def test_event_creation_context_sub_type_property() -> None:
 
     # Test without sub_type
     operation.sub_type = None
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=1,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -1850,11 +1850,11 @@ def test_event_creation_context_get_retry_details() -> None:
         step_options=StepOptions(next_attempt_delay_seconds=30),
     )
 
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=1,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -1872,11 +1872,11 @@ def test_event_creation_context_get_retry_details() -> None:
 
     # Test with no step_details
     operation.step_details = None
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=1,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -1892,11 +1892,11 @@ def test_event_creation_context_get_retry_details() -> None:
 
     # Test with no operation_update
     operation.step_details = StepDetails(attempt=2)
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=1,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",
@@ -1920,11 +1920,11 @@ def test_create_chained_invoke_event_pending() -> None:
     operation.start_timestamp = datetime.now(timezone.utc)
     operation.sub_type = None
 
-    context = EventCreationContext.create(
+    context = EventCreationContext(
         operation=operation,
         event_id=1,
         durable_execution_arn="arn:test",
-        start_input=StartDurableExecutionInput(
+        start_durable_execution_input=StartDurableExecutionInput(
             account_id="123",
             function_name="test",
             function_qualifier="$LATEST",

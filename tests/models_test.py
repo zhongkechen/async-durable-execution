@@ -1,6 +1,7 @@
 """Tests for model classes and serialization helpers."""
 
-from typing import no_type_check
+from collections.abc import Mapping
+from typing import Any, cast, no_type_check
 
 import datetime
 from datetime import timezone
@@ -9,6 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from async_durable_execution._core.exceptions import CallableRuntimeError
+from async_durable_execution._core.execution import InitialExecutionState
 from async_durable_execution._core.models import OperationIdentifier
 from async_durable_execution._core.models import (
     CallbackDetails,
@@ -40,6 +42,40 @@ from async_durable_execution._core.models import (
 # =============================================================================
 # Tests for Data Classes (ExecutionDetails, ContextDetails, ErrorObject, etc.)
 # =============================================================================
+
+
+@pytest.mark.parametrize(
+    "model_type",
+    [
+        ErrorObject,
+        DurableExecutionInvocationOutput,
+        ExecutionDetails,
+        ContextDetails,
+        StepDetails,
+        WaitDetails,
+        CallbackDetails,
+        ChainedInvokeDetails,
+        StepOptions,
+        WaitOptions,
+        CallbackOptions,
+        ChainedInvokeOptions,
+        ContextOptions,
+        OperationUpdate,
+        Operation,
+        CheckpointUpdatedExecutionState,
+        CheckpointOutput,
+        StateOutput,
+    ],
+)
+def test_boto_models_only_expose_dict_serialization(model_type) -> None:
+    assert hasattr(model_type, "from_dict")
+    assert hasattr(model_type, "to_dict")
+    assert not hasattr(model_type, "from_boto")
+    assert not hasattr(model_type, "to_boto")
+    assert not hasattr(model_type, "from_json_dict")
+    assert not hasattr(model_type, "to_json_dict")
+    assert not hasattr(model_type, "from_mapping")
+    assert not hasattr(model_type, "to_mapping")
 
 
 async def test_execution_details_from_dict() -> None:
@@ -284,18 +320,6 @@ async def test_step_details_minimal() -> None:
     assert details.error is None
 
 
-async def test_step_details_json_roundtrip() -> None:
-    """Test StepDetails JSON serialization uses timestamp metadata."""
-    timestamp = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc)
-    details = StepDetails(attempt=2, next_attempt_timestamp=timestamp)
-
-    json_data = details.to_json_dict()
-    restored = StepDetails.from_json_dict(json_data)
-
-    assert json_data["NextAttemptTimestamp"] == int(timestamp.timestamp() * 1000)
-    assert restored == details
-
-
 async def test_wait_details_from_dict() -> None:
     """Test WaitDetails.from_dict method."""
     timestamp = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc)
@@ -310,18 +334,6 @@ async def test_wait_details_from_dict_empty() -> None:
     data = {}
     details = WaitDetails.from_dict(data)
     assert details.scheduled_end_timestamp is None
-
-
-async def test_wait_details_json_roundtrip() -> None:
-    """Test WaitDetails JSON serialization uses timestamp metadata."""
-    timestamp = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc)
-    details = WaitDetails(scheduled_end_timestamp=timestamp)
-
-    json_data = details.to_json_dict()
-    restored = WaitDetails.from_json_dict(json_data)
-
-    assert json_data["ScheduledEndTimestamp"] == int(timestamp.timestamp() * 1000)
-    assert restored == details
 
 
 @no_type_check
@@ -1739,19 +1751,29 @@ async def test_checkpoint_updated_execution_state_from_dict_with_operations() ->
     assert state.next_marker == "marker123"
 
 
-# Tests for Operation JSON Serialization Methods
+# Tests for nested Operation JSON serialization
 # =============================================================================
 
 
-async def test_operation_to_json_dict_minimal() -> None:
-    """Test Operation.to_json_dict with minimal required fields."""
+def _operation_to_json_mapping(operation: Operation) -> dict[str, Any]:
+    state = InitialExecutionState(operations=[operation])
+    return cast("dict[str, Any]", state.to_dict()["Operations"][0])
+
+
+def _operation_from_json_mapping(data: Mapping[str, Any]) -> Operation:
+    state = InitialExecutionState.from_dict({"Operations": [data]})
+    return state.operations[0]
+
+
+async def test_operation_json_mapping_minimal() -> None:
+    """Test nested Operation JSON mapping with minimal required fields."""
     operation = Operation(
         operation_id="op1",
         operation_type=OperationType.STEP,
         status=OperationStatus.SUCCEEDED,
     )
 
-    result = operation.to_json_dict()
+    result = _operation_to_json_mapping(operation)
     expected = {
         "Id": "op1",
         "Type": "STEP",
@@ -1760,8 +1782,8 @@ async def test_operation_to_json_dict_minimal() -> None:
     assert result == expected
 
 
-async def test_operation_to_json_dict_with_timestamps() -> None:
-    """Test Operation.to_json_dict converts datetime objects to millisecond timestamps."""
+async def test_operation_json_mapping_with_timestamps() -> None:
+    """Test nested Operation JSON mapping converts datetimes to milliseconds."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
     end_time = datetime.datetime(2023, 1, 1, 11, 30, 0, tzinfo=datetime.timezone.utc)
 
@@ -1773,7 +1795,7 @@ async def test_operation_to_json_dict_with_timestamps() -> None:
         end_timestamp=end_time,
     )
 
-    result = operation.to_json_dict()
+    result = _operation_to_json_mapping(operation)
 
     # Convert expected timestamps to milliseconds
     expected_start_ms = int(start_time.timestamp() * 1000)  # 1672574400000
@@ -1786,8 +1808,8 @@ async def test_operation_to_json_dict_with_timestamps() -> None:
     assert result["Status"] == "SUCCEEDED"
 
 
-async def test_operation_to_json_dict_with_step_details_timestamp() -> None:
-    """Test Operation.to_json_dict converts StepDetails.NextAttemptTimestamp to milliseconds."""
+async def test_operation_json_mapping_with_step_details_timestamp() -> None:
+    """Test nested StepDetails.NextAttemptTimestamp JSON conversion."""
     next_attempt_time = datetime.datetime(
         2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc
     )
@@ -1802,7 +1824,7 @@ async def test_operation_to_json_dict_with_step_details_timestamp() -> None:
         step_details=step_details,
     )
 
-    result = operation.to_json_dict()
+    result = _operation_to_json_mapping(operation)
     expected_ms = int(next_attempt_time.timestamp() * 1000)  # 1672581600000
 
     assert result["StepDetails"]["NextAttemptTimestamp"] == expected_ms
@@ -1810,8 +1832,8 @@ async def test_operation_to_json_dict_with_step_details_timestamp() -> None:
     assert result["StepDetails"]["Result"] == "step_result"
 
 
-async def test_operation_to_json_dict_with_wait_details_timestamp() -> None:
-    """Test Operation.to_json_dict converts WaitDetails.ScheduledEndTimestamp to milliseconds."""
+async def test_operation_json_mapping_with_wait_details_timestamp() -> None:
+    """Test nested WaitDetails.ScheduledEndTimestamp JSON conversion."""
     scheduled_end_time = datetime.datetime(
         2023, 1, 1, 15, 0, 0, tzinfo=datetime.timezone.utc
     )
@@ -1824,14 +1846,14 @@ async def test_operation_to_json_dict_with_wait_details_timestamp() -> None:
         wait_details=wait_details,
     )
 
-    result = operation.to_json_dict()
+    result = _operation_to_json_mapping(operation)
     expected_ms = int(scheduled_end_time.timestamp() * 1000)  # 1672592400000
 
     assert result["WaitDetails"]["ScheduledEndTimestamp"] == expected_ms
 
 
-async def test_operation_to_json_dict_with_all_timestamps() -> None:
-    """Test Operation.to_json_dict with all timestamp fields present."""
+async def test_operation_json_mapping_with_all_timestamps() -> None:
+    """Test nested Operation JSON mapping with all timestamp fields."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
     end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.timezone.utc)
     next_attempt_time = datetime.datetime(
@@ -1856,7 +1878,7 @@ async def test_operation_to_json_dict_with_all_timestamps() -> None:
         wait_details=wait_details,
     )
 
-    result = operation.to_json_dict()
+    result = _operation_to_json_mapping(operation)
 
     # Verify all timestamps are converted to milliseconds
     assert result["StartTimestamp"] == int(start_time.timestamp() * 1000)
@@ -1869,8 +1891,8 @@ async def test_operation_to_json_dict_with_all_timestamps() -> None:
     )
 
 
-async def test_operation_to_json_dict_with_none_timestamps() -> None:
-    """Test Operation.to_json_dict handles None timestamp values correctly."""
+async def test_operation_json_mapping_with_none_timestamps() -> None:
+    """Test nested Operation JSON mapping handles None timestamps."""
     step_details = StepDetails(
         attempt=1, next_attempt_timestamp=None, result="step_result"
     )
@@ -1886,7 +1908,7 @@ async def test_operation_to_json_dict_with_none_timestamps() -> None:
         wait_details=wait_details,
     )
 
-    result = operation.to_json_dict()
+    result = _operation_to_json_mapping(operation)
 
     # None timestamps should not be present in the result
     assert "StartTimestamp" not in result
@@ -1895,15 +1917,15 @@ async def test_operation_to_json_dict_with_none_timestamps() -> None:
     assert result["WaitDetails"] == {}  # Empty dict when no scheduled end timestamp
 
 
-async def test_operation_from_json_dict_minimal() -> None:
-    """Test Operation.from_json_dict with minimal required fields."""
+async def test_operation_from_json_mapping_minimal() -> None:
+    """Test nested Operation parsing from a minimal JSON mapping."""
     data = {
         "Id": "op1",
         "Type": "STEP",
         "Status": "SUCCEEDED",
     }
 
-    operation = Operation.from_json_dict(data)
+    operation = _operation_from_json_mapping(data)
     assert operation.operation_id == "op1"
     assert operation.operation_type is OperationType.STEP
     assert operation.status is OperationStatus.SUCCEEDED
@@ -1911,8 +1933,8 @@ async def test_operation_from_json_dict_minimal() -> None:
     assert operation.end_timestamp is None
 
 
-async def test_operation_from_json_dict_with_timestamps() -> None:
-    """Test Operation.from_json_dict converts millisecond timestamps to datetime objects."""
+async def test_operation_from_json_mapping_with_timestamps() -> None:
+    """Test nested Operation parsing converts milliseconds to datetimes."""
     start_ms = 1672574400000  # 2023-01-01 12:00:00 UTC
     end_ms = 1672579800000  # 2023-01-01 13:30:00 UTC
 
@@ -1924,7 +1946,7 @@ async def test_operation_from_json_dict_with_timestamps() -> None:
         "EndTimestamp": end_ms,
     }
 
-    operation = Operation.from_json_dict(data)
+    operation = _operation_from_json_mapping(data)
 
     expected_start = datetime.datetime(
         2023, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc
@@ -1939,8 +1961,8 @@ async def test_operation_from_json_dict_with_timestamps() -> None:
 
 
 @no_type_check
-async def test_operation_from_json_dict_with_step_details_timestamp() -> None:
-    """Test Operation.from_json_dict converts StepDetails.NextAttemptTimestamp from milliseconds."""
+async def test_operation_from_json_mapping_with_step_details_timestamp() -> None:
+    """Test nested StepDetails.NextAttemptTimestamp parsing."""
     next_attempt_ms = 1672581600000  # 2023-01-01 14:00:00 UTC
 
     data = {
@@ -1954,7 +1976,7 @@ async def test_operation_from_json_dict_with_step_details_timestamp() -> None:
         },
     }
 
-    operation = Operation.from_json_dict(data)
+    operation = _operation_from_json_mapping(data)
     expected_time = datetime.datetime(
         2023, 1, 1, 14, 0, 0, tzinfo=datetime.timezone.utc
     )
@@ -1965,8 +1987,8 @@ async def test_operation_from_json_dict_with_step_details_timestamp() -> None:
 
 
 @no_type_check
-async def test_operation_from_json_dict_with_wait_details_timestamp() -> None:
-    """Test Operation.from_json_dict converts WaitDetails.ScheduledEndTimestamp from milliseconds."""
+async def test_operation_from_json_mapping_with_wait_details_timestamp() -> None:
+    """Test nested WaitDetails.ScheduledEndTimestamp parsing."""
     scheduled_end_ms = 1672592400000  # 2023-01-01 17:00:00 UTC
 
     data = {
@@ -1976,7 +1998,7 @@ async def test_operation_from_json_dict_with_wait_details_timestamp() -> None:
         "WaitDetails": {"ScheduledEndTimestamp": scheduled_end_ms},
     }
 
-    operation = Operation.from_json_dict(data)
+    operation = _operation_from_json_mapping(data)
     expected_time = datetime.datetime(
         2023, 1, 1, 17, 0, 0, tzinfo=datetime.timezone.utc
     )
@@ -1985,8 +2007,8 @@ async def test_operation_from_json_dict_with_wait_details_timestamp() -> None:
 
 
 @no_type_check
-async def test_operation_from_json_dict_with_all_timestamps() -> None:
-    """Test Operation.from_json_dict with all timestamp fields present."""
+async def test_operation_from_json_mapping_with_all_timestamps() -> None:
+    """Test nested Operation parsing with all timestamp fields."""
     start_ms = 1672574400000  # 2023-01-01 120:00:00 UTC
     end_ms = 1672578000000  # 2023-01-01 13:00:00 UTC
     next_attempt_ms = 1672581600000  # 2023-01-01 14:00:00 UTC
@@ -2006,7 +2028,7 @@ async def test_operation_from_json_dict_with_all_timestamps() -> None:
         "WaitDetails": {"ScheduledEndTimestamp": scheduled_end_ms},
     }
 
-    operation = Operation.from_json_dict(data)
+    operation = _operation_from_json_mapping(data)
 
     # Verify all timestamps are converted correctly
     assert operation.start_timestamp == datetime.datetime(
@@ -2024,8 +2046,8 @@ async def test_operation_from_json_dict_with_all_timestamps() -> None:
 
 
 @no_type_check
-async def test_operation_from_json_dict_with_none_timestamps() -> None:
-    """Test Operation.from_json_dict handles None timestamp values correctly."""
+async def test_operation_from_json_mapping_with_none_timestamps() -> None:
+    """Test nested Operation parsing handles None timestamps."""
     data = {
         "Id": "op1",
         "Type": "STEP",
@@ -2040,7 +2062,7 @@ async def test_operation_from_json_dict_with_none_timestamps() -> None:
         "WaitDetails": {"ScheduledEndTimestamp": None},
     }
 
-    operation = Operation.from_json_dict(data)
+    operation = _operation_from_json_mapping(data)
 
     assert operation.start_timestamp is None
     assert operation.end_timestamp is None
@@ -2050,7 +2072,7 @@ async def test_operation_from_json_dict_with_none_timestamps() -> None:
 
 @no_type_check
 async def test_operation_json_roundtrip() -> None:
-    """Test Operation to_json_dict -> from_json_dict roundtrip preserves all data."""
+    """Test Operation JSON mapping roundtrip preserves all data."""
     start_time = datetime.datetime(2023, 1, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
     end_time = datetime.datetime(2023, 1, 1, 11, 0, 0, tzinfo=datetime.timezone.utc)
     next_attempt_time = datetime.datetime(
@@ -2096,8 +2118,8 @@ async def test_operation_json_roundtrip() -> None:
     )
 
     # Convert to JSON dict and back
-    json_data = original.to_json_dict()
-    restored = Operation.from_json_dict(json_data)
+    json_data = _operation_to_json_mapping(original)
+    restored = _operation_from_json_mapping(json_data)
 
     # Verify all fields are preserved
     assert restored.operation_id == original.operation_id
@@ -2129,7 +2151,7 @@ async def test_operation_json_roundtrip() -> None:
 
 
 async def test_operation_json_dict_preserves_non_timestamp_fields() -> None:
-    """Test that to_json_dict preserves all non-timestamp fields unchanged."""
+    """Test nested JSON mapping preserves non-timestamp fields."""
     context_details = ContextDetails(replay_children=True, result="context_result")
 
     chained_invoke_details = ChainedInvokeDetails(result="invoke_result")
@@ -2145,7 +2167,7 @@ async def test_operation_json_dict_preserves_non_timestamp_fields() -> None:
         chained_invoke_details=chained_invoke_details,
     )
 
-    result = operation.to_json_dict()
+    result = _operation_to_json_mapping(operation)
 
     # Verify non-timestamp fields are unchanged
     assert result["Id"] == "op1"
@@ -2386,37 +2408,6 @@ async def test_timestamp_converter_millisecond_boundaries() -> None:
         assert abs((result_dt - dt).total_seconds()) < 0.001
 
 
-@pytest.mark.parametrize(
-    ("sub_type", "operation_type"),
-    [
-        (OperationSubType.STEP, OperationType.STEP),
-        (OperationSubType.WAIT_FOR_CONDITION, OperationType.STEP),
-        (OperationSubType.WAIT, OperationType.WAIT),
-        (OperationSubType.CHAINED_INVOKE, OperationType.CHAINED_INVOKE),
-        (OperationSubType.CALLBACK, OperationType.CALLBACK),
-        (OperationSubType.EXECUTION, OperationType.EXECUTION),
-        (OperationSubType.WAIT_FOR_CALLBACK, OperationType.CONTEXT),
-        (OperationSubType.RUN_IN_CHILD_CONTEXT, OperationType.CONTEXT),
-        (OperationSubType.MAP, OperationType.CONTEXT),
-        (OperationSubType.MAP_ITERATION, OperationType.CONTEXT),
-        (OperationSubType.PARALLEL, OperationType.CONTEXT),
-        (OperationSubType.PARALLEL_BRANCH, OperationType.CONTEXT),
-    ],
-)
-def test_operation_type_from_sub_type_maps_all_sdk_subtypes(
-    sub_type: OperationSubType,
-    operation_type: OperationType,
-) -> None:
-    assert OperationType.from_sub_type(sub_type) is operation_type
-    assert OperationIdentifier("op-1", sub_type=sub_type).type is operation_type
-
-
-@no_type_check
-def test_operation_type_from_sub_type_rejects_unknown_subtype() -> None:
-    with pytest.raises(ValueError, match="Unknown operation sub-type"):
-        OperationType.from_sub_type("NotARealSubtype")
-
-
 def test_operation_identifier_requires_operation_id_for_non_execution_operations() -> (
     None
 ):
@@ -2433,14 +2424,3 @@ def test_operation_identifier_create_execution_op_builds_root_identifier() -> No
     assert identifier.sub_type is OperationSubType.EXECUTION
     assert identifier.parent_id is None
     assert identifier.name is None
-    assert identifier.type is OperationType.EXECUTION
-
-
-def test_durable_execution_invocation_output_create_retry_sets_retry_status() -> None:
-    error = ErrorObject.from_message("retry later")
-
-    output = DurableExecutionInvocationOutput.create_retry(error)
-
-    assert output.status.value == "RETRY"
-    assert output.error is error
-    assert output.result is None

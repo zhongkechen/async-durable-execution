@@ -238,7 +238,7 @@ class InProcessInvoker(Invoker):
         endpoint_url: str | None = None,  # noqa: ARG002
     ) -> InvokeResponse:
         context = create_test_lambda_context()
-        payload = input.to_json_dict()
+        payload = input.to_dict()
         async_handler = getattr(self.handler, "_async_handler", None)
         handler_result = (
             async_handler(payload, context)
@@ -251,9 +251,6 @@ class InProcessInvoker(Invoker):
         return InvokeResponse(
             invocation_output=output, request_id=context.aws_request_id
         )
-
-    def update_endpoint(self, endpoint_url: str, region_name: str) -> None:
-        """No-op for in-process invoker."""
 
 
 def create_test_lambda_context() -> LambdaContext:

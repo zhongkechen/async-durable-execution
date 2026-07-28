@@ -5,12 +5,12 @@ from __future__ import annotations
 import datetime
 import json
 import logging
-from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Any, Protocol, TYPE_CHECKING
 
 from .._core import (
+    BotoSerializableModel,
     CallbackDetails,
     CallbackOptions,
     ChainedInvokeDetails,
@@ -28,7 +28,6 @@ from .._core import (
     OperationType,
     OperationUpdate,
     StepDetails,
-    TimestampConverter,
     WaitDetails,
 )
 from .exceptions import (
@@ -82,80 +81,32 @@ TERMINAL_STATUSES: set[OperationStatus] = {
 
 
 @dataclass(frozen=True)
-class GetDurableExecutionResponse:
+class GetDurableExecutionResponse(BotoSerializableModel):
     """Response containing durable execution details."""
 
-    durable_execution_arn: str
-    durable_execution_name: str
-    function_arn: str
-    status: str
-    start_timestamp: datetime.datetime
-    input_payload: str | None = None
-    result: str | None = None
-    error: ErrorObject | None = None
-    end_timestamp: datetime.datetime | None = None
-    version: str | None = None
-
-    @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> GetDurableExecutionResponse:
-        error = None
-        if error_data := data.get("Error"):
-            error = ErrorObject.from_dict(error_data)
-
-        return cls(
-            durable_execution_arn=data["DurableExecutionArn"],
-            durable_execution_name=data["DurableExecutionName"],
-            function_arn=data["FunctionArn"],
-            status=data["Status"],
-            start_timestamp=data["StartTimestamp"],
-            input_payload=data.get("InputPayload"),
-            result=data.get("Result"),
-            error=error,
-            end_timestamp=data.get("EndTimestamp"),
-            version=data.get("Version"),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {
-            "DurableExecutionArn": self.durable_execution_arn,
-            "DurableExecutionName": self.durable_execution_name,
-            "FunctionArn": self.function_arn,
-            "Status": self.status,
-            "StartTimestamp": self.start_timestamp,
-        }
-        if self.input_payload is not None:
-            result["InputPayload"] = self.input_payload
-        if self.result is not None:
-            result["Result"] = self.result
-        if self.error is not None:
-            result["Error"] = self.error.to_dict()
-        if self.end_timestamp is not None:
-            result["EndTimestamp"] = self.end_timestamp
-        if self.version is not None:
-            result["Version"] = self.version
-        return result
+    durable_execution_arn: str = field(metadata={"alias": "DurableExecutionArn"})
+    durable_execution_name: str = field(metadata={"alias": "DurableExecutionName"})
+    function_arn: str = field(metadata={"alias": "FunctionArn"})
+    status: str = field(metadata={"alias": "Status"})
+    start_timestamp: datetime.datetime = field(
+        metadata={"alias": "StartTimestamp", "is_timestamp": True}
+    )
+    input_payload: str | None = field(default=None, metadata={"alias": "InputPayload"})
+    result: str | None = field(default=None, metadata={"alias": "Result"})
+    error: ErrorObject | None = field(default=None, metadata={"alias": "Error"})
+    end_timestamp: datetime.datetime | None = field(
+        default=None, metadata={"alias": "EndTimestamp", "is_timestamp": True}
+    )
+    version: str | None = field(default=None, metadata={"alias": "Version"})
 
 
 # Event-related structures from Smithy model
 @dataclass(frozen=True)
-class EventInput:
+class EventInput(BotoSerializableModel):
     """Event input structure."""
 
-    payload: str | None = None
-    truncated: bool = False
-
-    @classmethod
-    def from_dict(cls, data: dict) -> EventInput:
-        return cls(
-            payload=data.get("Payload"),
-            truncated=data.get("Truncated", False),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {"Truncated": self.truncated}
-        if self.payload is not None:
-            result["Payload"] = self.payload
-        return result
+    payload: str | None = field(default=None, metadata={"alias": "Payload"})
+    truncated: bool = field(default=False, metadata={"alias": "Truncated"})
 
     @classmethod
     def from_details(
@@ -180,24 +131,11 @@ class EventInput:
 
 
 @dataclass(frozen=True)
-class EventResult:
+class EventResult(BotoSerializableModel):
     """Event result structure."""
 
-    payload: str | None = None
-    truncated: bool = False
-
-    @classmethod
-    def from_dict(cls, data: dict) -> EventResult:
-        return cls(
-            payload=data.get("Payload"),
-            truncated=data.get("Truncated", False),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {"Truncated": self.truncated}
-        if self.payload is not None:
-            result["Payload"] = self.payload
-        return result
+    payload: str | None = field(default=None, metadata={"alias": "Payload"})
+    truncated: bool = field(default=False, metadata={"alias": "Truncated"})
 
     @classmethod
     def from_details(
@@ -221,28 +159,11 @@ class EventResult:
 
 
 @dataclass(frozen=True)
-class EventError:
+class EventError(BotoSerializableModel):
     """Event error structure."""
 
-    payload: ErrorObject | None = None
-    truncated: bool = False
-
-    @classmethod
-    def from_dict(cls, data: dict) -> EventError:
-        payload = None
-        if payload_data := data.get("Payload"):
-            payload = ErrorObject.from_dict(payload_data)
-
-        return cls(
-            payload=payload,
-            truncated=data.get("Truncated", False),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {"Truncated": self.truncated}
-        if self.payload is not None:
-            result["Payload"] = self.payload.to_dict()
-        return result
+    payload: ErrorObject | None = field(default=None, metadata={"alias": "Payload"})
+    truncated: bool = field(default=False, metadata={"alias": "Truncated"})
 
     @classmethod
     def from_details(
@@ -265,592 +186,211 @@ class EventError:
 
 
 @dataclass(frozen=True)
-class RetryDetails:
+class RetryDetails(BotoSerializableModel):
     """Retry details structure."""
 
-    current_attempt: int = 0
-    next_attempt_delay_seconds: int | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> RetryDetails:
-        return cls(
-            current_attempt=data.get("CurrentAttempt", 0),
-            next_attempt_delay_seconds=data.get("NextAttemptDelaySeconds"),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {"CurrentAttempt": self.current_attempt}
-        if self.next_attempt_delay_seconds is not None:
-            result["NextAttemptDelaySeconds"] = self.next_attempt_delay_seconds
-        return result
+    current_attempt: int = field(default=0, metadata={"alias": "CurrentAttempt"})
+    next_attempt_delay_seconds: int | None = field(
+        default=None, metadata={"alias": "NextAttemptDelaySeconds"}
+    )
 
 
 # Event detail structures
 @dataclass(frozen=True)
-class ExecutionStartedDetails:
+class ExecutionStartedDetails(BotoSerializableModel):
     """Execution started event details."""
 
-    input: EventInput | None = None
-    execution_timeout: int | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> ExecutionStartedDetails:
-        input_data = None
-        if input_dict := data.get("Input"):
-            input_data = EventInput.from_dict(input_dict)
-
-        return cls(
-            input=input_data,
-            execution_timeout=data.get("ExecutionTimeout"),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.input is not None:
-            result["Input"] = self.input.to_dict()
-        if self.execution_timeout is not None:
-            result["ExecutionTimeout"] = self.execution_timeout
-        return result
+    input: EventInput | None = field(default=None, metadata={"alias": "Input"})
+    execution_timeout: int | None = field(
+        default=None, metadata={"alias": "ExecutionTimeout"}
+    )
 
 
 @dataclass(frozen=True)
-class ExecutionSucceededDetails:
+class ExecutionSucceededDetails(BotoSerializableModel):
     """Execution succeeded event details."""
 
-    result: EventResult | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> ExecutionSucceededDetails:
-        result_data = None
-        if result_dict := data.get("Result"):
-            result_data = EventResult.from_dict(result_dict)
-
-        return cls(result=result_data)
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.result is not None:
-            result["Result"] = self.result.to_dict()
-        return result
+    result: EventResult | None = field(default=None, metadata={"alias": "Result"})
 
 
 @dataclass(frozen=True)
-class ExecutionFailedDetails:
+class ExecutionFailedDetails(BotoSerializableModel):
     """Execution failed event details."""
 
-    error: EventError | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> ExecutionFailedDetails:
-        error_data = None
-        if error_dict := data.get("Error"):
-            error_data = EventError.from_dict(error_dict)
-
-        return cls(error=error_data)
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.error is not None:
-            result["Error"] = self.error.to_dict()
-        return result
+    error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class ExecutionTimedOutDetails:
+class ExecutionTimedOutDetails(BotoSerializableModel):
     """Execution timed out event details."""
 
-    error: EventError | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> ExecutionTimedOutDetails:
-        error_data = None
-        if error_dict := data.get("Error"):
-            error_data = EventError.from_dict(error_dict)
-
-        return cls(error=error_data)
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.error is not None:
-            result["Error"] = self.error.to_dict()
-        return result
+    error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class ExecutionStoppedDetails:
+class ExecutionStoppedDetails(BotoSerializableModel):
     """Execution stopped event details."""
 
-    error: EventError | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> ExecutionStoppedDetails:
-        error_data = None
-        if error_dict := data.get("Error"):
-            error_data = EventError.from_dict(error_dict)
-
-        return cls(error=error_data)
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.error is not None:
-            result["Error"] = self.error.to_dict()
-        return result
+    error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class ContextStartedDetails:
+class ContextStartedDetails(BotoSerializableModel):
     """Context started event details."""
 
-    @classmethod
-    def from_dict(cls, data: dict) -> ContextStartedDetails:  # noqa: ARG003
-        return cls()
-
-    def to_dict(self) -> dict[str, Any]:
-        return {}
-
 
 @dataclass(frozen=True)
-class ContextSucceededDetails:
+class ContextSucceededDetails(BotoSerializableModel):
     """Context succeeded event details."""
 
-    result: EventResult | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> ContextSucceededDetails:
-        result_data = None
-        if result_dict := data.get("Result"):
-            result_data = EventResult.from_dict(result_dict)
-
-        return cls(result=result_data)
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.result is not None:
-            result["Result"] = self.result.to_dict()
-        return result
+    result: EventResult | None = field(default=None, metadata={"alias": "Result"})
 
 
 @dataclass(frozen=True)
-class ContextFailedDetails:
+class ContextFailedDetails(BotoSerializableModel):
     """Context failed event details."""
 
-    error: EventError | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> ContextFailedDetails:
-        error_data = None
-        if error_dict := data.get("Error"):
-            error_data = EventError.from_dict(error_dict)
-
-        return cls(error=error_data)
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.error is not None:
-            result["Error"] = self.error.to_dict()
-        return result
+    error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class WaitStartedDetails:
+class WaitStartedDetails(BotoSerializableModel):
     """Wait started event details."""
 
-    duration: int | None = None
-    scheduled_end_timestamp: datetime.datetime | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> WaitStartedDetails:
-        return cls(
-            duration=data.get("Duration"),
-            scheduled_end_timestamp=data.get("ScheduledEndTimestamp"),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.duration is not None:
-            result["Duration"] = self.duration
-        if self.scheduled_end_timestamp is not None:
-            result["ScheduledEndTimestamp"] = self.scheduled_end_timestamp
-        return result
+    duration: int | None = field(default=None, metadata={"alias": "Duration"})
+    scheduled_end_timestamp: datetime.datetime | None = field(
+        default=None,
+        metadata={"alias": "ScheduledEndTimestamp", "is_timestamp": True},
+    )
 
 
 @dataclass(frozen=True)
-class WaitSucceededDetails:
+class WaitSucceededDetails(BotoSerializableModel):
     """Wait succeeded event details."""
 
-    duration: int | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> WaitSucceededDetails:
-        return cls(duration=data.get("Duration"))
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.duration is not None:
-            result["Duration"] = self.duration
-        return result
+    duration: int | None = field(default=None, metadata={"alias": "Duration"})
 
 
 @dataclass(frozen=True)
-class WaitCancelledDetails:
+class WaitCancelledDetails(BotoSerializableModel):
     """Wait cancelled event details."""
 
-    error: EventError | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> WaitCancelledDetails:
-        error_data = None
-        if error_dict := data.get("Error"):
-            error_data = EventError.from_dict(error_dict)
-
-        return cls(error=error_data)
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.error is not None:
-            result["Error"] = self.error.to_dict()
-        return result
+    error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class StepStartedDetails:
+class StepStartedDetails(BotoSerializableModel):
     """Step started event details."""
 
-    @classmethod
-    def from_dict(cls, data: dict) -> StepStartedDetails:  # noqa: ARG003
-        return cls()
-
-    def to_dict(self) -> dict[str, Any]:
-        return {}
-
 
 @dataclass(frozen=True)
-class StepSucceededDetails:
+class StepSucceededDetails(BotoSerializableModel):
     """Step succeeded event details."""
 
-    result: EventResult | None = None
-    retry_details: RetryDetails | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> StepSucceededDetails:
-        result_data = None
-        if result_dict := data.get("Result"):
-            result_data = EventResult.from_dict(result_dict)
-
-        retry_details_data = None
-        if retry_dict := data.get("RetryDetails"):
-            retry_details_data = RetryDetails.from_dict(retry_dict)
-
-        return cls(result=result_data, retry_details=retry_details_data)
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.result is not None:
-            result["Result"] = self.result.to_dict()
-        if self.retry_details is not None:
-            result["RetryDetails"] = self.retry_details.to_dict()
-        return result
+    result: EventResult | None = field(default=None, metadata={"alias": "Result"})
+    retry_details: RetryDetails | None = field(
+        default=None, metadata={"alias": "RetryDetails"}
+    )
 
 
 @dataclass(frozen=True)
-class StepFailedDetails:
+class StepFailedDetails(BotoSerializableModel):
     """Step failed event details."""
 
-    error: EventError | None = None
-    retry_details: RetryDetails | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> StepFailedDetails:
-        error_data = None
-        if error_dict := data.get("Error"):
-            error_data = EventError.from_dict(error_dict)
-
-        retry_details_data = None
-        if retry_dict := data.get("RetryDetails"):
-            retry_details_data = RetryDetails.from_dict(retry_dict)
-
-        return cls(error=error_data, retry_details=retry_details_data)
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.error is not None:
-            result["Error"] = self.error.to_dict()
-        if self.retry_details is not None:
-            result["RetryDetails"] = self.retry_details.to_dict()
-        return result
+    error: EventError | None = field(default=None, metadata={"alias": "Error"})
+    retry_details: RetryDetails | None = field(
+        default=None, metadata={"alias": "RetryDetails"}
+    )
 
 
 @dataclass(frozen=True)
-class ChainedInvokePendingDetails:
+class ChainedInvokePendingDetails(BotoSerializableModel):
     """Chained Invoke Pending event details."""
 
-    input: EventInput | None = None
-    function_name: str | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> ChainedInvokePendingDetails:
-        input_data = None
-        if input_dict := data.get("Input"):
-            input_data = EventInput.from_dict(input_dict)
-
-        return cls(
-            input=input_data,
-            function_name=data.get("FunctionName"),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.input is not None:
-            result["Input"] = self.input.to_dict()
-        if self.function_name is not None:
-            result["FunctionName"] = self.function_name
-        return result
+    input: EventInput | None = field(default=None, metadata={"alias": "Input"})
+    function_name: str | None = field(default=None, metadata={"alias": "FunctionName"})
 
 
 @dataclass(frozen=True)
-class ChainedInvokeStartedDetails:
+class ChainedInvokeStartedDetails(BotoSerializableModel):
     """Chained invoke started event details."""
 
-    durable_execution_arn: str | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> ChainedInvokeStartedDetails:
-        return cls(
-            durable_execution_arn=data.get("DurableExecutionArn"),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.durable_execution_arn is not None:
-            result["DurableExecutionArn"] = self.durable_execution_arn
-        return result
+    durable_execution_arn: str | None = field(
+        default=None, metadata={"alias": "DurableExecutionArn"}
+    )
 
 
 @dataclass(frozen=True)
-class ChainedInvokeSucceededDetails:
+class ChainedInvokeSucceededDetails(BotoSerializableModel):
     """Chained invoke succeeded event details."""
 
-    result: EventResult | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> ChainedInvokeSucceededDetails:
-        result_data = None
-        if result_dict := data.get("Result"):
-            result_data = EventResult.from_dict(result_dict)
-
-        return cls(result=result_data)
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.result is not None:
-            result["Result"] = self.result.to_dict()
-        return result
+    result: EventResult | None = field(default=None, metadata={"alias": "Result"})
 
 
 @dataclass(frozen=True)
-class ChainedInvokeFailedDetails:
+class ChainedInvokeFailedDetails(BotoSerializableModel):
     """Chained invoke failed event details."""
 
-    error: EventError | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> ChainedInvokeFailedDetails:
-        error_data = None
-        if error_dict := data.get("Error"):
-            error_data = EventError.from_dict(error_dict)
-
-        return cls(error=error_data)
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.error is not None:
-            result["Error"] = self.error.to_dict()
-        return result
+    error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class ChainedInvokeTimedOutDetails:
+class ChainedInvokeTimedOutDetails(BotoSerializableModel):
     """Chained invoke timed out event details."""
 
-    error: EventError | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> ChainedInvokeTimedOutDetails:
-        error_data = None
-        if error_dict := data.get("Error"):
-            error_data = EventError.from_dict(error_dict)
-
-        return cls(error=error_data)
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.error is not None:
-            result["Error"] = self.error.to_dict()
-        return result
+    error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class ChainedInvokeStoppedDetails:
+class ChainedInvokeStoppedDetails(BotoSerializableModel):
     """Chained invoke stopped event details."""
 
-    error: EventError | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> ChainedInvokeStoppedDetails:
-        error_data = None
-        if error_dict := data.get("Error"):
-            error_data = EventError.from_dict(error_dict)
-
-        return cls(error=error_data)
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.error is not None:
-            result["Error"] = self.error.to_dict()
-        return result
+    error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class CallbackStartedDetails:
+class CallbackStartedDetails(BotoSerializableModel):
     """Callback started event details."""
 
-    callback_id: str | None = None
-    heartbeat_timeout: int | None = None
-    timeout: int | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> CallbackStartedDetails:
-        return cls(
-            callback_id=data.get("CallbackId"),
-            heartbeat_timeout=data.get("HeartbeatTimeout"),
-            timeout=data.get("Timeout"),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.callback_id is not None:
-            result["CallbackId"] = self.callback_id
-        if self.heartbeat_timeout is not None:
-            result["HeartbeatTimeout"] = self.heartbeat_timeout
-        if self.timeout is not None:
-            result["Timeout"] = self.timeout
-        return result
+    callback_id: str | None = field(default=None, metadata={"alias": "CallbackId"})
+    heartbeat_timeout: int | None = field(
+        default=None, metadata={"alias": "HeartbeatTimeout"}
+    )
+    timeout: int | None = field(default=None, metadata={"alias": "Timeout"})
 
 
 @dataclass(frozen=True)
-class CallbackSucceededDetails:
+class CallbackSucceededDetails(BotoSerializableModel):
     """Callback succeeded event details."""
 
-    result: EventResult | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> CallbackSucceededDetails:
-        result_data = None
-        if result_dict := data.get("Result"):
-            result_data = EventResult.from_dict(result_dict)
-
-        return cls(result=result_data)
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.result is not None:
-            result["Result"] = self.result.to_dict()
-        return result
+    result: EventResult | None = field(default=None, metadata={"alias": "Result"})
 
 
 @dataclass(frozen=True)
-class CallbackFailedDetails:
+class CallbackFailedDetails(BotoSerializableModel):
     """Callback failed event details."""
 
-    error: EventError | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> CallbackFailedDetails:
-        error_data = None
-        if error_dict := data.get("Error"):
-            error_data = EventError.from_dict(error_dict)
-
-        return cls(error=error_data)
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.error is not None:
-            result["Error"] = self.error.to_dict()
-        return result
+    error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class CallbackTimedOutDetails:
+class CallbackTimedOutDetails(BotoSerializableModel):
     """Callback timed out event details."""
 
-    error: EventError | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> CallbackTimedOutDetails:
-        error_data = None
-        if error_dict := data.get("Error"):
-            error_data = EventError.from_dict(error_dict)
-
-        return cls(error=error_data)
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        if self.error is not None:
-            result["Error"] = self.error.to_dict()
-        return result
+    error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class InvocationCompletedDetails:
+class InvocationCompletedDetails(BotoSerializableModel):
     """Invocation completed event details."""
 
-    start_timestamp: datetime.datetime
-    end_timestamp: datetime.datetime
-    request_id: str
-
-    @classmethod
-    def from_dict(cls, data: dict) -> InvocationCompletedDetails:
-        return cls(
-            start_timestamp=data["StartTimestamp"],
-            end_timestamp=data["EndTimestamp"],
-            request_id=data["RequestId"],
-        )
-
-    @classmethod
-    def from_json_dict(cls, data: dict) -> InvocationCompletedDetails:
-        """Deserialize from JSON dict with Unix millisecond timestamps."""
-        start_ts: datetime.datetime | None = TimestampConverter.from_unix_millis(
-            data["StartTimestamp"]
-        )
-        end_ts: datetime.datetime | None = TimestampConverter.from_unix_millis(
-            data["EndTimestamp"]
-        )
-
-        if start_ts is None or end_ts is None:
-            raise InvalidParameterValueException(
-                "StartTimestamp and EndTimestamp cannot be null"
-            )
-
-        return cls(
-            start_timestamp=start_ts,
-            end_timestamp=end_ts,
-            request_id=data["RequestId"],
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "StartTimestamp": self.start_timestamp,
-            "EndTimestamp": self.end_timestamp,
-            "RequestId": self.request_id,
-        }
-
-    def to_json_dict(self) -> dict[str, Any]:
-        """Convert to JSON-serializable dict with Unix millisecond timestamps."""
-        return {
-            "StartTimestamp": TimestampConverter.to_unix_millis(self.start_timestamp),
-            "EndTimestamp": TimestampConverter.to_unix_millis(self.end_timestamp),
-            "RequestId": self.request_id,
-        }
+    start_timestamp: datetime.datetime = field(
+        metadata={"alias": "StartTimestamp", "is_timestamp": True}
+    )
+    end_timestamp: datetime.datetime = field(
+        metadata={"alias": "EndTimestamp", "is_timestamp": True}
+    )
+    request_id: str = field(metadata={"alias": "RequestId"})
 
 
 @dataclass(frozen=True)
@@ -862,27 +402,6 @@ class EventCreationContext:
     durable_execution_invocation_output: DurableExecutionInvocationOutput | None = None
     operation_update: OperationUpdate | None = None
     include_execution_data: bool = False
-
-    @classmethod
-    def create(
-        cls,
-        operation: Operation,
-        event_id: int,
-        durable_execution_arn: str,
-        start_input: StartDurableExecutionInput,
-        result: DurableExecutionInvocationOutput | None = None,
-        operation_update: OperationUpdate | None = None,
-        include_execution_data: bool = False,  # noqa: FBT001, FBT002
-    ) -> EventCreationContext:
-        return cls(
-            operation=operation,
-            event_id=event_id,
-            durable_execution_arn=durable_execution_arn,
-            start_durable_execution_input=start_input,
-            durable_execution_invocation_output=result,
-            operation_update=operation_update,
-            include_execution_data=include_execution_data,
-        )
 
     @property
     def sub_type(self) -> str | None:
@@ -922,287 +441,93 @@ class EventCreationContext:
 
 
 @dataclass(frozen=True)
-class Event:
+class Event(BotoSerializableModel):
     """Event structure from Smithy model."""
 
-    event_type: str
-    event_timestamp: datetime.datetime
-    sub_type: str | None = None
-    event_id: int = 1
-    operation_id: str | None = None
-    name: str | None = None
-    parent_id: str | None = None
-    execution_started_details: ExecutionStartedDetails | None = None
-    execution_succeeded_details: ExecutionSucceededDetails | None = None
-    execution_failed_details: ExecutionFailedDetails | None = None
-    execution_timed_out_details: ExecutionTimedOutDetails | None = None
-    execution_stopped_details: ExecutionStoppedDetails | None = None
-    context_started_details: ContextStartedDetails | None = None
-    context_succeeded_details: ContextSucceededDetails | None = None
-    context_failed_details: ContextFailedDetails | None = None
-    wait_started_details: WaitStartedDetails | None = None
-    wait_succeeded_details: WaitSucceededDetails | None = None
-    wait_cancelled_details: WaitCancelledDetails | None = None
-    step_started_details: StepStartedDetails | None = None
-    step_succeeded_details: StepSucceededDetails | None = None
-    step_failed_details: StepFailedDetails | None = None
-    chained_invoke_pending_details: ChainedInvokePendingDetails | None = None
-    chained_invoke_started_details: ChainedInvokeStartedDetails | None = None
-    chained_invoke_succeeded_details: ChainedInvokeSucceededDetails | None = None
-    chained_invoke_failed_details: ChainedInvokeFailedDetails | None = None
-    chained_invoke_timed_out_details: ChainedInvokeTimedOutDetails | None = None
-    chained_invoke_stopped_details: ChainedInvokeStoppedDetails | None = None
-    callback_started_details: CallbackStartedDetails | None = None
-    callback_succeeded_details: CallbackSucceededDetails | None = None
-    callback_failed_details: CallbackFailedDetails | None = None
-    callback_timed_out_details: CallbackTimedOutDetails | None = None
-    invocation_completed_details: InvocationCompletedDetails | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> Event:
-        # Parse all the detail structures
-        execution_started_details = None
-        if details_data := data.get("ExecutionStartedDetails"):
-            execution_started_details = ExecutionStartedDetails.from_dict(details_data)
-
-        execution_succeeded_details = None
-        if details_data := data.get("ExecutionSucceededDetails"):
-            execution_succeeded_details = ExecutionSucceededDetails.from_dict(
-                details_data
-            )
-
-        execution_failed_details = None
-        if details_data := data.get("ExecutionFailedDetails"):
-            execution_failed_details = ExecutionFailedDetails.from_dict(details_data)
-
-        execution_timed_out_details = None
-        if details_data := data.get("ExecutionTimedOutDetails"):
-            execution_timed_out_details = ExecutionTimedOutDetails.from_dict(
-                details_data
-            )
-
-        execution_stopped_details = None
-        if details_data := data.get("ExecutionStoppedDetails"):
-            execution_stopped_details = ExecutionStoppedDetails.from_dict(details_data)
-
-        context_started_details = None
-        if details_data := data.get("ContextStartedDetails"):
-            context_started_details = ContextStartedDetails.from_dict(details_data)
-
-        context_succeeded_details = None
-        if details_data := data.get("ContextSucceededDetails"):
-            context_succeeded_details = ContextSucceededDetails.from_dict(details_data)
-
-        context_failed_details = None
-        if details_data := data.get("ContextFailedDetails"):
-            context_failed_details = ContextFailedDetails.from_dict(details_data)
-
-        wait_started_details = None
-        if details_data := data.get("WaitStartedDetails"):
-            wait_started_details = WaitStartedDetails.from_dict(details_data)
-
-        wait_succeeded_details = None
-        if details_data := data.get("WaitSucceededDetails"):
-            wait_succeeded_details = WaitSucceededDetails.from_dict(details_data)
-
-        wait_cancelled_details = None
-        if details_data := data.get("WaitCancelledDetails"):
-            wait_cancelled_details = WaitCancelledDetails.from_dict(details_data)
-
-        step_started_details = None
-        if details_data := data.get("StepStartedDetails"):
-            step_started_details = StepStartedDetails.from_dict(details_data)
-
-        step_succeeded_details = None
-        if details_data := data.get("StepSucceededDetails"):
-            step_succeeded_details = StepSucceededDetails.from_dict(details_data)
-
-        step_failed_details = None
-        if details_data := data.get("StepFailedDetails"):
-            step_failed_details = StepFailedDetails.from_dict(details_data)
-
-        chained_invoke_pending_details = None
-        if details_data := data.get("ChainedInvokePendingDetails"):
-            chained_invoke_pending_details = ChainedInvokePendingDetails.from_dict(
-                details_data
-            )
-
-        chained_invoke_started_details = None
-        if details_data := data.get("ChainedInvokeStartedDetails"):
-            chained_invoke_started_details = ChainedInvokeStartedDetails.from_dict(
-                details_data
-            )
-
-        chained_invoke_succeeded_details = None
-        if details_data := data.get("ChainedInvokeSucceededDetails"):
-            chained_invoke_succeeded_details = ChainedInvokeSucceededDetails.from_dict(
-                details_data
-            )
-
-        chained_invoke_failed_details = None
-        if details_data := data.get("ChainedInvokeFailedDetails"):
-            chained_invoke_failed_details = ChainedInvokeFailedDetails.from_dict(
-                details_data
-            )
-
-        chained_invoke_timed_out_details = None
-        if details_data := data.get("ChainedInvokeTimedOutDetails"):
-            chained_invoke_timed_out_details = ChainedInvokeTimedOutDetails.from_dict(
-                details_data
-            )
-
-        chained_invoke_stopped_details = None
-        if details_data := data.get("ChainedInvokeStoppedDetails"):
-            chained_invoke_stopped_details = ChainedInvokeStoppedDetails.from_dict(
-                details_data
-            )
-
-        callback_started_details = None
-        if details_data := data.get("CallbackStartedDetails"):
-            callback_started_details = CallbackStartedDetails.from_dict(details_data)
-
-        callback_succeeded_details = None
-        if details_data := data.get("CallbackSucceededDetails"):
-            callback_succeeded_details = CallbackSucceededDetails.from_dict(
-                details_data
-            )
-
-        callback_failed_details = None
-        if details_data := data.get("CallbackFailedDetails"):
-            callback_failed_details = CallbackFailedDetails.from_dict(details_data)
-
-        callback_timed_out_details = None
-        if details_data := data.get("CallbackTimedOutDetails"):
-            callback_timed_out_details = CallbackTimedOutDetails.from_dict(details_data)
-
-        invocation_completed_details = None
-        if details_data := data.get("InvocationCompletedDetails"):
-            invocation_completed_details = InvocationCompletedDetails.from_dict(
-                details_data
-            )
-
-        return cls(
-            event_type=data["EventType"],
-            event_timestamp=data["EventTimestamp"],
-            sub_type=data.get("SubType"),
-            event_id=data.get("EventId", 1),
-            operation_id=data.get("Id"),
-            name=data.get("Name"),
-            parent_id=data.get("ParentId"),
-            execution_started_details=execution_started_details,
-            execution_succeeded_details=execution_succeeded_details,
-            execution_failed_details=execution_failed_details,
-            execution_timed_out_details=execution_timed_out_details,
-            execution_stopped_details=execution_stopped_details,
-            context_started_details=context_started_details,
-            context_succeeded_details=context_succeeded_details,
-            context_failed_details=context_failed_details,
-            wait_started_details=wait_started_details,
-            wait_succeeded_details=wait_succeeded_details,
-            wait_cancelled_details=wait_cancelled_details,
-            step_started_details=step_started_details,
-            step_succeeded_details=step_succeeded_details,
-            step_failed_details=step_failed_details,
-            chained_invoke_pending_details=chained_invoke_pending_details,
-            chained_invoke_started_details=chained_invoke_started_details,
-            chained_invoke_succeeded_details=chained_invoke_succeeded_details,
-            chained_invoke_failed_details=chained_invoke_failed_details,
-            chained_invoke_timed_out_details=chained_invoke_timed_out_details,
-            chained_invoke_stopped_details=chained_invoke_stopped_details,
-            callback_started_details=callback_started_details,
-            callback_succeeded_details=callback_succeeded_details,
-            callback_failed_details=callback_failed_details,
-            callback_timed_out_details=callback_timed_out_details,
-            invocation_completed_details=invocation_completed_details,
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {
-            "EventType": self.event_type,
-            "EventTimestamp": self.event_timestamp,
-            "EventId": self.event_id,
-        }
-        if self.sub_type is not None:
-            result["SubType"] = self.sub_type
-        if self.operation_id is not None:
-            result["Id"] = self.operation_id
-        if self.name is not None:
-            result["Name"] = self.name
-        if self.parent_id is not None:
-            result["ParentId"] = self.parent_id
-        if self.execution_started_details is not None:
-            result["ExecutionStartedDetails"] = self.execution_started_details.to_dict()
-        if self.execution_succeeded_details is not None:
-            result["ExecutionSucceededDetails"] = (
-                self.execution_succeeded_details.to_dict()
-            )
-        if self.execution_failed_details is not None:
-            result["ExecutionFailedDetails"] = self.execution_failed_details.to_dict()
-        if self.execution_timed_out_details is not None:
-            result["ExecutionTimedOutDetails"] = (
-                self.execution_timed_out_details.to_dict()
-            )
-        if self.execution_stopped_details is not None:
-            result["ExecutionStoppedDetails"] = self.execution_stopped_details.to_dict()
-        if self.context_started_details is not None:
-            result["ContextStartedDetails"] = self.context_started_details.to_dict()
-        if self.context_succeeded_details is not None:
-            result["ContextSucceededDetails"] = self.context_succeeded_details.to_dict()
-        if self.context_failed_details is not None:
-            result["ContextFailedDetails"] = self.context_failed_details.to_dict()
-        if self.wait_started_details is not None:
-            result["WaitStartedDetails"] = self.wait_started_details.to_dict()
-        if self.wait_succeeded_details is not None:
-            result["WaitSucceededDetails"] = self.wait_succeeded_details.to_dict()
-        if self.wait_cancelled_details is not None:
-            result["WaitCancelledDetails"] = self.wait_cancelled_details.to_dict()
-        if self.step_started_details is not None:
-            result["StepStartedDetails"] = self.step_started_details.to_dict()
-        if self.step_succeeded_details is not None:
-            result["StepSucceededDetails"] = self.step_succeeded_details.to_dict()
-        if self.step_failed_details is not None:
-            result["StepFailedDetails"] = self.step_failed_details.to_dict()
-        if self.chained_invoke_pending_details is not None:
-            result["ChainedInvokePendingDetails"] = (
-                self.chained_invoke_pending_details.to_dict()
-            )
-        if self.chained_invoke_started_details is not None:
-            result["ChainedInvokeStartedDetails"] = (
-                self.chained_invoke_started_details.to_dict()
-            )
-        if self.chained_invoke_succeeded_details is not None:
-            result["ChainedInvokeSucceededDetails"] = (
-                self.chained_invoke_succeeded_details.to_dict()
-            )
-        if self.chained_invoke_failed_details is not None:
-            result["ChainedInvokeFailedDetails"] = (
-                self.chained_invoke_failed_details.to_dict()
-            )
-        if self.chained_invoke_timed_out_details is not None:
-            result["ChainedInvokeTimedOutDetails"] = (
-                self.chained_invoke_timed_out_details.to_dict()
-            )
-        if self.chained_invoke_stopped_details is not None:
-            result["ChainedInvokeStoppedDetails"] = (
-                self.chained_invoke_stopped_details.to_dict()
-            )
-        if self.callback_started_details is not None:
-            result["CallbackStartedDetails"] = self.callback_started_details.to_dict()
-        if self.callback_succeeded_details is not None:
-            result["CallbackSucceededDetails"] = (
-                self.callback_succeeded_details.to_dict()
-            )
-        if self.callback_failed_details is not None:
-            result["CallbackFailedDetails"] = self.callback_failed_details.to_dict()
-        if self.callback_timed_out_details is not None:
-            result["CallbackTimedOutDetails"] = (
-                self.callback_timed_out_details.to_dict()
-            )
-        if self.invocation_completed_details is not None:
-            result["InvocationCompletedDetails"] = (
-                self.invocation_completed_details.to_dict()
-            )
-        return result
+    event_type: str = field(metadata={"alias": "EventType"})
+    event_timestamp: datetime.datetime = field(
+        metadata={"alias": "EventTimestamp", "is_timestamp": True}
+    )
+    sub_type: str | None = field(default=None, metadata={"alias": "SubType"})
+    event_id: int = field(default=1, metadata={"alias": "EventId"})
+    operation_id: str | None = field(default=None, metadata={"alias": "Id"})
+    name: str | None = field(default=None, metadata={"alias": "Name"})
+    parent_id: str | None = field(default=None, metadata={"alias": "ParentId"})
+    execution_started_details: ExecutionStartedDetails | None = field(
+        default=None, metadata={"alias": "ExecutionStartedDetails"}
+    )
+    execution_succeeded_details: ExecutionSucceededDetails | None = field(
+        default=None, metadata={"alias": "ExecutionSucceededDetails"}
+    )
+    execution_failed_details: ExecutionFailedDetails | None = field(
+        default=None, metadata={"alias": "ExecutionFailedDetails"}
+    )
+    execution_timed_out_details: ExecutionTimedOutDetails | None = field(
+        default=None, metadata={"alias": "ExecutionTimedOutDetails"}
+    )
+    execution_stopped_details: ExecutionStoppedDetails | None = field(
+        default=None, metadata={"alias": "ExecutionStoppedDetails"}
+    )
+    context_started_details: ContextStartedDetails | None = field(
+        default=None, metadata={"alias": "ContextStartedDetails"}
+    )
+    context_succeeded_details: ContextSucceededDetails | None = field(
+        default=None, metadata={"alias": "ContextSucceededDetails"}
+    )
+    context_failed_details: ContextFailedDetails | None = field(
+        default=None, metadata={"alias": "ContextFailedDetails"}
+    )
+    wait_started_details: WaitStartedDetails | None = field(
+        default=None, metadata={"alias": "WaitStartedDetails"}
+    )
+    wait_succeeded_details: WaitSucceededDetails | None = field(
+        default=None, metadata={"alias": "WaitSucceededDetails"}
+    )
+    wait_cancelled_details: WaitCancelledDetails | None = field(
+        default=None, metadata={"alias": "WaitCancelledDetails"}
+    )
+    step_started_details: StepStartedDetails | None = field(
+        default=None, metadata={"alias": "StepStartedDetails"}
+    )
+    step_succeeded_details: StepSucceededDetails | None = field(
+        default=None, metadata={"alias": "StepSucceededDetails"}
+    )
+    step_failed_details: StepFailedDetails | None = field(
+        default=None, metadata={"alias": "StepFailedDetails"}
+    )
+    chained_invoke_pending_details: ChainedInvokePendingDetails | None = field(
+        default=None, metadata={"alias": "ChainedInvokePendingDetails"}
+    )
+    chained_invoke_started_details: ChainedInvokeStartedDetails | None = field(
+        default=None, metadata={"alias": "ChainedInvokeStartedDetails"}
+    )
+    chained_invoke_succeeded_details: ChainedInvokeSucceededDetails | None = field(
+        default=None, metadata={"alias": "ChainedInvokeSucceededDetails"}
+    )
+    chained_invoke_failed_details: ChainedInvokeFailedDetails | None = field(
+        default=None, metadata={"alias": "ChainedInvokeFailedDetails"}
+    )
+    chained_invoke_timed_out_details: ChainedInvokeTimedOutDetails | None = field(
+        default=None, metadata={"alias": "ChainedInvokeTimedOutDetails"}
+    )
+    chained_invoke_stopped_details: ChainedInvokeStoppedDetails | None = field(
+        default=None, metadata={"alias": "ChainedInvokeStoppedDetails"}
+    )
+    callback_started_details: CallbackStartedDetails | None = field(
+        default=None, metadata={"alias": "CallbackStartedDetails"}
+    )
+    callback_succeeded_details: CallbackSucceededDetails | None = field(
+        default=None, metadata={"alias": "CallbackSucceededDetails"}
+    )
+    callback_failed_details: CallbackFailedDetails | None = field(
+        default=None, metadata={"alias": "CallbackFailedDetails"}
+    )
+    callback_timed_out_details: CallbackTimedOutDetails | None = field(
+        default=None, metadata={"alias": "CallbackTimedOutDetails"}
+    )
+    invocation_completed_details: InvocationCompletedDetails | None = field(
+        default=None, metadata={"alias": "InvocationCompletedDetails"}
+    )
 
     @classmethod
     def create_execution_event_started(cls, context: EventCreationContext) -> Event:
@@ -2399,25 +1724,11 @@ def events_to_operations(events: list[Event]) -> list[Operation]:
 
 
 @dataclass(frozen=True)
-class GetDurableExecutionHistoryResponse:
+class GetDurableExecutionHistoryResponse(BotoSerializableModel):
     """Response containing durable execution history events."""
 
-    events: list[Event]
-    next_marker: str | None = None
-
-    @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> GetDurableExecutionHistoryResponse:
-        events = [Event.from_dict(event_data) for event_data in data.get("Events", [])]
-        return cls(
-            events=events,
-            next_marker=data.get("NextMarker"),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {"Events": [event.to_dict() for event in self.events]}
-        if self.next_marker is not None:
-            result["NextMarker"] = self.next_marker
-        return result
+    events: list[Event] = field(default_factory=list, metadata={"alias": "Events"})
+    next_marker: str | None = field(default=None, metadata={"alias": "NextMarker"})
 
 
 class _ExecutionResultSource(Protocol):

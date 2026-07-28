@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timezone
-from enum import Enum
-from typing import Any
 from uuid import uuid4
 
 from ..._core import (
@@ -31,16 +29,6 @@ from .model import (
 )
 
 
-class ExecutionStatus(Enum):
-    """Execution status for API responses."""
-
-    RUNNING = "RUNNING"
-    SUCCEEDED = "SUCCEEDED"
-    FAILED = "FAILED"
-    STOPPED = "STOPPED"
-    TIMED_OUT = "TIMED_OUT"
-
-
 class Execution:
     """Execution state."""
 
@@ -57,28 +45,15 @@ class Execution:
         self.updates: list[OperationUpdate] = []
         self.invocation_completions: list[InvocationCompletedDetails] = []
         self.used_tokens: set[str] = set()
-        # TODO: this will need to persist/rehydrate depending on inmemory vs sqllite store
         self._token_sequence: int = 0
         self.is_complete: bool = False
         self.result: DurableExecutionInvocationOutput | None = None
         self.consecutive_failed_invocation_attempts: int = 0
-        self.close_status: ExecutionStatus | None = None
 
     @property
     def token_sequence(self) -> int:
         """Get current token sequence value."""
         return self._token_sequence
-
-    def current_status(self) -> ExecutionStatus:
-        """Get execution status."""
-        if not self.is_complete:
-            return ExecutionStatus.RUNNING
-
-        if not self.close_status:
-            msg: str = "close_status must be set when execution is complete"
-            raise IllegalStateException(msg)
-
-        return self.close_status
 
     @staticmethod
     def new(input: StartDurableExecutionInput) -> Execution:  # noqa: A002
@@ -92,68 +67,6 @@ class Execution:
             start_input=input,
             operations=[],
         )
-
-    def to_json_dict(self) -> dict[str, Any]:
-        """Serialize execution to JSON-serializable dictionary"""
-        return {
-            "DurableExecutionArn": self.durable_execution_arn,
-            "StartInput": self.start_input.to_dict(),
-            "Operations": [op.to_json_dict() for op in self.operations],
-            "Updates": [update.to_dict() for update in self.updates],
-            "InvocationCompletions": [
-                completion.to_json_dict() for completion in self.invocation_completions
-            ],
-            "UsedTokens": list(self.used_tokens),
-            "TokenSequence": self._token_sequence,
-            "IsComplete": self.is_complete,
-            "Result": self.result.to_dict() if self.result else None,
-            "ConsecutiveFailedInvocationAttempts": self.consecutive_failed_invocation_attempts,
-            "CloseStatus": self.close_status.value if self.close_status else None,
-        }
-
-    @classmethod
-    def from_json_dict(cls, data: dict[str, Any]) -> Execution:
-        """Deserialize execution from dictionary."""
-        # Reconstruct start_input
-        start_input = StartDurableExecutionInput.from_dict(data["StartInput"])
-
-        # Reconstruct operations
-        operations = [
-            Operation.from_json_dict(op_data) for op_data in data["Operations"]
-        ]
-
-        # Create execution
-        execution = cls(
-            durable_execution_arn=data["DurableExecutionArn"],
-            start_input=start_input,
-            operations=operations,
-        )
-
-        # Set additional fields
-        execution.updates = [
-            OperationUpdate.from_dict(update_data) for update_data in data["Updates"]
-        ]
-        execution.invocation_completions = [
-            InvocationCompletedDetails.from_json_dict(item)
-            for item in data.get("InvocationCompletions", [])
-        ]
-        execution.used_tokens = set(data["UsedTokens"])
-        execution._token_sequence = data["TokenSequence"]
-        execution.is_complete = data["IsComplete"]
-        execution.result = (
-            DurableExecutionInvocationOutput.from_dict(data["Result"])
-            if data["Result"]
-            else None
-        )
-        execution.consecutive_failed_invocation_attempts = data[
-            "ConsecutiveFailedInvocationAttempts"
-        ]
-        close_status_str = data.get("CloseStatus")
-        execution.close_status = (
-            ExecutionStatus(close_status_str) if close_status_str else None
-        )
-
-        return execution
 
     def start(self) -> None:
         if self.start_input.invocation_id is None:
@@ -239,7 +152,6 @@ class Execution:
             status=InvocationStatus.SUCCEEDED, result=result
         )
         self.is_complete = True
-        self.close_status = ExecutionStatus.SUCCEEDED
         self._end_execution(OperationStatus.SUCCEEDED)
 
     def complete_fail(self, error: ErrorObject) -> None:
@@ -248,7 +160,6 @@ class Execution:
             status=InvocationStatus.FAILED, error=error
         )
         self.is_complete = True
-        self.close_status = ExecutionStatus.FAILED
         self._end_execution(OperationStatus.FAILED)
 
     def complete_timeout(self, error: ErrorObject) -> None:
@@ -257,17 +168,7 @@ class Execution:
             status=InvocationStatus.FAILED, error=error
         )
         self.is_complete = True
-        self.close_status = ExecutionStatus.TIMED_OUT
         self._end_execution(OperationStatus.TIMED_OUT)
-
-    def complete_stopped(self, error: ErrorObject) -> None:
-        """Complete execution as terminated (TerminateWorkflowExecutionV2Request)."""
-        self.result = DurableExecutionInvocationOutput(
-            status=InvocationStatus.FAILED, error=error
-        )
-        self.is_complete = True
-        self.close_status = ExecutionStatus.STOPPED
-        self._end_execution(OperationStatus.STOPPED)
 
     def find_operation(self, operation_id: str) -> tuple[int, Operation]:
         """Find operation by ID, return index and operation."""

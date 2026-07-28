@@ -114,6 +114,22 @@ class _CustomSerDesError(SerDesError):
     pass
 
 
+def test_workflow_results_only_expose_dict_serialization() -> None:
+    models: tuple[Any, ...] = (
+        FlowNodeResult.succeeded("result"),
+        BatchItem(0, BatchItemStatus.SUCCEEDED, "result"),
+        BatchResult([], CompletionReason.ALL_COMPLETED),
+    )
+
+    for model in models:
+        assert hasattr(type(model), "from_dict")
+        assert hasattr(model, "to_dict")
+        assert not hasattr(type(model), "from_boto")
+        assert not hasattr(model, "to_boto")
+        assert not hasattr(type(model), "from_json_dict")
+        assert not hasattr(model, "to_json_dict")
+
+
 def test_flow_result_helpers_preserve_selected_output_arity() -> None:
     first = FlowNodeResult.succeeded("first")
     second = FlowNodeResult.succeeded("second")

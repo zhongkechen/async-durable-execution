@@ -11,6 +11,7 @@ from typing import (
     Protocol,
     TypeAlias,
     TypeVar,
+    cast,
     get_args,
     get_origin,
     get_type_hints,
@@ -20,7 +21,7 @@ from typing import (
 ReplayChildren: TypeAlias = bool
 OperationPayload: TypeAlias = str
 TimeoutSeconds: TypeAlias = int
-_SerializableModelT = TypeVar("_SerializableModelT", bound="SerializableModel")
+ModelT = TypeVar("ModelT")
 
 
 class LambdaContext(Protocol):
@@ -41,7 +42,7 @@ class LambdaContext(Protocol):
     def log(self, msg) -> None: ...
 
 
-def _metadata(
+def _model_field_metadata(
     *,
     alias: str,
     serializer: Any = None,
@@ -50,6 +51,7 @@ def _metadata(
     omit_if_falsey: bool = False,
     is_timestamp: bool = False,
 ) -> dict[str, Any]:
+    """Build dataclass field metadata for the shared mapping engine."""
     return {
         "alias": alias,
         "serializer": serializer,
@@ -58,6 +60,53 @@ def _metadata(
         "omit_if_falsey": omit_if_falsey,
         "is_timestamp": is_timestamp,
     }
+
+
+class MappingModel:
+    """Dataclass serialized through the shared Python mapping engine."""
+
+    @classmethod
+    def from_dict(
+        cls: type[ModelT],
+        data: Mapping[str, Any],
+    ) -> ModelT:
+        """Construct a model from its serialized mapping."""
+        return _model_from_mapping(cls, data)
+
+    def to_dict(self) -> MutableMapping[str, Any]:
+        """Convert the model to its serialized mapping."""
+        return _model_to_mapping(self)
+
+
+class BotoSerializableModel:
+    """Dataclass serialized as a boto-style mapping with native Python values."""
+
+    @classmethod
+    def from_dict(cls: type[ModelT], data: Mapping[str, Any]) -> ModelT:
+        """Create a model from a boto-style mapping with native Python values."""
+        return _model_from_mapping(cls, data)
+
+    def to_dict(self) -> MutableMapping[str, Any]:
+        """Convert the model to a boto-style mapping with native Python values."""
+        return _model_to_mapping(self)
+
+
+class JsonSerializableModel:
+    @classmethod
+    def from_dict(cls: type[ModelT], data: Mapping[str, Any]) -> ModelT:
+        """Create a model from a JSON-compatible mapping."""
+        return _model_from_mapping(cls, data, json_mode=True)
+
+    def to_dict(self) -> MutableMapping[str, Any]:
+        """Convert the model to a JSON-compatible mapping."""
+        return _model_to_mapping(self, json_mode=True)
+
+
+_MAPPING_MODEL_TYPES = (
+    MappingModel,
+    BotoSerializableModel,
+    JsonSerializableModel,
+)
 
 
 def _enum_type(annotation: Any) -> type[Enum] | None:
@@ -76,12 +125,12 @@ def _enum_type(annotation: Any) -> type[Enum] | None:
     return None
 
 
-def _model_type(annotation: Any) -> type[SerializableModel] | None:
-    if isinstance(annotation, type) and issubclass(annotation, SerializableModel):
+def _model_type(annotation: Any) -> type[Any] | None:
+    if isinstance(annotation, type) and issubclass(annotation, _MAPPING_MODEL_TYPES):
         return annotation
 
     origin = get_origin(annotation)
-    if isinstance(origin, type) and issubclass(origin, SerializableModel):
+    if isinstance(origin, type) and issubclass(origin, _MAPPING_MODEL_TYPES):
         return origin
     if origin is None:
         return None
@@ -113,9 +162,7 @@ def _deserialize_value(
 
     model_cls = _model_type(annotation)
     if model_cls is not None and isinstance(value, Mapping):
-        if json_mode:
-            return model_cls.from_json_dict(value)
-        return model_cls.from_dict(value)
+        return _model_from_mapping(model_cls, value, json_mode=json_mode)
 
     enum_cls = _enum_type(annotation)
     if enum_cls is not None:
@@ -157,10 +204,8 @@ def _serialize_value(
     if isinstance(value, Enum):
         return value.value
 
-    if isinstance(value, SerializableModel):
-        if json_mode:
-            return value.to_json_dict()
-        return value.to_dict()
+    if isinstance(value, _MAPPING_MODEL_TYPES):
+        return _model_to_mapping(value, json_mode=json_mode)
 
     if isinstance(value, list):
         return [_serialize_value(item, {}, json_mode=json_mode) for item in value]
@@ -168,80 +213,60 @@ def _serialize_value(
     return value
 
 
-@dataclass(frozen=True)
-class SerializableModel:
-    """Dataclass mixin for the SDK's wire-format serialization helpers."""
+def _model_from_mapping(
+    model_cls: type[ModelT],
+    data: Mapping[str, Any],
+    *,
+    json_mode: bool = False,
+) -> ModelT:
+    kwargs: dict[str, Any] = {}
+    type_hints = get_type_hints(model_cls)
 
-    @classmethod
-    def from_dict(
-        cls: type[_SerializableModelT], data: Mapping[str, Any]
-    ) -> _SerializableModelT:
-        return cls._from_mapping(data)
+    for model_field in fields(cast("Any", model_cls)):
+        alias = model_field.metadata.get("alias", model_field.name)
+        annotation = type_hints.get(model_field.name, model_field.type)
 
-    @classmethod
-    def from_json_dict(
-        cls: type[_SerializableModelT], data: Mapping[str, Any]
-    ) -> _SerializableModelT:
-        return cls._from_mapping(data, json_mode=True)
-
-    @classmethod
-    def _from_mapping(
-        cls: type[_SerializableModelT],
-        data: Mapping[str, Any],
-        *,
-        json_mode: bool = False,
-    ) -> _SerializableModelT:
-        kwargs: dict[str, Any] = {}
-        type_hints = get_type_hints(cls)
-
-        for model_field in fields(cls):
-            alias = model_field.metadata.get("alias", model_field.name)
-            annotation = type_hints.get(model_field.name, model_field.type)
-
-            if alias in data:
-                kwargs[model_field.name] = _deserialize_value(
-                    data[alias],
-                    annotation,
-                    model_field.metadata,
-                    json_mode=json_mode,
-                )
-                continue
-
-            if (
-                model_field.default is not MISSING
-                or model_field.default_factory is not MISSING
-            ):
-                continue
-
-            raise KeyError(alias)
-
-        return cls(**kwargs)
-
-    def to_dict(self) -> MutableMapping[str, Any]:
-        return self._to_mapping()
-
-    def to_json_dict(self) -> MutableMapping[str, Any]:
-        return self._to_mapping(json_mode=True)
-
-    def _to_mapping(self, *, json_mode: bool = False) -> MutableMapping[str, Any]:
-        result: MutableMapping[str, Any] = {}
-
-        for model_field in fields(self):
-            alias = model_field.metadata.get("alias", model_field.name)
-            value = getattr(self, model_field.name)
-
-            if value is None and model_field.metadata.get("omit_if_none", True):
-                continue
-            if not value and model_field.metadata.get("omit_if_falsey", False):
-                continue
-
-            result[alias] = _serialize_value(
-                value,
+        if alias in data:
+            kwargs[model_field.name] = _deserialize_value(
+                data[alias],
+                annotation,
                 model_field.metadata,
                 json_mode=json_mode,
             )
+            continue
 
-        return result
+        if (
+            model_field.default is not MISSING
+            or model_field.default_factory is not MISSING
+        ):
+            continue
+
+        raise KeyError(alias)
+
+    return model_cls(**kwargs)
+
+
+def _model_to_mapping(
+    model: Any, *, json_mode: bool = False
+) -> MutableMapping[str, Any]:
+    result: MutableMapping[str, Any] = {}
+
+    for model_field in fields(model):
+        alias = model_field.metadata.get("alias", model_field.name)
+        value = getattr(model, model_field.name)
+
+        if value is None and model_field.metadata.get("omit_if_none", True):
+            continue
+        if not value and model_field.metadata.get("omit_if_falsey", False):
+            continue
+
+        result[alias] = _serialize_value(
+            value,
+            model_field.metadata,
+            json_mode=json_mode,
+        )
+
+    return result
 
 
 class OperationAction(Enum):
@@ -274,24 +299,6 @@ class CallbackTimeoutType(Enum):
     HEARTBEAT = "Callback.Heartbeat"
 
 
-class ChainedInvokeFailedToStartType(Enum):
-    """Error type used when a durable invoke never starts remotely."""
-
-    FAILED_TO_START = "ChainedInvoke.FailedToStart"
-
-
-class ChainedInvokeTimeoutType(Enum):
-    """Error type used when a durable invoke times out."""
-
-    TIMEOUT = "ChainedInvoke.Timeout"
-
-
-class ChainedInvokeStopType(Enum):
-    """Error type used when a durable invoke is stopped externally."""
-
-    STOPPED = "ChainedInvoke.Stopped"
-
-
 class OperationSubType(Enum):
     """Fine-grained operation kind used in execution history."""
 
@@ -319,31 +326,6 @@ class OperationType(Enum):
     CALLBACK = "CALLBACK"
     CHAINED_INVOKE = "CHAINED_INVOKE"
 
-    @classmethod
-    def from_sub_type(cls, sub_type: OperationSubType) -> OperationType:
-        match sub_type:
-            case OperationSubType.STEP | OperationSubType.WAIT_FOR_CONDITION:
-                return OperationType.STEP
-            case OperationSubType.WAIT:
-                return OperationType.WAIT
-            case OperationSubType.CHAINED_INVOKE:
-                return OperationType.CHAINED_INVOKE
-            case OperationSubType.CALLBACK:
-                return OperationType.CALLBACK
-            case OperationSubType.EXECUTION:
-                return OperationType.EXECUTION
-            case (
-                OperationSubType.WAIT_FOR_CALLBACK
-                | OperationSubType.RUN_IN_CHILD_CONTEXT
-                | OperationSubType.MAP
-                | OperationSubType.MAP_ITERATION
-                | OperationSubType.PARALLEL
-                | OperationSubType.PARALLEL_BRANCH
-            ):
-                return OperationType.CONTEXT
-            case _:
-                raise ValueError(f"Unknown operation sub-type {sub_type}")
-
 
 @dataclass(frozen=True)
 class OperationIdentifier:
@@ -353,10 +335,6 @@ class OperationIdentifier:
     sub_type: OperationSubType
     parent_id: str | None = None
     name: str | None = None
-
-    @property
-    def type(self) -> OperationType:
-        return OperationType.from_sub_type(self.sub_type)
 
     def require_operation_id(self) -> str:
         """Return the operation id for non-root operations."""
@@ -382,14 +360,20 @@ class InvocationStatus(Enum):
 
 
 @dataclass(frozen=True)
-class ErrorObject(SerializableModel):
+class ErrorObject(BotoSerializableModel):
     """Serializable representation of an exception captured by the SDK."""
 
-    message: str | None = field(default=None, metadata=_metadata(alias="ErrorMessage"))
-    type: str | None = field(default=None, metadata=_metadata(alias="ErrorType"))
-    data: str | None = field(default=None, metadata=_metadata(alias="ErrorData"))
+    message: str | None = field(
+        default=None, metadata=_model_field_metadata(alias="ErrorMessage")
+    )
+    type: str | None = field(
+        default=None, metadata=_model_field_metadata(alias="ErrorType")
+    )
+    data: str | None = field(
+        default=None, metadata=_model_field_metadata(alias="ErrorData")
+    )
     stack_trace: list[str] | None = field(
-        default=None, metadata=_metadata(alias="StackTrace")
+        default=None, metadata=_model_field_metadata(alias="StackTrace")
     )
 
     @classmethod
@@ -412,107 +396,119 @@ class ErrorObject(SerializableModel):
 
 
 @dataclass(frozen=True)
-class DurableExecutionInvocationOutput(SerializableModel):
+class DurableExecutionInvocationOutput(BotoSerializableModel):
     """Representation the DurableExecutionInvocationOutput. This is what the Durable lambda handler returns.
 
     If the execution has been already completed via an update to the EXECUTION operation via CheckpointDurableExecution,
     payload must be empty for SUCCEEDED/FAILED status.
     """
 
-    status: InvocationStatus = field(metadata=_metadata(alias="Status"))
-    result: str | None = field(default=None, metadata=_metadata(alias="Result"))
-    error: ErrorObject | None = field(default=None, metadata=_metadata(alias="Error"))
+    status: InvocationStatus = field(metadata=_model_field_metadata(alias="Status"))
+    result: str | None = field(
+        default=None, metadata=_model_field_metadata(alias="Result")
+    )
+    error: ErrorObject | None = field(
+        default=None, metadata=_model_field_metadata(alias="Error")
+    )
 
     @classmethod
     def create_succeeded(cls, result: str) -> DurableExecutionInvocationOutput:
         return cls(status=InvocationStatus.SUCCEEDED, result=result)
 
-    @classmethod
-    def create_retry(cls, error: ErrorObject) -> DurableExecutionInvocationOutput:
-        return cls(status=InvocationStatus.RETRY, error=error)
-
 
 @dataclass(frozen=True)
-class ExecutionDetails(SerializableModel):
+class ExecutionDetails(BotoSerializableModel):
     """Extra fields stored on the root execution operation."""
 
     input_payload: str | None = field(
         default=None,
-        metadata=_metadata(alias="InputPayload", omit_if_none=False),
+        metadata=_model_field_metadata(alias="InputPayload", omit_if_none=False),
     )
 
 
 @dataclass(frozen=True)
-class ContextDetails(SerializableModel):
+class ContextDetails(BotoSerializableModel):
     """Checkpoint payload stored for child-context style operations."""
 
     replay_children: ReplayChildren = field(
-        default=False, metadata=_metadata(alias="ReplayChildren")
+        default=False, metadata=_model_field_metadata(alias="ReplayChildren")
     )
     result: OperationPayload | None = field(
-        default=None, metadata=_metadata(alias="Result")
+        default=None, metadata=_model_field_metadata(alias="Result")
     )
-    error: ErrorObject | None = field(default=None, metadata=_metadata(alias="Error"))
+    error: ErrorObject | None = field(
+        default=None, metadata=_model_field_metadata(alias="Error")
+    )
 
 
 @dataclass(frozen=True)
-class StepDetails(SerializableModel):
+class StepDetails(BotoSerializableModel):
     """Checkpoint payload stored for durable steps and polling checks."""
 
-    attempt: int = field(default=0, metadata=_metadata(alias="Attempt"))
+    attempt: int = field(default=0, metadata=_model_field_metadata(alias="Attempt"))
     next_attempt_timestamp: datetime.datetime | None = field(
         default=None,
-        metadata=_metadata(alias="NextAttemptTimestamp", is_timestamp=True),
+        metadata=_model_field_metadata(alias="NextAttemptTimestamp", is_timestamp=True),
     )
     result: OperationPayload | None = field(
         default=None,
-        metadata=_metadata(alias="Result"),
+        metadata=_model_field_metadata(alias="Result"),
     )
     error: ErrorObject | None = field(
         default=None,
-        metadata=_metadata(alias="Error"),
+        metadata=_model_field_metadata(alias="Error"),
     )
 
 
 @dataclass(frozen=True)
-class WaitDetails(SerializableModel):
+class WaitDetails(BotoSerializableModel):
     """Checkpoint payload stored for durable waits."""
 
     scheduled_end_timestamp: datetime.datetime | None = field(
         default=None,
-        metadata=_metadata(alias="ScheduledEndTimestamp", is_timestamp=True),
+        metadata=_model_field_metadata(
+            alias="ScheduledEndTimestamp", is_timestamp=True
+        ),
     )
 
 
 @dataclass(frozen=True)
-class CallbackDetails(SerializableModel):
+class CallbackDetails(BotoSerializableModel):
     """Checkpoint payload stored for callbacks and callback results."""
 
-    callback_id: str = field(metadata=_metadata(alias="CallbackId"))
-    result: str | None = field(default=None, metadata=_metadata(alias="Result"))
-    error: ErrorObject | None = field(default=None, metadata=_metadata(alias="Error"))
+    callback_id: str = field(metadata=_model_field_metadata(alias="CallbackId"))
+    result: str | None = field(
+        default=None, metadata=_model_field_metadata(alias="Result")
+    )
+    error: ErrorObject | None = field(
+        default=None, metadata=_model_field_metadata(alias="Error")
+    )
 
 
 @dataclass(frozen=True)
-class ChainedInvokeDetails(SerializableModel):
+class ChainedInvokeDetails(BotoSerializableModel):
     """Checkpoint payload stored for durable invokes."""
 
-    result: str | None = field(default=None, metadata=_metadata(alias="Result"))
-    error: ErrorObject | None = field(default=None, metadata=_metadata(alias="Error"))
+    result: str | None = field(
+        default=None, metadata=_model_field_metadata(alias="Result")
+    )
+    error: ErrorObject | None = field(
+        default=None, metadata=_model_field_metadata(alias="Error")
+    )
 
 
 @dataclass(frozen=True)
-class StepOptions(SerializableModel):
+class StepOptions(BotoSerializableModel):
     """Additional options recorded on step retries."""
 
     next_attempt_delay_seconds: int = field(
         default=0,
-        metadata=_metadata(alias="NextAttemptDelaySeconds"),
+        metadata=_model_field_metadata(alias="NextAttemptDelaySeconds"),
     )
 
 
 @dataclass(frozen=True)
-class WaitOptions(SerializableModel):
+class WaitOptions(BotoSerializableModel):
     """
     Wait Options provides details regarding suspension.
 
@@ -523,11 +519,13 @@ class WaitOptions(SerializableModel):
 
     """
 
-    wait_seconds: int = field(default=1, metadata=_metadata(alias="WaitSeconds"))
+    wait_seconds: int = field(
+        default=1, metadata=_model_field_metadata(alias="WaitSeconds")
+    )
 
 
 @dataclass(frozen=True)
-class CallbackOptions(SerializableModel):
+class CallbackOptions(BotoSerializableModel):
     """
     Callback options provides details about the callback, wrt timeout
     and heartbeat checks.
@@ -542,81 +540,85 @@ class CallbackOptions(SerializableModel):
     """
 
     timeout_seconds: TimeoutSeconds = field(
-        default=0, metadata=_metadata(alias="TimeoutSeconds")
+        default=0, metadata=_model_field_metadata(alias="TimeoutSeconds")
     )
     heartbeat_timeout_seconds: int = field(
         default=0,
-        metadata=_metadata(alias="HeartbeatTimeoutSeconds"),
+        metadata=_model_field_metadata(alias="HeartbeatTimeoutSeconds"),
     )
 
 
 @dataclass(frozen=True)
-class ChainedInvokeOptions(SerializableModel):
+class ChainedInvokeOptions(BotoSerializableModel):
     """
     As of 2025/10/27:
      - Chained invoke options only contains a function name
     """
 
-    function_name: str = field(metadata=_metadata(alias="FunctionName"))
-    tenant_id: str | None = field(default=None, metadata=_metadata(alias="TenantId"))
-
-
-@dataclass(frozen=True)
-class ContextOptions(SerializableModel):
-    """Extra flags recorded for child-context operations."""
-
-    replay_children: ReplayChildren = field(
-        default=False,
-        metadata=_metadata(alias="ReplayChildren"),
+    function_name: str = field(metadata=_model_field_metadata(alias="FunctionName"))
+    tenant_id: str | None = field(
+        default=None, metadata=_model_field_metadata(alias="TenantId")
     )
 
 
 @dataclass(frozen=True)
-class OperationUpdate(SerializableModel):
+class ContextOptions(BotoSerializableModel):
+    """Extra flags recorded for child-context operations."""
+
+    replay_children: ReplayChildren = field(
+        default=False,
+        metadata=_model_field_metadata(alias="ReplayChildren"),
+    )
+
+
+@dataclass(frozen=True)
+class OperationUpdate(BotoSerializableModel):
     """Update an Operation. Use this to create a checkpoint.
 
     See the various create_ factory class methods to instantiate me.
     """
 
-    operation_id: str = field(metadata=_metadata(alias="Id"))
-    operation_type: OperationType = field(metadata=_metadata(alias="Type"))
-    action: OperationAction = field(metadata=_metadata(alias="Action"))
+    operation_id: str = field(metadata=_model_field_metadata(alias="Id"))
+    operation_type: OperationType = field(metadata=_model_field_metadata(alias="Type"))
+    action: OperationAction = field(metadata=_model_field_metadata(alias="Action"))
     parent_id: str | None = field(
         default=None,
-        metadata=_metadata(alias="ParentId", omit_if_falsey=True),
+        metadata=_model_field_metadata(alias="ParentId", omit_if_falsey=True),
     )
     name: str | None = field(
         default=None,
-        metadata=_metadata(alias="Name", omit_if_falsey=True),
+        metadata=_model_field_metadata(alias="Name", omit_if_falsey=True),
     )
     sub_type: OperationSubType | None = field(
         default=None,
-        metadata=_metadata(alias="SubType"),
+        metadata=_model_field_metadata(alias="SubType"),
     )
     payload: str | None = field(
         default=None,
-        metadata=_metadata(alias="Payload"),
+        metadata=_model_field_metadata(alias="Payload"),
     )
-    error: ErrorObject | None = field(default=None, metadata=_metadata(alias="Error"))
+    error: ErrorObject | None = field(
+        default=None, metadata=_model_field_metadata(alias="Error")
+    )
     context_options: ContextOptions | None = field(
         default=None,
-        metadata=_metadata(alias="ContextOptions"),
+        metadata=_model_field_metadata(alias="ContextOptions"),
     )
     step_options: StepOptions | None = field(
         default=None,
-        metadata=_metadata(alias="StepOptions"),
+        metadata=_model_field_metadata(alias="StepOptions"),
     )
     wait_options: WaitOptions | None = field(
         default=None,
-        metadata=_metadata(alias="WaitOptions"),
+        metadata=_model_field_metadata(alias="WaitOptions"),
     )
     callback_options: CallbackOptions | None = field(
         default=None,
-        metadata=_metadata(alias="CallbackOptions"),
+        metadata=_model_field_metadata(alias="CallbackOptions"),
     )
     chained_invoke_options: ChainedInvokeOptions | None = field(
         default=None,
-        metadata=_metadata(alias="ChainedInvokeOptions"),
+        metadata=_model_field_metadata(alias="ChainedInvokeOptions"),
     )
 
     @classmethod
@@ -888,95 +890,95 @@ class TimestampConverter:
 
 
 @dataclass(frozen=True)
-class Operation(SerializableModel):
+class Operation(BotoSerializableModel):
     """Represent the Operation type for GetDurableExecutionState and CheckpointDurableExecution."""
 
-    operation_id: str = field(metadata=_metadata(alias="Id"))
-    operation_type: OperationType = field(metadata=_metadata(alias="Type"))
-    status: OperationStatus = field(metadata=_metadata(alias="Status"))
+    operation_id: str = field(metadata=_model_field_metadata(alias="Id"))
+    operation_type: OperationType = field(metadata=_model_field_metadata(alias="Type"))
+    status: OperationStatus = field(metadata=_model_field_metadata(alias="Status"))
     parent_id: str | None = field(
         default=None,
-        metadata=_metadata(alias="ParentId", omit_if_falsey=True),
+        metadata=_model_field_metadata(alias="ParentId", omit_if_falsey=True),
     )
     name: str | None = field(
         default=None,
-        metadata=_metadata(alias="Name", omit_if_falsey=True),
+        metadata=_model_field_metadata(alias="Name", omit_if_falsey=True),
     )
     start_timestamp: datetime.datetime | None = field(
         default=None,
-        metadata=_metadata(alias="StartTimestamp", is_timestamp=True),
+        metadata=_model_field_metadata(alias="StartTimestamp", is_timestamp=True),
     )
     end_timestamp: datetime.datetime | None = field(
         default=None,
-        metadata=_metadata(alias="EndTimestamp", is_timestamp=True),
+        metadata=_model_field_metadata(alias="EndTimestamp", is_timestamp=True),
     )
     sub_type: OperationSubType | None = field(
         default=None,
-        metadata=_metadata(alias="SubType"),
+        metadata=_model_field_metadata(alias="SubType"),
     )
     execution_details: ExecutionDetails | None = field(
         default=None,
-        metadata=_metadata(alias="ExecutionDetails"),
+        metadata=_model_field_metadata(alias="ExecutionDetails"),
     )
     context_details: ContextDetails | None = field(
         default=None,
-        metadata=_metadata(alias="ContextDetails"),
+        metadata=_model_field_metadata(alias="ContextDetails"),
     )
     step_details: StepDetails | None = field(
         default=None,
-        metadata=_metadata(alias="StepDetails"),
+        metadata=_model_field_metadata(alias="StepDetails"),
     )
     wait_details: WaitDetails | None = field(
         default=None,
-        metadata=_metadata(alias="WaitDetails"),
+        metadata=_model_field_metadata(alias="WaitDetails"),
     )
     callback_details: CallbackDetails | None = field(
         default=None,
-        metadata=_metadata(alias="CallbackDetails"),
+        metadata=_model_field_metadata(alias="CallbackDetails"),
     )
     chained_invoke_details: ChainedInvokeDetails | None = field(
         default=None,
-        metadata=_metadata(alias="ChainedInvokeDetails"),
+        metadata=_model_field_metadata(alias="ChainedInvokeDetails"),
     )
 
 
 @dataclass(frozen=True)
-class CheckpointUpdatedExecutionState(SerializableModel):
+class CheckpointUpdatedExecutionState(BotoSerializableModel):
     """Representation of the CheckpointUpdatedExecutionState structure of the DEX API."""
 
     operations: list[Operation] = field(
         default_factory=list,
-        metadata=_metadata(alias="Operations"),
+        metadata=_model_field_metadata(alias="Operations"),
     )
     next_marker: str | None = field(
-        default=None, metadata=_metadata(alias="NextMarker")
+        default=None, metadata=_model_field_metadata(alias="NextMarker")
     )
 
 
 @dataclass(frozen=True)
-class CheckpointOutput(SerializableModel):
+class CheckpointOutput(BotoSerializableModel):
     """Representation of the CheckpointDurableExecutionOutput structure of the DEX CheckpointDurableExecution API."""
 
     checkpoint_token: str | None = field(
         default=None,
-        metadata=_metadata(alias="CheckpointToken"),
+        metadata=_model_field_metadata(alias="CheckpointToken"),
     )
     new_execution_state: CheckpointUpdatedExecutionState = field(
         default_factory=CheckpointUpdatedExecutionState,
-        metadata=_metadata(alias="NewExecutionState", omit_if_none=False),
+        metadata=_model_field_metadata(alias="NewExecutionState", omit_if_none=False),
     )
 
 
 @dataclass(frozen=True)
-class StateOutput(SerializableModel):
+class StateOutput(BotoSerializableModel):
     """Representation of the GetDurableExecutionStateOutput structure of the DEX GetDurableExecutionState API."""
 
     operations: list[Operation] = field(
         default_factory=list,
-        metadata=_metadata(alias="Operations"),
+        metadata=_model_field_metadata(alias="Operations"),
     )
     next_marker: str | None = field(
-        default=None, metadata=_metadata(alias="NextMarker")
+        default=None, metadata=_model_field_metadata(alias="NextMarker")
     )
 
 
@@ -985,10 +987,7 @@ __all__ = [
     "CallbackOptions",
     "CallbackTimeoutType",
     "ChainedInvokeDetails",
-    "ChainedInvokeFailedToStartType",
     "ChainedInvokeOptions",
-    "ChainedInvokeStopType",
-    "ChainedInvokeTimeoutType",
     "CheckpointOutput",
     "CheckpointUpdatedExecutionState",
     "ContextDetails",
@@ -1005,7 +1004,6 @@ __all__ = [
     "OperationType",
     "OperationUpdate",
     "ReplayChildren",
-    "SerializableModel",
     "StateOutput",
     "StepDetails",
     "StepOptions",

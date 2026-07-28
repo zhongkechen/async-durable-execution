@@ -24,18 +24,43 @@ def wait_for_condition(condition_func, timeout_iterations=100) -> bool:
     return False
 
 
+def scheduler_is_started(scheduler: Scheduler) -> bool:
+    return scheduler._running  # noqa: SLF001
+
+
+def scheduler_event_count(scheduler: Scheduler) -> int:
+    return len(scheduler._events)  # noqa: SLF001
+
+
+def scheduler_task_count(scheduler: Scheduler) -> int:
+    return sum(1 for task in scheduler._tasks if not task.done())  # noqa: SLF001
+
+
+def remove_event(event: Event) -> None:
+    event._scheduler.remove_event(event._event)  # noqa: SLF001
+
+
+def wait_for_event(
+    event: Event, timeout: float | None = None, *, clear_on_set: bool = True
+) -> bool:
+    loop = event._scheduler.get_loop()  # noqa: SLF001
+    return loop.run_until_complete(
+        event.wait_async(timeout=timeout, clear_on_set=clear_on_set)
+    )
+
+
 def test_scheduler_init() -> None:
     """Test Scheduler initialization."""
     scheduler = Scheduler()
-    assert not scheduler.is_started()
-    assert scheduler.event_count() == 0
+    assert not scheduler_is_started(scheduler)
+    assert scheduler_event_count(scheduler) == 0
 
 
 def test_scheduler_context_manager() -> None:
     """Test Scheduler as context manager."""
     with Scheduler() as scheduler:
-        assert scheduler.is_started()
-    assert not scheduler.is_started()
+        assert scheduler_is_started(scheduler)
+    assert not scheduler_is_started(scheduler)
 
 
 def test_scheduler_start_stop() -> None:
@@ -43,65 +68,65 @@ def test_scheduler_start_stop() -> None:
     scheduler = Scheduler()
 
     scheduler.start()
-    assert scheduler.is_started()
+    assert scheduler_is_started(scheduler)
 
     # Test start when already running
     scheduler.start()
-    assert scheduler.is_started()
+    assert scheduler_is_started(scheduler)
 
     scheduler.stop()
-    assert not scheduler.is_started()
+    assert not scheduler_is_started(scheduler)
 
     # Test stop when not running
     scheduler.stop()
-    assert not scheduler.is_started()
+    assert not scheduler_is_started(scheduler)
 
 
-def test_scheduler_is_started() -> None:
-    """Test Scheduler is_started method."""
+def test_scheduler_running_state() -> None:
+    """Test Scheduler running state transitions."""
     scheduler = Scheduler()
 
     # Initially not started
-    assert not scheduler.is_started()
+    assert not scheduler_is_started(scheduler)
 
     # After start
     scheduler.start()
-    assert scheduler.is_started()
+    assert scheduler_is_started(scheduler)
 
     # After stop
     scheduler.stop()
-    assert not scheduler.is_started()
+    assert not scheduler_is_started(scheduler)
 
 
-def test_scheduler_event_count() -> None:
-    """Test Scheduler event_count method."""
+def test_scheduler_event_tracking() -> None:
+    """Test Scheduler event tracking."""
     scheduler = Scheduler()
     scheduler.start()
 
     # Initially no events
-    assert scheduler.event_count() == 0
+    assert scheduler_event_count(scheduler) == 0
 
     # Create events
     event1 = scheduler.create_event()
-    assert scheduler.event_count() == 1
+    assert scheduler_event_count(scheduler) == 1
 
     scheduler.create_event()
-    assert scheduler.event_count() == 2
+    assert scheduler_event_count(scheduler) == 2
 
     # Remove event
-    event1.remove()
-    wait_for_condition(lambda: scheduler.event_count() == 1)
-    assert scheduler.event_count() == 1
+    remove_event(event1)
+    wait_for_condition(lambda: scheduler_event_count(scheduler) == 1)
+    assert scheduler_event_count(scheduler) == 1
 
     scheduler.stop()
 
 
-def test_scheduler_task_count() -> None:
-    """Test Scheduler task_count method."""
+def test_scheduler_task_tracking() -> None:
+    """Test Scheduler task tracking."""
     scheduler = Scheduler()
 
     # When not started, task count is 0
-    assert scheduler.task_count() == 0
+    assert scheduler_task_count(scheduler) == 0
 
     scheduler.start()
 
@@ -109,18 +134,20 @@ def test_scheduler_task_count() -> None:
     future1 = scheduler.call_later(async_noop, delay=0.5)
     # Give a moment for the task to be created
     time.sleep(0.01)
-    assert scheduler.task_count() >= 1
+    assert scheduler_task_count(scheduler) >= 1
 
     future2 = scheduler.call_later(async_noop, delay=0.5)
     time.sleep(0.01)
-    assert scheduler.task_count() >= 2
+    assert scheduler_task_count(scheduler) >= 2
 
     # Cancel tasks to clean up
     future1.cancel()
     future2.cancel()
 
     # Wait for tasks to complete or be cancelled
-    wait_for_condition(lambda: scheduler.task_count() == 0, timeout_iterations=200)
+    wait_for_condition(
+        lambda: scheduler_task_count(scheduler) == 0, timeout_iterations=200
+    )
 
     scheduler.stop()
 
@@ -252,7 +279,7 @@ def test_scheduler_create_event() -> None:
     event = scheduler.create_event()
 
     assert isinstance(event, Event)
-    assert scheduler.event_count() == 1
+    assert scheduler_event_count(scheduler) == 1
 
     scheduler.stop()
 
@@ -352,14 +379,14 @@ def test_event_set_and_wait_timeout() -> None:
     event = scheduler.create_event()
 
     # Test wait with timeout (should timeout)
-    result = event.wait(timeout=0.01, clear_on_set=False)
+    result = wait_for_event(event, timeout=0.01, clear_on_set=False)
     assert result is False
 
     # Set the event
     event.set()
 
     # Wait should now succeed
-    result = event.wait(timeout=0.1, clear_on_set=True)
+    result = wait_for_event(event, timeout=0.1, clear_on_set=True)
     assert result is True
 
     scheduler.stop()
@@ -377,7 +404,7 @@ def test_event_wait_set_by_scheduled_callback() -> None:
 
     scheduler.call_later(set_event, delay=0.01)
 
-    assert event.wait(timeout=1.0) is True
+    assert wait_for_event(event, timeout=1.0) is True
 
     scheduler.stop()
 
@@ -390,25 +417,25 @@ def test_event_wait_clear_on_set_false() -> None:
     event = scheduler.create_event()
     event.set()
 
-    result = event.wait(clear_on_set=False)
+    result = wait_for_event(event, clear_on_set=False)
     assert result is True
-    assert scheduler.event_count() == 1
+    assert scheduler_event_count(scheduler) == 1
 
     scheduler.stop()
 
 
-def test_event_remove() -> None:
-    """Test Event remove method."""
+def test_scheduler_remove_event() -> None:
+    """Test Scheduler event removal."""
     scheduler = Scheduler()
     scheduler.start()
 
     event = scheduler.create_event()
-    assert scheduler.event_count() == 1
+    assert scheduler_event_count(scheduler) == 1
 
-    event.remove()
-    wait_for_condition(lambda: scheduler.event_count() == 0)
+    remove_event(event)
+    wait_for_condition(lambda: scheduler_event_count(scheduler) == 0)
 
-    assert scheduler.event_count() == 0
+    assert scheduler_event_count(scheduler) == 0
 
     scheduler.stop()
 
@@ -419,10 +446,10 @@ def test_event_wait_removed_event() -> None:
     scheduler.start()
 
     event = scheduler.create_event()
-    event.remove()
-    wait_for_condition(lambda: scheduler.event_count() == 0)
+    remove_event(event)
+    wait_for_condition(lambda: scheduler_event_count(scheduler) == 0)
 
-    result = event.wait(timeout=0.01)
+    result = wait_for_event(event, timeout=0.01)
     assert result is False
 
     scheduler.stop()
@@ -434,8 +461,8 @@ def test_event_set_removed_event() -> None:
     scheduler.start()
 
     event = scheduler.create_event()
-    event.remove()
-    wait_for_condition(lambda: scheduler.event_count() == 0)
+    remove_event(event)
+    wait_for_condition(lambda: scheduler_event_count(scheduler) == 0)
 
     # Should not crash
     event.set()
@@ -456,9 +483,9 @@ def test_scheduler_cleanup_on_stop() -> None:
     scheduler.stop()
 
     # Events should be cleared (this is what we can reliably test)
-    assert scheduler.event_count() == 0
+    assert scheduler_event_count(scheduler) == 0
     # Future state may vary due to timing, but scheduler should be stopped
-    assert not scheduler.is_started()
+    assert not scheduler_is_started(scheduler)
 
 
 def test_scheduler_call_later_after_stop_returns_cancelled_future() -> None:
@@ -481,13 +508,13 @@ def test_scheduler_multiple_events() -> None:
     event1 = scheduler.create_event()
     event2 = scheduler.create_event()
 
-    assert scheduler.event_count() == 2
+    assert scheduler_event_count(scheduler) == 2
 
     event1.set()
-    result1 = event1.wait(timeout=0.01)
+    result1 = wait_for_event(event1, timeout=0.01)
     assert result1 is True
 
-    result2 = event2.wait(timeout=0.01)
+    result2 = wait_for_event(event2, timeout=0.01)
     assert result2 is False
 
     scheduler.stop()
@@ -518,7 +545,7 @@ def test_event_timeout_handling() -> None:
     event = scheduler.create_event()
 
     start_time = time.time()
-    result = event.wait(timeout=0.05)
+    result = wait_for_event(event, timeout=0.05)
     end_time = time.time()
 
     assert result is False
@@ -639,7 +666,7 @@ def test_event_set_exception() -> None:
     event.set_exception(test_exception)
 
     with pytest.raises(ValueError, match="test exception"):
-        event.wait()
+        wait_for_event(event)
 
     scheduler.stop()
 
@@ -660,7 +687,7 @@ def test_call_later_with_completion_event_exception() -> None:
 
     # Wait for the completion event to be set with exception
     with pytest.raises(RuntimeError, match="completion event test"):
-        completion_event.wait(timeout=1.0)
+        wait_for_event(completion_event, timeout=1.0)
 
     scheduler.stop()
 
@@ -691,14 +718,14 @@ def test_call_later_multiple_iterations() -> None:
 
 
 def test_wait_for_event_timeout_exception() -> None:
-    """Test _wait_for_event with timeout exception handling."""
+    """Test wait_for_event timeout handling."""
     scheduler = Scheduler()
     scheduler.start()
 
     event = scheduler.create_event()
 
     # Test timeout behavior
-    result = event.wait(timeout=0.001)
+    result = wait_for_event(event, timeout=0.001)
     assert result is False
 
     scheduler.stop()
