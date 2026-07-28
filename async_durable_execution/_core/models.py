@@ -299,24 +299,6 @@ class CallbackTimeoutType(Enum):
     HEARTBEAT = "Callback.Heartbeat"
 
 
-class ChainedInvokeFailedToStartType(Enum):
-    """Error type used when a durable invoke never starts remotely."""
-
-    FAILED_TO_START = "ChainedInvoke.FailedToStart"
-
-
-class ChainedInvokeTimeoutType(Enum):
-    """Error type used when a durable invoke times out."""
-
-    TIMEOUT = "ChainedInvoke.Timeout"
-
-
-class ChainedInvokeStopType(Enum):
-    """Error type used when a durable invoke is stopped externally."""
-
-    STOPPED = "ChainedInvoke.Stopped"
-
-
 class OperationSubType(Enum):
     """Fine-grained operation kind used in execution history."""
 
@@ -344,31 +326,6 @@ class OperationType(Enum):
     CALLBACK = "CALLBACK"
     CHAINED_INVOKE = "CHAINED_INVOKE"
 
-    @classmethod
-    def from_sub_type(cls, sub_type: OperationSubType) -> OperationType:
-        match sub_type:
-            case OperationSubType.STEP | OperationSubType.WAIT_FOR_CONDITION:
-                return OperationType.STEP
-            case OperationSubType.WAIT:
-                return OperationType.WAIT
-            case OperationSubType.CHAINED_INVOKE:
-                return OperationType.CHAINED_INVOKE
-            case OperationSubType.CALLBACK:
-                return OperationType.CALLBACK
-            case OperationSubType.EXECUTION:
-                return OperationType.EXECUTION
-            case (
-                OperationSubType.WAIT_FOR_CALLBACK
-                | OperationSubType.RUN_IN_CHILD_CONTEXT
-                | OperationSubType.MAP
-                | OperationSubType.MAP_ITERATION
-                | OperationSubType.PARALLEL
-                | OperationSubType.PARALLEL_BRANCH
-            ):
-                return OperationType.CONTEXT
-            case _:
-                raise ValueError(f"Unknown operation sub-type {sub_type}")
-
 
 @dataclass(frozen=True)
 class OperationIdentifier:
@@ -378,10 +335,6 @@ class OperationIdentifier:
     sub_type: OperationSubType
     parent_id: str | None = None
     name: str | None = None
-
-    @property
-    def type(self) -> OperationType:
-        return OperationType.from_sub_type(self.sub_type)
 
     def require_operation_id(self) -> str:
         """Return the operation id for non-root operations."""
@@ -461,10 +414,6 @@ class DurableExecutionInvocationOutput(BotoSerializableModel):
     @classmethod
     def create_succeeded(cls, result: str) -> DurableExecutionInvocationOutput:
         return cls(status=InvocationStatus.SUCCEEDED, result=result)
-
-    @classmethod
-    def create_retry(cls, error: ErrorObject) -> DurableExecutionInvocationOutput:
-        return cls(status=InvocationStatus.RETRY, error=error)
 
 
 @dataclass(frozen=True)
@@ -1038,10 +987,7 @@ __all__ = [
     "CallbackOptions",
     "CallbackTimeoutType",
     "ChainedInvokeDetails",
-    "ChainedInvokeFailedToStartType",
     "ChainedInvokeOptions",
-    "ChainedInvokeStopType",
-    "ChainedInvokeTimeoutType",
     "CheckpointOutput",
     "CheckpointUpdatedExecutionState",
     "ContextDetails",

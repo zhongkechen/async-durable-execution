@@ -2408,37 +2408,6 @@ async def test_timestamp_converter_millisecond_boundaries() -> None:
         assert abs((result_dt - dt).total_seconds()) < 0.001
 
 
-@pytest.mark.parametrize(
-    ("sub_type", "operation_type"),
-    [
-        (OperationSubType.STEP, OperationType.STEP),
-        (OperationSubType.WAIT_FOR_CONDITION, OperationType.STEP),
-        (OperationSubType.WAIT, OperationType.WAIT),
-        (OperationSubType.CHAINED_INVOKE, OperationType.CHAINED_INVOKE),
-        (OperationSubType.CALLBACK, OperationType.CALLBACK),
-        (OperationSubType.EXECUTION, OperationType.EXECUTION),
-        (OperationSubType.WAIT_FOR_CALLBACK, OperationType.CONTEXT),
-        (OperationSubType.RUN_IN_CHILD_CONTEXT, OperationType.CONTEXT),
-        (OperationSubType.MAP, OperationType.CONTEXT),
-        (OperationSubType.MAP_ITERATION, OperationType.CONTEXT),
-        (OperationSubType.PARALLEL, OperationType.CONTEXT),
-        (OperationSubType.PARALLEL_BRANCH, OperationType.CONTEXT),
-    ],
-)
-def test_operation_type_from_sub_type_maps_all_sdk_subtypes(
-    sub_type: OperationSubType,
-    operation_type: OperationType,
-) -> None:
-    assert OperationType.from_sub_type(sub_type) is operation_type
-    assert OperationIdentifier("op-1", sub_type=sub_type).type is operation_type
-
-
-@no_type_check
-def test_operation_type_from_sub_type_rejects_unknown_subtype() -> None:
-    with pytest.raises(ValueError, match="Unknown operation sub-type"):
-        OperationType.from_sub_type("NotARealSubtype")
-
-
 def test_operation_identifier_requires_operation_id_for_non_execution_operations() -> (
     None
 ):
@@ -2455,14 +2424,3 @@ def test_operation_identifier_create_execution_op_builds_root_identifier() -> No
     assert identifier.sub_type is OperationSubType.EXECUTION
     assert identifier.parent_id is None
     assert identifier.name is None
-    assert identifier.type is OperationType.EXECUTION
-
-
-def test_durable_execution_invocation_output_create_retry_sets_retry_status() -> None:
-    error = ErrorObject.from_message("retry later")
-
-    output = DurableExecutionInvocationOutput.create_retry(error)
-
-    assert output.status.value == "RETRY"
-    assert output.error is error
-    assert output.result is None
