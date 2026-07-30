@@ -33,6 +33,7 @@ from .._core import (
     call_user_function,
     create_eager_task,
     duration_to_seconds,
+    ensure_durable_operations_allowed,
     get_current_context,
     get_durable_context,
     suspend_with_optional_resume_delay,
@@ -383,6 +384,7 @@ def wait_for_condition(
     next polling delay, or None to stop polling and complete with the latest
     result.
     """
+    ensure_durable_operations_allowed("wait_for_condition()")
     context = get_durable_context()
 
     with context._replay_aware(executes_user_code=True):

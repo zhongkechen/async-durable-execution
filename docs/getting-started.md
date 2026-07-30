@@ -131,8 +131,10 @@ result = await run_in_child_context(
 )
 ```
 
-Handlers and child contexts compose durable operations. Step bodies perform the
-nondeterministic work that should be checkpointed atomically.
+Async handlers and async child contexts compose durable operations. Synchronous
+user callables are leaf functions and cannot start steps or other durable
+operations. Step bodies perform the nondeterministic work that should be
+checkpointed atomically.
 
 ## Continue
 

@@ -16,6 +16,7 @@ from .._core import (
     bind_current_context,
     call_user_function,
     durable_callable,
+    ensure_durable_operations_allowed,
     get_current_context,
 )
 from .._primitive.callback import Callback, create_callback
@@ -113,6 +114,7 @@ def wait_for_callback(
         serdes: Optional serializer for callback results and submitter results.
         retry_strategy: Optional strategy that returns a retry delay or None to stop.
     """
+    ensure_durable_operations_allowed("wait_for_callback()")
     context_name = name if name is not None else getattr(submitter, "__name__", None)
     logger.debug("wait_for_callback name: %s", context_name)
 

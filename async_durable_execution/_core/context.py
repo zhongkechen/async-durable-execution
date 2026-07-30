@@ -207,10 +207,14 @@ _durable_definition_operation: ContextVar[str | None] = ContextVar(
     "async_durable_execution.durable_definition_operation",
     default=None,
 )
+_synchronous_user_callable: ContextVar[bool] = ContextVar(
+    "async_durable_execution.synchronous_user_callable",
+    default=False,
+)
 
 
-def ensure_durable_operations_allowed(operation_name: str) -> None:
-    """Reject durable operation creation during a synchronous definition phase."""
+def _ensure_not_in_durable_definition(operation_name: str) -> None:
+    """Reject context access during a synchronous definition phase."""
     definition_operation = _durable_definition_operation.get()
     if definition_operation is None:
         return
@@ -223,6 +227,20 @@ def ensure_durable_operations_allowed(operation_name: str) -> None:
     raise InvalidStateError(msg)
 
 
+def ensure_durable_operations_allowed(operation_name: str) -> None:
+    """Reject durable operation creation from unsupported execution phases."""
+    _ensure_not_in_durable_definition(operation_name)
+    if not _synchronous_user_callable.get():
+        return
+
+    msg = (
+        f"{operation_name} cannot be created from a synchronous user callable. "
+        "Define the enclosing handler, child context, flow node, map item, "
+        "parallel branch, or other composing callable with async def."
+    )
+    raise InvalidStateError(msg)
+
+
 @contextmanager
 def bind_durable_definition(operation_name: str) -> Iterator[None]:
     """Mark a synchronous definition phase in the current context."""
@@ -231,6 +249,16 @@ def bind_durable_definition(operation_name: str) -> Iterator[None]:
         yield
     finally:
         _durable_definition_operation.reset(token)
+
+
+@contextmanager
+def bind_synchronous_user_callable() -> Iterator[None]:
+    """Mark execution originating from a synchronous user callable."""
+    token = _synchronous_user_callable.set(True)
+    try:
+        yield
+    finally:
+        _synchronous_user_callable.reset(token)
 
 
 def set_current_context(context) -> Token:
@@ -249,7 +277,7 @@ def get_current_context() -> OperationContext | SerDesContext:
     Raises:
         RuntimeError: If called outside supported durable user code.
     """
-    ensure_durable_operations_allowed("Durable operations")
+    _ensure_not_in_durable_definition("Context access")
     current_context = _current_context.get()
     if current_context is None:
         msg = (
@@ -262,7 +290,7 @@ def get_current_context() -> OperationContext | SerDesContext:
 
 
 def get_durable_context() -> DurableContext:
-    """Return the current context after validating durable operations are allowed."""
+    """Return the active handler, child context, or parallel branch context."""
     current_context = get_current_context()
     if (
         not hasattr(current_context, "execution_state")

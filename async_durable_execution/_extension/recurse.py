@@ -10,6 +10,7 @@ from .._core import (
     DurableContext,
     SerDes,
     ValidationError,
+    ensure_durable_operations_allowed,
     get_durable_context,
 )
 from .._primitive.invoke import invoke
@@ -112,6 +113,7 @@ def recurse(
         tenant_id: Optional tenant identifier. Defaults to the current Lambda context
             tenant id when present.
     """
+    ensure_durable_operations_allowed("recurse()")
     context = get_durable_context()
     recursive_payload = (
         _add_recursive_level(context, payload) if with_recursive_level else payload

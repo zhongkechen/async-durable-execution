@@ -22,6 +22,7 @@ from .._core import (
     OperationUpdate,
     SerDes,
     create_eager_task,
+    ensure_durable_operations_allowed,
     get_durable_context,
     suspend_with_optional_resume_delay,
 )
@@ -165,6 +166,7 @@ def invoke(
         serdes_result: Optional deserializer for the invocation result.
         tenant_id: Optional tenant identifier for the chained invocation.
     """
+    ensure_durable_operations_allowed("invoke()")
     context = get_durable_context()
 
     with context._replay_aware():

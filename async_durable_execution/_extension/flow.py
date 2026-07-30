@@ -2117,7 +2117,7 @@ def flow(
     name: str | None = None,
 ) -> asyncio.Task[FlowResult]:
     """Validate and start a declarative acyclic durable workflow."""
-    ensure_durable_operations_allowed("flow")
+    ensure_durable_operations_allowed("flow()")
     get_durable_context()
     frozen_flow = _evaluate_definition(definition)
     flow_name = name or getattr(definition, "__name__", None) or "flow"

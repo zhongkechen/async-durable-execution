@@ -12,6 +12,7 @@ from .._core import (
     SerDes,
     bind_current_context,
     call_user_function,
+    ensure_durable_operations_allowed,
     get_current_context,
     get_durable_context,
 )
@@ -90,6 +91,7 @@ def with_retry(
         summary_generator: Optional summary generator for large child results.
         is_virtual: Whether the child context should skip lifecycle checkpoints.
     """
+    ensure_durable_operations_allowed("with_retry()")
 
     async def run_loop() -> T:
         retry = retry_strategy or RetryStrategy()

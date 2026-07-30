@@ -29,6 +29,7 @@ from .._core import (
     call_user_function,
     create_eager_task,
     deserialize,
+    ensure_durable_operations_allowed,
     get_durable_context,
     serialize,
 )
@@ -360,6 +361,7 @@ def _create_child_context_task(
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
 ) -> asyncio.Task[T]:
+    ensure_durable_operations_allowed("run_in_child_context()")
     context = get_durable_context()
 
     operation_id = context.step_counter.create_step_id()
@@ -399,6 +401,7 @@ async def _run_in_child_context(
     is_virtual: bool = False,
 ) -> T:
     """Execute a durable sub-workflow with an explicit operation subtype."""
+    ensure_durable_operations_allowed("run_in_child_context()")
     context = get_durable_context()
     with context._replay_aware():
         operation_id = context.step_counter.create_step_id()

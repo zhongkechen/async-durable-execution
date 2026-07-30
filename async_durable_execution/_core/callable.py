@@ -7,6 +7,8 @@ import inspect
 from collections.abc import Awaitable, Callable
 from typing import Any, ParamSpec, TypeAlias, TypeVar, cast, overload
 
+from .context import bind_synchronous_user_callable
+
 
 T = TypeVar("T")
 Params = ParamSpec("Params")
@@ -43,7 +45,10 @@ async def call_user_function(
         result = func(*args, **kwargs)
     else:
         sync_func = cast("Callable[Params, Any]", func)
-        result = await asyncio.to_thread(sync_func, *args, **kwargs)
+        with bind_synchronous_user_callable():
+            result = await asyncio.to_thread(sync_func, *args, **kwargs)
+            if inspect.isawaitable(result):
+                return await cast("Awaitable[T]", result)
 
     if inspect.isawaitable(result):
         return await cast("Awaitable[T]", result)

@@ -32,7 +32,9 @@ context and gives type checkers the concrete context type without a cast.
 | Serializer or deserializer | `get_serdes_context()` | `SerDesContext` |
 
 `get_current_context()` remains available when code intentionally handles more
-than one context type.
+than one context type. Context getters are available in both sync and async
+user callables. A sync callable may inspect its context, but it remains a leaf
+and cannot create durable operations.
 
 ::: async_durable_execution
     options:

@@ -33,6 +33,7 @@ from .._core import (
     call_user_function,
     create_eager_task,
     duration_to_seconds,
+    ensure_durable_operations_allowed,
     get_current_context,
     get_durable_context,
     suspend_with_optional_resume_delay,
@@ -413,6 +414,7 @@ def step(
     calls, clock reads, UUID generation, and database access from replayed code.
     Synchronous functions run in the event loop's thread executor.
     """
+    ensure_durable_operations_allowed("step()")
     context = get_durable_context()
     step_name = name if name is not None else getattr(func, "__name__", None)
     logger.debug("Step name: %s", step_name)

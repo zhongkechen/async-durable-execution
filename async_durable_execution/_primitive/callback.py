@@ -27,6 +27,7 @@ from .._core import (
     create_eager_task,
     deserialize,
     duration_to_seconds,
+    ensure_durable_operations_allowed,
     get_durable_context,
 )
 
@@ -166,6 +167,7 @@ def create_callback(
         heartbeat_timeout: Optional maximum time to wait between callback heartbeats.
         serdes: Optional serializer for callback results.
     """
+    ensure_durable_operations_allowed("create_callback()")
     context = get_durable_context()
 
     with context._replay_aware():

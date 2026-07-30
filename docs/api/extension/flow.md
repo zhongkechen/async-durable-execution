@@ -95,9 +95,10 @@ DAG definition code must be deterministic. It must not:
 
 Put nondeterministic work and durable operations inside `@durable_node`
 functions. A synchronous node runs in a worker thread; use an async node when
-its body needs to await durable operations. Give every `flow()` and `node()` a
-stable name. If `name` is omitted, `node()` uses the decorated function name,
-which must still be unique within the graph.
+its body creates durable operations. Synchronous nodes are leaves and must
+return ordinary values. Give every `flow()` and `node()` a stable name. If
+`name` is omitted, `node()` uses the decorated function name, which must still
+be unique within the graph.
 
 ## Inputs and Inferred Dependencies
 

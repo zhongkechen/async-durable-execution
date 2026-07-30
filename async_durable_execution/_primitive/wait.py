@@ -19,6 +19,7 @@ from .._core import (
     WaitOptions,
     create_eager_task,
     duration_to_seconds,
+    ensure_durable_operations_allowed,
     get_durable_context,
     suspend_with_optional_resume_delay,
 )
@@ -93,6 +94,7 @@ def wait(duration: Duration, *, name: str | None = None) -> asyncio.Task[None]:
         duration: Seconds or timedelta to pause. Must be at least one second.
         name: Optional operation name shown in execution history.
     """
+    ensure_durable_operations_allowed("wait()")
     context = get_durable_context()
     seconds = duration_to_seconds(duration)
     if seconds < 1:

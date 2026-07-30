@@ -37,6 +37,7 @@ from .._core import (
     call_user_function,
     deserialize,
     durable_callable,
+    ensure_durable_operations_allowed,
     get_durable_context,
 )
 from .._primitive.base import OperationExecutor
@@ -1488,6 +1489,7 @@ def parallel(
         RuntimeError: If called outside a durable context.
     """
     _validate_max_concurrency(max_concurrency)
+    ensure_durable_operations_allowed("parallel()")
     context = get_durable_context()
     validated_branches: list[Callable[[], CallableResult[T]]] = []
     for branch in branches:

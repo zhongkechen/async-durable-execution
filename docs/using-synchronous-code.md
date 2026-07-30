@@ -55,6 +55,60 @@ def handler(event: dict) -> dict:
     return {"order_id": event["order_id"], "accepted": True}
 ```
 
+## Composition Functions Must Be Async
+
+Synchronous executable callables are leaf functions. They may use their
+scope-specific context getter, call ordinary synchronous helpers, and return an
+ordinary value, but they cannot create durable operations. This rule applies
+equally to sync handlers, child contexts, flow nodes, map items, parallel
+branches, callback submitters, condition checks, and serializers.
+
+Use `async def` for any function that calls `step()`, `wait()`, `invoke()`,
+`recurse()`, `run_in_child_context()`, `flow()`, `map()`, `parallel()`,
+`wait_for_callback()`, `wait_for_condition()`, `with_retry()`, or another
+durable operation. Returning an async helper from a sync callable does not
+bypass this rule. The SDK raises `InvalidStateError` and identifies the
+operation when a synchronous user callable attempts durable composition.
+
+An async child context can compose sync and async steps:
+
+```python
+from async_durable_execution import (
+    durable_callable,
+    durable_execution,
+    run_in_child_context,
+    step,
+)
+
+
+@durable_callable
+def blocking_lookup(order_id: str) -> dict:
+    return legacy_client.lookup(order_id)
+
+
+@durable_callable
+async def enrich_order(order: dict) -> dict:
+    return await async_client.enrich(order)
+
+
+@durable_callable
+async def process_order(order_id: str) -> dict:
+    order = await step(blocking_lookup(order_id), name="lookup")
+    return await step(enrich_order(order), name="enrich")
+
+
+@durable_execution
+async def handler(event: dict) -> dict:
+    return await run_in_child_context(
+        process_order(event["order_id"]),
+        name="process-order",
+    )
+```
+
+Here, `blocking_lookup()` runs in a worker thread and `enrich_order()` runs on
+the event loop. `process_order()` and `handler()` must be async because they
+compose durable operations.
+
 ## What Must Stay Synchronous
 
 These declarative and configuration hooks must be regular synchronous callables,
@@ -272,12 +326,14 @@ Each example has a matching local and cloud runner test under
 ## Checklist
 
 1. Use either `def` or `async def` for executable user callables.
-2. Use `async def` when the body must await durable operations or async libraries.
-3. Keep declarative and configuration hooks synchronous; keep DAG definitions
+2. Treat sync callables as leaves that return ordinary values.
+3. Use `async def` for every handler, child context, node, item, or branch that
+   creates durable operations or awaits async libraries.
+4. Keep declarative and configuration hooks synchronous; keep DAG definitions
    and structural or metadata hooks deterministic and side-effect free.
-4. Call deterministic synchronous helpers directly only when they do not block.
-5. Put synchronous I/O, external reads, and writes inside `@durable_callable` steps.
-6. Do not perform durable operations from inside a step.
-7. Do not call `asyncio.run()` from durable code.
-8. Name each important synchronous step so tests and logs stay
+5. Call deterministic synchronous helpers directly only when they do not block.
+6. Put synchronous I/O, external reads, and writes inside `@durable_callable` steps.
+7. Do not perform durable operations from inside a step.
+8. Do not call `asyncio.run()` from durable code.
+9. Name each important synchronous step so tests and logs stay
    clear.

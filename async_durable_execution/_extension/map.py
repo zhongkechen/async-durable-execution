@@ -36,6 +36,7 @@ from .._core import (
     bind_current_context,
     call_user_function,
     durable_callable,
+    ensure_durable_operations_allowed,
     get_current_context,
     get_durable_context,
 )
@@ -271,6 +272,7 @@ def map(
         RuntimeError: If called outside a durable context.
     """
     _validate_max_concurrency(max_concurrency)
+    ensure_durable_operations_allowed("map()")
     context = get_durable_context()
     items_sequence = list(items)
     map_name = name if name is not None else getattr(func, "__name__", None)

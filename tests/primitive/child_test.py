@@ -14,10 +14,12 @@ import pytest
 from async_durable_execution._core.context import (
     DurableContext,
     bind_current_context,
+    get_durable_context,
 )
 from async_durable_execution._core.exceptions import (
     CallableRuntimeError,
     ExecutionError,
+    InvalidStateError,
     InvocationError,
     _decode_sdk_error_data,
 )
@@ -38,6 +40,7 @@ from async_durable_execution._primitive.child import (
     run_in_child_context,
 )
 from async_durable_execution._primitive.callback import CallbackError
+from async_durable_execution._primitive.step import step
 from async_durable_execution._core.serdes import SerDes
 from async_durable_execution._core.state import ExecutionState
 
@@ -116,7 +119,7 @@ async def test_internal_run_in_child_context_uses_custom_sub_type() -> None:
         return "custom_result"
 
     with bind_current_context(context):
-        result = await _run_in_child_context(
+        result: str = await _run_in_child_context(
             child_func,
             sub_type=OperationSubType.MAP,
             name="custom-child",
@@ -136,6 +139,34 @@ async def test_internal_run_in_child_context_uses_custom_sub_type() -> None:
     assert start_operation.name == "custom-child"
     assert success_operation.sub_type is OperationSubType.MAP
     assert success_operation.name == "custom-child"
+
+
+async def test_sync_child_context_cannot_create_durable_operation() -> None:
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "test_arn"
+    mock_state.operations.get.return_value = None
+    context = create_test_context(state=mock_state, parent_id="parent")
+
+    def child_func() -> str:
+        assert get_durable_context().parent_id is not None
+        step(lambda: "nested", name="nested")
+        return "unreachable"
+
+    with (
+        bind_current_context(context),
+        pytest.raises(
+            CallableRuntimeError,
+            match=r"step\(\) cannot be created from a synchronous user callable",
+        ) as raised,
+    ):
+        await run_in_child_context(child_func, name="sync-child")
+
+    assert isinstance(raised.value.__cause__, InvalidStateError)
+    assert mock_state.create_checkpoint.call_count == 2
+    failure = mock_state.create_checkpoint.call_args_list[1].kwargs["operation_update"]
+    assert failure.action is OperationAction.FAIL
+    assert failure.error is not None
+    assert failure.error.type == InvalidStateError.__name__
 
 
 @pytest.mark.parametrize(
