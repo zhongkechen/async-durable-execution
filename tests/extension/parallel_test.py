@@ -405,7 +405,7 @@ async def test_parallel_executor_init_with_callables() -> None:
 async def test_parallel_executor_execute_item() -> None:
     """Test ParallelExecutor.execute_item method."""
 
-    async def test_func() -> str:
+    def test_func() -> str:
         return "processed"
 
     executable = Executable(index=0, func=test_func)

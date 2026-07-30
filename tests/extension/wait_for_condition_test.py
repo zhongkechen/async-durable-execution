@@ -222,7 +222,7 @@ async def wait_for_condition_handler(
 ) -> Any:
     """Test helper that wraps WaitForConditionOperationExecutor."""
     executor = WaitForConditionOperationExecutor(
-        check=_asyncify(check),
+        check=check,
         initial_state=initial_state,
         state=state,
         operation_identifier=operation_identifier,

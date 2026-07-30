@@ -525,7 +525,7 @@ async def test_wait_for_callback_handler_submitter_reads_callback_id_from_contex
 
     captured_callback_id = None
 
-    async def mock_submitter() -> None:
+    def mock_submitter() -> None:
         nonlocal captured_callback_id
         captured_callback_id = get_current_context().callback_id
 

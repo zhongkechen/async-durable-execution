@@ -11,10 +11,11 @@ from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Se
 from contextvars import ContextVar
 from dataclasses import dataclass, field, fields as dataclass_fields, is_dataclass
 from enum import Enum
-from typing import Any, Generic, NoReturn, ParamSpec, TypeVar, cast
+from typing import Any, Generic, NoReturn, ParamSpec, TypeVar, cast, overload
 
 from .._core import (
     CallableRuntimeError,
+    CallableResult,
     DurableContext,
     DurableExecutionsError,
     ErrorObject,
@@ -31,6 +32,7 @@ from .._core import (
     _restore_sdk_control_error,
     bind_current_context,
     bind_durable_definition,
+    call_user_function,
     create_eager_task,
     ensure_durable_operations_allowed,
     get_current_context,
@@ -1249,24 +1251,36 @@ def node(
     return flow_node
 
 
+@overload
 def durable_node(
     func: Callable[Params, Awaitable[T]],
+) -> Callable[Params, Callable[[], Awaitable[T]]]: ...
+
+
+@overload
+def durable_node(
+    func: Callable[Params, T],
+) -> Callable[Params, Callable[[], Awaitable[T]]]: ...
+
+
+def durable_node(
+    func: Callable[Params, CallableResult[T]],
 ) -> Callable[Params, Callable[[], Awaitable[T]]]:
-    """Bind arguments to an async function used as a durable flow node."""
+    """Bind arguments to a sync or async function used as a durable flow node."""
     if isinstance(func, classmethod):
         return classmethod(durable_node(func.__func__))
     if isinstance(func, staticmethod):
         return staticmethod(durable_node(func.__func__))
-    if not inspect.iscoroutinefunction(func):
-        msg = "@durable_node can only decorate an async node function."
-        raise FlowDefinitionError(msg)
 
     @functools.wraps(func)
     def wrapper(
         *args: Params.args, **kwargs: Params.kwargs
     ) -> Callable[[], Awaitable[T]]:
         inspect.signature(func).bind(*args, **kwargs)
-        bound = functools.partial(func, *args, **kwargs)
+
+        async def bound() -> T:
+            return await call_user_function(func, *args, **kwargs)
+
         setattr(bound, "__name__", func.__name__)
         setattr(bound, "_durable_node_callable", True)
         setattr(bound, "_durable_node_function", func)
@@ -1327,10 +1341,14 @@ class _FlowValueSerDes(SerDes[Any]):
         self.delegate: SerDes[Any] = _BatchResultSerDes()
 
     async def serialize(self, value: Any) -> str:
-        return await self.delegate.serialize(_encode_flow_value(value))
+        return await call_user_function(
+            self.delegate.serialize,
+            _encode_flow_value(value),
+        )
 
     async def deserialize(self, data: str) -> Any:
-        return _decode_flow_value(await self.delegate.deserialize(data))
+        decoded = await call_user_function(self.delegate.deserialize, data)
+        return _decode_flow_value(decoded)
 
 
 class _NodeExecutionSerDes(SerDes[_NodeExecution]):
@@ -1338,10 +1356,10 @@ class _NodeExecutionSerDes(SerDes[_NodeExecution]):
         self.delegate = _FlowValueSerDes()
 
     async def serialize(self, value: _NodeExecution) -> str:
-        return await self.delegate.serialize(value.to_dict())
+        return await call_user_function(self.delegate.serialize, value.to_dict())
 
     async def deserialize(self, data: str) -> _NodeExecution:
-        decoded = await self.delegate.deserialize(data)
+        decoded = await call_user_function(self.delegate.deserialize, data)
         if not isinstance(decoded, Mapping):
             msg = "Serialized flow node result must be a mapping."
             raise SerDesError(msg)
@@ -1377,10 +1395,10 @@ class _PersistedDependencyResolutionSerDes(SerDes[_PersistedDependencyResolution
         self.delegate: ExtendedTypeSerDes[Any] = ExtendedTypeSerDes()
 
     async def serialize(self, value: _PersistedDependencyResolution) -> str:
-        return await self.delegate.serialize(value.to_dict())
+        return await call_user_function(self.delegate.serialize, value.to_dict())
 
     async def deserialize(self, data: str) -> _PersistedDependencyResolution:
-        decoded = await self.delegate.deserialize(data)
+        decoded = await call_user_function(self.delegate.deserialize, data)
         if not isinstance(decoded, Mapping):
             msg = "Serialized flow dependency resolution must be a mapping."
             raise SerDesError(msg)
@@ -1392,10 +1410,13 @@ class _FlowResultSerDes(SerDes[FlowResult]):
         self.delegate = _FlowValueSerDes()
 
     async def serialize(self, value: FlowResult) -> str:
-        return await self.delegate.serialize(_flow_result_to_checkpoint_dict(value))
+        return await call_user_function(
+            self.delegate.serialize,
+            _flow_result_to_checkpoint_dict(value),
+        )
 
     async def deserialize(self, data: str) -> FlowResult:
-        decoded = await self.delegate.deserialize(data)
+        decoded = await call_user_function(self.delegate.deserialize, data)
         if not isinstance(decoded, Mapping):
             msg = "Serialized flow result must be a mapping."
             raise SerDesError(msg)
@@ -1885,7 +1906,7 @@ async def _invoke_flow_node(
     results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
 ) -> Any:
     func = cast(
-        "Callable[..., Awaitable[Any]]",
+        "Callable[..., CallableResult[Any]]",
         getattr(flow_node._func, "_durable_node_function"),
     )
     args = cast("tuple[Any, ...]", getattr(flow_node._func, "_durable_node_args"))
@@ -1898,7 +1919,7 @@ async def _invoke_flow_node(
         kwargs,
         results,
     )
-    return await func(*cloned_args, **cloned_kwargs)
+    return await call_user_function(func, *cloned_args, **cloned_kwargs)
 
 
 async def _execute_node(

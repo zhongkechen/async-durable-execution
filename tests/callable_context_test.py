@@ -116,3 +116,40 @@ async def test_durable_callable_supports_staticmethod_orders() -> None:
     assert getattr(bound_greet_outside, "__name__") == "greet_outside"
     assert await bound_greet_inside() == "hello, Ada"
     assert await bound_greet_outside() == "hi, Grace"
+
+
+async def test_durable_callable_supports_synchronous_methods():
+    class Greeter:
+        prefix = "hello"
+
+        @durable_callable
+        def instance(self, name: str) -> str:
+            return f"{self.prefix}, {name}"
+
+        @classmethod
+        @durable_callable
+        def class_inside(cls, name: str) -> str:
+            return f"{cls.prefix}, {name}"
+
+        @durable_callable
+        @classmethod
+        def class_outside(cls, name: str) -> str:
+            return f"{cls.prefix}, {name}"
+
+        @staticmethod
+        @durable_callable
+        def static_inside(name: str) -> str:
+            return f"hi, {name}"
+
+        @durable_callable
+        @staticmethod
+        def static_outside(name: str) -> str:
+            return f"hi, {name}"
+
+    greeter = Greeter()
+
+    assert await greeter.instance("Ada")() == "hello, Ada"
+    assert await Greeter.class_inside("Grace")() == "hello, Grace"
+    assert await Greeter.class_outside("Linus")() == "hello, Linus"
+    assert await Greeter.static_inside("Guido")() == "hi, Guido"
+    assert await Greeter.static_outside("Margaret")() == "hi, Margaret"

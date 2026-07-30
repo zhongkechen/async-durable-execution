@@ -18,8 +18,8 @@ difference is the Python programming model.
 | Package | `aws-durable-execution-sdk-python` | `async-durable-execution` |
 | Ownership | AWS official SDK | Community-maintained fork under Apache-2.0 |
 | Python support | Python 3.11+ | Python 3.10+ |
-| Handler shape | Synchronous `def handler(event, context)` | `async def handler(event)` with `@durable_execution` |
-| User durable functions | Synchronous `@durable_step` functions with `StepContext` | `async def` functions decorated with `@durable_callable` |
+| Handler shape | Synchronous `def handler(event, context)` | Sync or async `handler(event)` with `@durable_execution`; async is required to await operations |
+| User durable functions | Synchronous `@durable_step` functions with `StepContext` | Sync or async functions decorated with `@durable_callable` |
 | Durable operations | `context.step(...)`, `context.wait(...)`, `context.invoke(...)` | Top-level `await step(...)`, `await wait(...)`, `await invoke(...)` |
 | Async library integration | Requires bridging async code from sync call sites | Native `await` for async clients and services |
 | Fan-out concurrency | SDK fan-out helpers such as `context.parallel()` and `context.map()` | `parallel()`, `map()`, and normal `asyncio.gather()` over operation tasks |
@@ -29,7 +29,7 @@ difference is the Python programming model.
 | Documentation | AWS official documentation | Generated API reference, migration guide, and async-focused guides |
 | Lambda layer | Supported through normal Lambda packaging flows | Repository tooling and workflows for building an SDK Lambda layer |
 | Maturity | Official AWS package and support channel | Community-maintained, async-focused project |
-| Best fit | Synchronous Python codebases and teams requiring official AWS support | Async-first services, AI workflows, and codebases already using `asyncio` |
+| Best fit | Synchronous Python codebases and teams requiring official AWS support | Async services, mixed sync/async workflows, AI workflows, and codebases using `asyncio` |
 
 ## Programming Model
 
@@ -59,11 +59,12 @@ def handler(event: dict, context: DurableContext) -> dict:
     return {"user": user}
 ```
 
-This SDK binds the active durable context internally and exposes durable operations as
-top-level awaitable helpers. User handlers, steps, child contexts, `flow` nodes,
-callback submitters, map item functions, parallel branches, and condition checks are
-written as `async def`. The `@durable_dag` function that declares a flow graph is
-synchronous and deterministic.
+This SDK binds the active durable context internally and exposes durable
+operations as top-level awaitable helpers. User handlers, steps, child
+contexts, `flow` nodes, callback submitters, map item functions, parallel
+branches, condition checks, and serializers may use `def` or `async def`.
+Synchronous callables run in a worker thread. The `@durable_dag` function that
+declares a flow graph is synchronous, deterministic, and evaluated directly.
 
 ```python
 import logging
@@ -120,10 +121,11 @@ written around that contract.
 | Imports | Longer official package path | Short top-level imports |
 | API shape | More context/config-object oriented | More direct keyword arguments and fewer wrapper objects |
 
-The migration is mostly mechanical: change durable callables to `async def`, replace
-context methods with awaited top-level helpers, use `datetime.timedelta`, and replace
-context loggers with standard Python loggers. See the
-[migration guide](migrating-from-official-python-sdk.md) for the full mapping.
+The migration is mostly mechanical: replace context methods with awaited
+top-level helpers, convert only callables that need to await work to
+`async def`, use `datetime.timedelta`, and replace context loggers with standard
+Python loggers. See the [migration guide](migrating-from-official-python-sdk.md)
+for the full mapping.
 
 ## Concurrency
 
@@ -171,11 +173,12 @@ libraries.
 | Lambda service client | Synchronous botocore-style client usage | Async client when `aioboto` is installed; otherwise a threaded async adapter over the bundled sync client |
 | Async database pools | Harder to share cleanly from sync steps | Natural event-loop usage |
 | AI or agent loops | Often needs wrapper code around model/tool calls | Durable workflow can be written as an async loop |
-| Existing synchronous business logic | Natural fit | Supported by wrapping blocking work with safe sync adapters |
+| Existing synchronous business logic | Natural fit | Accepted directly and dispatched to worker threads |
 
-If most business logic is synchronous, the official SDK may be the simpler default. If
-the workflow already uses async clients or agent orchestration, this SDK usually keeps
-the code smaller and easier to compose.
+If most workflow orchestration is synchronous, the official SDK may still be
+the simpler default because its durable operations are synchronous methods. If
+the workflow uses async clients, mixed sync/async callables, or agent
+orchestration, this SDK usually keeps the code smaller and easier to compose.
 
 ## Runtime And Performance
 
@@ -242,7 +245,9 @@ Functions deployment requirements.
 Moving from the official SDK to this SDK is usually straightforward:
 
 1. Replace package dependencies and imports.
-2. Convert durable handlers and durable user callables to `async def`.
+2. Convert handlers or user callables to `async def` when they need to await
+   durable operations or async libraries; synchronous callables may remain
+   `def`.
 3. Replace `context.step(...)`, `context.wait(...)`, and related methods with awaited
    top-level helpers.
 4. Replace `@durable_step` with `@durable_callable`.

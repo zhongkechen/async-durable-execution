@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING, Generic, TypeVar, cast
+from typing import Generic, TypeVar, cast, overload
 
 from .._core import (
     CallableRuntimeError,
+    CallableResult,
     Duration,
     DurableContext,
     ErrorObject,
@@ -29,6 +30,7 @@ from .._core import (
     _register_sdk_control_error_type,
     _restore_sdk_control_error,
     bind_current_context,
+    call_user_function,
     create_eager_task,
     duration_to_seconds,
     get_current_context,
@@ -38,10 +40,6 @@ from .._core import (
 )
 from .._primitive.base import OperationExecutor
 from .._primitive.step import StepContext
-
-if TYPE_CHECKING:
-    from collections.abc import Awaitable
-
 
 T = TypeVar("T")
 
@@ -97,7 +95,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
 
     def __init__(
         self,
-        check: Callable[[T | None], Awaitable[T]],
+        check: Callable[[T | None], CallableResult[T]],
         initial_state: T | None,
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
@@ -235,7 +233,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 operation_identifier=self.operation_identifier,
             )
             with bind_current_context(check_context):
-                new_state = await self.check(current_state)
+                new_state = await call_user_function(self.check, current_state)
 
             serialized_state = await self.serialize_value(
                 value=new_state,
@@ -347,8 +345,30 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         raise ValidationError(msg)
 
 
+@overload
 def wait_for_condition(
     check: Callable[[T | None], Awaitable[T]],
+    *,
+    initial_state: T | None = None,
+    name: str | None = None,
+    polling_strategy: PollingStrategyFunction[T] | None = None,
+    serdes: SerDes | None = None,
+) -> asyncio.Task[T]: ...
+
+
+@overload
+def wait_for_condition(
+    check: Callable[[T | None], T],
+    *,
+    initial_state: T | None = None,
+    name: str | None = None,
+    polling_strategy: PollingStrategyFunction[T] | None = None,
+    serdes: SerDes | None = None,
+) -> asyncio.Task[T]: ...
+
+
+def wait_for_condition(
+    check: Callable[[T | None], CallableResult[T]],
     *,
     initial_state: T | None = None,
     name: str | None = None,
@@ -358,9 +378,10 @@ def wait_for_condition(
     """Poll durable state until the configured strategy decides to stop waiting.
 
     The check receives the current state, beginning with `initial_state`,
-    and returns the next state. The polling strategy receives that result and
-    returns the next polling delay, or None to stop polling and complete with
-    the latest result.
+    and returns the next state. Synchronous checks run in the event loop's
+    thread executor. The polling strategy receives that result and returns the
+    next polling delay, or None to stop polling and complete with the latest
+    result.
     """
     context = get_durable_context()
 
@@ -386,7 +407,7 @@ def wait_for_condition(
 
 
 async def _wait_for_condition(
-    check: Callable[[T | None], Awaitable[T]],
+    check: Callable[[T | None], CallableResult[T]],
     *,
     context: DurableContext,
     operation_identifier: OperationIdentifier,

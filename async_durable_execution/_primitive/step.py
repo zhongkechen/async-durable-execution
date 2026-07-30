@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, TypeVar, cast
+from typing import TYPE_CHECKING, TypeVar, cast, overload
 
 from .base import OperationExecutor
 from .._core import (
     CallableRuntimeError,
+    CallableResult,
     Duration,
     DurableContext,
     ErrorObject,
@@ -28,6 +30,7 @@ from .._core import (
     TerminationReason,
     _encode_sdk_control_error_data,
     bind_current_context,
+    call_user_function,
     create_eager_task,
     duration_to_seconds,
     get_current_context,
@@ -37,7 +40,7 @@ from .._core import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +87,7 @@ class StepOperationExecutor(OperationExecutor[T]):
 
     def __init__(
         self,
-        func: Callable[[], Awaitable[T]],
+        func: Callable[[], CallableResult[T]],
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
         retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
@@ -203,7 +206,7 @@ class StepOperationExecutor(OperationExecutor[T]):
         try:
             # This is the actual code provided by the caller to execute durably inside the step
             with bind_current_context(step_context):
-                raw_result = await self.func()
+                raw_result = await call_user_function(self.func)
 
             serialized_result: str = await self.serialize_value(
                 value=raw_result,
@@ -374,8 +377,30 @@ class StepOperationExecutor(OperationExecutor[T]):
         raise CallableRuntimeError.from_error_object(error)
 
 
+@overload
 def step(
     func: Callable[[], Awaitable[T]],
+    *,
+    name: str | None = None,
+    retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
+    step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+    serdes: SerDes | None = None,
+) -> asyncio.Task[T]: ...
+
+
+@overload
+def step(
+    func: Callable[[], CallableResult[T]],
+    *,
+    name: str | None = None,
+    retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
+    step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+    serdes: SerDes | None = None,
+) -> asyncio.Task[T]: ...
+
+
+def step(
+    func: Callable[[], CallableResult[T]],
     *,
     name: str | None = None,
     retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
@@ -386,6 +411,7 @@ def step(
 
     Durable steps are the main way to isolate non-deterministic work such as API
     calls, clock reads, UUID generation, and database access from replayed code.
+    Synchronous functions run in the event loop's thread executor.
     """
     context = get_durable_context()
     step_name = name if name is not None else getattr(func, "__name__", None)
@@ -413,7 +439,7 @@ def step(
 
 
 async def _step(
-    func: Callable[[], Awaitable[T]],
+    func: Callable[[], CallableResult[T]],
     *,
     context: DurableContext,
     operation_identifier: OperationIdentifier,

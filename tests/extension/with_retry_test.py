@@ -223,7 +223,7 @@ async def test_success_on_first_attempt_returns_result_without_retry() -> None:
     ctx = MockDurableContext()
     retry_strategy = _make_retry_strategy()
 
-    async def tracking_func() -> str:
+    def tracking_func() -> str:
         return "success"
 
     result = await _call_with_retry(

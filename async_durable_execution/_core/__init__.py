@@ -1,5 +1,6 @@
 """Private core runtime used by the public package facade."""
 
+from .callable import CallableResult, call_user_function
 from .client import (
     DurableServiceClient,
     aioboto_is_installed,

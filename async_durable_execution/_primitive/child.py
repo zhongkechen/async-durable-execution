@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
-from typing import TYPE_CHECKING, TypeAlias, TypeVar, cast
+from collections.abc import Awaitable, Callable
+from typing import TypeAlias, TypeVar, cast, overload
 
 from .base import OperationExecutor
 from .._core import (
     CallableRuntimeError,
+    CallableResult,
     ContextOptions,
     DurableContext,
     ErrorObject,
@@ -25,14 +26,12 @@ from .._core import (
     _encode_sdk_control_error_data,
     _restore_sdk_control_error,
     bind_current_context,
+    call_user_function,
     create_eager_task,
     deserialize,
     get_durable_context,
     serialize,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Awaitable
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +50,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
 
     def __init__(
         self,
-        func: Callable[[], Awaitable[T]],
+        func: Callable[[], CallableResult[T]],
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
         *,
@@ -142,7 +141,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
         )
         try:
             replaying_children = self._is_replay_children(operation)
-            raw_result: T = await self.func()
+            raw_result = await call_user_function(self.func)
 
             if self.is_virtual:
                 logger.debug(
@@ -300,8 +299,30 @@ class ChildOperationExecutor(OperationExecutor[T]):
         raise CallableRuntimeError.from_error_object(error)
 
 
+@overload
 def run_in_child_context(
     func: Callable[[], Awaitable[T]],
+    *,
+    name: str | None = None,
+    serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    is_virtual: bool = False,
+) -> asyncio.Task[T]: ...
+
+
+@overload
+def run_in_child_context(
+    func: Callable[[], CallableResult[T]],
+    *,
+    name: str | None = None,
+    serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    is_virtual: bool = False,
+) -> asyncio.Task[T]: ...
+
+
+def run_in_child_context(
+    func: Callable[[], CallableResult[T]],
     *,
     name: str | None = None,
     serdes: SerDes | None = None,
@@ -311,7 +332,8 @@ def run_in_child_context(
     """Execute a durable sub-workflow inside its own child context.
 
     Args:
-        func: The child context function to execute.
+        func: The sync or async child context function to execute. Synchronous
+            functions run in the event loop's thread executor.
         name: Optional durable operation name.
         serdes: Optional serializer for the child context result.
         summary_generator: Optional summary generator for large child results.
@@ -330,7 +352,7 @@ def run_in_child_context(
 
 
 def _create_child_context_task(
-    func: Callable[[], Awaitable[T]],
+    func: Callable[[], CallableResult[T]],
     *,
     sub_type: OperationSubType,
     name: str | None = None,
@@ -368,7 +390,7 @@ def _create_child_context_task(
 
 
 async def _run_in_child_context(
-    func: Callable[[], Awaitable[T]],
+    func: Callable[[], CallableResult[T]],
     *,
     sub_type: OperationSubType,
     name: str | None = None,
@@ -404,7 +426,7 @@ async def _run_in_child_context(
 
 
 async def _run_child_context(
-    func: Callable[[], Awaitable[T]],
+    func: Callable[[], CallableResult[T]],
     *,
     context: DurableContext,
     child_context: DurableContext,
@@ -415,7 +437,7 @@ async def _run_child_context(
 ) -> T:
     async def callable_with_child_context() -> T:
         with bind_current_context(child_context):
-            return await func()
+            return await call_user_function(func)
 
     executor: ChildOperationExecutor[T] = ChildOperationExecutor(
         callable_with_child_context,

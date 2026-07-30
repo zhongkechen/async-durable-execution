@@ -510,9 +510,13 @@ def test_durable_dag_supports_class_and_static_method_decorator_orders() -> None
 
 def test_durable_node_supports_class_and_static_method_decorator_orders() -> None:
     class Nodes:
+        @durable_node
+        def instance(self, value: str) -> Any:
+            return value
+
         @classmethod
         @durable_node
-        async def class_inside(cls, value: str) -> Any:
+        def class_inside(cls, value: str) -> Any:
             return value
 
         @durable_node
@@ -522,7 +526,7 @@ def test_durable_node_supports_class_and_static_method_decorator_orders() -> Non
 
         @staticmethod
         @durable_node
-        async def static_inside(value: str) -> Any:
+        def static_inside(value: str) -> Any:
             return value
 
         @durable_node
@@ -530,7 +534,9 @@ def test_durable_node_supports_class_and_static_method_decorator_orders() -> Non
         async def static_outside(value: str) -> Any:
             return value
 
+    nodes = Nodes()
     for bound in (
+        nodes.instance("instance"),
         Nodes.class_inside("a"),
         Nodes.class_outside("b"),
         Nodes.static_inside("c"),

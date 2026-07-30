@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Awaitable, Callable, TypeVar
+from typing import TYPE_CHECKING, Callable, TypeVar, overload
 
 from .._core import (
+    CallableResult,
     Duration,
     DurableContext,
     RetryStrategy,
     SerDes,
     bind_current_context,
+    call_user_function,
     get_current_context,
     get_durable_context,
 )
@@ -17,6 +19,8 @@ from .._primitive.child import run_in_child_context
 from .._primitive.wait import wait
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
     from .._primitive.child import SummaryGenerator
 
 T = TypeVar("T")
@@ -41,8 +45,32 @@ def get_with_retry_context() -> WithRetryContext:
     return current_context
 
 
+@overload
 def with_retry(
     func: Callable[[], Awaitable[T]],
+    *,
+    name: str | None = None,
+    retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
+    serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    is_virtual: bool = False,
+) -> asyncio.Task[T]: ...
+
+
+@overload
+def with_retry(
+    func: Callable[[], T],
+    *,
+    name: str | None = None,
+    retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
+    serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    is_virtual: bool = False,
+) -> asyncio.Task[T]: ...
+
+
+def with_retry(
+    func: Callable[[], CallableResult[T]],
     *,
     name: str | None = None,
     retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
@@ -53,8 +81,9 @@ def with_retry(
     """Retry a block of durable logic with configurable backoff.
 
     Args:
-        func: Async callable to retry. Use get_with_retry_context().attempt inside
-            the callable to access the current attempt number.
+        func: Sync or async callable to retry. Synchronous callables run in the
+            event loop's thread executor. Use get_with_retry_context().attempt
+            inside the callable to access the current attempt number.
         name: Optional durable operation name.
         retry_strategy: Optional strategy that returns a retry delay or None to stop.
         serdes: Optional serializer for the child context result.
@@ -81,7 +110,7 @@ def with_retry(
                         "step_counter"
                     ]
                 with bind_current_context(retry_context):
-                    return await func()
+                    return await call_user_function(func)
             except Exception as err:
                 delay = retry(err, attempt)
                 if delay is None:

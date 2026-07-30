@@ -5,14 +5,16 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, overload
 
 from .._core import (
+    CallableResult,
     Duration,
     OperationContext,
     OperationSubType,
     SerDes,
     bind_current_context,
+    call_user_function,
     durable_callable,
     get_current_context,
 )
@@ -28,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 @durable_callable
 async def wait_for_callback_handler(
-    submitter: Callable[[], Awaitable[Any]],
+    submitter: Callable[[], CallableResult[Any]],
     name: str | None = None,
     timeout: Duration | None = None,
     heartbeat_timeout: Duration | None = None,
@@ -53,7 +55,7 @@ async def wait_for_callback_handler(
             operation_identifier=step_context.operation_identifier,
         )
         with bind_current_context(callback_context):
-            return await submitter()
+            return await call_user_function(submitter)
 
     await step(
         func=submitter_step,
@@ -65,8 +67,32 @@ async def wait_for_callback_handler(
     return await callback.result()
 
 
+@overload
 def wait_for_callback(
     submitter: Callable[[], Awaitable[Any]],
+    *,
+    name: str | None = None,
+    timeout: Duration | None = None,
+    heartbeat_timeout: Duration | None = None,
+    serdes: SerDes | None = None,
+    retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
+) -> asyncio.Task[Any]: ...
+
+
+@overload
+def wait_for_callback(
+    submitter: Callable[[], Any],
+    *,
+    name: str | None = None,
+    timeout: Duration | None = None,
+    heartbeat_timeout: Duration | None = None,
+    serdes: SerDes | None = None,
+    retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
+) -> asyncio.Task[Any]: ...
+
+
+def wait_for_callback(
+    submitter: Callable[[], CallableResult[Any]],
     *,
     name: str | None = None,
     timeout: Duration | None = None,
@@ -77,8 +103,10 @@ def wait_for_callback(
     """Create a callback, run a submitter, then suspend until the callback resolves.
 
     Args:
-        submitter: Async callable. Use get_wait_for_callback_context().callback_id
-            inside the submitter to access the callback id.
+        submitter: Sync or async callable. Synchronous submitters run in the
+            event loop's thread executor. Use
+            get_wait_for_callback_context().callback_id inside the submitter to
+            access the callback id.
         name: Optional durable operation name.
         timeout: Optional maximum time to wait for callback completion.
         heartbeat_timeout: Optional maximum time to wait between callback heartbeats.

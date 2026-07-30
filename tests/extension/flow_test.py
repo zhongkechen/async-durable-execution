@@ -167,13 +167,19 @@ async def test_durable_node_rejects_invalid_arguments_before_checkpoint() -> Non
     state.create_checkpoint.assert_not_called()
 
 
-@no_type_check
-def test_durable_node_rejects_synchronous_function() -> None:
-    with pytest.raises(FlowDefinitionError, match="async"):
+async def test_durable_node_accepts_synchronous_function() -> None:
+    calls: list[str] = []
 
-        @durable_node
-        def invalid_node() -> None:
-            return None
+    @durable_node
+    def sync_node(value: str) -> str:
+        calls.append(value)
+        return value.upper()
+
+    bound = sync_node("ready")
+
+    assert calls == []
+    assert await bound() == "READY"
+    assert calls == ["ready"]
 
 
 def test_node_outside_definition_is_rejected() -> None:

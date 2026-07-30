@@ -123,8 +123,8 @@ async def test_serdes_abstract_methods_not_implemented() -> None:
 async def test_serdes_abstract_methods_coverage() -> None:
     """Test to achieve coverage of abstract method pass statements."""
     # To cover the pass statements, call the abstract methods directly
-    await SerDes.serialize(None, None)  # Covers line 100
-    await SerDes.deserialize(None, None)  # Covers line 104
+    assert SerDes.serialize(None, None) is None
+    assert SerDes.deserialize(None, None) is None
 
 
 @no_type_check
@@ -327,6 +327,23 @@ async def test_async_serdes_can_await_io_like_work() -> None:
     assert serialized == "op-1:payload"
 
     deserialized = await deserialize(AsyncContextSerDes(), serialized, "op-1", "arn-1")
+    assert deserialized == "op-1:payload:arn-1"
+
+
+async def test_synchronous_serdes_methods_run_with_context():
+    class SyncContextSerDes(SerDes[str]):
+        def serialize(self, value: str) -> str:
+            context = get_serdes_context()
+            return f"{context.operation_id}:{value}"
+
+        def deserialize(self, data: str) -> str:
+            context = get_serdes_context()
+            return f"{data}:{context.durable_execution_arn}"
+
+    serialized = await serialize(SyncContextSerDes(), "payload", "op-1", "arn-1")
+    assert serialized == "op-1:payload"
+
+    deserialized = await deserialize(SyncContextSerDes(), serialized, "op-1", "arn-1")
     assert deserialized == "op-1:payload:arn-1"
 
 

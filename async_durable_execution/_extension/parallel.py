@@ -10,10 +10,11 @@ from collections import Counter
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field as dataclass_field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar, cast, overload
 
 from .._core import (
     CallableRuntimeError,
+    CallableResult,
     DurableContext,
     EncodedValue,
     ErrorObject,
@@ -33,6 +34,7 @@ from .._core import (
     ValidationError,
     MappingModel,
     bind_current_context,
+    call_user_function,
     deserialize,
     durable_callable,
     get_durable_context,
@@ -1012,9 +1014,9 @@ class ParallelExecutor(
         child_context: DurableContext,
         executable: Executable[CallableType],
     ) -> ResultType:
-        func = cast("Callable[[], Awaitable[ResultType]]", executable.func)
+        func = cast("Callable[[], CallableResult[ResultType]]", executable.func)
         with bind_current_context(child_context):
-            result: ResultType = await func()
+            result = await call_user_function(func)
         return result
 
     def get_iteration_name(self, index: int) -> str:
@@ -1362,7 +1364,7 @@ class ParallelSummaryGenerator:
 
 @durable_callable
 async def parallel_handler(
-    callables: Sequence[Callable[[], Awaitable[R]]],
+    callables: Sequence[Callable[[], CallableResult[R]]],
     execution_state: ExecutionState,
     parallel_context: DurableContext,
     operation_identifier: OperationIdentifier,
@@ -1385,7 +1387,7 @@ async def parallel_handler(
     #
     # See TypeScript reference: aws-durable-execution-sdk-js/src/handlers/parallel-handler/parallel-handler.ts (~line 112)
 
-    executor: ParallelExecutor[Callable[[], Awaitable[R]], R] = ParallelExecutor(
+    executor: ParallelExecutor[Callable[[], CallableResult[R]], R] = ParallelExecutor(
         executables=[
             Executable(index=i, func=func) for i, func in enumerate(callables)
         ],
@@ -1407,8 +1409,36 @@ async def parallel_handler(
     return await executor.process()
 
 
+@overload
 def parallel(
     branches: Iterable[Callable[[], Awaitable[T]]],
+    *,
+    name: str | None = None,
+    max_concurrency: int | None = None,
+    completion_config: CompletionConfig | None = None,
+    serdes: SerDes | None = None,
+    item_serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = ParallelSummaryGenerator(),
+    nesting_type: NestingType = NestingType.NESTED,
+) -> asyncio.Task[BatchResult[T]]: ...
+
+
+@overload
+def parallel(
+    branches: Iterable[Callable[[], T]],
+    *,
+    name: str | None = None,
+    max_concurrency: int | None = None,
+    completion_config: CompletionConfig | None = None,
+    serdes: SerDes | None = None,
+    item_serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = ParallelSummaryGenerator(),
+    nesting_type: NestingType = NestingType.NESTED,
+) -> asyncio.Task[BatchResult[T]]: ...
+
+
+def parallel(
+    branches: Iterable[Callable[[], CallableResult[T]]],
     *,
     name: str | None = None,
     max_concurrency: int | None = None,
@@ -1420,9 +1450,10 @@ def parallel(
 ) -> asyncio.Task[BatchResult[T]]:
     """Start a durable parallel operation.
 
-    Each branch is an async zero-argument callable, typically a bound durable
-    callable such as `fetch_user(user_id)`. Branches run in child durable
-    contexts and may contain durable operations such as `step()` or `wait()`.
+    Each branch is a sync or async zero-argument callable, typically a bound
+    durable callable such as `fetch_user(user_id)`. Synchronous branches run in
+    the event loop's thread executor. Async branches may contain durable
+    operations such as `step()` or `wait()`.
 
     The returned object is an `asyncio.Task`; awaiting it yields a `BatchResult`.
     Calling `parallel()` without immediately awaiting it schedules the durable
@@ -1433,7 +1464,7 @@ def parallel(
     Pass `completion_config` to use threshold-based or custom completion.
 
     Args:
-        branches: Async zero-argument branch callables to run concurrently.
+        branches: Sync or async zero-argument branch callables to run concurrently.
         name: Optional durable operation name.
         max_concurrency: Optional limit for in-flight branches. A suspended
             branch retains its slot until it reaches a terminal state.
@@ -1458,7 +1489,7 @@ def parallel(
     """
     _validate_max_concurrency(max_concurrency)
     context = get_durable_context()
-    validated_branches: list[Callable[[], Awaitable[T]]] = []
+    validated_branches: list[Callable[[], CallableResult[T]]] = []
     for branch in branches:
         validated_branches.append(branch)
 

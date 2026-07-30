@@ -8,7 +8,7 @@ conditional success and failure routes.
 
 A DAG workflow has three parts:
 
-1. Async node functions decorated with `@durable_node`.
+1. Sync or async node functions decorated with `@durable_node`.
 2. A synchronous graph definition decorated with `@durable_dag`.
 3. An awaited `flow()` call inside a durable handler, child context, or flow
    node.
@@ -93,10 +93,11 @@ DAG definition code must be deterministic. It must not:
   `flow()`.
 - Depend on mutable state that can change between replays.
 
-Put nondeterministic work and durable operations inside `@durable_node` async
-functions. Give every `flow()` and `node()` a stable name. If `name` is omitted,
-`node()` uses the decorated function name, which must still be unique within
-the graph.
+Put nondeterministic work and durable operations inside `@durable_node`
+functions. A synchronous node runs in a worker thread; use an async node when
+its body needs to await durable operations. Give every `flow()` and `node()` a
+stable name. If `name` is omitted, `node()` uses the decorated function name,
+which must still be unique within the graph.
 
 ## Inputs and Inferred Dependencies
 

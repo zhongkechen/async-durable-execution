@@ -165,6 +165,39 @@ async def test_in_process_invoker_binds_service_client_to_decorated_handler() ->
     assert response.invocation_output.result == '{"result": "test-result"}'
 
 
+async def test_in_process_invoker_supports_sync_decorated_handler() -> None:
+    """Test in-process invoker executes a synchronous decorated handler."""
+    service_client = Mock()
+
+    @durable_execution
+    def handler(event: Any) -> dict:
+        durable_context = cast(DurableContext, get_current_context())
+        assert event == {"hello": "world"}
+        assert durable_context.execution_state._service_client is service_client  # noqa: SLF001
+        return {"result": "test-result"}
+
+    invoker = InProcessInvoker(handler, service_client)
+
+    start_input = StartDurableExecutionInput(
+        account_id="123456789012",
+        function_name="test-function",
+        function_qualifier="$LATEST",
+        execution_name="test-execution",
+        execution_timeout_seconds=300,
+        execution_retention_period_days=7,
+        invocation_id="test-invocation",
+        input='{"hello": "world"}',
+    )
+    execution = Execution.new(start_input)
+    execution.start()
+    input_data = create_invocation_input(invoker, execution)
+
+    response = await invoker.invoke("test-function", input_data)
+
+    assert response.invocation_output.status == InvocationStatus.SUCCEEDED
+    assert response.invocation_output.result == '{"result": "test-result"}'
+
+
 def test_lambda_invoker_init() -> None:
     """Test LambdaInvoker initialization."""
     lambda_client = Mock()

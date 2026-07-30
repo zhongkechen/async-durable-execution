@@ -9,8 +9,9 @@ results are checkpointed, waits suspend without compute charges, callbacks resum
 external signals, and invoked durable functions must use qualified function names.
 
 The main migration is mechanical: replace the official SDK's synchronous
-`DurableContext` method calls with async top-level operations and make user-provided
-durable code `async def`.
+`DurableContext` method calls with async top-level operations. User-provided
+callables may remain synchronous when they do not need to await durable
+operations; the SDK runs them in a worker thread.
 
 ## Package Changes
 
@@ -34,8 +35,8 @@ from `async_durable_execution`.
 
 | Official SDK | This SDK |
 | --- | --- |
-| `@durable_execution def handler(event, context)` | `@durable_execution async def handler(event)` |
-| `@durable_step def step_fn(step_context, ...)` | `@durable_callable async def step_fn(...)` |
+| `@durable_execution def handler(event, context)` | `@durable_execution async def handler(event)` for workflows that await operations; sync handlers are also accepted |
+| `@durable_step def step_fn(step_context, ...)` | `@durable_callable def step_fn(...)` or `async def` |
 | `context.step(my_step(args))` | `await step(my_step(args), name="my-step")` |
 | `context.wait(Duration.from_seconds(10))` | `await wait(timedelta(seconds=10), name="delay")` |
 | `context.create_callback(...)` | `await create_callback(...)` |
@@ -48,8 +49,8 @@ from `async_durable_execution`.
 | No direct declarative DAG equivalent | `await flow(my_dag(...), name="...")` |
 | `context.logger` or `step_context.logger` | standard `logging.getLogger(__name__)` |
 
-This SDK binds the active durable context internally while your async callable runs. If
-you need execution metadata, use the getter for that callable's scope, such as
+This SDK binds the active durable context internally while your callable runs. If you
+need execution metadata, use the getter for that callable's scope, such as
 `get_durable_context()` or `get_step_context()`, and read fields such as
 `durable_execution_arn`, `operation_id`, `operation_name`, `lambda_context`, or
 `is_replaying()`. Specific getters validate the active scope and provide concrete
@@ -105,7 +106,7 @@ logger = logging.getLogger(__name__)
 
 
 @durable_callable
-async def my_step() -> str:
+def my_step() -> str:
     logger.info("Hello from my_step")
     return "Hello from Durable Lambda!"
 
@@ -120,16 +121,16 @@ async def lambda_handler(event: dict) -> dict:
 
 ## Step Migration
 
-Official steps receive a `StepContext` argument and run synchronously. In this SDK, a
-step function is an async callable created with `@durable_callable`. Pass the resulting
-zero-argument callable to `step()`.
+Official steps receive a `StepContext` argument and run synchronously. In this
+SDK, a step function may be synchronous or asynchronous and is created with
+`@durable_callable`. Pass the resulting zero-argument callable to `step()`.
 
 ```python
 from async_durable_execution import durable_callable, step
 
 
 @durable_callable
-async def add_numbers(a: int, b: int) -> int:
+def add_numbers(a: int, b: int) -> int:
     return a + b
 
 
@@ -330,9 +331,10 @@ def order_flow(order_id: str):
 result = await flow(order_flow(order_id), name="order-flow")
 ```
 
-Unlike other user-provided callables, a `@durable_dag` definition is synchronous
-and must be deterministic. `@durable_node` bodies are async and can contain normal
-durable operations. See [flow and DAG workflows](api/extension/flow.md) for the complete dependency,
+Unlike executable user-provided callables, a `@durable_dag` definition is
+synchronous and must be deterministic. `@durable_node` bodies may be sync or
+async; use async bodies when they contain durable operations. See
+[flow and DAG workflows](api/extension/flow.md) for the complete dependency,
 failure, and output model.
 
 ## Logging
@@ -379,8 +381,8 @@ assertions can use `result.get_step("my-step")` instead of depending on operatio
 
 1. Replace package dependencies and imports.
 2. Change every durable handler, step, child context, flow node, callback submitter,
-   map function, parallel branch, and wait-for-condition check to `async def`; keep
-   `@durable_dag` definitions synchronous.
+   map function, parallel branch, and wait-for-condition check to either `def`
+   or `async def`; keep `@durable_dag` definitions synchronous.
 3. Replace `DurableContext` method calls with awaited top-level operations.
 4. Replace `@durable_step` with `@durable_callable`.
 5. Remove explicit `DurableContext` and `StepContext` parameters. Use the context

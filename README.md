@@ -41,7 +41,7 @@ composition, and APIs designed for modern Python applications.
 
 ## ✨ Key Features
 
-- **[Async-first durable code](https://zhongkechen.github.io/async-durable-execution/official-python-sdk-comparison.html#programming-model)** - Compared with the official AWS SDK, user-provided durable handlers, steps, child contexts, `flow` nodes, callback submitters, map item functions, parallel branches, and wait-for-condition checks are written with `async def`.
+- **[Async-native durable code](https://zhongkechen.github.io/async-durable-execution/official-python-sdk-comparison.html#programming-model)** - User-provided handlers, steps, child contexts, `flow` nodes, callback submitters, map item functions, parallel branches, condition checks, and serializers may use `async def` or `def`. Synchronous callables run in a worker thread so they do not block the event loop.
 - **[Operations not available in the official SDK](https://zhongkechen.github.io/async-durable-execution/api/extension/replay_safe.html)** - This SDK adds [replay-safe helpers](https://zhongkechen.github.io/async-durable-execution/api/extension/replay_safe.html) (`random()`, `now()`, `timestamp()`, and `uuid()`) and [durable self-invocation](https://zhongkechen.github.io/async-durable-execution/api/extension/recurse.html) (`recurse()`).
 - **[Declarative DAG workflows](https://zhongkechen.github.io/async-durable-execution/api/extension/flow.html#quick-start)** - Define acyclic workflows with typed node inputs, inferred or conditional dependencies, failure routes, and durable operations inside each node. The SDK validates the graph before execution and skips nodes that are not required by the selected outputs.
 - **[Background operation tasks](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#background-operation-tasks)** - Durable operations such as `step(...)`, `wait(...)`, `invoke(...)`, `recurse(...)`, `run_in_child_context(...)`, and `flow(...)` return `asyncio.Task` objects, so independent operations can run in the background and be awaited together with `asyncio.gather` without using `parallel()` or `map()`.
@@ -203,6 +203,7 @@ The example tests in `test_examples/` are also useful as executable recipes. Bro
 
 - `step/`, `wait/`, `wait_for_callback/`, and `wait_for_condition/` for core durable operations
 - `step/steps_with_gather.py` for starting multiple step tasks and awaiting them together with `asyncio.gather`
+- `sync_functions/` for synchronous handlers, durable functions and methods, map items, and parallel branches
 - `flow/`, `map/`, `parallel/`, and `run_in_child_context/` for composition patterns
 - `invoke/`, including `invoke/recurse.py`, `with_retry/`, `callback/`, and `logger_example/` for integrations and operational behavior
 

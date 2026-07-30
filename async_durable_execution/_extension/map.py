@@ -15,6 +15,7 @@ from typing import (
     Callable,
     Any,
     Awaitable,
+    overload,
 )
 
 from .parallel import (
@@ -26,12 +27,14 @@ from .parallel import (
 )
 from .parallel import parallel_handler
 from .._core import (
+    CallableResult,
     DurableContext,
     ExecutionState,
     OperationIdentifier,
     OperationSubType,
     SerDes,
     bind_current_context,
+    call_user_function,
     durable_callable,
     get_current_context,
     get_durable_context,
@@ -83,7 +86,7 @@ def get_map_item_context() -> MapItemContext[Any]:
 def _bind_map_item_to_branch(
     items: Sequence[T],
     index: int,
-    func: Callable[[T], Awaitable[R]],
+    func: Callable[[T], CallableResult[R]],
 ) -> Callable[[], Awaitable[R]]:
     async def run_branch() -> R:
         logger.debug("🗺️ Processing map item: %s", index)
@@ -98,7 +101,7 @@ def _bind_map_item_to_branch(
             items=items,
         )
         with bind_current_context(map_item_context):
-            result: R = await func(item)
+            result = await call_user_function(func, item)
         logger.debug("✅ Processed map item: %s", index)
         return result
 
@@ -107,7 +110,7 @@ def _bind_map_item_to_branch(
 
 def _create_map_branches(
     items: Sequence[T],
-    func: Callable[[T], Awaitable[R]],
+    func: Callable[[T], CallableResult[R]],
 ) -> list[Callable[[], Awaitable[R]]]:
     return [
         _bind_map_item_to_branch(items=items, index=index, func=func)
@@ -146,7 +149,7 @@ class MapSummaryGenerator:
 @durable_callable
 async def map_handler(
     items: Sequence[T],
-    func: Callable[[T], Awaitable[R]],
+    func: Callable[[T], CallableResult[R]],
     execution_state: ExecutionState,
     map_context: DurableContext,
     operation_identifier: OperationIdentifier,
@@ -180,8 +183,40 @@ async def map_handler(
     return await handler()
 
 
+@overload
 def map(
-    func: Callable[[U | BatchedInput[Any, U]], Awaitable[T]],
+    func: Callable[[U], Awaitable[T]],
+    items: Iterable[U],
+    *,
+    name: str | None = None,
+    max_concurrency: int | None = None,
+    completion_config: CompletionConfig | None = None,
+    serdes: SerDes | None = None,
+    item_serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = MapSummaryGenerator(),
+    nesting_type: NestingType = NestingType.NESTED,
+    item_namer: Callable[[U, int], str] | None = None,
+) -> asyncio.Task[BatchResult[T]]: ...
+
+
+@overload
+def map(
+    func: Callable[[U], T],
+    items: Iterable[U],
+    *,
+    name: str | None = None,
+    max_concurrency: int | None = None,
+    completion_config: CompletionConfig | None = None,
+    serdes: SerDes | None = None,
+    item_serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = MapSummaryGenerator(),
+    nesting_type: NestingType = NestingType.NESTED,
+    item_namer: Callable[[U, int], str] | None = None,
+) -> asyncio.Task[BatchResult[T]]: ...
+
+
+def map(
+    func: Callable[[U], CallableResult[T]],
     items: Iterable[U],
     *,
     name: str | None = None,
@@ -196,8 +231,9 @@ def map(
     """Start a durable map operation over a collection of items.
 
     `map()` creates one durable child context per item and calls `func` with that
-    item. The item function must be async and may contain durable operations such
-    as `step()` or `wait()`.
+    item. Synchronous item functions run in the event loop's thread executor.
+    Async item functions may contain durable operations such as `step()` or
+    `wait()`.
 
     The returned object is an `asyncio.Task`; awaiting it yields a `BatchResult`.
     Calling `map()` without immediately awaiting it schedules the durable
@@ -210,8 +246,8 @@ def map(
     custom completion.
 
     Args:
-        func: Async callable that processes each item. It receives the original
-            item value and returns that item's result.
+        func: Sync or async callable that processes each item. It receives the
+            original item value and returns that item's result.
         items: Items to process.
         name: Optional durable operation name.
         max_concurrency: Optional limit for in-flight items. A suspended item

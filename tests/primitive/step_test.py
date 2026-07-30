@@ -84,7 +84,7 @@ async def step_handler(
 ) -> Any:
     """Test helper that wraps StepOperationExecutor."""
     executor = StepOperationExecutor(
-        func=_asyncify(func),
+        func=func,
         state=state,
         operation_identifier=operation_identifier,
         retry_strategy=retry_strategy,

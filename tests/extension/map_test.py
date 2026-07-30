@@ -302,7 +302,7 @@ async def test_map_executor_execute_item(mock_logger) -> None:
     """Test map branch executor execute_item method with logging."""
     items = ["hello", "world"]
 
-    async def callable_func(item) -> str:
+    def callable_func(item) -> str:
         ctx = get_current_context()
         return f"{item}_{ctx.index}"
 

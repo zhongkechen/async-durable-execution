@@ -33,6 +33,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, Generic, Protocol, TypeVar, cast
 
+from .callable import CallableResult, call_user_function
 from .context import SerDesContext, bind_current_context, get_current_context
 from .exceptions import (
     DurableExecutionsError,
@@ -398,13 +399,19 @@ class SerDes(ABC, Generic[T]):
     """Abstract serializer interface for durable operation payloads and results."""
 
     @abstractmethod
-    async def serialize(self, value: T) -> str:
-        """Convert a Python value into the wire format stored by the SDK."""
+    def serialize(self, value: T) -> CallableResult[str]:
+        """Convert a Python value into the wire format stored by the SDK.
+
+        Synchronous implementations run in the event loop's thread executor.
+        """
         pass
 
     @abstractmethod
-    async def deserialize(self, data: str) -> T:
-        """Reconstruct a Python value from the durable wire format."""
+    def deserialize(self, data: str) -> CallableResult[T]:
+        """Reconstruct a Python value from the durable wire format.
+
+        Synchronous implementations run in the event loop's thread executor.
+        """
         pass
 
     @staticmethod
@@ -554,12 +561,9 @@ async def serialize(
     )
     active_serdes: SerDes[T] = serdes or EXTENDED_TYPES_SERDES
 
-    async def serialize_value() -> str:
-        return await active_serdes.serialize(value)
-
     try:
         with bind_current_context(serdes_context):
-            return await serialize_value()
+            return await call_user_function(active_serdes.serialize, value)
     except Exception as e:
         logger.exception(
             "⚠️ Serialization failed for id: %s",
@@ -597,12 +601,9 @@ async def deserialize(
     )
     active_serdes: SerDes[T] = serdes or EXTENDED_TYPES_SERDES
 
-    async def deserialize_value() -> T:
-        return await active_serdes.deserialize(data)
-
     try:
         with bind_current_context(serdes_context):
-            return await deserialize_value()
+            return await call_user_function(active_serdes.deserialize, data)
     except Exception as e:
         logger.exception("⚠️ Deserialization failed for id: %s", operation_id)
         msg = f"Deserialization failed for id: {operation_id}"

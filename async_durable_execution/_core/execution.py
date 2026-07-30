@@ -6,8 +6,9 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast, overload
 
+from .callable import CallableResult, call_user_function
 from .context import DurableContext, bind_current_context
 from .exceptions import (
     CheckpointError,
@@ -51,14 +52,27 @@ T = TypeVar("T")
 Params = ParamSpec("Params")
 
 
+@overload
 def durable_callable(
     func: Callable[Params, Awaitable[T]],
+) -> Callable[Params, Callable[[], Awaitable[T]]]: ...
+
+
+@overload
+def durable_callable(
+    func: Callable[Params, T],
+) -> Callable[Params, Callable[[], Awaitable[T]]]: ...
+
+
+def durable_callable(
+    func: Callable[Params, CallableResult[T]],
 ) -> Callable[Params, Callable[[], Awaitable[T]]]:
-    """Wrap an async function so calling it returns a zero-argument durable callable.
+    """Wrap a function so calling it returns a zero-argument durable callable.
 
     The returned callable can be passed to durable operations such as `step()`
     and `run_in_child_context()`, keeping durable operation creation explicit
     while avoiding manual `functools.partial(...)` wrapping at the callsite.
+    Synchronous functions run in the event loop's thread executor.
 
     Class and static methods are supported with either decorator order:
     `@classmethod`/`@staticmethod` may appear above or below `@durable_callable`.
@@ -72,7 +86,9 @@ def durable_callable(
     def wrapper(
         *args: Params.args, **kwargs: Params.kwargs
     ) -> Callable[[], Awaitable[T]]:
-        bound = functools.partial(func, *args, **kwargs)
+        async def bound() -> T:
+            return await call_user_function(func, *args, **kwargs)
+
         setattr(bound, "__name__", func.__name__)
         return bound
 
@@ -128,7 +144,7 @@ class DurableConfig:
 
 
 def durable_execution(
-    func: Callable[..., Awaitable[Any]] | None = None,
+    func: Callable[..., CallableResult[Any]] | None = None,
     /,
     *,
     boto3_client: LambdaApiClient | AsyncLambdaApiClient | None = None,
@@ -138,7 +154,8 @@ def durable_execution(
     Decorator to create a durable execution handler.
 
     Args:
-        func: The user function to decorate
+        func: The sync or async user function to decorate. Synchronous
+            functions run in the event loop's thread executor.
         boto3_client: Optional sync or async Lambda API client to use
         service_client: Optional durable service client to use. Intended for
             testing and local execution tooling.
@@ -303,7 +320,7 @@ async def _wrapper_async(
         logger.debug("execution arn: %s", invocation_input.durable_execution_arn)
 
         with bind_current_context(root_context):
-            result = await user_func(input_event)
+            result = await call_user_function(user_func, input_event)
         return await handle_user_function_result(execution_state, result)
 
     except SuspendExecution:

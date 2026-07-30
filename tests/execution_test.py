@@ -2744,6 +2744,31 @@ def _make_lambda_context() -> Any:
     return ctx
 
 
+async def test_durable_execution_accepts_synchronous_handler() -> None:
+    mock_client = Mock(spec=DurableServiceClient)
+
+    @durable_execution
+    def test_handler(event: Any) -> dict:
+        context = cast(DurableContext, get_current_context())
+        return {
+            "event": event,
+            "execution_arn": context.durable_execution_arn,
+        }
+
+    result = await run_handler(
+        test_handler,
+        _make_invocation_input(),
+        _make_lambda_context(),
+        service_client=mock_client,
+    )
+
+    assert result["Status"] == InvocationStatus.SUCCEEDED.value
+    assert json.loads(result["Result"]) == {
+        "event": {},
+        "execution_arn": "arn:test:execution/exec1",
+    }
+
+
 async def test_durable_execution_replays_when_paginated_state_has_prior_operations() -> (
     None
 ):
