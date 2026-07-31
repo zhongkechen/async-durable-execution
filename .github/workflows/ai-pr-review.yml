@@ -24,8 +24,8 @@ jobs:
       - name: Record approval
         run: echo "Approved review of ${{ github.event.pull_request.head.sha }}"
 
-  review:
-    name: Claude review
+  claude-review:
+    name: Generate Claude review
     needs: approve_external
     if: >-
       always() &&
@@ -38,10 +38,12 @@ jobs:
     runs-on: ubuntu-latest
     environment: ai-pr-review-runtime
     timeout-minutes: 45
+    outputs:
+      summary_base64: ${{ steps.review-output.outputs.summary_base64 }}
     permissions:
       contents: read
       id-token: write
-      pull-requests: write
+      pull-requests: read
 
     steps:
       # pull_request_target exposes repository secrets, so only check out the
@@ -64,22 +66,11 @@ jobs:
       - name: Prepare shared review inputs
         id: review-inputs
         run: |
-          inline_marker="<!-- ai-pr-review:inline:claude:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:primary -->"
-          retry_inline_marker="<!-- ai-pr-review:inline:claude:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:retry -->"
           {
             echo 'prompt<<AI_REVIEW_PROMPT'
             cat .github/prompts/ai-pr-review.md
-            printf '\nFor every inline comment, the first line of the comment body must be exactly:\n%s\nPut the finding text on the following lines. Do not include this marker in the final response.\n' \
-              "$inline_marker"
             echo 'AI_REVIEW_PROMPT'
-            echo 'retry_prompt<<AI_REVIEW_RETRY_PROMPT'
-            cat .github/prompts/ai-pr-review.md
-            printf '\nFor every inline comment, the first line of the comment body must be exactly:\n%s\nPut the finding text on the following lines. Do not include this marker in the final response.\n' \
-              "$retry_inline_marker"
-            echo 'AI_REVIEW_RETRY_PROMPT'
             echo "schema=$(jq -c . .github/prompts/ai-pr-review-schema.json)"
-            echo "inline_marker=$inline_marker"
-            echo "retry_inline_marker=$retry_inline_marker"
           } >> "$GITHUB_OUTPUT"
 
       - name: Prepare unprivileged Claude user
@@ -132,13 +123,12 @@ jobs:
           path_to_claude_code_executable: ${{ github.workspace }}/scripts/run_claude_isolated.sh
           # This also keeps the token out of the git remote configured by the action.
           allowed_non_write_users: ${{ github.actor }}
-          classify_inline_comments: "false"
           prompt: ${{ steps.review-inputs.outputs.prompt }}
           claude_args: |
             --model us.anthropic.claude-opus-5
             --max-turns 20
-            --allowedTools "Read,Grep,Glob,mcp__github_inline_comment__create_inline_comment"
-            --disallowedTools "Bash,Write,Edit,NotebookEdit,WebFetch,WebSearch"
+            --allowedTools "Read,Grep,Glob"
+            --disallowedTools "Bash,Write,Edit,NotebookEdit,WebFetch,WebSearch,mcp__github_inline_comment__create_inline_comment"
             --json-schema '${{ steps.review-inputs.outputs.schema }}'
 
       - name: Retry pull request review with Claude on Amazon Bedrock
@@ -154,26 +144,17 @@ jobs:
           path_to_claude_code_executable: ${{ github.workspace }}/scripts/run_claude_isolated.sh
           # This also keeps the token out of the git remote configured by the action.
           allowed_non_write_users: ${{ github.actor }}
-          classify_inline_comments: "false"
-          prompt: ${{ steps.review-inputs.outputs.retry_prompt }}
+          prompt: ${{ steps.review-inputs.outputs.prompt }}
           claude_args: |
             --model us.anthropic.claude-opus-5
             --max-turns 20
-            --allowedTools "Read,Grep,Glob,mcp__github_inline_comment__create_inline_comment"
-            --disallowedTools "Bash,Write,Edit,NotebookEdit,WebFetch,WebSearch"
+            --allowedTools "Read,Grep,Glob"
+            --disallowedTools "Bash,Write,Edit,NotebookEdit,WebFetch,WebSearch,mcp__github_inline_comment__create_inline_comment"
             --json-schema '${{ steps.review-inputs.outputs.schema }}'
 
-      - name: Post review summary
+      - name: Prepare Claude review output
+        id: review-output
         env:
-          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          CURRENT_INLINE_COMMENT_MARKER: >-
-            ${{
-              steps.review.outcome == 'success' &&
-              steps.review-inputs.outputs.inline_marker ||
-              steps.review-inputs.outputs.retry_inline_marker
-            }}
           REVIEW_OUTPUT: >-
             ${{
               steps.review.outcome == 'success' &&
@@ -207,15 +188,58 @@ jobs:
             exit 1
           fi
 
+          # Keep model-controlled text on one line across the job boundary.
+          summary_base64="$(printf '%s' "$summary" | base64 -w 0)"
+          echo "summary_base64=$summary_base64" >> "$GITHUB_OUTPUT"
+
+  post-claude-review:
+    name: Post Claude review
+    needs: claude-review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      # Only trusted base-branch code handles the write-capable token.
+      - name: Check out base branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      - name: Post Claude review
+        env:
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REVIEW_SUMMARY_BASE64: >-
+            ${{ needs.claude-review.outputs.summary_base64 }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$REVIEW_SUMMARY_BASE64" ]]; then
+            echo "::error::Claude review output is missing."
+            exit 1
+          fi
+
           summary_file="${RUNNER_TEMP}/claude-review-summary.md"
-          printf '%s' "$summary" > "$summary_file"
+          if ! printf '%s' "$REVIEW_SUMMARY_BASE64" |
+            base64 --decode > "$summary_file"
+          then
+            echo "::error::Claude review output is invalid."
+            exit 1
+          fi
+
           bash scripts/post_ai_review_summary.sh \
             claude \
             "$EXPECTED_HEAD_SHA" \
             "$summary_file"
 
   codex-review:
-    name: Codex review
+    name: Generate Codex review
     needs: approve_external
     if: >-
       always() &&
@@ -228,10 +252,12 @@ jobs:
     runs-on: ubuntu-latest
     environment: ai-pr-review-runtime
     timeout-minutes: 45
+    outputs:
+      summary_base64: ${{ steps.review-output.outputs.summary_base64 }}
     permissions:
       contents: read
       id-token: write
-      pull-requests: write
+      pull-requests: read
 
     steps:
       # pull_request_target exposes repository secrets, so only check out the
@@ -397,12 +423,10 @@ jobs:
             "$output_file" \
             "${RUNNER_TEMP}/codex-review.json"
 
-      - name: Post Codex review
+      - name: Prepare Codex review output
+        id: review-output
         env:
           CODEX_REVIEW_FILE: ${{ runner.temp }}/codex-review.json
-          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
 
@@ -430,8 +454,51 @@ jobs:
             exit 1
           fi
 
+          # Keep model-controlled text on one line across the job boundary.
+          summary_base64="$(printf '%s' "$CODEX_REVIEW" | base64 -w 0)"
+          echo "summary_base64=$summary_base64" >> "$GITHUB_OUTPUT"
+
+  post-codex-review:
+    name: Post Codex review
+    needs: codex-review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      # Only trusted base-branch code handles the write-capable token.
+      - name: Check out base branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      - name: Post Codex review
+        env:
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REVIEW_SUMMARY_BASE64: >-
+            ${{ needs.codex-review.outputs.summary_base64 }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$REVIEW_SUMMARY_BASE64" ]]; then
+            echo "::error::Codex review output is missing."
+            exit 1
+          fi
+
           summary_file="${RUNNER_TEMP}/codex-review-summary.md"
-          printf '%s' "$CODEX_REVIEW" > "$summary_file"
+          if ! printf '%s' "$REVIEW_SUMMARY_BASE64" |
+            base64 --decode > "$summary_file"
+          then
+            echo "::error::Codex review output is invalid."
+            exit 1
+          fi
+
           bash scripts/post_ai_review_summary.sh \
             codex \
             "$EXPECTED_HEAD_SHA" \
