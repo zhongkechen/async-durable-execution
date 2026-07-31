@@ -94,14 +94,10 @@ async def handler(event):
     assert entry == {
         "name": "Logger Example",
         "description": "Log durable execution details.",
-        "handler": (
-            "async_durable_execution_examples.logger_example.logger_example.handler"
-        ),
+        "handler": ("examples.logger_example.logger_example.handler"),
         "integration": True,
         "durableConfig": DEFAULT_DURABLE_CONFIG,
-        "path": (
-            "./src/async_durable_execution_examples/logger_example/logger_example.py"
-        ),
+        "path": ("./examples/logger_example/logger_example.py"),
         "loggingConfig": {"ApplicationLogLevel": "INFO", "LogFormat": "JSON"},
     }
     assert entry["durableConfig"] is not DEFAULT_DURABLE_CONFIG
@@ -125,12 +121,7 @@ def test_build_examples_catalog_scans_package_source(
     repo_dir = tmp_path / "repo"
     scripts_dir = repo_dir / "scripts"
     scripts_dir.mkdir(parents=True)
-    source_root = (
-        repo_dir
-        / "async-durable-execution-examples"
-        / "src"
-        / sam_module.PACKAGE_PREFIX
-    )
+    source_root = repo_dir / sam_module.PACKAGE_PREFIX
     write_module(source_root / "__init__.py", "")
     write_module(source_root / "__about__.py", "__version__ = '1.0.0'\n")
     write_module(
@@ -149,10 +140,10 @@ def test_build_examples_catalog_scans_package_source(
         {
             "name": "Step",
             "description": "Step module docs.",
-            "handler": "async_durable_execution_examples.step.step.handler",
+            "handler": "examples.step.step.handler",
             "integration": True,
             "durableConfig": DEFAULT_DURABLE_CONFIG,
-            "path": "./src/async_durable_execution_examples/step/step.py",
+            "path": "./examples/step/step.py",
         }
     ]
 
@@ -172,7 +163,7 @@ def test_build_template_adds_layer_role_and_functions() -> None:
     template = build_template(
         [
             {
-                "handler": "async_durable_execution_examples.step.step.handler",
+                "handler": "examples.step.step.handler",
                 "description": "Step example.",
                 "durableConfig": {"ExecutionTimeout": 10},
             }
@@ -190,9 +181,23 @@ def test_build_template_adds_layer_role_and_functions() -> None:
     function = template["Resources"]["AsyncDurableExecutionExamplesStepStep"][
         "Properties"
     ]
-    assert function["Handler"] == "async_durable_execution_examples.step.step.handler"
+    assert function["Handler"] == "examples.step.step.handler"
     assert function["DurableConfig"] == {"ExecutionTimeout": 10}
     assert function["FunctionName"] == {"Fn::Sub": "${FunctionNamePrefix}StepStep"}
+
+
+def test_build_template_preserves_deployed_handler_error_logical_id() -> None:
+    template = build_template(
+        [
+            {
+                "handler": "examples.handler_error.handler_error.handler",
+                "description": "Handler error example.",
+            }
+        ]
+    )
+
+    assert "AsyncDurableExecutionExamplesErrorError" in template["Resources"]
+    assert "AsyncDurableExecutionExamplesHandlerErrorError" not in template["Resources"]
 
 
 def test_validate_catalog_test_coverage_accepts_known_handlers(
@@ -206,15 +211,11 @@ def test_validate_catalog_test_coverage_accepts_known_handlers(
     monkeypatch.setattr(
         sam_module,
         "load_test_handlers",
-        Mock(return_value={"async_durable_execution_examples.step.step.handler"}),
+        Mock(return_value={"examples.step.step.handler"}),
     )
 
     validate_catalog_test_coverage(
-        {
-            "examples": [
-                {"handler": "async_durable_execution_examples.step.step.handler"}
-            ]
-        }
+        {"examples": [{"handler": "examples.step.step.handler"}]}
     )
 
 
@@ -229,7 +230,7 @@ def test_validate_catalog_test_coverage_reports_missing_handlers(
     monkeypatch.setattr(
         sam_module,
         "load_test_handlers",
-        Mock(return_value={"async_durable_execution_examples.step.step.handler"}),
+        Mock(return_value={"examples.step.step.handler"}),
     )
 
     with pytest.raises(SystemExit, match="missing from the generated examples catalog"):
@@ -242,7 +243,7 @@ def test_generate_sam_template_writes_template(
     catalog = {
         "examples": [
             {
-                "handler": "async_durable_execution_examples.step.step.handler",
+                "handler": "examples.step.step.handler",
                 "description": "Step example.",
                 "durableConfig": {"ExecutionTimeout": 10},
             }
@@ -271,12 +272,12 @@ def test_generate_sam_template_selects_named_example(
         "examples": [
             {
                 "name": "Hello World",
-                "handler": "async_durable_execution_examples.hello_world.handler",
+                "handler": "examples.hello_world.handler",
                 "description": "Hello World example.",
             },
             {
                 "name": "Step",
-                "handler": "async_durable_execution_examples.step.step.handler",
+                "handler": "examples.step.step.handler",
                 "description": "Step example.",
             },
         ]
@@ -301,7 +302,7 @@ def test_generate_sam_template_rejects_unknown_example(
         "examples": [
             {
                 "name": "Hello World",
-                "handler": "async_durable_execution_examples.hello_world.handler",
+                "handler": "examples.hello_world.handler",
                 "description": "Hello World example.",
             }
         ]

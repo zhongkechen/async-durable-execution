@@ -4,7 +4,7 @@ import ast
 from pathlib import Path
 
 
-EXAMPLES_IMPORT_PREFIX = "async_durable_execution_examples"
+EXAMPLES_IMPORT_PREFIX = "examples"
 HANDLER_SUFFIX = ".handler"
 
 
@@ -26,7 +26,7 @@ def load_test_handlers_from_file(path: Path) -> set[str]:
             if not node.module.startswith(EXAMPLES_IMPORT_PREFIX):
                 continue
             for alias in node.names:
-                # Example: from async_durable_execution_examples.step import step
+                # Example: from examples.step import step
                 imported_modules[alias.asname or alias.name] = (
                     f"{node.module}.{alias.name}{HANDLER_SUFFIX}"
                 )

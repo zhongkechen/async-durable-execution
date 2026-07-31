@@ -19,7 +19,7 @@ class AppendSerDes(SerDes[str]):
 
 @durable_execution
 async def handler(_event: Any) -> str:
-    async def check(state: str | None):
+    async def check(state: str | None) -> str:
         return (state or "") + "x"
 
     return await wait_for_condition(

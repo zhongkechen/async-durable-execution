@@ -37,10 +37,13 @@ running again.
 
 ## Why This SDK
 
-- **Async-first**: handlers, steps, callbacks, child contexts, map functions,
-  and condition checks use `async def`.
+- **Async-first**: handlers, steps, callbacks, child contexts, `flow` nodes, map
+  functions, and condition checks use `async def`.
 - **Durable primitives**: compose checkpointed steps, waits, callbacks, child
   contexts, invokes, maps, and parallel branches.
+- **[Declarative DAG workflows](api/extension/flow.md)**: define validated acyclic graphs
+  with typed inputs, conditional dependencies, failure routes, and durable node
+  bodies.
 - **Normal asyncio composition**: durable operations return `asyncio.Task`
   objects and work with `asyncio.gather()`.
 - **Local and cloud testing**: run the same durable handler in memory or against
@@ -55,25 +58,55 @@ running again.
 
 ## Execution Model
 
+A durable workflow is **replayed**, not resumed from an in-memory Python stack.
+When a wait finishes or an interrupted execution continues, Lambda invokes the
+handler again from its first line. The SDK uses the saved execution history to
+avoid repeating completed durable operations.
+
 ```mermaid
-flowchart LR
-    A[Lambda event] --> B[Async handler]
-    B --> C[Checkpointed step]
-    C --> D[Wait or callback]
-    D --> E[Resume and replay]
-    E --> F[Next step]
-    C -. save result .-> S[(AWS Lambda durable state)]
-    D -. suspend .-> S
-    S -. restore history .-> E
+sequenceDiagram
+    participant L as AWS Lambda
+    participant H as handler()
+    participant S as SDK and durable history
+
+    L->>H: First invocation
+    H->>S: step("reserve-inventory")
+    S-->>H: Run it and save the result
+    H->>S: wait("payment-window")
+    S-->>L: Save progress and suspend
+
+    Note over L,S: The payment window ends
+
+    L->>H: Invoke again from the first line
+    H->>S: step("reserve-inventory")
+    S-->>H: Return the saved result
+    H->>S: wait("payment-window")
+    S-->>H: The wait is complete
+    H-->>L: Continue and return the response
 ```
 
-Code outside durable operations can replay. Keep it deterministic and put API
-calls, database access, random values, clock reads, and other side effects
-inside checkpointed steps.
+In the example above, `reserve_inventory()` runs only during the first
+invocation. On the second invocation, ordinary handler code before the wait
+runs again, but `step()` returns the saved reservation instead of calling
+`reserve_inventory()` again.
+
+This gives workflow code two different behaviors:
+
+- **Ordinary Python code replays.** For the same event and saved results, it
+  must make the same decisions and call durable operations in the same order.
+- **Durable operations use history.** Completed steps return saved results, and
+  waits or callbacks continue from their recorded state.
+
+Keep API calls, database access, filesystem operations, random values, UUIDs,
+clock reads, and other side effects inside checkpointed steps. Standard
+`logging` calls are replay-aware and can remain in the handler.
 
 ## Next Steps
 
 - Follow the [getting-started guide](getting-started.md).
+- Apply common [workflow patterns](workflow-patterns.md).
+- [Deploy and invoke](deployment.md) a durable Lambda function.
 - Learn the [advanced asyncio patterns](advanced-usage.md).
-- Browse the [durable operations API](api/operations.md).
-- Test locally with the [runner API](async_durable_execution/runner.md).
+- Define a [durable DAG workflow](api/extension/flow.md).
+- Browse the [API reference](async_durable_execution.md).
+- Test locally with the [runner API](api/runner.md).

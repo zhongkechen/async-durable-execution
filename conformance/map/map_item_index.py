@@ -3,15 +3,14 @@
 from typing import Any
 
 from async_durable_execution import (
-    MapItemContext,
     durable_execution,
-    get_current_context,
+    get_map_item_context,
     map,
 )
 
 
 async def map_fn(item: int) -> int:
-    context: MapItemContext = get_current_context()
+    context = get_map_item_context()
     return item + context.index
 
 

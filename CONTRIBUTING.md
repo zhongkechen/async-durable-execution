@@ -14,16 +14,17 @@ commands in this repository are run through Hatch from the repository root.
 
 ## Repository Structure
 
-This repository is a monorepo with two active Python packages at the repository root:
+The SDK, examples, and their tests all live at the repository root:
 
 ```text
-async-durable-execution/           # Core SDK plus local/cloud runner helpers
-async-durable-execution-examples/  # Example functions and tests
+async_durable_execution/  # Primitive, extension, core, and runner packages
+tests/                    # SDK and runner tests
+examples/                 # Example durable functions
+test_examples/            # Local and cloud example tests
 ```
 
-The root `pyproject.toml` defines shared Hatch environments for testing,
-typing, and examples. Each package-level `pyproject.toml` contains the
-package metadata and package-local tool configuration.
+The root `pyproject.toml` contains the SDK package metadata and all Hatch,
+pytest, coverage, mypy, and Ruff configuration.
 
 ## Development Workflow
 
@@ -33,14 +34,14 @@ otherwise.
 ### Common commands
 
 ```bash
-# Run all tests across all packages
+# Run all tests
 hatch run test:all
 
 # Run all tests with coverage
 hatch run test:cov
 
 # Type check the repo
-hatch run types:check
+hatch run test:typecheck
 ```
 
 ### Focused package development
@@ -56,11 +57,9 @@ hatch run test:examples
 
 ### Formatting and linting
 
-Ruff configuration is package-local, so run formatting checks from the package
-directory you are working in:
+Run formatting checks from the repository root:
 
 ```bash
-cd async-durable-execution
 hatch fmt --check
 
 # Or apply formatting fixes
@@ -81,7 +80,7 @@ documentation changes.
 
 ### Testing examples against PyPI
 
-To verify the examples package against the published SDK:
+To verify the examples against the published SDK:
 
 ```bash
 hatch run test-pypi-examples:test
@@ -111,14 +110,14 @@ and structure that makes the code easier to understand and maintain.
 # Entire repo
 hatch run test:all
 
-# One package
-hatch run dev-core:test
+# SDK tests
+hatch run test:sdk
 
 # A single test file
-hatch run dev-core:test async-durable-execution/test_sdk/path_to_test_module.py
+hatch run test:sdk tests/path_to_test_module.py
 
 # A single test
-hatch run dev-core:test async-durable-execution/test_sdk/path_to_test_module.py::test_name
+hatch run test:sdk tests/path_to_test_module.py::test_name
 
 # Filter by pattern
 hatch run test:all -k pattern
@@ -134,18 +133,17 @@ hatch run test:all --pdb
 
 - `TimeoutError: Execution did not complete within 60s` - Increase the runner
   timeout, for example `timeout=120`.
-- `ModuleNotFoundError: No module named 'async_durable_execution.runner'` - Run
-  through Hatch, such as `hatch run test:examples`, so workspace dependencies
-  are installed automatically.
+- `ModuleNotFoundError: No module named 'async_durable_execution._runner'` - Run
+  through Hatch, such as `hatch run test:examples`, so the local SDK is
+  installed automatically.
 
 ### Test layout
 
-- Put tests in the package `tests/` or `test/` directory that matches the code
-  you are changing. For the SDK package, mirror the source layout under
-  `async-durable-execution/test_sdk/`: primitive operation tests live in
-  `primitive/`, composite operation tests live in `composite/`, and shared model
-  or package-level behavior stays at the `test_sdk/` root. Runner tests live
-  under `async-durable-execution/test_sdk/runner/`.
+- Put tests in the test directory that matches the code you are changing. For
+  the SDK package, mirror the source layout under `tests/`: primitive
+  operation tests live in `primitive/`, extension operation tests live in
+  `extension/`, and shared core or package-level behavior stays at the
+  `tests/` root. Runner tests live under `tests/runner/`.
 - Use filenames ending in `_test.py`.
 - Prefer adding focused unit tests near the affected area, and add integration
   coverage when behavior spans multiple components.
@@ -154,24 +152,25 @@ hatch run test:all --pdb
 
 Run example-related commands from the repository root.
 
-The examples package includes pytest coverage that can run against either the local in-memory runner or deployed AWS Lambda durable functions. Local mode is the default and does not require AWS credentials:
+The examples include pytest coverage that can run against either the local
+in-memory runner or deployed AWS Lambda durable functions. Local mode is the
+default and does not require AWS credentials:
 
 ```bash
 # Run all example tests locally.
 hatch run test:examples
 
 # Or run pytest directly with an explicit mode.
-pytest --runner-mode=local async-durable-execution-examples/test_examples/
+pytest --runner-mode=local test_examples/
 
 # Run a specific example test.
-pytest --runner-mode=local -k test_hello_world async-durable-execution-examples/test_examples/
+pytest --runner-mode=local -k test_hello_world test_examples/
 ```
 
 Refresh editable installs in the examples environment when needed:
 
 ```bash
-hatch run -- examples:pip install -e async-durable-execution
-hatch run -- examples:pip install -e async-durable-execution-examples
+hatch run -- examples:pip install -e .
 ```
 
 Cloud mode exercises deployed Lambda functions with `DurableFunctionCloudTestRunner`:
@@ -187,7 +186,7 @@ hatch run examples:build
 hatch run examples:generate-sam-template -- --example-name "Hello World"
 
 # Deploy the function with SAM.
-sam build --template-file async-durable-execution-examples/template.generated.json
+sam build --template-file template.generated.json
 sam deploy \
   --template-file .aws-sam/build/template.yaml \
   --stack-name hello-world-test \
@@ -204,7 +203,7 @@ export LAMBDA_ENDPOINT=https://lambda.eu-south-1.amazonaws.com
 export QUALIFIED_FUNCTION_NAME="hello-world-test-HelloWorld:$LATEST"
 
 # Run one cloud-backed example test.
-pytest --runner-mode=cloud -k test_hello_world async-durable-execution-examples/test_examples/
+pytest --runner-mode=cloud -k test_hello_world test_examples/
 
 # Or run via hatch.
 hatch run test:examples-integration -k test_hello_world
@@ -221,7 +220,7 @@ Example tests use the `durable_runner` pytest fixture as a factory context manag
 
 ```python
 from async_durable_execution import InvocationStatus
-from async_durable_execution_examples import hello_world
+from examples import hello_world
 
 
 async def test_hello_world(durable_runner):

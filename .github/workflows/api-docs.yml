@@ -4,10 +4,10 @@ on:
   push:
     branches: [main]
     paths:
-      - "async-durable-execution/src/**"
-      - "async-durable-execution/test_sdk/**"
-      - "async-durable-execution/pyproject.toml"
-      - "async-durable-execution-examples/**"
+      - "async_durable_execution/**"
+      - "tests/**"
+      - "examples/**"
+      - "test_examples/**"
       - "docs/**"
       - "scripts/**"
       - "mkdocs.yml"
@@ -16,10 +16,10 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "async-durable-execution/src/**"
-      - "async-durable-execution/test_sdk/**"
-      - "async-durable-execution/pyproject.toml"
-      - "async-durable-execution-examples/**"
+      - "async_durable_execution/**"
+      - "tests/**"
+      - "examples/**"
+      - "test_examples/**"
       - "docs/**"
       - "scripts/**"
       - "mkdocs.yml"
@@ -57,9 +57,9 @@ jobs:
       - name: Assemble documentation at site root
         run: |
           cp -R build/docs/. site/
-          test -f site/api/operations.html
-          test -f site/api/composition.html
-          test -f site/api/configuration.html
+          test -f site/api/primitive/step.html
+          test -f site/api/extension/flow.html
+          test -f site/api/core.html
 
       - name: Build HTML coverage report
         run: hatch run test:cov-html

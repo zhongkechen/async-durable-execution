@@ -1,0 +1,451 @@
+"""Tests for wait operation processor."""
+
+from typing import Any, no_type_check
+
+from datetime import datetime, timezone
+from unittest.mock import Mock
+
+import pytest
+
+from async_durable_execution._core.models import (
+    Operation,
+    OperationAction,
+    OperationStatus,
+    OperationType,
+    OperationUpdate,
+    WaitOptions,
+)
+from async_durable_execution._runner.local.processors.wait import (
+    WaitProcessor,
+)
+from async_durable_execution._runner.exceptions import (
+    InvalidParameterValueException,
+)
+
+
+class MockNotifier:
+    """Mock notifier for testing."""
+
+    def __init__(self) -> None:
+        self.completed_calls: list[Any] = []
+        self.failed_calls: list[Any] = []
+        self.wait_timer_calls: list[Any] = []
+        self.step_retry_calls: list[Any] = []
+
+    def complete_execution(self, execution_arn, result=None) -> None:
+        self.completed_calls.append((execution_arn, result))
+
+    def fail_execution(self, execution_arn, error) -> None:
+        self.failed_calls.append((execution_arn, error))
+
+    def schedule_wait_timer(self, execution_arn, operation_id, delay) -> None:
+        self.wait_timer_calls.append((execution_arn, operation_id, delay))
+
+    def schedule_step_retry(self, execution_arn, operation_id, delay) -> None:
+        self.step_retry_calls.append((execution_arn, operation_id, delay))
+
+
+@no_type_check
+def test_process_start_action() -> None:
+    processor = WaitProcessor()
+    notifier = MockNotifier()
+    execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
+
+    wait_options = WaitOptions(wait_seconds=30)
+    update = OperationUpdate(
+        operation_id="wait-123",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.START,
+        name="test-wait",
+        wait_options=wait_options,
+    )
+
+    result = processor.process(update, None, notifier, execution_arn)
+
+    assert isinstance(result, Operation)
+    assert result.operation_id == "wait-123"
+    assert result.operation_type == OperationType.WAIT
+    assert result.status == OperationStatus.STARTED
+    assert result.name == "test-wait"
+    assert result.wait_details is not None
+    assert result.wait_details.scheduled_end_timestamp > datetime.now(timezone.utc)
+
+    assert len(notifier.wait_timer_calls) == 1
+    assert notifier.wait_timer_calls[0] == (execution_arn, "wait-123", 30)
+
+
+def test_process_start_action_scales_wait_delay(monkeypatch) -> None:
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.1")
+
+    processor = WaitProcessor()
+    notifier = MockNotifier()
+    execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
+
+    update = OperationUpdate(
+        operation_id="wait-123",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.START,
+        name="test-wait",
+        wait_options=WaitOptions(wait_seconds=30),
+    )
+
+    processor.process(update, None, notifier, execution_arn)
+
+    assert notifier.wait_timer_calls[0] == (execution_arn, "wait-123", 3.0)
+
+
+def test_process_start_action_without_wait_options() -> None:
+    processor = WaitProcessor()
+    notifier = MockNotifier()
+    execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
+
+    update = OperationUpdate(
+        operation_id="wait-123",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.START,
+        name="test-wait",
+    )
+
+    result = processor.process(update, None, notifier, execution_arn)
+
+    assert isinstance(result, Operation)
+    assert result.wait_details is not None
+
+    assert len(notifier.wait_timer_calls) == 1
+    assert notifier.wait_timer_calls[0] == (execution_arn, "wait-123", 0)
+
+
+def test_process_start_action_with_zero_seconds() -> None:
+    processor = WaitProcessor()
+    notifier = MockNotifier()
+    execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
+
+    wait_options = WaitOptions(wait_seconds=0)
+    update = OperationUpdate(
+        operation_id="wait-123",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.START,
+        name="test-wait",
+        wait_options=wait_options,
+    )
+
+    result = processor.process(update, None, notifier, execution_arn)
+
+    assert isinstance(result, Operation)
+    assert result.wait_details is not None
+
+    assert len(notifier.wait_timer_calls) == 1
+    assert notifier.wait_timer_calls[0] == (execution_arn, "wait-123", 0)
+
+
+def test_process_start_action_with_parent_id() -> None:
+    processor = WaitProcessor()
+    notifier = MockNotifier()
+    execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
+
+    wait_options = WaitOptions(wait_seconds=15)
+    update = OperationUpdate(
+        operation_id="wait-123",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.START,
+        name="test-wait",
+        parent_id="parent-456",
+        wait_options=wait_options,
+    )
+
+    result = processor.process(update, None, notifier, execution_arn)
+
+    assert result.parent_id == "parent-456"
+
+
+@no_type_check
+def test_process_start_action_with_sub_type() -> None:
+    processor = WaitProcessor()
+    notifier = MockNotifier()
+    execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
+
+    wait_options = WaitOptions(wait_seconds=15)
+    update = OperationUpdate(
+        operation_id="wait-123",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.START,
+        name="test-wait",
+        sub_type="timer",
+        wait_options=wait_options,
+    )
+
+    result = processor.process(update, None, notifier, execution_arn)
+
+    assert result.sub_type == "timer"
+
+
+def test_process_cancel_action() -> None:
+    processor = WaitProcessor()
+    notifier = MockNotifier()
+    execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
+
+    current_op = Mock()
+    current_op.start_timestamp = datetime.now(timezone.utc)
+
+    update = OperationUpdate(
+        operation_id="wait-123",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.CANCEL,
+        name="test-wait",
+    )
+
+    result = processor.process(update, current_op, notifier, execution_arn)
+
+    assert isinstance(result, Operation)
+    assert result.operation_id == "wait-123"
+    assert result.status == OperationStatus.CANCELLED
+    assert result.start_timestamp == current_op.start_timestamp
+
+
+def test_process_cancel_action_without_current_operation() -> None:
+    processor = WaitProcessor()
+    notifier = MockNotifier()
+    execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
+
+    update = OperationUpdate(
+        operation_id="wait-123",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.CANCEL,
+        name="test-wait",
+    )
+
+    result = processor.process(update, None, notifier, execution_arn)
+
+    assert isinstance(result, Operation)
+    assert result.status == OperationStatus.CANCELLED
+
+
+def test_process_invalid_action() -> None:
+    processor = WaitProcessor()
+    notifier = MockNotifier()
+    execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
+
+    update = OperationUpdate(
+        operation_id="wait-123",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.SUCCEED,
+        name="test-wait",
+    )
+
+    with pytest.raises(
+        InvalidParameterValueException, match="Invalid action for WAIT operation"
+    ):
+        processor.process(update, None, notifier, execution_arn)
+
+
+def test_process_fail_action() -> None:
+    processor = WaitProcessor()
+    notifier = MockNotifier()
+    execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
+
+    update = OperationUpdate(
+        operation_id="wait-123",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.FAIL,
+        name="test-wait",
+    )
+
+    with pytest.raises(
+        InvalidParameterValueException, match="Invalid action for WAIT operation"
+    ):
+        processor.process(update, None, notifier, execution_arn)
+
+
+def test_process_retry_action() -> None:
+    processor = WaitProcessor()
+    notifier = MockNotifier()
+    execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
+
+    update = OperationUpdate(
+        operation_id="wait-123",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.RETRY,
+        name="test-wait",
+    )
+
+    with pytest.raises(
+        InvalidParameterValueException, match="Invalid action for WAIT operation"
+    ):
+        processor.process(update, None, notifier, execution_arn)
+
+
+@no_type_check
+def test_wait_details_created_correctly() -> None:
+    processor = WaitProcessor()
+    notifier = MockNotifier()
+    execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
+
+    wait_options = WaitOptions(wait_seconds=60)
+    update = OperationUpdate(
+        operation_id="wait-123",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.START,
+        name="test-wait",
+        wait_options=wait_options,
+    )
+
+    before_time = datetime.now(timezone.utc)
+    result = processor.process(update, None, notifier, execution_arn)
+
+    assert result.wait_details.scheduled_end_timestamp > before_time
+
+
+def test_no_completed_or_failed_calls() -> None:
+    processor = WaitProcessor()
+    notifier = MockNotifier()
+    execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
+
+    wait_options = WaitOptions(wait_seconds=30)
+    update = OperationUpdate(
+        operation_id="wait-123",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.START,
+        name="test-wait",
+        wait_options=wait_options,
+    )
+
+    processor.process(update, None, notifier, execution_arn)
+
+    assert len(notifier.completed_calls) == 0
+    assert len(notifier.failed_calls) == 0
+    assert len(notifier.step_retry_calls) == 0
+
+
+def test_cancel_no_timer_scheduled() -> None:
+    processor = WaitProcessor()
+    notifier = MockNotifier()
+    execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
+
+    current_op = Mock()
+    current_op.start_timestamp = datetime.now(timezone.utc)
+
+    update = OperationUpdate(
+        operation_id="wait-123",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.CANCEL,
+        name="test-wait",
+    )
+
+    processor.process(update, current_op, notifier, execution_arn)
+
+    assert len(notifier.wait_timer_calls) == 0
+
+
+# Wait validation tests
+
+"""Unit tests for wait operation validator."""
+
+import pytest
+
+from async_durable_execution._core.models import (
+    Operation,
+    OperationAction,
+    OperationStatus,
+    OperationType,
+    OperationUpdate,
+)
+from async_durable_execution._runner.local.processors.wait import (
+    WaitProcessor,
+)
+from async_durable_execution._runner.exceptions import (
+    InvalidParameterValueException,
+)
+
+
+def test_validate_start_action_with_no_current_state() -> None:
+    """Test START action with no current state."""
+    update = OperationUpdate(
+        operation_id="test-id",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.START,
+    )
+    WaitProcessor.validate(None, update)
+
+
+def test_validate_start_action_with_existing_state() -> None:
+    """Test START action with existing state raises error."""
+    current_state = Operation(
+        operation_id="test-id",
+        operation_type=OperationType.WAIT,
+        status=OperationStatus.STARTED,
+    )
+    update = OperationUpdate(
+        operation_id="test-id",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.START,
+    )
+
+    with pytest.raises(
+        InvalidParameterValueException, match="Cannot start a WAIT that already exist"
+    ):
+        WaitProcessor.validate(current_state, update)
+
+
+def test_validate_cancel_action_with_started_state() -> None:
+    """Test CANCEL action with STARTED state."""
+    current_state = Operation(
+        operation_id="test-id",
+        operation_type=OperationType.WAIT,
+        status=OperationStatus.STARTED,
+    )
+    update = OperationUpdate(
+        operation_id="test-id",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.CANCEL,
+    )
+    WaitProcessor.validate(current_state, update)
+
+
+def test_validate_cancel_action_with_no_current_state() -> None:
+    """Test CANCEL action with no current state raises error."""
+    update = OperationUpdate(
+        operation_id="test-id",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.CANCEL,
+    )
+
+    with pytest.raises(
+        InvalidParameterValueException,
+        match="Cannot cancel a WAIT that does not exist or has already completed",
+    ):
+        WaitProcessor.validate(None, update)
+
+
+def test_validate_cancel_action_with_completed_state() -> None:
+    """Test CANCEL action with completed state raises error."""
+    current_state = Operation(
+        operation_id="test-id",
+        operation_type=OperationType.WAIT,
+        status=OperationStatus.SUCCEEDED,
+    )
+    update = OperationUpdate(
+        operation_id="test-id",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.CANCEL,
+    )
+
+    with pytest.raises(
+        InvalidParameterValueException,
+        match="Cannot cancel a WAIT that does not exist or has already completed",
+    ):
+        WaitProcessor.validate(current_state, update)
+
+
+def test_validate_invalid_action() -> None:
+    """Test invalid action raises error."""
+    update = OperationUpdate(
+        operation_id="test-id",
+        operation_type=OperationType.WAIT,
+        action=OperationAction.SUCCEED,
+    )
+
+    with pytest.raises(
+        InvalidParameterValueException,
+        match="Invalid action for the given operation type",
+    ):
+        WaitProcessor.validate(None, update)

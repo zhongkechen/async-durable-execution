@@ -1,0 +1,381 @@
+"""Unit tests for logger module."""
+
+from __future__ import annotations
+from typing import no_type_check
+
+import logging
+from collections.abc import Mapping
+from unittest.mock import Mock
+
+import pytest
+
+from async_durable_execution._core.context import (
+    set_current_context,
+    reset_current_context,
+)
+from async_durable_execution._core.logger import (
+    DurableContextFilter,
+    build_context_log_extra,
+    configure_durable_logger,
+)
+from async_durable_execution._core.exceptions import ValidationError
+from async_durable_execution._core.models import OperationIdentifier
+from async_durable_execution._core.models import (
+    Operation,
+    OperationStatus,
+    OperationSubType,
+    OperationType,
+)
+from async_durable_execution._core.state import ExecutionState
+from async_durable_execution import DurableContext, StepContext
+
+
+class PowertoolsLoggerStub:
+    """Stub implementation of AWS Powertools Logger with exact method signatures."""
+
+    filters: list[logging.Filter]
+    handlers: list[logging.Handler]
+
+    def __init__(self) -> None:
+        self.filters = []
+        self.handlers = []
+
+    def addFilter(self, filter: logging.Filter) -> None:  # noqa: N802
+        self.filters.append(filter)
+
+    def debug(
+        self,
+        msg: object,
+        *args: object,
+        exc_info=None,
+        stack_info: bool = False,
+        stacklevel: int = 2,
+        extra: Mapping[str, object] | None = None,
+        **kwargs: object,
+    ) -> None:
+        pass
+
+    def info(
+        self,
+        msg: object,
+        *args: object,
+        exc_info=None,
+        stack_info: bool = False,
+        stacklevel: int = 2,
+        extra: Mapping[str, object] | None = None,
+        **kwargs: object,
+    ) -> None:
+        pass
+
+    def warning(
+        self,
+        msg: object,
+        *args: object,
+        exc_info=None,
+        stack_info: bool = False,
+        stacklevel: int = 2,
+        extra: Mapping[str, object] | None = None,
+        **kwargs: object,
+    ) -> None:
+        pass
+
+    def error(
+        self,
+        msg: object,
+        *args: object,
+        exc_info=None,
+        stack_info: bool = False,
+        stacklevel: int = 2,
+        extra: Mapping[str, object] | None = None,
+        **kwargs: object,
+    ) -> None:
+        pass
+
+    def exception(
+        self,
+        msg: object,
+        *args: object,
+        exc_info=True,
+        stack_info: bool = False,
+        stacklevel: int = 2,
+        extra: Mapping[str, object] | None = None,
+        **kwargs: object,
+    ) -> None:
+        pass
+
+
+EXECUTION_STATE = ExecutionState(
+    durable_execution_arn="arn:aws:test",
+    initial_checkpoint_token="test_token",  # noqa: S106
+    service_client=Mock(),
+)
+
+
+def create_durable_context(
+    parent_id: str | None = None,
+    operation_id: str | None = None,
+    operation_name: str | None = None,
+) -> DurableContext:
+    return DurableContext(
+        execution_state=EXECUTION_STATE,
+        operation_identifier=OperationIdentifier(
+            operation_id=operation_id,
+            sub_type=OperationSubType.EXECUTION,
+            parent_id=parent_id,
+            name=operation_name,
+        ),
+    )
+
+
+def test_powertools_logger_compatibility() -> None:
+    """The public logger protocol should still accept Powertools-style loggers."""
+    powertools_logger = PowertoolsLoggerStub()
+
+    def accepts_logger_interface(logger) -> None:
+        logger.debug("test")
+        logger.info("test")
+        logger.warning("test")
+        logger.error("test")
+        logger.exception("test")
+
+    accepts_logger_interface(powertools_logger)
+    configure_durable_logger(powertools_logger)
+    assert any(
+        isinstance(item, DurableContextFilter) for item in powertools_logger.filters
+    )
+
+
+def test_build_context_log_extra_for_durable_context() -> None:
+    context = create_durable_context(
+        parent_id="parent-1",
+        operation_id="context-op",
+        operation_name="child-context",
+    )
+
+    assert build_context_log_extra(context) == {
+        "executionArn": "arn:aws:test",
+        "parentId": "parent-1",
+        "operationId": "context-op",
+        "operationName": "child-context",
+    }
+
+
+def test_build_context_log_extra_for_step_context() -> None:
+    step_context = StepContext(
+        attempt=2,
+        execution_state=EXECUTION_STATE,
+        operation_identifier=OperationIdentifier(
+            operation_id="step-1",
+            sub_type=OperationSubType.STEP,
+            parent_id="parent-1",
+            name="process",
+        ),
+    )
+
+    assert build_context_log_extra(step_context) == {
+        "executionArn": "arn:aws:test",
+        "parentId": "parent-1",
+        "operationId": "step-1",
+        "operationName": "process",
+        "attempt": 2,
+    }
+
+
+def test_build_context_log_extra_includes_callback_id() -> None:
+    callback_context = Mock(
+        durable_execution_arn="arn:aws:test",
+        parent_id=None,
+        operation_id=None,
+        operation_name=None,
+        callback_id="callback-1",
+        attempt=None,
+    )
+
+    assert build_context_log_extra(callback_context) == {
+        "executionArn": "arn:aws:test",
+        "callbackId": "callback-1",
+    }
+
+
+def test_filter_allows_logs_without_active_context() -> None:
+    record = logging.LogRecord(
+        name="test",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="hello",
+        args=(),
+        exc_info=None,
+    )
+
+    assert DurableContextFilter().filter(record) is True
+
+
+def test_filter_allows_context_without_execution_state() -> None:
+    record = logging.LogRecord(
+        name="test",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="hello",
+        args=(),
+        exc_info=None,
+    )
+    context = Mock(spec=[])
+
+    token = set_current_context(context)
+    try:
+        assert DurableContextFilter().filter(record) is True
+    finally:
+        reset_current_context(token)
+
+
+def test_filter_raises_when_execution_state_is_none() -> None:
+    record = logging.LogRecord(
+        name="test",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="hello",
+        args=(),
+        exc_info=None,
+    )
+    context = Mock(
+        execution_state=None,
+        durable_execution_arn="arn:aws:test",
+        parent_id=None,
+        operation_id=None,
+        operation_name=None,
+    )
+
+    token = set_current_context(context)
+    try:
+        with pytest.raises(ValidationError, match="execution state is None"):
+            DurableContextFilter().filter(record)
+    finally:
+        reset_current_context(token)
+
+
+def test_configure_durable_logger_ignores_objects_without_add_filter() -> None:
+    logger = object()
+
+    assert configure_durable_logger(logger) is logger
+
+
+@no_type_check
+def test_filter_adds_fields_from_active_context() -> None:
+    record = logging.LogRecord(
+        name="test",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="hello",
+        args=(),
+        exc_info=None,
+    )
+    context = create_durable_context(parent_id="parent-1", operation_id="context-op")
+
+    token = set_current_context(context)
+    try:
+        allowed = DurableContextFilter().filter(record)
+    finally:
+        reset_current_context(token)
+
+    assert allowed is True
+    assert record.executionArn == "arn:aws:test"
+    assert record.parentId == "parent-1"
+    assert record.operationId == "context-op"
+
+
+@no_type_check
+def test_filter_preserves_existing_extra_fields() -> None:
+    record = logging.LogRecord(
+        name="test",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="hello",
+        args=(),
+        exc_info=None,
+    )
+    record.executionArn = "preexisting"
+
+    step_context = StepContext(
+        attempt=4,
+        execution_state=EXECUTION_STATE,
+        operation_identifier=OperationIdentifier(
+            operation_id="step-1",
+            sub_type=OperationSubType.STEP,
+            parent_id="parent-1",
+            name="process",
+        ),
+    )
+
+    token = set_current_context(step_context)
+    try:
+        DurableContextFilter().filter(record)
+    finally:
+        reset_current_context(token)
+
+    assert record.executionArn == "preexisting"
+    assert record.parentId == "parent-1"
+    assert record.operationId == "step-1"
+    assert record.operationName == "process"
+    assert record.attempt == 4
+
+
+def test_filter_suppresses_logs_during_replay() -> None:
+    operation = Operation(
+        operation_id="op1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.SUCCEEDED,
+    )
+    replay_state = ExecutionState(
+        durable_execution_arn="arn:aws:test",
+        initial_checkpoint_token="test_token",  # noqa: S106
+        operations={"op1": operation},
+        service_client=Mock(),
+    )
+    durable_context = DurableContext(
+        execution_state=replay_state,
+        operation_identifier=OperationIdentifier(
+            operation_id=None,
+            sub_type=OperationSubType.EXECUTION,
+        ),
+        replaying=True,
+    )
+
+    record = logging.LogRecord(
+        name="test",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="hello",
+        args=(),
+        exc_info=None,
+    )
+
+    token = set_current_context(durable_context)
+    try:
+        allowed = DurableContextFilter().filter(record)
+    finally:
+        reset_current_context(token)
+
+    assert allowed is False
+
+
+def test_configure_durable_logger_is_idempotent_for_logger_and_handlers() -> None:
+    logger = logging.getLogger("async_durable_execution.tests.logger")
+    logger.handlers = []
+    handler = logging.StreamHandler()
+    logger.addHandler(handler)
+
+    try:
+        configure_durable_logger(logger)
+        configure_durable_logger(logger)
+    finally:
+        logger.removeHandler(handler)
+        handler.close()
+
+    assert sum(isinstance(item, DurableContextFilter) for item in logger.filters) == 1
+    assert sum(isinstance(item, DurableContextFilter) for item in handler.filters) == 1

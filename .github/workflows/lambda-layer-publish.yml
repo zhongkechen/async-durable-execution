@@ -67,7 +67,7 @@ jobs:
       - name: Build Lambda layer zip
         run: |
           hatch run python scripts/build_layer.py \
-            --sdk-source ./async-durable-execution \
+            --sdk-source ".[aioboto]" \
             --output "$LAYER_ZIP" \
             --verbose
 

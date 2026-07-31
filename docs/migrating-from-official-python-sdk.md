@@ -45,12 +45,15 @@ from `async_durable_execution`.
 | `context.run_in_child_context(...)` | `await run_in_child_context(child(), name="...")` |
 | `context.map(...)` | `await map(func=..., items=..., ...)` |
 | `context.parallel(...)` | `await parallel(branches=[...], ...)` |
+| No direct declarative DAG equivalent | `await flow(my_dag(...), name="...")` |
 | `context.logger` or `step_context.logger` | standard `logging.getLogger(__name__)` |
 
 This SDK binds the active durable context internally while your async callable runs. If
-you need execution metadata, call `get_current_context()` and read fields such as
+you need execution metadata, use the getter for that callable's scope, such as
+`get_durable_context()` or `get_step_context()`, and read fields such as
 `durable_execution_arn`, `operation_id`, `operation_name`, `lambda_context`, or
-`is_replaying()`.
+`is_replaying()`. Specific getters validate the active scope and provide concrete
+return types without a cast.
 
 Durable operation helpers return `asyncio.Task` objects. You can keep the simple
 `await step(...)` style during migration, or start multiple independent operations
@@ -231,17 +234,15 @@ For the combined submit-and-wait pattern, make the submitter a durable callable:
 from datetime import timedelta
 
 from async_durable_execution import (
-    WaitForCallbackContext,
     durable_callable,
-    get_current_context,
+    get_wait_for_callback_context,
     wait_for_callback,
 )
 
 
 @durable_callable
 async def submit_approval() -> None:
-    callback_context = get_current_context()
-    assert isinstance(callback_context, WaitForCallbackContext)
+    callback_context = get_wait_for_callback_context()
     send_approval_request(callback_context.callback_id)
 
 
@@ -298,6 +299,42 @@ parallel_results = await parallel(
 )
 ```
 
+## Declarative DAG Flows
+
+`flow()` is an additional composition API in this SDK rather than a mechanical
+replacement for an official context method. Use it when the workflow is a static
+acyclic graph and benefits from inferred data dependencies, conditional success or
+failure routes, and concurrent independent nodes.
+
+```python
+from async_durable_execution import durable_dag, durable_node, flow, node
+
+
+@durable_node
+async def load_order(order_id: str) -> dict:
+    return {"id": order_id}
+
+
+@durable_node
+async def process_order(order: dict) -> dict:
+    return {"id": order["id"], "status": "processed"}
+
+
+@durable_dag
+def order_flow(order_id: str):
+    loaded = node(load_order(order_id), name="load-order")
+    processed = node(process_order(loaded.outcome), name="process-order")
+    return processed.outcome
+
+
+result = await flow(order_flow(order_id), name="order-flow")
+```
+
+Unlike other user-provided callables, a `@durable_dag` definition is synchronous
+and must be deterministic. `@durable_node` bodies are async and can contain normal
+durable operations. See [flow and DAG workflows](api/extension/flow.md) for the complete dependency,
+failure, and output model.
+
 ## Logging
 
 Use standard Python logging:
@@ -341,12 +378,13 @@ assertions can use `result.get_step("my-step")` instead of depending on operatio
 ## Migration Checklist
 
 1. Replace package dependencies and imports.
-2. Change every durable handler, step, child context, callback submitter, map function,
-   parallel branch, and wait-for-condition check to `async def`.
+2. Change every durable handler, step, child context, flow node, callback submitter,
+   map function, parallel branch, and wait-for-condition check to `async def`; keep
+   `@durable_dag` definitions synchronous.
 3. Replace `DurableContext` method calls with awaited top-level operations.
 4. Replace `@durable_step` with `@durable_callable`.
-5. Remove explicit `DurableContext` and `StepContext` parameters unless you are reading
-   metadata through `get_current_context()`.
+5. Remove explicit `DurableContext` and `StepContext` parameters. Use the context
+   getter for the active scope when you need metadata.
 6. Replace `Duration` with `datetime.timedelta`.
 7. Move all nondeterministic work and side effects into steps.
 8. Replace context loggers with standard `logging` loggers.

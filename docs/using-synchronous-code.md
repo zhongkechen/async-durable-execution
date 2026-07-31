@@ -1,9 +1,14 @@
 # Using Synchronous Code
 
-This SDK requires durable handlers and user-provided durable operation callables to be
-`async def`, but your business code does not have to be fully async. You can call
-existing synchronous functions from async durable callables as long as you preserve the
-durable execution replay rules.
+This SDK requires executable workflow bodies such as durable handlers, steps,
+and flow nodes to be `async def`, but your business code does not have to be
+fully async. You can call existing synchronous functions from async durable
+callables as long as you preserve the durable execution replay rules.
+
+Declarative and configuration hooks are intentionally synchronous. For example,
+a `@durable_dag` definition must be a regular `def` because it only declares
+and validates a flow graph, while its `@durable_node` bodies must be
+`async def`.
 
 The important distinction is where the synchronous code runs:
 
@@ -18,14 +23,35 @@ asynchronous:
 
 - `@durable_execution` handlers
 - `@durable_callable` step functions
+- `@durable_node` flow node functions
 - child context functions passed to `run_in_child_context()`
 - callback submitters passed to `wait_for_callback()`
 - item functions passed to `map()`
 - branch callables passed to `parallel()`
 - condition checks passed to `wait_for_condition()`
 
+These entry points can be functions, instance methods, class methods, or static
+methods. Durable operations are awaitable and run on the same event loop as the
+handler.
+
 Do not pass a regular `def` function directly to `step()`, `run_in_child_context()`,
-`map()`, or `parallel()`. Wrap synchronous work in an async durable callable instead.
+`node()`, `map()`, or `parallel()`. Wrap synchronous work in an async durable
+callable instead.
+
+## What Must Stay Synchronous
+
+These declarative and configuration hooks must be regular synchronous callables,
+not `async def` functions:
+
+- `@durable_dag` definitions
+- retry and polling strategies
+- custom completion callbacks passed to `CompletionConfig.custom()`
+- `item_namer` callbacks passed to `map()`
+- `summary_generator` callbacks
+
+Keep DAG definitions and structural or metadata hooks deterministic and
+side-effect free. They must not perform I/O, start durable operations, or return
+awaitables.
 
 ## Calling Pure Synchronous Helpers
 
@@ -177,10 +203,9 @@ import asyncio
 from datetime import timedelta
 
 from async_durable_execution import (
-    WaitForCallbackContext,
     durable_callable,
     durable_execution,
-    get_current_context,
+    get_wait_for_callback_context,
     wait_for_callback,
 )
 
@@ -191,8 +216,7 @@ def submit_approval_sync(callback_id: str, approver_email: str) -> None:
 
 @durable_callable
 async def submit_approval(approver_email: str) -> None:
-    callback_context = get_current_context()
-    assert isinstance(callback_context, WaitForCallbackContext)
+    callback_context = get_wait_for_callback_context()
     await asyncio.to_thread(
         submit_approval_sync,
         callback_context.callback_id,
@@ -221,11 +245,13 @@ whether it blocks.
 
 ## Checklist
 
-1. Keep all durable entry points as `async def`.
-2. Call deterministic synchronous helpers directly only when they have no side effects.
-3. Put synchronous I/O, external reads, and writes inside `@durable_callable` steps.
-4. Use `asyncio.to_thread()` for blocking synchronous I/O.
-5. Do not perform durable operations from inside a step.
-6. Do not call `asyncio.run()` from durable code.
-7. Name the step that wraps each important synchronous operation so tests and logs stay
+1. Keep executable workflow bodies as `async def`.
+2. Keep declarative and configuration hooks synchronous; keep DAG definitions
+   and structural or metadata hooks deterministic and side-effect free.
+3. Call deterministic synchronous helpers directly only when they have no side effects.
+4. Put synchronous I/O, external reads, and writes inside `@durable_callable` steps.
+5. Use `asyncio.to_thread()` for blocking synchronous I/O.
+6. Do not perform durable operations from inside a step.
+7. Do not call `asyncio.run()` from durable code.
+8. Name the step that wraps each important synchronous operation so tests and logs stay
    clear.

@@ -23,6 +23,7 @@ difference is the Python programming model.
 | Durable operations | `context.step(...)`, `context.wait(...)`, `context.invoke(...)` | Top-level `await step(...)`, `await wait(...)`, `await invoke(...)` |
 | Async library integration | Requires bridging async code from sync call sites | Native `await` for async clients and services |
 | Fan-out concurrency | SDK fan-out helpers such as `context.parallel()` and `context.map()` | `parallel()`, `map()`, and normal `asyncio.gather()` over operation tasks |
+| Declarative DAG workflows | No direct equivalent | `flow()` with typed node inputs, conditional dependencies, and failure routes |
 | Logging | Context logger APIs | Standard `logging.getLogger(...)` with SDK replay filtering |
 | Test runner | Separate testing package | Local and cloud runners included in the main package |
 | Documentation | AWS official documentation | Generated API reference, migration guide, and async-focused guides |
@@ -59,9 +60,10 @@ def handler(event: dict, context: DurableContext) -> dict:
 ```
 
 This SDK binds the active durable context internally and exposes durable operations as
-top-level awaitable helpers. User handlers, steps, child contexts, callback submitters,
-map item functions, parallel branches, and condition checks are written as
-`async def`.
+top-level awaitable helpers. User handlers, steps, child contexts, `flow` nodes,
+callback submitters, map item functions, parallel branches, and condition checks are
+written as `async def`. The `@durable_dag` function that declares a flow graph is
+synchronous and deterministic.
 
 ```python
 import logging
@@ -111,7 +113,7 @@ written around that contract.
 | Concern | Official Python SDK | `async-durable-execution` |
 | --- | --- | --- |
 | Operation access | Methods on `DurableContext` | Top-level helpers imported from `async_durable_execution` |
-| Context metadata | `DurableContext` and `StepContext` parameters | `get_current_context()` when metadata is needed |
+| Context metadata | `DurableContext` and `StepContext` parameters | Typed context getters such as `get_durable_context()` and `get_step_context()` |
 | Durations | SDK duration wrapper objects | Standard `datetime.timedelta` |
 | Operation names | Usually passed through operation config or context APIs | Keyword-only `name=...` arguments |
 | Retry configuration | SDK retry config objects | `RetryStrategy(...)` passed to operations |
@@ -152,6 +154,8 @@ prices = await asyncio.gather(*price_tasks)
 
 Use `map()` when you want item-level result aggregation, completion thresholds, or
 bounded fan-out semantics. Use `parallel()` when you want explicit durable branches.
+Use `flow()` when a static DAG benefits from inferred data dependencies, conditional
+routes, and graph validation before execution.
 Use `asyncio.gather()` when independent durable operations fit normal async task
 composition.
 
@@ -196,6 +200,7 @@ adds async-focused project documentation:
 - Generated API reference published through GitHub Pages.
 - A migration guide for moving from the official synchronous Python SDK.
 - Async-focused examples, including `asyncio.gather()` over durable operation tasks.
+- Declarative DAG examples covering fan-out/fan-in and failure recovery.
 - Local/cloud runner examples and typed result inspection patterns.
 - Expanded test coverage and published coverage reporting for this repository.
 - Repository scripts and CI workflows for packaging the SDK as an AWS Lambda layer.

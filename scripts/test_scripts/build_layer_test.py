@@ -21,7 +21,9 @@ from scripts.build_layer import parse_args
 
 def test_default_sdk_spec_uses_shared_version() -> None:
     namespace: dict[str, str] = {}
-    version_file = Path(__file__).resolve().parents[2] / "VERSION.py"
+    version_file = (
+        Path(__file__).resolve().parents[2] / "async_durable_execution" / "__about__.py"
+    )
     exec(version_file.read_text(encoding="utf-8"), namespace)
 
     assert default_sdk_spec() == f"async-durable-execution=={namespace['__version__']}"
@@ -99,14 +101,14 @@ def test_build_layer_installs_sdk_and_returns_archive_details(
     output_path = tmp_path / "dist" / "layer.zip"
     result = build_layer(
         output_path=output_path,
-        sdk_source="./async-durable-execution",
+        sdk_source=".",
         python_executable="python-test",
         pip_args=("--quiet",),
     )
 
     assert result == LayerBuildResult(
         output_path=output_path.resolve(),
-        sdk_source="./async-durable-execution",
+        sdk_source=".",
         file_count=1,
         size_bytes=output_path.stat().st_size,
     )
@@ -115,7 +117,7 @@ def test_build_layer_installs_sdk_and_returns_archive_details(
     assert call["python_executable"] == "python-test"
     assert isinstance(call["target_dir"], Path)
     assert call["target_dir"].name == "python"
-    assert call["sdk_source"] == "./async-durable-execution"
+    assert call["sdk_source"] == "."
     assert call["pip_args"] == ("--quiet",)
 
 
@@ -153,7 +155,7 @@ def test_pip_install_invokes_pip_with_extra_args(
 def test_load_version_from_path_requires_loadable_spec(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    version_path = tmp_path / "VERSION.py"
+    version_path = tmp_path / "__about__.py"
     version_path.write_text("__version__ = '1.2.3'\n")
     monkeypatch.setattr(
         build_layer_module.importlib.util,

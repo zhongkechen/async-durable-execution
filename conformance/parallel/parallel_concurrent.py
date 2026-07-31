@@ -1,11 +1,12 @@
 """8-11: Parallel concurrent execution preserves result order."""
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from async_durable_execution import durable_execution, parallel
 
 
-def branch(value: str):
+def branch(value: str) -> Callable[[], Awaitable[str]]:
     async def run() -> str:
         return value
 
