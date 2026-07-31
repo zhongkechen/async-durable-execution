@@ -26,7 +26,7 @@ from .._core import (
     OperationSubType,
     OperationUpdate,
     RetryStrategy,
-    SerDesLike,
+    SerDes,
     TerminationReason,
     _encode_sdk_control_error_data,
     bind_current_context,
@@ -93,7 +93,7 @@ class StepOperationExecutor(OperationExecutor[T]):
         operation_identifier: OperationIdentifier,
         retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
         step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
-        serdes: SerDesLike | None = None,
+        serdes: SerDes | None = None,
     ) -> None:
         """Initialize the step operation executor.
 
@@ -385,7 +385,7 @@ def step(
     name: str | None = None,
     retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
     step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
 ) -> asyncio.Task[T]: ...
 
 
@@ -396,7 +396,7 @@ def step(
     name: str | None = None,
     retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
     step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
 ) -> asyncio.Task[T]: ...
 
 
@@ -406,7 +406,7 @@ def step(
     name: str | None = None,
     retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
     step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
 ) -> asyncio.Task[T]:
     """Run user code as a checkpointed durable step.
 
@@ -447,7 +447,7 @@ async def _step(
     operation_identifier: OperationIdentifier,
     retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
     step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
 ) -> T:
     executor: StepOperationExecutor[T] = StepOperationExecutor(
         func=func,

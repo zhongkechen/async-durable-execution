@@ -9,7 +9,7 @@ from .._core import (
     Duration,
     DurableContext,
     RetryStrategy,
-    SerDesLike,
+    SerDes,
     bind_current_context,
     call_user_function,
     ensure_durable_operations_allowed,
@@ -52,7 +52,7 @@ def with_retry(
     *,
     name: str | None = None,
     retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
 ) -> asyncio.Task[T]: ...
@@ -64,7 +64,7 @@ def with_retry(
     *,
     name: str | None = None,
     retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
 ) -> asyncio.Task[T]: ...
@@ -75,7 +75,7 @@ def with_retry(
     *,
     name: str | None = None,
     retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
 ) -> asyncio.Task[T]:

@@ -14,8 +14,8 @@ directly and are not sent to the thread executor.
 The important distinctions are where synchronous code runs and whether it
 needs to await durable operations:
 
-- A sync step, child context, callback submitter, map item, parallel branch,
-  condition check, or serializer runs in a worker thread.
+- A sync step, child context, callback submitter, map item, parallel branch, or
+  condition check runs in a worker thread.
 - Nondeterministic synchronous code and side effects must still run inside a
   durable step.
 - Durable operations return `asyncio.Task` objects. Use `async def` for any
@@ -41,7 +41,6 @@ These other executable entry points accept either `def` or `async def`:
 - item functions passed to `map()`
 - branch callables passed to `parallel()`
 - condition checks passed to `wait_for_condition()`
-- `SyncSerDes.serialize()` and `SyncSerDes.deserialize()` methods
 
 Callable parameters can be plain functions or bound methods. `@durable_step`
 supports synchronous instance, class, and static methods.
@@ -58,11 +57,11 @@ Synchronous executable callables are leaf functions. They may use their
 scope-specific context getter, call ordinary synchronous helpers, and return an
 ordinary value, but they cannot create durable operations. This rule applies
 to child contexts, map items, parallel branches, callback submitters, condition
-checks, and serializers. Handlers and flow nodes are always async.
+checks. Handlers and flow nodes are always async.
 
-Async serializers subclass `SerDes`; synchronous serializers subclass
-`SyncSerDes`. Operation APIs accept either interface, while `SerDes` keeps its
-awaitable method contract for generic async integrations.
+Custom serializers subclass `SerDes` and implement both `serialize()` and
+`deserialize()` with `async def`. Serializer methods always run on the event
+loop and may await asynchronous integrations.
 
 Use `async def` for any function that calls `step()`, `wait()`, `invoke()`,
 `recurse()`, `run_in_child_context()`, `flow()`, `map()`, `parallel()`,

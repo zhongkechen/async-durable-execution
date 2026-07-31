@@ -21,7 +21,6 @@ from .._core import (
     OperationUpdate,
     PassThroughSerDes,
     SerDes,
-    SerDesLike,
     SuspendExecution,
     TerminationReason,
     _register_sdk_control_error_type,
@@ -158,7 +157,7 @@ def create_callback(
     name: str | None = None,
     timeout: Duration | None = None,
     heartbeat_timeout: Duration | None = None,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
 ) -> asyncio.Task[Callback]:
     """Create a durable callback handle that external systems can complete later.
 
@@ -199,7 +198,7 @@ async def _create_callback(
     operation_id: str,
     timeout: Duration | None = None,
     heartbeat_timeout: Duration | None = None,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
 ) -> Callback:
     executor: CallbackOperationExecutor = CallbackOperationExecutor(
         state=context.execution_state,
@@ -224,12 +223,12 @@ class Callback(Generic[T]):
         callback_id: str,
         operation_id: str,
         state: ExecutionState,
-        serdes: SerDesLike[T] | None = None,
+        serdes: SerDes[T] | None = None,
     ) -> None:
         self.callback_id: str = callback_id
         self.operation_id: str = operation_id
         self.state: ExecutionState = state
-        self.serdes: SerDesLike[T] | None = serdes
+        self.serdes: SerDes[T] | None = serdes
 
     async def result(self) -> T | None:
         """Return the result of the future. Will block until result is available.
@@ -242,6 +241,7 @@ class Callback(Generic[T]):
         heartbeats: SendDurableExecutionCallbackSuccess, SendDurableExecutionCallbackFailure
         and SendDurableExecutionCallbackHeartbeat.
         """
+        ensure_durable_operations_allowed("Callback.result()")
         operation = self.state.operations.get(self.operation_id)
 
         if not isinstance(operation, Operation):

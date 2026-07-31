@@ -77,7 +77,7 @@ from async_durable_execution._extension.replay_safe import (
     timestamp as module_timestamp,
     uuid as module_uuid,
 )
-from async_durable_execution._core.serdes import ExtendedTypeSerDes, SyncSerDes
+from async_durable_execution._core.serdes import ExtendedTypeSerDes
 from async_durable_execution._core.client import DurableServiceClient
 
 
@@ -110,7 +110,6 @@ def test_additional_public_types_importable_from_package_root() -> None:
         "OperationSubType": OperationSubType,
         "RetryStrategy": RetryStrategy,
         "SummaryGenerator": SummaryGenerator,
-        "SyncSerDes": SyncSerDes,
         "CompletionDecision": CompletionDecision,
         "CompletionStatus": CompletionStatus,
         "WithRetryContext": ModuleWithRetryContext,
@@ -176,7 +175,6 @@ def test_core_public_api_is_reexported_from_core_package() -> None:
         "SerDes",
         "SerDesContext",
         "SerDesError",
-        "SyncSerDes",
         "UserlandError",
         "ValidationError",
         "create_default_sync_client",

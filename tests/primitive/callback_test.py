@@ -10,6 +10,7 @@ from datetime import timedelta
 from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
+from async_durable_execution._core.callable import call_user_function
 from async_durable_execution._core.context import (
     bind_current_context,
     reset_current_context,
@@ -17,6 +18,7 @@ from async_durable_execution._core.context import (
     get_current_context,
 )
 from async_durable_execution._core.exceptions import (
+    InvalidStateError,
     ValidationError,
     _encode_sdk_control_error_data,
     _restore_sdk_control_error,
@@ -100,6 +102,23 @@ def test_callback_error_control_codec_preserves_callback_id() -> None:
 
     assert isinstance(restored, CallbackError)
     assert restored.callback_id == "callback-123"
+
+
+async def test_sync_callable_cannot_return_callback_result() -> None:
+    callback_result = Callback(
+        callback_id="callback-123",
+        operation_id="operation-123",
+        state=Mock(spec=ExecutionState),
+    ).result
+
+    def sync_callable() -> Any:
+        return callback_result()
+
+    with pytest.raises(
+        InvalidStateError,
+        match=r"Callback\.result\(\) cannot be created from a synchronous user callable",
+    ):
+        await call_user_function(sync_callable)
 
 
 def test_wait_for_callback_name_is_keyword_only() -> None:

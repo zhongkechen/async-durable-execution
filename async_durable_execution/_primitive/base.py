@@ -11,7 +11,7 @@ from .._core import (
     OperationContext,
     OperationIdentifier,
     OperationUpdate,
-    SerDesLike,
+    SerDes,
     deserialize,
     serialize,
 )
@@ -63,7 +63,7 @@ class OperationExecutor(ABC, Generic[T]):
             is_sync=is_sync,
         )
 
-    async def serialize_value(self, value: S, serdes: SerDesLike[S] | None) -> str:
+    async def serialize_value(self, value: S, serdes: SerDes[S] | None) -> str:
         """Serialize a value using operation-scoped metadata."""
         return await serialize(
             serdes=serdes,
@@ -73,7 +73,7 @@ class OperationExecutor(ABC, Generic[T]):
             recursive_level=self.state.recursive_level,
         )
 
-    async def deserialize_value(self, data: str, serdes: SerDesLike[S] | None) -> S:
+    async def deserialize_value(self, data: str, serdes: SerDes[S] | None) -> S:
         """Deserialize a value using operation-scoped metadata."""
         return await deserialize(
             serdes=serdes,

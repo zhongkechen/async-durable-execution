@@ -65,7 +65,7 @@ operations as top-level awaitable helpers. User handlers and `flow` nodes use
 synchronous step functions. Child contexts, callback submitters, map item
 functions, parallel branches, and condition checks may use `def` or
 `async def`.
-Serializers use the async `SerDes` or synchronous `SyncSerDes` interface.
+Serializers use the async `SerDes` interface.
 Synchronous leaf callables run in a worker thread. The `@durable_dag` function
 that declares a flow graph is synchronous, deterministic, and evaluated
 directly.

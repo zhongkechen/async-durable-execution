@@ -23,7 +23,7 @@ from .._core import (
     OperationStatus,
     OperationSubType,
     OperationUpdate,
-    SerDesLike,
+    SerDes,
     ValidationError,
     _DelayStrategy,
     _encode_sdk_control_error_data,
@@ -101,7 +101,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
         polling_strategy: PollingStrategyFunction[T] | None = None,
-        serdes: SerDesLike | None = None,
+        serdes: SerDes | None = None,
     ) -> None:
         """Initialize the wait_for_condition executor.
 
@@ -353,7 +353,7 @@ def wait_for_condition(
     initial_state: T | None = None,
     name: str | None = None,
     polling_strategy: PollingStrategyFunction[T] | None = None,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
 ) -> asyncio.Task[T]: ...
 
 
@@ -364,7 +364,7 @@ def wait_for_condition(
     initial_state: T | None = None,
     name: str | None = None,
     polling_strategy: PollingStrategyFunction[T] | None = None,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
 ) -> asyncio.Task[T]: ...
 
 
@@ -374,7 +374,7 @@ def wait_for_condition(
     initial_state: T | None = None,
     name: str | None = None,
     polling_strategy: PollingStrategyFunction[T] | None = None,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
 ) -> asyncio.Task[T]:
     """Poll durable state until the configured strategy decides to stop waiting.
 
@@ -415,7 +415,7 @@ async def _wait_for_condition(
     operation_identifier: OperationIdentifier,
     initial_state: T | None = None,
     polling_strategy: PollingStrategyFunction[T] | None = None,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
 ) -> T:
     executor: WaitForConditionOperationExecutor[T] = WaitForConditionOperationExecutor(
         check=check,

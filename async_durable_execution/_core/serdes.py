@@ -31,9 +31,8 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Generic, Protocol, TypeAlias, TypeVar, cast
+from typing import Any, Generic, Protocol, TypeVar, cast
 
-from .callable import call_user_function
 from .context import SerDesContext, bind_current_context, get_current_context
 from .exceptions import (
     DurableExecutionsError,
@@ -418,23 +417,6 @@ class SerDes(ABC, Generic[T]):
         return False
 
 
-class SyncSerDes(ABC, Generic[T]):
-    """Synchronous serializer interface run in the worker-thread executor."""
-
-    @abstractmethod
-    def serialize(self, value: T) -> str:
-        """Convert a Python value into the wire format stored by the SDK."""
-        pass
-
-    @abstractmethod
-    def deserialize(self, data: str) -> T:
-        """Reconstruct a Python value from the durable wire format."""
-        pass
-
-
-SerDesLike: TypeAlias = SerDes[T] | SyncSerDes[T]
-
-
 class PassThroughSerDes(SerDes[T]):
     """Serializer that leaves already-serialized string payloads unchanged."""
 
@@ -545,7 +527,7 @@ EXTENDED_TYPES_SERDES: SerDes[Any] = ExtendedTypeSerDes()
 
 
 async def serialize(
-    serdes: SerDesLike[T] | None,
+    serdes: SerDes[T] | None,
     value: T,
     operation_id: str,
     durable_execution_arn: str,
@@ -570,11 +552,11 @@ async def serialize(
         durable_execution_arn,
         recursive_level,
     )
-    active_serdes: SerDesLike[T] = serdes or EXTENDED_TYPES_SERDES
+    active_serdes: SerDes[T] = serdes or EXTENDED_TYPES_SERDES
 
     try:
         with bind_current_context(serdes_context):
-            return await call_user_function(active_serdes.serialize, value)
+            return await active_serdes.serialize(value)
     except Exception as e:
         logger.exception(
             "⚠️ Serialization failed for id: %s",
@@ -585,7 +567,7 @@ async def serialize(
 
 
 async def deserialize(
-    serdes: SerDesLike[T] | None,
+    serdes: SerDes[T] | None,
     data: str,
     operation_id: str,
     durable_execution_arn: str,
@@ -610,11 +592,11 @@ async def deserialize(
         durable_execution_arn,
         recursive_level,
     )
-    active_serdes: SerDesLike[T] = serdes or EXTENDED_TYPES_SERDES
+    active_serdes: SerDes[T] = serdes or EXTENDED_TYPES_SERDES
 
     try:
         with bind_current_context(serdes_context):
-            return await call_user_function(active_serdes.deserialize, data)
+            return await active_serdes.deserialize(data)
     except Exception as e:
         logger.exception("⚠️ Deserialization failed for id: %s", operation_id)
         msg = f"Deserialization failed for id: {operation_id}"

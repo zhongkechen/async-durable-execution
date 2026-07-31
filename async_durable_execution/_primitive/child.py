@@ -22,7 +22,7 @@ from .._core import (
     OperationStatus,
     OperationSubType,
     OperationUpdate,
-    SerDesLike,
+    SerDes,
     _encode_sdk_control_error_data,
     _restore_sdk_control_error,
     bind_current_context,
@@ -55,7 +55,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
         *,
-        serdes: SerDesLike | None = None,
+        serdes: SerDes | None = None,
         summary_generator: SummaryGenerator | None = None,
         is_virtual: bool = False,
     ) -> None:
@@ -305,7 +305,7 @@ def run_in_child_context(
     func: Callable[[], Awaitable[T]],
     *,
     name: str | None = None,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
 ) -> asyncio.Task[T]: ...
@@ -316,7 +316,7 @@ def run_in_child_context(
     func: Callable[[], CallableResult[T]],
     *,
     name: str | None = None,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
 ) -> asyncio.Task[T]: ...
@@ -326,7 +326,7 @@ def run_in_child_context(
     func: Callable[[], CallableResult[T]],
     *,
     name: str | None = None,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
 ) -> asyncio.Task[T]:
@@ -357,7 +357,7 @@ def _create_child_context_task(
     *,
     sub_type: OperationSubType,
     name: str | None = None,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
 ) -> asyncio.Task[T]:
@@ -396,7 +396,7 @@ async def _run_in_child_context(
     *,
     sub_type: OperationSubType,
     name: str | None = None,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
 ) -> T:
@@ -434,7 +434,7 @@ async def _run_child_context(
     context: DurableContext,
     child_context: DurableContext,
     operation_identifier: OperationIdentifier,
-    serdes: SerDesLike | None = None,
+    serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
 ) -> T:

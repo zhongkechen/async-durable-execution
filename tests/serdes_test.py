@@ -33,7 +33,6 @@ from async_durable_execution._core.serdes import (
     PrimitiveCodec,
     SerDes,
     SerDesContext,
-    SyncSerDes,
     TypeCodec,
     TypeTag,
     UuidCodec,
@@ -131,16 +130,6 @@ async def test_serdes_abstract_methods_coverage() -> None:
     # To cover the pass statements, call the abstract methods directly
     assert await SerDes.serialize(None, None) is None
     assert await SerDes.deserialize(None, None) is None
-
-
-@no_type_check
-async def test_sync_serdes_abstract_contract() -> None:
-    """SyncSerDes requires both synchronous methods."""
-    with pytest.raises(TypeError):
-        SyncSerDes()
-
-    assert SyncSerDes.serialize(None, None) is None
-    assert SyncSerDes.deserialize(None, None) is None
 
 
 @no_type_check
@@ -343,23 +332,6 @@ async def test_async_serdes_can_await_io_like_work() -> None:
     assert serialized == "op-1:payload"
 
     deserialized = await deserialize(AsyncContextSerDes(), serialized, "op-1", "arn-1")
-    assert deserialized == "op-1:payload:arn-1"
-
-
-async def test_synchronous_serdes_methods_run_with_context():
-    class SyncContextSerDes(SyncSerDes[str]):
-        def serialize(self, value: str) -> str:
-            context = get_serdes_context()
-            return f"{context.operation_id}:{value}"
-
-        def deserialize(self, data: str) -> str:
-            context = get_serdes_context()
-            return f"{data}:{context.durable_execution_arn}"
-
-    serialized = await serialize(SyncContextSerDes(), "payload", "op-1", "arn-1")
-    assert serialized == "op-1:payload"
-
-    deserialized = await deserialize(SyncContextSerDes(), serialized, "op-1", "arn-1")
     assert deserialized == "op-1:payload:arn-1"
 
 

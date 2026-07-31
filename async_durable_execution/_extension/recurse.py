@@ -8,7 +8,7 @@ from typing import TypeVar, cast
 from .._core import (
     RECURSIVE_LEVEL_INPUT_FIELD,
     DurableContext,
-    SerDesLike,
+    SerDes,
     ValidationError,
     ensure_durable_operations_allowed,
     get_durable_context,
@@ -90,8 +90,8 @@ def recurse(
     name: str | None = None,
     function_name: str | None = None,
     with_recursive_level: bool = False,
-    serdes_payload: SerDesLike[P] | None = None,
-    serdes_result: SerDesLike[R] | None = None,
+    serdes_payload: SerDes[P] | None = None,
+    serdes_result: SerDes[R] | None = None,
     tenant_id: str | None = None,
 ) -> asyncio.Task[R]:
     """Invoke the current durable Lambda function and wait for its result.
