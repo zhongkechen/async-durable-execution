@@ -131,3 +131,10 @@ def test_converting_to_draft_cancels_previous_review() -> None:
     ):
         assert "!cancelled()" in jobs[job_id]
         assert "always()" not in jobs[job_id]
+
+
+def test_claude_review_uses_sonnet_5_for_both_attempts() -> None:
+    claude_review = _jobs()["claude-review"]
+
+    assert claude_review.count("--model us.anthropic.claude-sonnet-5") == 2
+    assert "--model us.anthropic.claude-opus-" not in claude_review
