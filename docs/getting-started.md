@@ -131,10 +131,10 @@ result = await run_in_child_context(
 )
 ```
 
-Async handlers and async child contexts compose durable operations. Synchronous
-user callables are leaf functions and cannot start steps or other durable
-operations. Step bodies perform the nondeterministic work that should be
-checkpointed atomically.
+Handlers must use `async def`. Async child contexts compose durable operations;
+synchronous user callables are leaf functions and cannot start steps or other
+durable operations. Step bodies perform the nondeterministic work that should
+be checkpointed atomically.
 
 ## Continue
 

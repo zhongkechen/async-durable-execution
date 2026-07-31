@@ -8,10 +8,11 @@ The durable execution model is the same: code outside durable operations replays
 results are checkpointed, waits suspend without compute charges, callbacks resume from
 external signals, and invoked durable functions must use qualified function names.
 
-The main migration is mechanical: replace the official SDK's synchronous
-`DurableContext` method calls with async top-level operations. User-provided
-callables may remain synchronous when they do not need to await durable
-operations; the SDK runs them in a worker thread.
+The main migration is mechanical: convert the handler to `async def` and
+replace the official SDK's synchronous `DurableContext` method calls with
+async top-level operations. Other user-provided callables may remain
+synchronous when they do not need to await durable operations; the SDK runs
+them in a worker thread.
 
 ## Package Changes
 
@@ -35,7 +36,7 @@ from `async_durable_execution`.
 
 | Official SDK | This SDK |
 | --- | --- |
-| `@durable_execution def handler(event, context)` | `@durable_execution async def handler(event)` for workflows that await operations; sync handlers are also accepted |
+| `@durable_execution def handler(event, context)` | `@durable_execution async def handler(event)` |
 | `@durable_step def step_fn(step_context, ...)` | `@durable_callable def step_fn(...)` or `async def` |
 | `context.step(my_step(args))` | `await step(my_step(args), name="my-step")` |
 | `context.wait(Duration.from_seconds(10))` | `await wait(timedelta(seconds=10), name="delay")` |
@@ -380,9 +381,10 @@ assertions can use `result.get_step("my-step")` instead of depending on operatio
 ## Migration Checklist
 
 1. Replace package dependencies and imports.
-2. Change every durable handler, step, child context, flow node, callback submitter,
-   map function, parallel branch, and wait-for-condition check to either `def`
-   or `async def`; keep `@durable_dag` definitions synchronous.
+2. Change every durable handler to `async def`. Steps, child contexts, flow
+   nodes, callback submitters, map functions, parallel branches, and
+   wait-for-condition checks may use `def` or `async def`; keep
+   `@durable_dag` definitions synchronous.
 3. Replace `DurableContext` method calls with awaited top-level operations.
 4. Replace `@durable_step` with `@durable_callable`.
 5. Remove explicit `DurableContext` and `StepContext` parameters. Use the context

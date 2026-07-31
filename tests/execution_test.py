@@ -2744,29 +2744,24 @@ def _make_lambda_context() -> Any:
     return ctx
 
 
-async def test_durable_execution_accepts_synchronous_handler() -> None:
-    mock_client = Mock(spec=DurableServiceClient)
-
-    @durable_execution
+def test_durable_execution_rejects_synchronous_handler() -> None:
     def test_handler(event: Any) -> dict:
-        context = cast(DurableContext, get_current_context())
-        return {
-            "event": event,
-            "execution_arn": context.durable_execution_arn,
-        }
+        return {"event": event}
 
-    result = await run_handler(
-        test_handler,
-        _make_invocation_input(),
-        _make_lambda_context(),
-        service_client=mock_client,
+    with pytest.raises(TypeError, match="handlers must be async callables"):
+        durable_execution(cast(Any, test_handler))
+
+
+def test_configured_durable_execution_rejects_synchronous_handler() -> None:
+    def test_handler(event: Any) -> dict:
+        return {"event": event}
+
+    decorator = cast(
+        Any,
+        durable_execution(service_client=Mock(spec=DurableServiceClient)),
     )
-
-    assert result["Status"] == InvocationStatus.SUCCEEDED.value
-    assert json.loads(result["Result"]) == {
-        "event": {},
-        "execution_arn": "arn:test:execution/exec1",
-    }
+    with pytest.raises(TypeError, match="handlers must be async callables"):
+        decorator(test_handler)
 
 
 async def test_durable_execution_replays_when_paginated_state_has_prior_operations() -> (

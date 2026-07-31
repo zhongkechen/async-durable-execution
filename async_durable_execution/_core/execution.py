@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast, overload
 
-from .callable import CallableResult, call_user_function
+from .callable import CallableResult, _is_async_callable, call_user_function
 from .context import DurableContext, bind_current_context
 from .exceptions import (
     CheckpointError,
@@ -144,7 +144,7 @@ class DurableConfig:
 
 
 def durable_execution(
-    func: Callable[..., CallableResult[Any]] | None = None,
+    func: Callable[..., Awaitable[Any]] | None = None,
     /,
     *,
     boto3_client: LambdaApiClient | AsyncLambdaApiClient | None = None,
@@ -154,8 +154,7 @@ def durable_execution(
     Decorator to create a durable execution handler.
 
     Args:
-        func: The sync or async user function to decorate. Synchronous
-            functions run in the event loop's thread executor.
+        func: The async user function to decorate.
         boto3_client: Optional sync or async Lambda API client to use
         service_client: Optional durable service client to use. Intended for
             testing and local execution tooling.
@@ -168,6 +167,12 @@ def durable_execution(
             boto3_client=boto3_client,
             service_client=service_client,
         )
+    if not _is_async_callable(func):
+        msg = (
+            "@durable_execution handlers must be async callables. "
+            "Define the handler with async def."
+        )
+        raise TypeError(msg)
     config = DurableConfig(
         boto3_client=boto3_client,
         service_client=service_client,
@@ -256,7 +261,7 @@ def _run_on_event_loop(
         pass
     else:
         msg = (
-            "durable_execution sync handlers cannot be called from a running "
+            "@durable_execution wrappers cannot be called from a running "
             "event loop. Use the handler's _async_handler attribute instead."
         )
         raise RuntimeError(msg)
@@ -288,7 +293,7 @@ def deserialize_input(event: Any) -> DurableExecutionInvocationInput:
 
 
 async def _wrapper_async(
-    user_func: Callable[[Any], Any],
+    user_func: Callable[[Any], Awaitable[Any]],
     event: Any,
     context: LambdaContext,
     service_client: DurableServiceClient,
@@ -320,7 +325,7 @@ async def _wrapper_async(
         logger.debug("execution arn: %s", invocation_input.durable_execution_arn)
 
         with bind_current_context(root_context):
-            result = await call_user_function(user_func, input_event)
+            result = await user_func(input_event)
         return await handle_user_function_result(execution_state, result)
 
     except SuspendExecution:

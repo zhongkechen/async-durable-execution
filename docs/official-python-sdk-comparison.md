@@ -18,7 +18,7 @@ difference is the Python programming model.
 | Package | `aws-durable-execution-sdk-python` | `async-durable-execution` |
 | Ownership | AWS official SDK | Community-maintained fork under Apache-2.0 |
 | Python support | Python 3.11+ | Python 3.10+ |
-| Handler shape | Synchronous `def handler(event, context)` | Sync or async `handler(event)` with `@durable_execution`; async is required to await operations |
+| Handler shape | Synchronous `def handler(event, context)` | `async def handler(event)` with `@durable_execution` |
 | User durable functions | Synchronous `@durable_step` functions with `StepContext` | Sync or async functions decorated with `@durable_callable` |
 | Durable operations | `context.step(...)`, `context.wait(...)`, `context.invoke(...)` | Top-level `await step(...)`, `await wait(...)`, `await invoke(...)` |
 | Async library integration | Requires bridging async code from sync call sites | Native `await` for async clients and services |
@@ -60,12 +60,13 @@ def handler(event: dict, context: DurableContext) -> dict:
 ```
 
 This SDK binds the active durable context internally and exposes durable
-operations as top-level awaitable helpers. User handlers, steps, child
-contexts, `flow` nodes, callback submitters, map item functions, parallel
-branches, and condition checks may use `def` or `async def`. Serializers use
-the async `SerDes` or synchronous `SyncSerDes` interface. Synchronous callables
-run in a worker thread. The `@durable_dag` function that declares a flow graph
-is synchronous, deterministic, and evaluated directly.
+operations as top-level awaitable helpers. User handlers use `async def`.
+Steps, child contexts, `flow` nodes, callback submitters, map item functions,
+parallel branches, and condition checks may use `def` or `async def`.
+Serializers use the async `SerDes` or synchronous `SyncSerDes` interface.
+Synchronous leaf callables run in a worker thread. The `@durable_dag` function
+that declares a flow graph is synchronous, deterministic, and evaluated
+directly.
 
 ```python
 import logging
@@ -246,9 +247,9 @@ Functions deployment requirements.
 Moving from the official SDK to this SDK is usually straightforward:
 
 1. Replace package dependencies and imports.
-2. Convert handlers or user callables to `async def` when they need to await
-   durable operations or async libraries; synchronous callables may remain
-   `def`.
+2. Convert handlers to `async def`. Convert other user callables when they need
+   to await durable operations or async libraries; synchronous leaf callables
+   may remain `def`.
 3. Replace `context.step(...)`, `context.wait(...)`, and related methods with awaited
    top-level helpers.
 4. Replace `@durable_step` with `@durable_callable`.

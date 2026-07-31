@@ -37,11 +37,11 @@ running again.
 
 ## Why This SDK
 
-- **Async-native with sync support**: handlers, steps, callbacks, child
-  contexts, `flow` nodes, map functions, and condition checks may use
-  `async def` or `def`; serializers use `SerDes` or `SyncSerDes`. Synchronous
-  leaf callables run in a worker thread, while durable composition uses
-  `async def`.
+- **Async-native with sync support**: handlers use `async def`; steps,
+  callbacks, child contexts, `flow` nodes, map functions, and condition checks
+  may use `async def` or `def`; serializers use `SerDes` or `SyncSerDes`.
+  Synchronous leaf callables run in a worker thread, while durable composition
+  uses `async def`.
 - **Durable primitives**: compose checkpointed steps, waits, callbacks, child
   contexts, invokes, maps, and parallel branches.
 - **[Declarative DAG workflows](api/extension/flow.md)**: define validated acyclic graphs
