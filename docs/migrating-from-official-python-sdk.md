@@ -37,7 +37,7 @@ from `async_durable_execution`.
 | Official SDK | This SDK |
 | --- | --- |
 | `@durable_execution def handler(event, context)` | `@durable_execution async def handler(event)` |
-| `@durable_step def step_fn(step_context, ...)` | `@durable_callable def step_fn(...)` or `async def` |
+| `@durable_step def step_fn(step_context, ...)` | `@durable_step def step_fn(...)` or `@durable_callable async def step_fn(...)` |
 | `context.step(my_step(args))` | `await step(my_step(args), name="my-step")` |
 | `context.wait(Duration.from_seconds(10))` | `await wait(timedelta(seconds=10), name="delay")` |
 | `context.create_callback(...)` | `await create_callback(...)` |
@@ -97,8 +97,8 @@ import logging
 from datetime import timedelta
 
 from async_durable_execution import (
-    durable_callable,
     durable_execution,
+    durable_step,
     step,
     wait,
 )
@@ -106,7 +106,7 @@ from async_durable_execution import (
 logger = logging.getLogger(__name__)
 
 
-@durable_callable
+@durable_step
 def my_step() -> str:
     logger.info("Hello from my_step")
     return "Hello from Durable Lambda!"
@@ -123,14 +123,15 @@ async def lambda_handler(event: dict) -> dict:
 ## Step Migration
 
 Official steps receive a `StepContext` argument and run synchronously. In this
-SDK, a step function may be synchronous or asynchronous and is created with
-`@durable_callable`. Pass the resulting zero-argument callable to `step()`.
+SDK, use `@durable_step` for a synchronous step or `@durable_callable` for an
+async step. Both decorators bind arguments into a zero-argument callable to
+pass to `step()`.
 
 ```python
-from async_durable_execution import durable_callable, step
+from async_durable_execution import durable_step, step
 
 
-@durable_callable
+@durable_step
 def add_numbers(a: int, b: int) -> int:
     return a + b
 
@@ -161,8 +162,8 @@ prices = await asyncio.gather(*tasks)
 
 Put nondeterministic work and side effects inside steps just as you did with the
 official SDK. Reads of time, UUID generation, random values, API calls, database
-queries, and writes should stay inside `@durable_callable` functions that run through
-`step()`.
+queries, and writes should stay inside `@durable_step` or `@durable_callable`
+functions that run through `step()`.
 
 Step retry configuration is passed directly to `step()`:
 
@@ -333,8 +334,9 @@ result = await flow(order_flow(order_id), name="order-flow")
 ```
 
 Unlike executable user-provided callables, a `@durable_dag` definition is
-synchronous and must be deterministic. `@durable_node` bodies may be sync or
-async; use async bodies when they contain durable operations. See
+synchronous and must be deterministic. `@durable_node` bodies must use
+`async def` because they execute as durable child contexts and may contain
+durable operations. See
 [flow and DAG workflows](api/extension/flow.md) for the complete dependency,
 failure, and output model.
 
@@ -381,12 +383,13 @@ assertions can use `result.get_step("my-step")` instead of depending on operatio
 ## Migration Checklist
 
 1. Replace package dependencies and imports.
-2. Change every durable handler to `async def`. Steps, child contexts, flow
-   nodes, callback submitters, map functions, parallel branches, and
-   wait-for-condition checks may use `def` or `async def`; keep
-   `@durable_dag` definitions synchronous.
+2. Change every durable handler and flow node to `async def`. Steps, child
+   contexts, callback submitters, map functions, parallel branches, and
+   wait-for-condition checks may use `def` or `async def`; keep `@durable_dag`
+   definitions synchronous.
 3. Replace `DurableContext` method calls with awaited top-level operations.
-4. Replace `@durable_step` with `@durable_callable`.
+4. Remove the `StepContext` parameter from synchronous `@durable_step`
+   functions. Use `@durable_callable` when converting a step to `async def`.
 5. Remove explicit `DurableContext` and `StepContext` parameters. Use the context
    getter for the active scope when you need metadata.
 6. Replace `Duration` with `datetime.timedelta`.

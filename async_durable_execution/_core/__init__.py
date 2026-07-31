@@ -1,6 +1,6 @@
 """Private core runtime used by the public package facade."""
 
-from .callable import CallableResult, call_user_function
+from .callable import CallableResult, _is_async_callable, call_user_function
 from .client import (
     DurableServiceClient,
     aioboto_is_installed,
@@ -50,6 +50,7 @@ from .execution import (
     _bind_service_client_to_handler,
     durable_callable,
     durable_execution,
+    durable_step,
 )
 from .models import (
     BotoSerializableModel,
@@ -127,6 +128,7 @@ __all__ = [
     "create_default_sync_client",
     "durable_callable",
     "durable_execution",
+    "durable_step",
     "get_current_context",
     "get_durable_context",
     "get_serdes_context",

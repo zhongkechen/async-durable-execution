@@ -13,6 +13,7 @@ JSON fails the invocation before the handler executes.
       members:
         - durable_callable
         - durable_execution
+        - durable_step
 
 ## Current Context
 

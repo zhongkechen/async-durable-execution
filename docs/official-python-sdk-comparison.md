@@ -19,7 +19,7 @@ difference is the Python programming model.
 | Ownership | AWS official SDK | Community-maintained fork under Apache-2.0 |
 | Python support | Python 3.11+ | Python 3.10+ |
 | Handler shape | Synchronous `def handler(event, context)` | `async def handler(event)` with `@durable_execution` |
-| User durable functions | Synchronous `@durable_step` functions with `StepContext` | Sync or async functions decorated with `@durable_callable` |
+| User durable functions | Synchronous `@durable_step` functions with `StepContext` | Sync `@durable_step` functions or async `@durable_callable` functions |
 | Durable operations | `context.step(...)`, `context.wait(...)`, `context.invoke(...)` | Top-level `await step(...)`, `await wait(...)`, `await invoke(...)` |
 | Async library integration | Requires bridging async code from sync call sites | Native `await` for async clients and services |
 | Fan-out concurrency | SDK fan-out helpers such as `context.parallel()` and `context.map()` | `parallel()`, `map()`, and normal `asyncio.gather()` over operation tasks |
@@ -60,9 +60,11 @@ def handler(event: dict, context: DurableContext) -> dict:
 ```
 
 This SDK binds the active durable context internally and exposes durable
-operations as top-level awaitable helpers. User handlers use `async def`.
-Steps, child contexts, `flow` nodes, callback submitters, map item functions,
-parallel branches, and condition checks may use `def` or `async def`.
+operations as top-level awaitable helpers. User handlers and `flow` nodes use
+`async def`. `@durable_callable` is async-only, while `@durable_step` binds
+synchronous step functions. Child contexts, callback submitters, map item
+functions, parallel branches, and condition checks may use `def` or
+`async def`.
 Serializers use the async `SerDes` or synchronous `SyncSerDes` interface.
 Synchronous leaf callables run in a worker thread. The `@durable_dag` function
 that declares a flow graph is synchronous, deterministic, and evaluated
@@ -252,7 +254,8 @@ Moving from the official SDK to this SDK is usually straightforward:
    may remain `def`.
 3. Replace `context.step(...)`, `context.wait(...)`, and related methods with awaited
    top-level helpers.
-4. Replace `@durable_step` with `@durable_callable`.
+4. Remove `StepContext` parameters from synchronous `@durable_step` functions,
+   or use `@durable_callable` after converting a step to `async def`.
 5. Replace SDK duration wrappers with `datetime.timedelta`.
 6. Replace context loggers with standard `logging` loggers.
 7. Update tests to use the runner helpers from `async_durable_execution`.

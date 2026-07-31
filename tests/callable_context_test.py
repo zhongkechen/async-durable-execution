@@ -1,7 +1,10 @@
+import threading
 from typing import no_type_check
 from unittest.mock import Mock
 
-from async_durable_execution import DurableContext, durable_callable
+import pytest
+
+from async_durable_execution import DurableContext, durable_callable, durable_step
 from async_durable_execution._core.context import (
     bind_current_context,
     get_current_context,
@@ -118,30 +121,59 @@ async def test_durable_callable_supports_staticmethod_orders() -> None:
     assert await bound_greet_outside() == "hi, Grace"
 
 
-async def test_durable_callable_supports_synchronous_methods():
+def test_durable_callable_rejects_synchronous_function() -> None:
+    def sync_callable() -> str:
+        return "result"
+
+    with pytest.raises(TypeError, match="functions must be async callables"):
+        durable_callable(sync_callable)  # type: ignore[arg-type]
+
+
+def test_durable_step_rejects_asynchronous_function() -> None:
+    async def async_step() -> str:
+        return "result"
+
+    with pytest.raises(TypeError, match="functions must be synchronous callables"):
+        durable_step(async_step)
+
+
+async def test_durable_step_runs_synchronous_function_in_worker_thread() -> None:
+    caller_thread = threading.get_ident()
+
+    @durable_step
+    def current_thread() -> int:
+        return threading.get_ident()
+
+    bound_step = current_thread()
+
+    assert bound_step.__name__ == "current_thread"
+    assert await bound_step() != caller_thread
+
+
+async def test_durable_step_supports_synchronous_methods() -> None:
     class Greeter:
         prefix = "hello"
 
-        @durable_callable
+        @durable_step
         def instance(self, name: str) -> str:
             return f"{self.prefix}, {name}"
 
         @classmethod
-        @durable_callable
+        @durable_step
         def class_inside(cls, name: str) -> str:
             return f"{cls.prefix}, {name}"
 
-        @durable_callable
+        @durable_step
         @classmethod
         def class_outside(cls, name: str) -> str:
             return f"{cls.prefix}, {name}"
 
         @staticmethod
-        @durable_callable
+        @durable_step
         def static_inside(name: str) -> str:
             return f"hi, {name}"
 
-        @durable_callable
+        @durable_step
         @staticmethod
         def static_outside(name: str) -> str:
             return f"hi, {name}"

@@ -15,7 +15,6 @@ from typing import Any, Generic, NoReturn, ParamSpec, TypeVar, cast, overload
 
 from .._core import (
     CallableRuntimeError,
-    CallableResult,
     DurableContext,
     DurableExecutionsError,
     ErrorObject,
@@ -29,10 +28,10 @@ from .._core import (
     TimedSuspendExecution,
     ValidationError,
     MappingModel,
+    _is_async_callable,
     _restore_sdk_control_error,
     bind_current_context,
     bind_durable_definition,
-    call_user_function,
     create_eager_task,
     ensure_durable_operations_allowed,
     get_current_context,
@@ -1251,26 +1250,20 @@ def node(
     return flow_node
 
 
-@overload
 def durable_node(
     func: Callable[Params, Awaitable[T]],
-) -> Callable[Params, Callable[[], Awaitable[T]]]: ...
-
-
-@overload
-def durable_node(
-    func: Callable[Params, T],
-) -> Callable[Params, Callable[[], Awaitable[T]]]: ...
-
-
-def durable_node(
-    func: Callable[Params, CallableResult[T]],
 ) -> Callable[Params, Callable[[], Awaitable[T]]]:
-    """Bind arguments to a sync or async function used as a durable flow node."""
+    """Bind arguments to an async function used as a durable flow node."""
     if isinstance(func, classmethod):
         return classmethod(durable_node(func.__func__))
     if isinstance(func, staticmethod):
         return staticmethod(durable_node(func.__func__))
+    if not _is_async_callable(func):
+        msg = (
+            "@durable_node functions must be async callables. "
+            "Define the node with async def."
+        )
+        raise FlowDefinitionError(msg)
 
     @functools.wraps(func)
     def wrapper(
@@ -1279,7 +1272,7 @@ def durable_node(
         inspect.signature(func).bind(*args, **kwargs)
 
         async def bound() -> T:
-            return await call_user_function(func, *args, **kwargs)
+            return await func(*args, **kwargs)
 
         setattr(bound, "__name__", func.__name__)
         setattr(bound, "_durable_node_callable", True)
@@ -1899,7 +1892,7 @@ async def _invoke_flow_node(
     results: Mapping[FlowNode[Any], FlowNodeResult[Any]],
 ) -> Any:
     func = cast(
-        "Callable[..., CallableResult[Any]]",
+        "Callable[..., Awaitable[Any]]",
         getattr(flow_node._func, "_durable_node_function"),
     )
     args = cast("tuple[Any, ...]", getattr(flow_node._func, "_durable_node_args"))
@@ -1912,7 +1905,7 @@ async def _invoke_flow_node(
         kwargs,
         results,
     )
-    return await call_user_function(func, *cloned_args, **cloned_kwargs)
+    return await func(*cloned_args, **cloned_kwargs)
 
 
 async def _execute_node(

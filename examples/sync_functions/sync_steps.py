@@ -2,10 +2,10 @@
 
 from typing import Any
 
-from async_durable_execution import durable_callable, durable_execution, step
+from async_durable_execution import durable_execution, durable_step, step
 
 
-@durable_callable
+@durable_step
 def load_unit_price(sku: str) -> float:
     """Represent a synchronous call to an existing pricing client."""
     prices = {"book": 12.5, "pen": 2.0}
@@ -16,7 +16,7 @@ class OrderCalculator:
     def __init__(self, tax_rate: float):
         self.tax_rate = tax_rate
 
-    @durable_callable
+    @durable_step
     def calculate_total(self, unit_price: float, quantity: int) -> float:
         """Calculate an order total in a synchronous bound method."""
         subtotal = unit_price * quantity

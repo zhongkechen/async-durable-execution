@@ -4,11 +4,11 @@ import asyncio
 import functools
 import json
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast, overload
 
-from .callable import CallableResult, _is_async_callable, call_user_function
+from .callable import _is_async_callable, call_user_function
 from .context import DurableContext, bind_current_context
 from .exceptions import (
     CheckpointError,
@@ -54,25 +54,24 @@ Params = ParamSpec("Params")
 
 @overload
 def durable_callable(
-    func: Callable[Params, Awaitable[T]],
-) -> Callable[Params, Callable[[], Awaitable[T]]]: ...
+    func: Callable[Params, Coroutine[Any, Any, T]],
+) -> Callable[Params, Callable[[], Coroutine[Any, Any, T]]]: ...
 
 
 @overload
 def durable_callable(
-    func: Callable[Params, T],
+    func: Callable[Params, Awaitable[T]],
 ) -> Callable[Params, Callable[[], Awaitable[T]]]: ...
 
 
 def durable_callable(
-    func: Callable[Params, CallableResult[T]],
+    func: Callable[Params, Awaitable[T]],
 ) -> Callable[Params, Callable[[], Awaitable[T]]]:
-    """Wrap a function so calling it returns a zero-argument durable callable.
+    """Wrap an async function as a zero-argument durable callable.
 
     The returned callable can be passed to durable operations such as `step()`
     and `run_in_child_context()`, keeping durable operation creation explicit
     while avoiding manual `functools.partial(...)` wrapping at the callsite.
-    Synchronous functions run in the event loop's thread executor.
 
     Class and static methods are supported with either decorator order:
     `@classmethod`/`@staticmethod` may appear above or below `@durable_callable`.
@@ -81,6 +80,47 @@ def durable_callable(
         return classmethod(durable_callable(func.__func__))
     if isinstance(func, staticmethod):
         return staticmethod(durable_callable(func.__func__))
+    if not _is_async_callable(func):
+        msg = (
+            "@durable_callable functions must be async callables. "
+            "Define the function with async def."
+        )
+        raise TypeError(msg)
+
+    @functools.wraps(func)
+    def wrapper(
+        *args: Params.args, **kwargs: Params.kwargs
+    ) -> Callable[[], Awaitable[T]]:
+        async def bound() -> T:
+            return await func(*args, **kwargs)
+
+        setattr(bound, "__name__", func.__name__)
+        return bound
+
+    return wrapper
+
+
+def durable_step(
+    func: Callable[Params, T],
+) -> Callable[Params, Callable[[], Awaitable[T]]]:
+    """Wrap a synchronous step function as a zero-argument durable callable.
+
+    The returned callable is intended for `step()`. Its synchronous body runs
+    in the event loop's worker-thread executor when the step invokes it.
+
+    Class and static methods are supported with either decorator order:
+    `@classmethod`/`@staticmethod` may appear above or below `@durable_step`.
+    """
+    if isinstance(func, classmethod):
+        return classmethod(durable_step(func.__func__))
+    if isinstance(func, staticmethod):
+        return staticmethod(durable_step(func.__func__))
+    if _is_async_callable(func):
+        msg = (
+            "@durable_step functions must be synchronous callables. "
+            "Define the step with def."
+        )
+        raise TypeError(msg)
 
     @functools.wraps(func)
     def wrapper(

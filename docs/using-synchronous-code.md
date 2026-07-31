@@ -1,10 +1,10 @@
 # Using Synchronous Code
 
-Durable handlers must be written with `async def`. Other executable workflow
-bodies may use either `def` or `async def`. The SDK awaits asynchronous
-callables on the event loop and dispatches synchronous callables to the loop's
-worker-thread executor. The active durable context is copied into that thread,
-so context getters continue to work.
+Durable handlers and flow nodes must be written with `async def`. Other
+executable workflow bodies may use either `def` or `async def`. The SDK awaits
+asynchronous callables on the event loop and dispatches synchronous callables
+to the loop's worker-thread executor. The active durable context is copied into
+that thread, so context getters continue to work.
 
 Declarative and configuration hooks are intentionally synchronous. For example,
 a `@durable_dag` definition must be a regular `def` because it only declares
@@ -14,24 +14,28 @@ directly and are not sent to the thread executor.
 The important distinctions are where synchronous code runs and whether it
 needs to await durable operations:
 
-- A sync step, child context, flow node, callback submitter, map item, parallel
-  branch, condition check, or serializer runs in a worker thread.
+- A sync step, child context, callback submitter, map item, parallel branch,
+  condition check, or serializer runs in a worker thread.
 - Nondeterministic synchronous code and side effects must still run inside a
   durable step.
 - Durable operations return `asyncio.Task` objects. Use `async def` for any
   callable that needs to await or compose them.
 - Synchronous configuration hooks remain deterministic and side-effect free.
 
-## Async Handlers and Sync or Async Callables
+## Async Context Functions and Sync or Async Callables
 
 Functions decorated with `@durable_execution` must use `async def`, including
 handlers that do not create durable operations. This keeps the workflow entry
 point consistent and ready to compose durable operations.
 
+Functions decorated with `@durable_node` must also use `async def`. Every flow
+node runs as a durable child context and may compose child operations.
+
+Functions decorated with `@durable_callable` must use `async def`. Use
+`@durable_step` to bind arguments to a synchronous step function.
+
 These other executable entry points accept either `def` or `async def`:
 
-- `@durable_callable` step functions
-- `@durable_node` flow node functions
 - child context functions passed to `run_in_child_context()`
 - callback submitters passed to `wait_for_callback()`
 - item functions passed to `map()`
@@ -39,10 +43,11 @@ These other executable entry points accept either `def` or `async def`:
 - condition checks passed to `wait_for_condition()`
 - `SyncSerDes.serialize()` and `SyncSerDes.deserialize()` methods
 
-Callable parameters can be plain functions or bound methods.
-`@durable_callable` and `@durable_node` support instance, class, and static
-methods. The SDK automatically wraps synchronous callables with
-`asyncio.to_thread()`.
+Callable parameters can be plain functions or bound methods. `@durable_step`
+supports synchronous instance, class, and static methods.
+`@durable_callable` and `@durable_node` support the same method forms but
+require async implementations. The SDK automatically wraps supported
+synchronous callables with `asyncio.to_thread()`.
 
 An async callable runs on the event loop and can await durable operations. A
 sync callable runs in a worker thread and should return an ordinary value.
@@ -52,8 +57,8 @@ sync callable runs in a worker thread and should return an ordinary value.
 Synchronous executable callables are leaf functions. They may use their
 scope-specific context getter, call ordinary synchronous helpers, and return an
 ordinary value, but they cannot create durable operations. This rule applies
-to child contexts, flow nodes, map items, parallel branches, callback
-submitters, condition checks, and serializers. Handlers are always async.
+to child contexts, map items, parallel branches, callback submitters, condition
+checks, and serializers. Handlers and flow nodes are always async.
 
 Async serializers subclass `SerDes`; synchronous serializers subclass
 `SyncSerDes`. Operation APIs accept either interface, while `SerDes` keeps its
@@ -72,12 +77,13 @@ An async child context can compose sync and async steps:
 from async_durable_execution import (
     durable_callable,
     durable_execution,
+    durable_step,
     run_in_child_context,
     step,
 )
 
 
-@durable_callable
+@durable_step
 def blocking_lookup(order_id: str) -> dict:
     return legacy_client.lookup(order_id)
 
@@ -160,7 +166,7 @@ step function in a worker thread automatically.
 ```python
 import requests
 
-from async_durable_execution import durable_callable, durable_execution, step
+from async_durable_execution import durable_execution, durable_step, step
 
 
 def fetch_customer_sync(customer_id: str) -> dict:
@@ -172,7 +178,7 @@ def fetch_customer_sync(customer_id: str) -> dict:
     return response.json()
 
 
-@durable_callable
+@durable_step
 def fetch_customer(customer_id: str) -> dict:
     return fetch_customer_sync(customer_id)
 
@@ -191,17 +197,17 @@ the durable step still controls checkpointing, retries, and replay.
 
 ## Calling Fast Synchronous Code in a Step
 
-CPU-light synchronous work can also be used directly as a sync durable callable.
+CPU-light synchronous work can also be used directly as a synchronous durable step.
 
 ```python
-from async_durable_execution import durable_callable, step
+from async_durable_execution import durable_step, step
 
 
 def calculate_tax_sync(order: dict) -> dict:
     return {"amount": round(order["subtotal"] * 0.0825, 2)}
 
 
-@durable_callable
+@durable_step
 def calculate_tax(order: dict) -> dict:
     return calculate_tax_sync(order)
 
@@ -230,7 +236,7 @@ deterministic replay.
 import smtplib
 from email.message import EmailMessage
 
-from async_durable_execution import durable_callable, durable_execution, step
+from async_durable_execution import durable_execution, durable_step, step
 
 
 def send_email_sync(to_address: str, subject: str, body: str) -> None:
@@ -243,7 +249,7 @@ def send_email_sync(to_address: str, subject: str, body: str) -> None:
         client.send_message(message)
 
 
-@durable_callable
+@durable_step
 def send_email(to_address: str, subject: str, body: str) -> None:
     send_email_sync(to_address, subject, body)
 
@@ -272,9 +278,9 @@ thread. Keep the external notification inside that submitter.
 
 ```python
 from datetime import timedelta
+from functools import partial
 
 from async_durable_execution import (
-    durable_callable,
     durable_execution,
     get_wait_for_callback_context,
     wait_for_callback,
@@ -285,7 +291,6 @@ def submit_approval_sync(callback_id: str, approver_email: str) -> None:
     send_approval_email(approver_email, callback_id)
 
 
-@durable_callable
 def submit_approval(approver_email: str) -> None:
     callback_context = get_wait_for_callback_context()
     submit_approval_sync(
@@ -297,7 +302,7 @@ def submit_approval(approver_email: str) -> None:
 @durable_execution
 async def handler(event: dict) -> dict:
     approval = await wait_for_callback(
-        submit_approval(event["approver_email"]),
+        partial(submit_approval, event["approver_email"]),
         timeout=timedelta(hours=24),
         name="approval",
     )
@@ -336,7 +341,7 @@ Each example has a matching local and cloud runner test under
 5. Keep declarative and configuration hooks synchronous; keep DAG definitions
    and structural or metadata hooks deterministic and side-effect free.
 6. Call deterministic synchronous helpers directly only when they do not block.
-7. Put synchronous I/O, external reads, and writes inside `@durable_callable` steps.
+7. Put synchronous I/O, external reads, and writes inside `@durable_step` functions.
 8. Do not perform durable operations from inside a step.
 9. Do not call `asyncio.run()` from durable code.
 10. Name each important synchronous step so tests and logs stay

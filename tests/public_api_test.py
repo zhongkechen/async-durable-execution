@@ -182,6 +182,7 @@ def test_core_public_api_is_reexported_from_core_package() -> None:
         "create_default_sync_client",
         "durable_callable",
         "durable_execution",
+        "durable_step",
         "get_current_context",
         "get_durable_context",
         "get_serdes_context",
