@@ -13,8 +13,12 @@ WORKFLOW_FILE = REPOSITORY_ROOT / ".github" / "workflows" / "ai-pr-review.yml"
 JOB_HEADER = re.compile(r"^  ([a-z0-9_-]+):\n", re.MULTILINE)
 
 
+def _workflow() -> str:
+    return WORKFLOW_FILE.read_text(encoding="utf-8")
+
+
 def _jobs() -> dict[str, str]:
-    workflow = WORKFLOW_FILE.read_text(encoding="utf-8").split("jobs:\n", 1)[1]
+    workflow = _workflow().split("jobs:\n", 1)[1]
     matches = list(JOB_HEADER.finditer(workflow))
     return {
         match.group(1): workflow[
@@ -61,7 +65,10 @@ def test_ai_review_generation_is_separate_from_posting(
     assert "scripts/post_ai_review_summary.sh" not in generation
 
     assert f"needs: {generate_job}" in posting
-    assert f"if: always() && needs.{generate_job}.result == 'success'" in posting
+    posting_condition = (
+        f"if: \"!cancelled() && needs.{generate_job}.result == 'success'\""
+    )
+    assert posting_condition in posting
     assert "pull-requests: write" in posting
     assert "id-token:" not in posting
     assert "environment: ai-pr-review-runtime" not in posting
@@ -92,7 +99,7 @@ if: >-
 """
     generation_condition = """\
 if: >-
-      always() &&
+      !cancelled() &&
       github.actor != 'dependabot[bot]' &&
       (
         (
@@ -106,3 +113,21 @@ if: >-
     assert approval_condition in approval
     for job_id in ("claude-review", "codex-review"):
         assert generation_condition in jobs[job_id]
+
+
+def test_converting_to_draft_cancels_previous_review() -> None:
+    workflow = _workflow()
+    jobs = _jobs()
+
+    assert (
+        "types: [opened, synchronize, reopened, ready_for_review, "
+        "converted_to_draft]" in workflow
+    )
+    for job_id in (
+        "claude-review",
+        "post-claude-review",
+        "codex-review",
+        "post-codex-review",
+    ):
+        assert "!cancelled()" in jobs[job_id]
+        assert "always()" not in jobs[job_id]
