@@ -12,11 +12,13 @@ concurrency:
 
 jobs:
   approve_external:
-    name: Approve external PR review
+    name: Approve AI review
     if: >-
-      !github.event.pull_request.draft &&
       github.actor != 'dependabot[bot]' &&
-      github.event.pull_request.author_association != 'OWNER'
+      (
+        github.event.pull_request.draft ||
+        github.event.pull_request.author_association != 'OWNER'
+      )
     runs-on: ubuntu-latest
     environment: ai-pr-review
     permissions: {}
@@ -29,10 +31,12 @@ jobs:
     needs: approve_external
     if: >-
       always() &&
-      !github.event.pull_request.draft &&
       github.actor != 'dependabot[bot]' &&
       (
-        github.event.pull_request.author_association == 'OWNER' ||
+        (
+          !github.event.pull_request.draft &&
+          github.event.pull_request.author_association == 'OWNER'
+        ) ||
         needs.approve_external.result == 'success'
       )
     runs-on: ubuntu-latest
@@ -244,10 +248,12 @@ jobs:
     needs: approve_external
     if: >-
       always() &&
-      !github.event.pull_request.draft &&
       github.actor != 'dependabot[bot]' &&
       (
-        github.event.pull_request.author_association == 'OWNER' ||
+        (
+          !github.event.pull_request.draft &&
+          github.event.pull_request.author_association == 'OWNER'
+        ) ||
         needs.approve_external.result == 'success'
       )
     runs-on: ubuntu-latest

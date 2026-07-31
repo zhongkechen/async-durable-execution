@@ -1,4 +1,4 @@
-"""Tests for the AI review workflow's permission boundaries."""
+"""Tests for the AI review workflow behavior and permission boundaries."""
 
 from __future__ import annotations
 
@@ -77,3 +77,32 @@ def test_only_posting_jobs_can_write_pull_requests() -> None:
     }
 
     assert write_jobs == {"post-claude-review", "post-codex-review"}
+
+
+def test_draft_reviews_require_environment_approval() -> None:
+    jobs = _jobs()
+    approval = jobs["approve_external"]
+    approval_condition = """\
+if: >-
+      github.actor != 'dependabot[bot]' &&
+      (
+        github.event.pull_request.draft ||
+        github.event.pull_request.author_association != 'OWNER'
+      )
+"""
+    generation_condition = """\
+if: >-
+      always() &&
+      github.actor != 'dependabot[bot]' &&
+      (
+        (
+          !github.event.pull_request.draft &&
+          github.event.pull_request.author_association == 'OWNER'
+        ) ||
+        needs.approve_external.result == 'success'
+      )
+"""
+
+    assert approval_condition in approval
+    for job_id in ("claude-review", "codex-review"):
+        assert generation_condition in jobs[job_id]
