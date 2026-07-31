@@ -3517,11 +3517,14 @@ async def test_concurrent_executor_replay_completed_with_failed_operations() -> 
 async def test_concurrent_executor_replay_completed_with_cancelled_operation(
     operation_status: OperationStatus,
 ) -> None:
-    """Started children of a completed parent replay as cancelled branches."""
+    """Cancelled children preserve a threshold-completed parent's result."""
 
     executor = create_concurrent_executor(
         ParallelExecutor,
-        executables=[Executable(index=0, func=lambda: "unused")],
+        executables=[
+            Executable(index=0, func=lambda: "unused"),
+            Executable(index=1, func=lambda: "unused"),
+        ],
         max_concurrency=None,
         completion_config=CompletionConfig(min_successful=1),
         top_level_sub_type=OperationSubType.PARALLEL,
@@ -3530,16 +3533,27 @@ async def test_concurrent_executor_replay_completed_with_cancelled_operation(
         serdes=None,
     )
     execution_state = create_execution_state()
-    execution_state.operations.get.return_value = Operation(
-        operation_id="child_0",
-        operation_type=OperationType.CONTEXT,
-        status=operation_status,
-    )
+    execution_state.operations.get.side_effect = [
+        Operation(
+            operation_id="child_0",
+            operation_type=OperationType.CONTEXT,
+            status=OperationStatus.SUCCEEDED,
+        ),
+        Operation(
+            operation_id="child_1",
+            operation_type=OperationType.CONTEXT,
+            status=operation_status,
+        ),
+    ]
     executor_context = create_executor_context(execution_state, step_id="child")
 
     result = await executor.replay_completed(execution_state, executor_context)
 
-    assert result.all == [BatchItem(0, BatchItemStatus.CANCELLED)]
+    assert result.all == [
+        BatchItem(0, BatchItemStatus.SUCCEEDED),
+        BatchItem(1, BatchItemStatus.CANCELLED),
+    ]
+    assert result.completion_reason is CompletionReason.MIN_SUCCESSFUL_REACHED
 
 
 async def test_concurrent_executor_replay_completed_with_missing_operation_started() -> (

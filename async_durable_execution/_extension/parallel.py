@@ -536,8 +536,8 @@ class BatchResult(MappingModel, Generic[R]):
         cancelled_count = counts.get(BatchItemStatus.CANCELLED, 0)
         started_count = counts.get(BatchItemStatus.STARTED, 0)
 
-        completed_count = succeeded_count + failed_count + cancelled_count
-        total_count = started_count + completed_count
+        completed_count = succeeded_count + failed_count
+        total_count = completed_count + started_count + cancelled_count
 
         completion_reason = cls._get_completion_reason(
             failure_count=failed_count,
