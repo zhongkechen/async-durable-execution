@@ -202,6 +202,7 @@ branches appear in the parent `BatchResult` with `BatchItemStatus.CANCELLED`, wh
 preserves the same outcome on replay. A cancelled branch does not checkpoint its own
 result. If it is running synchronous code in a worker thread, the parent waits for
 that already-started code to settle before checkpointing the batch result.
+Synchronous worker calls that are still queued are cancelled without running.
 
 By default, `parallel()` uses `CompletionConfig.all_successful()`, while `map()` uses
 `CompletionConfig()`. Pass an explicit `completion_config` when you want a different

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import inspect
+import threading
 from collections.abc import Awaitable, Callable
 from typing import Any, ParamSpec, TypeAlias, TypeVar, cast, overload
 
@@ -15,6 +16,29 @@ T = TypeVar("T")
 Params = ParamSpec("Params")
 
 CallableResult: TypeAlias = T | Awaitable[T]
+
+
+class _SyncCallState:
+    """Coordinate cancellation with a worker function's start boundary."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._started = False
+        self._cancelled = False
+
+    def try_start(self) -> bool:
+        with self._lock:
+            if self._cancelled:
+                return False
+            self._started = True
+            return True
+
+    def cancel_if_queued(self) -> bool:
+        with self._lock:
+            if self._started:
+                return False
+            self._cancelled = True
+            return True
 
 
 async def _drain_thread_task(task: asyncio.Task[Any]) -> None:
@@ -98,13 +122,21 @@ async def call_user_function(
     else:
         sync_func = cast("Callable[Params, Any]", func)
         with bind_synchronous_user_callable():
-            thread_task = asyncio.create_task(
-                asyncio.to_thread(sync_func, *args, **kwargs)
-            )
+            call_state = _SyncCallState()
+
+            def run_sync_func() -> Any:
+                if not call_state.try_start():
+                    return None
+                return sync_func(*args, **kwargs)
+
+            thread_task = asyncio.create_task(asyncio.to_thread(run_sync_func))
             try:
                 result = await asyncio.shield(thread_task)
             except asyncio.CancelledError:
-                await _drain_thread_task(thread_task)
+                if call_state.cancel_if_queued():
+                    thread_task.cancel()
+                else:
+                    await _drain_thread_task(thread_task)
                 raise
             if inspect.isawaitable(result):
                 return await cast("Awaitable[T]", result)

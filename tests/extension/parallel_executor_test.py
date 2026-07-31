@@ -1,15 +1,13 @@
 """Tests for the parallel executor support types."""
 
-from typing import no_type_check
-
-from typing import Any
+from typing import Any, cast, no_type_check
 
 import asyncio
 import json
 import random
 import threading
 import time
-from concurrent.futures import Future
+from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
 from itertools import combinations
 from unittest.mock import AsyncMock, Mock, patch
@@ -3985,6 +3983,80 @@ async def test_executor_drains_cancelled_sync_branch_without_checkpointing_resul
         and update.action in {OperationAction.SUCCEED, OperationAction.FAIL}
         for update in updates
     )
+
+
+async def test_executor_cancels_queued_sync_branches_before_they_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Early completion drains running sync work without starting queued work."""
+    from asyncio.threads import to_thread as real_to_thread
+
+    loop = asyncio.get_running_loop()
+    previous_executor = cast(Any, loop)._default_executor  # noqa: SLF001
+    worker_executor = ThreadPoolExecutor(max_workers=1)
+    loop.set_default_executor(worker_executor)
+    monkeypatch.setattr(asyncio, "to_thread", real_to_thread)
+
+    worker_started = threading.Event()
+    release_worker = threading.Event()
+    queued_started = [threading.Event(), threading.Event()]
+
+    def slow_sync_branch() -> str:
+        worker_started.set()
+        release_worker.wait()
+        return "slow"
+
+    def queued_sync_branch(index: int) -> str:
+        queued_started[index].set()
+        return f"queued-{index}"
+
+    async def fast_branch() -> str:
+        while not worker_started.is_set():
+            await asyncio.sleep(0.001)
+        return "fast"
+
+    executor = create_concurrent_executor(
+        ParallelExecutor,
+        executables=[
+            Executable(0, slow_sync_branch),
+            Executable(1, partial(queued_sync_branch, 0)),
+            Executable(2, partial(queued_sync_branch, 1)),
+            Executable(3, fast_branch),
+        ],
+        max_concurrency=4,
+        completion_config=CompletionConfig(min_successful=1),
+        top_level_sub_type=OperationSubType.PARALLEL,
+        iteration_sub_type=OperationSubType.PARALLEL_BRANCH,
+        name_prefix="parallel-branch-",
+        serdes=None,
+    )
+
+    execution_task = asyncio.create_task(executor.execute())
+    try:
+        await asyncio.wait_for(executor._completion_event.wait(), timeout=1)  # noqa: SLF001
+        await asyncio.sleep(0.01)
+
+        assert not execution_task.done()
+        assert not any(event.is_set() for event in queued_started)
+
+        release_worker.set()
+        result = await asyncio.wait_for(execution_task, timeout=1)
+        await loop.run_in_executor(None, lambda: None)
+    finally:
+        release_worker.set()
+        if not execution_task.done():
+            await asyncio.gather(execution_task, return_exceptions=True)
+        cast(Any, loop)._default_executor = previous_executor  # noqa: SLF001
+        worker_executor.shutdown(wait=True)
+
+    assert not any(event.is_set() for event in queued_started)
+    assert [item.status for item in result.all] == [
+        BatchItemStatus.CANCELLED,
+        BatchItemStatus.CANCELLED,
+        BatchItemStatus.CANCELLED,
+        BatchItemStatus.SUCCEEDED,
+    ]
+    assert result.completion_reason is CompletionReason.MIN_SUCCESSFUL_REACHED
 
 
 async def test_executor_returns_with_incomplete_branches() -> None:

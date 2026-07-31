@@ -221,9 +221,10 @@ steps and make them idempotent where possible.
 Python cannot forcibly stop a worker thread. If a parent `map()` or `parallel()`
 operation reaches an early completion condition while a synchronous branch is
 running, the SDK cancels the branch task but waits for the started worker function to
-settle before the parent completes. The cancelled child does not checkpoint its
-return value or error; the parent `BatchResult` records it as
-`BatchItemStatus.CANCELLED` for deterministic replay.
+settle before the parent completes. Worker functions that are still queued are
+cancelled without running. The cancelled child does not checkpoint its return value
+or error; the parent `BatchResult` records it as `BatchItemStatus.CANCELLED` for
+deterministic replay.
 
 ```python
 import smtplib
