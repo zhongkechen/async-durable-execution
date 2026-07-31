@@ -22,10 +22,9 @@ pending. Resolve each candidate finding as confirmed or discard it before
 responding.
 
 Report only actionable findings in severity order, with impact and a concrete
-fix. Every finding must identify the affected file and changed line. When an
-inline-comment tool is available, use it and set `commit_id` to the head SHA in
-`.ai-review-context/pr.json`. Otherwise, include a `path:line` reference in the
-top-level summary. Do not comment on unchanged lines and do not repeat findings.
+fix. Every finding must include a `path:line` reference to the affected file and
+changed line in the top-level summary. Do not comment on unchanged lines and do
+not repeat findings.
 
 Return a concise Markdown review body without a Claude or Codex title; the
 posting workflow adds the reviewer heading. If structured output is required,
