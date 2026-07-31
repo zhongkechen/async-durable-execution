@@ -133,8 +133,15 @@ def test_converting_to_draft_cancels_previous_review() -> None:
         assert "always()" not in jobs[job_id]
 
 
-def test_claude_review_uses_sonnet_5_for_both_attempts() -> None:
+def test_claude_review_uses_opus_5_for_both_attempts() -> None:
     claude_review = _jobs()["claude-review"]
 
-    assert claude_review.count("--model us.anthropic.claude-sonnet-5") == 2
-    assert "--model us.anthropic.claude-opus-" not in claude_review
+    assert claude_review.count("--model us.anthropic.claude-opus-5") == 2
+    assert "--model us.anthropic.claude-sonnet-" not in claude_review
+
+
+def test_claude_review_allows_bash_for_both_attempts() -> None:
+    claude_review = _jobs()["claude-review"]
+
+    assert claude_review.count('--allowedTools "Read,Grep,Glob,Bash"') == 2
+    assert '--disallowedTools "Bash,' not in claude_review
