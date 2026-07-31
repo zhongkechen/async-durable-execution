@@ -7,6 +7,7 @@ from typing import Any
 import asyncio
 import json
 import random
+import threading
 import time
 from concurrent.futures import Future
 from functools import partial
@@ -45,6 +46,7 @@ from async_durable_execution._core.models import (
     ContextDetails,
     ErrorObject,
     Operation,
+    OperationAction,
     OperationIdentifier,
     OperationStatus,
     OperationSubType,
@@ -316,6 +318,7 @@ async def test_batch_item_status_enum() -> None:
     """Test BatchItemStatus enum values."""
     assert BatchItemStatus.SUCCEEDED.value == "SUCCEEDED"
     assert BatchItemStatus.FAILED.value == "FAILED"
+    assert BatchItemStatus.CANCELLED.value == "CANCELLED"
     assert BatchItemStatus.STARTED.value == "STARTED"
 
 
@@ -338,6 +341,7 @@ async def test_branch_status_enum() -> None:
     assert BranchStatus.SUSPENDED.value == "suspended"
     assert BranchStatus.SUSPENDED_WITH_TIMEOUT.value == "suspended_with_timeout"
     assert BranchStatus.FAILED.value == "failed"
+    assert BranchStatus.CANCELLED.value == "cancelled"
 
 
 async def test_batch_item_creation() -> None:
@@ -442,6 +446,19 @@ async def test_batch_result_started() -> None:
     assert started[0].status == BatchItemStatus.STARTED
 
 
+async def test_batch_result_cancelled() -> None:
+    """Test BatchResult cancelled method."""
+    items = [
+        BatchItem(0, BatchItemStatus.CANCELLED),
+        BatchItem(1, BatchItemStatus.SUCCEEDED, "result1"),
+    ]
+    result = BatchResult(items, CompletionReason.MIN_SUCCESSFUL_REACHED)
+
+    cancelled = result.cancelled()
+    assert len(cancelled) == 1
+    assert cancelled[0].status == BatchItemStatus.CANCELLED
+
+
 async def test_batch_result_status() -> None:
     """Test BatchResult status property."""
     # No failures
@@ -534,13 +551,15 @@ async def test_batch_result_counts() -> None:
         ),
         BatchItem(2, BatchItemStatus.STARTED),
         BatchItem(3, BatchItemStatus.SUCCEEDED, "result2"),
+        BatchItem(4, BatchItemStatus.CANCELLED),
     ]
     result = BatchResult(items, CompletionReason.ALL_COMPLETED)
 
     assert result.success_count == 2
     assert result.failure_count == 1
     assert result.started_count == 1
-    assert result.total_count == 4
+    assert result.cancelled_count == 1
+    assert result.total_count == 5
 
 
 async def test_batch_result_to_dict() -> None:
@@ -556,6 +575,20 @@ async def test_batch_result_to_dict() -> None:
         "completionReason": "ALL_COMPLETED",
     }
     assert result_dict == expected
+
+
+@no_type_check
+async def test_batch_result_cancelled_item_round_trip() -> None:
+    """Cancelled child state is preserved in the parent result payload."""
+    result = BatchResult(
+        [BatchItem(0, BatchItemStatus.CANCELLED)],
+        CompletionReason.MIN_SUCCESSFUL_REACHED,
+    )
+
+    restored = BatchResult.from_dict(result.to_dict())
+
+    assert restored == result
+    assert restored.cancelled_count == 1
 
 
 @no_type_check
@@ -1319,12 +1352,38 @@ async def test_concurrent_executor_on_task_complete_suspend() -> None:
     exe_state = ExecutableWithState(executables[0])
     future = Mock()
     future.result.side_effect = SuspendExecution("test message")
+    future.cancelled.return_value = False
 
     scheduler = Mock()
 
     await run_async(executor._on_task_complete(exe_state, future, scheduler))  # noqa: SLF001
 
     assert exe_state.status == BranchStatus.SUSPENDED
+
+
+@no_type_check
+async def test_concurrent_executor_on_task_complete_cancelled() -> None:
+    """A cancelled task becomes a terminal cancelled branch."""
+
+    executor = create_concurrent_executor(
+        ParallelExecutor,
+        executables=[Executable(0, lambda: "test")],
+        max_concurrency=1,
+        completion_config=CompletionConfig(min_successful=1),
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
+        name_prefix="test_",
+        serdes=None,
+    )
+    exe_state = ExecutableWithState(executor.executables[0])
+    future = Mock()
+    future.cancelled.return_value = True
+
+    await executor._on_task_complete(exe_state, future, Mock())  # noqa: SLF001
+
+    assert exe_state.status is BranchStatus.CANCELLED
+    assert executor.counters.success_count == 0
+    assert executor.counters.failure_count == 0
 
 
 @no_type_check
@@ -1636,6 +1695,42 @@ async def test_concurrent_executor_refills_terminal_slot_before_suspending() -> 
     assert executor.executables_with_state[2].status is BranchStatus.SUSPENDED
 
 
+async def test_early_completion_marks_suspended_branch_cancelled() -> None:
+    """A started suspended branch is cancelled when another branch completes."""
+    first_branch_suspended = asyncio.Event()
+
+    class TestExecutor(ParallelExecutor):
+        async def _execute_item_in_child_context(
+            self, executor_context, executable
+        ) -> str:
+            if executable.index == 0:
+                first_branch_suspended.set()
+                raise SuspendExecution("waiting for callback")
+            await first_branch_suspended.wait()
+            return "completed"
+
+    executor = create_concurrent_executor(
+        TestExecutor,
+        executables=[
+            Executable(0, lambda: None),
+            Executable(1, lambda: None),
+        ],
+        max_concurrency=2,
+        completion_config=CompletionConfig(min_successful=1),
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
+        name_prefix="test_",
+        serdes=None,
+    )
+
+    result = await executor.execute()
+
+    assert result.all == [
+        BatchItem(0, BatchItemStatus.CANCELLED),
+        BatchItem(1, BatchItemStatus.SUCCEEDED, result="completed"),
+    ]
+
+
 @pytest.mark.parametrize("invalid_max_concurrency", [0, -1, True, 1.5])
 def test_parallel_rejects_invalid_max_concurrency_before_creating_context(
     invalid_max_concurrency,
@@ -1690,8 +1785,9 @@ async def test_concurrent_executor_custom_should_complete_succeeds_early() -> No
     assert result.completion_reason == CompletionReason.CUSTOM_COMPLETION_SUCCEEDED
     assert result.completion_reason.is_succeeded
     assert result.success_count == 2
-    assert result.started_count == 1
-    assert result.all[2].status == BatchItemStatus.STARTED
+    assert result.cancelled_count == 1
+    assert result.started_count == 0
+    assert result.all[2].status == BatchItemStatus.CANCELLED
 
 
 async def test_concurrent_executor_custom_should_complete_can_complete_as_failed() -> (
@@ -1740,7 +1836,8 @@ async def test_concurrent_executor_custom_should_complete_can_complete_as_failed
     assert not result.completion_reason.is_succeeded
     assert result.success_count == 0
     assert result.failure_count == 2
-    assert result.started_count == 1
+    assert result.cancelled_count == 1
+    assert result.started_count == 0
 
 
 async def test_batch_result_from_items_uses_custom_should_complete_reason() -> None:
@@ -2464,6 +2561,31 @@ async def test_create_result_failed_branch() -> None:
     assert result.all[0].error.message == "Test error message"
     assert result.all[0].error.type == "ValueError"
     assert result.all[0].index == 0
+
+
+@no_type_check
+async def test_create_result_cancelled_branch() -> None:
+    """Test _create_result with a CANCELLED branch."""
+
+    executor = create_concurrent_executor(
+        ParallelExecutor,
+        executables=[Executable(0, lambda: "test")],
+        max_concurrency=1,
+        completion_config=CompletionConfig(min_successful=1),
+        top_level_sub_type="TOP",
+        iteration_sub_type="ITER",
+        name_prefix="test_",
+        serdes=None,
+    )
+    exe_state = ExecutableWithState(executor.executables[0])
+    exe_state.cancel()
+    executor.executables_with_state = [exe_state]
+
+    result = executor._create_result()  # noqa: SLF001
+
+    assert result.all == [BatchItem(0, BatchItemStatus.CANCELLED)]
+    assert result.cancelled_count == 1
+    assert result.started_count == 0
 
 
 @no_type_check
@@ -3388,6 +3510,38 @@ async def test_concurrent_executor_replay_completed_with_failed_operations() -> 
     assert result.all[0].error is not None
 
 
+@pytest.mark.parametrize(
+    "operation_status",
+    [OperationStatus.STARTED, OperationStatus.CANCELLED],
+)
+async def test_concurrent_executor_replay_completed_with_cancelled_operation(
+    operation_status: OperationStatus,
+) -> None:
+    """Started children of a completed parent replay as cancelled branches."""
+
+    executor = create_concurrent_executor(
+        ParallelExecutor,
+        executables=[Executable(index=0, func=lambda: "unused")],
+        max_concurrency=None,
+        completion_config=CompletionConfig(min_successful=1),
+        top_level_sub_type=OperationSubType.PARALLEL,
+        iteration_sub_type=OperationSubType.PARALLEL_BRANCH,
+        name_prefix="parallel-branch-",
+        serdes=None,
+    )
+    execution_state = create_execution_state()
+    execution_state.operations.get.return_value = Operation(
+        operation_id="child_0",
+        operation_type=OperationType.CONTEXT,
+        status=operation_status,
+    )
+    executor_context = create_executor_context(execution_state, step_id="child")
+
+    result = await executor.replay_completed(execution_state, executor_context)
+
+    assert result.all == [BatchItem(0, BatchItemStatus.CANCELLED)]
+
+
 async def test_concurrent_executor_replay_completed_with_missing_operation_started() -> (
     None
 ):
@@ -3735,14 +3889,88 @@ async def test_executor_exits_early_with_min_successful() -> None:
     assert result.all[0].status == BatchItemStatus.SUCCEEDED
     assert result.all[0].result == "fast_result"
 
-    # Slow branch should be marked as STARTED (incomplete)
-    assert result.all[1].status == BatchItemStatus.STARTED
+    # Slow branch was started, then cancelled after the threshold was reached.
+    assert result.all[1].status == BatchItemStatus.CANCELLED
 
     # Verify counts
     assert result.success_count == 1
     assert result.failure_count == 0
-    assert result.started_count == 1
+    assert result.cancelled_count == 1
+    assert result.started_count == 0
     assert result.total_count == 2
+
+
+async def test_executor_drains_cancelled_sync_branch_without_checkpointing_result() -> (
+    None
+):
+    """Early completion waits for sync work and records only parent cancellation."""
+    worker_started = threading.Event()
+    release_worker = threading.Event()
+    side_effect_completed = threading.Event()
+
+    def slow_sync_branch() -> str:
+        worker_started.set()
+        release_worker.wait()
+        side_effect_completed.set()
+        return "slow_result"
+
+    async def fast_branch() -> str:
+        while not worker_started.is_set():
+            await asyncio.sleep(0.001)
+        return "fast_result"
+
+    execution_state = create_execution_state()
+    executor_context = create_executor_context(
+        execution_state,
+        step_id="branch",
+        parent_id="parent",
+    )
+    executor = create_concurrent_executor(
+        ParallelExecutor,
+        executables=[
+            Executable(0, slow_sync_branch),
+            Executable(1, fast_branch),
+        ],
+        max_concurrency=2,
+        completion_config=CompletionConfig(min_successful=1),
+        top_level_sub_type=OperationSubType.PARALLEL,
+        iteration_sub_type=OperationSubType.PARALLEL_BRANCH,
+        name_prefix="parallel-branch-",
+        serdes=None,
+        execution_state=execution_state,
+        executor_context=executor_context,
+    )
+
+    execution_task = asyncio.create_task(executor.execute())
+    try:
+        while not worker_started.is_set():
+            await asyncio.sleep(0.001)
+        await asyncio.wait_for(executor._completion_event.wait(), timeout=1)  # noqa: SLF001
+        await asyncio.sleep(0.01)
+
+        assert not execution_task.done()
+        assert not side_effect_completed.is_set()
+    finally:
+        release_worker.set()
+
+    result = await asyncio.wait_for(execution_task, timeout=1)
+
+    assert side_effect_completed.is_set()
+    assert result.all == [
+        BatchItem(0, BatchItemStatus.CANCELLED),
+        BatchItem(1, BatchItemStatus.SUCCEEDED, result="fast_result"),
+    ]
+
+    updates = [
+        call.kwargs["operation_update"]
+        for call in execution_state.create_checkpoint.await_args_list
+        if call.kwargs.get("operation_update") is not None
+    ]
+    assert not any(
+        update.operation_id == "branch_0"
+        and update.action in {OperationAction.SUCCEED, OperationAction.FAIL}
+        for update in updates
+    )
 
 
 async def test_executor_returns_with_incomplete_branches() -> None:
@@ -3804,10 +4032,11 @@ async def test_executor_returns_with_incomplete_branches() -> None:
     # Result should show MIN_SUCCESSFUL_REACHED
     assert result.completion_reason == CompletionReason.MIN_SUCCESSFUL_REACHED
 
-    # Verify counts - one succeeded, one incomplete
+    # Verify counts - one succeeded and the other started branch was cancelled.
     assert result.success_count == 1
     assert result.failure_count == 0
-    assert result.started_count == 1
+    assert result.cancelled_count == 1
+    assert result.started_count == 0
     assert result.total_count == 2
 
 
@@ -3863,7 +4092,8 @@ async def test_executor_returns_before_slow_branch_completes() -> None:
     # Verify counts
     assert result.success_count == 1
     assert result.failure_count == 0
-    assert result.started_count == 1
+    assert result.cancelled_count == 1
+    assert result.started_count == 0
     assert result.total_count == 2
 
 

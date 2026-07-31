@@ -196,6 +196,13 @@ explicit thresholds. They complete successfully when all work completes without
 failures, but any observed failure completes the operation as failed because no
 failure tolerance is configured.
 
+When a completion condition is reached early, `map()` and `parallel()` cancel
+branches that have already started and omit branches that never started. Cancelled
+branches appear in the parent `BatchResult` with `BatchItemStatus.CANCELLED`, which
+preserves the same outcome on replay. A cancelled branch does not checkpoint its own
+result. If it is running synchronous code in a worker thread, the parent waits for
+that already-started code to settle before checkpointing the batch result.
+
 By default, `parallel()` uses `CompletionConfig.all_successful()`, while `map()` uses
 `CompletionConfig()`. Pass an explicit `completion_config` when you want a different
 policy.

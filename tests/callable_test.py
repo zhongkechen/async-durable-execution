@@ -49,6 +49,37 @@ async def test_call_user_function_runs_sync_callable_in_thread_with_context() ->
     assert context_value == "bound"
 
 
+async def test_call_user_function_drains_sync_worker_before_propagating_cancel() -> (
+    None
+):
+    started = threading.Event()
+    release = threading.Event()
+    completed = threading.Event()
+
+    def sync_callable() -> str:
+        started.set()
+        release.wait()
+        completed.set()
+        return "done"
+
+    task = asyncio.create_task(call_user_function(sync_callable))
+    try:
+        while not started.is_set():
+            await asyncio.sleep(0.001)
+
+        task.cancel()
+        await asyncio.sleep(0.01)
+
+        assert not task.done()
+        assert not completed.is_set()
+    finally:
+        release.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert completed.is_set()
+
+
 async def test_call_user_function_runs_async_callable_on_event_loop() -> None:
     async def async_callable() -> int:
         await asyncio.sleep(0)
