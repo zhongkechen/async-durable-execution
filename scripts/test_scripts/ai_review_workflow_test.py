@@ -61,6 +61,7 @@ def test_ai_review_generation_is_separate_from_posting(
     assert "scripts/post_ai_review_summary.sh" not in generation
 
     assert f"needs: {generate_job}" in posting
+    assert f"if: always() && needs.{generate_job}.result == 'success'" in posting
     assert "pull-requests: write" in posting
     assert "id-token:" not in posting
     assert "environment: ai-pr-review-runtime" not in posting

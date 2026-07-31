@@ -195,6 +195,7 @@ jobs:
   post-claude-review:
     name: Post Claude review
     needs: claude-review
+    if: always() && needs.claude-review.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -461,6 +462,7 @@ jobs:
   post-codex-review:
     name: Post Codex review
     needs: codex-review
+    if: always() && needs.codex-review.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
