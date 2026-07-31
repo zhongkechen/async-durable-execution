@@ -2,7 +2,7 @@ name: AI PR Review
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
 
 permissions: {}
 
@@ -30,7 +30,7 @@ jobs:
     name: Generate Claude review
     needs: approve_external
     if: >-
-      always() &&
+      !cancelled() &&
       github.actor != 'dependabot[bot]' &&
       (
         (
@@ -199,7 +199,7 @@ jobs:
   post-claude-review:
     name: Post Claude review
     needs: claude-review
-    if: always() && needs.claude-review.result == 'success'
+    if: "!cancelled() && needs.claude-review.result == 'success'"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -247,7 +247,7 @@ jobs:
     name: Generate Codex review
     needs: approve_external
     if: >-
-      always() &&
+      !cancelled() &&
       github.actor != 'dependabot[bot]' &&
       (
         (
@@ -468,7 +468,7 @@ jobs:
   post-codex-review:
     name: Post Codex review
     needs: codex-review
-    if: always() && needs.codex-review.result == 'success'
+    if: "!cancelled() && needs.codex-review.result == 'success'"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
