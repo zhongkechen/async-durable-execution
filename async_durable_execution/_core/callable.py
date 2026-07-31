@@ -16,6 +16,23 @@ Params = ParamSpec("Params")
 CallableResult: TypeAlias = T | Awaitable[T]
 
 
+def _is_async_callable(func: Callable[..., Any]) -> bool:
+    """Return whether a callable's implementation is asynchronous."""
+    candidates = (func, getattr(func, "__call__", None))
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        if inspect.iscoroutinefunction(candidate):
+            return True
+        try:
+            unwrapped = inspect.unwrap(candidate)
+        except ValueError:
+            continue
+        if inspect.iscoroutinefunction(unwrapped):
+            return True
+    return False
+
+
 @overload
 async def call_user_function(
     func: Callable[Params, Awaitable[T]],
@@ -41,7 +58,7 @@ async def call_user_function(
     **kwargs: Params.kwargs,
 ) -> T:
     """Invoke async callables directly and sync callables in a worker thread."""
-    if inspect.iscoroutinefunction(func):
+    if _is_async_callable(func):
         result = func(*args, **kwargs)
     else:
         sync_func = cast("Callable[Params, Any]", func)

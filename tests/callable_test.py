@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import threading
 from collections.abc import Awaitable
 from contextvars import ContextVar
@@ -14,6 +15,7 @@ from async_durable_execution import (
 )
 from async_durable_execution._core.callable import call_user_function
 from async_durable_execution._core.context import bind_current_context
+from async_durable_execution._core.context import ensure_durable_operations_allowed
 from async_durable_execution._core.models import (
     OperationIdentifier,
     OperationSubType,
@@ -57,6 +59,39 @@ async def test_call_user_function_runs_async_callable_on_event_loop() -> None:
         new=AsyncMock(),
     ) as to_thread:
         assert await call_user_function(async_callable) == threading.get_ident()
+
+    to_thread.assert_not_awaited()
+
+
+async def test_call_user_function_runs_async_callable_instance_on_event_loop() -> None:
+    class AsyncCallable:
+        async def __call__(self) -> int:
+            ensure_durable_operations_allowed("step()")
+            return threading.get_ident()
+
+    with patch(
+        "async_durable_execution._core.callable.asyncio.to_thread",
+        new=AsyncMock(),
+    ) as to_thread:
+        assert await call_user_function(AsyncCallable()) == threading.get_ident()
+
+    to_thread.assert_not_awaited()
+
+
+async def test_call_user_function_unwraps_async_target() -> None:
+    async def async_callable() -> int:
+        ensure_durable_operations_allowed("step()")
+        return threading.get_ident()
+
+    @functools.wraps(async_callable)
+    def wrapped_callable() -> Awaitable[int]:
+        return async_callable()
+
+    with patch(
+        "async_durable_execution._core.callable.asyncio.to_thread",
+        new=AsyncMock(),
+    ) as to_thread:
+        assert await call_user_function(wrapped_callable) == threading.get_ident()
 
     to_thread.assert_not_awaited()
 

@@ -1426,7 +1426,7 @@ def parallel(
 
 @overload
 def parallel(
-    branches: Iterable[Callable[[], T]],
+    branches: Iterable[Callable[[], CallableResult[T]]],
     *,
     name: str | None = None,
     max_concurrency: int | None = None,

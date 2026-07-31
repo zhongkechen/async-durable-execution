@@ -7,7 +7,7 @@ import inspect
 import importlib
 import json
 from collections.abc import Awaitable, Callable, Iterator, Mapping
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
 from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
@@ -48,6 +48,22 @@ from async_durable_execution._core.serdes import ExtendedTypeSerDes, serialize
 from async_durable_execution._core.state import ExecutionState
 
 from ..serdes_test import CustomStrSerDes
+
+if TYPE_CHECKING:
+    from async_durable_execution._core import CallableResult
+
+    def _check_mixed_parallel_branch_types() -> None:
+        def sync_branch() -> str:
+            return "sync"
+
+        async def async_branch() -> str:
+            return "async"
+
+        branches: list[Callable[[], CallableResult[str]]] = [
+            sync_branch,
+            async_branch,
+        ]
+        task: asyncio.Task[BatchResult[str]] = parallel(branches)
 
 
 async def _invoke_maybe_async(func, *args, **kwargs) -> Any:
