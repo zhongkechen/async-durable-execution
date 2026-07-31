@@ -59,6 +59,7 @@ and cannot create durable operations.
         - SerDesContext
         - get_serdes_context
         - SerDes
+        - SyncSerDes
         - JsonSerDes
         - ExtendedTypeSerDes
 

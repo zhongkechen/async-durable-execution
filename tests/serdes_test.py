@@ -33,6 +33,7 @@ from async_durable_execution._core.serdes import (
     PrimitiveCodec,
     SerDes,
     SerDesContext,
+    SyncSerDes,
     TypeCodec,
     TypeTag,
     UuidCodec,
@@ -85,6 +86,11 @@ class CustomDictSerDes(SerDes[Any]):
         return value
 
 
+async def _use_awaitable_serdes_contract(serdes: SerDes[str]) -> str:
+    serialized = await serdes.serialize("value")
+    return await serdes.deserialize(serialized)
+
+
 async def test_serdes_abstract() -> None:
     """Test SerDes abstract base class."""
 
@@ -123,8 +129,18 @@ async def test_serdes_abstract_methods_not_implemented() -> None:
 async def test_serdes_abstract_methods_coverage() -> None:
     """Test to achieve coverage of abstract method pass statements."""
     # To cover the pass statements, call the abstract methods directly
-    assert SerDes.serialize(None, None) is None
-    assert SerDes.deserialize(None, None) is None
+    assert await SerDes.serialize(None, None) is None
+    assert await SerDes.deserialize(None, None) is None
+
+
+@no_type_check
+async def test_sync_serdes_abstract_contract() -> None:
+    """SyncSerDes requires both synchronous methods."""
+    with pytest.raises(TypeError):
+        SyncSerDes()
+
+    assert SyncSerDes.serialize(None, None) is None
+    assert SyncSerDes.deserialize(None, None) is None
 
 
 @no_type_check
@@ -331,7 +347,7 @@ async def test_async_serdes_can_await_io_like_work() -> None:
 
 
 async def test_synchronous_serdes_methods_run_with_context():
-    class SyncContextSerDes(SerDes[str]):
+    class SyncContextSerDes(SyncSerDes[str]):
         def serialize(self, value: str) -> str:
             context = get_serdes_context()
             return f"{context.operation_id}:{value}"

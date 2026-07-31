@@ -33,7 +33,7 @@ These executable entry points accept either `def` or `async def`:
 - item functions passed to `map()`
 - branch callables passed to `parallel()`
 - condition checks passed to `wait_for_condition()`
-- `SerDes.serialize()` and `SerDes.deserialize()` methods
+- `SyncSerDes.serialize()` and `SyncSerDes.deserialize()` methods
 
 Callable parameters can be plain functions or bound methods.
 `@durable_callable` and `@durable_node` support instance, class, and static
@@ -62,6 +62,10 @@ scope-specific context getter, call ordinary synchronous helpers, and return an
 ordinary value, but they cannot create durable operations. This rule applies
 equally to sync handlers, child contexts, flow nodes, map items, parallel
 branches, callback submitters, condition checks, and serializers.
+
+Async serializers subclass `SerDes`; synchronous serializers subclass
+`SyncSerDes`. Operation APIs accept either interface, while `SerDes` keeps its
+awaitable method contract for generic async integrations.
 
 Use `async def` for any function that calls `step()`, `wait()`, `invoke()`,
 `recurse()`, `run_in_child_context()`, `flow()`, `map()`, `parallel()`,

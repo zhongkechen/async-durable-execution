@@ -31,9 +31,9 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Generic, Protocol, TypeVar, cast
+from typing import Any, Generic, Protocol, TypeAlias, TypeVar, cast
 
-from .callable import CallableResult, call_user_function
+from .callable import call_user_function
 from .context import SerDesContext, bind_current_context, get_current_context
 from .exceptions import (
     DurableExecutionsError,
@@ -396,22 +396,16 @@ def get_serdes_context() -> SerDesContext:
 
 
 class SerDes(ABC, Generic[T]):
-    """Abstract serializer interface for durable operation payloads and results."""
+    """Asynchronous serializer interface for durable operation values."""
 
     @abstractmethod
-    def serialize(self, value: T) -> CallableResult[str]:
-        """Convert a Python value into the wire format stored by the SDK.
-
-        Synchronous implementations run in the event loop's thread executor.
-        """
+    async def serialize(self, value: T) -> str:
+        """Convert a Python value into the wire format stored by the SDK."""
         pass
 
     @abstractmethod
-    def deserialize(self, data: str) -> CallableResult[T]:
-        """Reconstruct a Python value from the durable wire format.
-
-        Synchronous implementations run in the event loop's thread executor.
-        """
+    async def deserialize(self, data: str) -> T:
+        """Reconstruct a Python value from the durable wire format."""
         pass
 
     @staticmethod
@@ -422,6 +416,23 @@ class SerDes(ABC, Generic[T]):
         if isinstance(obj, list):
             return all(SerDes.is_primitive(item) for item in obj)
         return False
+
+
+class SyncSerDes(ABC, Generic[T]):
+    """Synchronous serializer interface run in the worker-thread executor."""
+
+    @abstractmethod
+    def serialize(self, value: T) -> str:
+        """Convert a Python value into the wire format stored by the SDK."""
+        pass
+
+    @abstractmethod
+    def deserialize(self, data: str) -> T:
+        """Reconstruct a Python value from the durable wire format."""
+        pass
+
+
+SerDesLike: TypeAlias = SerDes[T] | SyncSerDes[T]
 
 
 class PassThroughSerDes(SerDes[T]):
@@ -534,7 +545,7 @@ EXTENDED_TYPES_SERDES: SerDes[Any] = ExtendedTypeSerDes()
 
 
 async def serialize(
-    serdes: SerDes[T] | None,
+    serdes: SerDesLike[T] | None,
     value: T,
     operation_id: str,
     durable_execution_arn: str,
@@ -559,7 +570,7 @@ async def serialize(
         durable_execution_arn,
         recursive_level,
     )
-    active_serdes: SerDes[T] = serdes or EXTENDED_TYPES_SERDES
+    active_serdes: SerDesLike[T] = serdes or EXTENDED_TYPES_SERDES
 
     try:
         with bind_current_context(serdes_context):
@@ -574,7 +585,7 @@ async def serialize(
 
 
 async def deserialize(
-    serdes: SerDes[T] | None,
+    serdes: SerDesLike[T] | None,
     data: str,
     operation_id: str,
     durable_execution_arn: str,
@@ -599,7 +610,7 @@ async def deserialize(
         durable_execution_arn,
         recursive_level,
     )
-    active_serdes: SerDes[T] = serdes or EXTENDED_TYPES_SERDES
+    active_serdes: SerDesLike[T] = serdes or EXTENDED_TYPES_SERDES
 
     try:
         with bind_current_context(serdes_context):

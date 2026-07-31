@@ -20,7 +20,7 @@ from .._core import (
     OperationStatus,
     OperationSubType,
     OperationUpdate,
-    SerDes,
+    SerDesLike,
     create_eager_task,
     ensure_durable_operations_allowed,
     get_durable_context,
@@ -42,8 +42,8 @@ class InvokeOperationExecutor(OperationExecutor[R]):
         payload: P,
         state: ExecutionState,
         operation_identifier: OperationIdentifier,
-        serdes_payload: SerDes[P] | None = None,
-        serdes_result: SerDes[R] | None = None,
+        serdes_payload: SerDesLike[P] | None = None,
+        serdes_result: SerDesLike[R] | None = None,
         tenant_id: str | None = None,
     ) -> None:
         """Initialize the invoke operation executor.
@@ -152,8 +152,8 @@ def invoke(
     payload: P,
     *,
     name: str | None = None,
-    serdes_payload: SerDes[P] | None = None,
-    serdes_result: SerDes[R] | None = None,
+    serdes_payload: SerDesLike[P] | None = None,
+    serdes_result: SerDesLike[R] | None = None,
     tenant_id: str | None = None,
 ) -> asyncio.Task[R]:
     """Invoke another durable Lambda function and wait for its durable result.
@@ -197,8 +197,8 @@ async def _invoke(
     *,
     context: DurableContext,
     operation_identifier: OperationIdentifier,
-    serdes_payload: SerDes[P] | None = None,
-    serdes_result: SerDes[R] | None = None,
+    serdes_payload: SerDesLike[P] | None = None,
+    serdes_result: SerDesLike[R] | None = None,
     tenant_id: str | None = None,
 ) -> R:
     executor: InvokeOperationExecutor[R] = InvokeOperationExecutor(

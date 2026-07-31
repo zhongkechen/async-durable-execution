@@ -21,6 +21,7 @@ from .._core import (
     OperationUpdate,
     PassThroughSerDes,
     SerDes,
+    SerDesLike,
     SuspendExecution,
     TerminationReason,
     _register_sdk_control_error_type,
@@ -157,7 +158,7 @@ def create_callback(
     name: str | None = None,
     timeout: Duration | None = None,
     heartbeat_timeout: Duration | None = None,
-    serdes: SerDes | None = None,
+    serdes: SerDesLike | None = None,
 ) -> asyncio.Task[Callback]:
     """Create a durable callback handle that external systems can complete later.
 
@@ -198,7 +199,7 @@ async def _create_callback(
     operation_id: str,
     timeout: Duration | None = None,
     heartbeat_timeout: Duration | None = None,
-    serdes: SerDes | None = None,
+    serdes: SerDesLike | None = None,
 ) -> Callback:
     executor: CallbackOperationExecutor = CallbackOperationExecutor(
         state=context.execution_state,
@@ -223,12 +224,12 @@ class Callback(Generic[T]):
         callback_id: str,
         operation_id: str,
         state: ExecutionState,
-        serdes: SerDes[T] | None = None,
+        serdes: SerDesLike[T] | None = None,
     ) -> None:
         self.callback_id: str = callback_id
         self.operation_id: str = operation_id
         self.state: ExecutionState = state
-        self.serdes: SerDes[T] | None = serdes
+        self.serdes: SerDesLike[T] | None = serdes
 
     async def result(self) -> T | None:
         """Return the result of the future. Will block until result is available.

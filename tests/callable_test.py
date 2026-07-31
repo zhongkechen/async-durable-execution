@@ -127,6 +127,27 @@ async def test_call_user_function_unwraps_async_target() -> None:
     to_thread.assert_not_awaited()
 
 
+async def test_call_user_function_unwraps_partial_async_callable_instance() -> None:
+    class AsyncCallable:
+        async def __call__(self, value: str, *, suffix: str) -> str:
+            ensure_durable_operations_allowed("step()")
+            return f"{value}{suffix}"
+
+    partial_callable = functools.partial(AsyncCallable(), suffix="-done")
+    context = _create_durable_context()
+
+    with (
+        bind_current_context(context),
+        patch(
+            "async_durable_execution._core.callable.asyncio.to_thread",
+            new=AsyncMock(),
+        ) as to_thread,
+    ):
+        assert await call_user_function(partial_callable, "work") == "work-done"
+
+    to_thread.assert_not_awaited()
+
+
 async def test_call_user_function_awaits_value_returned_by_sync_callable() -> None:
     def sync_callable() -> Awaitable[str]:
         async def result() -> str:

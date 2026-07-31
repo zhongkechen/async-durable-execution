@@ -62,9 +62,10 @@ def handler(event: dict, context: DurableContext) -> dict:
 This SDK binds the active durable context internally and exposes durable
 operations as top-level awaitable helpers. User handlers, steps, child
 contexts, `flow` nodes, callback submitters, map item functions, parallel
-branches, condition checks, and serializers may use `def` or `async def`.
-Synchronous callables run in a worker thread. The `@durable_dag` function that
-declares a flow graph is synchronous, deterministic, and evaluated directly.
+branches, and condition checks may use `def` or `async def`. Serializers use
+the async `SerDes` or synchronous `SyncSerDes` interface. Synchronous callables
+run in a worker thread. The `@durable_dag` function that declares a flow graph
+is synchronous, deterministic, and evaluated directly.
 
 ```python
 import logging

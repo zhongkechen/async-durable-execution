@@ -12,7 +12,7 @@ from .._core import (
     Duration,
     OperationContext,
     OperationSubType,
-    SerDes,
+    SerDesLike,
     bind_current_context,
     call_user_function,
     durable_callable,
@@ -35,7 +35,7 @@ async def wait_for_callback_handler(
     name: str | None = None,
     timeout: Duration | None = None,
     heartbeat_timeout: Duration | None = None,
-    serdes: SerDes | None = None,
+    serdes: SerDesLike | None = None,
     retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
 ) -> Any:
     """Create a callback, run a submitter, and wait for callback completion."""
@@ -75,7 +75,7 @@ def wait_for_callback(
     name: str | None = None,
     timeout: Duration | None = None,
     heartbeat_timeout: Duration | None = None,
-    serdes: SerDes | None = None,
+    serdes: SerDesLike | None = None,
     retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
 ) -> asyncio.Task[Any]: ...
 
@@ -87,7 +87,7 @@ def wait_for_callback(
     name: str | None = None,
     timeout: Duration | None = None,
     heartbeat_timeout: Duration | None = None,
-    serdes: SerDes | None = None,
+    serdes: SerDesLike | None = None,
     retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
 ) -> asyncio.Task[Any]: ...
 
@@ -98,7 +98,7 @@ def wait_for_callback(
     name: str | None = None,
     timeout: Duration | None = None,
     heartbeat_timeout: Duration | None = None,
-    serdes: SerDes | None = None,
+    serdes: SerDesLike | None = None,
     retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
 ) -> asyncio.Task[Any]:
     """Create a callback, run a submitter, then suspend until the callback resolves.

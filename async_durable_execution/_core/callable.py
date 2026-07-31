@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import inspect
 from collections.abc import Awaitable, Callable
 from typing import Any, ParamSpec, TypeAlias, TypeVar, cast, overload
@@ -30,21 +31,41 @@ async def _drain_thread_task(task: asyncio.Task[Any]) -> None:
             return
 
 
+def _is_async_callable_target(target: Any, seen: set[int]) -> bool:
+    target_id = id(target)
+    if target_id in seen:
+        return False
+    seen.add(target_id)
+
+    if inspect.iscoroutinefunction(target):
+        return True
+    if isinstance(target, functools.partial) and _is_async_callable_target(
+        target.func, seen
+    ):
+        return True
+
+    try:
+        unwrapped = inspect.unwrap(target)
+    except ValueError:
+        unwrapped = target
+    if unwrapped is not target and _is_async_callable_target(unwrapped, seen):
+        return True
+
+    call = getattr(target, "__call__", None)
+    if call is None:
+        return False
+    if inspect.iscoroutinefunction(call):
+        return True
+    try:
+        unwrapped_call = inspect.unwrap(call)
+    except ValueError:
+        return False
+    return inspect.iscoroutinefunction(unwrapped_call)
+
+
 def _is_async_callable(func: Callable[..., Any]) -> bool:
     """Return whether a callable's implementation is asynchronous."""
-    candidates = (func, getattr(func, "__call__", None))
-    for candidate in candidates:
-        if candidate is None:
-            continue
-        if inspect.iscoroutinefunction(candidate):
-            return True
-        try:
-            unwrapped = inspect.unwrap(candidate)
-        except ValueError:
-            continue
-        if inspect.iscoroutinefunction(unwrapped):
-            return True
-    return False
+    return _is_async_callable_target(func, set())
 
 
 @overload

@@ -1341,14 +1341,10 @@ class _FlowValueSerDes(SerDes[Any]):
         self.delegate: SerDes[Any] = _BatchResultSerDes()
 
     async def serialize(self, value: Any) -> str:
-        return await call_user_function(
-            self.delegate.serialize,
-            _encode_flow_value(value),
-        )
+        return await self.delegate.serialize(_encode_flow_value(value))
 
     async def deserialize(self, data: str) -> Any:
-        decoded = await call_user_function(self.delegate.deserialize, data)
-        return _decode_flow_value(decoded)
+        return _decode_flow_value(await self.delegate.deserialize(data))
 
 
 class _NodeExecutionSerDes(SerDes[_NodeExecution]):
@@ -1356,10 +1352,10 @@ class _NodeExecutionSerDes(SerDes[_NodeExecution]):
         self.delegate = _FlowValueSerDes()
 
     async def serialize(self, value: _NodeExecution) -> str:
-        return await call_user_function(self.delegate.serialize, value.to_dict())
+        return await self.delegate.serialize(value.to_dict())
 
     async def deserialize(self, data: str) -> _NodeExecution:
-        decoded = await call_user_function(self.delegate.deserialize, data)
+        decoded = await self.delegate.deserialize(data)
         if not isinstance(decoded, Mapping):
             msg = "Serialized flow node result must be a mapping."
             raise SerDesError(msg)
@@ -1395,10 +1391,10 @@ class _PersistedDependencyResolutionSerDes(SerDes[_PersistedDependencyResolution
         self.delegate: ExtendedTypeSerDes[Any] = ExtendedTypeSerDes()
 
     async def serialize(self, value: _PersistedDependencyResolution) -> str:
-        return await call_user_function(self.delegate.serialize, value.to_dict())
+        return await self.delegate.serialize(value.to_dict())
 
     async def deserialize(self, data: str) -> _PersistedDependencyResolution:
-        decoded = await call_user_function(self.delegate.deserialize, data)
+        decoded = await self.delegate.deserialize(data)
         if not isinstance(decoded, Mapping):
             msg = "Serialized flow dependency resolution must be a mapping."
             raise SerDesError(msg)
@@ -1410,13 +1406,10 @@ class _FlowResultSerDes(SerDes[FlowResult]):
         self.delegate = _FlowValueSerDes()
 
     async def serialize(self, value: FlowResult) -> str:
-        return await call_user_function(
-            self.delegate.serialize,
-            _flow_result_to_checkpoint_dict(value),
-        )
+        return await self.delegate.serialize(_flow_result_to_checkpoint_dict(value))
 
     async def deserialize(self, data: str) -> FlowResult:
-        decoded = await call_user_function(self.delegate.deserialize, data)
+        decoded = await self.delegate.deserialize(data)
         if not isinstance(decoded, Mapping):
             msg = "Serialized flow result must be a mapping."
             raise SerDesError(msg)

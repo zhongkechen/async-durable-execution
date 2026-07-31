@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 import asyncio
+import functools
 import hashlib
 import inspect
 import json
@@ -14,6 +15,7 @@ import pytest
 from async_durable_execution._core.context import (
     DurableContext,
     bind_current_context,
+    ensure_durable_operations_allowed,
     get_durable_context,
 )
 from async_durable_execution._core.exceptions import (
@@ -139,6 +141,31 @@ async def test_internal_run_in_child_context_uses_custom_sub_type() -> None:
     assert start_operation.name == "custom-child"
     assert success_operation.sub_type is OperationSubType.MAP
     assert success_operation.name == "custom-child"
+
+
+async def test_partial_async_callable_instance_runs_in_child_context() -> None:
+    """Partial async callable objects retain async child composition semantics."""
+
+    class AsyncChild:
+        async def __call__(self, value: str) -> str:
+            ensure_durable_operations_allowed("step()")
+            return value
+
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "test_arn"
+    mock_state.operations.get.return_value = None
+    context = create_test_context(state=mock_state, parent_id="parent")
+    child_func = functools.partial(AsyncChild(), "partial-result")
+
+    with bind_current_context(context):
+        result = await run_in_child_context(child_func, name="partial-child")
+
+    assert result == "partial-result"
+    assert mock_state.create_checkpoint.call_count == 2
+    success_operation = mock_state.create_checkpoint.call_args_list[1].kwargs[
+        "operation_update"
+    ]
+    assert success_operation.action is OperationAction.SUCCEED
 
 
 async def test_sync_child_context_cannot_create_durable_operation() -> None:
