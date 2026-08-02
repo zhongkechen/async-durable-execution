@@ -200,6 +200,12 @@ By default, `parallel()` uses `CompletionConfig.all_successful()`, while `map()`
 `CompletionConfig()`. Pass an explicit `completion_config` when you want a different
 policy.
 
+When a completion policy finishes a batch early, started items or branches that did
+not settle are cancelled and recorded in the parent `BatchResult` with
+`BatchItemStatus.CANCELLED`. They are available through `result.cancelled()` and
+`result.cancelled_count`, are not counted as successes or failures, and remain
+cancelled when the parent result is replayed. Work that never started is omitted.
+
 For custom policies, use `CompletionConfig.custom()` with a deterministic callback
 that returns a `CompletionDecision`:
 

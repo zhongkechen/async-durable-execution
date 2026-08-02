@@ -391,10 +391,16 @@ def _validate_max_concurrency(max_concurrency: int | None) -> None:
 
 
 class BatchItemStatus(Enum):
-    """Status of one item or branch inside a batch-style operation."""
+    """Status of one item or branch inside a batch-style operation.
+
+    A ``CANCELLED`` item started but did not finish before the parent reached
+    an early completion condition. Its cancellation is stored in the parent
+    ``BatchResult`` rather than checkpointed as a child result.
+    """
 
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
     STARTED = "STARTED"
 
 
@@ -524,10 +530,11 @@ class BatchResult(MappingModel, Generic[R]):
         counts = Counter(statuses)
         succeeded_count = counts.get(BatchItemStatus.SUCCEEDED, 0)
         failed_count = counts.get(BatchItemStatus.FAILED, 0)
+        cancelled_count = counts.get(BatchItemStatus.CANCELLED, 0)
         started_count = counts.get(BatchItemStatus.STARTED, 0)
 
         completed_count = succeeded_count + failed_count
-        total_count = started_count + completed_count
+        total_count = completed_count + started_count + cancelled_count
 
         completion_reason = cls._get_completion_reason(
             failure_count=failed_count,
@@ -555,6 +562,9 @@ class BatchResult(MappingModel, Generic[R]):
 
     def started(self) -> list[BatchItem[R]]:
         return [item for item in self.all if item.status is BatchItemStatus.STARTED]
+
+    def cancelled(self) -> list[BatchItem[R]]:
+        return [item for item in self.all if item.status is BatchItemStatus.CANCELLED]
 
     @property
     def status(self) -> BatchItemStatus:
@@ -593,6 +603,10 @@ class BatchResult(MappingModel, Generic[R]):
     @property
     def started_count(self) -> int:
         return sum(1 for item in self.all if item.status is BatchItemStatus.STARTED)
+
+    @property
+    def cancelled_count(self) -> int:
+        return sum(1 for item in self.all if item.status is BatchItemStatus.CANCELLED)
 
     @property
     def total_count(self) -> int:
@@ -708,11 +722,14 @@ class BranchStatus(Enum):
             continues to occupy its slot.
         FAILED: The branch completed with an error. This is a terminal state
             and releases its concurrency slot.
+        CANCELLED: The branch was cancelled after the parent reached an early
+            completion condition. This is a terminal state.
 
     Typical state transitions::
 
         NOT_STARTED -> RUNNING -> COMPLETED
                                -> FAILED
+                               -> CANCELLED
                                -> SUSPENDED
                                -> SUSPENDED_WITH_TIMEOUT
         SUSPENDED_WITH_TIMEOUT -> PENDING -> RUNNING
@@ -730,6 +747,7 @@ class BranchStatus(Enum):
     SUSPENDED = "suspended"
     SUSPENDED_WITH_TIMEOUT = "suspended_with_timeout"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class ExecutableWithState(Generic[CallableType, ResultType]):
@@ -816,6 +834,9 @@ class ExecutableWithState(Generic[CallableType, ResultType]):
     def fail(self, error: Exception) -> None:
         self._status = BranchStatus.FAILED
         self._error = error
+
+    def cancel(self) -> None:
+        self._status = BranchStatus.CANCELLED
 
     def reset_to_pending(self) -> None:
         self._status = BranchStatus.PENDING
@@ -998,6 +1019,7 @@ class ParallelExecutor(
         self._completion_exception: Exception | None = None
         self._completion_decision: CompletionDecision | None = None
         self._running_tasks: set[asyncio.Task[ResultType]] = set()
+        self._completion_tasks: set[asyncio.Task[None]] = set()
 
         self.counters = ExecutionCounters(
             len(executables),
@@ -1049,6 +1071,7 @@ class ParallelExecutor(
         self._completion_exception = None
         self._completion_decision = None
         self._running_tasks.clear()
+        self._completion_tasks.clear()
         next_executable_index = 0
 
         async def submit_task(
@@ -1070,7 +1093,9 @@ class ParallelExecutor(
 
             def on_done(done_task: asyncio.Task[ResultType]) -> None:
                 self._running_tasks.discard(done_task)
-                asyncio.create_task(handle_task_completion(done_task))
+                completion_task = asyncio.create_task(handle_task_completion(done_task))
+                self._completion_tasks.add(completion_task)
+                completion_task.add_done_callback(self._completion_tasks.discard)
 
             async def handle_task_completion(
                 done_task: asyncio.Task[ResultType],
@@ -1119,6 +1144,14 @@ class ParallelExecutor(
                     task.cancel()
             if self._running_tasks:
                 await asyncio.gather(*self._running_tasks, return_exceptions=True)
+            await asyncio.sleep(0)
+            while self._completion_tasks:
+                await asyncio.gather(
+                    *list(self._completion_tasks),
+                    return_exceptions=True,
+                )
+            if self._completion_decision is not None:
+                self._cancel_unfinished_executables()
 
             if self._suspend_exception:
                 raise self._suspend_exception
@@ -1170,7 +1203,7 @@ class ParallelExecutor(
         scheduler: TimerScheduler,
     ) -> None:
         if task.cancelled():
-            exe_state.suspend()
+            exe_state.cancel()
             return
 
         try:
@@ -1211,9 +1244,24 @@ class ParallelExecutor(
 
     def _all_executables_terminal(self) -> bool:
         return all(
-            exe_state.status in {BranchStatus.COMPLETED, BranchStatus.FAILED}
+            exe_state.status
+            in {
+                BranchStatus.COMPLETED,
+                BranchStatus.FAILED,
+                BranchStatus.CANCELLED,
+            }
             for exe_state in self.executables_with_state
         )
+
+    def _cancel_unfinished_executables(self) -> None:
+        for exe_state in self.executables_with_state:
+            if exe_state.status in {
+                BranchStatus.PENDING,
+                BranchStatus.RUNNING,
+                BranchStatus.SUSPENDED,
+                BranchStatus.SUSPENDED_WITH_TIMEOUT,
+            }:
+                exe_state.cancel()
 
     def _create_result(self) -> BatchResult[ResultType]:
         batch_items: list[BatchItem[ResultType]] = []
@@ -1234,6 +1282,10 @@ class ParallelExecutor(
                             BatchItemStatus.FAILED,
                             error=ErrorObject.from_exception(executable.error),
                         )
+                    )
+                case BranchStatus.CANCELLED:
+                    batch_items.append(
+                        BatchItem(executable.index, BatchItemStatus.CANCELLED)
                     )
                 case (
                     BranchStatus.PENDING
@@ -1334,6 +1386,11 @@ class ParallelExecutor(
                     else None
                 )
                 status = BatchItemStatus.FAILED
+            elif operation is not None and operation.status in {
+                OperationStatus.CANCELLED,
+                OperationStatus.STARTED,
+            }:
+                status = BatchItemStatus.CANCELLED
             else:
                 continue
 
