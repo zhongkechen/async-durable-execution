@@ -117,7 +117,7 @@ jobs:
       - name: Review pull request with Claude on Amazon Bedrock
         id: review
         continue-on-error: true
-        uses: anthropics/claude-code-action@6b082c41935b4c8a3b8b0ef85ba4ba4d9eeb8975 # v1.0.189
+        uses: anthropics/claude-code-action@5ef2e550a465a721f4f45e4a7d3c340c873e1dcc # v1.0.190
         env:
           AWS_REGION: us-east-1
           CLAUDE_CODE_ATTRIBUTION_HEADER: "0"
@@ -138,7 +138,7 @@ jobs:
       - name: Retry pull request review with Claude on Amazon Bedrock
         id: review-retry
         if: steps.review.outcome == 'failure'
-        uses: anthropics/claude-code-action@6b082c41935b4c8a3b8b0ef85ba4ba4d9eeb8975 # v1.0.189
+        uses: anthropics/claude-code-action@5ef2e550a465a721f4f45e4a7d3c340c873e1dcc # v1.0.190
         env:
           AWS_REGION: us-east-1
           CLAUDE_CODE_ATTRIBUTION_HEADER: "0"
