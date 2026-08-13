@@ -46,7 +46,7 @@ def test_non_core_packages_import_core_through_package_facade() -> None:
 
 def test_implementation_packages_are_not_public_import_paths() -> None:
     """Only underscore-prefixed implementation package names are available."""
-    for package_name in ("core", "runner", "primitive"):
+    for package_name in ("core", "operation", "runner", "primitive"):
         assert (
             importlib.util.find_spec(f"async_durable_execution.{package_name}") is None
         )

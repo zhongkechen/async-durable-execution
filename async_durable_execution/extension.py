@@ -14,6 +14,7 @@ from ._core import (
     ErrorObject,
     ExecutionError,
     ExecutionState,
+    InvocationError,
     Operation,
     OperationIdentifier,
     OperationStatus,
@@ -23,6 +24,7 @@ from ._core import (
     OperationUpdate,
     SerDes,
     ValidationError,
+    _restore_sdk_control_error,
     bind_current_context,
     create_eager_task,
     duration_to_seconds,
@@ -60,10 +62,10 @@ class ExtensionStepResult(Generic[T]):
         return cls(value=value)
 
     @classmethod
-    def retry(cls, state: T, delay: Duration) -> ExtensionStepResult[T]:
+    def retry(cls, state: T | None, delay: Duration) -> ExtensionStepResult[T]:
         """Checkpoint ``state`` and retry after ``delay``."""
         duration_to_seconds(delay, "retry delay")
-        return cls(value=state, retry_delay=delay)
+        return cls(value=cast("T", state), retry_delay=delay)
 
     @property
     def is_retry(self) -> bool:
@@ -180,9 +182,11 @@ class _ExtensionStepOperationExecutor(OperationExecutor[T]):
         try:
             with bind_current_context(step_context):
                 outcome = await self.func(state)
-        except Exception as error:
-            if isinstance(error, ExecutionError):
+        except InvocationError as error:
+            if error.is_retryable():
                 raise
+            return await self._handle_failure(error, state, attempt)
+        except Exception as error:
             return await self._handle_failure(error, state, attempt)
 
         if not isinstance(outcome, ExtensionStepResult):
@@ -282,7 +286,7 @@ class _ExtensionStepOperationExecutor(OperationExecutor[T]):
                 error_object,
             )
         )
-        if isinstance(error, StepInterruptedError):
+        if isinstance(error, ExecutionError):
             raise error
         raise CallableRuntimeError.from_error_object(error_object)
 
@@ -293,13 +297,20 @@ class _ExtensionStepOperationExecutor(OperationExecutor[T]):
             error = ErrorObject.from_message(
                 "Unknown error. No ErrorObject exists on the checkpoint operation."
             )
+        control_error = _restore_sdk_control_error(
+            error.message or "Extension step failed",
+            error.type,
+            error.data,
+        )
+        if control_error is not None:
+            raise control_error
         raise CallableRuntimeError.from_error_object(error)
 
 
 class ExtensionOperation:
     """Opaque one-shot reservation for one SDK-owned durable primitive."""
 
-    __slots__ = ("_claimed", "_context", "_name", "_operation_id")
+    __slots__ = ("_claimed", "_context", "_identifier", "_name", "_operation_id")
 
     def __init__(
         self,
@@ -311,6 +322,7 @@ class ExtensionOperation:
         self._operation_id = operation_id
         self._name = name
         self._claimed = False
+        self._identifier: OperationIdentifier | None = None
 
     def step(
         self,
@@ -412,6 +424,44 @@ class ExtensionOperation:
     ) -> asyncio.Task[T]:
         """Use this reservation for a CONTEXT primitive."""
         identifier = self._claim(OperationType.CONTEXT, sub_type)
+        return self._create_child_context_task(
+            identifier,
+            func,
+            serdes=serdes,
+            summary_generator=summary_generator,
+            is_virtual=is_virtual,
+        )
+
+    def _restart_child_context(
+        self,
+        func: Callable[[], Awaitable[T]],
+        *,
+        serdes: SerDes[T] | None = None,
+        summary_generator: SummaryGenerator[T] | None = None,
+        is_virtual: bool = False,
+    ) -> asyncio.Task[T]:
+        """Re-enter an SDK-owned child operation after an in-process suspension."""
+        identifier = self._identifier
+        if identifier is None or identifier.operation_type is not OperationType.CONTEXT:
+            msg = "Only a claimed child-context reservation can be restarted"
+            raise RuntimeError(msg)
+        return self._create_child_context_task(
+            identifier,
+            func,
+            serdes=serdes,
+            summary_generator=summary_generator,
+            is_virtual=is_virtual,
+        )
+
+    def _create_child_context_task(
+        self,
+        identifier: OperationIdentifier,
+        func: Callable[[], Awaitable[T]],
+        *,
+        serdes: SerDes[T] | None,
+        summary_generator: SummaryGenerator[T] | None,
+        is_virtual: bool,
+    ) -> asyncio.Task[T]:
         child_context = self._context.create_child_context(
             operation_id=self._operation_id,
             is_virtual=is_virtual,
@@ -438,13 +488,14 @@ class ExtensionOperation:
             msg = "An extension operation reservation can only be used once"
             raise RuntimeError(msg)
         self._claimed = True
-        return OperationIdentifier(
+        self._identifier = OperationIdentifier(
             operation_id=self._operation_id,
             sub_type=normalized_sub_type,
             parent_id=self._context.parent_id,
             name=self._name,
             operation_type=operation_type,
         )
+        return self._identifier
 
 
 class ExtensionContext:
@@ -487,13 +538,25 @@ class ExtensionContext:
         but it must be unique within the current durable context.
         """
         with self._context._replay_aware(executes_user_code=True):
-            if local_operation_id is None:
-                operation_id = self._context.step_counter.create_step_id()
-            else:
-                operation_id = self._context.step_counter.create_step_id_for_local_id(
-                    local_operation_id
-                )
+            operation_id = self._reserve_operation_id(local_operation_id)
         return ExtensionOperation(self._context, operation_id, name)
+
+    def _reserve_without_replay_transition(
+        self,
+        name: str | None = None,
+        *,
+        local_operation_id: str | None = None,
+    ) -> ExtensionOperation:
+        """Reserve an SDK-owned concurrent child without changing parent replay state."""
+        operation_id = self._reserve_operation_id(local_operation_id)
+        return ExtensionOperation(self._context, operation_id, name)
+
+    def _reserve_operation_id(self, local_operation_id: str | None) -> str:
+        if local_operation_id is None:
+            return self._context.step_counter.create_step_id()
+        return self._context.step_counter.create_step_id_for_local_id(
+            local_operation_id
+        )
 
 
 def get_extension_context() -> ExtensionContext:

@@ -37,7 +37,8 @@ from .._core import (
     suspend_with_optional_resume_timestamp,
 )
 from .._primitive.base import OperationExecutor
-from .._primitive.step import StepContext
+from .._primitive.step import StepContext, get_step_context
+from ..extension import ExtensionStepResult, get_extension_context
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
@@ -50,6 +51,7 @@ logger = logging.getLogger(__name__)
 
 PollingStrategyFunction = Callable[[T, int], Duration | None]
 _LEGACY_WAIT_FOR_CONDITION_ERROR_TYPE_NAMES = (
+    "async_durable_execution._extension.wait_for_condition.WaitForConditionError",
     "async_durable_execution.exceptions.WaitForConditionError",
     "async_durable_execution.extension.wait_for_condition.WaitForConditionError",
 )
@@ -362,27 +364,54 @@ def wait_for_condition(
     returns the next polling delay, or None to stop polling and complete with
     the latest result.
     """
-    context = get_durable_context()
+    strategy = polling_strategy or PollingStrategy[T]()
 
-    with context._replay_aware(executes_user_code=True):
-        operation_id = context.step_counter.create_step_id()
-        operation_identifier = OperationIdentifier(
-            operation_id=operation_id,
+    async def check_attempt(state: T | None) -> ExtensionStepResult[T]:
+        step_context = get_step_context()
+        attempt = step_context.attempt or 1
+        check_context = WaitForConditionCheckContext(
+            attempt=attempt,
+            execution_state=step_context.execution_state,
+            operation_identifier=step_context.operation_identifier,
+        )
+        with bind_current_context(check_context):
+            new_state = await check(state)
+
+        wait_delay = strategy(new_state, attempt)
+        if wait_delay is None:
+            return ExtensionStepResult.succeed(new_state)
+        if not isinstance(wait_delay, int | timedelta):
+            msg = (
+                "wait_for_condition polling_strategy must return int seconds, "
+                "timedelta, or None"
+            )
+            raise ValidationError(msg)
+
+        delay_seconds = duration_to_seconds(
+            wait_delay,
+            "polling_strategy delay",
+        )
+        if delay_seconds < 1:
+            logger.warning(
+                (
+                    "wait_for_condition delay_seconds for name %s is %d < 1. "
+                    "Setting to minimum of 1 second."
+                ),
+                name,
+                delay_seconds,
+            )
+        return ExtensionStepResult.retry(new_state, wait_delay)
+
+    return (
+        get_extension_context()
+        .reserve(name)
+        .step(
+            check_attempt,
             sub_type=OperationSubType.WAIT_FOR_CONDITION,
-            parent_id=context.parent_id,
-            name=name,
+            initial_state=initial_state,
+            serdes=serdes,
         )
-
-        return create_eager_task(
-            lambda: _wait_for_condition(
-                check=check,
-                context=context,
-                operation_identifier=operation_identifier,
-                initial_state=initial_state,
-                polling_strategy=polling_strategy,
-                serdes=serdes,
-            ),
-        )
+    )
 
 
 async def _wait_for_condition(

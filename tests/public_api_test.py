@@ -1,5 +1,6 @@
 """Tests for public package exports and module-level operation helpers."""
 
+import importlib
 from typing import no_type_check
 
 from typing import Any
@@ -67,20 +68,44 @@ from async_durable_execution._core.models import (
 )
 from async_durable_execution._core.config import JitterStrategy
 from async_durable_execution._core.config import RetryStrategy
-from async_durable_execution._extension.parallel import CompletionDecision
-from async_durable_execution._extension.parallel import CompletionStatus
+from async_durable_execution._operation.parallel import CompletionDecision
+from async_durable_execution._operation.parallel import CompletionStatus
 from async_durable_execution._primitive.child import SummaryGenerator
-from async_durable_execution._extension.with_retry import (
+from async_durable_execution._operation.with_retry import (
     WithRetryContext as ModuleWithRetryContext,
 )
-from async_durable_execution._extension.wait_for_condition import PollingStrategy
-from async_durable_execution._extension.recurse import recurse as module_recurse
-from async_durable_execution._extension.replay_safe import (
+from async_durable_execution._operation.wait_for_condition import PollingStrategy
+from async_durable_execution._operation.recurse import recurse as module_recurse
+from async_durable_execution._operation.replay_safe import (
     now as module_now,
     random as module_random,
     timestamp as module_timestamp,
     uuid as module_uuid,
 )
+
+
+def test_legacy_extension_modules_alias_operation_modules() -> None:
+    """Former private module paths resolve to the canonical operation modules."""
+    for module_name in (
+        "flow",
+        "map",
+        "parallel",
+        "recurse",
+        "replay_safe",
+        "wait_for_callback",
+        "wait_for_condition",
+        "with_retry",
+    ):
+        legacy = importlib.import_module(
+            f"async_durable_execution._extension.{module_name}"
+        )
+        canonical = importlib.import_module(
+            f"async_durable_execution._operation.{module_name}"
+        )
+
+        assert legacy is canonical
+
+
 from async_durable_execution._core.serdes import ExtendedTypeSerDes
 from async_durable_execution._core.client import DurableServiceClient
 
@@ -296,15 +321,15 @@ async def test_module_level_operations_delegate_to_mock_context_methods() -> Non
                 mock_child_executor,
             ),
             patch(
-                "async_durable_execution._extension.wait_for_callback._create_child_context_task",
+                "async_durable_execution._operation.wait_for_callback._create_child_context_task",
                 mock_callback_child,
             ),
             patch(
-                "async_durable_execution._extension.map._run_in_child_context",
+                "async_durable_execution._operation.map._run_in_child_context",
                 mock_map_child,
             ),
             patch(
-                "async_durable_execution._extension.parallel._run_in_child_context",
+                "async_durable_execution._operation.parallel._run_in_child_context",
                 mock_parallel_child,
             ),
         ):

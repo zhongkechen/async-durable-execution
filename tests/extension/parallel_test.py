@@ -13,7 +13,7 @@ from unittest.mock import ANY, AsyncMock, Mock, patch
 import pytest
 import async_durable_execution._core.context as context_module
 import async_durable_execution._primitive.child as child
-from async_durable_execution._extension.parallel import (
+from async_durable_execution._operation.parallel import (
     _BATCH_RESULT_SERDES,
     _BatchResultSerDes,
     BatchItem,
@@ -37,8 +37,8 @@ from async_durable_execution._core.context import (
 from async_durable_execution import durable_callable, parallel, DurableContext
 from async_durable_execution._core.models import OperationIdentifier
 from async_durable_execution._core.models import OperationSubType
-from async_durable_execution._extension.parallel import CompletionConfig, NestingType
-from async_durable_execution._extension.parallel import (
+from async_durable_execution._operation.parallel import CompletionConfig, NestingType
+from async_durable_execution._operation.parallel import (
     ParallelExecutor,
     ParallelSummaryGenerator,
     parallel_handler,
@@ -205,7 +205,7 @@ def test_parallel_signature_requires_keyword_only_options() -> None:
     assert parameters["nesting_type"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
-@patch("async_durable_execution._extension.parallel.parallel_handler")
+@patch("async_durable_execution._operation.parallel.parallel_handler")
 async def test_parallel_passes_config_fields_to_handler(
     mock_parallel_handler,
 ) -> None:
@@ -251,7 +251,7 @@ async def test_parallel_passes_config_fields_to_handler(
     assert kwargs["nesting_type"] is NestingType.FLAT
 
 
-@patch("async_durable_execution._extension.parallel.parallel_handler")
+@patch("async_durable_execution._operation.parallel.parallel_handler")
 async def test_parallel_passes_default_summary_generator(
     mock_parallel_handler,
 ) -> None:
@@ -304,7 +304,7 @@ def test_parallel_summary_generator_returns_compact_json_payload() -> None:
     }
 
 
-@patch("async_durable_execution._extension.parallel._run_in_child_context")
+@patch("async_durable_execution._operation.parallel._run_in_child_context")
 async def test_parallel_raises_when_child_operation_id_is_missing(
     mock_run_in_child_context,
 ) -> None:
@@ -326,7 +326,7 @@ async def test_parallel_raises_when_child_operation_id_is_missing(
         await run_with_context(context, lambda: parallel([branch_a]))
 
 
-@patch("async_durable_execution._extension.parallel.parallel_handler")
+@patch("async_durable_execution._operation.parallel.parallel_handler")
 async def test_parallel_accepts_one_shot_branch_iterable(
     mock_parallel_handler,
 ) -> None:
@@ -583,7 +583,7 @@ async def test_parallel_handler_creates_executor_with_correct_config() -> None:
     executor_context.create_child_context = lambda *args, **kwargs: Mock()
 
     with patch(
-        "async_durable_execution._extension.parallel.ParallelExecutor"
+        "async_durable_execution._operation.parallel.ParallelExecutor"
     ) as mock_executor_class:
         mock_batch_result = Mock(spec=BatchResult)
         mock_executor = Mock()
@@ -646,7 +646,7 @@ async def test_parallel_handler_creates_executor_with_default_fields() -> None:
     executor_context.create_child_context = lambda *args, **kwargs: Mock()
 
     with patch(
-        "async_durable_execution._extension.parallel.ParallelExecutor"
+        "async_durable_execution._operation.parallel.ParallelExecutor"
     ) as mock_executor_class:
         mock_batch_result = Mock(spec=BatchResult)
         mock_executor = Mock()
@@ -1134,10 +1134,10 @@ async def test_parallel_handler_first_execution_then_replay() -> None:
 
     with (
         patch(
-            "async_durable_execution._extension.parallel.ParallelExecutor.execute"
+            "async_durable_execution._operation.parallel.ParallelExecutor.execute"
         ) as mock_execute,
         patch(
-            "async_durable_execution._extension.parallel.ParallelExecutor.replay_completed"
+            "async_durable_execution._operation.parallel.ParallelExecutor.replay_completed"
         ) as mock_replay,
     ):
         mock_execute.return_value = Mock()  # Mock BatchResult
@@ -1193,10 +1193,14 @@ async def test_parallel_item_serialize(
     )
 
     def child_checkpoint_for(op_id: str) -> Any:
+        index = op_id.removeprefix("child-")
         return Operation(
             operation_id=op_id,
             operation_type=OperationType.CONTEXT,
             status=OperationStatus.STARTED,
+            parent_id="parent",
+            name=f"parallel-branch-{index}",
+            sub_type=OperationSubType.PARALLEL_BRANCH,
         )
 
     def get_checkpoint(op_id) -> Any:
@@ -1223,7 +1227,7 @@ async def test_parallel_item_serialize(
 
     with patch.object(
         context_module.OperationIdGenerator,
-        "_create_step_id_for_logical_step",
+        "_create_id_for_local_id",
         create_id,
     ):
         context = create_test_context(state=mock_state)
@@ -1279,10 +1283,14 @@ async def test_parallel_item_deserialize(
     parent_checkpoint.is_existent.return_value = False
 
     def child_checkpoint_for(op_id: str) -> Any:
+        index = op_id.removeprefix("child-")
         return Operation(
             operation_id=op_id,
             operation_type=OperationType.CONTEXT,
             status=OperationStatus.SUCCEEDED,
+            parent_id="parent",
+            name=f"parallel-branch-{index}",
+            sub_type=OperationSubType.PARALLEL_BRANCH,
             context_details=ContextDetails(result='"cached"'),
         )
 
@@ -1310,7 +1318,7 @@ async def test_parallel_item_deserialize(
 
     with patch.object(
         context_module.OperationIdGenerator,
-        "_create_step_id_for_logical_step",
+        "_create_id_for_local_id",
         create_id,
     ):
         context = create_test_context(state=mock_state)
@@ -1511,7 +1519,7 @@ async def test_parallel_handler_serializes_batch_result() -> None:
 
             with patch.object(
                 context_module.OperationIdGenerator,
-                "_create_step_id_for_logical_step",
+                "_create_id_for_local_id",
                 create_id,
             ):
                 context = create_test_context(state=mock_state)
@@ -1578,7 +1586,7 @@ async def test_parallel_default_serdes_serializes_batch_result() -> None:
 
             with patch.object(
                 context_module.OperationIdGenerator,
-                "_create_step_id_for_logical_step",
+                "_create_id_for_local_id",
                 create_id,
             ):
                 context = create_test_context(state=mock_state)
@@ -1653,7 +1661,7 @@ async def test_parallel_custom_serdes_serializes_batch_result() -> None:
 
             with patch.object(
                 context_module.OperationIdGenerator,
-                "_create_step_id_for_logical_step",
+                "_create_id_for_local_id",
                 create_id,
             ):
                 context = create_test_context(state=mock_state)

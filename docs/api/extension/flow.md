@@ -1,6 +1,6 @@
 # Flow and DAG Workflows
 
-Internal implementation module: `async_durable_execution._extension.flow`.
+Internal implementation module: `async_durable_execution._operation.flow`.
 
 Use a durable directed acyclic graph (DAG) when workflow structure is known
 before execution but independent nodes should run concurrently or follow
@@ -271,7 +271,7 @@ output.
 
 ## API
 
-::: async_durable_execution._extension.flow
+::: async_durable_execution._operation.flow
     options:
       members:
         - FlowDefinitionError

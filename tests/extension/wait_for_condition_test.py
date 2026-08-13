@@ -37,7 +37,7 @@ from async_durable_execution._core.models import (
     StepDetails,
 )
 import logging
-from async_durable_execution._extension.wait_for_condition import (
+from async_durable_execution._operation.wait_for_condition import (
     WaitForConditionError,
     WaitForConditionOperationExecutor,
     wait_for_condition,
@@ -49,7 +49,7 @@ from async_durable_execution import (
     get_wait_for_condition_check_context,
 )
 from async_durable_execution._core.config import JitterStrategy
-from async_durable_execution._extension.wait_for_condition import PollingStrategy
+from async_durable_execution._operation.wait_for_condition import PollingStrategy
 from async_durable_execution._core.serdes import SerDes
 
 from ..serdes_test import CustomDictSerDes
@@ -84,7 +84,7 @@ def test_wait_for_condition_signature_accepts_config_fields_directly() -> None:
 def test_wait_for_condition_error_is_defined_by_operation_module() -> None:
     assert (
         WaitForConditionError.__module__
-        == "async_durable_execution._extension.wait_for_condition"
+        == "async_durable_execution._operation.wait_for_condition"
     )
 
 
@@ -145,36 +145,25 @@ async def test_wait_for_condition_requires_check_callable() -> None:
         cast("Any", wait_for_condition)()
 
 
-async def test_wait_for_condition_public_wrapper_builds_executor_from_context() -> None:
-    """The public wrapper derives operation identity from the durable context."""
+async def test_wait_for_condition_public_wrapper_reserves_spi_step() -> None:
+    """The public wrapper reserves and executes a stateful SPI step."""
 
     async def check(state) -> Any:
         return state
 
-    context = Mock()
-    context._replay_aware.return_value = nullcontext()
-    context.step_counter.create_step_id.return_value = "wait-op"
-    context.parent_id = "parent-op"
-    context.execution_state = Mock(spec=ExecutionState)
-    polling_strategy = Mock()
-    serdes = Mock()
-    captured_executor = None
-
-    async def fake_process(self) -> str:
-        nonlocal captured_executor
-        captured_executor = self
+    async def completed() -> str:
         return "done"
 
-    with (
-        patch(
-            "async_durable_execution._extension.wait_for_condition.get_durable_context",
-            return_value=context,
-        ),
-        patch.object(
-            WaitForConditionOperationExecutor,
-            "process",
-            fake_process,
-        ),
+    extension = Mock()
+    operation = Mock()
+    operation.step.return_value = asyncio.create_task(completed())
+    extension.reserve.return_value = operation
+    polling_strategy = Mock()
+    serdes = Mock()
+
+    with patch(
+        "async_durable_execution._operation.wait_for_condition.get_extension_context",
+        return_value=extension,
     ):
         result = await wait_for_condition(
             check,
@@ -185,17 +174,14 @@ async def test_wait_for_condition_public_wrapper_builds_executor_from_context() 
         )
 
     assert result == "done"
-    assert captured_executor is not None
-    executor = captured_executor
-    assert executor.initial_state == {"status": "pending"}
-    assert executor.polling_strategy is polling_strategy
-    assert executor.serdes is serdes
-    assert executor.operation_identifier == OperationIdentifier(
-        operation_id="wait-op",
-        sub_type=OperationSubType.WAIT_FOR_CONDITION,
-        parent_id="parent-op",
-        name="poll-job",
-    )
+    extension.reserve.assert_called_once_with("poll-job")
+    operation.step.assert_called_once()
+    assert callable(operation.step.call_args.args[0])
+    assert operation.step.call_args.kwargs == {
+        "sub_type": OperationSubType.WAIT_FOR_CONDITION,
+        "initial_state": {"status": "pending"},
+        "serdes": serdes,
+    }
 
 
 async def _invoke_maybe_async(result) -> Any:
@@ -519,7 +505,7 @@ async def test_wait_for_condition_replays_exhaustion_error() -> None:
     assert fail_operation.error.type == "WaitForConditionError"
     assert fail_operation.error.data is not None
     assert json.loads(fail_operation.error.data)["exception_type"] == (
-        "async_durable_execution._extension.wait_for_condition.WaitForConditionError"
+        "async_durable_execution._operation.wait_for_condition.WaitForConditionError"
     )
 
     replay_state = Mock(spec=ExecutionState)
@@ -545,6 +531,7 @@ async def test_wait_for_condition_replays_exhaustion_error() -> None:
 @pytest.mark.parametrize(
     "exception_type",
     [
+        "async_durable_execution._extension.wait_for_condition.WaitForConditionError",
         "async_durable_execution.extension.wait_for_condition.WaitForConditionError",
         "async_durable_execution.exceptions.WaitForConditionError",
     ],

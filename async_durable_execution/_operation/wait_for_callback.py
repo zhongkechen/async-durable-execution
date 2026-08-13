@@ -16,14 +16,83 @@ from .._core import (
     durable_callable,
     get_current_context,
 )
-from .._primitive.callback import Callback, create_callback
-from .._primitive.child import _create_child_context_task
-from .._primitive.step import get_step_context, step
+from ..extension import ExtensionStepResult, get_extension_context
+from .._primitive.callback import Callback
+from .._primitive.step import get_step_context
+from ._common import adapt_retry_strategy
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+    from .._primitive.child import SummaryGenerator
 
 logger = logging.getLogger(__name__)
+
+
+def create_callback(
+    *,
+    name: str | None = None,
+    timeout: Duration | None = None,
+    heartbeat_timeout: Duration | None = None,
+    serdes: SerDes | None = None,
+) -> asyncio.Task[Callback]:
+    """Create an SDK-owned callback through the stable operation SPI."""
+    return (
+        get_extension_context()
+        .reserve(name)
+        .create_callback(
+            sub_type=OperationSubType.CALLBACK,
+            timeout=timeout,
+            heartbeat_timeout=heartbeat_timeout,
+            serdes=serdes,
+        )
+    )
+
+
+def step(
+    func: Callable[[], Awaitable[Any]],
+    *,
+    name: str | None = None,
+    retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
+    serdes: SerDes | None = None,
+) -> asyncio.Task[Any]:
+    """Run an SDK-owned submitter step through the stable operation SPI."""
+
+    async def run_submitter(_state: None) -> ExtensionStepResult[Any]:
+        return ExtensionStepResult.succeed(await func())
+
+    return (
+        get_extension_context()
+        .reserve(name)
+        .step(
+            run_submitter,
+            sub_type=OperationSubType.STEP,
+            retry_strategy=adapt_retry_strategy(retry_strategy),
+            serdes=serdes,
+        )
+    )
+
+
+def _create_child_context_task(
+    func: Callable[[], Awaitable[Any]],
+    *,
+    sub_type: OperationSubType,
+    name: str | None = None,
+    serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    is_virtual: bool = False,
+) -> asyncio.Task[Any]:
+    """Run an SDK-owned callback scope through the stable operation SPI."""
+    return (
+        get_extension_context()
+        .reserve(name)
+        .run_in_child_context(
+            func,
+            sub_type=sub_type,
+            serdes=serdes,
+            summary_generator=summary_generator,
+            is_virtual=is_virtual,
+        )
+    )
 
 
 @durable_callable

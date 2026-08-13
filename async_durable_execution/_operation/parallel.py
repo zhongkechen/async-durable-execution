@@ -38,10 +38,8 @@ from .._core import (
     get_durable_context,
 )
 from .._primitive.base import OperationExecutor
-from .._primitive.child import (
-    ChildOperationExecutor,
-    _create_child_context_task as _run_in_child_context,
-)
+from .._primitive.child import ChildOperationExecutor
+from ..extension import ExtensionContext, ExtensionOperation, get_extension_context
 
 if TYPE_CHECKING:
     from .._primitive.child import SummaryGenerator
@@ -53,6 +51,29 @@ CallableType = TypeVar("CallableType")
 ResultType = TypeVar("ResultType")
 R = TypeVar("R")
 T = TypeVar("T")
+
+
+def _run_in_child_context(
+    func: Callable[[], Awaitable[T]],
+    *,
+    sub_type: OperationSubType,
+    name: str | None = None,
+    serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    is_virtual: bool = False,
+) -> asyncio.Task[T]:
+    """Run an SDK-owned child operation through the stable operation SPI."""
+    return (
+        get_extension_context()
+        .reserve(name)
+        .run_in_child_context(
+            func,
+            sub_type=sub_type,
+            serdes=serdes,
+            summary_generator=summary_generator,
+            is_virtual=is_virtual,
+        )
+    )
 
 
 class CompletionReason(Enum):
@@ -999,6 +1020,7 @@ class ParallelExecutor(
         summary_generator: SummaryGenerator | None = None,
         nesting_type: NestingType = NestingType.NESTED,
         branch_namer: Callable[[int], str] | None = None,
+        branch_operations: Mapping[int, ExtensionOperation] | None = None,
     ) -> None:
         super().__init__(
             state=execution_state,
@@ -1014,6 +1036,8 @@ class ParallelExecutor(
         self.summary_generator = summary_generator
         self.nesting_type = nesting_type
         self._branch_namer = branch_namer
+        self._branch_operations = branch_operations
+        self._started_branch_operations: set[int] = set()
         self._completion_event = asyncio.Event()
         self._suspend_exception: SuspendExecution | None = None
         self._completion_exception: Exception | None = None
@@ -1315,13 +1339,37 @@ class ParallelExecutor(
         executor_context: DurableContext,
         executable: Executable[CallableType],
     ) -> ResultType:
+        is_virtual: bool = self.nesting_type is NestingType.FLAT
+
+        async def run_child_operation() -> ResultType:
+            return await self.execute_item(get_durable_context(), executable)
+
+        if self._branch_operations is not None:
+            operation = self._branch_operations[executable.index]
+            if executable.index in self._started_branch_operations:
+                task = operation._restart_child_context(  # noqa: SLF001
+                    run_child_operation,
+                    serdes=self.item_serdes or self.serdes,
+                    summary_generator=self.summary_generator,
+                    is_virtual=is_virtual,
+                )
+            else:
+                self._started_branch_operations.add(executable.index)
+                task = operation.run_in_child_context(
+                    run_child_operation,
+                    sub_type=self.sub_type_iteration,
+                    serdes=self.item_serdes or self.serdes,
+                    summary_generator=self.summary_generator,
+                    is_virtual=is_virtual,
+                )
+            return await task
+
         operation_id: str = (
             executor_context.step_counter._create_step_id_for_logical_step(  # noqa: SLF001
                 executable.index
             )
         )
         name: str = self.get_iteration_name(executable.index)
-        is_virtual: bool = self.nesting_type is NestingType.FLAT
 
         child_context: DurableContext = executor_context.create_child_context(
             operation_id, is_virtual=is_virtual
@@ -1333,11 +1381,11 @@ class ParallelExecutor(
             name=name,
         )
 
-        async def run_child_operation() -> ResultType:
+        async def run_legacy_child_operation() -> ResultType:
             return await self.execute_item(child_context, executable)
 
         executor: ChildOperationExecutor[ResultType] = ChildOperationExecutor(
-            run_child_operation,
+            run_legacy_child_operation,
             child_context.execution_state,
             operation_identifier,
             serdes=self.item_serdes or self.serdes,
@@ -1442,23 +1490,43 @@ async def parallel_handler(
     #
     # See TypeScript reference: aws-durable-execution-sdk-js/src/handlers/parallel-handler/parallel-handler.ts (~line 112)
 
-    executor: ParallelExecutor[Callable[[], Awaitable[R]], R] = ParallelExecutor(
-        executables=[
+    branch_operations: Mapping[int, ExtensionOperation] | None = None
+    if isinstance(parallel_context, DurableContext):
+        extension = ExtensionContext(parallel_context)
+        branch_operations = {
+            index: extension._reserve_without_replay_transition(  # noqa: SLF001
+                (
+                    branch_namer(index)
+                    if branch_namer is not None
+                    else f"{name_prefix}{index}"
+                ),
+                local_operation_id=str(index),
+            )
+            for index in range(len(callables))
+        }
+    executor_kwargs: dict[str, Any] = {
+        "executables": [
             Executable(index=i, func=func) for i, func in enumerate(callables)
         ],
-        max_concurrency=max_concurrency,
-        completion_config=completion_config or CompletionConfig.all_successful(),
-        top_level_sub_type=top_level_sub_type,
-        iteration_sub_type=iteration_sub_type,
-        name_prefix=name_prefix,
-        serdes=serdes,
-        summary_generator=summary_generator,
-        item_serdes=item_serdes,
-        nesting_type=nesting_type,
-        branch_namer=branch_namer,
-        execution_state=execution_state,
-        operation_identifier=operation_identifier,
-        executor_context=parallel_context,
+        "max_concurrency": max_concurrency,
+        "completion_config": completion_config or CompletionConfig.all_successful(),
+        "top_level_sub_type": top_level_sub_type,
+        "iteration_sub_type": iteration_sub_type,
+        "name_prefix": name_prefix,
+        "serdes": serdes,
+        "summary_generator": summary_generator,
+        "item_serdes": item_serdes,
+        "nesting_type": nesting_type,
+        "branch_namer": branch_namer,
+        "execution_state": execution_state,
+        "operation_identifier": operation_identifier,
+        "executor_context": parallel_context,
+    }
+    if branch_operations is not None:
+        executor_kwargs["branch_operations"] = branch_operations
+
+    executor: ParallelExecutor[Callable[[], Awaitable[R]], R] = ParallelExecutor(
+        **executor_kwargs,
     )
 
     return await executor.process()
