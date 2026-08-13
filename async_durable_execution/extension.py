@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass
-from typing import Generic, TypeAlias, TypeVar, cast
+from typing import Any, Generic, TypeAlias, TypeVar, cast
 
 from ._core import (
     Duration,
@@ -33,6 +33,7 @@ from ._primitive.wait import _wait
 T = TypeVar("T")
 P = TypeVar("P")
 R = TypeVar("R")
+U = TypeVar("U")
 
 
 @dataclass(frozen=True)
@@ -99,17 +100,27 @@ def _normalize_sub_type(sub_type: str | OperationSubType) -> OperationSubTypeVal
 class ExtensionOperation:
     """Opaque one-shot reservation for one SDK-owned durable primitive."""
 
-    __slots__ = ("_claimed", "_context", "_identifier", "_name", "_operation_id")
+    __slots__ = (
+        "_check_next_operation",
+        "_claimed",
+        "_context",
+        "_identifier",
+        "_name",
+        "_operation_id",
+    )
 
     def __init__(
         self,
         context: DurableContext,
         operation_id: str,
         name: str | None,
+        *,
+        check_next_operation: bool,
     ) -> None:
         self._context = context
         self._operation_id = operation_id
         self._name = name
+        self._check_next_operation = check_next_operation
         self._claimed = False
         self._identifier: OperationIdentifier | None = None
 
@@ -125,7 +136,7 @@ class ExtensionOperation:
     ) -> asyncio.Task[T]:
         """Use this reservation for a stateful STEP primitive."""
         identifier = self._claim(OperationType.STEP, sub_type)
-        return create_eager_task(
+        return self._create_task(
             lambda: _stateful_step(
                 func=func,
                 context=self._context,
@@ -134,7 +145,8 @@ class ExtensionOperation:
                 retry_strategy=retry_strategy,
                 step_semantics=step_semantics,
                 serdes=serdes,
-            )
+            ),
+            executes_user_code=True,
         )
 
     def _run_step(
@@ -152,7 +164,7 @@ class ExtensionOperation:
             sub_type,
             include_operation_type=False,
         )
-        return create_eager_task(
+        return self._create_task(
             lambda: _step(
                 func=func,
                 context=self._context,
@@ -160,7 +172,8 @@ class ExtensionOperation:
                 retry_strategy=retry_strategy,
                 step_semantics=step_semantics,
                 serdes=serdes,
-            )
+            ),
+            executes_user_code=True,
         )
 
     def wait(
@@ -175,12 +188,13 @@ class ExtensionOperation:
             msg = "duration must be at least 1 second"
             raise ValidationError(msg)
         identifier = self._claim(OperationType.WAIT, sub_type)
-        return create_eager_task(
+        return self._create_task(
             lambda: _wait(
                 seconds=seconds,
                 context=self._context,
                 operation_identifier=identifier,
-            )
+            ),
+            executes_user_code=False,
         )
 
     def _run_wait(
@@ -199,12 +213,13 @@ class ExtensionOperation:
             sub_type,
             include_operation_type=False,
         )
-        return create_eager_task(
+        return self._create_task(
             lambda: _wait(
                 seconds=seconds,
                 context=self._context,
                 operation_identifier=identifier,
-            )
+            ),
+            executes_user_code=False,
         )
 
     def invoke(
@@ -219,7 +234,7 @@ class ExtensionOperation:
     ) -> asyncio.Task[R]:
         """Use this reservation for a CHAINED_INVOKE primitive."""
         identifier = self._claim(OperationType.CHAINED_INVOKE, sub_type)
-        return create_eager_task(
+        return self._create_task(
             lambda: _invoke(
                 function_name=function_name,
                 payload=payload,
@@ -228,7 +243,8 @@ class ExtensionOperation:
                 serdes_payload=serdes_payload,
                 serdes_result=serdes_result,
                 tenant_id=tenant_id,
-            )
+            ),
+            executes_user_code=False,
         )
 
     def _run_invoke(
@@ -247,7 +263,7 @@ class ExtensionOperation:
             sub_type,
             include_operation_type=False,
         )
-        return create_eager_task(
+        return self._create_task(
             lambda: _invoke(
                 function_name=function_name,
                 payload=payload,
@@ -256,7 +272,8 @@ class ExtensionOperation:
                 serdes_payload=serdes_payload,
                 serdes_result=serdes_result,
                 tenant_id=tenant_id,
-            )
+            ),
+            executes_user_code=False,
         )
 
     def create_callback(
@@ -269,7 +286,7 @@ class ExtensionOperation:
     ) -> asyncio.Task[Callback[T]]:
         """Use this reservation for a CALLBACK primitive."""
         identifier = self._claim(OperationType.CALLBACK, sub_type)
-        return create_eager_task(
+        return self._create_task(
             lambda: _create_callback(
                 context=self._context,
                 operation_identifier=identifier,
@@ -277,7 +294,8 @@ class ExtensionOperation:
                 timeout=timeout,
                 heartbeat_timeout=heartbeat_timeout,
                 serdes=serdes,
-            )
+            ),
+            executes_user_code=False,
         )
 
     def _run_create_callback(
@@ -294,7 +312,7 @@ class ExtensionOperation:
             sub_type,
             include_operation_type=False,
         )
-        return create_eager_task(
+        return self._create_task(
             lambda: _create_callback(
                 context=self._context,
                 operation_identifier=identifier,
@@ -302,7 +320,8 @@ class ExtensionOperation:
                 timeout=timeout,
                 heartbeat_timeout=heartbeat_timeout,
                 serdes=serdes,
-            )
+            ),
+            executes_user_code=False,
         )
 
     def run_in_child_context(
@@ -322,6 +341,7 @@ class ExtensionOperation:
             serdes=serdes,
             summary_generator=summary_generator,
             is_virtual=is_virtual,
+            replay_aware=True,
         )
 
     def _run_in_child_context(
@@ -388,6 +408,7 @@ class ExtensionOperation:
             if replay_aware:
                 with self._context._replay_aware(
                     operation_id=self._operation_id,
+                    check_next_operation=self._check_next_operation,
                 ):
                     return await _run_child_context(
                         func,
@@ -409,6 +430,19 @@ class ExtensionOperation:
             )
 
         return create_eager_task(run_child_context)
+
+    def _create_task(
+        self,
+        coro_factory: Callable[[], Coroutine[Any, Any, U]],
+        *,
+        executes_user_code: bool,
+    ) -> asyncio.Task[U]:
+        with self._context._replay_aware(
+            operation_id=self._operation_id,
+            executes_user_code=executes_user_code,
+            check_next_operation=self._check_next_operation,
+        ):
+            return create_eager_task(coro_factory)
 
     def _claim(
         self,
@@ -484,7 +518,6 @@ class ExtensionContext:
         return self._reserve_sdk_operation(
             name,
             local_operation_id=local_operation_id,
-            executes_user_code=True,
         )
 
     def _reserve_sdk_operation(
@@ -492,19 +525,17 @@ class ExtensionContext:
         name: str | None = None,
         *,
         local_operation_id: str | None = None,
-        executes_user_code: bool,
     ) -> ExtensionOperation:
-        """Reserve an SDK-owned primitive with its established replay transition."""
+        """Reserve an SDK-owned primitive without selecting its behavior."""
         self._require_active_context()
         normalized_name = _normalize_operation_name(name)
         operation_id = self._reserve_operation_id(local_operation_id)
-        with self._context._replay_aware(
-            operation_id=operation_id,
-            executes_user_code=executes_user_code,
+        return ExtensionOperation(
+            self._context,
+            operation_id,
+            normalized_name,
             check_next_operation=local_operation_id is None,
-        ):
-            pass
-        return ExtensionOperation(self._context, operation_id, normalized_name)
+        )
 
     def _reserve_without_replay_transition(
         self,
@@ -516,7 +547,12 @@ class ExtensionContext:
         self._require_active_context()
         normalized_name = _normalize_operation_name(name)
         operation_id = self._reserve_operation_id(local_operation_id)
-        return ExtensionOperation(self._context, operation_id, normalized_name)
+        return ExtensionOperation(
+            self._context,
+            operation_id,
+            normalized_name,
+            check_next_operation=local_operation_id is None,
+        )
 
     def _reserve_operation_id(self, local_operation_id: str | None) -> str:
         if local_operation_id is None:

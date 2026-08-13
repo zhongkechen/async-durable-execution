@@ -36,7 +36,6 @@ def step(
         get_extension_context()
         ._reserve_sdk_operation(  # noqa: SLF001
             step_name,
-            executes_user_code=True,
         )
         ._run_step(  # noqa: SLF001
             func,

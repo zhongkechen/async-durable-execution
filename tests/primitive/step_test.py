@@ -84,6 +84,11 @@ class FailingSerDes(SerDes[str]):
         return data
 
 
+class NonRetryableInvocationError(InvocationError):
+    def is_retryable(self) -> bool:
+        return False
+
+
 # Test helper for StepOperationExecutor.
 async def step_handler(
     func,
@@ -180,6 +185,82 @@ async def test_stateful_step_serialization_failure_is_checkpointed(
         for call in state.create_checkpoint.await_args_list
     ]
     assert actions == [OperationAction.START, OperationAction.FAIL]
+
+
+@pytest.mark.parametrize(
+    ("error_factory", "expected_type"),
+    [
+        (
+            lambda: NonRetryableInvocationError("invocation failed"),
+            InvocationError,
+        ),
+        (
+            lambda: SerDesError("serialization failed"),
+            ExecutionError,
+        ),
+    ],
+)
+@no_type_check
+async def test_stateful_step_control_error_type_is_stable_across_replay(
+    error_factory,
+    expected_type,
+) -> None:
+    operation_identifier = OperationIdentifier(
+        "control-error",
+        "AcmeStep",
+        None,
+        "custom",
+        operation_type=OperationType.STEP,
+    )
+    first_state = Mock(spec=ExecutionState)
+    first_state.durable_execution_arn = "arn:test"
+    first_state.operations.get.return_value = None
+
+    async def fail(_state):
+        raise error_factory()
+
+    first_executor = StatefulStepOperationExecutor(
+        func=fail,
+        state=first_state,
+        operation_identifier=operation_identifier,
+        initial_state=None,
+        retry_strategy=None,
+        step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+        serdes=None,
+    )
+
+    with pytest.raises(expected_type) as first_error:
+        await first_executor.process()
+
+    fail_update = first_state.create_checkpoint.await_args_list[1].kwargs[
+        "operation_update"
+    ]
+    replay_operation = Operation(
+        operation_id="control-error",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.FAILED,
+        name="custom",
+        sub_type="AcmeStep",
+        step_details=StepDetails(error=fail_update.error),
+    )
+    replay_state = Mock(spec=ExecutionState)
+    replay_state.durable_execution_arn = "arn:test"
+    replay_state.operations.get.return_value = replay_operation
+    replay_executor = StatefulStepOperationExecutor(
+        func=fail,
+        state=replay_state,
+        operation_identifier=operation_identifier,
+        initial_state=None,
+        retry_strategy=None,
+        step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+        serdes=None,
+    )
+
+    with pytest.raises(expected_type) as replay_error:
+        await replay_executor.process()
+
+    assert type(first_error.value) is type(replay_error.value)
+    assert first_error.value.termination_reason is replay_error.value.termination_reason
 
 
 def test_step_signature_accepts_config_fields_directly() -> None:

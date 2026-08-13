@@ -35,7 +35,6 @@ def invoke(
         get_extension_context()
         ._reserve_sdk_operation(  # noqa: SLF001
             name,
-            executes_user_code=False,
         )
         ._run_invoke(  # noqa: SLF001
             function_name,

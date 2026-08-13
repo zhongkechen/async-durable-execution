@@ -19,7 +19,6 @@ def wait(duration: Duration, *, name: str | None = None) -> asyncio.Task[None]:
         get_extension_context()
         ._reserve_sdk_operation(  # noqa: SLF001
             name,
-            executes_user_code=False,
         )
         ._run_wait(  # noqa: SLF001
             duration,

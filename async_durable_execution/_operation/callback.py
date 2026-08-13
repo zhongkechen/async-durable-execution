@@ -28,7 +28,6 @@ def create_callback(
         get_extension_context()
         ._reserve_sdk_operation(  # noqa: SLF001
             name,
-            executes_user_code=False,
         )
         ._run_create_callback(  # noqa: SLF001
             sub_type=OperationSubType.CALLBACK,

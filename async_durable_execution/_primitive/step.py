@@ -595,8 +595,13 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
                 error_object,
             )
         )
-        if isinstance(error, ExecutionError):
-            raise error
+        control_error = _restore_sdk_control_error(
+            error_object.message or str(error),
+            error_object.type,
+            error_object.data,
+        )
+        if control_error is not None:
+            raise control_error
         raise CallableRuntimeError.from_error_object(error_object)
 
     @staticmethod

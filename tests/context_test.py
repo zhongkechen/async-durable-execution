@@ -2758,31 +2758,72 @@ def test_replay_aware_user_code_flips_new_before_retrying_operation() -> None:
     assert ctx.is_replaying() is False
 
 
-def test_custom_local_id_replay_uses_reserved_operation_id() -> None:
+async def test_custom_local_id_replay_transitions_when_selected(monkeypatch) -> None:
     ctx = create_replay_context()
     node_a_id = ctx.step_counter._create_id_for_local_id("node-a")  # noqa: SLF001
-    node_b_id = ctx.step_counter._create_id_for_local_id("node-b")  # noqa: SLF001
-    ctx.execution_state.operations.update(
-        {
-            node_a_id: create_replay_operation(
-                node_a_id,
-                OperationStatus.SUCCEEDED,
-            ),
-            node_b_id: create_replay_operation(
-                node_b_id,
-                OperationStatus.SUCCEEDED,
-            ),
-        }
+    ctx.execution_state.operations[node_a_id] = create_replay_operation(
+        node_a_id,
+        OperationStatus.SUCCEEDED,
+        OperationType.WAIT,
     )
+
+    async def replay_wait(**_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr("async_durable_execution.extension._wait", replay_wait)
 
     with bind_current_context(ctx):
         extension = ExtensionContext(ctx)
-        extension.reserve("first", local_operation_id="node-a")
+        reservation = extension.reserve("first", local_operation_id="node-a")
 
         assert ctx.is_replaying() is True
 
-        extension.reserve("new", local_operation_id="node-c")
+        await reservation.wait(1, sub_type="AcmeWait")
 
+    assert ctx.is_replaying() is False
+
+
+async def test_child_context_inherits_replay_before_parent_transition(
+    monkeypatch,
+) -> None:
+    ctx = create_replay_context()
+    operation_id = ctx.step_counter._create_id_for_local_id("child")  # noqa: SLF001
+    ctx.execution_state.operations[operation_id] = create_replay_operation(
+        operation_id,
+        OperationStatus.STARTED,
+        OperationType.CONTEXT,
+    )
+    observed_child_replay = None
+
+    async def run_child_context(_func, *, child_context, **_kwargs):
+        nonlocal observed_child_replay
+        observed_child_replay = child_context.is_replaying()
+        return "done"
+
+    monkeypatch.setattr(
+        "async_durable_execution.extension._run_child_context",
+        run_child_context,
+    )
+
+    async def child() -> str:
+        return "unused"
+
+    with bind_current_context(ctx):
+        reservation = ExtensionContext(ctx).reserve(
+            "child",
+            local_operation_id="child",
+        )
+
+        assert ctx.is_replaying() is True
+        assert (
+            await reservation.run_in_child_context(
+                child,
+                sub_type="AcmeContext",
+            )
+            == "done"
+        )
+
+    assert observed_child_replay is True
     assert ctx.is_replaying() is False
 
 

@@ -216,8 +216,8 @@ class DurableContext(OperationContext):
         """Update replay status around one durable operation.
 
         `operation_id` identifies an operation that was allocated before entering
-        this scope. Disable `check_next_operation` for explicit local IDs because
-        their reservation order is not tied to the sequential counter.
+        this scope. Explicit local IDs do not have a meaningful sequential
+        successor, so they leave replay after a terminal operation is selected.
         """
         was_replaying = self.is_replaying()
         current_operation_id = operation_id or self._peek_next_operation_id()
@@ -244,12 +244,12 @@ class DurableContext(OperationContext):
         finally:
             if flip_after:
                 self._set_replay_status_new()
-            elif (
-                check_next_operation
-                and self.is_replaying()
-                and not self._next_operation_exists()
-            ):
-                self._set_replay_status_new()
+            elif self.is_replaying():
+                if check_next_operation:
+                    if not self._next_operation_exists():
+                        self._set_replay_status_new()
+                elif current_terminal:
+                    self._set_replay_status_new()
 
 
 _current_context: ContextVar = ContextVar(
