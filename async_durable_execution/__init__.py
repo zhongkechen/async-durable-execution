@@ -98,6 +98,14 @@ from ._primitive.step import (
 )
 from ._extension.replay_safe import now, random, timestamp, uuid
 from ._primitive.wait import wait
+from .extension import (
+    ExtensionContext,
+    ExtensionOperation,
+    ExtensionStepFunction,
+    ExtensionStepResult,
+    ExtensionStepRetryStrategy,
+    get_extension_context,
+)
 from ._runner import (
     DurableFunctionCloudTestRunner,
     DurableFunctionLocalTestRunner,
@@ -119,6 +127,7 @@ __all__ = [
     "flow",
     "get_current_context",
     "get_durable_context",
+    "get_extension_context",
     "get_map_item_context",
     "get_node_context",
     "get_serdes_context",
@@ -159,6 +168,11 @@ __all__ = [
     "DurableExecutionsError",
     "ErrorObject",
     "ExecutionError",
+    "ExtensionContext",
+    "ExtensionOperation",
+    "ExtensionStepFunction",
+    "ExtensionStepResult",
+    "ExtensionStepRetryStrategy",
     "ExtendedTypeSerDes",
     "FlowDefinitionError",
     "FlowExecutionError",

@@ -22,6 +22,7 @@ These operations map directly to durable execution backend operations.
 These SDK operations are implemented on top of primitive operations or SDK
 checkpoint conventions.
 
+- [Custom operation SPI](api/extension/custom_operations.md)
 - [Flow and DAG workflows](api/extension/flow.md)
 - [Map](api/extension/map.md)
 - [Parallel](api/extension/parallel.md)

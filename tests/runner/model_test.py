@@ -11,6 +11,7 @@ from async_durable_execution._core.models import (
     BotoSerializableModel,
     CheckpointUpdatedExecutionState,
     OperationStatus,
+    OperationSubType,
     OperationType,
 )
 from async_durable_execution._runner.exceptions import (
@@ -2804,27 +2805,25 @@ def test_events_to_operations_preserves_sub_type() -> None:
     operations = events_to_operations([event])
 
     assert len(operations) == 1
-    assert operations[0].sub_type is not None
-    assert operations[0].sub_type.value == "Step"
+    assert operations[0].sub_type is OperationSubType.STEP
 
 
-def test_events_to_operations_invalid_sub_type() -> None:
-    """Test events_to_operations raises InvalidParameterValueException when sub_type is invalid."""
-    invalid_sub_type: str = "INVALID_SUB_TYPE"
+def test_events_to_operations_preserves_custom_sub_type() -> None:
+    """Test events_to_operations preserves extension-defined subtypes."""
+    custom_sub_type = "AcmeCustomStep"
     event = Event(
         event_type="StepStarted",
         event_timestamp=datetime.datetime(
             2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
         ),
         operation_id="step-1",
-        sub_type=invalid_sub_type,
+        sub_type=custom_sub_type,
     )
 
-    with pytest.raises(
-        InvalidParameterValueException,
-        match=f"'{invalid_sub_type}' is not a valid OperationSubType",
-    ):
-        events_to_operations([event])
+    operations = events_to_operations([event])
+
+    assert len(operations) == 1
+    assert operations[0].sub_type == custom_sub_type
 
 
 def test_invocation_completed_details_to_dict_preserves_datetime() -> None:

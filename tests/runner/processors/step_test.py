@@ -127,6 +127,33 @@ def test_process_retry_action() -> None:
 
 
 @no_type_check
+def test_process_retry_action_replaces_checkpointed_state_payload() -> None:
+    processor = StepProcessor()
+    notifier = MockNotifier()
+    execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
+    current_op = Mock()
+    current_op.start_timestamp = datetime.now(timezone.utc)
+    current_op.step_details = StepDetails(attempt=1, result="previous-result")
+    current_op.execution_details = None
+    current_op.context_details = None
+    current_op.wait_details = None
+    current_op.callback_details = None
+    current_op.chained_invoke_details = None
+    update = OperationUpdate(
+        operation_id="step-123",
+        operation_type=OperationType.STEP,
+        action=OperationAction.RETRY,
+        name="test-step",
+        payload="next-state",
+        step_options=StepOptions(next_attempt_delay_seconds=30),
+    )
+
+    result = processor.process(update, current_op, notifier, execution_arn)
+
+    assert result.step_details.result == "next-state"
+
+
+@no_type_check
 def test_process_retry_action_scales_delay(monkeypatch) -> None:
     monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.1")
 

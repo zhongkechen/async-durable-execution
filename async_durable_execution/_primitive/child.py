@@ -20,6 +20,7 @@ from .._core import (
     OperationIdentifier,
     OperationStatus,
     OperationSubType,
+    OperationSubTypeValue,
     OperationUpdate,
     SerDes,
     _encode_sdk_control_error_data,
@@ -332,7 +333,7 @@ def run_in_child_context(
 def _create_child_context_task(
     func: Callable[[], Awaitable[T]],
     *,
-    sub_type: OperationSubType,
+    sub_type: OperationSubTypeValue,
     name: str | None = None,
     serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,
@@ -370,7 +371,7 @@ def _create_child_context_task(
 async def _run_in_child_context(
     func: Callable[[], Awaitable[T]],
     *,
-    sub_type: OperationSubType,
+    sub_type: OperationSubTypeValue,
     name: str | None = None,
     serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,

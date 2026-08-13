@@ -7,6 +7,7 @@ from typing import Generic, TypeVar
 
 from .._core import (
     ExecutionState,
+    InvalidStateError,
     Operation,
     OperationContext,
     OperationIdentifier,
@@ -98,4 +99,33 @@ class OperationExecutor(ABC, Generic[T]):
         operation = self.state.operations.get(self.operation_id)
         if operation is None:
             return await self.start()
+        expected_type = self.operation_identifier.operation_type
+        if expected_type is not None:
+            expected = self.operation_identifier
+            mismatches = []
+            if operation.operation_type is not expected_type:
+                mismatches.append(
+                    f"type={operation.operation_type.value!r}, "
+                    f"expected {expected_type.value!r}"
+                )
+            if operation.sub_type != expected.sub_type:
+                mismatches.append(
+                    f"sub_type={operation.sub_type!r}, expected {expected.sub_type!r}"
+                )
+            if operation.name != expected.name:
+                mismatches.append(
+                    f"name={operation.name!r}, expected {expected.name!r}"
+                )
+            if operation.parent_id != expected.parent_id:
+                mismatches.append(
+                    f"parent_id={operation.parent_id!r}, "
+                    f"expected {expected.parent_id!r}"
+                )
+            if mismatches:
+                details = "; ".join(mismatches)
+                msg = (
+                    f"Reserved extension operation {self.operation_id!r} does "
+                    f"not match its checkpoint: {details}"
+                )
+                raise InvalidStateError(msg)
         return await self.replay(operation)

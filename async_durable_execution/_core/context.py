@@ -40,6 +40,7 @@ class OperationIdGenerator:
     def __init__(self, prefix: str | None) -> None:
         self._prefix = prefix
         self._counter = 0
+        self._claimed_local_ids: set[str] = set()
 
     def increment(self) -> int:
         self._counter += 1
@@ -48,15 +49,41 @@ class OperationIdGenerator:
     def get_current(self) -> int:
         return self._counter
 
+    def _create_id_for_local_id(self, local_id: str) -> str:
+        """Generate the stable operation id for a context-local identifier."""
+        prefix = self._prefix
+        step_id = f"{prefix}-{local_id}" if prefix else local_id
+        return hashlib.blake2b(step_id.encode()).hexdigest()[:64]
+
     def _create_step_id_for_logical_step(self, step: int) -> str:
         """Generate the stable operation id for a logical step."""
-        prefix = self._prefix
-        step_id = f"{prefix}-{step}" if prefix else str(step)
-        return hashlib.blake2b(step_id.encode()).hexdigest()[:64]
+        return self._create_id_for_local_id(str(step))
 
     def create_step_id(self) -> str:
         """Generate an operation id and advance the logical step counter."""
-        return self._create_step_id_for_logical_step(self.increment())
+        while True:
+            step = self.increment()
+            local_id = str(step)
+            if local_id in self._claimed_local_ids:
+                continue
+            self._claimed_local_ids.add(local_id)
+            return self._create_step_id_for_logical_step(step)
+
+    def create_step_id_for_local_id(self, local_id: str) -> str:
+        """Generate an operation id from a stable caller-provided local id."""
+        if not isinstance(local_id, str):
+            msg = "local_operation_id must be a string"
+            raise TypeError(msg)
+        if not local_id.strip():
+            msg = "local_operation_id must not be blank"
+            raise ValueError(msg)
+        if local_id in self._claimed_local_ids:
+            msg = f"local_operation_id is already reserved: {local_id}"
+            raise ValueError(msg)
+
+        self.increment()
+        self._claimed_local_ids.add(local_id)
+        return self._create_id_for_local_id(local_id)
 
 
 @dataclass(frozen=True)

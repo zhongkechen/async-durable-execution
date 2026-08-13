@@ -2408,6 +2408,24 @@ async def test_timestamp_converter_millisecond_boundaries() -> None:
         assert abs((result_dt - dt).total_seconds()) < 0.001
 
 
+def test_operation_models_round_trip_custom_subtype_strings() -> None:
+    operation = Operation(
+        operation_id="custom",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.SUCCEEDED,
+        sub_type="AcmeStep",
+    )
+    update = OperationUpdate(
+        operation_id="custom",
+        operation_type=OperationType.STEP,
+        action=OperationAction.START,
+        sub_type="AcmeStep",
+    )
+
+    assert Operation.from_dict(operation.to_dict()).sub_type == "AcmeStep"
+    assert OperationUpdate.from_dict(update.to_dict()).sub_type == "AcmeStep"
+
+
 def test_operation_identifier_requires_operation_id_for_non_execution_operations() -> (
     None
 ):

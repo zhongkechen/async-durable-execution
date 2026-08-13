@@ -127,11 +127,22 @@ class OperationProcessor:
                 OperationAction.FAIL,
             }:
                 attempt += 1
+            result = update.payload
+            error = update.error
+            if (
+                update.action is OperationAction.START
+                and current_operation is not None
+                and current_operation.step_details is not None
+            ):
+                if result is None:
+                    result = current_operation.step_details.result
+                if error is None:
+                    error = current_operation.step_details.error
             return StepDetails(
                 attempt=attempt,
                 next_attempt_timestamp=next_attempt_timestamp,
-                result=update.payload,
-                error=update.error,
+                result=result,
+                error=error,
             )
 
         return None

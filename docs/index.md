@@ -46,6 +46,9 @@ running again.
   bodies.
 - **Normal asyncio composition**: durable operations return `asyncio.Task`
   objects and work with `asyncio.gather()`.
+- **[Custom operation SPI](custom-operations.md)**: third-party packages can
+  reserve stable primitive identities and build replay-safe durable operations
+  without importing SDK internals.
 - **Local and cloud testing**: run the same durable handler in memory or against
   a deployed Lambda function.
 
@@ -107,6 +110,7 @@ clock reads, and other side effects inside checkpointed steps. Standard
 - Apply common [workflow patterns](workflow-patterns.md).
 - [Deploy and invoke](deployment.md) a durable Lambda function.
 - Learn the [advanced asyncio patterns](advanced-usage.md).
+- Build [custom durable operations](custom-operations.md).
 - Define a [durable DAG workflow](api/extension/flow.md).
 - Browse the [API reference](async_durable_execution.md).
 - Test locally with the [runner API](api/runner.md).

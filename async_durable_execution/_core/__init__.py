@@ -73,6 +73,7 @@ from .models import (
     OperationPayload,
     OperationStatus,
     OperationSubType,
+    OperationSubTypeValue,
     OperationType,
     OperationUpdate,
     StateOutput,
