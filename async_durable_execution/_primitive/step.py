@@ -466,6 +466,18 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
         try:
             with bind_current_context(step_context):
                 outcome = await self.func(state)
+
+            if not isinstance(outcome, ExtensionStepResult):
+                msg = (
+                    "Extension step functions must return "
+                    "ExtensionStepResult.succeed(...) or ExtensionStepResult.retry(...)"
+                )
+                raise TypeError(msg)
+
+            if outcome.is_retry:
+                delay_seconds, payload = await self._prepare_retry(outcome)
+            else:
+                payload = await self.serialize_value(outcome.value, self.serdes)
         except InvocationError as error:
             if error.is_retryable():
                 raise
@@ -473,17 +485,12 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
         except Exception as error:
             return await self._handle_failure(error, state, attempt)
 
-        if not isinstance(outcome, ExtensionStepResult):
-            msg = (
-                "Extension step functions must return "
-                "ExtensionStepResult.succeed(...) or ExtensionStepResult.retry(...)"
-            )
-            return await self._fail(TypeError(msg))
-
         if outcome.is_retry:
-            return await self._schedule_retry(outcome)
+            return await self._schedule_retry(
+                delay_seconds=delay_seconds,
+                payload=payload,
+            )
 
-        payload = await self.serialize_value(outcome.value, self.serdes)
         await self.create_checkpoint(
             OperationUpdate.create_step_succeed(
                 self.operation_identifier,
@@ -535,18 +542,34 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
             )
             return await self._fail(TypeError(msg))
 
-        return await self._schedule_retry(decision)
+        try:
+            delay_seconds, payload = await self._prepare_retry(decision)
+        except Exception as retry_error:
+            return await self._fail(retry_error)
 
-    async def _schedule_retry(
+        return await self._schedule_retry(
+            delay_seconds=delay_seconds,
+            payload=payload,
+        )
+
+    async def _prepare_retry(
         self,
         outcome: ExtensionStepResult[T],
-    ) -> T:
+    ) -> tuple[int, str]:
         assert outcome.retry_delay is not None
         delay_seconds = max(
             1,
             duration_to_seconds(outcome.retry_delay, "retry delay"),
         )
         payload = await self.serialize_value(outcome.value, self.serdes)
+        return delay_seconds, payload
+
+    async def _schedule_retry(
+        self,
+        *,
+        delay_seconds: int,
+        payload: str,
+    ) -> T:
         await self.create_checkpoint(
             OperationUpdate.create_step_retry(
                 self.operation_identifier,

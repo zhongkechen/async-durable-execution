@@ -42,6 +42,7 @@ from async_durable_execution import (
     wait_for_condition,
     wait_for_callback,
     map as map_operation,
+    ExtensionContext,
     StepContext,
     StepSemantics,
     DurableContext,
@@ -2753,6 +2754,34 @@ def test_replay_aware_user_code_flips_new_before_retrying_operation() -> None:
     with ctx._replay_aware(executes_user_code=True):  # noqa: SLF001
         ctx.step_counter.create_step_id()
         assert ctx.is_replaying() is False
+
+    assert ctx.is_replaying() is False
+
+
+def test_custom_local_id_replay_uses_reserved_operation_id() -> None:
+    ctx = create_replay_context()
+    node_a_id = ctx.step_counter._create_id_for_local_id("node-a")  # noqa: SLF001
+    node_b_id = ctx.step_counter._create_id_for_local_id("node-b")  # noqa: SLF001
+    ctx.execution_state.operations.update(
+        {
+            node_a_id: create_replay_operation(
+                node_a_id,
+                OperationStatus.SUCCEEDED,
+            ),
+            node_b_id: create_replay_operation(
+                node_b_id,
+                OperationStatus.SUCCEEDED,
+            ),
+        }
+    )
+
+    with bind_current_context(ctx):
+        extension = ExtensionContext(ctx)
+        extension.reserve("first", local_operation_id="node-a")
+
+        assert ctx.is_replaying() is True
+
+        extension.reserve("new", local_operation_id="node-c")
 
     assert ctx.is_replaying() is False
 

@@ -32,6 +32,40 @@ def test_replay_safe_helper_signatures_use_keyword_only_names() -> None:
         assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
+async def test_replay_safe_helpers_keep_default_step_retries(monkeypatch) -> None:
+    """Replay-safe helpers retain the normal step retry policy."""
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.01")
+    calls = 0
+
+    async def flaky_random() -> float:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("transient")
+        return 0.5
+
+    monkeypatch.setattr(
+        "async_durable_execution._operation.replay_safe._random_value",
+        flaky_random,
+    )
+
+    @durable_execution
+    async def function_under_test(event) -> float:
+        return await random()
+
+    async with create_local_runner(
+        handler=function_under_test,
+        input={},
+        poll_interval=0.01,
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert result.get_deserialized_result() == 0.5
+    assert calls == 2
+
+
 @no_type_check
 async def test_replay_safe_helpers_use_default_step_names(monkeypatch) -> None:
     """Default helper names make their checkpoints easy to inspect."""

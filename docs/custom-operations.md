@@ -103,6 +103,12 @@ A local ID must be a nonblank string and unique within the current durable
 context. It is namespaced by the SDK; extension code never receives the backend
 operation ID. Changing or reusing a local ID is a workflow compatibility change.
 
+Reservation names must be nonblank strings when provided. An
+`ExtensionContext` may only reserve operations, and a reservation may only be
+claimed, while the durable handler or child context that created it is active.
+They cannot create operations from inside a step function or another durable
+scope.
+
 Each reservation can create exactly one primitive. Reusing it raises
 `RuntimeError`.
 

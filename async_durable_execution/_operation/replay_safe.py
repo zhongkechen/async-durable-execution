@@ -8,8 +8,7 @@ import time as _time
 import uuid as _uuid
 from datetime import datetime, timezone
 
-from .._core import OperationSubType
-from ..extension import ExtensionStepResult, get_extension_context
+from .step import step
 
 
 async def _random_value() -> float:
@@ -30,51 +29,19 @@ async def _uuid_value() -> _uuid.UUID:
 
 def random(*, name: str | None = None) -> asyncio.Task[float]:
     """Return a checkpointed `random.random()` value."""
-
-    async def run(_state: float | None) -> ExtensionStepResult[float]:
-        return ExtensionStepResult.succeed(await _random_value())
-
-    return (
-        get_extension_context()
-        .reserve(name or "random")
-        .step(run, sub_type=OperationSubType.STEP)
-    )
+    return step(_random_value, name=name or "random")
 
 
 def now(*, name: str | None = None) -> asyncio.Task[datetime]:
     """Return a checkpointed timezone-aware UTC `datetime`."""
-
-    async def run(_state: datetime | None) -> ExtensionStepResult[datetime]:
-        return ExtensionStepResult.succeed(await _now_value())
-
-    return (
-        get_extension_context()
-        .reserve(name or "now")
-        .step(run, sub_type=OperationSubType.STEP)
-    )
+    return step(_now_value, name=name or "now")
 
 
 def timestamp(*, name: str | None = None) -> asyncio.Task[float]:
     """Return a checkpointed Unix timestamp in seconds."""
-
-    async def run(_state: float | None) -> ExtensionStepResult[float]:
-        return ExtensionStepResult.succeed(await _timestamp_value())
-
-    return (
-        get_extension_context()
-        .reserve(name or "timestamp")
-        .step(run, sub_type=OperationSubType.STEP)
-    )
+    return step(_timestamp_value, name=name or "timestamp")
 
 
 def uuid(*, name: str | None = None) -> asyncio.Task[_uuid.UUID]:
     """Return a checkpointed UUID4 value."""
-
-    async def run(_state: _uuid.UUID | None) -> ExtensionStepResult[_uuid.UUID]:
-        return ExtensionStepResult.succeed(await _uuid_value())
-
-    return (
-        get_extension_context()
-        .reserve(name or "uuid")
-        .step(run, sub_type=OperationSubType.STEP)
-    )
+    return step(_uuid_value, name=name or "uuid")

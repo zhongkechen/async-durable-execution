@@ -182,13 +182,19 @@ class DurableContext(OperationContext):
         )
 
     def _next_operation_result(self) -> Operation | None:
-        return self.execution_state.operations.get(self._peek_next_operation_id())
+        return self._operation_result(self._peek_next_operation_id())
+
+    def _operation_result(self, operation_id: str) -> Operation | None:
+        return self.execution_state.operations.get(operation_id)
 
     def _next_operation_exists(self) -> bool:
         return self._next_operation_result() is not None
 
     def _next_operation_is_terminal_checkpoint(self) -> bool:
-        operation = self._next_operation_result()
+        return self._operation_is_terminal_checkpoint(self._peek_next_operation_id())
+
+    def _operation_is_terminal_checkpoint(self, operation_id: str) -> bool:
+        operation = self._operation_result(operation_id)
         if operation is None:
             return False
         return operation.status in {
@@ -200,20 +206,36 @@ class DurableContext(OperationContext):
         }
 
     @contextmanager
-    def _replay_aware(self, *, executes_user_code: bool = False) -> Iterator[None]:
-        """Update this context's replay status around one durable operation."""
+    def _replay_aware(
+        self,
+        *,
+        operation_id: str | None = None,
+        executes_user_code: bool = False,
+        check_next_operation: bool = True,
+    ) -> Iterator[None]:
+        """Update replay status around one durable operation.
+
+        `operation_id` identifies an operation that was allocated before entering
+        this scope. Disable `check_next_operation` for explicit local IDs because
+        their reservation order is not tied to the sequential counter.
+        """
         was_replaying = self.is_replaying()
-        next_exists = was_replaying and self._next_operation_exists()
-        next_terminal = was_replaying and self._next_operation_is_terminal_checkpoint()
+        current_operation_id = operation_id or self._peek_next_operation_id()
+        current_exists = was_replaying and (
+            self._operation_result(current_operation_id) is not None
+        )
+        current_terminal = was_replaying and self._operation_is_terminal_checkpoint(
+            current_operation_id
+        )
         flip_after = (
             was_replaying
             and not executes_user_code
-            and next_exists
-            and not next_terminal
+            and current_exists
+            and not current_terminal
         )
 
         if was_replaying and (
-            not next_exists or (executes_user_code and not next_terminal)
+            not current_exists or (executes_user_code and not current_terminal)
         ):
             self._set_replay_status_new()
 
@@ -222,7 +244,11 @@ class DurableContext(OperationContext):
         finally:
             if flip_after:
                 self._set_replay_status_new()
-            elif self.is_replaying() and not self._next_operation_exists():
+            elif (
+                check_next_operation
+                and self.is_replaying()
+                and not self._next_operation_exists()
+            ):
                 self._set_replay_status_new()
 
 

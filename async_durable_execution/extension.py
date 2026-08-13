@@ -69,6 +69,18 @@ ExtensionStepRetryStrategy: TypeAlias = Callable[
 ]
 
 
+def _normalize_operation_name(name: str | None) -> str | None:
+    if name is None:
+        return None
+    if not isinstance(name, str):
+        msg = "name must be a string or None"
+        raise TypeError(msg)
+    if not name.strip():
+        msg = "name must not be blank"
+        raise ValueError(msg)
+    return name
+
+
 def _normalize_sub_type(sub_type: str | OperationSubType) -> OperationSubTypeValue:
     if isinstance(sub_type, OperationSubType):
         return sub_type
@@ -374,7 +386,9 @@ class ExtensionOperation:
 
         async def run_child_context() -> T:
             if replay_aware:
-                with self._context._replay_aware():
+                with self._context._replay_aware(
+                    operation_id=self._operation_id,
+                ):
                     return await _run_child_context(
                         func,
                         context=self._context,
@@ -403,6 +417,7 @@ class ExtensionOperation:
         *,
         include_operation_type: bool = True,
     ) -> OperationIdentifier:
+        self._require_active_context()
         normalized_sub_type = _normalize_sub_type(sub_type)
         if self._claimed:
             msg = "An extension operation reservation can only be used once"
@@ -416,6 +431,15 @@ class ExtensionOperation:
             operation_type=operation_type if include_operation_type else None,
         )
         return self._identifier
+
+    def _require_active_context(self) -> None:
+        current_context = get_durable_context()
+        if current_context is not self._context:
+            msg = (
+                "An extension operation reservation can only be used in the "
+                "durable context where it was created"
+            )
+            raise RuntimeError(msg)
 
 
 class ExtensionContext:
@@ -471,9 +495,16 @@ class ExtensionContext:
         executes_user_code: bool,
     ) -> ExtensionOperation:
         """Reserve an SDK-owned primitive with its established replay transition."""
-        with self._context._replay_aware(executes_user_code=executes_user_code):
-            operation_id = self._reserve_operation_id(local_operation_id)
-        return ExtensionOperation(self._context, operation_id, name)
+        self._require_active_context()
+        normalized_name = _normalize_operation_name(name)
+        operation_id = self._reserve_operation_id(local_operation_id)
+        with self._context._replay_aware(
+            operation_id=operation_id,
+            executes_user_code=executes_user_code,
+            check_next_operation=local_operation_id is None,
+        ):
+            pass
+        return ExtensionOperation(self._context, operation_id, normalized_name)
 
     def _reserve_without_replay_transition(
         self,
@@ -482,8 +513,10 @@ class ExtensionContext:
         local_operation_id: str | None = None,
     ) -> ExtensionOperation:
         """Reserve an SDK-owned concurrent child without changing parent replay state."""
+        self._require_active_context()
+        normalized_name = _normalize_operation_name(name)
         operation_id = self._reserve_operation_id(local_operation_id)
-        return ExtensionOperation(self._context, operation_id, name)
+        return ExtensionOperation(self._context, operation_id, normalized_name)
 
     def _reserve_operation_id(self, local_operation_id: str | None) -> str:
         if local_operation_id is None:
@@ -491,6 +524,15 @@ class ExtensionContext:
         return self._context.step_counter.create_step_id_for_local_id(
             local_operation_id
         )
+
+    def _require_active_context(self) -> None:
+        current_context = get_durable_context()
+        if current_context is not self._context:
+            msg = (
+                "An extension context can only reserve operations in the "
+                "durable context where it was created"
+            )
+            raise RuntimeError(msg)
 
 
 def get_extension_context() -> ExtensionContext:

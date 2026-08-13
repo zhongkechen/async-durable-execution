@@ -258,3 +258,74 @@ async def test_extension_reservations_are_one_shot():
 
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.get_deserialized_result() == "done"
+
+
+async def test_captured_extension_context_cannot_reserve_inside_step():
+    async def outer(_state):
+        assert captured is not None
+        captured.reserve("nested")
+        return ExtensionStepResult.succeed("done")
+
+    @durable_execution
+    async def handler(_event):
+        nonlocal captured
+        captured = get_extension_context()
+        return await captured.reserve("outer").step(
+            outer,
+            sub_type="AcmeOuter",
+        )
+
+    captured = None
+    result = await _run(handler)
+
+    assert result.status is InvocationStatus.FAILED
+    assert result.get_step("outer").status is OperationStatus.FAILED
+
+
+async def test_reserved_operation_cannot_be_claimed_inside_step():
+    async def inner(_state):
+        return ExtensionStepResult.succeed("nested")
+
+    async def outer(_state):
+        assert nested is not None
+        return ExtensionStepResult.succeed(
+            await nested.step(inner, sub_type="AcmeNested")
+        )
+
+    @durable_execution
+    async def handler(_event):
+        nonlocal nested
+        extension = get_extension_context()
+        nested = extension.reserve("nested")
+        return await extension.reserve("outer").step(
+            outer,
+            sub_type="AcmeOuter",
+        )
+
+    nested = None
+    result = await _run(handler)
+
+    assert result.status is InvocationStatus.FAILED
+    assert result.get_step("outer").status is OperationStatus.FAILED
+
+
+async def test_extension_operation_names_must_be_nonblank():
+    async def work(_state):
+        return ExtensionStepResult.succeed("done")
+
+    @durable_execution
+    async def handler(_event):
+        extension = get_extension_context()
+        for name in ("", "   "):
+            with pytest.raises(ValueError, match="name must not be blank"):
+                extension.reserve(name)
+
+        return await extension.reserve("valid").step(
+            work,
+            sub_type="AcmeStep",
+        )
+
+    result = await _run(handler)
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert result.get_step("valid").operation_id == _operation_id("1")

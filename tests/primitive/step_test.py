@@ -38,6 +38,7 @@ from async_durable_execution._core.context import (
     get_current_context,
 )
 from async_durable_execution._primitive.step import (
+    StatefulStepOperationExecutor,
     StepOperationExecutor,
 )
 from async_durable_execution._operation.step import (
@@ -48,7 +49,7 @@ from async_durable_execution._operation.step import (
 )
 from async_durable_execution._core.serdes import SerDes
 from async_durable_execution._core.state import ExecutionState
-from async_durable_execution import StepContext
+from async_durable_execution import ExtensionStepResult, StepContext
 
 from ..serdes_test import CustomDictSerDes
 
@@ -70,6 +71,14 @@ def _asyncify(func) -> Any:
 class UppercaseSerDes(SerDes[str]):
     async def serialize(self, value: str) -> str:
         return value.upper()
+
+    async def deserialize(self, data: str) -> str:
+        return data
+
+
+class FailingSerDes(SerDes[str]):
+    async def serialize(self, value: str) -> str:
+        raise ValueError("cannot serialize")
 
     async def deserialize(self, data: str) -> str:
         return data
@@ -132,6 +141,45 @@ def test_step_operation_executor_accepts_config_fields_directly() -> None:
     assert executor.retry_strategy is retry_strategy
     assert executor.step_semantics == StepSemantics.AT_MOST_ONCE_PER_RETRY
     assert executor.serdes is serdes
+
+
+@pytest.mark.parametrize("retry_outcome", [False, True])
+async def test_stateful_step_serialization_failure_is_checkpointed(
+    retry_outcome,
+) -> None:
+    state = Mock(spec=ExecutionState)
+    state.durable_execution_arn = "arn:test"
+    state.operations.get.return_value = None
+
+    async def work(_state):
+        if retry_outcome:
+            return ExtensionStepResult.retry("result", 1)
+        return ExtensionStepResult.succeed("result")
+
+    executor = StatefulStepOperationExecutor(
+        func=work,
+        state=state,
+        operation_identifier=OperationIdentifier(
+            "op-1",
+            "AcmeStep",
+            None,
+            "custom",
+            operation_type=OperationType.STEP,
+        ),
+        initial_state=None,
+        retry_strategy=None,
+        step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+        serdes=FailingSerDes(),
+    )
+
+    with pytest.raises(ExecutionError, match="Serialization failed"):
+        await executor.process()
+
+    actions = [
+        call.kwargs["operation_update"].action
+        for call in state.create_checkpoint.await_args_list
+    ]
+    assert actions == [OperationAction.START, OperationAction.FAIL]
 
 
 def test_step_signature_accepts_config_fields_directly() -> None:
