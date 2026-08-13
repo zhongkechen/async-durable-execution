@@ -1,10 +1,10 @@
 # Child Context
 
-Internal implementation module: `async_durable_execution._primitive.child`.
+Operation module: `async_durable_execution._operation.child`.
 
 Use a child context to group durable operations in an isolated operation scope.
 
-::: async_durable_execution._primitive.child
+::: async_durable_execution._operation.child
     options:
       members:
         - SummaryGenerator

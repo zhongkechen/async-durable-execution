@@ -19,7 +19,6 @@ from .._core import (
     Operation,
     OperationIdentifier,
     OperationStatus,
-    OperationSubType,
     OperationSubTypeValue,
     OperationUpdate,
     SerDes,
@@ -319,11 +318,11 @@ def run_in_child_context(
         is_virtual: Whether the child context should skip lifecycle checkpoints.
     """
 
-    step_name = name if name is not None else getattr(func, "__name__", None)
-    return _create_child_context_task(
+    from .._operation.child import run_in_child_context as operation_child_context
+
+    return operation_child_context(
         func,
-        sub_type=OperationSubType.RUN_IN_CHILD_CONTEXT,
-        name=step_name,
+        name=name,
         serdes=serdes,
         summary_generator=summary_generator,
         is_virtual=is_virtual,

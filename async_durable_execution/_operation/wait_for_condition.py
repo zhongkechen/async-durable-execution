@@ -37,7 +37,7 @@ from .._core import (
     suspend_with_optional_resume_timestamp,
 )
 from .._primitive.base import OperationExecutor
-from .._primitive.step import StepContext, get_step_context
+from .step import StepContext, get_step_context
 from ..extension import ExtensionStepResult, get_extension_context
 
 if TYPE_CHECKING:

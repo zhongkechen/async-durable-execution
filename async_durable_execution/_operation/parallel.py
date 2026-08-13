@@ -42,7 +42,7 @@ from .._primitive.child import ChildOperationExecutor
 from ..extension import ExtensionContext, ExtensionOperation, get_extension_context
 
 if TYPE_CHECKING:
-    from .._primitive.child import SummaryGenerator
+    from .child import SummaryGenerator
 
 
 logger = logging.getLogger(__name__)

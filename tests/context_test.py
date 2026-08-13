@@ -26,7 +26,7 @@ from async_durable_execution._core.context import (
     set_current_context,
     get_current_context,
 )
-from async_durable_execution._primitive.callback import (
+from async_durable_execution._operation.callback import (
     Callback,
     CallbackError,
 )

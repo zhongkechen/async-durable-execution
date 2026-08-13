@@ -19,7 +19,8 @@ from async_durable_execution._core.models import (
     OperationUpdate,
     WaitOptions,
 )
-from async_durable_execution._primitive.wait import WaitOperationExecutor, wait
+from async_durable_execution._operation.wait import wait
+from async_durable_execution._primitive.wait import WaitOperationExecutor
 from async_durable_execution._core.state import ExecutionState
 
 

@@ -17,17 +17,14 @@ from .._core import (
     Operation,
     OperationIdentifier,
     OperationStatus,
-    OperationSubType,
     OperationUpdate,
     PassThroughSerDes,
     SerDes,
     SuspendExecution,
     TerminationReason,
     _register_sdk_control_error_type,
-    create_eager_task,
     deserialize,
     duration_to_seconds,
-    get_durable_context,
 )
 
 T = TypeVar("T")  # Result type
@@ -158,35 +155,15 @@ def create_callback(
     heartbeat_timeout: Duration | None = None,
     serdes: SerDes | None = None,
 ) -> asyncio.Task[Callback]:
-    """Create a durable callback handle that external systems can complete later.
+    """Compatibility import for the canonical operation-layer helper."""
+    from .._operation.callback import create_callback as operation_create_callback
 
-    Args:
-        name: Optional durable operation name.
-        timeout: Optional maximum time to wait for callback completion.
-        heartbeat_timeout: Optional maximum time to wait between callback heartbeats.
-        serdes: Optional serializer for callback results.
-    """
-    context = get_durable_context()
-
-    with context._replay_aware():
-        operation_id: str = context.step_counter.create_step_id()
-        operation_identifier = OperationIdentifier(
-            operation_id=operation_id,
-            sub_type=OperationSubType.CALLBACK,
-            parent_id=context.parent_id,
-            name=name,
-        )
-
-        return create_eager_task(
-            lambda: _create_callback(
-                context=context,
-                operation_identifier=operation_identifier,
-                operation_id=operation_id,
-                timeout=timeout,
-                heartbeat_timeout=heartbeat_timeout,
-                serdes=serdes,
-            ),
-        )
+    return operation_create_callback(
+        name=name,
+        timeout=timeout,
+        heartbeat_timeout=heartbeat_timeout,
+        serdes=serdes,
+    )
 
 
 async def _create_callback(

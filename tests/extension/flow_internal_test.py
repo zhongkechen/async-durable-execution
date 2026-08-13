@@ -77,7 +77,7 @@ from async_durable_execution._core.exceptions import (
     _encode_sdk_error_data,
     _sdk_error_type_name,
 )
-from async_durable_execution._primitive.callback import CallbackError
+from async_durable_execution._operation.callback import CallbackError
 from async_durable_execution._core.execution import handle_user_function_exception
 from async_durable_execution._core.models import (
     InvocationStatus,

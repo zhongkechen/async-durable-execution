@@ -24,7 +24,7 @@ from async_durable_execution._core.models import (
     OperationType,
     OperationUpdate,
 )
-from async_durable_execution._primitive.invoke import invoke
+from async_durable_execution._operation.invoke import invoke
 from async_durable_execution._runner.exceptions import (
     IllegalStateException,
     InvalidParameterValueException,

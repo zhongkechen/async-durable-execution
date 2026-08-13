@@ -46,7 +46,7 @@ from async_durable_execution._core.execution import (
     _bind_service_client_to_handler,
     durable_execution,
 )
-from async_durable_execution._primitive.step import StepSemantics
+from async_durable_execution._operation.step import StepSemantics
 
 from async_durable_execution._core.models import (
     CallbackDetails,

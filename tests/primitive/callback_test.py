@@ -35,11 +35,13 @@ from async_durable_execution._core.models import (
     OperationUpdate,
 )
 import async_durable_execution._operation.wait_for_callback as callback
-from async_durable_execution._primitive.callback import (
+from async_durable_execution._operation.callback import (
     Callback,
     CallbackError,
-    CallbackOperationExecutor,
     create_callback,
+)
+from async_durable_execution._primitive.callback import (
+    CallbackOperationExecutor,
 )
 from async_durable_execution._operation.wait_for_callback import (
     wait_for_callback,

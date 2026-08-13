@@ -13,13 +13,8 @@ from .._core import (
     Operation,
     OperationIdentifier,
     OperationStatus,
-    OperationSubType,
     OperationUpdate,
-    ValidationError,
     WaitOptions,
-    create_eager_task,
-    duration_to_seconds,
-    get_durable_context,
     suspend_with_optional_resume_delay,
 )
 
@@ -87,34 +82,10 @@ class WaitOperationExecutor(OperationExecutor[None]):
 
 
 def wait(duration: Duration, *, name: str | None = None) -> asyncio.Task[None]:
-    """Suspend the durable execution for at least the given duration.
+    """Compatibility import for the canonical operation-layer helper."""
+    from .._operation.wait import wait as operation_wait
 
-    Args:
-        duration: Seconds or timedelta to pause. Must be at least one second.
-        name: Optional operation name shown in execution history.
-    """
-    context = get_durable_context()
-    seconds = duration_to_seconds(duration)
-    if seconds < 1:
-        msg = "duration must be at least 1 second"
-        raise ValidationError(msg)
-
-    with context._replay_aware():
-        operation_id = context.step_counter.create_step_id()
-        operation_identifier = OperationIdentifier(
-            operation_id=operation_id,
-            sub_type=OperationSubType.WAIT,
-            parent_id=context.parent_id,
-            name=name,
-        )
-
-        return create_eager_task(
-            lambda: _wait(
-                seconds=seconds,
-                context=context,
-                operation_identifier=operation_identifier,
-            ),
-        )
+    return operation_wait(duration, name=name)
 
 
 async def _wait(

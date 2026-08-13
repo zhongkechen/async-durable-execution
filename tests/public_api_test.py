@@ -1,9 +1,10 @@
 """Tests for public package exports and module-level operation helpers."""
 
 import importlib
+import inspect
 from typing import no_type_check
 
-from typing import Any
+from typing import Any, cast
 
 from collections.abc import Callable
 from datetime import timedelta
@@ -43,6 +44,7 @@ from async_durable_execution import (
     get_wait_for_callback_context,
     get_wait_for_condition_check_context,
     get_with_retry_context,
+    invoke,
     now,
     node,
     step,
@@ -70,7 +72,16 @@ from async_durable_execution._core.config import JitterStrategy
 from async_durable_execution._core.config import RetryStrategy
 from async_durable_execution._operation.parallel import CompletionDecision
 from async_durable_execution._operation.parallel import CompletionStatus
-from async_durable_execution._primitive.child import SummaryGenerator
+from async_durable_execution._operation.callback import (
+    create_callback as module_create_callback,
+)
+from async_durable_execution._operation.child import (
+    SummaryGenerator,
+    run_in_child_context as module_run_in_child_context,
+)
+from async_durable_execution._operation.invoke import invoke as module_invoke
+from async_durable_execution._operation.step import step as module_step
+from async_durable_execution._operation.wait import wait as module_wait
 from async_durable_execution._operation.with_retry import (
     WithRetryContext as ModuleWithRetryContext,
 )
@@ -104,6 +115,36 @@ def test_legacy_extension_modules_alias_operation_modules() -> None:
         )
 
         assert legacy is canonical
+
+
+def test_user_facing_primitives_are_owned_by_operation_modules() -> None:
+    """Package-root primitive helpers resolve to the operation layer."""
+    assert create_callback is module_create_callback
+    assert invoke is module_invoke
+    assert run_in_child_context is module_run_in_child_context
+    assert step is module_step
+    assert wait is module_wait
+
+
+def test_legacy_primitive_helper_imports_remain_compatible() -> None:
+    """Former private helper imports retain the public call signatures."""
+    canonical_helpers = {
+        "callback": ("create_callback", module_create_callback),
+        "child": ("run_in_child_context", module_run_in_child_context),
+        "invoke": ("invoke", module_invoke),
+        "step": ("step", module_step),
+        "wait": ("wait", module_wait),
+    }
+
+    for module_name, (helper_name, canonical) in canonical_helpers.items():
+        legacy_module = importlib.import_module(
+            f"async_durable_execution._primitive.{module_name}"
+        )
+        legacy = getattr(legacy_module, helper_name)
+
+        assert inspect.signature(legacy) == inspect.signature(
+            cast("Callable[..., Any]", canonical)
+        )
 
 
 from async_durable_execution._core.serdes import ExtendedTypeSerDes

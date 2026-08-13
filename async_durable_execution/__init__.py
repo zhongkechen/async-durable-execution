@@ -73,12 +73,12 @@ from ._operation.wait_for_condition import (
     get_wait_for_condition_check_context,
     wait_for_condition,
 )
-from ._primitive.invoke import invoke
+from ._operation.invoke import invoke
 from ._operation.recurse import recurse
 from ._operation.parallel import (
     parallel,
 )
-from ._primitive.callback import (
+from ._operation.callback import (
     Callback,
     CallbackError,
     create_callback,
@@ -88,8 +88,8 @@ from ._operation.wait_for_callback import (
     get_wait_for_callback_context,
     wait_for_callback,
 )
-from ._primitive.child import SummaryGenerator, run_in_child_context
-from ._primitive.step import (
+from ._operation.child import SummaryGenerator, run_in_child_context
+from ._operation.step import (
     StepContext,
     StepInterruptedError,
     StepSemantics,
@@ -97,7 +97,7 @@ from ._primitive.step import (
     step,
 )
 from ._operation.replay_safe import now, random, timestamp, uuid
-from ._primitive.wait import wait
+from ._operation.wait import wait
 from .extension import (
     ExtensionContext,
     ExtensionOperation,

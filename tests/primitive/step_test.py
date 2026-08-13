@@ -38,8 +38,10 @@ from async_durable_execution._core.context import (
     get_current_context,
 )
 from async_durable_execution._primitive.step import (
-    StepInterruptedError,
     StepOperationExecutor,
+)
+from async_durable_execution._operation.step import (
+    StepInterruptedError,
     StepSemantics,
     get_step_context,
     step,

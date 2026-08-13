@@ -39,7 +39,7 @@ from .._core import (
 from ..extension import get_extension_context
 
 if TYPE_CHECKING:
-    from .._primitive.child import SummaryGenerator
+    from .child import SummaryGenerator
 
 logger = logging.getLogger(__name__)
 

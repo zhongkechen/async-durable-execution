@@ -16,14 +16,13 @@ from .._core import (
     durable_callable,
     get_current_context,
 )
-from ..extension import ExtensionStepResult, get_extension_context
-from .._primitive.callback import Callback
-from .._primitive.step import get_step_context
-from ._common import adapt_retry_strategy
+from ..extension import get_extension_context
+from .callback import Callback, create_callback as _create_callback
+from .step import get_step_context, step as _step
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
-    from .._primitive.child import SummaryGenerator
+    from .child import SummaryGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -36,15 +35,11 @@ def create_callback(
     serdes: SerDes | None = None,
 ) -> asyncio.Task[Callback]:
     """Create an SDK-owned callback through the stable operation SPI."""
-    return (
-        get_extension_context()
-        .reserve(name)
-        .create_callback(
-            sub_type=OperationSubType.CALLBACK,
-            timeout=timeout,
-            heartbeat_timeout=heartbeat_timeout,
-            serdes=serdes,
-        )
+    return _create_callback(
+        name=name,
+        timeout=timeout,
+        heartbeat_timeout=heartbeat_timeout,
+        serdes=serdes,
     )
 
 
@@ -56,19 +51,11 @@ def step(
     serdes: SerDes | None = None,
 ) -> asyncio.Task[Any]:
     """Run an SDK-owned submitter step through the stable operation SPI."""
-
-    async def run_submitter(_state: None) -> ExtensionStepResult[Any]:
-        return ExtensionStepResult.succeed(await func())
-
-    return (
-        get_extension_context()
-        .reserve(name)
-        .step(
-            run_submitter,
-            sub_type=OperationSubType.STEP,
-            retry_strategy=adapt_retry_strategy(retry_strategy),
-            serdes=serdes,
-        )
+    return _step(
+        func,
+        name=name,
+        retry_strategy=retry_strategy,
+        serdes=serdes,
     )
 
 

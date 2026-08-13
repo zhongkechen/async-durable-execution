@@ -9,9 +9,12 @@ Extension packages do not register with the SDK and do not send raw checkpoint
 updates. An extension is ordinary Python code that composes reserved STEP, WAIT,
 CHAINED_INVOKE, CALLBACK, and CONTEXT primitives.
 
-The SDK's built-in composite operations use this same interface internally.
-Their canonical private implementation package is
-`async_durable_execution._operation`. The former
+All SDK-provided operation helpers, including `step()`, `wait()`, `invoke()`,
+`create_callback()`, and `run_in_child_context()`, use this same reservation
+interface internally. Their canonical private implementation package is
+`async_durable_execution._operation`; backend checkpoint state machines remain
+isolated under `async_durable_execution._primitive`. The SPI delegates to those
+internal executors rather than duplicating primitive lifecycle behavior. The former
 `async_durable_execution._extension` modules remain import aliases for
 compatibility, but both underscore-prefixed packages are private; third-party
 operations should depend only on `async_durable_execution.extension` and the

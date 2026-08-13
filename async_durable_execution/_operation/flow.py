@@ -41,7 +41,7 @@ from ..extension import get_extension_context
 from .parallel import _BatchResultSerDes
 
 if TYPE_CHECKING:
-    from .._primitive.child import SummaryGenerator
+    from .child import SummaryGenerator
 
 
 T = TypeVar("T")
