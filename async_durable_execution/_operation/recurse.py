@@ -125,7 +125,7 @@ def recurse(
 
     return (
         get_extension_context()
-        .reserve(name)
+        ._reserve_sdk_operation(name)  # noqa: SLF001
         .invoke(
             target_function_name,
             recursive_payload,

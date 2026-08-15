@@ -149,7 +149,11 @@ class DurableContext(OperationContext):
         )
 
     def create_child_context(
-        self, operation_id: str, *, is_virtual: bool = False
+        self,
+        operation_id: str,
+        *,
+        is_virtual: bool = False,
+        replaying: bool | None = None,
     ) -> DurableContext:
         """Create a child context for the given operation."""
         child_parent_id = self.parent_id if is_virtual else operation_id
@@ -166,7 +170,7 @@ class DurableContext(OperationContext):
                 parent_id=child_parent_id,
             ),
             step_id_prefix=operation_id,
-            replaying=self.is_replaying(),
+            replaying=self.is_replaying() if replaying is None else replaying,
         )
 
     def is_replaying(self) -> bool:

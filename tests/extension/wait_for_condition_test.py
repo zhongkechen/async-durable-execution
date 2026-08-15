@@ -157,7 +157,7 @@ async def test_wait_for_condition_public_wrapper_reserves_spi_step() -> None:
     extension = Mock()
     operation = Mock()
     operation.step.return_value = asyncio.create_task(completed())
-    extension.reserve.return_value = operation
+    extension._reserve_sdk_operation.return_value = operation  # noqa: SLF001
     polling_strategy = Mock()
     serdes = Mock()
 
@@ -174,7 +174,9 @@ async def test_wait_for_condition_public_wrapper_reserves_spi_step() -> None:
         )
 
     assert result == "done"
-    extension.reserve.assert_called_once_with("poll-job")
+    extension._reserve_sdk_operation.assert_called_once_with(  # noqa: SLF001
+        "poll-job"
+    )
     operation.step.assert_called_once()
     assert callable(operation.step.call_args.args[0])
     assert operation.step.call_args.kwargs == {

@@ -60,7 +60,7 @@ def run_in_child_context(
     """Run an SDK-owned flow scope through the stable operation SPI."""
     return (
         get_extension_context()
-        .reserve(name)
+        ._reserve_sdk_operation(name)  # noqa: SLF001
         .run_in_child_context(
             func,
             sub_type=OperationSubType.RUN_IN_CHILD_CONTEXT,

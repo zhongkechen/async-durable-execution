@@ -404,7 +404,7 @@ def wait_for_condition(
 
     return (
         get_extension_context()
-        .reserve(name)
+        ._reserve_sdk_operation(name)  # noqa: SLF001
         .step(
             check_attempt,
             sub_type=OperationSubType.WAIT_FOR_CONDITION,

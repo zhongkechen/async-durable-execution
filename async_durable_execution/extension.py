@@ -82,6 +82,11 @@ def _normalize_operation_name(name: str | None) -> str | None:
     return name
 
 
+def _normalize_sdk_operation_name(name: str | None) -> str | None:
+    """Normalize names the service omits while preserving legacy SDK inputs."""
+    return None if name == "" else name
+
+
 def _normalize_sub_type(sub_type: str | OperationSubType) -> OperationSubTypeValue:
     if isinstance(sub_type, OperationSubType):
         return sub_type
@@ -107,6 +112,7 @@ class ExtensionOperation:
         "_identifier",
         "_name",
         "_operation_id",
+        "_replaying",
     )
 
     def __init__(
@@ -121,6 +127,7 @@ class ExtensionOperation:
         self._operation_id = operation_id
         self._name = name
         self._check_next_operation = check_next_operation
+        self._replaying = context.is_replaying()
         self._claimed = False
         self._identifier: OperationIdentifier | None = None
 
@@ -402,6 +409,7 @@ class ExtensionOperation:
         child_context = self._context.create_child_context(
             operation_id=self._operation_id,
             is_virtual=is_virtual,
+            replaying=self._replaying,
         )
 
         async def run_child_context() -> T:
@@ -515,8 +523,9 @@ class ExtensionContext:
         A caller-provided local id remains stable when reservation order changes,
         but it must be unique within the current durable context.
         """
-        return self._reserve_sdk_operation(
-            name,
+        self._require_active_context()
+        return self._create_reservation(
+            _normalize_operation_name(name),
             local_operation_id=local_operation_id,
         )
 
@@ -528,13 +537,9 @@ class ExtensionContext:
     ) -> ExtensionOperation:
         """Reserve an SDK-owned primitive without selecting its behavior."""
         self._require_active_context()
-        normalized_name = _normalize_operation_name(name)
-        operation_id = self._reserve_operation_id(local_operation_id)
-        return ExtensionOperation(
-            self._context,
-            operation_id,
-            normalized_name,
-            check_next_operation=local_operation_id is None,
+        return self._create_reservation(
+            _normalize_sdk_operation_name(name),
+            local_operation_id=local_operation_id,
         )
 
     def _reserve_without_replay_transition(
@@ -545,12 +550,22 @@ class ExtensionContext:
     ) -> ExtensionOperation:
         """Reserve an SDK-owned concurrent child without changing parent replay state."""
         self._require_active_context()
-        normalized_name = _normalize_operation_name(name)
+        return self._create_reservation(
+            _normalize_sdk_operation_name(name),
+            local_operation_id=local_operation_id,
+        )
+
+    def _create_reservation(
+        self,
+        name: str | None,
+        *,
+        local_operation_id: str | None,
+    ) -> ExtensionOperation:
         operation_id = self._reserve_operation_id(local_operation_id)
         return ExtensionOperation(
             self._context,
             operation_id,
-            normalized_name,
+            name,
             check_next_operation=local_operation_id is None,
         )
 
