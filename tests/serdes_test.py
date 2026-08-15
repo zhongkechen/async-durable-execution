@@ -572,6 +572,19 @@ async def test_envelope_format_structure() -> None:
     assert parsed["v"]["test"]["v"] == "value"
 
 
+def test_envelope_normalizes_type_tags_to_plain_strings() -> None:
+    serdes: ExtendedTypeSerDes[Any] = ExtendedTypeSerDes()
+
+    wrapped = serdes._to_json_serializable(  # noqa: SLF001
+        EncodedValue(TypeTag.DICT, {"nested": EncodedValue(TypeTag.TUPLE, [])})
+    )
+
+    assert type(wrapped["t"]) is str
+    assert wrapped["t"] == "m"
+    assert type(wrapped["v"]["nested"]["t"]) is str
+    assert wrapped["v"]["nested"]["t"] == "t"
+
+
 @no_type_check
 async def test_envelope_compact_json_output() -> None:
     serdes = ExtendedTypeSerDes()

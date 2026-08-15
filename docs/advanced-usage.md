@@ -438,6 +438,10 @@ hatch run python scripts/build_layer.py \
   --output dist/async-durable-execution-layer.zip
 ```
 
-You can also use a prebuilt layer published by GitHub Actions. The layer ARN is shown in the summary of the [Lambda layer publish workflow](https://github.com/zhongkechen/async-durable-execution/actions/workflows/lambda-layer-publish.yml).
+You can also use a prebuilt layer published by GitHub Actions. The standard
+layer includes the `aioboto` extra and supports Python 3.10 through 3.14. While
+Python 3.15 is in preview, the workflow also publishes a Botocore-only layer
+named `async-durable-execution-python315-preview`. The layer ARNs are shown in
+the summary of the [Lambda layer publish workflow](https://github.com/zhongkechen/async-durable-execution/actions/workflows/lambda-layer-publish.yml).
 
 Publish the zip as an `AWS::Serverless::LayerVersion` or `AWS::Lambda::LayerVersion`, then add the layer ARN to Python durable functions.

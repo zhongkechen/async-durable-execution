@@ -14,7 +14,7 @@ on:
         required: false
         default: ""
       layer-name:
-        description: Lambda layer name
+        description: Stable Lambda layer name (maximum 122 characters); the Python 3.15 preview layer adds a -python315-preview suffix
         required: true
         default: async-durable-execution
       share-principals:
@@ -45,11 +45,21 @@ env:
   SHARE_PRINCIPALS_CN: ${{ inputs['share-principals'] || secrets.AWS_ACCOUNT_ID_CN }}
   ROLE_TO_ASSUME: ${{ secrets.ACTIONS_LAYER_PUBLISH_ROLE_ARN || secrets.ACTIONS_INTEGRATION_ROLE_NAME }}
   ROLE_TO_ASSUME_CN: ${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME_CN }}
-  LAYER_ZIP: dist/async-durable-execution-layer.zip
 
 jobs:
   build-layer:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        layer:
+          - artifact_name: async-durable-execution-layer
+            python_version: "3.11"
+            sdk_source: ".[aioboto]"
+            zip_name: async-durable-execution-layer.zip
+          - artifact_name: async-durable-execution-python315-preview-layer
+            python_version: "3.15"
+            sdk_source: "."
+            zip_name: async-durable-execution-python315-preview-layer.zip
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -59,7 +69,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.layer.python_version }}
+          allow-prereleases: ${{ matrix.layer.python_version == '3.15' }}
 
       - name: Install Hatch
         run: python -m pip install --upgrade hatch==1.16.5
@@ -67,15 +78,15 @@ jobs:
       - name: Build Lambda layer zip
         run: |
           hatch run python scripts/build_layer.py \
-            --sdk-source ".[aioboto]" \
-            --output "$LAYER_ZIP" \
+            --sdk-source "${{ matrix.layer.sdk_source }}" \
+            --output "dist/${{ matrix.layer.zip_name }}" \
             --verbose
 
       - name: Upload layer zip artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: async-durable-execution-layer
-          path: ${{ env.LAYER_ZIP }}
+          name: ${{ matrix.layer.artifact_name }}
+          path: dist/${{ matrix.layer.zip_name }}
 
   resolve-regions:
     runs-on: ubuntu-latest
@@ -200,12 +211,21 @@ jobs:
       fail-fast: false
       matrix:
         aws-region: ${{ fromJson(needs.resolve-regions.outputs.regions) }}
+        layer:
+          - artifact_name: async-durable-execution-layer
+            compatible_runtimes: python3.10 python3.11 python3.12 python3.13 python3.14
+            name_suffix: ""
+            zip_name: async-durable-execution-layer.zip
+          - artifact_name: async-durable-execution-python315-preview-layer
+            compatible_runtimes: python3.15
+            name_suffix: -python315-preview
+            zip_name: async-durable-execution-python315-preview-layer.zip
 
     steps:
       - name: Download layer zip artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: async-durable-execution-layer
+          name: ${{ matrix.layer.artifact_name }}
           path: dist/
 
       - name: Select AWS credentials for Region
@@ -251,13 +271,20 @@ jobs:
           set -euo pipefail
 
           description="${LAYER_DESCRIPTION:-async-durable-execution SDK ${SDK_REF}}"
+          layer_name="${LAYER_NAME}${{ matrix.layer.name_suffix }}"
+          layer_zip="dist/${{ matrix.layer.zip_name }}"
+
+          if [ "${#layer_name}" -gt 140 ]; then
+            echo "Lambda layer name '${layer_name}' exceeds the 140-character limit. Set the base layer name to at most 122 characters." >&2
+            exit 1
+          fi
 
           read -r version layer_version_arn < <(
             aws lambda publish-layer-version \
-              --layer-name "$LAYER_NAME" \
+              --layer-name "$layer_name" \
               --description "$description" \
-              --zip-file "fileb://${LAYER_ZIP}" \
-              --compatible-runtimes python3.10 python3.11 python3.12 python3.13 python3.14 \
+              --zip-file "fileb://${layer_zip}" \
+              --compatible-runtimes ${{ matrix.layer.compatible_runtimes }} \
               --compatible-architectures x86_64 arm64 \
               --license-info Apache-2.0 \
               --query '[Version, LayerVersionArn]' \
@@ -266,6 +293,7 @@ jobs:
 
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "layer-version-arn=${layer_version_arn}" >> "$GITHUB_OUTPUT"
+          echo "layer-name=${layer_name}" >> "$GITHUB_OUTPUT"
           echo "Published ${layer_version_arn}"
 
       - name: Share Lambda layer version
@@ -286,7 +314,7 @@ jobs:
 
             if [[ "$principal" == o-* ]]; then
               aws lambda add-layer-version-permission \
-                --layer-name "$LAYER_NAME" \
+                --layer-name "${{ steps.publish.outputs.layer-name }}" \
                 --version-number "${{ steps.publish.outputs.version }}" \
                 --statement-id "$statement_id" \
                 --action lambda:GetLayerVersion \
@@ -294,7 +322,7 @@ jobs:
                 --organization-id "$principal"
             else
               aws lambda add-layer-version-permission \
-                --layer-name "$LAYER_NAME" \
+                --layer-name "${{ steps.publish.outputs.layer-name }}" \
                 --version-number "${{ steps.publish.outputs.version }}" \
                 --statement-id "$statement_id" \
                 --action lambda:GetLayerVersion \
@@ -309,6 +337,7 @@ jobs:
           {
             echo "### Published Lambda layer"
             echo ""
+            echo "- Layer name: \`${{ steps.publish.outputs.layer-name }}\`"
             echo "- Layer ARN: \`${{ steps.publish.outputs.layer-version-arn }}\`"
             echo "- Version: \`${{ steps.publish.outputs.version }}\`"
             echo "- Source ref: \`${SDK_REF}\`"

@@ -33,6 +33,7 @@ on:
         options:
           - "3.13"
           - "3.14"
+          - "3.15"
 
 permissions:
   contents: read
@@ -57,6 +58,7 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          allow-prereleases: ${{ env.PYTHON_VERSION == '3.15' }}
 
       - name: Generate SAM templates
         run: |
