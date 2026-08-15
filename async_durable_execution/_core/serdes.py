@@ -488,7 +488,9 @@ class ExtendedTypeSerDes(SerDes[T]):
         match obj:
             case EncodedValue():
                 return {
-                    TYPE_TOKEN: obj.tag,
+                    TYPE_TOKEN: (
+                        obj.tag.value if isinstance(obj.tag, TypeTag) else obj.tag
+                    ),
                     VALUE_TOKEN: self._to_json_serializable(obj.value),
                 }
             case list():

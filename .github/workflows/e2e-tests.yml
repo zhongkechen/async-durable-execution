@@ -32,7 +32,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     
@@ -40,6 +40,7 @@ jobs:
       uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       with:
         python-version: ${{ matrix.python-version }}
+        allow-prereleases: ${{ matrix.python-version == '3.15' }}
 
     - name: Configure AWS credentials
       if: github.event_name != 'workflow_dispatch' || github.actor != 'nektos/act'
@@ -55,7 +56,15 @@ jobs:
       uses: aws-actions/setup-sam@89ddb14d60e682855e3fea4be85b3c56485de310 # v3
 
     - name: Build SDK Lambda layer
-      run: hatch run examples:build-layer
+      run: |
+        if [ "${{ matrix.python-version }}" = "3.15" ]; then
+          # Use the Botocore fallback until aiohttp publishes Lambda-compatible 3.15 wheels.
+          python scripts/build_layer.py \
+            --sdk-source . \
+            --output dist/async-durable-execution-layer.zip
+        else
+          hatch run examples:build-layer
+        fi
 
     - name: Build examples
       run: hatch run examples:build
@@ -78,12 +87,18 @@ jobs:
 
         STACK_NAME=$(echo "$STACK_NAME" | tr -cd '[:alnum:]-' | cut -c1-128)
 
-        echo "Building SAM application"
-        sam build --template-file template.generated.json
+        TEMPLATE_FILE="template.generated.json"
+        if [ "${{ matrix.python-version }}" != "3.15" ]; then
+          echo "Building SAM application"
+          sam build --template-file "$TEMPLATE_FILE"
+          TEMPLATE_FILE=".aws-sam/build/template.yaml"
+        else
+          echo "Deploying prebuilt artifacts because SAM CLI does not yet build the preview runtime"
+        fi
 
         echo "Deploying stack $STACK_NAME with function prefix $FUNCTION_NAME_PREFIX"
         sam deploy \
-          --template-file .aws-sam/build/template.yaml \
+          --template-file "$TEMPLATE_FILE" \
           --stack-name "$STACK_NAME" \
           --resolve-s3 \
           --capabilities CAPABILITY_IAM \

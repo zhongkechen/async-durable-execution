@@ -58,10 +58,11 @@ The workflow runs on the `release: [published]` event, so it fires whenever a re
 
 Creating a GitHub Release also triggers the [`lambda-layer-publish.yml`](.github/workflows/lambda-layer-publish.yml) workflow automatically. The workflow:
 
-1. **Builds** a Lambda layer zip from the release tag using the local root package.
+1. **Builds** two Lambda layer zips from the release tag: the standard layer with the `aioboto` extra and a Botocore-only Python 3.15 preview layer.
 2. **Discovers** all enabled commercial and China AWS Regions in the publishing accounts, unless Regions are provided explicitly.
-3. **Publishes** a new Lambda layer version in each Region with compatible runtimes `python3.10` through `python3.14`.
-4. **Shares** each layer version with the account ID configured in the `AWS_ACCOUNT_ID` secret, with the China account ID configured in `AWS_ACCOUNT_ID_CN` for China Regions, with principals entered in the manual workflow dispatch form, or with principals configured in `LAMBDA_LAYER_SHARE_PRINCIPALS`.
+3. **Publishes** the standard layer for compatible runtimes `python3.10` through `python3.14`.
+4. **Publishes** the Botocore-only layer for `python3.15` as `<layer-name>-python315-preview`, avoiding native dependencies that do not yet provide Lambda-compatible Python 3.15 wheels.
+5. **Shares** each layer version with the account ID configured in the `AWS_ACCOUNT_ID` secret, with the China account ID configured in `AWS_ACCOUNT_ID_CN` for China Regions, with principals entered in the manual workflow dispatch form, or with principals configured in `LAMBDA_LAYER_SHARE_PRINCIPALS`.
 
 Set the repository secret `ACTIONS_LAYER_PUBLISH_ROLE_ARN` to the AWS role used for publishing the layer. The role needs `ec2:DescribeRegions`, `lambda:PublishLayerVersion`, and `lambda:AddLayerVersionPermission` for the target layer. If `ACTIONS_LAYER_PUBLISH_ROLE_ARN` is not set, the workflow falls back to `ACTIONS_INTEGRATION_ROLE_NAME`.
 Set the repository secret `AWS_ACCOUNT_ID` to the AWS account ID that should receive `lambda:GetLayerVersion` permission by default.
@@ -70,7 +71,7 @@ Set the repository secret `ACTIONS_INTEGRATION_ROLE_NAME_CN` to the AWS China pa
 Optional repository variables:
 
 - `LAMBDA_LAYER_AWS_REGIONS`: Comma, space, or newline-separated AWS Regions for publishing. Leave unset to publish to all enabled commercial and China Regions in the publishing accounts. When unset, both the commercial publishing role and `ACTIONS_INTEGRATION_ROLE_NAME_CN` must be configured.
-- `LAMBDA_LAYER_NAME`: Lambda layer name. Defaults to `async-durable-execution`.
+- `LAMBDA_LAYER_NAME`: Stable Lambda layer name, limited to 122 characters so the derived preview name remains within Lambda's 140-character limit. Defaults to `async-durable-execution`; the Python 3.15 preview layer adds the `-python315-preview` suffix.
 - `LAMBDA_LAYER_SHARE_PRINCIPALS`: Comma, space, or newline-separated AWS account IDs, AWS organization IDs such as `o-abc123`, or `*` for public sharing in commercial Regions. Used only when neither the manual `share-principals` input nor `AWS_ACCOUNT_ID` is set.
 
 ### Trusted Publisher Configuration
