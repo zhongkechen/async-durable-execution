@@ -10,6 +10,7 @@ from typing import Any, Generic, TypeAlias, TypeVar, cast
 from ._core import (
     Duration,
     DurableContext,
+    LambdaContext,
     OperationIdentifier,
     OperationSubType,
     OperationSubTypeValue,
@@ -552,7 +553,9 @@ def _create_extension_operation(
     operation._operation_id = operation_id  # noqa: SLF001
     operation._name = name  # noqa: SLF001
     operation._parent_replaying = (  # noqa: SLF001
-        context.is_replaying() if parent_replaying is None else parent_replaying
+        context._virtual_child_replay_snapshot()  # noqa: SLF001
+        if parent_replaying is None
+        else parent_replaying
     )
     operation._replaying = has_checkpoint  # noqa: SLF001
     operation._claimed = False  # noqa: SLF001
@@ -575,7 +578,7 @@ class ExtensionContext:
         return cls(get_durable_context())
 
     @property
-    def lambda_context(self):
+    def lambda_context(self) -> LambdaContext | None:
         """Return the active AWS Lambda context, when available."""
         return self._context.lambda_context
 

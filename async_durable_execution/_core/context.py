@@ -44,6 +44,7 @@ class OperationIdGenerator:
         self._unconsumed_reservations: dict[str, bool] = {}
         self._unconsumed_checkpoint_count = 0
         self._reservation_selection_started = False
+        self._replay_frontier_pending = False
 
     def increment(self) -> int:
         self._counter += 1
@@ -122,6 +123,18 @@ class OperationIdGenerator:
     def _has_unconsumed_checkpoint(self) -> bool:
         """Return whether any allocated reservation still has replay history."""
         return self._unconsumed_checkpoint_count > 0
+
+    def _mark_replay_frontier(self) -> None:
+        """Remember that replay ended immediately before a virtual scope."""
+        self._replay_frontier_pending = True
+
+    def _clear_replay_frontier(self) -> None:
+        """Clear a replay frontier after the next operation boundary is known."""
+        self._replay_frontier_pending = False
+
+    def _is_replay_frontier_pending(self) -> bool:
+        """Return whether a virtual scope may still contain flattened history."""
+        return self._replay_frontier_pending
 
 
 @dataclass(frozen=True)
@@ -217,6 +230,18 @@ class DurableContext(OperationContext):
 
     def _set_replay_status_new(self) -> None:
         object.__setattr__(self, "replaying", False)
+        self.step_counter._clear_replay_frontier()  # noqa: SLF001
+
+    def _set_replay_status_frontier(self) -> None:
+        """End parent replay while retaining a snapshot for a virtual child."""
+        object.__setattr__(self, "replaying", False)
+        self.step_counter._mark_replay_frontier()  # noqa: SLF001
+
+    def _virtual_child_replay_snapshot(self) -> bool:
+        """Return replay state including flattened history past the frontier."""
+        return (
+            self.is_replaying() or self.step_counter._is_replay_frontier_pending()  # noqa: SLF001
+        )
 
     def _peek_next_operation_id(self) -> str:
         return self.step_counter._create_step_id_for_logical_step(  # noqa: SLF001
@@ -267,6 +292,7 @@ class DurableContext(OperationContext):
         sequential counter so launch order does not end replay prematurely.
         """
         was_replaying = self.is_replaying()
+        self.step_counter._clear_replay_frontier()  # noqa: SLF001
         current_operation_id = operation_id or self._peek_next_operation_id()
         if operation_id is not None and consume_reservation:
             self.step_counter._consume_reservation(operation_id)  # noqa: SLF001
@@ -292,7 +318,7 @@ class DurableContext(OperationContext):
             yield
         finally:
             if flip_after:
-                self._set_replay_status_new()
+                self._set_replay_status_frontier()
             elif self.is_replaying():
                 next_operation_exists = (
                     self._next_reserved_or_sequential_operation_exists()
@@ -300,7 +326,7 @@ class DurableContext(OperationContext):
                     else self._next_operation_exists()
                 )
                 if not next_operation_exists:
-                    self._set_replay_status_new()
+                    self._set_replay_status_frontier()
 
 
 _current_context: ContextVar = ContextVar(

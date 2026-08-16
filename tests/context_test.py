@@ -45,6 +45,7 @@ from async_durable_execution import (
     map as map_operation,
     ExtensionContext,
     ExtensionOperation,
+    LambdaContext,
     StepContext,
     StepSemantics,
     DurableContext,
@@ -179,6 +180,15 @@ def test_context_function_type_hints_are_runtime_resolvable() -> None:
         "context": OperationContext | SerDesContext,
         "return": Iterator[None],
     }
+    lambda_context_property = inspect.getattr_static(
+        ExtensionContext,
+        "lambda_context",
+    )
+    assert isinstance(lambda_context_property, property)
+    assert lambda_context_property.fget is not None
+    assert (
+        get_type_hints(lambda_context_property.fget)["return"] == LambdaContext | None
+    )
 
 
 def test_get_durable_context_returns_bound_durable_context() -> None:

@@ -493,6 +493,42 @@ async def test_virtual_child_preserves_replay_state_and_advances_parent(monkeypa
     assert observed_parent_replay == [False]
 
 
+async def test_virtual_child_replays_after_preceding_completed_operation(monkeypatch):
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.01")
+    observed_parent_replay = []
+    observed_replay = []
+
+    async def completed_step(_state):
+        return ExtensionStepResult.succeed("ready")
+
+    async def child():
+        observed_replay.append(get_extension_context().is_replaying())
+        await wait(1, name="pause")
+        return "done"
+
+    @durable_execution
+    async def handler(_event):
+        extension = get_extension_context()
+        await extension.reserve("before").step(
+            completed_step,
+            sub_type="AcmeBefore",
+        )
+        result = await extension.reserve("virtual").run_in_child_context(
+            child,
+            sub_type="AcmeVirtual",
+            is_virtual=True,
+        )
+        observed_parent_replay.append(get_extension_context().is_replaying())
+        return result
+
+    result = await _run(handler)
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert result.get_deserialized_result() == "done"
+    assert observed_replay == [False, True]
+    assert observed_parent_replay == [False]
+
+
 async def test_flat_parallel_branch_preserves_replay_state(monkeypatch):
     monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.01")
     observed_replay = []
