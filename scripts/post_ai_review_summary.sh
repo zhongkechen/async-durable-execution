@@ -53,7 +53,8 @@ if [[ -z "${summary//[[:space:]]/}" ]]; then
   echo "::error::$title returned an empty review body."
   exit 1
 fi
-if grep -Fq '<!-- ai-pr-review:' "$summary_file"; then
+reserved_metadata_pattern='^<!-- ai-pr-review:(claude|codex|inline:(claude|codex):[0-9]+:[0-9]+:(primary|retry)) -->$'
+if grep -Eq "$reserved_metadata_pattern" "$summary_file"; then
   echo "::error::$title returned a review body containing reserved metadata."
   exit 1
 fi

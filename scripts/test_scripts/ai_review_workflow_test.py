@@ -156,3 +156,12 @@ def test_claude_review_uses_sonnet_5_for_both_attempts() -> None:
 
     assert claude_review.count("--model us.anthropic.claude-sonnet-5") == 2
     assert "--model us.anthropic.claude-opus-" not in claude_review
+
+
+def test_claude_review_relies_on_os_isolation_without_tool_limits() -> None:
+    claude_review = _jobs()["claude-review"]
+
+    assert claude_review.count("scripts/run_claude_isolated.sh") == 2
+    assert "bash scripts/prepare_ai_review_user.sh claude-review" in claude_review
+    assert "--allowedTools" not in claude_review
+    assert "--disallowedTools" not in claude_review

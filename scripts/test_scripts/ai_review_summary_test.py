@@ -533,6 +533,53 @@ def test_post_summary_rejects_reserved_metadata(tmp_path: Path) -> None:
     assert "review body containing reserved metadata" in result.stdout
 
 
+def test_post_summary_allows_quoted_reserved_marker(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    mock_gh = bin_dir / "gh"
+    mock_gh.write_text(MOCK_GH, encoding="utf-8")
+    mock_gh.chmod(0o755)
+
+    summary = "The change quotes `<!-- ai-pr-review:claude -->` in prose."
+    summary_file = tmp_path / "summary.md"
+    summary_file.write_text(summary, encoding="utf-8")
+    posted_body = tmp_path / "posted-body.md"
+
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "PATH": f"{bin_dir}{os.pathsep}{environment['PATH']}",
+            "GH_TOKEN": "test-token",
+            "GITHUB_REPOSITORY": "example/repository",
+            "GITHUB_RUN_ID": "123",
+            "GITHUB_SERVER_URL": "https://github.example",
+            "PR_NUMBER": "42",
+            "RUNNER_TEMP": str(tmp_path),
+            "MOCK_POSTED_BODY": str(posted_body),
+            "MOCK_FAIL_FETCH": "true",
+        }
+    )
+
+    result = subprocess.run(
+        [
+            "bash",
+            POST_SUMMARY_SCRIPT,
+            "claude",
+            "expected-base-sha",
+            "expected-head-sha",
+            str(summary_file),
+        ],
+        check=False,
+        cwd=REPOSITORY_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert summary in posted_body.read_text(encoding="utf-8")
+
+
 @pytest.mark.parametrize(
     ("changed_revision", "changed_sha"),
     [

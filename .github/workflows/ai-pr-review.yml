@@ -83,8 +83,10 @@ jobs:
         run: |
           bash scripts/prepare_ai_review_user.sh claude-review
 
-          # The Claude CLI runs through sudo. Preserve only its Bedrock
-          # credentials and the action's subprocess-isolation controls.
+          # Like Codex, Claude relies on an unprivileged account and a
+          # read-only workspace instead of model-level tool restrictions.
+          # Preserve only its Bedrock credentials and the action's
+          # subprocess-isolation controls.
           sudo sh -c \
             'printf "%s\n" \
               "Defaults:runner env_keep += \"AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_REGION AWS_DEFAULT_REGION AWS_BEARER_TOKEN_BEDROCK\"" \
@@ -133,8 +135,6 @@ jobs:
           claude_args: |
             --model us.anthropic.claude-sonnet-5
             --max-turns 20
-            --allowedTools "Read,Grep,Glob"
-            --disallowedTools "Bash,Write,Edit,NotebookEdit,WebFetch,WebSearch,mcp__github_inline_comment__create_inline_comment"
             --json-schema '${{ steps.review-inputs.outputs.schema }}'
 
       - name: Retry pull request review with Claude on Amazon Bedrock
@@ -154,8 +154,6 @@ jobs:
           claude_args: |
             --model us.anthropic.claude-sonnet-5
             --max-turns 20
-            --allowedTools "Read,Grep,Glob"
-            --disallowedTools "Bash,Write,Edit,NotebookEdit,WebFetch,WebSearch,mcp__github_inline_comment__create_inline_comment"
             --json-schema '${{ steps.review-inputs.outputs.schema }}'
 
       - name: Prepare Claude review output
