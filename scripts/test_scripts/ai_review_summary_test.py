@@ -25,7 +25,20 @@ repository = os.environ["GITHUB_REPOSITORY"]
 pr_number = os.environ["PR_NUMBER"]
 
 if f"repos/{repository}/pulls/{pr_number}" in args:
-    print("expected-head-sha")
+    current_base_repository = os.environ.get(
+        "MOCK_CURRENT_BASE_REPOSITORY",
+        "expected-base-repository",
+    )
+    current_base_ref = os.environ.get("MOCK_CURRENT_BASE_REF", "expected-base-ref")
+    current_base_sha = os.environ.get("MOCK_CURRENT_BASE_SHA", "expected-base-sha")
+    current_head_sha = os.environ.get(
+        "MOCK_CURRENT_HEAD_SHA",
+        "expected-head-sha",
+    )
+    print(
+        f"{current_base_repository}\\t{current_base_ref}\\t"
+        f"{current_base_sha}\\t{current_head_sha}"
+    )
     raise SystemExit
 
 if f"repos/{repository}/issues/{pr_number}/comments" in args:
@@ -296,6 +309,8 @@ def test_post_summary_minimizes_only_exact_same_reviewer_comments(
             "bash",
             POST_SUMMARY_SCRIPT,
             reviewer,
+            "expected-base-repository",
+            "expected-base-ref",
             "expected-head-sha",
             str(summary_file),
         ],
@@ -388,6 +403,8 @@ def test_post_summary_treats_summary_fetch_failure_as_cleanup_warning(
             "bash",
             POST_SUMMARY_SCRIPT,
             "claude",
+            "expected-base-repository",
+            "expected-base-ref",
             "expected-head-sha",
             str(summary_file),
         ],
@@ -464,6 +481,8 @@ def test_post_summary_treats_inline_fetch_failure_as_cleanup_warning(
             "bash",
             POST_SUMMARY_SCRIPT,
             "claude",
+            "expected-base-repository",
+            "expected-base-ref",
             "expected-head-sha",
             str(summary_file),
         ],
@@ -482,3 +501,204 @@ def test_post_summary_treats_inline_fetch_failure_as_cleanup_warning(
         "::warning::Failed to list previous Claude AI review inline comments "
         "for cleanup." in result.stdout
     )
+
+
+def test_post_summary_rejects_reserved_metadata(tmp_path: Path) -> None:
+    summary_file = tmp_path / "summary.md"
+    summary_file.write_text(
+        "Finding\n<!-- ai-pr-review:claude -->",
+        encoding="utf-8",
+    )
+
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "GH_TOKEN": "test-token",
+            "GITHUB_REPOSITORY": "example/repository",
+            "GITHUB_RUN_ID": "123",
+            "GITHUB_SERVER_URL": "https://github.example",
+            "PR_NUMBER": "42",
+        }
+    )
+
+    result = subprocess.run(
+        [
+            "bash",
+            POST_SUMMARY_SCRIPT,
+            "claude",
+            "expected-base-repository",
+            "expected-base-ref",
+            "expected-head-sha",
+            str(summary_file),
+        ],
+        check=False,
+        cwd=REPOSITORY_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "review body containing reserved metadata" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        "The change quotes `<!-- ai-pr-review:claude -->` in prose.",
+        "```html\n<!-- ai-pr-review:claude -->\n```",
+        "~~~markdown\n<!-- ai-pr-review:inline:codex:123:1:primary -->\n~~~~",
+    ],
+)
+def test_post_summary_allows_reserved_marker_in_markdown_examples(
+    tmp_path: Path,
+    summary: str,
+) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    mock_gh = bin_dir / "gh"
+    mock_gh.write_text(MOCK_GH, encoding="utf-8")
+    mock_gh.chmod(0o755)
+
+    summary_file = tmp_path / "summary.md"
+    summary_file.write_text(summary, encoding="utf-8")
+    posted_body = tmp_path / "posted-body.md"
+
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "PATH": f"{bin_dir}{os.pathsep}{environment['PATH']}",
+            "GH_TOKEN": "test-token",
+            "GITHUB_REPOSITORY": "example/repository",
+            "GITHUB_RUN_ID": "123",
+            "GITHUB_SERVER_URL": "https://github.example",
+            "PR_NUMBER": "42",
+            "RUNNER_TEMP": str(tmp_path),
+            "MOCK_POSTED_BODY": str(posted_body),
+            "MOCK_FAIL_FETCH": "true",
+        }
+    )
+
+    result = subprocess.run(
+        [
+            "bash",
+            POST_SUMMARY_SCRIPT,
+            "claude",
+            "expected-base-repository",
+            "expected-base-ref",
+            "expected-head-sha",
+            str(summary_file),
+        ],
+        check=False,
+        cwd=REPOSITORY_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert summary in posted_body.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("changed_revision", "changed_value"),
+    [
+        ("MOCK_CURRENT_BASE_REPOSITORY", "changed-base-repository"),
+        ("MOCK_CURRENT_BASE_REF", "changed-base-ref"),
+        ("MOCK_CURRENT_HEAD_SHA", "changed-head-sha"),
+    ],
+)
+def test_post_summary_rejects_changed_base_target_or_head_revision(
+    tmp_path: Path,
+    changed_revision: str,
+    changed_value: str,
+) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    mock_gh = bin_dir / "gh"
+    mock_gh.write_text(MOCK_GH, encoding="utf-8")
+    mock_gh.chmod(0o755)
+
+    summary_file = tmp_path / "summary.md"
+    summary_file.write_text("No actionable findings.", encoding="utf-8")
+
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "PATH": f"{bin_dir}{os.pathsep}{environment['PATH']}",
+            "GH_TOKEN": "test-token",
+            "GITHUB_REPOSITORY": "example/repository",
+            "GITHUB_RUN_ID": "123",
+            "GITHUB_SERVER_URL": "https://github.example",
+            "PR_NUMBER": "42",
+            changed_revision: changed_value,
+        }
+    )
+
+    result = subprocess.run(
+        [
+            "bash",
+            POST_SUMMARY_SCRIPT,
+            "codex",
+            "expected-base-repository",
+            "expected-base-ref",
+            "expected-head-sha",
+            str(summary_file),
+        ],
+        check=False,
+        cwd=REPOSITORY_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "The PR changed while it was being reviewed." in result.stdout
+
+
+def test_post_summary_allows_base_sha_to_advance(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    mock_gh = bin_dir / "gh"
+    mock_gh.write_text(MOCK_GH, encoding="utf-8")
+    mock_gh.chmod(0o755)
+
+    summary_file = tmp_path / "summary.md"
+    summary_file.write_text("No actionable findings.", encoding="utf-8")
+    posted_body = tmp_path / "posted-body.md"
+
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "PATH": f"{bin_dir}{os.pathsep}{environment['PATH']}",
+            "GH_TOKEN": "test-token",
+            "GITHUB_REPOSITORY": "example/repository",
+            "GITHUB_RUN_ID": "123",
+            "GITHUB_SERVER_URL": "https://github.example",
+            "PR_NUMBER": "42",
+            "RUNNER_TEMP": str(tmp_path),
+            "MOCK_CURRENT_BASE_SHA": "advanced-base-sha",
+            "MOCK_POSTED_BODY": str(posted_body),
+            "MOCK_FAIL_FETCH": "true",
+        }
+    )
+
+    result = subprocess.run(
+        [
+            "bash",
+            POST_SUMMARY_SCRIPT,
+            "codex",
+            "expected-base-repository",
+            "expected-base-ref",
+            "expected-head-sha",
+            str(summary_file),
+        ],
+        check=False,
+        cwd=REPOSITORY_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert posted_body.is_file()

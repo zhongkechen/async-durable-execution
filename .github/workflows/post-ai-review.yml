@@ -1,0 +1,85 @@
+name: Post AI review
+
+on:
+  workflow_call:
+    inputs:
+      reviewer:
+        description: AI reviewer whose summary is being posted
+        required: true
+        type: string
+      expected_base_repository:
+        description: Expected pull request base repository
+        required: true
+        type: string
+      expected_base_ref:
+        description: Expected pull request base ref
+        required: true
+        type: string
+      expected_base_sha:
+        description: Trusted base revision containing the posting scripts
+        required: true
+        type: string
+      expected_head_sha:
+        description: Expected pull request head revision
+        required: true
+        type: string
+      pr_number:
+        description: Pull request number
+        required: true
+        type: number
+      review_summary_base64:
+        description: Base64-encoded AI review summary
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  post-review:
+    name: Post ${{ inputs.reviewer }} review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      # Only trusted base-branch code handles the write-capable token.
+      - name: Check out base branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ inputs.expected_base_sha }}
+
+      - name: Post AI review
+        env:
+          EXPECTED_BASE_REF: ${{ inputs.expected_base_ref }}
+          EXPECTED_BASE_REPOSITORY: ${{ inputs.expected_base_repository }}
+          EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          REVIEWER: ${{ inputs.reviewer }}
+          REVIEW_SUMMARY_BASE64: ${{ inputs.review_summary_base64 }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$REVIEW_SUMMARY_BASE64" ]]; then
+            echo "::error::${REVIEWER^} review output is missing."
+            exit 1
+          fi
+
+          summary_file="${RUNNER_TEMP}/${REVIEWER}-review-summary.md"
+          if ! printf '%s' "$REVIEW_SUMMARY_BASE64" |
+            base64 --decode > "$summary_file"
+          then
+            echo "::error::${REVIEWER^} review output is invalid."
+            exit 1
+          fi
+
+          bash scripts/post_ai_review_summary.sh \
+            "$REVIEWER" \
+            "$EXPECTED_BASE_REPOSITORY" \
+            "$EXPECTED_BASE_REF" \
+            "$EXPECTED_HEAD_SHA" \
+            "$summary_file"
