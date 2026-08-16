@@ -173,6 +173,7 @@ def test_claude_review_uses_hardened_os_isolation_without_tool_limits() -> None:
     assert claude_review.count("scripts/run_claude_isolated.sh") == 2
     assert "bash scripts/prepare_ai_review_user.sh claude-review" in claude_review
     assert claude_review.count("--bare") == 2
+    assert claude_review.count("--permission-mode bypassPermissions") == 2
     assert "--allowedTools" not in claude_review
     assert "--disallowedTools" not in claude_review
 

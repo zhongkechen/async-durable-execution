@@ -154,6 +154,7 @@ jobs:
             --model us.anthropic.claude-sonnet-5
             --max-turns 20
             --bare
+            --permission-mode bypassPermissions
             --json-schema '${{ steps.review-inputs.outputs.schema }}'
 
       - name: Retry pull request review with Claude on Amazon Bedrock
@@ -174,6 +175,7 @@ jobs:
             --model us.anthropic.claude-sonnet-5
             --max-turns 20
             --bare
+            --permission-mode bypassPermissions
             --json-schema '${{ steps.review-inputs.outputs.schema }}'
 
       - name: Prepare Claude review output
