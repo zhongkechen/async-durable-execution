@@ -44,6 +44,7 @@ from async_durable_execution import (
     wait_for_callback,
     map as map_operation,
     ExtensionContext,
+    ExtensionOperation,
     StepContext,
     StepSemantics,
     DurableContext,
@@ -3053,6 +3054,56 @@ async def test_local_ids_must_be_reserved_before_operation_selection(
             match="before any reserved operation is selected",
         ):
             extension.reserve("late", local_operation_id="late")
+
+
+async def test_child_claim_marks_selection_before_lazy_task_starts(
+    monkeypatch,
+) -> None:
+    ctx = create_replay_context()
+    child_started = asyncio.Event()
+
+    def create_lazy_task(coro_factory):
+        return asyncio.get_running_loop().create_task(coro_factory())
+
+    async def run_child_context(_func, **_kwargs):
+        child_started.set()
+        return "done"
+
+    monkeypatch.setattr(
+        "async_durable_execution.extension.create_eager_task",
+        create_lazy_task,
+    )
+    monkeypatch.setattr(
+        "async_durable_execution.extension._run_child_context",
+        run_child_context,
+    )
+
+    async def child() -> str:
+        return "unused"
+
+    with bind_current_context(ctx):
+        extension = ExtensionContext(ctx)
+        task = extension.reserve("child").run_in_child_context(
+            child,
+            sub_type="AcmeContext",
+        )
+
+        assert child_started.is_set() is False
+        with pytest.raises(
+            RuntimeError,
+            match="before any reserved operation is selected",
+        ):
+            extension.reserve("late", local_operation_id="late")
+
+        assert await task == "done"
+
+
+def test_extension_operation_cannot_be_constructed_directly() -> None:
+    with pytest.raises(
+        TypeError,
+        match=r"created by ExtensionContext\.reserve",
+    ):
+        ExtensionOperation()
 
 
 def test_extension_subtype_strings_cannot_alias_sdk_subtypes() -> None:

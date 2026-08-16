@@ -110,10 +110,14 @@ class OperationIdGenerator:
 
     def _consume_reservation(self, operation_id: str) -> None:
         """Discard a reservation after workflow code selects it."""
-        self._reservation_selection_started = True
+        self._mark_reservation_selected()
         has_checkpoint = self._unconsumed_reservations.pop(operation_id, False)
         if has_checkpoint:
             self._unconsumed_checkpoint_count -= 1
+
+    def _mark_reservation_selected(self) -> None:
+        """Prevent explicit local ids from being registered after selection."""
+        self._reservation_selection_started = True
 
     def _has_unconsumed_checkpoint(self) -> bool:
         """Return whether any allocated reservation still has replay history."""

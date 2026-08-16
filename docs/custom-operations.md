@@ -84,6 +84,8 @@ first_task = first.step(run_first, sub_type="AcmeStep")
 
 Sequential reservations must occur in the same order on every replay. Reordering,
 inserting, or removing them is a workflow compatibility change.
+`ExtensionOperation` instances cannot be constructed directly; obtain them only
+through `ExtensionContext.reserve()`.
 
 Schedulers whose registration order may change can use stable local IDs:
 

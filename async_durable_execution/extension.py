@@ -108,7 +108,10 @@ def _normalize_sub_type(sub_type: str | OperationSubType) -> OperationSubTypeVal
 
 
 class ExtensionOperation:
-    """Opaque one-shot reservation for one SDK-owned durable primitive."""
+    """Opaque one-shot reservation for one SDK-owned durable primitive.
+
+    Instances are created only by :meth:`ExtensionContext.reserve`.
+    """
 
     __slots__ = (
         "_claimed_operation_type",
@@ -121,22 +124,18 @@ class ExtensionOperation:
         "_replaying",
     )
 
-    def __init__(
-        self,
-        context: DurableContext,
-        operation_id: str,
-        name: str | None,
-        *,
-        has_checkpoint: bool,
-    ) -> None:
-        self._context = context
-        self._operation_id = operation_id
-        self._name = name
-        self._parent_replaying = context.is_replaying()
-        self._replaying = self._parent_replaying and has_checkpoint
-        self._claimed = False
-        self._claimed_operation_type: OperationType | None = None
-        self._identifier: OperationIdentifier | None = None
+    _claimed_operation_type: OperationType | None
+    _claimed: bool
+    _context: DurableContext
+    _identifier: OperationIdentifier | None
+    _name: str | None
+    _operation_id: str
+    _parent_replaying: bool
+    _replaying: bool
+
+    def __init__(self) -> None:
+        msg = "ExtensionOperation instances are created by ExtensionContext.reserve()"
+        raise TypeError(msg)
 
     def step(
         self,
@@ -505,6 +504,7 @@ class ExtensionOperation:
         if self._claimed:
             msg = "An extension operation reservation can only be used once"
             raise RuntimeError(msg)
+        self._context.step_counter._mark_reservation_selected()  # noqa: SLF001
         self._claimed = True
         self._claimed_operation_type = operation_type
         self._identifier = OperationIdentifier(
@@ -524,6 +524,25 @@ class ExtensionOperation:
                 "durable context where it was created"
             )
             raise RuntimeError(msg)
+
+
+def _create_extension_operation(
+    context: DurableContext,
+    operation_id: str,
+    name: str | None,
+    *,
+    has_checkpoint: bool,
+) -> ExtensionOperation:
+    operation = object.__new__(ExtensionOperation)
+    operation._context = context  # noqa: SLF001
+    operation._operation_id = operation_id  # noqa: SLF001
+    operation._name = name  # noqa: SLF001
+    operation._parent_replaying = context.is_replaying()  # noqa: SLF001
+    operation._replaying = operation._parent_replaying and has_checkpoint  # noqa: SLF001
+    operation._claimed = False  # noqa: SLF001
+    operation._claimed_operation_type = None  # noqa: SLF001
+    operation._identifier = None  # noqa: SLF001
+    return operation
 
 
 class ExtensionContext:
@@ -620,7 +639,7 @@ class ExtensionContext:
             operation_id,
             has_checkpoint=has_checkpoint,
         )
-        return ExtensionOperation(
+        return _create_extension_operation(
             self._context,
             operation_id,
             name,
