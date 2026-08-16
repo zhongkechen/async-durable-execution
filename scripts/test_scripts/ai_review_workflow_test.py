@@ -125,12 +125,14 @@ if: >-
     "posting_job",
     ["post-claude-review", "post-codex-review"],
 )
-def test_posting_validates_base_and_head_revisions(posting_job: str) -> None:
+def test_posting_validates_base_target_and_head_revision(posting_job: str) -> None:
     posting = _jobs()[posting_job]
 
-    assert "EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha }}" in posting
+    assert "EXPECTED_BASE_REF: ${{ github.event.pull_request.base.ref }}" in posting
+    assert "${{ github.event.pull_request.base.repo.full_name }}" in posting
     assert "EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}" in posting
-    assert '"$EXPECTED_BASE_SHA"' in posting
+    assert '"$EXPECTED_BASE_REPOSITORY"' in posting
+    assert '"$EXPECTED_BASE_REF"' in posting
     assert '"$EXPECTED_HEAD_SHA"' in posting
 
 
