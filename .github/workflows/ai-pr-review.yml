@@ -14,28 +14,30 @@ jobs:
   approve_external:
     name: Approve AI review
     if: >-
-      github.actor != 'dependabot[bot]' &&
       (
+        github.event.pull_request.user.login == 'dependabot[bot]' ||
         github.event.pull_request.draft ||
-        github.event.pull_request.author_association != 'OWNER'
+        github.event.pull_request.head.repo.full_name != github.repository
       )
     runs-on: ubuntu-latest
     environment: ai-pr-review
     permissions: {}
     steps:
       - name: Record approval
-        run: echo "Approved review of ${{ github.event.pull_request.head.sha }}"
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: echo "Approved review of $HEAD_SHA"
 
   claude-review:
     name: Generate Claude review
     needs: approve_external
     if: >-
       !cancelled() &&
-      github.actor != 'dependabot[bot]' &&
       (
         (
+          github.event.pull_request.user.login != 'dependabot[bot]' &&
           !github.event.pull_request.draft &&
-          github.event.pull_request.author_association == 'OWNER'
+          github.event.pull_request.head.repo.full_name == github.repository
         ) ||
         needs.approve_external.result == 'success'
       )
@@ -217,6 +219,7 @@ jobs:
 
       - name: Post Claude review
         env:
+          EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -240,6 +243,7 @@ jobs:
 
           bash scripts/post_ai_review_summary.sh \
             claude \
+            "$EXPECTED_BASE_SHA" \
             "$EXPECTED_HEAD_SHA" \
             "$summary_file"
 
@@ -248,11 +252,11 @@ jobs:
     needs: approve_external
     if: >-
       !cancelled() &&
-      github.actor != 'dependabot[bot]' &&
       (
         (
+          github.event.pull_request.user.login != 'dependabot[bot]' &&
           !github.event.pull_request.draft &&
-          github.event.pull_request.author_association == 'OWNER'
+          github.event.pull_request.head.repo.full_name == github.repository
         ) ||
         needs.approve_external.result == 'success'
       )
@@ -486,6 +490,7 @@ jobs:
 
       - name: Post Codex review
         env:
+          EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -509,5 +514,6 @@ jobs:
 
           bash scripts/post_ai_review_summary.sh \
             codex \
+            "$EXPECTED_BASE_SHA" \
             "$EXPECTED_HEAD_SHA" \
             "$summary_file"

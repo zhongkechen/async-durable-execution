@@ -86,33 +86,51 @@ def test_only_posting_jobs_can_write_pull_requests() -> None:
     assert write_jobs == {"post-claude-review", "post-codex-review"}
 
 
-def test_draft_reviews_require_environment_approval() -> None:
+def test_untrusted_reviews_require_environment_approval() -> None:
     jobs = _jobs()
     approval = jobs["approve_external"]
     approval_condition = """\
 if: >-
-      github.actor != 'dependabot[bot]' &&
       (
+        github.event.pull_request.user.login == 'dependabot[bot]' ||
         github.event.pull_request.draft ||
-        github.event.pull_request.author_association != 'OWNER'
+        github.event.pull_request.head.repo.full_name != github.repository
       )
 """
     generation_condition = """\
 if: >-
       !cancelled() &&
-      github.actor != 'dependabot[bot]' &&
       (
         (
+          github.event.pull_request.user.login != 'dependabot[bot]' &&
           !github.event.pull_request.draft &&
-          github.event.pull_request.author_association == 'OWNER'
+          github.event.pull_request.head.repo.full_name == github.repository
         ) ||
         needs.approve_external.result == 'success'
       )
 """
 
     assert approval_condition in approval
+    assert "HEAD_SHA: ${{ github.event.pull_request.head.sha }}" in approval
+    assert 'run: echo "Approved review of $HEAD_SHA"' in approval
+    assert (
+        "${{ github.event.pull_request.head.sha }}" not in approval.split("run:", 1)[1]
+    )
     for job_id in ("claude-review", "codex-review"):
         assert generation_condition in jobs[job_id]
+
+
+@pytest.mark.parametrize(
+    "posting_job",
+    ["post-claude-review", "post-codex-review"],
+)
+def test_posting_validates_base_and_head_revisions(posting_job: str) -> None:
+    posting = _jobs()[posting_job]
+
+    assert "EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha }}" in posting
+    assert "EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}" in posting
+    assert '"$EXPECTED_BASE_SHA"' in posting
+    assert '"$EXPECTED_HEAD_SHA"' in posting
 
 
 def test_converting_to_draft_cancels_previous_review() -> None:

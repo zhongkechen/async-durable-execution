@@ -2,14 +2,15 @@
 
 set -euo pipefail
 
-if [[ "$#" -ne 3 ]]; then
-  echo "usage: $0 <claude|codex> <expected-head-sha> <summary-file>" >&2
+if [[ "$#" -ne 4 ]]; then
+  echo "usage: $0 <claude|codex> <expected-base-sha> <expected-head-sha> <summary-file>" >&2
   exit 2
 fi
 
 reviewer="$1"
-expected_head_sha="$2"
-summary_file="$3"
+expected_base_sha="$2"
+expected_head_sha="$3"
+summary_file="$4"
 
 case "$reviewer" in
   claude)
@@ -52,11 +53,21 @@ if [[ -z "${summary//[[:space:]]/}" ]]; then
   echo "::error::$title returned an empty review body."
   exit 1
 fi
+if grep -Fq '<!-- ai-pr-review:' "$summary_file"; then
+  echo "::error::$title returned a review body containing reserved metadata."
+  exit 1
+fi
 
-current_head_sha="$(
-  gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha
+current_revision="$(
+  gh api \
+    "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
+    --jq '.base.sha + "\t" + .head.sha'
 )"
-if [[ "$current_head_sha" != "$expected_head_sha" ]]; then
+IFS=$'\t' read -r current_base_sha current_head_sha <<< "$current_revision"
+if [[
+  "$current_base_sha" != "$expected_base_sha" ||
+  "$current_head_sha" != "$expected_head_sha"
+]]; then
   echo "::error::The PR changed while it was being reviewed."
   exit 1
 fi
