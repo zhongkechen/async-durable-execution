@@ -174,6 +174,8 @@ def test_claude_review_uses_single_sonnet_5_attempt() -> None:
     claude_review = _jobs()["claude-review"]
 
     assert claude_review.count("--model us.anthropic.claude-sonnet-5") == 1
+    assert claude_review.count("--max-turns 40") == 1
+    assert "--max-turns 20" not in claude_review
     assert "--model us.anthropic.claude-opus-" not in claude_review
     assert "continue-on-error: true" not in claude_review
     assert "review-retry" not in claude_review
