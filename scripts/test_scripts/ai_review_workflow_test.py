@@ -201,3 +201,6 @@ def test_claude_review_uses_hardened_os_isolation_without_tool_limits() -> None:
     claude_wrapper = CLAUDE_WRAPPER_FILE.read_text(encoding="utf-8")
     assert 'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB:-}" != "1"' in claude_wrapper
     assert "command -v bwrap" in claude_wrapper
+    assert "sudo -H -u claude-review -- env HOST_PID=" in claude_wrapper
+    assert "--unshare-pid" in claude_wrapper
+    assert 'test ! -e "/proc/${HOST_PID}"' in claude_wrapper
