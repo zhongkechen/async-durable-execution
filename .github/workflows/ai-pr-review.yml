@@ -154,7 +154,7 @@ jobs:
           prompt: ${{ steps.review-inputs.outputs.prompt }}
           claude_args: |
             --model us.anthropic.claude-sonnet-5
-            --max-turns 20
+            --max-turns 40
             --bare
             --permission-mode bypassPermissions
             --json-schema '${{ steps.review-inputs.outputs.schema }}'
