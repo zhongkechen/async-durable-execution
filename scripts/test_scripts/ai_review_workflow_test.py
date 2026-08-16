@@ -34,28 +34,25 @@ def _jobs() -> dict[str, str]:
 
 
 @pytest.mark.parametrize(
-    ("generate_job", "post_job", "invocation_marker"),
+    ("generate_job", "invocation_marker"),
     [
         (
             "claude-review",
-            "post-claude-review",
             "anthropics/claude-code-action@",
         ),
         (
             "codex-review",
-            "post-codex-review",
             "--model openai.gpt-",
         ),
     ],
 )
 def test_ai_review_generation_is_separate_from_posting(
     generate_job: str,
-    post_job: str,
     invocation_marker: str,
 ) -> None:
     jobs = _jobs()
     generation = jobs[generate_job]
-    posting = jobs[post_job]
+    posting = jobs["post-reviews"]
 
     assert "pull-requests: read" in generation
     assert "pull-requests: write" not in generation
@@ -65,11 +62,9 @@ def test_ai_review_generation_is_separate_from_posting(
     assert "base64 -w 0" in generation
     assert "scripts/post_ai_review_summary.sh" not in generation
 
-    assert f"needs: {generate_job}" in posting
-    posting_condition = (
-        f"if: \"!cancelled() && needs.{generate_job}.result == 'success'\""
-    )
-    assert posting_condition in posting
+    assert "needs: [claude-review, codex-review]" in posting
+    assert f"needs.{generate_job}.result == 'success'" in posting
+    assert f"needs.{generate_job}.outputs.summary_base64" in posting
     assert "pull-requests: write" in posting
     assert "id-token:" not in posting
     assert "environment: ai-pr-review-runtime" not in posting
@@ -84,7 +79,28 @@ def test_only_posting_jobs_can_write_pull_requests() -> None:
         job_id for job_id, job in jobs.items() if "pull-requests: write" in job
     }
 
-    assert write_jobs == {"post-claude-review", "post-codex-review"}
+    assert write_jobs == {"post-reviews"}
+
+
+def test_shared_posting_runs_for_each_successful_generator() -> None:
+    posting = _jobs()["post-reviews"]
+
+    assert "needs: [claude-review, codex-review]" in posting
+    assert (
+        """\
+if: >-
+      !cancelled() &&
+      (
+        needs.claude-review.result == 'success' ||
+        needs.codex-review.result == 'success'
+      )
+"""
+        in posting
+    )
+    assert "CLAUDE_REVIEW_RESULT: ${{ needs.claude-review.result }}" in posting
+    assert "CODEX_REVIEW_RESULT: ${{ needs.codex-review.result }}" in posting
+    assert "posting_failed=false" in posting
+    assert posting.count("if ! post_review \\") == 2
 
 
 def test_untrusted_reviews_require_environment_approval() -> None:
@@ -121,12 +137,8 @@ if: >-
         assert generation_condition in jobs[job_id]
 
 
-@pytest.mark.parametrize(
-    "posting_job",
-    ["post-claude-review", "post-codex-review"],
-)
-def test_posting_validates_base_target_and_head_revision(posting_job: str) -> None:
-    posting = _jobs()[posting_job]
+def test_shared_posting_validates_base_target_and_head_revision() -> None:
+    posting = _jobs()["post-reviews"]
 
     assert "EXPECTED_BASE_REF: ${{ github.event.pull_request.base.ref }}" in posting
     assert "${{ github.event.pull_request.base.repo.full_name }}" in posting
@@ -134,6 +146,8 @@ def test_posting_validates_base_target_and_head_revision(posting_job: str) -> No
     assert '"$EXPECTED_BASE_REPOSITORY"' in posting
     assert '"$EXPECTED_BASE_REF"' in posting
     assert '"$EXPECTED_HEAD_SHA"' in posting
+    assert "post_review \\\n            claude" in posting
+    assert "post_review \\\n            codex" in posting
 
 
 def test_converting_to_draft_cancels_previous_review() -> None:
@@ -146,9 +160,8 @@ def test_converting_to_draft_cancels_previous_review() -> None:
     )
     for job_id in (
         "claude-review",
-        "post-claude-review",
         "codex-review",
-        "post-codex-review",
+        "post-reviews",
     ):
         assert "!cancelled()" in jobs[job_id]
         assert "always()" not in jobs[job_id]
@@ -193,6 +206,7 @@ def test_claude_review_uses_hardened_os_isolation_without_tool_limits() -> None:
     }
     assert claude_review.count("scripts/run_claude_isolated.sh") == 1
     assert "bash scripts/prepare_ai_review_user.sh claude-review" in claude_review
+    assert 'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"' in claude_review
     assert claude_review.count("--bare") == 1
     assert claude_review.count("--permission-mode bypassPermissions") == 1
     assert "--allowedTools" not in claude_review
