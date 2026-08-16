@@ -170,8 +170,25 @@ def test_claude_review_uses_hardened_os_isolation_without_tool_limits() -> None:
     )
     assert "egress-policy: block" in claude_review
     assert "disable-telemetry: true" in claude_review
-    assert "bedrock-runtime.us-east-1.amazonaws.com:443" in claude_review
-    assert "sts.us-east-1.amazonaws.com:443" in claude_review
+    endpoint_block = claude_review.split("allowed-endpoints: |", 1)[1].split("\n\n", 1)[
+        0
+    ]
+    allowed_endpoints = {
+        line.strip() for line in endpoint_block.splitlines() if line.strip()
+    }
+    assert allowed_endpoints == {
+        "api.github.com:443",
+        "azure.archive.ubuntu.com:80",
+        "bedrock-runtime.us-east-1.amazonaws.com:443",
+        "github.com:443",
+        "objects.githubusercontent.com:443",
+        "pipelines.actions.githubusercontent.com:443",
+        "raw.githubusercontent.com:443",
+        "registry.npmjs.org:443",
+        "release-assets.githubusercontent.com:443",
+        "sts.us-east-1.amazonaws.com:443",
+        "token.actions.githubusercontent.com:443",
+    }
     assert claude_review.count("scripts/run_claude_isolated.sh") == 1
     assert "bash scripts/prepare_ai_review_user.sh claude-review" in claude_review
     assert claude_review.count("--bare") == 1
