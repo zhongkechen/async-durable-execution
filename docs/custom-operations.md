@@ -100,8 +100,11 @@ result = await operation.step(
 ```
 
 A local ID must be a nonblank string and unique within the current durable
-context. It is namespaced by the SDK; extension code never receives the backend
-operation ID. Changing or reusing a local ID is a workflow compatibility change.
+context. Reserve every local-ID operation before selecting any reserved
+primitive; late local-ID reservations are rejected because future hashed IDs
+cannot be discovered from replay history. Local IDs are namespaced by the SDK;
+extension code never receives the backend operation ID. Changing or reusing a
+local ID is a workflow compatibility change.
 
 Reservation names must be nonblank strings when provided. An
 `ExtensionContext` may only reserve operations, and a reservation may only be
@@ -126,6 +129,8 @@ An `ExtensionOperation` exposes one explicit method per backend primitive:
 
 Every method requires a subtype. A subtype may be an existing
 `OperationSubType` or a nonblank extension-owned string such as `"AcmePoll"`.
+An extension-owned string must not match a reserved `OperationSubType` value.
+Pass the enum member explicitly when selecting an SDK subtype.
 The method selects the backend operation type; the subtype only identifies the
 logical operation in history, plugins, logs, and replay validation. Changing a
 subtype is a workflow compatibility change.

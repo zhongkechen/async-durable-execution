@@ -97,9 +97,14 @@ def _normalize_sub_type(sub_type: str | OperationSubType) -> OperationSubTypeVal
         msg = "sub_type must not be blank"
         raise ValueError(msg)
     try:
-        return OperationSubType(sub_type)
+        reserved_sub_type = OperationSubType(sub_type)
     except ValueError:
         return sub_type
+    msg = (
+        f"sub_type {reserved_sub_type.value!r} is reserved by the SDK; "
+        "use an extension-owned subtype string"
+    )
+    raise ValueError(msg)
 
 
 class ExtensionOperation:
@@ -122,12 +127,13 @@ class ExtensionOperation:
         name: str | None,
         *,
         check_next_operation: bool,
+        has_checkpoint: bool,
     ) -> None:
         self._context = context
         self._operation_id = operation_id
         self._name = name
         self._check_next_operation = check_next_operation
-        self._replaying = context.is_replaying()
+        self._replaying = context.is_replaying() and has_checkpoint
         self._claimed = False
         self._identifier: OperationIdentifier | None = None
 
@@ -627,6 +633,7 @@ class ExtensionContext:
             operation_id,
             name,
             check_next_operation=True,
+            has_checkpoint=has_checkpoint,
         )
 
     def _reserve_operation_id(self, local_operation_id: str | None) -> str:

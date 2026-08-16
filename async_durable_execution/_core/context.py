@@ -43,6 +43,7 @@ class OperationIdGenerator:
         self._claimed_local_ids: set[str] = set()
         self._unconsumed_reservations: dict[str, bool] = {}
         self._unconsumed_checkpoint_count = 0
+        self._reservation_selection_started = False
 
     def increment(self) -> int:
         self._counter += 1
@@ -77,6 +78,12 @@ class OperationIdGenerator:
         if not local_id.strip():
             msg = "local_operation_id must not be blank"
             raise ValueError(msg)
+        if self._reservation_selection_started:
+            msg = (
+                "local_operation_id reservations must be created before any "
+                "reserved operation is selected"
+            )
+            raise RuntimeError(msg)
         if local_id in self._claimed_local_ids:
             msg = f"local_operation_id is already reserved: {local_id}"
             raise ValueError(msg)
@@ -97,6 +104,7 @@ class OperationIdGenerator:
 
     def _consume_reservation(self, operation_id: str) -> None:
         """Discard a reservation after workflow code selects it."""
+        self._reservation_selection_started = True
         has_checkpoint = self._unconsumed_reservations.pop(operation_id, False)
         if has_checkpoint:
             self._unconsumed_checkpoint_count -= 1

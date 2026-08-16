@@ -187,7 +187,7 @@ async def test_stateful_step_serialization_failure_is_checkpointed(
     assert actions == [OperationAction.START, OperationAction.FAIL]
 
 
-async def test_stateful_step_exception_retry_checkpoints_triggering_error() -> None:
+async def test_stateful_step_exception_retry_checkpoints_replacement_state() -> None:
     state = Mock(spec=ExecutionState)
     state.durable_execution_arn = "arn:test"
     state.operations.get.return_value = None
@@ -217,9 +217,7 @@ async def test_stateful_step_exception_retry_checkpoints_triggering_error() -> N
     retry_update = state.create_checkpoint.await_args_list[1].kwargs["operation_update"]
     assert retry_update.action is OperationAction.RETRY
     assert retry_update.payload == json.dumps("retry-state")
-    assert retry_update.error is not None
-    assert retry_update.error.message == "temporary failure"
-    assert retry_update.error.type == "RuntimeError"
+    assert retry_update.error is None
 
 
 @pytest.mark.parametrize(

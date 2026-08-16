@@ -2835,16 +2835,20 @@ async def test_local_reservation_does_not_end_replay_between_sequential_operatio
 
     with bind_current_context(ctx):
         extension = ExtensionContext(ctx)
-        await extension.reserve("first").wait(1, sub_type="AcmeWait")
-        assert ctx.is_replaying() is True
-
-        await extension.reserve(
+        first = extension.reserve("first")
+        local = extension.reserve(
             "local",
             local_operation_id="node-a",
-        ).wait(1, sub_type="AcmeWait")
+        )
+        second = extension.reserve("second")
+
+        await first.wait(1, sub_type="AcmeWait")
         assert ctx.is_replaying() is True
 
-        await extension.reserve("second").wait(1, sub_type="AcmeWait")
+        await local.wait(1, sub_type="AcmeWait")
+        assert ctx.is_replaying() is True
+
+        await second.wait(1, sub_type="AcmeWait")
 
     assert ctx.is_replaying() is False
 
@@ -2948,6 +2952,50 @@ async def test_pre_reserved_children_keep_their_replay_snapshot(monkeypatch) -> 
     assert ctx.is_replaying() is False
 
 
+async def test_pre_reserved_new_child_does_not_inherit_stale_replay(
+    monkeypatch,
+) -> None:
+    ctx = create_replay_context()
+    historical_id = ctx.step_counter._create_id_for_local_id("historical")  # noqa: SLF001
+    ctx.execution_state.operations[historical_id] = create_replay_operation(
+        historical_id,
+        OperationStatus.STARTED,
+        OperationType.CONTEXT,
+    )
+    observed_child_replay = []
+
+    async def run_child_context(_func, *, child_context, **_kwargs):
+        observed_child_replay.append(child_context.is_replaying())
+        return "done"
+
+    monkeypatch.setattr(
+        "async_durable_execution.extension._run_child_context",
+        run_child_context,
+    )
+
+    async def child() -> str:
+        return "unused"
+
+    with bind_current_context(ctx):
+        extension = ExtensionContext(ctx)
+        historical = extension.reserve(
+            "historical",
+            local_operation_id="historical",
+        )
+        new = extension.reserve("new", local_operation_id="new")
+
+        await historical.run_in_child_context(
+            child,
+            sub_type="AcmeContext",
+        )
+        await new.run_in_child_context(
+            child,
+            sub_type="AcmeContext",
+        )
+
+    assert observed_child_replay == [True, False]
+
+
 async def test_replay_tracks_checkpointed_reservations_across_launch_order_gaps(
     monkeypatch,
 ) -> None:
@@ -2984,6 +3032,40 @@ async def test_replay_tracks_checkpointed_reservations_across_launch_order_gaps(
     assert ctx.step_counter._unconsumed_reservations == {  # noqa: SLF001
         operation_ids["skipped"]: False
     }
+
+
+async def test_local_ids_must_be_reserved_before_operation_selection(
+    monkeypatch,
+) -> None:
+    ctx = create_replay_context()
+
+    async def run_wait(**_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr("async_durable_execution.extension._wait", run_wait)
+
+    with bind_current_context(ctx):
+        extension = ExtensionContext(ctx)
+        await extension.reserve("first").wait(1, sub_type="AcmeWait")
+
+        with pytest.raises(
+            RuntimeError,
+            match="before any reserved operation is selected",
+        ):
+            extension.reserve("late", local_operation_id="late")
+
+
+def test_extension_subtype_strings_cannot_alias_sdk_subtypes() -> None:
+    ctx = create_replay_context()
+
+    with bind_current_context(ctx):
+        reservation = ExtensionContext(ctx).reserve("collision")
+
+        with pytest.raises(ValueError, match="is reserved by the SDK"):
+            reservation.wait(
+                1,
+                sub_type=OperationSubType.WAIT.value,
+            )
 
 
 async def test_sdk_reservations_preserve_legacy_blank_name_behavior(

@@ -9,6 +9,7 @@ from async_durable_execution import (
     InvocationStatus,
     OperationStatus,
     OperationType,
+    StepSemantics,
     create_local_runner,
     durable_execution,
     get_extension_context,
@@ -197,6 +198,7 @@ async def test_extension_step_exception_retry_strategy_can_replace_state(monkeyp
                 sub_type="AcmeRetry",
                 initial_state="initial",
                 retry_strategy=retry_strategy,
+                step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY,
             )
         )
 
