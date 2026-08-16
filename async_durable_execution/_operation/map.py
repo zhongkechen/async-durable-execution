@@ -256,6 +256,7 @@ def map(
         RuntimeError: If called outside a durable context.
     """
     _validate_max_concurrency(max_concurrency)
+    get_durable_context()
     items_sequence = list(items)
     map_name = name if name is not None else getattr(func, "__name__", None)
 

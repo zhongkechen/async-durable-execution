@@ -1084,6 +1084,28 @@ async def test_map_iterates_items_iterable_once(mock_handler) -> None:
     assert items.iterations == 1
 
 
+def test_map_outside_context_does_not_consume_items() -> None:
+    """Context validation precedes materializing a potentially effectful iterable."""
+
+    class TrackingItems:
+        def __init__(self) -> None:
+            self.iterations = 0
+
+        def __iter__(self) -> Any:
+            self.iterations += 1
+            return iter([1, 2, 3])
+
+    async def test_function(item) -> Any:
+        return item
+
+    items = TrackingItems()
+
+    with pytest.raises(RuntimeError):
+        map_operation(test_function, items)
+
+    assert items.iterations == 0
+
+
 def test_map_signature_defaults_to_map_summary_generator() -> None:
     """The public map operation defaults to MapSummaryGenerator."""
     parameters = inspect.signature(map_operation).parameters

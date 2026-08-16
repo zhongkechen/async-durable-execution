@@ -84,6 +84,14 @@ class FailingSerDes(SerDes[str]):
         return data
 
 
+class FailingDeserializeSerDes(SerDes[str]):
+    async def serialize(self, value: str) -> str:
+        return value
+
+    async def deserialize(self, data: str) -> str:
+        raise ValueError("cannot deserialize")
+
+
 class NonRetryableInvocationError(InvocationError):
     def is_retryable(self) -> bool:
         return False
@@ -178,6 +186,42 @@ async def test_stateful_step_serialization_failure_is_checkpointed(
     )
 
     with pytest.raises(ExecutionError, match="Serialization failed"):
+        await executor.process()
+
+    actions = [
+        call.kwargs["operation_update"].action
+        for call in state.create_checkpoint.await_args_list
+    ]
+    assert actions == [OperationAction.START, OperationAction.FAIL]
+
+
+async def test_stateful_step_deserialization_failure_precedes_success_checkpoint() -> (
+    None
+):
+    state = Mock(spec=ExecutionState)
+    state.durable_execution_arn = "arn:test"
+    state.operations.get.return_value = None
+
+    async def work(_state):
+        return ExtensionStepResult.succeed("result")
+
+    executor = StatefulStepOperationExecutor(
+        func=work,
+        state=state,
+        operation_identifier=OperationIdentifier(
+            "op-1",
+            "AcmeStep",
+            None,
+            "custom",
+            operation_type=OperationType.STEP,
+        ),
+        initial_state=None,
+        retry_strategy=None,
+        step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+        serdes=FailingDeserializeSerDes(),
+    )
+
+    with pytest.raises(ExecutionError, match="Deserialization failed"):
         await executor.process()
 
     actions = [
