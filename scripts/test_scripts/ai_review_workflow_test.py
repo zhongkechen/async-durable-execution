@@ -179,34 +179,21 @@ def test_claude_review_uses_single_sonnet_5_attempt() -> None:
     assert "review-retry" not in claude_review
 
 
-def test_claude_review_uses_hardened_os_isolation_without_tool_limits() -> None:
+def test_generation_jobs_do_not_depend_on_harden_runner() -> None:
+    jobs = _jobs()
+
+    for job_id in ("claude-review", "codex-review"):
+        generation = jobs[job_id]
+        assert "step-security/harden-runner@" not in generation
+        assert "egress-policy:" not in generation
+        assert generation.index("- name: Check out base branch") < generation.index(
+            "- name: Prepare pull request review context"
+        )
+
+
+def test_claude_review_uses_os_isolation_without_tool_limits() -> None:
     claude_review = _jobs()["claude-review"]
 
-    assert (
-        "step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c"
-        in claude_review
-    )
-    assert "egress-policy: block" in claude_review
-    assert "disable-telemetry: true" in claude_review
-    endpoint_block = claude_review.split("allowed-endpoints: |", 1)[1].split("\n\n", 1)[
-        0
-    ]
-    allowed_endpoints = {
-        line.strip() for line in endpoint_block.splitlines() if line.strip()
-    }
-    assert allowed_endpoints == {
-        "api.github.com:443",
-        "azure.archive.ubuntu.com:80",
-        "bedrock-runtime.us-east-1.amazonaws.com:443",
-        "github.com:443",
-        "objects.githubusercontent.com:443",
-        "pipelines.actions.githubusercontent.com:443",
-        "raw.githubusercontent.com:443",
-        "registry.npmjs.org:443",
-        "release-assets.githubusercontent.com:443",
-        "sts.us-east-1.amazonaws.com:443",
-        "token.actions.githubusercontent.com:443",
-    }
     assert claude_review.count("scripts/run_claude_isolated.sh") == 1
     assert "bash scripts/prepare_ai_review_user.sh claude-review" in claude_review
     assert 'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"' in claude_review
