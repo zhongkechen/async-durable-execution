@@ -472,7 +472,14 @@ class ExtensionOperation:
                 self._context.step_counter._consume_reservation(  # noqa: SLF001
                     self._operation_id
                 )
-                return await execute_child_context()
+                try:
+                    return await execute_child_context()
+                finally:
+                    if (
+                        self._context.is_replaying()
+                        and not self._context._next_reserved_or_sequential_operation_exists()  # noqa: SLF001
+                    ):
+                        self._context._set_replay_status_new()  # noqa: SLF001
             with self._context._replay_aware(
                 operation_id=self._operation_id,
             ):

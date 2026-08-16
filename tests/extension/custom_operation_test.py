@@ -432,7 +432,7 @@ async def test_extension_operation_names_must_be_nonblank():
     assert result.get_step("valid").operation_id == _operation_id("1")
 
 
-async def test_virtual_child_preserves_replay_state(monkeypatch):
+async def test_virtual_child_preserves_replay_state_and_advances_parent(monkeypatch):
     monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.01")
     observed_parent_replay = []
     observed_replay = []
@@ -461,7 +461,7 @@ async def test_virtual_child_preserves_replay_state(monkeypatch):
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.get_deserialized_result() == "done"
     assert observed_replay == [False, True]
-    assert observed_parent_replay == [True]
+    assert observed_parent_replay == [False]
 
 
 async def test_flat_parallel_branch_preserves_replay_state(monkeypatch):

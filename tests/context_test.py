@@ -3040,6 +3040,59 @@ async def test_pre_reserved_new_child_does_not_inherit_stale_replay(
     assert observed_child_replay == [True, False]
 
 
+async def test_virtual_child_keeps_parent_replaying_for_checkpointed_sibling(
+    monkeypatch,
+) -> None:
+    ctx = create_replay_context()
+    sibling_id = ctx.step_counter._create_id_for_local_id("sibling")  # noqa: SLF001
+    ctx.execution_state.operations[sibling_id] = create_replay_operation(
+        sibling_id,
+        OperationStatus.STARTED,
+        OperationType.CONTEXT,
+    )
+    observed_child_replay = []
+
+    async def run_child_context(_func, *, child_context, **_kwargs):
+        observed_child_replay.append(child_context.is_replaying())
+        return "done"
+
+    monkeypatch.setattr(
+        "async_durable_execution.extension._run_child_context",
+        run_child_context,
+    )
+
+    async def child() -> str:
+        return "unused"
+
+    with bind_current_context(ctx):
+        extension = ExtensionContext(ctx)
+        virtual = extension.reserve("virtual")
+        sibling = extension.reserve(
+            "sibling",
+            local_operation_id="sibling",
+        )
+
+        assert (
+            await virtual.run_in_child_context(
+                child,
+                sub_type="AcmeVirtual",
+                is_virtual=True,
+            )
+            == "done"
+        )
+        assert ctx.is_replaying() is True
+        assert (
+            await sibling.run_in_child_context(
+                child,
+                sub_type="AcmeContext",
+            )
+            == "done"
+        )
+
+    assert observed_child_replay == [True, True]
+    assert ctx.is_replaying() is False
+
+
 async def test_replay_tracks_checkpointed_reservations_across_launch_order_gaps(
     monkeypatch,
 ) -> None:
