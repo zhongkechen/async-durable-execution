@@ -111,7 +111,6 @@ class ExtensionOperation:
     """Opaque one-shot reservation for one SDK-owned durable primitive."""
 
     __slots__ = (
-        "_check_next_operation",
         "_claimed",
         "_context",
         "_identifier",
@@ -126,13 +125,11 @@ class ExtensionOperation:
         operation_id: str,
         name: str | None,
         *,
-        check_next_operation: bool,
         has_checkpoint: bool,
     ) -> None:
         self._context = context
         self._operation_id = operation_id
         self._name = name
-        self._check_next_operation = check_next_operation
         self._replaying = context.is_replaying() and has_checkpoint
         self._claimed = False
         self._identifier: OperationIdentifier | None = None
@@ -453,7 +450,6 @@ class ExtensionOperation:
             if replay_aware:
                 with self._context._replay_aware(
                     operation_id=self._operation_id,
-                    check_next_operation=self._check_next_operation,
                 ):
                     return await _run_child_context(
                         func,
@@ -485,7 +481,6 @@ class ExtensionOperation:
         with self._context._replay_aware(
             operation_id=self._operation_id,
             executes_user_code=executes_user_code,
-            check_next_operation=self._check_next_operation,
         ):
             return create_eager_task(coro_factory)
 
@@ -579,19 +574,6 @@ class ExtensionContext:
             local_operation_id=local_operation_id,
         )
 
-    def _reserve_without_replay_transition(
-        self,
-        name: str | None = None,
-        *,
-        local_operation_id: str | None = None,
-    ) -> ExtensionOperation:
-        """Reserve an SDK-owned concurrent child without changing parent replay state."""
-        self._require_active_context()
-        return self._create_reservation(
-            _normalize_sdk_operation_name(name),
-            local_operation_id=local_operation_id,
-        )
-
     def _reserve_sdk_operation_id(
         self,
         name: str | None,
@@ -632,7 +614,6 @@ class ExtensionContext:
             self._context,
             operation_id,
             name,
-            check_next_operation=True,
             has_checkpoint=has_checkpoint,
         )
 

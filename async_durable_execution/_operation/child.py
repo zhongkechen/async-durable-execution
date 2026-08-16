@@ -33,7 +33,7 @@ def run_in_child_context(
     step_name = name if name is not None else getattr(func, "__name__", None)
     return (
         get_extension_context()
-        ._reserve_without_replay_transition(step_name)  # noqa: SLF001
+        ._reserve_sdk_operation(step_name)  # noqa: SLF001
         ._run_in_child_context(  # noqa: SLF001
             func,
             sub_type=OperationSubType.RUN_IN_CHILD_CONTEXT,

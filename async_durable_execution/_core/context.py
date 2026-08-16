@@ -248,7 +248,6 @@ class DurableContext(OperationContext):
         *,
         operation_id: str | None = None,
         executes_user_code: bool = False,
-        check_next_operation: bool = True,
     ) -> Iterator[None]:
         """Update replay status around one durable operation.
 
@@ -284,15 +283,12 @@ class DurableContext(OperationContext):
             if flip_after:
                 self._set_replay_status_new()
             elif self.is_replaying():
-                if check_next_operation:
-                    next_operation_exists = (
-                        self._next_reserved_or_sequential_operation_exists()
-                        if operation_id is not None
-                        else self._next_operation_exists()
-                    )
-                    if not next_operation_exists:
-                        self._set_replay_status_new()
-                elif current_terminal:
+                next_operation_exists = (
+                    self._next_reserved_or_sequential_operation_exists()
+                    if operation_id is not None
+                    else self._next_operation_exists()
+                )
+                if not next_operation_exists:
                     self._set_replay_status_new()
 
 
