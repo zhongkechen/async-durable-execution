@@ -2,14 +2,16 @@
 
 set -euo pipefail
 
-if [[ "$#" -ne 3 ]]; then
-  echo "usage: $0 <claude|codex> <expected-head-sha> <summary-file>" >&2
+if [[ "$#" -ne 5 ]]; then
+  echo "usage: $0 <claude|codex> <expected-base-repository> <expected-base-ref> <expected-head-sha> <summary-file>" >&2
   exit 2
 fi
 
 reviewer="$1"
-expected_head_sha="$2"
-summary_file="$3"
+expected_base_repository="$2"
+expected_base_ref="$3"
+expected_head_sha="$4"
+summary_file="$5"
 
 case "$reviewer" in
   claude)
@@ -53,10 +55,28 @@ if [[ -z "${summary//[[:space:]]/}" ]]; then
   exit 1
 fi
 
-current_head_sha="$(
-  gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if ! python3 "$script_dir/validate_ai_review_summary.py" "$summary_file"; then
+  echo "::error::$title returned a review body containing reserved metadata."
+  exit 1
+fi
+
+current_revision="$(
+  gh api \
+    "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
+    --jq '.base.repo.full_name + "\t" + .base.ref + "\t" + .base.sha + "\t" + .head.sha'
 )"
-if [[ "$current_head_sha" != "$expected_head_sha" ]]; then
+IFS=$'\t' read -r \
+  current_base_repository \
+  current_base_ref \
+  _current_base_sha \
+  current_head_sha <<< "$current_revision"
+# The base SHA may advance independently while the PR still targets the same branch.
+if [[
+  "$current_base_repository" != "$expected_base_repository" ||
+  "$current_base_ref" != "$expected_base_ref" ||
+  "$current_head_sha" != "$expected_head_sha"
+]]; then
   echo "::error::The PR changed while it was being reviewed."
   exit 1
 fi
