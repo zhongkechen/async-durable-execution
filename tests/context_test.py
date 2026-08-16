@@ -3093,6 +3093,23 @@ async def test_sdk_reservations_preserve_legacy_blank_name_behavior(
     assert observed_names == [None, "   "]
 
 
+async def test_sdk_composite_operation_skips_extension_metadata_validation() -> None:
+    from async_durable_execution._operation.with_retry import wait as retry_wait
+
+    ctx = create_replay_context()
+    operation_id = ctx._peek_next_operation_id()  # noqa: SLF001
+    ctx.execution_state.operations[operation_id] = Operation(
+        operation_id=operation_id,
+        operation_type=OperationType.WAIT,
+        status=OperationStatus.SUCCEEDED,
+        sub_type=OperationSubType.WAIT_FOR_CONDITION,
+        name="legacy-name",
+    )
+
+    with bind_current_context(ctx):
+        await retry_wait(1, name="current-name")
+
+
 def test_child_context_refines_replay_status_independently() -> None:
     parent_ctx = create_replay_context()
     child_ctx = parent_ctx.create_child_context("child-op")

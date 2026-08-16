@@ -7,7 +7,7 @@ import json
 import logging
 import time
 from collections import Counter
-from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field as dataclass_field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar, cast
@@ -24,6 +24,7 @@ from .._core import (
     OperationIdentifier,
     OperationStatus,
     OperationSubType,
+    OperationType,
     OrphanedChildException,
     SerDes,
     SerDesError,
@@ -66,7 +67,7 @@ def _run_in_child_context(
     return (
         get_extension_context()
         ._reserve_sdk_operation(name)  # noqa: SLF001
-        .run_in_child_context(
+        ._run_in_child_context(  # noqa: SLF001
             func,
             sub_type=sub_type,
             serdes=serdes,
@@ -1355,7 +1356,7 @@ class ParallelExecutor(
                 )
             else:
                 self._started_branch_operations.add(executable.index)
-                task = operation.run_in_child_context(
+                task = operation._run_in_child_context(  # noqa: SLF001
                     run_child_operation,
                     sub_type=self.sub_type_iteration,
                     serdes=self.item_serdes or self.serdes,
@@ -1468,6 +1469,70 @@ class ParallelSummaryGenerator:
         return json.dumps(fields)
 
 
+class _BranchOperationReservations(Mapping[int, ExtensionOperation]):
+    """Create branch reservations lazily while retaining replay checkpoints."""
+
+    def __init__(
+        self,
+        *,
+        context: DurableContext,
+        count: int,
+        sub_type: OperationSubType,
+        name_prefix: str,
+        branch_namer: Callable[[int], str] | None,
+    ) -> None:
+        self._context = context
+        self._count = count
+        self._sub_type = sub_type
+        self._name_prefix = name_prefix
+        self._branch_namer = branch_namer
+        self._extension = ExtensionContext(context)
+        self._reservations: dict[int, ExtensionOperation] = {}
+        self._register_historical_checkpoints()
+
+    def __getitem__(self, index: int) -> ExtensionOperation:
+        if index < 0 or index >= self._count:
+            raise KeyError(index)
+        reservation = self._reservations.get(index)
+        if reservation is None:
+            reservation = self._extension._reserve_sdk_operation_id(  # noqa: SLF001
+                self._branch_name(index),
+                operation_id=(
+                    self._context.step_counter._create_step_id_for_logical_step(  # noqa: SLF001
+                        index
+                    )
+                ),
+            )
+            self._reservations[index] = reservation
+        return reservation
+
+    def __iter__(self) -> Iterator[int]:
+        return iter(range(self._count))
+
+    def __len__(self) -> int:
+        return self._count
+
+    def _branch_name(self, index: int) -> str:
+        if self._branch_namer is not None:
+            return self._branch_namer(index)
+        return f"{self._name_prefix}{index}"
+
+    def _register_historical_checkpoints(self) -> None:
+        operations = self._context.execution_state.operations
+        if not isinstance(operations, Mapping):
+            return
+        for operation in operations.values():
+            if (
+                operation.operation_type is OperationType.CONTEXT
+                and operation.sub_type == self._sub_type
+                and operation.parent_id == self._context.parent_id
+            ):
+                self._context.step_counter._register_reservation(  # noqa: SLF001
+                    operation.operation_id,
+                    has_checkpoint=True,
+                )
+
+
 @durable_callable
 async def parallel_handler(
     callables: Sequence[Callable[[], Awaitable[R]]],
@@ -1495,22 +1560,13 @@ async def parallel_handler(
 
     branch_operations: Mapping[int, ExtensionOperation] | None = None
     if isinstance(parallel_context, DurableContext):
-        extension = ExtensionContext(parallel_context)
-        branch_operations = {
-            index: extension._reserve_sdk_operation_id(  # noqa: SLF001
-                (
-                    branch_namer(index)
-                    if branch_namer is not None
-                    else f"{name_prefix}{index}"
-                ),
-                operation_id=(
-                    parallel_context.step_counter._create_step_id_for_logical_step(  # noqa: SLF001
-                        index
-                    )
-                ),
-            )
-            for index in range(len(callables))
-        }
+        branch_operations = _BranchOperationReservations(
+            context=parallel_context,
+            count=len(callables),
+            sub_type=iteration_sub_type,
+            name_prefix=name_prefix,
+            branch_namer=branch_namer,
+        )
     executor_kwargs: dict[str, Any] = {
         "executables": [
             Executable(index=i, func=func) for i, func in enumerate(callables)

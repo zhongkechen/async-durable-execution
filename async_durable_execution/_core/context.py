@@ -98,6 +98,12 @@ class OperationIdGenerator:
         has_checkpoint: bool,
     ) -> None:
         """Track an allocated reservation until workflow code selects it."""
+        previous = self._unconsumed_reservations.get(operation_id)
+        if operation_id in self._unconsumed_reservations:
+            if previous == has_checkpoint:
+                return
+            if previous:
+                self._unconsumed_checkpoint_count -= 1
         self._unconsumed_reservations[operation_id] = has_checkpoint
         if has_checkpoint:
             self._unconsumed_checkpoint_count += 1

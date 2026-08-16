@@ -15,6 +15,7 @@ import async_durable_execution._core.context as context_module
 import async_durable_execution._primitive.child as child
 from async_durable_execution._operation.parallel import (
     _BATCH_RESULT_SERDES,
+    _BranchOperationReservations,
     _BatchResultSerDes,
     BatchItem,
     BatchItemStatus,
@@ -1135,6 +1136,55 @@ async def test_replay_completed_uses_reserved_branch_operation_ids() -> None:
     result = await executor.replay_completed(state, context)
 
     assert result.get_results() == ["a", "b"]
+
+
+async def test_branch_operation_reservations_are_created_lazily() -> None:
+    state = create_mock_execution_state()
+    state.operations = {}
+    context = create_test_context(state, parent_id="parallel-operation")
+    reservations = _BranchOperationReservations(
+        context=context,
+        count=1_000,
+        sub_type=OperationSubType.PARALLEL_BRANCH,
+        name_prefix="parallel-branch-",
+        branch_namer=None,
+    )
+
+    assert reservations._reservations == {}  # noqa: SLF001
+
+    first = await run_with_context(context, lambda: reservations[0])
+
+    assert reservations[0] is first
+    assert list(reservations._reservations) == [0]  # noqa: SLF001
+
+
+async def test_lazy_branch_reservations_track_historical_checkpoints() -> None:
+    state = create_mock_execution_state()
+    context = create_test_context(state, parent_id="parallel-operation")
+    operation_id = context.step_counter._create_step_id_for_logical_step(7)  # noqa: SLF001
+    state.operations = {
+        operation_id: Operation(
+            operation_id=operation_id,
+            operation_type=OperationType.CONTEXT,
+            status=OperationStatus.STARTED,
+            sub_type=OperationSubType.PARALLEL_BRANCH,
+            parent_id=context.parent_id,
+        )
+    }
+    reservations = _BranchOperationReservations(
+        context=context,
+        count=10,
+        sub_type=OperationSubType.PARALLEL_BRANCH,
+        name_prefix="parallel-branch-",
+        branch_namer=None,
+    )
+
+    assert context.step_counter._has_unconsumed_checkpoint() is True  # noqa: SLF001
+
+    await run_with_context(context, lambda: reservations[7])
+    context.step_counter._consume_reservation(operation_id)  # noqa: SLF001
+
+    assert context.step_counter._has_unconsumed_checkpoint() is False  # noqa: SLF001
 
 
 @no_type_check

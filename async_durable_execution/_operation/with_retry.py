@@ -31,7 +31,7 @@ def wait(
     return (
         get_extension_context()
         ._reserve_sdk_operation(name)  # noqa: SLF001
-        .wait(
+        ._run_wait(  # noqa: SLF001
             duration,
             sub_type=OperationSubType.WAIT,
         )
@@ -50,7 +50,7 @@ def run_in_child_context(
     return (
         get_extension_context()
         ._reserve_sdk_operation(name)  # noqa: SLF001
-        .run_in_child_context(
+        ._run_in_child_context(  # noqa: SLF001
             func,
             sub_type=OperationSubType.RUN_IN_CHILD_CONTEXT,
             serdes=serdes,

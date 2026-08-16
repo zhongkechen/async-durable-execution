@@ -111,6 +111,7 @@ class ExtensionOperation:
     """Opaque one-shot reservation for one SDK-owned durable primitive."""
 
     __slots__ = (
+        "_claimed_operation_type",
         "_claimed",
         "_context",
         "_identifier",
@@ -134,6 +135,7 @@ class ExtensionOperation:
         self._parent_replaying = context.is_replaying()
         self._replaying = self._parent_replaying and has_checkpoint
         self._claimed = False
+        self._claimed_operation_type: OperationType | None = None
         self._identifier: OperationIdentifier | None = None
 
     def step(
@@ -421,7 +423,10 @@ class ExtensionOperation:
     ) -> asyncio.Task[T]:
         """Re-enter an SDK-owned child operation after an in-process suspension."""
         identifier = self._identifier
-        if identifier is None or identifier.operation_type is not OperationType.CONTEXT:
+        if (
+            identifier is None
+            or self._claimed_operation_type is not OperationType.CONTEXT
+        ):
             msg = "Only a claimed child-context reservation can be restarted"
             raise RuntimeError(msg)
         return self._create_child_context_task(
@@ -501,6 +506,7 @@ class ExtensionOperation:
             msg = "An extension operation reservation can only be used once"
             raise RuntimeError(msg)
         self._claimed = True
+        self._claimed_operation_type = operation_type
         self._identifier = OperationIdentifier(
             operation_id=self._operation_id,
             sub_type=normalized_sub_type,

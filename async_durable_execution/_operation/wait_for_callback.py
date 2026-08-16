@@ -72,7 +72,7 @@ def _create_child_context_task(
     return (
         get_extension_context()
         ._reserve_sdk_operation(name)  # noqa: SLF001
-        .run_in_child_context(
+        ._run_in_child_context(  # noqa: SLF001
             func,
             sub_type=sub_type,
             serdes=serdes,
