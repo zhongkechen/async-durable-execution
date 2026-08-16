@@ -552,6 +552,7 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
         return await self._schedule_retry(
             delay_seconds=delay_seconds,
             payload=payload,
+            error=_error_object_from_exception(error),
         )
 
     async def _prepare_retry(
@@ -571,13 +572,14 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
         *,
         delay_seconds: int,
         payload: str,
+        error: ErrorObject | None = None,
     ) -> T:
         await self.create_checkpoint(
             OperationUpdate.create_step_retry(
                 self.operation_identifier,
                 next_attempt_delay_seconds=delay_seconds,
                 payload=payload,
-                error=None,
+                error=error,
             )
         )
         suspend_with_optional_resume_delay(

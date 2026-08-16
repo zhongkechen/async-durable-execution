@@ -1497,13 +1497,17 @@ async def parallel_handler(
     if isinstance(parallel_context, DurableContext):
         extension = ExtensionContext(parallel_context)
         branch_operations = {
-            index: extension._reserve_without_replay_transition(  # noqa: SLF001
+            index: extension._reserve_sdk_operation_id(  # noqa: SLF001
                 (
                     branch_namer(index)
                     if branch_namer is not None
                     else f"{name_prefix}{index}"
                 ),
-                local_operation_id=str(index),
+                operation_id=(
+                    parallel_context.step_counter._create_step_id_for_logical_step(  # noqa: SLF001
+                        index
+                    )
+                ),
             )
             for index in range(len(callables))
         }

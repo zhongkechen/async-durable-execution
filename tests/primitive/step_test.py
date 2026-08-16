@@ -187,6 +187,41 @@ async def test_stateful_step_serialization_failure_is_checkpointed(
     assert actions == [OperationAction.START, OperationAction.FAIL]
 
 
+async def test_stateful_step_exception_retry_checkpoints_triggering_error() -> None:
+    state = Mock(spec=ExecutionState)
+    state.durable_execution_arn = "arn:test"
+    state.operations.get.return_value = None
+
+    async def work(_state):
+        raise RuntimeError("temporary failure")
+
+    executor = StatefulStepOperationExecutor(
+        func=work,
+        state=state,
+        operation_identifier=OperationIdentifier(
+            "op-1",
+            "AcmeStep",
+            None,
+            "custom",
+            operation_type=OperationType.STEP,
+        ),
+        initial_state="initial",
+        retry_strategy=Mock(return_value=ExtensionStepResult.retry("retry-state", 1)),
+        step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+        serdes=None,
+    )
+
+    with pytest.raises(SuspendExecution, match="will retry"):
+        await executor.process()
+
+    retry_update = state.create_checkpoint.await_args_list[1].kwargs["operation_update"]
+    assert retry_update.action is OperationAction.RETRY
+    assert retry_update.payload == json.dumps("retry-state")
+    assert retry_update.error is not None
+    assert retry_update.error.message == "temporary failure"
+    assert retry_update.error.type == "RuntimeError"
+
+
 @pytest.mark.parametrize(
     ("error_factory", "expected_type"),
     [

@@ -2948,6 +2948,44 @@ async def test_pre_reserved_children_keep_their_replay_snapshot(monkeypatch) -> 
     assert ctx.is_replaying() is False
 
 
+async def test_replay_tracks_checkpointed_reservations_across_launch_order_gaps(
+    monkeypatch,
+) -> None:
+    ctx = create_replay_context()
+    operation_ids = {
+        local_id: ctx.step_counter._create_id_for_local_id(local_id)  # noqa: SLF001
+        for local_id in ("first", "skipped", "third")
+    }
+    for local_id in ("first", "third"):
+        operation_id = operation_ids[local_id]
+        ctx.execution_state.operations[operation_id] = create_replay_operation(
+            operation_id,
+            OperationStatus.SUCCEEDED,
+            OperationType.WAIT,
+        )
+
+    async def replay_wait(**_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr("async_durable_execution.extension._wait", replay_wait)
+
+    with bind_current_context(ctx):
+        extension = ExtensionContext(ctx)
+        first = extension.reserve("first", local_operation_id="first")
+        extension.reserve("skipped", local_operation_id="skipped")
+        third = extension.reserve("third", local_operation_id="third")
+
+        await first.wait(1, sub_type="AcmeWait")
+        assert ctx.is_replaying() is True
+
+        await third.wait(1, sub_type="AcmeWait")
+
+    assert ctx.is_replaying() is False
+    assert ctx.step_counter._unconsumed_reservations == {  # noqa: SLF001
+        operation_ids["skipped"]: False
+    }
+
+
 async def test_sdk_reservations_preserve_legacy_blank_name_behavior(
     monkeypatch,
 ) -> None:

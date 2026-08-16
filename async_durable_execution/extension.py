@@ -586,6 +586,19 @@ class ExtensionContext:
             local_operation_id=local_operation_id,
         )
 
+    def _reserve_sdk_operation_id(
+        self,
+        name: str | None,
+        *,
+        operation_id: str,
+    ) -> ExtensionOperation:
+        """Reserve an SDK-owned primitive with a replay-compatible operation id."""
+        self._require_active_context()
+        return self._create_reservation_for_operation_id(
+            _normalize_sdk_operation_name(name),
+            operation_id=operation_id,
+        )
+
     def _create_reservation(
         self,
         name: str | None,
@@ -593,7 +606,22 @@ class ExtensionContext:
         local_operation_id: str | None,
     ) -> ExtensionOperation:
         operation_id = self._reserve_operation_id(local_operation_id)
-        self._context.step_counter._register_reservation(operation_id)  # noqa: SLF001
+        return self._create_reservation_for_operation_id(
+            name,
+            operation_id=operation_id,
+        )
+
+    def _create_reservation_for_operation_id(
+        self,
+        name: str | None,
+        *,
+        operation_id: str,
+    ) -> ExtensionOperation:
+        has_checkpoint = self._context._operation_result(operation_id) is not None  # noqa: SLF001
+        self._context.step_counter._register_reservation(  # noqa: SLF001
+            operation_id,
+            has_checkpoint=has_checkpoint,
+        )
         return ExtensionOperation(
             self._context,
             operation_id,

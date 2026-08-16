@@ -41,8 +41,8 @@ class OperationIdGenerator:
         self._prefix = prefix
         self._counter = 0
         self._claimed_local_ids: set[str] = set()
-        self._reserved_operation_ids: list[str] = []
-        self._consumed_operation_ids: set[str] = set()
+        self._unconsumed_reservations: dict[str, bool] = {}
+        self._unconsumed_checkpoint_count = 0
 
     def increment(self) -> int:
         self._counter += 1
@@ -84,24 +84,26 @@ class OperationIdGenerator:
         self._claimed_local_ids.add(local_id)
         return self._create_id_for_local_id(local_id)
 
-    def _register_reservation(self, operation_id: str) -> None:
-        """Record deterministic reservation order for replay transitions."""
-        self._reserved_operation_ids.append(operation_id)
+    def _register_reservation(
+        self,
+        operation_id: str,
+        *,
+        has_checkpoint: bool,
+    ) -> None:
+        """Track an allocated reservation until workflow code selects it."""
+        self._unconsumed_reservations[operation_id] = has_checkpoint
+        if has_checkpoint:
+            self._unconsumed_checkpoint_count += 1
 
     def _consume_reservation(self, operation_id: str) -> None:
-        """Mark a reservation as selected by workflow code."""
-        self._consumed_operation_ids.add(operation_id)
+        """Discard a reservation after workflow code selects it."""
+        has_checkpoint = self._unconsumed_reservations.pop(operation_id, False)
+        if has_checkpoint:
+            self._unconsumed_checkpoint_count -= 1
 
-    def _next_unconsumed_reservation_id(self) -> str | None:
-        """Return the next allocated reservation not yet selected."""
-        return next(
-            (
-                operation_id
-                for operation_id in self._reserved_operation_ids
-                if operation_id not in self._consumed_operation_ids
-            ),
-            None,
-        )
+    def _has_unconsumed_checkpoint(self) -> bool:
+        """Return whether any allocated reservation still has replay history."""
+        return self._unconsumed_checkpoint_count > 0
 
 
 @dataclass(frozen=True)
@@ -213,9 +215,8 @@ class DurableContext(OperationContext):
         return self._next_operation_result() is not None
 
     def _next_reserved_or_sequential_operation_exists(self) -> bool:
-        operation_id = self.step_counter._next_unconsumed_reservation_id()  # noqa: SLF001
-        if operation_id is not None:
-            return self._operation_result(operation_id) is not None
+        if self.step_counter._has_unconsumed_checkpoint():  # noqa: SLF001
+            return True
         return self._next_operation_exists()
 
     def _next_operation_is_terminal_checkpoint(self) -> bool:

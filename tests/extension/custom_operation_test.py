@@ -290,6 +290,19 @@ async def test_bounded_parallel_restarts_suspended_spi_branches(monkeypatch):
     }
     assert waits["pause-0"].status is OperationStatus.SUCCEEDED
     assert waits["pause-1"].status is OperationStatus.SUCCEEDED
+    parallel_operation = result.get_context("bounded")
+    branches = {
+        operation.name: operation
+        for operation in result.get_child_operations(parallel_operation)
+    }
+    assert branches["parallel-branch-0"].operation_id == _operation_id(
+        "0",
+        parallel_operation.operation_id,
+    )
+    assert branches["parallel-branch-1"].operation_id == _operation_id(
+        "1",
+        parallel_operation.operation_id,
+    )
 
 
 async def test_extension_reservations_are_one_shot():
