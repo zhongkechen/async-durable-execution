@@ -438,8 +438,16 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
                 f"Extension step operation_id={self.operation_id} "
                 f"name={self.operation_name} was previously interrupted"
             )
-            state = await self._load_state(operation)
             attempt = self._attempt(operation)
+            state = self.initial_state
+            try:
+                state = await self._load_state(operation)
+            except InvocationError as error:
+                if error.is_retryable():
+                    raise
+                return await self._handle_failure(error, state, attempt)
+            except Exception as error:
+                return await self._handle_failure(error, state, attempt)
             return await self._handle_failure(
                 StepInterruptedError(msg, self.operation_id),
                 state,
@@ -458,14 +466,15 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
     async def _execute(self, operation: Operation | None) -> T:
         from ..extension import ExtensionStepResult
 
-        state = await self._load_state(operation)
+        state = self.initial_state
         attempt = self._attempt(operation)
-        step_context = StepContext(
-            attempt=attempt,
-            execution_state=self.state,
-            operation_identifier=self.operation_identifier,
-        )
         try:
+            state = await self._load_state(operation)
+            step_context = StepContext(
+                attempt=attempt,
+                execution_state=self.state,
+                operation_identifier=self.operation_identifier,
+            )
             with bind_current_context(step_context):
                 outcome = await self.func(state)
 

@@ -9,7 +9,7 @@ import datetime
 import inspect
 import json
 from datetime import timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from async_durable_execution._core.exceptions import (
@@ -229,6 +229,96 @@ async def test_stateful_step_deserialization_failure_precedes_success_checkpoint
         for call in state.create_checkpoint.await_args_list
     ]
     assert actions == [OperationAction.START, OperationAction.FAIL]
+
+
+@pytest.mark.parametrize(
+    "step_semantics",
+    [
+        StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+        StepSemantics.AT_MOST_ONCE_PER_RETRY,
+    ],
+)
+async def test_stateful_step_invalid_retry_state_is_checkpointed(
+    step_semantics,
+) -> None:
+    state = Mock(spec=ExecutionState)
+    state.durable_execution_arn = "arn:test"
+    state.operations.get.return_value = Operation(
+        operation_id="op-1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.STARTED,
+        name="custom",
+        sub_type="AcmeStep",
+        step_details=StepDetails(result="invalid", attempt=2),
+    )
+    work = AsyncMock(side_effect=AssertionError("work should not run"))
+    executor = StatefulStepOperationExecutor(
+        func=work,
+        state=state,
+        operation_identifier=OperationIdentifier(
+            "op-1",
+            "AcmeStep",
+            None,
+            "custom",
+            operation_type=OperationType.STEP,
+        ),
+        initial_state="initial",
+        retry_strategy=None,
+        step_semantics=step_semantics,
+        serdes=FailingDeserializeSerDes(),
+    )
+
+    with pytest.raises(ExecutionError, match="Deserialization failed"):
+        await executor.process()
+
+    work.assert_not_awaited()
+    fail_update = state.create_checkpoint.await_args.kwargs["operation_update"]
+    assert fail_update.action is OperationAction.FAIL
+
+
+async def test_stateful_step_invalid_retry_state_applies_retry_strategy() -> None:
+    state = Mock(spec=ExecutionState)
+    state.durable_execution_arn = "arn:test"
+    state.operations.get.return_value = Operation(
+        operation_id="op-1",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.STARTED,
+        name="custom",
+        sub_type="AcmeStep",
+        step_details=StepDetails(result="invalid", attempt=2),
+    )
+    retry_strategy = Mock(
+        return_value=ExtensionStepResult.retry("replacement-state", 1)
+    )
+    work = AsyncMock(side_effect=AssertionError("work should not run"))
+    executor = StatefulStepOperationExecutor(
+        func=work,
+        state=state,
+        operation_identifier=OperationIdentifier(
+            "op-1",
+            "AcmeStep",
+            None,
+            "custom",
+            operation_type=OperationType.STEP,
+        ),
+        initial_state="initial",
+        retry_strategy=retry_strategy,
+        step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+        serdes=FailingDeserializeSerDes(),
+    )
+
+    with pytest.raises(SuspendExecution, match="will retry"):
+        await executor.process()
+
+    work.assert_not_awaited()
+    error, retry_state, attempt = retry_strategy.call_args.args
+    assert isinstance(error, ExecutionError)
+    assert retry_state == "initial"
+    assert attempt == 3
+    retry_update = state.create_checkpoint.await_args.kwargs["operation_update"]
+    assert retry_update.action is OperationAction.RETRY
+    assert retry_update.payload == "replacement-state"
+    assert retry_update.error is None
 
 
 async def test_stateful_step_exception_retry_checkpoints_replacement_state() -> None:
