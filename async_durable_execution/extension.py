@@ -116,6 +116,7 @@ class ExtensionOperation:
         "_identifier",
         "_name",
         "_operation_id",
+        "_parent_replaying",
         "_replaying",
     )
 
@@ -130,7 +131,8 @@ class ExtensionOperation:
         self._context = context
         self._operation_id = operation_id
         self._name = name
-        self._replaying = context.is_replaying() and has_checkpoint
+        self._parent_replaying = context.is_replaying()
+        self._replaying = self._parent_replaying and has_checkpoint
         self._claimed = False
         self._identifier: OperationIdentifier | None = None
 
@@ -443,23 +445,10 @@ class ExtensionOperation:
         child_context = self._context.create_child_context(
             operation_id=self._operation_id,
             is_virtual=is_virtual,
-            replaying=self._replaying,
+            replaying=self._parent_replaying if is_virtual else self._replaying,
         )
 
-        async def run_child_context() -> T:
-            if replay_aware:
-                with self._context._replay_aware(
-                    operation_id=self._operation_id,
-                ):
-                    return await _run_child_context(
-                        func,
-                        context=self._context,
-                        child_context=child_context,
-                        operation_identifier=identifier,
-                        serdes=serdes,
-                        summary_generator=summary_generator,
-                        is_virtual=is_virtual,
-                    )
+        async def execute_child_context() -> T:
             return await _run_child_context(
                 func,
                 context=self._context,
@@ -469,6 +458,21 @@ class ExtensionOperation:
                 summary_generator=summary_generator,
                 is_virtual=is_virtual,
             )
+
+        async def run_child_context() -> T:
+            if not replay_aware:
+                return await execute_child_context()
+            if is_virtual:
+                # Virtual contexts have no container checkpoint. Their nested
+                # operations refine the inherited replay snapshot independently.
+                self._context.step_counter._consume_reservation(  # noqa: SLF001
+                    self._operation_id
+                )
+                return await execute_child_context()
+            with self._context._replay_aware(
+                operation_id=self._operation_id,
+            ):
+                return await execute_child_context()
 
         return create_eager_task(run_child_context)
 

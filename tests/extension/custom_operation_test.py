@@ -7,14 +7,17 @@ import pytest
 from async_durable_execution import (
     ExtensionStepResult,
     InvocationStatus,
+    NestingType,
     OperationStatus,
     OperationType,
     StepSemantics,
     create_local_runner,
     durable_execution,
     get_extension_context,
+    get_with_retry_context,
     parallel,
     wait,
+    with_retry,
 )
 
 
@@ -397,3 +400,83 @@ async def test_extension_operation_names_must_be_nonblank():
 
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.get_step("valid").operation_id == _operation_id("1")
+
+
+async def test_virtual_child_preserves_replay_state(monkeypatch):
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.01")
+    observed_parent_replay = []
+    observed_replay = []
+
+    async def child():
+        observed_replay.append(get_extension_context().is_replaying())
+        await wait(1, name="pause")
+        return "done"
+
+    @durable_execution
+    async def handler(_event):
+        result = (
+            await get_extension_context()
+            .reserve("virtual")
+            .run_in_child_context(
+                child,
+                sub_type="AcmeVirtual",
+                is_virtual=True,
+            )
+        )
+        observed_parent_replay.append(get_extension_context().is_replaying())
+        return result
+
+    result = await _run(handler)
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert result.get_deserialized_result() == "done"
+    assert observed_replay == [False, True]
+    assert observed_parent_replay == [True]
+
+
+async def test_flat_parallel_branch_preserves_replay_state(monkeypatch):
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.01")
+    observed_replay = []
+
+    async def branch():
+        observed_replay.append(get_extension_context().is_replaying())
+        await wait(1, name="branch-pause")
+        return "done"
+
+    @durable_execution
+    async def handler(_event):
+        result = await parallel(
+            [branch],
+            nesting_type=NestingType.FLAT,
+        )
+        return result.get_results()
+
+    result = await _run(handler)
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert result.get_deserialized_result() == ["done"]
+    assert observed_replay == [False, True]
+
+
+async def test_virtual_retry_scope_preserves_replay_state(monkeypatch):
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.01")
+    observed_replay = []
+
+    async def operation():
+        observed_replay.append(get_with_retry_context().is_replaying())
+        await wait(1, name="retry-pause")
+        return "done"
+
+    @durable_execution
+    async def handler(_event):
+        return await with_retry(
+            operation,
+            name="virtual-retry",
+            is_virtual=True,
+        )
+
+    result = await _run(handler)
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert result.get_deserialized_result() == "done"
+    assert observed_replay == [False, True]
