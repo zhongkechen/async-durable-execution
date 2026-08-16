@@ -10,6 +10,7 @@ import pytest
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_FILE = REPOSITORY_ROOT / ".github" / "workflows" / "ai-pr-review.yml"
+CLAUDE_WRAPPER_FILE = REPOSITORY_ROOT / "scripts" / "run_claude_isolated.sh"
 JOB_HEADER = re.compile(r"^  ([a-z0-9_-]+):\n", re.MULTILINE)
 
 
@@ -158,10 +159,23 @@ def test_claude_review_uses_sonnet_5_for_both_attempts() -> None:
     assert "--model us.anthropic.claude-opus-" not in claude_review
 
 
-def test_claude_review_relies_on_os_isolation_without_tool_limits() -> None:
+def test_claude_review_uses_hardened_os_isolation_without_tool_limits() -> None:
     claude_review = _jobs()["claude-review"]
 
+    assert (
+        "step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c"
+        in claude_review
+    )
+    assert "egress-policy: block" in claude_review
+    assert "disable-telemetry: true" in claude_review
+    assert "bedrock-runtime.us-east-1.amazonaws.com:443" in claude_review
+    assert "sts.us-east-1.amazonaws.com:443" in claude_review
     assert claude_review.count("scripts/run_claude_isolated.sh") == 2
     assert "bash scripts/prepare_ai_review_user.sh claude-review" in claude_review
+    assert claude_review.count("--bare") == 2
     assert "--allowedTools" not in claude_review
     assert "--disallowedTools" not in claude_review
+
+    claude_wrapper = CLAUDE_WRAPPER_FILE.read_text(encoding="utf-8")
+    assert 'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB:-}" != "1"' in claude_wrapper
+    assert "command -v bwrap" in claude_wrapper

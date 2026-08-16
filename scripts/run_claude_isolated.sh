@@ -5,6 +5,14 @@ set -euo pipefail
 claude_bin="${GITHUB_ACTION_PATH}/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude"
 bun_dir="${GITHUB_ACTION_PATH}/bin"
 
+if [[ "${CLAUDE_CODE_SUBPROCESS_ENV_SCRUB:-}" != "1" ]]; then
+  echo "::error::Claude subprocess credential scrubbing is not enabled."
+  exit 1
+fi
+if ! command -v bwrap > /dev/null; then
+  echo "::error::Claude subprocess PID isolation is unavailable."
+  exit 1
+fi
 if [[ ! -x "$claude_bin" ]]; then
   echo "::error::The pinned Claude action did not install its bundled Linux CLI."
   exit 1

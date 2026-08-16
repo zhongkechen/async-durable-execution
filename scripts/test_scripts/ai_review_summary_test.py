@@ -533,14 +533,24 @@ def test_post_summary_rejects_reserved_metadata(tmp_path: Path) -> None:
     assert "review body containing reserved metadata" in result.stdout
 
 
-def test_post_summary_allows_quoted_reserved_marker(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "summary",
+    [
+        "The change quotes `<!-- ai-pr-review:claude -->` in prose.",
+        "```html\n<!-- ai-pr-review:claude -->\n```",
+        "~~~markdown\n<!-- ai-pr-review:inline:codex:123:1:primary -->\n~~~~",
+    ],
+)
+def test_post_summary_allows_reserved_marker_in_markdown_examples(
+    tmp_path: Path,
+    summary: str,
+) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     mock_gh = bin_dir / "gh"
     mock_gh.write_text(MOCK_GH, encoding="utf-8")
     mock_gh.chmod(0o755)
 
-    summary = "The change quotes `<!-- ai-pr-review:claude -->` in prose."
     summary_file = tmp_path / "summary.md"
     summary_file.write_text(summary, encoding="utf-8")
     posted_body = tmp_path / "posted-body.md"
