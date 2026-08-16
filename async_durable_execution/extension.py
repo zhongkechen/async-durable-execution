@@ -156,6 +156,37 @@ class ExtensionOperation:
             executes_user_code=True,
         )
 
+    def _run_stateful_step(
+        self,
+        func: ExtensionStepFunction[T],
+        *,
+        sub_type: str | OperationSubType,
+        initial_state: T | None = None,
+        retry_strategy: ExtensionStepRetryStrategy[T] | None = None,
+        step_semantics: StepSemantics = StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+        serdes: SerDes[T] | None = None,
+        raise_original_error: bool = False,
+    ) -> asyncio.Task[T]:
+        """Use this reservation for an SDK-owned stateful STEP primitive."""
+        identifier = self._claim(
+            OperationType.STEP,
+            sub_type,
+            include_operation_type=False,
+        )
+        return self._create_task(
+            lambda: _stateful_step(
+                func=func,
+                context=self._context,
+                operation_identifier=identifier,
+                initial_state=initial_state,
+                retry_strategy=retry_strategy,
+                step_semantics=step_semantics,
+                serdes=serdes,
+                raise_original_error=raise_original_error,
+            ),
+            executes_user_code=True,
+        )
+
     def _run_step(
         self,
         func: Callable[[], Awaitable[T]],
@@ -562,11 +593,12 @@ class ExtensionContext:
         local_operation_id: str | None,
     ) -> ExtensionOperation:
         operation_id = self._reserve_operation_id(local_operation_id)
+        self._context.step_counter._register_reservation(operation_id)  # noqa: SLF001
         return ExtensionOperation(
             self._context,
             operation_id,
             name,
-            check_next_operation=local_operation_id is None,
+            check_next_operation=True,
         )
 
     def _reserve_operation_id(self, local_operation_id: str | None) -> str:

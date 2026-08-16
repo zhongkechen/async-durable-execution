@@ -9,7 +9,7 @@ import json
 from contextlib import nullcontext
 from datetime import timedelta
 from typing import Any, cast, NoReturn
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from async_durable_execution._core.context import (
@@ -44,6 +44,7 @@ from async_durable_execution._operation.wait_for_condition import (
 )
 from async_durable_execution._core.state import ExecutionState
 from async_durable_execution import (
+    DurableContext,
     StepContext,
     WaitForConditionCheckContext,
     get_wait_for_condition_check_context,
@@ -156,7 +157,9 @@ async def test_wait_for_condition_public_wrapper_reserves_spi_step() -> None:
 
     extension = Mock()
     operation = Mock()
-    operation.step.return_value = asyncio.create_task(completed())
+    operation._run_stateful_step.return_value = asyncio.create_task(  # noqa: SLF001
+        completed()
+    )
     extension._reserve_sdk_operation.return_value = operation  # noqa: SLF001
     polling_strategy = Mock()
     serdes = Mock()
@@ -177,13 +180,39 @@ async def test_wait_for_condition_public_wrapper_reserves_spi_step() -> None:
     extension._reserve_sdk_operation.assert_called_once_with(  # noqa: SLF001
         "poll-job"
     )
-    operation.step.assert_called_once()
-    assert callable(operation.step.call_args.args[0])
-    assert operation.step.call_args.kwargs == {
+    operation._run_stateful_step.assert_called_once()  # noqa: SLF001
+    assert callable(operation._run_stateful_step.call_args.args[0])  # noqa: SLF001
+    assert operation._run_stateful_step.call_args.kwargs == {  # noqa: SLF001
         "sub_type": OperationSubType.WAIT_FOR_CONDITION,
         "initial_state": {"status": "pending"},
         "serdes": serdes,
+        "raise_original_error": True,
     }
+
+
+async def test_wait_for_condition_public_wrapper_reraises_initial_check_error() -> None:
+    state = Mock(spec=ExecutionState)
+    state.durable_execution_arn = "arn:aws:test"
+    state.operations = {}
+    state.create_checkpoint = AsyncMock()
+    context = DurableContext(
+        execution_state=state,
+        operation_identifier=OperationIdentifier.create_execution_op(),
+    )
+
+    async def check(_state) -> NoReturn:
+        msg = "check failed"
+        raise ValueError(msg)
+
+    with (
+        bind_current_context(context),
+        pytest.raises(ValueError, match="check failed"),
+    ):
+        await wait_for_condition(check)
+
+    assert state.create_checkpoint.call_count == 2
+    fail_update = state.create_checkpoint.call_args_list[-1].kwargs["operation_update"]
+    assert fail_update.action is OperationAction.FAIL
 
 
 async def _invoke_maybe_async(result) -> Any:

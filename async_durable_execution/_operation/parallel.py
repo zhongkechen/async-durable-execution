@@ -1399,11 +1399,14 @@ class ParallelExecutor(
     ) -> BatchResult[ResultType]:
         items: list[BatchItem[ResultType]] = []
         for executable in self.executables:
-            operation_id = (
-                executor_context.step_counter._create_step_id_for_logical_step(  # noqa: SLF001
-                    executable.index
+            if self._branch_operations is not None:
+                operation_id = self._branch_operations[executable.index]._operation_id  # noqa: SLF001
+            else:
+                operation_id = (
+                    executor_context.step_counter._create_step_id_for_logical_step(  # noqa: SLF001
+                        executable.index
+                    )
                 )
-            )
             operation = execution_state.operations.get(operation_id)
 
             result: ResultType | None = None

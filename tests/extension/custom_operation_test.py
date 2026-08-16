@@ -12,11 +12,19 @@ from async_durable_execution import (
     create_local_runner,
     durable_execution,
     get_extension_context,
+    parallel,
+    wait,
 )
 
 
-def _operation_id(local_id: str, parent_id: str | None = None) -> str:
-    namespaced = f"{parent_id}-{local_id}" if parent_id else local_id
+def _operation_id(
+    local_id: str,
+    parent_id: str | None = None,
+    *,
+    explicit: bool = False,
+) -> str:
+    value = f"local:{local_id}" if explicit else local_id
+    namespaced = f"{parent_id}-{value}" if parent_id else value
     return hashlib.blake2b(namespaced.encode()).hexdigest()[:64]
 
 
@@ -115,9 +123,18 @@ async def test_custom_local_ids_survive_reservation_reordering(monkeypatch):
     assert result.status is InvocationStatus.SUCCEEDED
     assert result.get_deserialized_result() == "AB"
     assert executions >= 2
-    assert result.get_step("first").operation_id == _operation_id("node-a")
-    assert result.get_step("second").operation_id == _operation_id("node-b")
-    assert result.get_wait("pause").operation_id == _operation_id("pause")
+    assert result.get_step("first").operation_id == _operation_id(
+        "node-a",
+        explicit=True,
+    )
+    assert result.get_step("second").operation_id == _operation_id(
+        "node-b",
+        explicit=True,
+    )
+    assert result.get_wait("pause").operation_id == _operation_id(
+        "pause",
+        explicit=True,
+    )
 
 
 async def test_stateful_extension_step_checkpoints_state_between_attempts(monkeypatch):
@@ -230,13 +247,49 @@ async def test_extension_can_create_custom_child_context_with_nested_reservation
     assert result.get_deserialized_result() == "nested"
     assert child_operation.operation_type is OperationType.CONTEXT
     assert child_operation.sub_type == "AcmeContext"
-    assert child_operation.operation_id == _operation_id("child")
+    assert child_operation.operation_id == _operation_id("child", explicit=True)
     assert nested_operation.operation_type is OperationType.STEP
     assert nested_operation.sub_type == "AcmeNestedStep"
     assert nested_operation.operation_id == _operation_id(
         "node",
         child_operation.operation_id,
+        explicit=True,
     )
+
+
+async def test_bounded_parallel_restarts_suspended_spi_branches(monkeypatch):
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.01")
+    branch_attempts = [0, 0]
+
+    def create_branch(index):
+        async def branch():
+            branch_attempts[index] += 1
+            await wait(1, name=f"pause-{index}")
+            return index
+
+        return branch
+
+    @durable_execution
+    async def handler(_event):
+        result = await parallel(
+            [create_branch(0), create_branch(1)],
+            name="bounded",
+            max_concurrency=1,
+        )
+        return result.get_results()
+
+    result = await _run(handler)
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert result.get_deserialized_result() == [0, 1]
+    assert branch_attempts == [2, 2]
+    waits = {
+        operation.name: operation
+        for operation in result.get_all_operations()
+        if operation.operation_type is OperationType.WAIT
+    }
+    assert waits["pause-0"].status is OperationStatus.SUCCEEDED
+    assert waits["pause-1"].status is OperationStatus.SUCCEEDED
 
 
 async def test_extension_reservations_are_one_shot():

@@ -89,6 +89,34 @@ def test_process_start_action_with_current_operation() -> None:
     assert result.start_timestamp == current_op.start_timestamp
 
 
+def test_process_start_clears_retry_error_but_preserves_state() -> None:
+    processor = StepProcessor()
+    notifier = MockNotifier()
+    execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
+    current_op = Operation(
+        operation_id="step-123",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.READY,
+        step_details=StepDetails(
+            attempt=1,
+            result="checkpointed-state",
+            error=ErrorObject.from_message("transient failure"),
+        ),
+    )
+    update = OperationUpdate(
+        operation_id="step-123",
+        operation_type=OperationType.STEP,
+        action=OperationAction.START,
+        name="test-step",
+    )
+
+    result = processor.process(update, current_op, notifier, execution_arn)
+
+    assert result.step_details is not None
+    assert result.step_details.result == "checkpointed-state"
+    assert result.step_details.error is None
+
+
 @no_type_check
 def test_process_retry_action() -> None:
     processor = StepProcessor()

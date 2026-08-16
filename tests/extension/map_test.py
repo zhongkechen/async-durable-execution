@@ -1320,10 +1320,17 @@ async def test_map_item_serialize(
             else f"child-{i}"
         )
 
-    with patch.object(
-        context_module.OperationIdGenerator,
-        "_create_id_for_local_id",
-        create_id,
+    with (
+        patch.object(
+            context_module.OperationIdGenerator,
+            "_create_step_id_for_logical_step",
+            create_id,
+        ),
+        patch.object(
+            context_module.OperationIdGenerator,
+            "_create_id_for_local_id",
+            create_id,
+        ),
     ):
         context = create_test_context(state=mock_state)
 
@@ -1408,10 +1415,17 @@ async def test_map_item_deserialize(
             else f"child-{i}"
         )
 
-    with patch.object(
-        context_module.OperationIdGenerator,
-        "_create_id_for_local_id",
-        create_id,
+    with (
+        patch.object(
+            context_module.OperationIdGenerator,
+            "_create_step_id_for_logical_step",
+            create_id,
+        ),
+        patch.object(
+            context_module.OperationIdGenerator,
+            "_create_id_for_local_id",
+            create_id,
+        ),
     ):
         context = create_test_context(state=mock_state)
 
@@ -1540,10 +1554,17 @@ async def test_map_handler_serializes_batch_result() -> None:
                     else f"child-{i}"
                 )
 
-            with patch.object(
-                context_module.OperationIdGenerator,
-                "_create_id_for_local_id",
-                create_id,
+            with (
+                patch.object(
+                    context_module.OperationIdGenerator,
+                    "_create_step_id_for_logical_step",
+                    create_id,
+                ),
+                patch.object(
+                    context_module.OperationIdGenerator,
+                    "_create_id_for_local_id",
+                    create_id,
+                ),
             ):
                 context = create_test_context(state=mock_state)
 
@@ -1604,10 +1625,17 @@ async def test_map_default_serdes_serializes_batch_result() -> None:
                     else f"child-{i}"
                 )
 
-            with patch.object(
-                context_module.OperationIdGenerator,
-                "_create_id_for_local_id",
-                create_id,
+            with (
+                patch.object(
+                    context_module.OperationIdGenerator,
+                    "_create_step_id_for_logical_step",
+                    create_id,
+                ),
+                patch.object(
+                    context_module.OperationIdGenerator,
+                    "_create_id_for_local_id",
+                    create_id,
+                ),
             ):
                 context = create_test_context(state=mock_state)
 
@@ -1676,10 +1704,17 @@ async def test_map_custom_serdes_serializes_batch_result() -> None:
                     else f"child-{i}"
                 )
 
-            with patch.object(
-                context_module.OperationIdGenerator,
-                "_create_id_for_local_id",
-                create_id,
+            with (
+                patch.object(
+                    context_module.OperationIdGenerator,
+                    "_create_step_id_for_logical_step",
+                    create_id,
+                ),
+                patch.object(
+                    context_module.OperationIdGenerator,
+                    "_create_id_for_local_id",
+                    create_id,
+                ),
             ):
                 context = create_test_context(state=mock_state)
 

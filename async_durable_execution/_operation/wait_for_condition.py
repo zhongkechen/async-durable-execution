@@ -405,11 +405,12 @@ def wait_for_condition(
     return (
         get_extension_context()
         ._reserve_sdk_operation(name)  # noqa: SLF001
-        .step(
+        ._run_stateful_step(  # noqa: SLF001
             check_attempt,
             sub_type=OperationSubType.WAIT_FOR_CONDITION,
             initial_state=initial_state,
             serdes=serdes,
+            raise_original_error=True,
         )
     )
 

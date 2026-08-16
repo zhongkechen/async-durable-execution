@@ -136,8 +136,6 @@ class OperationProcessor:
             ):
                 if result is None:
                     result = current_operation.step_details.result
-                if error is None:
-                    error = current_operation.step_details.error
             return StepDetails(
                 attempt=attempt,
                 next_attempt_timestamp=next_attempt_timestamp,

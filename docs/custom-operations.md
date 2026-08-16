@@ -208,6 +208,8 @@ Extension code is replayed under the same rules as handler code:
 
 - Reserve the same logical operations on every replay.
 - Keep sequential reservation order deterministic.
+- Local IDs use a separate identity namespace and do not consume sequential
+  reservation positions.
 - Keep local IDs, primitive choices, subtypes, names, and parent scope stable.
 - Put nondeterministic work and side effects inside reserved steps.
 - Keep retry strategies deterministic and side-effect free.
@@ -220,5 +222,6 @@ against existing checkpoints before replaying them.
 
 Use `create_local_runner()` to exercise first execution, suspension, and replay.
 Tests should cover changed launch order after reservation, custom local IDs,
-stateful retries, nested contexts, and compatibility with checkpoints produced by
-the previous extension version.
+stateful retries, nested contexts, bounded concurrent children that suspend and
+resume, and compatibility with checkpoints produced by the previous extension
+version.

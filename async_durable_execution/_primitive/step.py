@@ -391,6 +391,7 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
         retry_strategy: ExtensionStepRetryStrategy[T] | None,
         step_semantics: StepSemantics,
         serdes: SerDes[T] | None,
+        raise_original_error: bool = False,
     ) -> None:
         super().__init__(state=state, operation_identifier=operation_identifier)
         self.func = func
@@ -398,6 +399,7 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
         self.retry_strategy = retry_strategy
         self.step_semantics = step_semantics
         self.serdes = serdes
+        self.raise_original_error = raise_original_error
 
     async def start(self) -> T:
         start = OperationUpdate.create_step_start(self.operation_identifier)
@@ -595,6 +597,8 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
                 error_object,
             )
         )
+        if self.raise_original_error:
+            raise error
         control_error = _restore_sdk_control_error(
             error_object.message or str(error),
             error_object.type,
@@ -670,6 +674,7 @@ async def _stateful_step(
     retry_strategy: ExtensionStepRetryStrategy[T] | None,
     step_semantics: StepSemantics,
     serdes: SerDes[T] | None,
+    raise_original_error: bool = False,
 ) -> T:
     executor: StatefulStepOperationExecutor[T] = StatefulStepOperationExecutor(
         func=func,
@@ -679,6 +684,7 @@ async def _stateful_step(
         retry_strategy=retry_strategy,
         step_semantics=step_semantics,
         serdes=serdes,
+        raise_original_error=raise_original_error,
     )
     return await executor.process()
 

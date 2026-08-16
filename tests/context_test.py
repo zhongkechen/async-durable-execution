@@ -17,6 +17,7 @@ import pytest
 
 from async_durable_execution._core.context import (
     DurableContext as ModuleDurableContext,
+    OperationIdGenerator,
     OperationContext,
     SerDesContext,
     bind_current_context,
@@ -313,7 +314,7 @@ async def test_module_level_context_functions_delegate_to_durable_context() -> N
     invoke_executor = AsyncMock()
     invoke_executor.process.return_value = "invoke-result"
     condition_operation = Mock()
-    condition_operation.step.return_value = asyncio.create_task(
+    condition_operation._run_stateful_step.return_value = asyncio.create_task(  # noqa: SLF001
         asyncio.sleep(0, result="condition-result")
     )
     condition_extension = Mock()
@@ -451,12 +452,15 @@ async def test_module_level_context_functions_delegate_to_durable_context() -> N
     condition_extension._reserve_sdk_operation.assert_called_once_with(  # noqa: SLF001
         "condition-name"
     )
-    condition_operation.step.assert_called_once()
-    assert callable(condition_operation.step.call_args.args[0])
-    assert condition_operation.step.call_args.kwargs == {
+    condition_operation._run_stateful_step.assert_called_once()  # noqa: SLF001
+    assert callable(  # noqa: SLF001
+        condition_operation._run_stateful_step.call_args.args[0]
+    )
+    assert condition_operation._run_stateful_step.call_args.kwargs == {  # noqa: SLF001
         "sub_type": OperationSubType.WAIT_FOR_CONDITION,
         "initial_state": "pending",
         "serdes": None,
+        "raise_original_error": True,
     }
 
 
@@ -2329,7 +2333,7 @@ async def test_wait_for_condition_validation_errors() -> None:
         return state
 
     condition_operation = Mock()
-    condition_operation.step.return_value = asyncio.create_task(
+    condition_operation._run_stateful_step.return_value = asyncio.create_task(  # noqa: SLF001
         asyncio.sleep(0, result="test")
     )
     condition_extension = Mock()
@@ -2347,7 +2351,7 @@ async def test_wait_for_condition_validation_errors() -> None:
 
     assert result == "test"
     condition_extension._reserve_sdk_operation.assert_called_once_with(None)  # noqa: SLF001
-    condition_operation.step.assert_called_once()
+    condition_operation._run_stateful_step.assert_called_once()  # noqa: SLF001
 
 
 async def test_context_map_handler_call() -> None:
@@ -2436,7 +2440,7 @@ async def test_context_wait_for_condition_handler_call() -> None:
     context = create_test_context(state=state)
 
     condition_operation = Mock()
-    condition_operation.step.return_value = asyncio.create_task(
+    condition_operation._run_stateful_step.return_value = asyncio.create_task(  # noqa: SLF001
         asyncio.sleep(0, result="final_state")
     )
     condition_extension = Mock()
@@ -2457,12 +2461,15 @@ async def test_context_wait_for_condition_handler_call() -> None:
         )
 
     condition_extension._reserve_sdk_operation.assert_called_once_with(None)  # noqa: SLF001
-    condition_operation.step.assert_called_once()
-    assert callable(condition_operation.step.call_args.args[0])
-    assert condition_operation.step.call_args.kwargs == {
+    condition_operation._run_stateful_step.assert_called_once()  # noqa: SLF001
+    assert callable(  # noqa: SLF001
+        condition_operation._run_stateful_step.call_args.args[0]
+    )
+    assert condition_operation._run_stateful_step.call_args.kwargs == {  # noqa: SLF001
         "sub_type": OperationSubType.WAIT_FOR_CONDITION,
         "initial_state": None,
         "serdes": None,
+        "raise_original_error": True,
     }
     assert result == "final_state"
 
@@ -2766,6 +2773,22 @@ def test_replay_aware_user_code_flips_new_before_retrying_operation() -> None:
     assert ctx.is_replaying() is False
 
 
+def test_local_and_sequential_operation_ids_use_separate_namespaces() -> None:
+    local_first = OperationIdGenerator(None)
+    local_id = local_first.create_step_id_for_local_id("1")
+    sequential_id = local_first.create_step_id()
+
+    assert local_id != sequential_id
+    assert local_first.get_current() == 1
+
+    sequential_first = OperationIdGenerator(None)
+    sequential_id = sequential_first.create_step_id()
+    local_id = sequential_first.create_step_id_for_local_id("1")
+
+    assert local_id != sequential_id
+    assert sequential_first.get_current() == 1
+
+
 async def test_custom_local_id_replay_transitions_when_selected(monkeypatch) -> None:
     ctx = create_replay_context()
     node_a_id = ctx.step_counter._create_id_for_local_id("node-a")  # noqa: SLF001
@@ -2787,6 +2810,41 @@ async def test_custom_local_id_replay_transitions_when_selected(monkeypatch) -> 
         assert ctx.is_replaying() is True
 
         await reservation.wait(1, sub_type="AcmeWait")
+
+    assert ctx.is_replaying() is False
+
+
+async def test_local_reservation_does_not_end_replay_between_sequential_operations(
+    monkeypatch,
+) -> None:
+    ctx = create_replay_context()
+    first_id = ctx.step_counter._create_step_id_for_logical_step(1)  # noqa: SLF001
+    local_id = ctx.step_counter._create_id_for_local_id("node-a")  # noqa: SLF001
+    second_id = ctx.step_counter._create_step_id_for_logical_step(2)  # noqa: SLF001
+    for operation_id in (first_id, local_id, second_id):
+        ctx.execution_state.operations[operation_id] = create_replay_operation(
+            operation_id,
+            OperationStatus.SUCCEEDED,
+            OperationType.WAIT,
+        )
+
+    async def replay_wait(**_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr("async_durable_execution.extension._wait", replay_wait)
+
+    with bind_current_context(ctx):
+        extension = ExtensionContext(ctx)
+        await extension.reserve("first").wait(1, sub_type="AcmeWait")
+        assert ctx.is_replaying() is True
+
+        await extension.reserve(
+            "local",
+            local_operation_id="node-a",
+        ).wait(1, sub_type="AcmeWait")
+        assert ctx.is_replaying() is True
+
+        await extension.reserve("second").wait(1, sub_type="AcmeWait")
 
     assert ctx.is_replaying() is False
 
@@ -2887,6 +2945,7 @@ async def test_pre_reserved_children_keep_their_replay_snapshot(monkeypatch) -> 
         )
 
     assert observed_child_replay == [True, True]
+    assert ctx.is_replaying() is False
 
 
 async def test_sdk_reservations_preserve_legacy_blank_name_behavior(

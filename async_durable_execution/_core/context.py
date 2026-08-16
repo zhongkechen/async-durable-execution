@@ -41,6 +41,8 @@ class OperationIdGenerator:
         self._prefix = prefix
         self._counter = 0
         self._claimed_local_ids: set[str] = set()
+        self._reserved_operation_ids: list[str] = []
+        self._consumed_operation_ids: set[str] = set()
 
     def increment(self) -> int:
         self._counter += 1
@@ -49,25 +51,23 @@ class OperationIdGenerator:
     def get_current(self) -> int:
         return self._counter
 
-    def _create_id_for_local_id(self, local_id: str) -> str:
-        """Generate the stable operation id for a context-local identifier."""
+    def _create_id(self, value: str) -> str:
+        """Hash one context-local identity value."""
         prefix = self._prefix
-        step_id = f"{prefix}-{local_id}" if prefix else local_id
+        step_id = f"{prefix}-{value}" if prefix else value
         return hashlib.blake2b(step_id.encode()).hexdigest()[:64]
+
+    def _create_id_for_local_id(self, local_id: str) -> str:
+        """Generate an id in the caller-provided local-id namespace."""
+        return self._create_id(f"local:{local_id}")
 
     def _create_step_id_for_logical_step(self, step: int) -> str:
         """Generate the stable operation id for a logical step."""
-        return self._create_id_for_local_id(str(step))
+        return self._create_id(str(step))
 
     def create_step_id(self) -> str:
         """Generate an operation id and advance the logical step counter."""
-        while True:
-            step = self.increment()
-            local_id = str(step)
-            if local_id in self._claimed_local_ids:
-                continue
-            self._claimed_local_ids.add(local_id)
-            return self._create_step_id_for_logical_step(step)
+        return self._create_step_id_for_logical_step(self.increment())
 
     def create_step_id_for_local_id(self, local_id: str) -> str:
         """Generate an operation id from a stable caller-provided local id."""
@@ -81,9 +81,27 @@ class OperationIdGenerator:
             msg = f"local_operation_id is already reserved: {local_id}"
             raise ValueError(msg)
 
-        self.increment()
         self._claimed_local_ids.add(local_id)
         return self._create_id_for_local_id(local_id)
+
+    def _register_reservation(self, operation_id: str) -> None:
+        """Record deterministic reservation order for replay transitions."""
+        self._reserved_operation_ids.append(operation_id)
+
+    def _consume_reservation(self, operation_id: str) -> None:
+        """Mark a reservation as selected by workflow code."""
+        self._consumed_operation_ids.add(operation_id)
+
+    def _next_unconsumed_reservation_id(self) -> str | None:
+        """Return the next allocated reservation not yet selected."""
+        return next(
+            (
+                operation_id
+                for operation_id in self._reserved_operation_ids
+                if operation_id not in self._consumed_operation_ids
+            ),
+            None,
+        )
 
 
 @dataclass(frozen=True)
@@ -194,6 +212,12 @@ class DurableContext(OperationContext):
     def _next_operation_exists(self) -> bool:
         return self._next_operation_result() is not None
 
+    def _next_reserved_or_sequential_operation_exists(self) -> bool:
+        operation_id = self.step_counter._next_unconsumed_reservation_id()  # noqa: SLF001
+        if operation_id is not None:
+            return self._operation_result(operation_id) is not None
+        return self._next_operation_exists()
+
     def _next_operation_is_terminal_checkpoint(self) -> bool:
         return self._operation_is_terminal_checkpoint(self._peek_next_operation_id())
 
@@ -220,11 +244,13 @@ class DurableContext(OperationContext):
         """Update replay status around one durable operation.
 
         `operation_id` identifies an operation that was allocated before entering
-        this scope. Explicit local IDs do not have a meaningful sequential
-        successor, so they leave replay after a terminal operation is selected.
+        this scope. Pre-allocated reservations are tracked independently from the
+        sequential counter so launch order does not end replay prematurely.
         """
         was_replaying = self.is_replaying()
         current_operation_id = operation_id or self._peek_next_operation_id()
+        if operation_id is not None:
+            self.step_counter._consume_reservation(operation_id)  # noqa: SLF001
         current_exists = was_replaying and (
             self._operation_result(current_operation_id) is not None
         )
@@ -250,7 +276,12 @@ class DurableContext(OperationContext):
                 self._set_replay_status_new()
             elif self.is_replaying():
                 if check_next_operation:
-                    if not self._next_operation_exists():
+                    next_operation_exists = (
+                        self._next_reserved_or_sequential_operation_exists()
+                        if operation_id is not None
+                        else self._next_operation_exists()
+                    )
+                    if not next_operation_exists:
                         self._set_replay_status_new()
                 elif current_terminal:
                     self._set_replay_status_new()
