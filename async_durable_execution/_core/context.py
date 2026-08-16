@@ -258,6 +258,7 @@ class DurableContext(OperationContext):
         *,
         operation_id: str | None = None,
         executes_user_code: bool = False,
+        consume_reservation: bool = True,
     ) -> Iterator[None]:
         """Update replay status around one durable operation.
 
@@ -267,7 +268,7 @@ class DurableContext(OperationContext):
         """
         was_replaying = self.is_replaying()
         current_operation_id = operation_id or self._peek_next_operation_id()
-        if operation_id is not None:
+        if operation_id is not None and consume_reservation:
             self.step_counter._consume_reservation(operation_id)  # noqa: SLF001
         current_exists = was_replaying and (
             self._operation_result(current_operation_id) is not None

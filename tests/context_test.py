@@ -3194,6 +3194,72 @@ async def test_child_claim_marks_selection_before_lazy_task_starts(
         assert await task == "done"
 
 
+async def test_cancelled_lazy_child_consumes_replay_reservation(monkeypatch) -> None:
+    ctx = create_replay_context()
+    child_id = ctx.step_counter._create_id_for_local_id("child")  # noqa: SLF001
+    sibling_id = ctx.step_counter._create_id_for_local_id("sibling")  # noqa: SLF001
+    ctx.execution_state.operations[child_id] = create_replay_operation(
+        child_id,
+        OperationStatus.STARTED,
+        OperationType.CONTEXT,
+    )
+    ctx.execution_state.operations[sibling_id] = create_replay_operation(
+        sibling_id,
+        OperationStatus.SUCCEEDED,
+        OperationType.WAIT,
+    )
+    child_started = False
+
+    def create_lazy_task(coro_factory):
+        return asyncio.get_running_loop().create_task(coro_factory())
+
+    async def run_child_context(_func, **_kwargs):
+        nonlocal child_started
+        child_started = True
+        return "done"
+
+    async def replay_wait(**_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "async_durable_execution.extension.create_eager_task",
+        create_lazy_task,
+    )
+    monkeypatch.setattr(
+        "async_durable_execution.extension._run_child_context",
+        run_child_context,
+    )
+    monkeypatch.setattr("async_durable_execution.extension._wait", replay_wait)
+
+    async def child() -> str:
+        return "unused"
+
+    with bind_current_context(ctx):
+        extension = ExtensionContext(ctx)
+        child_operation = extension.reserve(
+            "child",
+            local_operation_id="child",
+        )
+        sibling = extension.reserve(
+            "sibling",
+            local_operation_id="sibling",
+        )
+        task = child_operation.run_in_child_context(
+            child,
+            sub_type="AcmeContext",
+        )
+        task.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert child_started is False
+        assert ctx.is_replaying() is True
+        await sibling.wait(1, sub_type="AcmeWait")
+
+    assert ctx.is_replaying() is False
+
+
 def test_extension_operation_cannot_be_constructed_directly() -> None:
     with pytest.raises(
         TypeError,

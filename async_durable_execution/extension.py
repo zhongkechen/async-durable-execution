@@ -469,9 +469,6 @@ class ExtensionOperation:
             if is_virtual:
                 # Virtual contexts have no container checkpoint. Their nested
                 # operations refine the inherited replay snapshot independently.
-                self._context.step_counter._consume_reservation(  # noqa: SLF001
-                    self._operation_id
-                )
                 try:
                     return await execute_child_context()
                 finally:
@@ -482,9 +479,14 @@ class ExtensionOperation:
                         self._context._set_replay_status_new()  # noqa: SLF001
             with self._context._replay_aware(
                 operation_id=self._operation_id,
+                consume_reservation=False,
             ):
                 return await execute_child_context()
 
+        if replay_aware:
+            self._context.step_counter._consume_reservation(  # noqa: SLF001
+                self._operation_id
+            )
         return create_eager_task(run_child_context)
 
     def _create_task(
