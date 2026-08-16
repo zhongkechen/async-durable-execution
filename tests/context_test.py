@@ -2953,6 +2953,49 @@ async def test_pre_reserved_children_keep_their_replay_snapshot(monkeypatch) -> 
     assert ctx.is_replaying() is False
 
 
+async def test_lazy_checkpointed_child_replays_after_parent_advanced(
+    monkeypatch,
+) -> None:
+    ctx = create_replay_context()
+    operation_id = ctx.step_counter._create_step_id_for_logical_step(1)  # noqa: SLF001
+    ctx.execution_state.operations[operation_id] = create_replay_operation(
+        operation_id,
+        OperationStatus.STARTED,
+        OperationType.CONTEXT,
+    )
+    observed_child_replay = None
+
+    async def run_child_context(_func, *, child_context, **_kwargs):
+        nonlocal observed_child_replay
+        observed_child_replay = child_context.is_replaying()
+        return "done"
+
+    monkeypatch.setattr(
+        "async_durable_execution.extension._run_child_context",
+        run_child_context,
+    )
+
+    async def child() -> str:
+        return "unused"
+
+    with bind_current_context(ctx):
+        ctx._set_replay_status_new()  # noqa: SLF001
+        reservation = ExtensionContext(ctx)._reserve_sdk_operation_id(  # noqa: SLF001
+            "late-child",
+            operation_id=operation_id,
+        )
+        assert (
+            await reservation._run_in_child_context(  # noqa: SLF001
+                child,
+                sub_type=OperationSubType.PARALLEL_BRANCH,
+            )
+            == "done"
+        )
+
+    assert observed_child_replay is True
+    assert ctx.is_replaying() is False
+
+
 async def test_pre_reserved_new_child_does_not_inherit_stale_replay(
     monkeypatch,
 ) -> None:

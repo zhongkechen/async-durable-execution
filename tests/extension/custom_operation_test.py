@@ -310,6 +310,36 @@ async def test_bounded_parallel_restarts_suspended_spi_branches(monkeypatch):
     )
 
 
+async def test_parallel_checkpointed_siblings_each_replay(monkeypatch):
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.01")
+    observed_replay = [[], []]
+    delays = [1, 100]
+
+    def create_branch(index):
+        async def branch():
+            observed_replay[index].append(get_extension_context().is_replaying())
+            await wait(delays[index], name=f"pause-{index}")
+            return index
+
+        return branch
+
+    @durable_execution
+    async def handler(_event):
+        result = await parallel(
+            [create_branch(0), create_branch(1)],
+            name="siblings",
+        )
+        return result.get_results()
+
+    result = await _run(handler)
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert result.get_deserialized_result() == [0, 1]
+    assert observed_replay[0] == [False, True]
+    assert observed_replay[1][0] is False
+    assert all(observed_replay[1][1:])
+
+
 async def test_extension_reservations_are_one_shot():
     async def work(_state):
         return ExtensionStepResult.succeed("done")

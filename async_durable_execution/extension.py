@@ -538,7 +538,7 @@ def _create_extension_operation(
     operation._operation_id = operation_id  # noqa: SLF001
     operation._name = name  # noqa: SLF001
     operation._parent_replaying = context.is_replaying()  # noqa: SLF001
-    operation._replaying = operation._parent_replaying and has_checkpoint  # noqa: SLF001
+    operation._replaying = has_checkpoint  # noqa: SLF001
     operation._claimed = False  # noqa: SLF001
     operation._claimed_operation_type = None  # noqa: SLF001
     operation._identifier = None  # noqa: SLF001
