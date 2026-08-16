@@ -1487,6 +1487,7 @@ class _BranchOperationReservations(Mapping[int, ExtensionOperation]):
         self._name_prefix = name_prefix
         self._branch_namer = branch_namer
         self._extension = ExtensionContext(context)
+        self._parent_replaying = context.is_replaying()
         self._reservations: dict[int, ExtensionOperation] = {}
         self._register_historical_checkpoints()
 
@@ -1502,6 +1503,7 @@ class _BranchOperationReservations(Mapping[int, ExtensionOperation]):
                         index
                     )
                 ),
+                parent_replaying=self._parent_replaying,
             )
             self._reservations[index] = reservation
         return reservation

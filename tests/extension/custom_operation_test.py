@@ -488,6 +488,37 @@ async def test_flat_parallel_branch_preserves_replay_state(monkeypatch):
     assert observed_replay == [False, True]
 
 
+async def test_late_flat_parallel_branch_preserves_initial_replay_state(monkeypatch):
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.01")
+    observed_after_parallel = []
+    observed_replay = {0: [], 1: []}
+
+    def branch(index):
+        async def run():
+            observed_replay[index].append(get_extension_context().is_replaying())
+            await wait(1, name=f"branch-{index}-pause")
+            return index
+
+        return run
+
+    @durable_execution
+    async def handler(_event):
+        result = await parallel(
+            [branch(0), branch(1)],
+            max_concurrency=1,
+            nesting_type=NestingType.FLAT,
+        )
+        observed_after_parallel.append(get_extension_context().is_replaying())
+        return result.get_results()
+
+    result = await _run(handler)
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert result.get_deserialized_result() == [0, 1]
+    assert observed_replay[1] == [True, True]
+    assert observed_after_parallel == [False]
+
+
 async def test_virtual_retry_scope_preserves_replay_state(monkeypatch):
     monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.01")
     observed_replay = []

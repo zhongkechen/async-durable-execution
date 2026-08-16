@@ -539,12 +539,15 @@ def _create_extension_operation(
     name: str | None,
     *,
     has_checkpoint: bool,
+    parent_replaying: bool | None = None,
 ) -> ExtensionOperation:
     operation = object.__new__(ExtensionOperation)
     operation._context = context  # noqa: SLF001
     operation._operation_id = operation_id  # noqa: SLF001
     operation._name = name  # noqa: SLF001
-    operation._parent_replaying = context.is_replaying()  # noqa: SLF001
+    operation._parent_replaying = (  # noqa: SLF001
+        context.is_replaying() if parent_replaying is None else parent_replaying
+    )
     operation._replaying = has_checkpoint  # noqa: SLF001
     operation._claimed = False  # noqa: SLF001
     operation._claimed_operation_type = None  # noqa: SLF001
@@ -615,12 +618,14 @@ class ExtensionContext:
         name: str | None,
         *,
         operation_id: str,
+        parent_replaying: bool | None = None,
     ) -> ExtensionOperation:
         """Reserve an SDK-owned primitive with a replay-compatible operation id."""
         self._require_active_context()
         return self._create_reservation_for_operation_id(
             _normalize_sdk_operation_name(name),
             operation_id=operation_id,
+            parent_replaying=parent_replaying,
         )
 
     def _create_reservation(
@@ -640,6 +645,7 @@ class ExtensionContext:
         name: str | None,
         *,
         operation_id: str,
+        parent_replaying: bool | None = None,
     ) -> ExtensionOperation:
         has_checkpoint = self._context._operation_result(operation_id) is not None  # noqa: SLF001
         self._context.step_counter._register_reservation(  # noqa: SLF001
@@ -651,6 +657,7 @@ class ExtensionContext:
             operation_id,
             name,
             has_checkpoint=has_checkpoint,
+            parent_replaying=parent_replaying,
         )
 
     def _reserve_operation_id(self, local_operation_id: str | None) -> str:
