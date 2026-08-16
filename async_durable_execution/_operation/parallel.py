@@ -1400,7 +1400,9 @@ class ParallelExecutor(
     ) -> BatchResult[ResultType]:
         items: list[BatchItem[ResultType]] = []
         for executable in self.executables:
-            if self._branch_operations is not None:
+            if isinstance(self._branch_operations, _BranchOperationReservations):
+                operation_id = self._branch_operations.operation_id(executable.index)
+            elif self._branch_operations is not None:
                 operation_id = self._branch_operations[executable.index]._operation_id  # noqa: SLF001
             else:
                 operation_id = (
@@ -1492,17 +1494,12 @@ class _BranchOperationReservations(Mapping[int, ExtensionOperation]):
         self._register_historical_checkpoints()
 
     def __getitem__(self, index: int) -> ExtensionOperation:
-        if index < 0 or index >= self._count:
-            raise KeyError(index)
+        operation_id = self.operation_id(index)
         reservation = self._reservations.get(index)
         if reservation is None:
             reservation = self._extension._reserve_sdk_operation_id(  # noqa: SLF001
                 self._branch_name(index),
-                operation_id=(
-                    self._context.step_counter._create_step_id_for_logical_step(  # noqa: SLF001
-                        index
-                    )
-                ),
+                operation_id=operation_id,
                 parent_replaying=self._parent_replaying,
             )
             self._reservations[index] = reservation
@@ -1513,6 +1510,14 @@ class _BranchOperationReservations(Mapping[int, ExtensionOperation]):
 
     def __len__(self) -> int:
         return self._count
+
+    def operation_id(self, index: int) -> str:
+        """Return a branch ID without creating its reservation or name."""
+        if index < 0 or index >= self._count:
+            raise KeyError(index)
+        return self._context.step_counter._create_step_id_for_logical_step(  # noqa: SLF001
+            index
+        )
 
     def _branch_name(self, index: int) -> str:
         if self._branch_namer is not None:

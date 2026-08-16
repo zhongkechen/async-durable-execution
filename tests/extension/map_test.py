@@ -17,6 +17,7 @@ import async_durable_execution._primitive.child as child
 # Mock the executor.execute method
 from async_durable_execution._operation.parallel import (
     _BATCH_RESULT_SERDES,
+    _BranchOperationReservations,
     BatchItem,
     BatchItemStatus,
     BatchResult,
@@ -1049,6 +1050,78 @@ async def test_map_handler_replay_with_replay_children() -> None:
 
         mock_replay.assert_called_once_with(execution_state, map_context)
         assert result == expected_batch_result
+
+
+async def test_completed_map_replay_does_not_name_unstarted_items() -> None:
+    items = ["started", "never-started"]
+    named_indexes = []
+
+    async def callable_func(item) -> str:
+        return f"result_{item}"
+
+    def item_namer(item, index) -> str:
+        named_indexes.append(index)
+        if index != 0:
+            raise AssertionError("item_namer called for an unstarted item")
+        return f"item-{item}"
+
+    state = create_mock_execution_state()
+    state.recursive_level = 0
+    context = create_test_context(state, parent_id="map-operation")
+    started_operation_id = (
+        context.step_counter._create_step_id_for_logical_step(0)  # noqa: SLF001
+    )
+    state.operations = {
+        started_operation_id: Operation(
+            operation_id=started_operation_id,
+            operation_type=OperationType.CONTEXT,
+            status=OperationStatus.SUCCEEDED,
+            sub_type=OperationSubType.MAP_ITERATION,
+            parent_id=context.parent_id,
+            context_details=ContextDetails(replay_children=True),
+        )
+    }
+    branch_operations = _BranchOperationReservations(
+        context=context,
+        count=len(items),
+        sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        branch_namer=_create_map_branch_namer(items, item_namer),
+    )
+    executor = create_map_executor(
+        executables=[
+            Executable(index=index, func=callable_func) for index in range(len(items))
+        ],
+        items=items,
+        item_namer=item_namer,
+        execution_state=state,
+        executor_context=context,
+        max_concurrency=1,
+        completion_config=CompletionConfig(min_successful=1),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
+        branch_operations=branch_operations,
+    )
+
+    async def replay_started_item(_context, executable) -> str:
+        branch_operations[executable.index]
+        return f"replayed-{items[executable.index]}"
+
+    with (
+        bind_current_context(context),
+        patch.object(
+            executor,
+            "_execute_item_in_child_context",
+            side_effect=replay_started_item,
+        ),
+    ):
+        result = await executor.replay_completed(state, context)
+
+    assert result.get_results() == ["replayed-started"]
+    assert named_indexes == [0]
+    assert list(branch_operations._reservations) == [0]  # noqa: SLF001
 
 
 @patch("async_durable_execution._operation.map._run_in_child_context")
