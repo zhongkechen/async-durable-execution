@@ -152,11 +152,13 @@ def test_converting_to_draft_cancels_previous_review() -> None:
         assert "always()" not in jobs[job_id]
 
 
-def test_claude_review_uses_sonnet_5_for_both_attempts() -> None:
+def test_claude_review_uses_single_sonnet_5_attempt() -> None:
     claude_review = _jobs()["claude-review"]
 
-    assert claude_review.count("--model us.anthropic.claude-sonnet-5") == 2
+    assert claude_review.count("--model us.anthropic.claude-sonnet-5") == 1
     assert "--model us.anthropic.claude-opus-" not in claude_review
+    assert "continue-on-error: true" not in claude_review
+    assert "review-retry" not in claude_review
 
 
 def test_claude_review_uses_hardened_os_isolation_without_tool_limits() -> None:
@@ -170,10 +172,10 @@ def test_claude_review_uses_hardened_os_isolation_without_tool_limits() -> None:
     assert "disable-telemetry: true" in claude_review
     assert "bedrock-runtime.us-east-1.amazonaws.com:443" in claude_review
     assert "sts.us-east-1.amazonaws.com:443" in claude_review
-    assert claude_review.count("scripts/run_claude_isolated.sh") == 2
+    assert claude_review.count("scripts/run_claude_isolated.sh") == 1
     assert "bash scripts/prepare_ai_review_user.sh claude-review" in claude_review
-    assert claude_review.count("--bare") == 2
-    assert claude_review.count("--permission-mode bypassPermissions") == 2
+    assert claude_review.count("--bare") == 1
+    assert claude_review.count("--permission-mode bypassPermissions") == 1
     assert "--allowedTools" not in claude_review
     assert "--disallowedTools" not in claude_review
 

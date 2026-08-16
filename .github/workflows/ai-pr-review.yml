@@ -138,28 +138,6 @@ jobs:
 
       - name: Review pull request with Claude on Amazon Bedrock
         id: review
-        continue-on-error: true
-        uses: anthropics/claude-code-action@5ef2e550a465a721f4f45e4a7d3c340c873e1dcc # v1.0.190
-        env:
-          AWS_REGION: us-east-1
-          CLAUDE_CODE_ATTRIBUTION_HEADER: "0"
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          use_bedrock: "true"
-          path_to_claude_code_executable: ${{ github.workspace }}/scripts/run_claude_isolated.sh
-          # This also keeps the token out of the git remote configured by the action.
-          allowed_non_write_users: ${{ github.actor }}
-          prompt: ${{ steps.review-inputs.outputs.prompt }}
-          claude_args: |
-            --model us.anthropic.claude-sonnet-5
-            --max-turns 20
-            --bare
-            --permission-mode bypassPermissions
-            --json-schema '${{ steps.review-inputs.outputs.schema }}'
-
-      - name: Retry pull request review with Claude on Amazon Bedrock
-        id: review-retry
-        if: steps.review.outcome == 'failure'
         uses: anthropics/claude-code-action@5ef2e550a465a721f4f45e4a7d3c340c873e1dcc # v1.0.190
         env:
           AWS_REGION: us-east-1
@@ -181,12 +159,7 @@ jobs:
       - name: Prepare Claude review output
         id: review-output
         env:
-          REVIEW_OUTPUT: >-
-            ${{
-              steps.review.outcome == 'success' &&
-              steps.review.outputs.structured_output ||
-              steps.review-retry.outputs.structured_output
-            }}
+          REVIEW_OUTPUT: ${{ steps.review.outputs.structured_output }}
         run: |
           set -euo pipefail
 
