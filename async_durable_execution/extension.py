@@ -434,6 +434,7 @@ class ExtensionOperation:
             serdes=serdes,
             summary_generator=summary_generator,
             is_virtual=is_virtual,
+            replaying=True,
         )
 
     def _create_child_context_task(
@@ -445,11 +446,14 @@ class ExtensionOperation:
         summary_generator: SummaryGenerator[T] | None,
         is_virtual: bool,
         replay_aware: bool = False,
+        replaying: bool | None = None,
     ) -> asyncio.Task[T]:
         child_context = self._context.create_child_context(
             operation_id=self._operation_id,
             is_virtual=is_virtual,
-            replaying=self._parent_replaying if is_virtual else self._replaying,
+            replaying=(self._parent_replaying if is_virtual else self._replaying)
+            if replaying is None
+            else replaying,
         )
 
         async def execute_child_context() -> T:

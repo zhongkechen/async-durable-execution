@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 
 import pytest
@@ -338,6 +339,34 @@ async def test_parallel_checkpointed_siblings_each_replay(monkeypatch):
     assert observed_replay[0] == [False, True]
     assert observed_replay[1][0] is False
     assert all(observed_replay[1][1:])
+
+
+async def test_timed_branch_restart_replays_while_sibling_is_active(monkeypatch):
+    monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0.01")
+    observed_replay = []
+
+    async def timed_branch():
+        observed_replay.append(get_extension_context().is_replaying())
+        await wait(1, name="timed-pause")
+        return "timed"
+
+    async def active_sibling():
+        await asyncio.sleep(0.1)
+        return "active"
+
+    @durable_execution
+    async def handler(_event):
+        result = await parallel(
+            [timed_branch, active_sibling],
+            name="in-process-restart",
+        )
+        return result.get_results()
+
+    result = await _run(handler)
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert result.get_deserialized_result() == ["timed", "active"]
+    assert observed_replay == [False, True]
 
 
 async def test_extension_reservations_are_one_shot():
