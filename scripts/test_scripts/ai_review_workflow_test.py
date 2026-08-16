@@ -197,6 +197,14 @@ def test_claude_review_uses_hardened_os_isolation_without_tool_limits() -> None:
     assert claude_review.count("--permission-mode bypassPermissions") == 1
     assert "--allowedTools" not in claude_review
     assert "--disallowedTools" not in claude_review
+    assert (
+        "sudo apt-get install -y --no-install-recommends bubblewrap socat"
+        in claude_review
+    )
+    assert "sudo sysctl -w kernel.unprivileged_userns_clone=1" in claude_review
+    assert (
+        "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0" in claude_review
+    )
 
     claude_wrapper = CLAUDE_WRAPPER_FILE.read_text(encoding="utf-8")
     assert 'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB:-}" != "1"' in claude_wrapper
