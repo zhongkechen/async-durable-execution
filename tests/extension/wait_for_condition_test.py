@@ -4,6 +4,7 @@ from typing import no_type_check
 
 import asyncio
 import datetime
+import importlib
 import inspect
 import json
 from contextlib import nullcontext
@@ -213,6 +214,40 @@ async def test_wait_for_condition_public_wrapper_reraises_initial_check_error() 
     assert state.create_checkpoint.call_count == 2
     fail_update = state.create_checkpoint.call_args_list[-1].kwargs["operation_update"]
     assert fail_update.action is OperationAction.FAIL
+
+
+async def test_legacy_private_executor_import_replays_pre_spi_checkpoint() -> None:
+    """The former private executor remains a tested compatibility boundary."""
+    legacy_module = importlib.import_module(
+        "async_durable_execution._extension.wait_for_condition"
+    )
+    assert (
+        legacy_module.WaitForConditionOperationExecutor
+        is WaitForConditionOperationExecutor
+    )
+
+    state = Mock(spec=ExecutionState)
+    state.durable_execution_arn = "test-arn"
+    state.operations.get.return_value = Operation(
+        operation_id="legacy-condition",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.SUCCEEDED,
+        sub_type=OperationSubType.WAIT_FOR_CONDITION,
+        step_details=StepDetails(result=json.dumps(True)),
+    )
+    check = AsyncMock()
+    executor = legacy_module.WaitForConditionOperationExecutor(
+        check=check,
+        initial_state=None,
+        state=state,
+        operation_identifier=OperationIdentifier(
+            "legacy-condition",
+            OperationSubType.WAIT_FOR_CONDITION,
+        ),
+    )
+
+    assert await executor.process() is True
+    check.assert_not_awaited()
 
 
 async def _invoke_maybe_async(result) -> Any:

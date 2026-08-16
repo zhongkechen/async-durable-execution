@@ -15,6 +15,7 @@ from async_durable_execution._core.models import (
     OperationIdentifier,
 )
 from async_durable_execution._primitive.base import OperationExecutor
+from async_durable_execution._core.exceptions import InvalidStateError
 from async_durable_execution._core.serdes import DEFAULT_JSON_SERDES
 
 
@@ -152,6 +153,42 @@ async def test_operation_executor_process_dispatches_to_replay_for_existing_oper
     assert executor.start_called == 0
     assert executor.replay_called == 1
     assert executor.execute_called == 1
+
+
+async def test_operation_executor_rejects_extension_checkpoint_metadata_mismatch() -> (
+    None
+):
+    """Extension reservations must match the checkpoint identity exactly."""
+    state = Mock()
+    state.durable_execution_arn = "test-arn"
+    state.operations.get.return_value = Operation(
+        operation_id="test_op",
+        operation_type=OperationType.WAIT,
+        status=OperationStatus.SUCCEEDED,
+        sub_type="LegacySubtype",
+        parent_id="legacy-parent",
+        name="legacy-name",
+    )
+    executor = ConcreteOperationExecutor(
+        state=state,
+        operation_identifier=OperationIdentifier(
+            "test_op",
+            "AcmeSubtype",
+            "expected-parent",
+            "expected-name",
+            operation_type=OperationType.STEP,
+        ),
+    )
+
+    with pytest.raises(InvalidStateError) as raised:
+        await executor.process()
+
+    message = str(raised.value)
+    assert "type='WAIT', expected 'STEP'" in message
+    assert "sub_type='LegacySubtype', expected 'AcmeSubtype'" in message
+    assert "name='legacy-name', expected 'expected-name'" in message
+    assert "parent_id='legacy-parent', expected 'expected-parent'" in message
+    assert executor.replay_called == 0
 
 
 @no_type_check

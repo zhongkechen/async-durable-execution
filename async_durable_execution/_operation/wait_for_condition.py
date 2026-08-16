@@ -95,7 +95,13 @@ class PollingStrategy(_DelayStrategy, Generic[T]):
 
 
 class WaitForConditionOperationExecutor(OperationExecutor[T]):
-    """Executor for wait_for_condition operations."""
+    """Compatibility executor for the pre-SPI private import path.
+
+    The public operation uses the shared stateful STEP executor. This class and
+    `_wait_for_condition` remain available through
+    `async_durable_execution._extension.wait_for_condition` so existing private
+    imports retain their original behavior during the package migration.
+    """
 
     def __init__(
         self,
@@ -125,9 +131,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
 
     async def start(self) -> T:
         """Start a new wait_for_condition operation."""
-        start_operation = OperationUpdate.create_wait_for_condition_start(
-            identifier=self.operation_identifier,
-        )
+        start_operation = OperationUpdate.create_step_start(self.operation_identifier)
         await self.create_checkpoint(start_operation, is_sync=False)
         return await self.execute(None)
 
@@ -189,8 +193,8 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             )
 
         if operation.status is not OperationStatus.STARTED:
-            start_operation = OperationUpdate.create_wait_for_condition_start(
-                identifier=self.operation_identifier,
+            start_operation = OperationUpdate.create_step_start(
+                self.operation_identifier
             )
             await self.create_checkpoint(start_operation, is_sync=False)
 
@@ -253,9 +257,9 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
 
             suspend_delay_seconds = self._resolve_delay_seconds(new_state, attempt)
             if suspend_delay_seconds is None:
-                success_operation = OperationUpdate.create_wait_for_condition_succeed(
-                    identifier=self.operation_identifier,
-                    payload=serialized_state,
+                success_operation = OperationUpdate.create_step_succeed(
+                    self.operation_identifier,
+                    serialized_state,
                 )
                 await self.create_checkpoint(success_operation)
 
@@ -284,8 +288,9 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 )
                 delay_seconds = 1
 
-            retry_operation = OperationUpdate.create_wait_for_condition_retry(
-                identifier=self.operation_identifier,
+            retry_operation = OperationUpdate.create_step_retry(
+                self.operation_identifier,
+                error=None,
                 payload=serialized_state,
                 next_attempt_delay_seconds=delay_seconds,
             )
@@ -322,9 +327,9 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                     stack_trace=error.stack_trace,
                 )
 
-            fail_operation = OperationUpdate.create_wait_for_condition_fail(
-                identifier=self.operation_identifier,
-                error=error,
+            fail_operation = OperationUpdate.create_step_fail(
+                self.operation_identifier,
+                error,
             )
             # Checkpoint FAIL operation with blocking (is_sync=True, default).
             # Must ensure the failure state is persisted before raising the exception.
@@ -424,6 +429,7 @@ async def _wait_for_condition(
     polling_strategy: PollingStrategyFunction[T] | None = None,
     serdes: SerDes | None = None,
 ) -> T:
+    """Run the compatibility executor retained for former private imports."""
     executor: WaitForConditionOperationExecutor[T] = WaitForConditionOperationExecutor(
         check=check,
         initial_state=initial_state,
