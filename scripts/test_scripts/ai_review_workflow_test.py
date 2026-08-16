@@ -10,12 +10,17 @@ import pytest
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_FILE = REPOSITORY_ROOT / ".github" / "workflows" / "ai-pr-review.yml"
+POST_WORKFLOW_FILE = REPOSITORY_ROOT / ".github" / "workflows" / "post-ai-review.yml"
 CLAUDE_WRAPPER_FILE = REPOSITORY_ROOT / "scripts" / "run_claude_isolated.sh"
 JOB_HEADER = re.compile(r"^  ([a-z0-9_-]+):\n", re.MULTILINE)
 
 
 def _workflow() -> str:
     return WORKFLOW_FILE.read_text(encoding="utf-8")
+
+
+def _post_workflow() -> str:
+    return POST_WORKFLOW_FILE.read_text(encoding="utf-8")
 
 
 def _jobs() -> dict[str, str]:
@@ -34,25 +39,27 @@ def _jobs() -> dict[str, str]:
 
 
 @pytest.mark.parametrize(
-    ("generate_job", "invocation_marker"),
+    ("reviewer", "invocation_marker"),
     [
         (
-            "claude-review",
+            "claude",
             "anthropics/claude-code-action@",
         ),
         (
-            "codex-review",
+            "codex",
             "--model openai.gpt-",
         ),
     ],
 )
 def test_ai_review_generation_is_separate_from_posting(
-    generate_job: str,
+    reviewer: str,
     invocation_marker: str,
 ) -> None:
     jobs = _jobs()
+    generate_job = f"{reviewer}-review"
+    post_job = f"post-{reviewer}-review"
     generation = jobs[generate_job]
-    posting = jobs["post-reviews"]
+    posting = jobs[post_job]
 
     assert "pull-requests: read" in generation
     assert "pull-requests: write" not in generation
@@ -62,15 +69,17 @@ def test_ai_review_generation_is_separate_from_posting(
     assert "base64 -w 0" in generation
     assert "scripts/post_ai_review_summary.sh" not in generation
 
-    assert "needs: [claude-review, codex-review]" in posting
+    assert f"needs: {generate_job}" in posting
     assert f"needs.{generate_job}.result == 'success'" in posting
     assert f"needs.{generate_job}.outputs.summary_base64" in posting
     assert "pull-requests: write" in posting
     assert "id-token:" not in posting
     assert "environment: ai-pr-review-runtime" not in posting
     assert invocation_marker not in posting
-    assert "base64 --decode" in posting
-    assert "scripts/post_ai_review_summary.sh" in posting
+    assert "uses: ./.github/workflows/post-ai-review.yml" in posting
+    assert f"reviewer: {reviewer}" in posting
+    other_reviewer = "codex" if reviewer == "claude" else "claude"
+    assert f"needs.{other_reviewer}-review" not in posting
 
 
 def test_only_posting_jobs_can_write_pull_requests() -> None:
@@ -79,28 +88,19 @@ def test_only_posting_jobs_can_write_pull_requests() -> None:
         job_id for job_id, job in jobs.items() if "pull-requests: write" in job
     }
 
-    assert write_jobs == {"post-reviews"}
+    assert write_jobs == {"post-claude-review", "post-codex-review"}
+    post_workflow = _post_workflow()
+    assert "pull-requests: write" in post_workflow
+    assert "id-token:" not in post_workflow
 
 
-def test_shared_posting_runs_for_each_successful_generator() -> None:
-    posting = _jobs()["post-reviews"]
+def test_posting_callers_do_not_wait_for_the_other_generator() -> None:
+    jobs = _jobs()
 
-    assert "needs: [claude-review, codex-review]" in posting
-    assert (
-        """\
-if: >-
-      !cancelled() &&
-      (
-        needs.claude-review.result == 'success' ||
-        needs.codex-review.result == 'success'
-      )
-"""
-        in posting
-    )
-    assert "CLAUDE_REVIEW_RESULT: ${{ needs.claude-review.result }}" in posting
-    assert "CODEX_REVIEW_RESULT: ${{ needs.codex-review.result }}" in posting
-    assert "posting_failed=false" in posting
-    assert posting.count("if ! post_review \\") == 2
+    assert "needs: claude-review" in jobs["post-claude-review"]
+    assert "codex-review" not in jobs["post-claude-review"]
+    assert "needs: codex-review" in jobs["post-codex-review"]
+    assert "claude-review" not in jobs["post-codex-review"]
 
 
 def test_untrusted_reviews_require_environment_approval() -> None:
@@ -138,16 +138,18 @@ if: >-
 
 
 def test_shared_posting_validates_base_target_and_head_revision() -> None:
-    posting = _jobs()["post-reviews"]
+    posting = _post_workflow()
 
-    assert "EXPECTED_BASE_REF: ${{ github.event.pull_request.base.ref }}" in posting
-    assert "${{ github.event.pull_request.base.repo.full_name }}" in posting
-    assert "EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}" in posting
+    assert "EXPECTED_BASE_REF: ${{ inputs.expected_base_ref }}" in posting
+    assert "EXPECTED_BASE_REPOSITORY: ${{ inputs.expected_base_repository }}" in posting
+    assert "EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}" in posting
+    assert "ref: ${{ inputs.expected_base_sha }}" in posting
+    assert "GH_TOKEN: ${{ github.token }}" in posting
     assert '"$EXPECTED_BASE_REPOSITORY"' in posting
     assert '"$EXPECTED_BASE_REF"' in posting
     assert '"$EXPECTED_HEAD_SHA"' in posting
-    assert "post_review \\\n            claude" in posting
-    assert "post_review \\\n            codex" in posting
+    assert "base64 --decode" in posting
+    assert "scripts/post_ai_review_summary.sh" in posting
 
 
 def test_converting_to_draft_cancels_previous_review() -> None:
@@ -160,8 +162,9 @@ def test_converting_to_draft_cancels_previous_review() -> None:
     )
     for job_id in (
         "claude-review",
+        "post-claude-review",
         "codex-review",
-        "post-reviews",
+        "post-codex-review",
     ):
         assert "!cancelled()" in jobs[job_id]
         assert "always()" not in jobs[job_id]

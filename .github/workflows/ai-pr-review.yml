@@ -434,92 +434,40 @@ jobs:
           summary_base64="$(printf '%s' "$CODEX_REVIEW" | base64 -w 0)"
           echo "summary_base64=$summary_base64" >> "$GITHUB_OUTPUT"
 
-  post-reviews:
-    name: Post AI reviews
-    needs: [claude-review, codex-review]
-    if: >-
-      !cancelled() &&
-      (
-        needs.claude-review.result == 'success' ||
-        needs.codex-review.result == 'success'
-      )
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+  post-claude-review:
+    name: Post Claude review
+    needs: claude-review
+    if: "!cancelled() && needs.claude-review.result == 'success'"
     permissions:
       contents: read
       pull-requests: write
+    uses: ./.github/workflows/post-ai-review.yml
+    with:
+      reviewer: claude
+      expected_base_repository: >-
+        ${{ github.event.pull_request.base.repo.full_name }}
+      expected_base_ref: ${{ github.event.pull_request.base.ref }}
+      expected_base_sha: ${{ github.event.pull_request.base.sha }}
+      expected_head_sha: ${{ github.event.pull_request.head.sha }}
+      pr_number: ${{ github.event.pull_request.number }}
+      review_summary_base64: >-
+        ${{ needs.claude-review.outputs.summary_base64 }}
 
-    steps:
-      # Only trusted base-branch code handles the write-capable token.
-      - name: Check out base branch
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 1
-          persist-credentials: false
-          ref: ${{ github.event.pull_request.base.sha }}
-
-      - name: Post AI reviews
-        env:
-          CLAUDE_REVIEW_RESULT: ${{ needs.claude-review.result }}
-          CLAUDE_REVIEW_SUMMARY_BASE64: >-
-            ${{ needs.claude-review.outputs.summary_base64 }}
-          CODEX_REVIEW_RESULT: ${{ needs.codex-review.result }}
-          CODEX_REVIEW_SUMMARY_BASE64: >-
-            ${{ needs.codex-review.outputs.summary_base64 }}
-          EXPECTED_BASE_REF: ${{ github.event.pull_request.base.ref }}
-          EXPECTED_BASE_REPOSITORY: >-
-            ${{ github.event.pull_request.base.repo.full_name }}
-          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set -euo pipefail
-
-          post_review() {
-            local reviewer="$1"
-            local review_result="$2"
-            local review_summary_base64="$3"
-
-            if [[ "$review_result" != "success" ]]; then
-              return
-            fi
-            if [[ -z "$review_summary_base64" ]]; then
-              echo "::error::${reviewer^} review output is missing."
-              return 1
-            fi
-
-            local summary_file="${RUNNER_TEMP}/${reviewer}-review-summary.md"
-            if ! printf '%s' "$review_summary_base64" |
-              base64 --decode > "$summary_file"
-            then
-              echo "::error::${reviewer^} review output is invalid."
-              return 1
-            fi
-
-            bash scripts/post_ai_review_summary.sh \
-              "$reviewer" \
-              "$EXPECTED_BASE_REPOSITORY" \
-              "$EXPECTED_BASE_REF" \
-              "$EXPECTED_HEAD_SHA" \
-              "$summary_file"
-          }
-
-          posting_failed=false
-          if ! post_review \
-            claude \
-            "$CLAUDE_REVIEW_RESULT" \
-            "$CLAUDE_REVIEW_SUMMARY_BASE64"
-          then
-            posting_failed=true
-          fi
-          if ! post_review \
-            codex \
-            "$CODEX_REVIEW_RESULT" \
-            "$CODEX_REVIEW_SUMMARY_BASE64"
-          then
-            posting_failed=true
-          fi
-
-          if [[ "$posting_failed" == "true" ]]; then
-            exit 1
-          fi
+  post-codex-review:
+    name: Post Codex review
+    needs: codex-review
+    if: "!cancelled() && needs.codex-review.result == 'success'"
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/post-ai-review.yml
+    with:
+      reviewer: codex
+      expected_base_repository: >-
+        ${{ github.event.pull_request.base.repo.full_name }}
+      expected_base_ref: ${{ github.event.pull_request.base.ref }}
+      expected_base_sha: ${{ github.event.pull_request.base.sha }}
+      expected_head_sha: ${{ github.event.pull_request.head.sha }}
+      pr_number: ${{ github.event.pull_request.number }}
+      review_summary_base64: >-
+        ${{ needs.codex-review.outputs.summary_base64 }}
