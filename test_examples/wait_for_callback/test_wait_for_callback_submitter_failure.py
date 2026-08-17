@@ -1,6 +1,10 @@
 """Tests for wait_for_callback_submitter_retry_success."""
 
-from async_durable_execution import InvocationStatus
+from async_durable_execution import (
+    InvocationStatus,
+    OperationStatus,
+    OperationType,
+)
 from examples.wait_for_callback import (
     wait_for_callback_submitter_failure,
 )
@@ -27,3 +31,11 @@ async def test_fail_after_exhausting_retries_when_submitter_always_fails(
     error = result.error
     assert error is not None
     assert "Simulated submitter failure" in error.message
+
+    submitter_step = next(
+        operation
+        for operation in result.get_all_operations()
+        if operation.name == "retry-submitter-callback-submitter"
+        and operation.operation_type is OperationType.STEP
+    )
+    assert submitter_step.status is OperationStatus.FAILED

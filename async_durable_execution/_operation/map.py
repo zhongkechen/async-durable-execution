@@ -36,12 +36,10 @@ from .._core import (
     get_current_context,
     get_durable_context,
 )
-from .._primitive.child import (
-    _create_child_context_task as _run_in_child_context,
-)
+from ..extension import get_extension_context
 
 if TYPE_CHECKING:
-    from .._primitive.child import SummaryGenerator
+    from .child import SummaryGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +48,29 @@ T = TypeVar("T")
 # Result type
 R = TypeVar("R")
 U = TypeVar("U")
+
+
+def _run_in_child_context(
+    func: Callable[[], Awaitable[T]],
+    *,
+    sub_type: OperationSubType,
+    name: str | None = None,
+    serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    is_virtual: bool = False,
+) -> asyncio.Task[T]:
+    """Run an SDK-owned child operation through the stable operation SPI."""
+    return (
+        get_extension_context()
+        ._reserve_sdk_operation(name)  # noqa: SLF001
+        ._run_in_child_context(  # noqa: SLF001
+            func,
+            sub_type=sub_type,
+            serdes=serdes,
+            summary_generator=summary_generator,
+            is_virtual=is_virtual,
+        )
+    )
 
 
 @dataclass(frozen=True)
@@ -235,7 +256,7 @@ def map(
         RuntimeError: If called outside a durable context.
     """
     _validate_max_concurrency(max_concurrency)
-    context = get_durable_context()
+    get_durable_context()
     items_sequence = list(items)
     map_name = name if name is not None else getattr(func, "__name__", None)
 
@@ -255,7 +276,7 @@ def map(
         handler = map_handler(
             items=items_sequence,
             func=func,
-            execution_state=context.execution_state,
+            execution_state=map_context.execution_state,
             map_context=map_context,
             operation_identifier=operation_identifier,
             max_concurrency=max_concurrency,

@@ -40,6 +40,11 @@ class OperationIdGenerator:
     def __init__(self, prefix: str | None) -> None:
         self._prefix = prefix
         self._counter = 0
+        self._claimed_local_ids: set[str] = set()
+        self._unconsumed_reservations: dict[str, bool] = {}
+        self._unconsumed_checkpoint_count = 0
+        self._reservation_selection_started = False
+        self._replay_frontier_pending = False
 
     def increment(self) -> int:
         self._counter += 1
@@ -48,15 +53,88 @@ class OperationIdGenerator:
     def get_current(self) -> int:
         return self._counter
 
+    def _create_id(self, value: str) -> str:
+        """Hash one context-local identity value."""
+        prefix = self._prefix
+        step_id = f"{prefix}-{value}" if prefix else value
+        return hashlib.blake2b(step_id.encode()).hexdigest()[:64]
+
+    def _create_id_for_local_id(self, local_id: str) -> str:
+        """Generate an id in the caller-provided local-id namespace."""
+        return self._create_id(f"local:{local_id}")
+
     def _create_step_id_for_logical_step(self, step: int) -> str:
         """Generate the stable operation id for a logical step."""
-        prefix = self._prefix
-        step_id = f"{prefix}-{step}" if prefix else str(step)
-        return hashlib.blake2b(step_id.encode()).hexdigest()[:64]
+        return self._create_id(str(step))
 
     def create_step_id(self) -> str:
         """Generate an operation id and advance the logical step counter."""
         return self._create_step_id_for_logical_step(self.increment())
+
+    def create_step_id_for_local_id(self, local_id: str) -> str:
+        """Generate an operation id from a stable caller-provided local id."""
+        if not isinstance(local_id, str):
+            msg = "local_operation_id must be a string"
+            raise TypeError(msg)
+        if not local_id.strip():
+            msg = "local_operation_id must not be blank"
+            raise ValueError(msg)
+        if self._reservation_selection_started:
+            msg = (
+                "local_operation_id reservations must be created before any "
+                "reserved operation is selected"
+            )
+            raise RuntimeError(msg)
+        if local_id in self._claimed_local_ids:
+            msg = f"local_operation_id is already reserved: {local_id}"
+            raise ValueError(msg)
+
+        self._claimed_local_ids.add(local_id)
+        return self._create_id_for_local_id(local_id)
+
+    def _register_reservation(
+        self,
+        operation_id: str,
+        *,
+        has_checkpoint: bool,
+    ) -> None:
+        """Track an allocated reservation until workflow code selects it."""
+        previous = self._unconsumed_reservations.get(operation_id)
+        if operation_id in self._unconsumed_reservations:
+            if previous == has_checkpoint:
+                return
+            if previous:
+                self._unconsumed_checkpoint_count -= 1
+        self._unconsumed_reservations[operation_id] = has_checkpoint
+        if has_checkpoint:
+            self._unconsumed_checkpoint_count += 1
+
+    def _consume_reservation(self, operation_id: str) -> None:
+        """Discard a reservation after workflow code selects it."""
+        self._mark_reservation_selected()
+        has_checkpoint = self._unconsumed_reservations.pop(operation_id, False)
+        if has_checkpoint:
+            self._unconsumed_checkpoint_count -= 1
+
+    def _mark_reservation_selected(self) -> None:
+        """Prevent explicit local ids from being registered after selection."""
+        self._reservation_selection_started = True
+
+    def _has_unconsumed_checkpoint(self) -> bool:
+        """Return whether any allocated reservation still has replay history."""
+        return self._unconsumed_checkpoint_count > 0
+
+    def _mark_replay_frontier(self) -> None:
+        """Remember that replay ended immediately before a virtual scope."""
+        self._replay_frontier_pending = True
+
+    def _clear_replay_frontier(self) -> None:
+        """Clear a replay frontier after the next operation boundary is known."""
+        self._replay_frontier_pending = False
+
+    def _is_replay_frontier_pending(self) -> bool:
+        """Return whether a virtual scope may still contain flattened history."""
+        return self._replay_frontier_pending
 
 
 @dataclass(frozen=True)
@@ -122,7 +200,11 @@ class DurableContext(OperationContext):
         )
 
     def create_child_context(
-        self, operation_id: str, *, is_virtual: bool = False
+        self,
+        operation_id: str,
+        *,
+        is_virtual: bool = False,
+        replaying: bool | None = None,
     ) -> DurableContext:
         """Create a child context for the given operation."""
         child_parent_id = self.parent_id if is_virtual else operation_id
@@ -139,7 +221,7 @@ class DurableContext(OperationContext):
                 parent_id=child_parent_id,
             ),
             step_id_prefix=operation_id,
-            replaying=self.is_replaying(),
+            replaying=self.is_replaying() if replaying is None else replaying,
         )
 
     def is_replaying(self) -> bool:
@@ -148,6 +230,18 @@ class DurableContext(OperationContext):
 
     def _set_replay_status_new(self) -> None:
         object.__setattr__(self, "replaying", False)
+        self.step_counter._clear_replay_frontier()  # noqa: SLF001
+
+    def _set_replay_status_frontier(self) -> None:
+        """End parent replay while retaining a snapshot for a virtual child."""
+        object.__setattr__(self, "replaying", False)
+        self.step_counter._mark_replay_frontier()  # noqa: SLF001
+
+    def _virtual_child_replay_snapshot(self) -> bool:
+        """Return replay state including flattened history past the frontier."""
+        return (
+            self.is_replaying() or self.step_counter._is_replay_frontier_pending()  # noqa: SLF001
+        )
 
     def _peek_next_operation_id(self) -> str:
         return self.step_counter._create_step_id_for_logical_step(  # noqa: SLF001
@@ -155,13 +249,24 @@ class DurableContext(OperationContext):
         )
 
     def _next_operation_result(self) -> Operation | None:
-        return self.execution_state.operations.get(self._peek_next_operation_id())
+        return self._operation_result(self._peek_next_operation_id())
+
+    def _operation_result(self, operation_id: str) -> Operation | None:
+        return self.execution_state.operations.get(operation_id)
 
     def _next_operation_exists(self) -> bool:
         return self._next_operation_result() is not None
 
+    def _next_reserved_or_sequential_operation_exists(self) -> bool:
+        if self.step_counter._has_unconsumed_checkpoint():  # noqa: SLF001
+            return True
+        return self._next_operation_exists()
+
     def _next_operation_is_terminal_checkpoint(self) -> bool:
-        operation = self._next_operation_result()
+        return self._operation_is_terminal_checkpoint(self._peek_next_operation_id())
+
+    def _operation_is_terminal_checkpoint(self, operation_id: str) -> bool:
+        operation = self._operation_result(operation_id)
         if operation is None:
             return False
         return operation.status in {
@@ -173,20 +278,39 @@ class DurableContext(OperationContext):
         }
 
     @contextmanager
-    def _replay_aware(self, *, executes_user_code: bool = False) -> Iterator[None]:
-        """Update this context's replay status around one durable operation."""
+    def _replay_aware(
+        self,
+        *,
+        operation_id: str | None = None,
+        executes_user_code: bool = False,
+        consume_reservation: bool = True,
+    ) -> Iterator[None]:
+        """Update replay status around one durable operation.
+
+        `operation_id` identifies an operation that was allocated before entering
+        this scope. Pre-allocated reservations are tracked independently from the
+        sequential counter so launch order does not end replay prematurely.
+        """
         was_replaying = self.is_replaying()
-        next_exists = was_replaying and self._next_operation_exists()
-        next_terminal = was_replaying and self._next_operation_is_terminal_checkpoint()
+        self.step_counter._clear_replay_frontier()  # noqa: SLF001
+        current_operation_id = operation_id or self._peek_next_operation_id()
+        if operation_id is not None and consume_reservation:
+            self.step_counter._consume_reservation(operation_id)  # noqa: SLF001
+        current_exists = was_replaying and (
+            self._operation_result(current_operation_id) is not None
+        )
+        current_terminal = was_replaying and self._operation_is_terminal_checkpoint(
+            current_operation_id
+        )
         flip_after = (
             was_replaying
             and not executes_user_code
-            and next_exists
-            and not next_terminal
+            and current_exists
+            and not current_terminal
         )
 
         if was_replaying and (
-            not next_exists or (executes_user_code and not next_terminal)
+            not current_exists or (executes_user_code and not current_terminal)
         ):
             self._set_replay_status_new()
 
@@ -194,9 +318,15 @@ class DurableContext(OperationContext):
             yield
         finally:
             if flip_after:
-                self._set_replay_status_new()
-            elif self.is_replaying() and not self._next_operation_exists():
-                self._set_replay_status_new()
+                self._set_replay_status_frontier()
+            elif self.is_replaying():
+                next_operation_exists = (
+                    self._next_reserved_or_sequential_operation_exists()
+                    if operation_id is not None
+                    else self._next_operation_exists()
+                )
+                if not next_operation_exists:
+                    self._set_replay_status_frontier()
 
 
 _current_context: ContextVar = ContextVar(

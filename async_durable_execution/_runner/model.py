@@ -405,7 +405,10 @@ class EventCreationContext:
 
     @property
     def sub_type(self) -> str | None:
-        return self.operation.sub_type.value if self.operation.sub_type else None
+        sub_type = self.operation.sub_type
+        if isinstance(sub_type, OperationSubType):
+            return sub_type.value
+        return sub_type
 
     def get_retry_details(self) -> RetryDetails | None:
         if not self.operation.step_details or not self.operation_update:
@@ -1522,12 +1525,12 @@ def events_to_operations(events: list[Event]) -> list[Operation]:
         )
 
         # Parse sub_type
-        sub_type: OperationSubType | None = None
+        sub_type: OperationSubType | str | None = None
         if event.sub_type:
             try:
                 sub_type = OperationSubType(event.sub_type)
-            except ValueError as e:
-                raise InvalidParameterValueException(str(e)) from e
+            except ValueError:
+                sub_type = event.sub_type
 
         # Create base operation
         operation = Operation(

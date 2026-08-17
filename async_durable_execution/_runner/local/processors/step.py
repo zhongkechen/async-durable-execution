@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from ...._core import (
+    ErrorObject,
     Operation,
     OperationAction,
     OperationStatus,
@@ -125,19 +126,33 @@ class StepProcessor(OperationProcessor):
                     if current_op and current_op.step_details
                     else 0
                 )
+                previous_result = (
+                    current_op.step_details.result
+                    if current_op and current_op.step_details
+                    else None
+                )
+                previous_error = (
+                    current_op.step_details.error
+                    if current_op and current_op.step_details
+                    else None
+                )
+                result: str | None
+                error: ErrorObject | None
+                if update.payload is not None:
+                    result = update.payload
+                    error = update.error
+                elif update.error is not None:
+                    result = previous_result
+                    error = update.error
+                else:
+                    result = previous_result
+                    error = previous_error
+
                 new_step_details = StepDetails(
                     attempt=current_attempt + 1,
                     next_attempt_timestamp=next_attempt_time,
-                    result=(
-                        current_op.step_details.result
-                        if current_op and current_op.step_details
-                        else None
-                    ),
-                    error=(
-                        current_op.step_details.error
-                        if current_op and current_op.step_details
-                        else None
-                    ),
+                    result=result,
+                    error=error,
                 )
 
                 # Create new operation with updated step_details

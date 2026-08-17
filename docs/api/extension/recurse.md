@@ -1,6 +1,6 @@
 # Recursive Invocation
 
-Internal implementation module: `async_durable_execution._extension.recurse`.
+Internal implementation module: `async_durable_execution._operation.recurse`.
 
 Use `recurse()` to invoke the current Lambda function as a new durable
 execution. Unlike a Python recursive call, it does not grow the Python call
@@ -8,7 +8,7 @@ stack. See [recursive self-invocation](../../advanced-usage.md#recursive-self-in
 for payload validation, recursion levels, Lambda permissions, and recursion
 protection.
 
-::: async_durable_execution._extension.recurse
+::: async_durable_execution._operation.recurse
     options:
       members:
         - recurse

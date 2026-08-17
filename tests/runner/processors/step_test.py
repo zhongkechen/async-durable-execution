@@ -89,6 +89,34 @@ def test_process_start_action_with_current_operation() -> None:
     assert result.start_timestamp == current_op.start_timestamp
 
 
+def test_process_start_clears_retry_error_but_preserves_state() -> None:
+    processor = StepProcessor()
+    notifier = MockNotifier()
+    execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
+    current_op = Operation(
+        operation_id="step-123",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.READY,
+        step_details=StepDetails(
+            attempt=1,
+            result="checkpointed-state",
+            error=ErrorObject.from_message("transient failure"),
+        ),
+    )
+    update = OperationUpdate(
+        operation_id="step-123",
+        operation_type=OperationType.STEP,
+        action=OperationAction.START,
+        name="test-step",
+    )
+
+    result = processor.process(update, current_op, notifier, execution_arn)
+
+    assert result.step_details is not None
+    assert result.step_details.result == "checkpointed-state"
+    assert result.step_details.error is None
+
+
 @no_type_check
 def test_process_retry_action() -> None:
     processor = StepProcessor()
@@ -124,6 +152,33 @@ def test_process_retry_action() -> None:
 
     assert len(notifier.step_retry_calls) == 1
     assert notifier.step_retry_calls[0] == (execution_arn, "step-123", 30)
+
+
+@no_type_check
+def test_process_retry_action_replaces_checkpointed_state_payload() -> None:
+    processor = StepProcessor()
+    notifier = MockNotifier()
+    execution_arn = "arn:aws:states:us-east-1:123456789012:execution:test"
+    current_op = Mock()
+    current_op.start_timestamp = datetime.now(timezone.utc)
+    current_op.step_details = StepDetails(attempt=1, result="previous-result")
+    current_op.execution_details = None
+    current_op.context_details = None
+    current_op.wait_details = None
+    current_op.callback_details = None
+    current_op.chained_invoke_details = None
+    update = OperationUpdate(
+        operation_id="step-123",
+        operation_type=OperationType.STEP,
+        action=OperationAction.RETRY,
+        name="test-step",
+        payload="next-state",
+        step_options=StepOptions(next_attempt_delay_seconds=30),
+    )
+
+    result = processor.process(update, current_op, notifier, execution_arn)
+
+    assert result.step_details.result == "next-state"
 
 
 @no_type_check

@@ -16,14 +16,70 @@ from .._core import (
     durable_callable,
     get_current_context,
 )
-from .._primitive.callback import Callback, create_callback
-from .._primitive.child import _create_child_context_task
-from .._primitive.step import get_step_context, step
+from ..extension import get_extension_context
+from .callback import Callback, create_callback as _create_callback
+from .step import get_step_context, step as _step
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+    from .child import SummaryGenerator
 
 logger = logging.getLogger(__name__)
+
+
+def create_callback(
+    *,
+    name: str | None = None,
+    timeout: Duration | None = None,
+    heartbeat_timeout: Duration | None = None,
+    serdes: SerDes | None = None,
+) -> asyncio.Task[Callback]:
+    """Create an SDK-owned callback through the stable operation SPI."""
+    return _create_callback(
+        name=name,
+        timeout=timeout,
+        heartbeat_timeout=heartbeat_timeout,
+        serdes=serdes,
+    )
+
+
+def step(
+    func: Callable[[], Awaitable[Any]],
+    *,
+    name: str | None = None,
+    retry_strategy: Callable[[Exception, int], Duration | None] | None = None,
+    serdes: SerDes | None = None,
+) -> asyncio.Task[Any]:
+    """Run an SDK-owned submitter step through the stable operation SPI."""
+    return _step(
+        func,
+        name=name,
+        retry_strategy=retry_strategy,
+        serdes=serdes,
+    )
+
+
+def _create_child_context_task(
+    func: Callable[[], Awaitable[Any]],
+    *,
+    sub_type: OperationSubType,
+    name: str | None = None,
+    serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    is_virtual: bool = False,
+) -> asyncio.Task[Any]:
+    """Run an SDK-owned callback scope through the stable operation SPI."""
+    return (
+        get_extension_context()
+        ._reserve_sdk_operation(name)  # noqa: SLF001
+        ._run_in_child_context(  # noqa: SLF001
+            func,
+            sub_type=sub_type,
+            serdes=serdes,
+            summary_generator=summary_generator,
+            is_virtual=is_virtual,
+        )
+    )
 
 
 @durable_callable

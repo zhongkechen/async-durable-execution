@@ -18,11 +18,8 @@ from .._core import (
     Operation,
     OperationIdentifier,
     OperationStatus,
-    OperationSubType,
     OperationUpdate,
     SerDes,
-    create_eager_task,
-    get_durable_context,
     suspend_with_optional_resume_delay,
 )
 
@@ -155,38 +152,17 @@ def invoke(
     serdes_result: SerDes[R] | None = None,
     tenant_id: str | None = None,
 ) -> asyncio.Task[R]:
-    """Invoke another durable Lambda function and wait for its durable result.
+    """Compatibility import for the canonical operation-layer helper."""
+    from .._operation.invoke import invoke as operation_invoke
 
-    Args:
-        function_name: Qualified Lambda function name or ARN to invoke.
-        payload: Payload to send to the invoked function.
-        name: Optional durable operation name.
-        serdes_payload: Optional serializer for the invocation payload.
-        serdes_result: Optional deserializer for the invocation result.
-        tenant_id: Optional tenant identifier for the chained invocation.
-    """
-    context = get_durable_context()
-
-    with context._replay_aware():
-        operation_id = context.step_counter.create_step_id()
-        operation_identifier = OperationIdentifier(
-            operation_id=operation_id,
-            sub_type=OperationSubType.CHAINED_INVOKE,
-            parent_id=context.parent_id,
-            name=name,
-        )
-
-        return create_eager_task(
-            lambda: _invoke(
-                function_name=function_name,
-                payload=payload,
-                context=context,
-                operation_identifier=operation_identifier,
-                serdes_payload=serdes_payload,
-                serdes_result=serdes_result,
-                tenant_id=tenant_id,
-            ),
-        )
+    return operation_invoke(
+        function_name,
+        payload,
+        name=name,
+        serdes_payload=serdes_payload,
+        serdes_result=serdes_result,
+        tenant_id=tenant_id,
+    )
 
 
 async def _invoke(

@@ -11,7 +11,7 @@ from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Se
 from contextvars import ContextVar
 from dataclasses import dataclass, field, fields as dataclass_fields, is_dataclass
 from enum import Enum
-from typing import Any, Generic, NoReturn, ParamSpec, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Generic, NoReturn, ParamSpec, TypeVar, cast
 
 from .._core import (
     CallableRuntimeError,
@@ -22,6 +22,7 @@ from .._core import (
     ExtendedTypeSerDes,
     InvalidStateError,
     InvocationError,
+    OperationSubType,
     SerDes,
     SerDesError,
     SuspendExecution,
@@ -36,13 +37,38 @@ from .._core import (
     get_current_context,
     get_durable_context,
 )
-from .._primitive.child import run_in_child_context
+from ..extension import get_extension_context
 from .parallel import _BatchResultSerDes
+
+if TYPE_CHECKING:
+    from .child import SummaryGenerator
 
 
 T = TypeVar("T")
 Params = ParamSpec("Params")
 _BASE_EXCEPTION_GROUP_TYPE = getattr(builtins, "BaseExceptionGroup", None)
+
+
+def run_in_child_context(
+    func: Callable[[], Awaitable[T]],
+    *,
+    name: str | None = None,
+    serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    is_virtual: bool = False,
+) -> asyncio.Task[T]:
+    """Run an SDK-owned flow scope through the stable operation SPI."""
+    return (
+        get_extension_context()
+        ._reserve_sdk_operation(name)  # noqa: SLF001
+        ._run_in_child_context(  # noqa: SLF001
+            func,
+            sub_type=OperationSubType.RUN_IN_CHILD_CONTEXT,
+            serdes=serdes,
+            summary_generator=summary_generator,
+            is_virtual=is_virtual,
+        )
+    )
 
 
 class FlowDefinitionError(ValidationError):

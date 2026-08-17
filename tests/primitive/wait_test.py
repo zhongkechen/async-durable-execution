@@ -8,7 +8,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from async_durable_execution._core.exceptions import SuspendExecution
+from async_durable_execution._core.exceptions import SuspendExecution, ValidationError
 from async_durable_execution._core.models import OperationIdentifier
 from async_durable_execution._core.models import (
     Operation,
@@ -19,7 +19,8 @@ from async_durable_execution._core.models import (
     OperationUpdate,
     WaitOptions,
 )
-from async_durable_execution._primitive.wait import WaitOperationExecutor, wait
+from async_durable_execution._operation.wait import wait
+from async_durable_execution._primitive.wait import WaitOperationExecutor
 from async_durable_execution._core.state import ExecutionState
 
 
@@ -44,6 +45,19 @@ def test_wait_name_is_keyword_only() -> None:
 
     assert parameters["duration"].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
     assert parameters["name"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+def test_wait_validates_duration_before_reserving_operation(monkeypatch) -> None:
+    extension = Mock()
+    monkeypatch.setattr(
+        "async_durable_execution._operation.wait.get_extension_context",
+        Mock(return_value=extension),
+    )
+
+    with pytest.raises(ValidationError, match="duration must be at least 1 second"):
+        wait(0)
+
+    extension._reserve_sdk_operation.assert_not_called()
 
 
 async def test_wait_handler_already_completed() -> None:

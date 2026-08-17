@@ -15,8 +15,9 @@ import async_durable_execution._core.context as context_module
 import async_durable_execution._primitive.child as child
 
 # Mock the executor.execute method
-from async_durable_execution._extension.parallel import (
+from async_durable_execution._operation.parallel import (
     _BATCH_RESULT_SERDES,
+    _BranchOperationReservations,
     BatchItem,
     BatchItemStatus,
     BatchResult,
@@ -39,8 +40,8 @@ from async_durable_execution._core.exceptions import ValidationError
 from async_durable_execution import map as map_operation, DurableContext
 from async_durable_execution._core.models import OperationIdentifier
 from async_durable_execution._core.models import OperationSubType
-from async_durable_execution._extension.parallel import CompletionConfig, NestingType
-from async_durable_execution._extension.map import (
+from async_durable_execution._operation.parallel import CompletionConfig, NestingType
+from async_durable_execution._operation.map import (
     BatchedInput,
     MapItemContext,
     MapSummaryGenerator,
@@ -49,7 +50,7 @@ from async_durable_execution._extension.map import (
     get_map_item_context,
     map_handler,
 )
-from async_durable_execution._extension.parallel import ParallelExecutor
+from async_durable_execution._operation.parallel import ParallelExecutor
 from async_durable_execution._core.serdes import serialize
 from async_durable_execution._core.state import ExecutionState
 
@@ -296,7 +297,7 @@ async def test_map_executor_init_default_config() -> None:
     assert executor.nesting_type is NestingType.NESTED
 
 
-@patch("async_durable_execution._extension.map.logger")
+@patch("async_durable_execution._operation.map.logger")
 @no_type_check
 async def test_map_executor_execute_item(mock_logger) -> None:
     """Test map branch executor execute_item method with logging."""
@@ -622,7 +623,7 @@ async def test_map_handler_passes_default_fields() -> None:
         return mock_batch_result
 
     with patch(
-        "async_durable_execution._extension.map.parallel_handler",
+        "async_durable_execution._operation.map.parallel_handler",
         return_value=handler_result,
     ) as mock_parallel_handler:
         executor_context = Mock()
@@ -1051,7 +1052,79 @@ async def test_map_handler_replay_with_replay_children() -> None:
         assert result == expected_batch_result
 
 
-@patch("async_durable_execution._extension.map._run_in_child_context")
+async def test_completed_map_replay_does_not_name_unstarted_items() -> None:
+    items = ["started", "never-started"]
+    named_indexes = []
+
+    async def callable_func(item) -> str:
+        return f"result_{item}"
+
+    def item_namer(item, index) -> str:
+        named_indexes.append(index)
+        if index != 0:
+            raise AssertionError("item_namer called for an unstarted item")
+        return f"item-{item}"
+
+    state = create_mock_execution_state()
+    state.recursive_level = 0
+    context = create_test_context(state, parent_id="map-operation")
+    started_operation_id = (
+        context.step_counter._create_step_id_for_logical_step(0)  # noqa: SLF001
+    )
+    state.operations = {
+        started_operation_id: Operation(
+            operation_id=started_operation_id,
+            operation_type=OperationType.CONTEXT,
+            status=OperationStatus.SUCCEEDED,
+            sub_type=OperationSubType.MAP_ITERATION,
+            parent_id=context.parent_id,
+            context_details=ContextDetails(replay_children=True),
+        )
+    }
+    branch_operations = _BranchOperationReservations(
+        context=context,
+        count=len(items),
+        sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        branch_namer=_create_map_branch_namer(items, item_namer),
+    )
+    executor = create_map_executor(
+        executables=[
+            Executable(index=index, func=callable_func) for index in range(len(items))
+        ],
+        items=items,
+        item_namer=item_namer,
+        execution_state=state,
+        executor_context=context,
+        max_concurrency=1,
+        completion_config=CompletionConfig(min_successful=1),
+        top_level_sub_type=OperationSubType.MAP,
+        iteration_sub_type=OperationSubType.MAP_ITERATION,
+        name_prefix="map-item-",
+        serdes=None,
+        branch_operations=branch_operations,
+    )
+
+    async def replay_started_item(_context, executable) -> str:
+        branch_operations[executable.index]
+        return f"replayed-{items[executable.index]}"
+
+    with (
+        bind_current_context(context),
+        patch.object(
+            executor,
+            "_execute_item_in_child_context",
+            side_effect=replay_started_item,
+        ),
+    ):
+        result = await executor.replay_completed(state, context)
+
+    assert result.get_results() == ["replayed-started"]
+    assert named_indexes == [0]
+    assert list(branch_operations._reservations) == [0]  # noqa: SLF001
+
+
+@patch("async_durable_execution._operation.map._run_in_child_context")
 async def test_map_iterates_items_iterable_once(mock_handler) -> None:
     """Test map materializes one-shot items iterables exactly once."""
     mock_handler.return_value = "map_result"
@@ -1082,6 +1155,28 @@ async def test_map_iterates_items_iterable_once(mock_handler) -> None:
 
     assert result == "map_result"
     assert items.iterations == 1
+
+
+def test_map_outside_context_does_not_consume_items() -> None:
+    """Context validation precedes materializing a potentially effectful iterable."""
+
+    class TrackingItems:
+        def __init__(self) -> None:
+            self.iterations = 0
+
+        def __iter__(self) -> Any:
+            self.iterations += 1
+            return iter([1, 2, 3])
+
+    async def test_function(item) -> Any:
+        return item
+
+    items = TrackingItems()
+
+    with pytest.raises(RuntimeError):
+        map_operation(test_function, items)
+
+    assert items.iterations == 0
 
 
 def test_map_signature_defaults_to_map_summary_generator() -> None:
@@ -1116,8 +1211,8 @@ def test_map_summary_generator_returns_compact_json_payload() -> None:
     }
 
 
-@patch("async_durable_execution._extension.map.map_handler")
-@patch("async_durable_execution._extension.map._run_in_child_context")
+@patch("async_durable_execution._operation.map.map_handler")
+@patch("async_durable_execution._operation.map._run_in_child_context")
 async def test_map_passes_default_summary_generator_to_handler(
     mock_run_in_child_context,
     mock_map_handler,
@@ -1152,7 +1247,7 @@ async def test_map_passes_default_summary_generator_to_handler(
     )
 
 
-@patch("async_durable_execution._extension.map._run_in_child_context")
+@patch("async_durable_execution._operation.map._run_in_child_context")
 async def test_map_raises_when_child_operation_id_is_missing(
     mock_run_in_child_context,
 ) -> None:
@@ -1229,10 +1324,10 @@ async def test_map_handler_first_execution_then_replay_integration() -> None:
 
     with (
         patch(
-            "async_durable_execution._extension.parallel.ParallelExecutor.execute"
+            "async_durable_execution._operation.parallel.ParallelExecutor.execute"
         ) as mock_execute,
         patch(
-            "async_durable_execution._extension.parallel.ParallelExecutor.replay_completed"
+            "async_durable_execution._operation.parallel.ParallelExecutor.replay_completed"
         ) as mock_replay,
     ):
         mock_execute.return_value = Mock()  # Mock BatchResult
@@ -1288,10 +1383,14 @@ async def test_map_item_serialize(
     )
 
     def child_checkpoint_for(op_id: str) -> Any:
+        index = op_id.removeprefix("child-")
         return Operation(
             operation_id=op_id,
             operation_type=OperationType.CONTEXT,
             status=OperationStatus.STARTED,
+            parent_id="parent",
+            name=f"map-item-{index}",
+            sub_type=OperationSubType.MAP_ITERATION,
         )
 
     def get_checkpoint(op_id) -> Any:
@@ -1316,10 +1415,17 @@ async def test_map_item_serialize(
             else f"child-{i}"
         )
 
-    with patch.object(
-        context_module.OperationIdGenerator,
-        "_create_step_id_for_logical_step",
-        create_id,
+    with (
+        patch.object(
+            context_module.OperationIdGenerator,
+            "_create_step_id_for_logical_step",
+            create_id,
+        ),
+        patch.object(
+            context_module.OperationIdGenerator,
+            "_create_id_for_local_id",
+            create_id,
+        ),
     ):
         context = create_test_context(state=mock_state)
 
@@ -1371,10 +1477,14 @@ async def test_map_item_deserialize(
     parent_checkpoint.is_existent.return_value = False
 
     def child_checkpoint_for(op_id: str) -> Any:
+        index = op_id.removeprefix("child-")
         return Operation(
             operation_id=op_id,
             operation_type=OperationType.CONTEXT,
             status=OperationStatus.SUCCEEDED,
+            parent_id="parent",
+            name=f"map-item-{index}",
+            sub_type=OperationSubType.MAP_ITERATION,
             context_details=ContextDetails(result='"cached"'),
         )
 
@@ -1400,10 +1510,17 @@ async def test_map_item_deserialize(
             else f"child-{i}"
         )
 
-    with patch.object(
-        context_module.OperationIdGenerator,
-        "_create_step_id_for_logical_step",
-        create_id,
+    with (
+        patch.object(
+            context_module.OperationIdGenerator,
+            "_create_step_id_for_logical_step",
+            create_id,
+        ),
+        patch.object(
+            context_module.OperationIdGenerator,
+            "_create_id_for_local_id",
+            create_id,
+        ),
     ):
         context = create_test_context(state=mock_state)
 
@@ -1532,10 +1649,17 @@ async def test_map_handler_serializes_batch_result() -> None:
                     else f"child-{i}"
                 )
 
-            with patch.object(
-                context_module.OperationIdGenerator,
-                "_create_step_id_for_logical_step",
-                create_id,
+            with (
+                patch.object(
+                    context_module.OperationIdGenerator,
+                    "_create_step_id_for_logical_step",
+                    create_id,
+                ),
+                patch.object(
+                    context_module.OperationIdGenerator,
+                    "_create_id_for_local_id",
+                    create_id,
+                ),
             ):
                 context = create_test_context(state=mock_state)
 
@@ -1596,10 +1720,17 @@ async def test_map_default_serdes_serializes_batch_result() -> None:
                     else f"child-{i}"
                 )
 
-            with patch.object(
-                context_module.OperationIdGenerator,
-                "_create_step_id_for_logical_step",
-                create_id,
+            with (
+                patch.object(
+                    context_module.OperationIdGenerator,
+                    "_create_step_id_for_logical_step",
+                    create_id,
+                ),
+                patch.object(
+                    context_module.OperationIdGenerator,
+                    "_create_id_for_local_id",
+                    create_id,
+                ),
             ):
                 context = create_test_context(state=mock_state)
 
@@ -1668,10 +1799,17 @@ async def test_map_custom_serdes_serializes_batch_result() -> None:
                     else f"child-{i}"
                 )
 
-            with patch.object(
-                context_module.OperationIdGenerator,
-                "_create_step_id_for_logical_step",
-                create_id,
+            with (
+                patch.object(
+                    context_module.OperationIdGenerator,
+                    "_create_step_id_for_logical_step",
+                    create_id,
+                ),
+                patch.object(
+                    context_module.OperationIdGenerator,
+                    "_create_id_for_local_id",
+                    create_id,
+                ),
             ):
                 context = create_test_context(state=mock_state)
 

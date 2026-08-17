@@ -1002,95 +1002,6 @@ async def test_operation_update_complete_with_new_fields() -> None:
     assert result == expected
 
 
-# =============================================================================
-# Tests for new wait-for-condition factory methods
-# =============================================================================
-
-
-async def test_operation_update_create_wait_for_condition_start() -> None:
-    """Test OperationUpdate.create_wait_for_condition_start factory method."""
-    identifier = OperationIdentifier(
-        "wait_cond_1",
-        OperationSubType.WAIT_FOR_CONDITION,
-        "parent1",
-        "test_wait_condition",
-    )
-    update = OperationUpdate.create_wait_for_condition_start(identifier)
-
-    assert update.operation_id == "wait_cond_1"
-    assert update.parent_id == "parent1"
-    assert update.operation_type == OperationType.STEP
-    assert update.sub_type == OperationSubType.WAIT_FOR_CONDITION
-    assert update.action == OperationAction.START
-    assert update.name == "test_wait_condition"
-
-
-async def test_operation_update_create_wait_for_condition_succeed() -> None:
-    """Test OperationUpdate.create_wait_for_condition_succeed factory method."""
-    identifier = OperationIdentifier(
-        "wait_cond_1",
-        OperationSubType.WAIT_FOR_CONDITION,
-        "parent1",
-        "test_wait_condition",
-    )
-    update = OperationUpdate.create_wait_for_condition_succeed(
-        identifier, "success_payload"
-    )
-
-    assert update.operation_id == "wait_cond_1"
-    assert update.parent_id == "parent1"
-    assert update.operation_type == OperationType.STEP
-    assert update.sub_type == OperationSubType.WAIT_FOR_CONDITION
-    assert update.action == OperationAction.SUCCEED
-    assert update.name == "test_wait_condition"
-    assert update.payload == "success_payload"
-
-
-@no_type_check
-async def test_operation_update_create_wait_for_condition_retry() -> None:
-    """Test OperationUpdate.create_wait_for_condition_retry factory method."""
-    identifier = OperationIdentifier(
-        "wait_cond_1",
-        OperationSubType.WAIT_FOR_CONDITION,
-        "parent1",
-        "test_wait_condition",
-    )
-    update = OperationUpdate.create_wait_for_condition_retry(
-        identifier, "retry_payload", 45
-    )
-
-    assert update.operation_id == "wait_cond_1"
-    assert update.parent_id == "parent1"
-    assert update.operation_type == OperationType.STEP
-    assert update.sub_type == OperationSubType.WAIT_FOR_CONDITION
-    assert update.action == OperationAction.RETRY
-    assert update.name == "test_wait_condition"
-    assert update.payload == "retry_payload"
-    assert update.step_options.next_attempt_delay_seconds == 45
-
-
-async def test_operation_update_create_wait_for_condition_fail() -> None:
-    """Test OperationUpdate.create_wait_for_condition_fail factory method."""
-    identifier = OperationIdentifier(
-        "wait_cond_1",
-        OperationSubType.WAIT_FOR_CONDITION,
-        "parent1",
-        "test_wait_condition",
-    )
-    error = ErrorObject(
-        message="Condition failed", type="ConditionError", data=None, stack_trace=None
-    )
-    update = OperationUpdate.create_wait_for_condition_fail(identifier, error)
-
-    assert update.operation_id == "wait_cond_1"
-    assert update.parent_id == "parent1"
-    assert update.operation_type == OperationType.STEP
-    assert update.sub_type == OperationSubType.WAIT_FOR_CONDITION
-    assert update.action == OperationAction.FAIL
-    assert update.name == "test_wait_condition"
-    assert update.error == error
-
-
 # Tests for ContextOptions class
 
 
@@ -2406,6 +2317,24 @@ async def test_timestamp_converter_millisecond_boundaries() -> None:
         result_dt = TimestampConverter.from_unix_millis(result_ms)
         # Should be equal within millisecond precision
         assert abs((result_dt - dt).total_seconds()) < 0.001
+
+
+def test_operation_models_round_trip_custom_subtype_strings() -> None:
+    operation = Operation(
+        operation_id="custom",
+        operation_type=OperationType.STEP,
+        status=OperationStatus.SUCCEEDED,
+        sub_type="AcmeStep",
+    )
+    update = OperationUpdate(
+        operation_id="custom",
+        operation_type=OperationType.STEP,
+        action=OperationAction.START,
+        sub_type="AcmeStep",
+    )
+
+    assert Operation.from_dict(operation.to_dict()).sub_type == "AcmeStep"
+    assert OperationUpdate.from_dict(update.to_dict()).sub_type == "AcmeStep"
 
 
 def test_operation_identifier_requires_operation_id_for_non_execution_operations() -> (

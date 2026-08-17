@@ -125,6 +125,17 @@ def _enum_type(annotation: Any) -> type[Enum] | None:
     return None
 
 
+def _accepts_plain_string(annotation: Any) -> bool:
+    if annotation is str:
+        return True
+
+    origin = get_origin(annotation)
+    if origin is None:
+        return False
+
+    return any(_accepts_plain_string(arg) for arg in get_args(annotation))
+
+
 def _model_type(annotation: Any) -> type[Any] | None:
     if isinstance(annotation, type) and issubclass(annotation, _MAPPING_MODEL_TYPES):
         return annotation
@@ -166,7 +177,12 @@ def _deserialize_value(
 
     enum_cls = _enum_type(annotation)
     if enum_cls is not None:
-        return enum_cls(value)
+        try:
+            return enum_cls(value)
+        except ValueError:
+            if isinstance(value, str) and _accepts_plain_string(annotation):
+                return value
+            raise
 
     origin = get_origin(annotation)
     if origin is list:
@@ -316,6 +332,9 @@ class OperationSubType(Enum):
     EXECUTION = "Execution"
 
 
+OperationSubTypeValue: TypeAlias = OperationSubType | str
+
+
 class OperationType(Enum):
     """Top-level operation categories persisted by the durable backend."""
 
@@ -332,9 +351,10 @@ class OperationIdentifier:
     """Container for operation id, parent id, and name."""
 
     operation_id: str | None
-    sub_type: OperationSubType
+    sub_type: OperationSubTypeValue
     parent_id: str | None = None
     name: str | None = None
+    operation_type: OperationType | None = field(default=None, kw_only=True)
 
     def require_operation_id(self) -> str:
         """Return the operation id for non-root operations."""
@@ -589,7 +609,7 @@ class OperationUpdate(BotoSerializableModel):
         default=None,
         metadata=_model_field_metadata(alias="Name", omit_if_falsey=True),
     )
-    sub_type: OperationSubType | None = field(
+    sub_type: OperationSubTypeValue | None = field(
         default=None,
         metadata=_model_field_metadata(alias="SubType"),
     )
@@ -630,7 +650,7 @@ class OperationUpdate(BotoSerializableModel):
             operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.CALLBACK,
-            sub_type=OperationSubType.CALLBACK,
+            sub_type=identifier.sub_type,
             action=OperationAction.START,
             name=identifier.name,
             callback_options=callback_options,
@@ -638,7 +658,7 @@ class OperationUpdate(BotoSerializableModel):
 
     @classmethod
     def create_context_start(
-        cls, identifier: OperationIdentifier, sub_type: OperationSubType
+        cls, identifier: OperationIdentifier, sub_type: OperationSubTypeValue
     ) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: CONTEXT, action: START."""
         return cls(
@@ -655,7 +675,7 @@ class OperationUpdate(BotoSerializableModel):
         cls,
         identifier: OperationIdentifier,
         payload: str,
-        sub_type: OperationSubType,
+        sub_type: OperationSubTypeValue,
         context_options: ContextOptions | None = None,
     ) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: CONTEXT, action: SUCCEED."""
@@ -675,7 +695,7 @@ class OperationUpdate(BotoSerializableModel):
         cls,
         identifier: OperationIdentifier,
         error: ErrorObject,
-        sub_type: OperationSubType,
+        sub_type: OperationSubTypeValue,
     ) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: CONTEXT, action: FAIL."""
         return cls(
@@ -717,7 +737,7 @@ class OperationUpdate(BotoSerializableModel):
             operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.STEP,
-            sub_type=OperationSubType.STEP,
+            sub_type=identifier.sub_type,
             action=OperationAction.SUCCEED,
             name=identifier.name,
             payload=payload,
@@ -732,7 +752,7 @@ class OperationUpdate(BotoSerializableModel):
             operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.STEP,
-            sub_type=OperationSubType.STEP,
+            sub_type=identifier.sub_type,
             action=OperationAction.FAIL,
             name=identifier.name,
             error=error,
@@ -745,7 +765,7 @@ class OperationUpdate(BotoSerializableModel):
             operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.STEP,
-            sub_type=OperationSubType.STEP,
+            sub_type=identifier.sub_type,
             action=OperationAction.START,
             name=identifier.name,
         )
@@ -754,17 +774,20 @@ class OperationUpdate(BotoSerializableModel):
     def create_step_retry(
         cls,
         identifier: OperationIdentifier,
-        error: ErrorObject,
+        error: ErrorObject | None,
         next_attempt_delay_seconds: int,
+        *,
+        payload: str | None = None,
     ) -> OperationUpdate:
         """Create an instance of OperationUpdate for type: STEP, action: RETRY."""
         return cls(
             operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.STEP,
-            sub_type=OperationSubType.STEP,
+            sub_type=identifier.sub_type,
             action=OperationAction.RETRY,
             name=identifier.name,
+            payload=payload,
             error=error,
             step_options=StepOptions(
                 next_attempt_delay_seconds=next_attempt_delay_seconds
@@ -783,76 +806,11 @@ class OperationUpdate(BotoSerializableModel):
             operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.CHAINED_INVOKE,
-            sub_type=OperationSubType.CHAINED_INVOKE,
+            sub_type=identifier.sub_type,
             action=OperationAction.START,
             name=identifier.name,
             payload=payload,
             chained_invoke_options=chained_invoke_options,
-        )
-
-    @classmethod
-    def create_wait_for_condition_start(
-        cls, identifier: OperationIdentifier
-    ) -> OperationUpdate:
-        """Create an instance of OperationUpdate for type: STEP, action: START."""
-        return cls(
-            operation_id=identifier.require_operation_id(),
-            parent_id=identifier.parent_id,
-            operation_type=OperationType.STEP,
-            sub_type=OperationSubType.WAIT_FOR_CONDITION,
-            action=OperationAction.START,
-            name=identifier.name,
-        )
-
-    @classmethod
-    def create_wait_for_condition_succeed(
-        cls, identifier: OperationIdentifier, payload: str
-    ) -> OperationUpdate:
-        """Create an instance of OperationUpdate for type: STEP, action: SUCCEED."""
-        return cls(
-            operation_id=identifier.require_operation_id(),
-            parent_id=identifier.parent_id,
-            operation_type=OperationType.STEP,
-            sub_type=OperationSubType.WAIT_FOR_CONDITION,
-            action=OperationAction.SUCCEED,
-            name=identifier.name,
-            payload=payload,
-        )
-
-    @classmethod
-    def create_wait_for_condition_retry(
-        cls,
-        identifier: OperationIdentifier,
-        payload: str,
-        next_attempt_delay_seconds: int,
-    ) -> OperationUpdate:
-        """Create an instance of OperationUpdate for type: STEP, action: RETRY."""
-        return cls(
-            operation_id=identifier.require_operation_id(),
-            parent_id=identifier.parent_id,
-            operation_type=OperationType.STEP,
-            sub_type=OperationSubType.WAIT_FOR_CONDITION,
-            action=OperationAction.RETRY,
-            name=identifier.name,
-            payload=payload,
-            step_options=StepOptions(
-                next_attempt_delay_seconds=next_attempt_delay_seconds
-            ),
-        )
-
-    @classmethod
-    def create_wait_for_condition_fail(
-        cls, identifier: OperationIdentifier, error: ErrorObject
-    ) -> OperationUpdate:
-        """Create an instance of OperationUpdate for type: STEP, action: FAIL."""
-        return cls(
-            operation_id=identifier.require_operation_id(),
-            parent_id=identifier.parent_id,
-            operation_type=OperationType.STEP,
-            sub_type=OperationSubType.WAIT_FOR_CONDITION,
-            action=OperationAction.FAIL,
-            name=identifier.name,
-            error=error,
         )
 
     @classmethod
@@ -864,7 +822,7 @@ class OperationUpdate(BotoSerializableModel):
             operation_id=identifier.require_operation_id(),
             parent_id=identifier.parent_id,
             operation_type=OperationType.WAIT,
-            sub_type=OperationSubType.WAIT,
+            sub_type=identifier.sub_type,
             action=OperationAction.START,
             name=identifier.name,
             wait_options=wait_options,
@@ -912,7 +870,7 @@ class Operation(BotoSerializableModel):
         default=None,
         metadata=_model_field_metadata(alias="EndTimestamp", is_timestamp=True),
     )
-    sub_type: OperationSubType | None = field(
+    sub_type: OperationSubTypeValue | None = field(
         default=None,
         metadata=_model_field_metadata(alias="SubType"),
     )
@@ -1001,6 +959,7 @@ __all__ = [
     "OperationPayload",
     "OperationStatus",
     "OperationSubType",
+    "OperationSubTypeValue",
     "OperationType",
     "OperationUpdate",
     "ReplayChildren",

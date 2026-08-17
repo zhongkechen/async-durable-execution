@@ -8,11 +8,12 @@ from typing import TypeVar, cast
 from .._core import (
     RECURSIVE_LEVEL_INPUT_FIELD,
     DurableContext,
+    OperationSubType,
     SerDes,
     ValidationError,
     get_durable_context,
 )
-from .._primitive.invoke import invoke
+from ..extension import get_extension_context
 
 
 P = TypeVar("P")
@@ -122,11 +123,15 @@ def recurse(
     if recursive_tenant_id is None and context.lambda_context is not None:
         recursive_tenant_id = getattr(context.lambda_context, "tenant_id", None)
 
-    return invoke(
-        function_name=target_function_name,
-        payload=recursive_payload,
-        name=name,
-        serdes_payload=serdes_payload,
-        serdes_result=serdes_result,
-        tenant_id=recursive_tenant_id,
+    return (
+        get_extension_context()
+        ._reserve_sdk_operation(name)  # noqa: SLF001
+        ._run_invoke(  # noqa: SLF001
+            target_function_name,
+            recursive_payload,
+            sub_type=OperationSubType.CHAINED_INVOKE,
+            serdes_payload=serdes_payload,
+            serdes_result=serdes_result,
+            tenant_id=recursive_tenant_id,
+        )
     )

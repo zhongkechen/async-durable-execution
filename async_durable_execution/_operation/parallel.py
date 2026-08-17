@@ -7,7 +7,7 @@ import json
 import logging
 import time
 from collections import Counter
-from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field as dataclass_field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar, cast
@@ -24,6 +24,7 @@ from .._core import (
     OperationIdentifier,
     OperationStatus,
     OperationSubType,
+    OperationType,
     OrphanedChildException,
     SerDes,
     SerDesError,
@@ -38,13 +39,11 @@ from .._core import (
     get_durable_context,
 )
 from .._primitive.base import OperationExecutor
-from .._primitive.child import (
-    ChildOperationExecutor,
-    _create_child_context_task as _run_in_child_context,
-)
+from .._primitive.child import ChildOperationExecutor
+from ..extension import ExtensionContext, ExtensionOperation, get_extension_context
 
 if TYPE_CHECKING:
-    from .._primitive.child import SummaryGenerator
+    from .child import SummaryGenerator
 
 
 logger = logging.getLogger(__name__)
@@ -53,6 +52,29 @@ CallableType = TypeVar("CallableType")
 ResultType = TypeVar("ResultType")
 R = TypeVar("R")
 T = TypeVar("T")
+
+
+def _run_in_child_context(
+    func: Callable[[], Awaitable[T]],
+    *,
+    sub_type: OperationSubType,
+    name: str | None = None,
+    serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    is_virtual: bool = False,
+) -> asyncio.Task[T]:
+    """Run an SDK-owned child operation through the stable operation SPI."""
+    return (
+        get_extension_context()
+        ._reserve_sdk_operation(name)  # noqa: SLF001
+        ._run_in_child_context(  # noqa: SLF001
+            func,
+            sub_type=sub_type,
+            serdes=serdes,
+            summary_generator=summary_generator,
+            is_virtual=is_virtual,
+        )
+    )
 
 
 class CompletionReason(Enum):
@@ -999,6 +1021,7 @@ class ParallelExecutor(
         summary_generator: SummaryGenerator | None = None,
         nesting_type: NestingType = NestingType.NESTED,
         branch_namer: Callable[[int], str] | None = None,
+        branch_operations: Mapping[int, ExtensionOperation] | None = None,
     ) -> None:
         super().__init__(
             state=execution_state,
@@ -1014,6 +1037,8 @@ class ParallelExecutor(
         self.summary_generator = summary_generator
         self.nesting_type = nesting_type
         self._branch_namer = branch_namer
+        self._branch_operations = branch_operations
+        self._started_branch_operations: set[int] = set()
         self._completion_event = asyncio.Event()
         self._suspend_exception: SuspendExecution | None = None
         self._completion_exception: Exception | None = None
@@ -1315,13 +1340,37 @@ class ParallelExecutor(
         executor_context: DurableContext,
         executable: Executable[CallableType],
     ) -> ResultType:
+        is_virtual: bool = self.nesting_type is NestingType.FLAT
+
+        async def run_child_operation() -> ResultType:
+            return await self.execute_item(get_durable_context(), executable)
+
+        if self._branch_operations is not None:
+            operation = self._branch_operations[executable.index]
+            if executable.index in self._started_branch_operations:
+                task = operation._restart_child_context(  # noqa: SLF001
+                    run_child_operation,
+                    serdes=self.item_serdes or self.serdes,
+                    summary_generator=self.summary_generator,
+                    is_virtual=is_virtual,
+                )
+            else:
+                self._started_branch_operations.add(executable.index)
+                task = operation._run_in_child_context(  # noqa: SLF001
+                    run_child_operation,
+                    sub_type=self.sub_type_iteration,
+                    serdes=self.item_serdes or self.serdes,
+                    summary_generator=self.summary_generator,
+                    is_virtual=is_virtual,
+                )
+            return await task
+
         operation_id: str = (
             executor_context.step_counter._create_step_id_for_logical_step(  # noqa: SLF001
                 executable.index
             )
         )
         name: str = self.get_iteration_name(executable.index)
-        is_virtual: bool = self.nesting_type is NestingType.FLAT
 
         child_context: DurableContext = executor_context.create_child_context(
             operation_id, is_virtual=is_virtual
@@ -1333,11 +1382,11 @@ class ParallelExecutor(
             name=name,
         )
 
-        async def run_child_operation() -> ResultType:
+        async def run_legacy_child_operation() -> ResultType:
             return await self.execute_item(child_context, executable)
 
         executor: ChildOperationExecutor[ResultType] = ChildOperationExecutor(
-            run_child_operation,
+            run_legacy_child_operation,
             child_context.execution_state,
             operation_identifier,
             serdes=self.item_serdes or self.serdes,
@@ -1351,11 +1400,16 @@ class ParallelExecutor(
     ) -> BatchResult[ResultType]:
         items: list[BatchItem[ResultType]] = []
         for executable in self.executables:
-            operation_id = (
-                executor_context.step_counter._create_step_id_for_logical_step(  # noqa: SLF001
-                    executable.index
+            if isinstance(self._branch_operations, _BranchOperationReservations):
+                operation_id = self._branch_operations.operation_id(executable.index)
+            elif self._branch_operations is not None:
+                operation_id = self._branch_operations[executable.index]._operation_id  # noqa: SLF001
+            else:
+                operation_id = (
+                    executor_context.step_counter._create_step_id_for_logical_step(  # noqa: SLF001
+                        executable.index
+                    )
                 )
-            )
             operation = execution_state.operations.get(operation_id)
 
             result: ResultType | None = None
@@ -1417,6 +1471,75 @@ class ParallelSummaryGenerator:
         return json.dumps(fields)
 
 
+class _BranchOperationReservations(Mapping[int, ExtensionOperation]):
+    """Create branch reservations lazily while retaining replay checkpoints."""
+
+    def __init__(
+        self,
+        *,
+        context: DurableContext,
+        count: int,
+        sub_type: OperationSubType,
+        name_prefix: str,
+        branch_namer: Callable[[int], str] | None,
+    ) -> None:
+        self._context = context
+        self._count = count
+        self._sub_type = sub_type
+        self._name_prefix = name_prefix
+        self._branch_namer = branch_namer
+        self._extension = ExtensionContext(context)
+        self._parent_replaying = context.is_replaying()
+        self._reservations: dict[int, ExtensionOperation] = {}
+        self._register_historical_checkpoints()
+
+    def __getitem__(self, index: int) -> ExtensionOperation:
+        operation_id = self.operation_id(index)
+        reservation = self._reservations.get(index)
+        if reservation is None:
+            reservation = self._extension._reserve_sdk_operation_id(  # noqa: SLF001
+                self._branch_name(index),
+                operation_id=operation_id,
+                parent_replaying=self._parent_replaying,
+            )
+            self._reservations[index] = reservation
+        return reservation
+
+    def __iter__(self) -> Iterator[int]:
+        return iter(range(self._count))
+
+    def __len__(self) -> int:
+        return self._count
+
+    def operation_id(self, index: int) -> str:
+        """Return a branch ID without creating its reservation or name."""
+        if index < 0 or index >= self._count:
+            raise KeyError(index)
+        return self._context.step_counter._create_step_id_for_logical_step(  # noqa: SLF001
+            index
+        )
+
+    def _branch_name(self, index: int) -> str:
+        if self._branch_namer is not None:
+            return self._branch_namer(index)
+        return f"{self._name_prefix}{index}"
+
+    def _register_historical_checkpoints(self) -> None:
+        operations = self._context.execution_state.operations
+        if not isinstance(operations, Mapping):
+            return
+        for operation in operations.values():
+            if (
+                operation.operation_type is OperationType.CONTEXT
+                and operation.sub_type == self._sub_type
+                and operation.parent_id == self._context.parent_id
+            ):
+                self._context.step_counter._register_reservation(  # noqa: SLF001
+                    operation.operation_id,
+                    has_checkpoint=True,
+                )
+
+
 @durable_callable
 async def parallel_handler(
     callables: Sequence[Callable[[], Awaitable[R]]],
@@ -1442,23 +1565,38 @@ async def parallel_handler(
     #
     # See TypeScript reference: aws-durable-execution-sdk-js/src/handlers/parallel-handler/parallel-handler.ts (~line 112)
 
-    executor: ParallelExecutor[Callable[[], Awaitable[R]], R] = ParallelExecutor(
-        executables=[
+    branch_operations: Mapping[int, ExtensionOperation] | None = None
+    if isinstance(parallel_context, DurableContext):
+        branch_operations = _BranchOperationReservations(
+            context=parallel_context,
+            count=len(callables),
+            sub_type=iteration_sub_type,
+            name_prefix=name_prefix,
+            branch_namer=branch_namer,
+        )
+    executor_kwargs: dict[str, Any] = {
+        "executables": [
             Executable(index=i, func=func) for i, func in enumerate(callables)
         ],
-        max_concurrency=max_concurrency,
-        completion_config=completion_config or CompletionConfig.all_successful(),
-        top_level_sub_type=top_level_sub_type,
-        iteration_sub_type=iteration_sub_type,
-        name_prefix=name_prefix,
-        serdes=serdes,
-        summary_generator=summary_generator,
-        item_serdes=item_serdes,
-        nesting_type=nesting_type,
-        branch_namer=branch_namer,
-        execution_state=execution_state,
-        operation_identifier=operation_identifier,
-        executor_context=parallel_context,
+        "max_concurrency": max_concurrency,
+        "completion_config": completion_config or CompletionConfig.all_successful(),
+        "top_level_sub_type": top_level_sub_type,
+        "iteration_sub_type": iteration_sub_type,
+        "name_prefix": name_prefix,
+        "serdes": serdes,
+        "summary_generator": summary_generator,
+        "item_serdes": item_serdes,
+        "nesting_type": nesting_type,
+        "branch_namer": branch_namer,
+        "execution_state": execution_state,
+        "operation_identifier": operation_identifier,
+        "executor_context": parallel_context,
+    }
+    if branch_operations is not None:
+        executor_kwargs["branch_operations"] = branch_operations
+
+    executor: ParallelExecutor[Callable[[], Awaitable[R]], R] = ParallelExecutor(
+        **executor_kwargs,
     )
 
     return await executor.process()

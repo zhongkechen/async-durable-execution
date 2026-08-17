@@ -1,8 +1,10 @@
 """Tests for public package exports and module-level operation helpers."""
 
+import importlib
+import inspect
 from typing import no_type_check
 
-from typing import Any
+from typing import Any, cast
 
 from collections.abc import Callable
 from datetime import timedelta
@@ -14,6 +16,9 @@ from async_durable_execution import (
     DurableFunctionCloudTestRunner,
     DurableFunctionLocalTestRunner,
     DurableFunctionTestResult,
+    ExtensionContext,
+    ExtensionOperation,
+    ExtensionStepResult,
     FlowDefinitionError,
     FlowExecutionError,
     FlowNode,
@@ -31,6 +36,7 @@ from async_durable_execution import (
     durable_node,
     flow,
     get_durable_context,
+    get_extension_context,
     get_map_item_context,
     get_node_context,
     get_serdes_context,
@@ -38,6 +44,7 @@ from async_durable_execution import (
     get_wait_for_callback_context,
     get_wait_for_condition_check_context,
     get_with_retry_context,
+    invoke,
     now,
     node,
     step,
@@ -63,20 +70,83 @@ from async_durable_execution._core.models import (
 )
 from async_durable_execution._core.config import JitterStrategy
 from async_durable_execution._core.config import RetryStrategy
-from async_durable_execution._extension.parallel import CompletionDecision
-from async_durable_execution._extension.parallel import CompletionStatus
-from async_durable_execution._primitive.child import SummaryGenerator
-from async_durable_execution._extension.with_retry import (
+from async_durable_execution._operation.parallel import CompletionDecision
+from async_durable_execution._operation.parallel import CompletionStatus
+from async_durable_execution._operation.callback import (
+    create_callback as module_create_callback,
+)
+from async_durable_execution._operation.child import (
+    SummaryGenerator,
+    run_in_child_context as module_run_in_child_context,
+)
+from async_durable_execution._operation.invoke import invoke as module_invoke
+from async_durable_execution._operation.step import step as module_step
+from async_durable_execution._operation.wait import wait as module_wait
+from async_durable_execution._operation.with_retry import (
     WithRetryContext as ModuleWithRetryContext,
 )
-from async_durable_execution._extension.wait_for_condition import PollingStrategy
-from async_durable_execution._extension.recurse import recurse as module_recurse
-from async_durable_execution._extension.replay_safe import (
+from async_durable_execution._operation.wait_for_condition import PollingStrategy
+from async_durable_execution._operation.recurse import recurse as module_recurse
+from async_durable_execution._operation.replay_safe import (
     now as module_now,
     random as module_random,
     timestamp as module_timestamp,
     uuid as module_uuid,
 )
+
+
+def test_legacy_extension_modules_alias_operation_modules() -> None:
+    """Former private module paths resolve to the canonical operation modules."""
+    for module_name in (
+        "flow",
+        "map",
+        "parallel",
+        "recurse",
+        "replay_safe",
+        "wait_for_callback",
+        "wait_for_condition",
+        "with_retry",
+    ):
+        legacy = importlib.import_module(
+            f"async_durable_execution._extension.{module_name}"
+        )
+        canonical = importlib.import_module(
+            f"async_durable_execution._operation.{module_name}"
+        )
+
+        assert legacy is canonical
+
+
+def test_user_facing_primitives_are_owned_by_operation_modules() -> None:
+    """Package-root primitive helpers resolve to the operation layer."""
+    assert create_callback is module_create_callback
+    assert invoke is module_invoke
+    assert run_in_child_context is module_run_in_child_context
+    assert step is module_step
+    assert wait is module_wait
+
+
+def test_legacy_primitive_helper_imports_remain_compatible() -> None:
+    """Former private helper imports retain the public call signatures."""
+    canonical_helpers = {
+        "callback": ("create_callback", module_create_callback),
+        "child": ("run_in_child_context", module_run_in_child_context),
+        "invoke": ("invoke", module_invoke),
+        "step": ("step", module_step),
+        "wait": ("wait", module_wait),
+    }
+
+    for module_name, (helper_name, canonical) in canonical_helpers.items():
+        legacy_module = importlib.import_module(
+            f"async_durable_execution._primitive.{module_name}"
+        )
+        legacy = getattr(legacy_module, helper_name)
+
+        assert inspect.signature(legacy) == inspect.signature(
+            cast("Callable[..., Any]", canonical)
+        )
+
+
 from async_durable_execution._core.serdes import ExtendedTypeSerDes
 from async_durable_execution._core.client import DurableServiceClient
 
@@ -98,6 +168,9 @@ def test_additional_public_types_importable_from_package_root() -> None:
         "DurableFunctionTestResult": DurableFunctionTestResult,
         "DurableContext": ModuleDurableContext,
         "ExtendedTypeSerDes": ExtendedTypeSerDes,
+        "ExtensionContext": ExtensionContext,
+        "ExtensionOperation": ExtensionOperation,
+        "ExtensionStepResult": ExtensionStepResult,
         "FlowDefinitionError": FlowDefinitionError,
         "FlowExecutionError": FlowExecutionError,
         "FlowNode": FlowNode,
@@ -122,6 +195,7 @@ def test_additional_public_types_importable_from_package_root() -> None:
         "durable_node": durable_node,
         "flow": flow,
         "get_durable_context": get_durable_context,
+        "get_extension_context": get_extension_context,
         "get_map_item_context": get_map_item_context,
         "get_node_context": get_node_context,
         "get_serdes_context": get_serdes_context,
@@ -288,15 +362,15 @@ async def test_module_level_operations_delegate_to_mock_context_methods() -> Non
                 mock_child_executor,
             ),
             patch(
-                "async_durable_execution._extension.wait_for_callback._create_child_context_task",
+                "async_durable_execution._operation.wait_for_callback._create_child_context_task",
                 mock_callback_child,
             ),
             patch(
-                "async_durable_execution._extension.map._run_in_child_context",
+                "async_durable_execution._operation.map._run_in_child_context",
                 mock_map_child,
             ),
             patch(
-                "async_durable_execution._extension.parallel._run_in_child_context",
+                "async_durable_execution._operation.parallel._run_in_child_context",
                 mock_parallel_child,
             ),
         ):

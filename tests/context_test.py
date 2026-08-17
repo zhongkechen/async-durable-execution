@@ -17,6 +17,7 @@ import pytest
 
 from async_durable_execution._core.context import (
     DurableContext as ModuleDurableContext,
+    OperationIdGenerator,
     OperationContext,
     SerDesContext,
     bind_current_context,
@@ -26,11 +27,11 @@ from async_durable_execution._core.context import (
     set_current_context,
     get_current_context,
 )
-from async_durable_execution._primitive.callback import (
+from async_durable_execution._operation.callback import (
     Callback,
     CallbackError,
 )
-from async_durable_execution._extension.map import MapSummaryGenerator
+from async_durable_execution._operation.map import MapSummaryGenerator
 from async_durable_execution import (
     durable_callable,
     create_callback,
@@ -42,6 +43,9 @@ from async_durable_execution import (
     wait_for_condition,
     wait_for_callback,
     map as map_operation,
+    ExtensionContext,
+    ExtensionOperation,
+    LambdaContext,
     StepContext,
     StepSemantics,
     DurableContext,
@@ -176,6 +180,15 @@ def test_context_function_type_hints_are_runtime_resolvable() -> None:
         "context": OperationContext | SerDesContext,
         "return": Iterator[None],
     }
+    lambda_context_property = inspect.getattr_static(
+        ExtensionContext,
+        "lambda_context",
+    )
+    assert isinstance(lambda_context_property, property)
+    assert lambda_context_property.fget is not None
+    assert (
+        get_type_hints(lambda_context_property.fget)["return"] == LambdaContext | None
+    )
 
 
 def test_get_durable_context_returns_bound_durable_context() -> None:
@@ -311,8 +324,14 @@ async def test_module_level_context_functions_delegate_to_durable_context() -> N
     callback_executor.process.return_value = "callback-id"
     invoke_executor = AsyncMock()
     invoke_executor.process.return_value = "invoke-result"
-    wait_for_condition_executor = AsyncMock()
-    wait_for_condition_executor.process.return_value = "condition-result"
+    condition_operation = Mock()
+    condition_operation._run_stateful_step.return_value = asyncio.create_task(  # noqa: SLF001
+        asyncio.sleep(0, result="condition-result")
+    )
+    condition_extension = Mock()
+    condition_extension._reserve_sdk_operation.return_value = (  # noqa: SLF001
+        condition_operation
+    )
 
     with (
         patch(
@@ -325,8 +344,9 @@ async def test_module_level_context_functions_delegate_to_durable_context() -> N
             "async_durable_execution._primitive.invoke.InvokeOperationExecutor"
         ) as mock_invoke_executor,
         patch(
-            "async_durable_execution._extension.wait_for_condition.WaitForConditionOperationExecutor"
-        ) as mock_wait_for_condition_executor,
+            "async_durable_execution._operation.wait_for_condition.get_extension_context",
+            return_value=condition_extension,
+        ),
         patch(
             "async_durable_execution._primitive.wait.WaitOperationExecutor"
         ) as mock_wait_executor,
@@ -335,22 +355,21 @@ async def test_module_level_context_functions_delegate_to_durable_context() -> N
             MagicMock(return_value=make_async_executor("child-result")),
         ),
         patch(
-            "async_durable_execution._extension.wait_for_callback._create_child_context_task",
+            "async_durable_execution._operation.wait_for_callback._create_child_context_task",
             mock_callback_child,
         ),
         patch(
-            "async_durable_execution._extension.map._run_in_child_context",
+            "async_durable_execution._operation.map._run_in_child_context",
             mock_map_child,
         ),
         patch(
-            "async_durable_execution._extension.parallel._run_in_child_context",
+            "async_durable_execution._operation.parallel._run_in_child_context",
             mock_parallel_child,
         ),
     ):
         mock_step_executor.return_value = step_executor
         mock_callback_executor.return_value = callback_executor
         mock_invoke_executor.return_value = invoke_executor
-        mock_wait_for_condition_executor.return_value = wait_for_condition_executor
         mock_wait_executor.return_value.process = mock_wait
 
         assert (
@@ -441,15 +460,19 @@ async def test_module_level_context_functions_delegate_to_durable_context() -> N
     assert mock_callback_child.await_args.kwargs["name"] == "wait-callback-name"
     mock_map_child.assert_awaited_once()
     mock_parallel_child.assert_awaited_once()
-    mock_wait_for_condition_executor.assert_called_once_with(
-        check=check,
-        initial_state="pending",
-        state=mock_state,
-        operation_identifier=ANY,
-        polling_strategy=polling_strategy,
-        serdes=None,
+    condition_extension._reserve_sdk_operation.assert_called_once_with(  # noqa: SLF001
+        "condition-name"
     )
-    wait_for_condition_executor.process.assert_awaited_once()
+    condition_operation._run_stateful_step.assert_called_once()  # noqa: SLF001
+    assert callable(  # noqa: SLF001
+        condition_operation._run_stateful_step.call_args.args[0]
+    )
+    assert condition_operation._run_stateful_step.call_args.kwargs == {  # noqa: SLF001
+        "sub_type": OperationSubType.WAIT_FOR_CONDITION,
+        "initial_state": "pending",
+        "serdes": None,
+        "raise_original_error": True,
+    }
 
 
 async def test_durable_callable_can_be_passed_to_step() -> None:
@@ -1794,7 +1817,7 @@ async def test_run_in_child_context_uses_callable_name(mock_executor_class) -> N
     assert call_args.args[2].name == "AsyncMock"
 
 
-@patch("async_durable_execution._extension.wait_for_callback.wait_for_callback_handler")
+@patch("async_durable_execution._operation.wait_for_callback.wait_for_callback_handler")
 async def test_wait_for_callback_basic(mock_executor_class) -> None:
     """Test wait_for_callback with basic parameters."""
     mock_executor = make_async_executor("callback_result")
@@ -1809,7 +1832,7 @@ async def test_wait_for_callback_basic(mock_executor_class) -> None:
     )  # Ensure _original_name doesn't exist
 
     with patch(
-        "async_durable_execution._extension.wait_for_callback._create_child_context_task",
+        "async_durable_execution._operation.wait_for_callback._create_child_context_task",
         new_callable=AsyncMock,
     ) as mock_run_in_child:
         mock_run_in_child.return_value = "callback_result"
@@ -1830,7 +1853,7 @@ async def test_wait_for_callback_basic(mock_executor_class) -> None:
         assert call_args.kwargs["serdes"] is None
 
 
-@patch("async_durable_execution._extension.wait_for_callback.wait_for_callback_handler")
+@patch("async_durable_execution._operation.wait_for_callback.wait_for_callback_handler")
 async def test_wait_for_callback_with_name_and_config(mock_executor_class) -> None:
     """Test wait_for_callback with name and configuration fields."""
     mock_executor = make_async_executor("configured_callback_result")
@@ -1844,7 +1867,7 @@ async def test_wait_for_callback_with_name_and_config(mock_executor_class) -> No
     heartbeat_timeout = timedelta(seconds=10)
 
     with patch(
-        "async_durable_execution._extension.wait_for_callback._create_child_context_task",
+        "async_durable_execution._operation.wait_for_callback._create_child_context_task",
         new_callable=AsyncMock,
     ) as mock_run_in_child:
         mock_run_in_child.return_value = "configured_callback_result"
@@ -1867,7 +1890,7 @@ async def test_wait_for_callback_with_name_and_config(mock_executor_class) -> No
         assert call_args.kwargs["name"] == "submit_function"
 
 
-@patch("async_durable_execution._extension.wait_for_callback.wait_for_callback_handler")
+@patch("async_durable_execution._operation.wait_for_callback.wait_for_callback_handler")
 async def test_wait_for_callback_uses_submitter_name(mock_executor_class) -> None:
     """Test wait_for_callback uses submitter.__name__ when name is not provided."""
     mock_executor = make_async_executor("named_callback_result")
@@ -1880,7 +1903,7 @@ async def test_wait_for_callback_uses_submitter_name(mock_executor_class) -> Non
     mock_submitter._original_name = "submit_task"  # noqa: SLF001
 
     with patch(
-        "async_durable_execution._extension.wait_for_callback._create_child_context_task",
+        "async_durable_execution._operation.wait_for_callback._create_child_context_task",
         new_callable=AsyncMock,
     ) as mock_run_in_child:
         mock_run_in_child.return_value = "named_callback_result"
@@ -1893,7 +1916,7 @@ async def test_wait_for_callback_uses_submitter_name(mock_executor_class) -> Non
         assert call_args.kwargs["name"] == "AsyncMock"
 
 
-@patch("async_durable_execution._extension.wait_for_callback.wait_for_callback_handler")
+@patch("async_durable_execution._operation.wait_for_callback.wait_for_callback_handler")
 async def test_wait_for_callback_passes_child_context(mock_executor_class) -> None:
     """Test wait_for_callback passes child context to handler."""
     mock_state = Mock(spec=ExecutionState)
@@ -1925,7 +1948,7 @@ async def test_wait_for_callback_passes_child_context(mock_executor_class) -> No
     mock_executor_class.side_effect = capture_handler_call
 
     with patch(
-        "async_durable_execution._extension.wait_for_callback._create_child_context_task"
+        "async_durable_execution._operation.wait_for_callback._create_child_context_task"
     ) as mock_run_in_child:
 
         async def run_child_context(
@@ -1956,7 +1979,7 @@ async def test_wait_for_callback_passes_child_context(mock_executor_class) -> No
         mock_executor_class.assert_called_once()
 
 
-@patch("async_durable_execution._extension.map._run_in_child_context")
+@patch("async_durable_execution._operation.map._run_in_child_context")
 async def test_map_basic(mock_handler) -> None:
     """Test map with basic parameters."""
     mock_handler.return_value = "map_result"
@@ -1985,7 +2008,7 @@ async def test_map_basic(mock_handler) -> None:
     assert call_args.kwargs["name"] == "test_function"
 
 
-@patch("async_durable_execution._extension.map._run_in_child_context")
+@patch("async_durable_execution._operation.map._run_in_child_context")
 @no_type_check
 async def test_map_with_name_and_config(mock_handler) -> None:
     """Test map with name and configuration fields."""
@@ -2015,7 +2038,7 @@ async def test_map_with_name_and_config(mock_handler) -> None:
     assert call_args.kwargs["name"] == "custom_map"
 
 
-@patch("async_durable_execution._extension.map._run_in_child_context")
+@patch("async_durable_execution._operation.map._run_in_child_context")
 async def test_map_calls_handler_correctly(mock_handler) -> None:
     """Test map calls map_handler with correct parameters."""
     mock_handler.return_value = "handler_result"
@@ -2039,7 +2062,7 @@ async def test_map_calls_handler_correctly(mock_handler) -> None:
     mock_handler.assert_called_once()
 
 
-@patch("async_durable_execution._extension.map._run_in_child_context")
+@patch("async_durable_execution._operation.map._run_in_child_context")
 @no_type_check
 async def test_map_with_empty_items(mock_handler) -> None:
     """Test map with empty items."""
@@ -2058,7 +2081,7 @@ async def test_map_with_empty_items(mock_handler) -> None:
     assert result == "empty_map_result"
 
 
-@patch("async_durable_execution._extension.map._run_in_child_context")
+@patch("async_durable_execution._operation.map._run_in_child_context")
 async def test_map_with_different_input_types(mock_handler) -> None:
     """Test map with different item types."""
     mock_handler.return_value = "mixed_map_result"
@@ -2076,7 +2099,7 @@ async def test_map_with_different_input_types(mock_handler) -> None:
     assert result == "mixed_map_result"
 
 
-@patch("async_durable_execution._extension.parallel._run_in_child_context")
+@patch("async_durable_execution._operation.parallel._run_in_child_context")
 @no_type_check
 async def test_parallel_basic(mock_handler) -> None:
     """Test parallel with basic parameters."""
@@ -2106,7 +2129,7 @@ async def test_parallel_basic(mock_handler) -> None:
     assert call_args.kwargs["sub_type"] is OperationSubType.PARALLEL
 
 
-@patch("async_durable_execution._extension.parallel._run_in_child_context")
+@patch("async_durable_execution._operation.parallel._run_in_child_context")
 @no_type_check
 async def test_parallel_with_name_and_config_fields(mock_handler) -> None:
     """Test parallel with name and direct config fields."""
@@ -2143,7 +2166,7 @@ async def test_parallel_with_name_and_config_fields(mock_handler) -> None:
     assert call_args.kwargs["serdes"] is serdes
 
 
-@patch("async_durable_execution._extension.parallel._run_in_child_context")
+@patch("async_durable_execution._operation.parallel._run_in_child_context")
 @no_type_check
 async def test_parallel_has_no_default_name(mock_handler) -> None:
     """Test parallel has no name when no name is provided."""
@@ -2169,7 +2192,7 @@ async def test_parallel_has_no_default_name(mock_handler) -> None:
     assert call_args.kwargs["name"] is None
 
 
-@patch("async_durable_execution._extension.parallel._run_in_child_context")
+@patch("async_durable_execution._operation.parallel._run_in_child_context")
 @no_type_check
 async def test_parallel_calls_handler_correctly(mock_handler) -> None:
     """Test parallel calls parallel_handler with correct parameters."""
@@ -2195,7 +2218,7 @@ async def test_parallel_calls_handler_correctly(mock_handler) -> None:
     mock_handler.assert_called_once()
 
 
-@patch("async_durable_execution._extension.parallel.parallel_handler")
+@patch("async_durable_execution._operation.parallel.parallel_handler")
 @no_type_check
 async def test_parallel_with_empty_callables(mock_handler) -> None:
     """Test parallel with empty callables."""
@@ -2213,7 +2236,7 @@ async def test_parallel_with_empty_callables(mock_handler) -> None:
     assert result == "empty_parallel_result"
 
 
-@patch("async_durable_execution._extension.parallel.parallel_handler")
+@patch("async_durable_execution._operation.parallel.parallel_handler")
 @no_type_check
 async def test_parallel_with_single_callable(mock_handler) -> None:
     """Test parallel with single callable."""
@@ -2234,7 +2257,7 @@ async def test_parallel_with_single_callable(mock_handler) -> None:
     assert result == "single_parallel_result"
 
 
-@patch("async_durable_execution._extension.parallel.parallel_handler")
+@patch("async_durable_execution._operation.parallel.parallel_handler")
 async def test_parallel_with_many_callables(mock_handler) -> None:
     """Test parallel with many callables."""
 
@@ -2257,7 +2280,7 @@ async def test_parallel_with_many_callables(mock_handler) -> None:
     assert result == "many_parallel_result"
 
 
-@patch("async_durable_execution._extension.map._run_in_child_context")
+@patch("async_durable_execution._operation.map._run_in_child_context")
 async def test_map_calls_handler(mock_handler) -> None:
     """Test map calls map_handler through run_in_child_context."""
     mock_handler.return_value = "map_result"
@@ -2280,7 +2303,7 @@ async def test_map_calls_handler(mock_handler) -> None:
     mock_handler.assert_called_once()
 
 
-@patch("async_durable_execution._extension.parallel._run_in_child_context")
+@patch("async_durable_execution._operation.parallel._run_in_child_context")
 @no_type_check
 async def test_parallel_calls_handler(mock_handler) -> None:
     """Test parallel calls parallel_handler through run_in_child_context."""
@@ -2320,17 +2343,26 @@ async def test_wait_for_condition_validation_errors() -> None:
     async def dummy_check(state) -> Any:
         return state
 
-    with patch(
-        "async_durable_execution._extension.wait_for_condition.WaitForConditionOperationExecutor"
-    ) as mock_executor_class:
-        mock_executor = make_async_executor("test")
-        mock_executor_class.return_value = mock_executor
+    condition_operation = Mock()
+    condition_operation._run_stateful_step.return_value = asyncio.create_task(  # noqa: SLF001
+        asyncio.sleep(0, result="test")
+    )
+    condition_extension = Mock()
+    condition_extension._reserve_sdk_operation.return_value = (  # noqa: SLF001
+        condition_operation
+    )
 
+    with patch(
+        "async_durable_execution._operation.wait_for_condition.get_extension_context",
+        return_value=condition_extension,
+    ):
         result = await run_with_context(
             context, lambda: wait_for_condition(dummy_check)
         )
 
     assert result == "test"
+    condition_extension._reserve_sdk_operation.assert_called_once_with(None)  # noqa: SLF001
+    condition_operation._run_stateful_step.assert_called_once()  # noqa: SLF001
 
 
 async def test_context_map_handler_call() -> None:
@@ -2351,7 +2383,7 @@ async def test_context_map_handler_call() -> None:
 
     # Mock the handlers to track calls.
     with patch(
-        "async_durable_execution._extension.map.map_handler"
+        "async_durable_execution._operation.map.map_handler"
     ) as mock_map_handler:
         mock_map_handler.return_value = bound_map_handler
 
@@ -2387,7 +2419,7 @@ async def test_context_parallel_handler_call() -> None:
 
     # Mock the handlers to track calls
     with patch(
-        "async_durable_execution._extension.parallel.parallel_handler"
+        "async_durable_execution._operation.parallel.parallel_handler"
     ) as mock_parallel_handler:
 
         async def handler_result() -> str:
@@ -2418,14 +2450,20 @@ async def test_context_wait_for_condition_handler_call() -> None:
 
     context = create_test_context(state=state)
 
-    # Mock the executor to track calls
-    with patch(
-        "async_durable_execution._extension.wait_for_condition.WaitForConditionOperationExecutor"
-    ) as mock_executor_class:
-        mock_executor = make_async_executor("final_state")
-        mock_executor_class.return_value = mock_executor
+    condition_operation = Mock()
+    condition_operation._run_stateful_step.return_value = asyncio.create_task(  # noqa: SLF001
+        asyncio.sleep(0, result="final_state")
+    )
+    condition_extension = Mock()
+    condition_extension._reserve_sdk_operation.return_value = (  # noqa: SLF001
+        condition_operation
+    )
 
-        # Call wait_for_condition method
+    # Mock the SPI operation to track calls.
+    with patch(
+        "async_durable_execution._operation.wait_for_condition.get_extension_context",
+        return_value=condition_extension,
+    ):
         result = await run_with_context(
             context,
             lambda: wait_for_condition(
@@ -2433,10 +2471,18 @@ async def test_context_wait_for_condition_handler_call() -> None:
             ),
         )
 
-        # Verify executor was called
-        mock_executor_class.assert_called_once()
-        mock_executor.process.assert_called_once()
-        assert result == "final_state"
+    condition_extension._reserve_sdk_operation.assert_called_once_with(None)  # noqa: SLF001
+    condition_operation._run_stateful_step.assert_called_once()  # noqa: SLF001
+    assert callable(  # noqa: SLF001
+        condition_operation._run_stateful_step.call_args.args[0]
+    )
+    assert condition_operation._run_stateful_step.call_args.kwargs == {  # noqa: SLF001
+        "sub_type": OperationSubType.WAIT_FOR_CONDITION,
+        "initial_state": None,
+        "serdes": None,
+        "raise_original_error": True,
+    }
+    assert result == "final_state"
 
 
 async def test_operation_id_conditional_on_parent() -> None:
@@ -2736,6 +2782,555 @@ def test_replay_aware_user_code_flips_new_before_retrying_operation() -> None:
         assert ctx.is_replaying() is False
 
     assert ctx.is_replaying() is False
+
+
+def test_local_and_sequential_operation_ids_use_separate_namespaces() -> None:
+    local_first = OperationIdGenerator(None)
+    local_id = local_first.create_step_id_for_local_id("1")
+    sequential_id = local_first.create_step_id()
+
+    assert local_id != sequential_id
+    assert local_first.get_current() == 1
+
+    sequential_first = OperationIdGenerator(None)
+    sequential_id = sequential_first.create_step_id()
+    local_id = sequential_first.create_step_id_for_local_id("1")
+
+    assert local_id != sequential_id
+    assert sequential_first.get_current() == 1
+
+
+async def test_custom_local_id_replay_transitions_when_selected(monkeypatch) -> None:
+    ctx = create_replay_context()
+    node_a_id = ctx.step_counter._create_id_for_local_id("node-a")  # noqa: SLF001
+    ctx.execution_state.operations[node_a_id] = create_replay_operation(
+        node_a_id,
+        OperationStatus.SUCCEEDED,
+        OperationType.WAIT,
+    )
+
+    async def replay_wait(**_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr("async_durable_execution.extension._wait", replay_wait)
+
+    with bind_current_context(ctx):
+        extension = ExtensionContext(ctx)
+        reservation = extension.reserve("first", local_operation_id="node-a")
+
+        assert ctx.is_replaying() is True
+
+        await reservation.wait(1, sub_type="AcmeWait")
+
+    assert ctx.is_replaying() is False
+
+
+async def test_local_reservation_does_not_end_replay_between_sequential_operations(
+    monkeypatch,
+) -> None:
+    ctx = create_replay_context()
+    first_id = ctx.step_counter._create_step_id_for_logical_step(1)  # noqa: SLF001
+    local_id = ctx.step_counter._create_id_for_local_id("node-a")  # noqa: SLF001
+    second_id = ctx.step_counter._create_step_id_for_logical_step(2)  # noqa: SLF001
+    for operation_id in (first_id, local_id, second_id):
+        ctx.execution_state.operations[operation_id] = create_replay_operation(
+            operation_id,
+            OperationStatus.SUCCEEDED,
+            OperationType.WAIT,
+        )
+
+    async def replay_wait(**_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr("async_durable_execution.extension._wait", replay_wait)
+
+    with bind_current_context(ctx):
+        extension = ExtensionContext(ctx)
+        first = extension.reserve("first")
+        local = extension.reserve(
+            "local",
+            local_operation_id="node-a",
+        )
+        second = extension.reserve("second")
+
+        await first.wait(1, sub_type="AcmeWait")
+        assert ctx.is_replaying() is True
+
+        await local.wait(1, sub_type="AcmeWait")
+        assert ctx.is_replaying() is True
+
+        await second.wait(1, sub_type="AcmeWait")
+
+    assert ctx.is_replaying() is False
+
+
+async def test_child_context_inherits_replay_before_parent_transition(
+    monkeypatch,
+) -> None:
+    ctx = create_replay_context()
+    operation_id = ctx.step_counter._create_id_for_local_id("child")  # noqa: SLF001
+    ctx.execution_state.operations[operation_id] = create_replay_operation(
+        operation_id,
+        OperationStatus.STARTED,
+        OperationType.CONTEXT,
+    )
+    observed_child_replay = None
+
+    async def run_child_context(_func, *, child_context, **_kwargs):
+        nonlocal observed_child_replay
+        observed_child_replay = child_context.is_replaying()
+        return "done"
+
+    monkeypatch.setattr(
+        "async_durable_execution.extension._run_child_context",
+        run_child_context,
+    )
+
+    async def child() -> str:
+        return "unused"
+
+    with bind_current_context(ctx):
+        reservation = ExtensionContext(ctx).reserve(
+            "child",
+            local_operation_id="child",
+        )
+
+        assert ctx.is_replaying() is True
+        assert (
+            await reservation.run_in_child_context(
+                child,
+                sub_type="AcmeContext",
+            )
+            == "done"
+        )
+
+    assert observed_child_replay is True
+    assert ctx.is_replaying() is False
+
+
+async def test_pre_reserved_children_keep_their_replay_snapshot(monkeypatch) -> None:
+    ctx = create_replay_context()
+    for local_id in ("first-child", "second-child"):
+        operation_id = ctx.step_counter._create_id_for_local_id(local_id)  # noqa: SLF001
+        ctx.execution_state.operations[operation_id] = create_replay_operation(
+            operation_id,
+            OperationStatus.STARTED,
+            OperationType.CONTEXT,
+        )
+
+    observed_child_replay = []
+
+    async def run_child_context(_func, *, child_context, **_kwargs):
+        observed_child_replay.append(child_context.is_replaying())
+        return "done"
+
+    monkeypatch.setattr(
+        "async_durable_execution.extension._run_child_context",
+        run_child_context,
+    )
+
+    async def child() -> str:
+        return "unused"
+
+    with bind_current_context(ctx):
+        extension = ExtensionContext(ctx)
+        first = extension.reserve(
+            "first",
+            local_operation_id="first-child",
+        )
+        second = extension.reserve(
+            "second",
+            local_operation_id="second-child",
+        )
+
+        assert (
+            await first.run_in_child_context(
+                child,
+                sub_type="AcmeContext",
+            )
+            == "done"
+        )
+        assert ctx.is_replaying() is False
+        assert (
+            await second.run_in_child_context(
+                child,
+                sub_type="AcmeContext",
+            )
+            == "done"
+        )
+
+    assert observed_child_replay == [True, True]
+    assert ctx.is_replaying() is False
+
+
+async def test_lazy_checkpointed_child_replays_after_parent_advanced(
+    monkeypatch,
+) -> None:
+    ctx = create_replay_context()
+    operation_id = ctx.step_counter._create_step_id_for_logical_step(1)  # noqa: SLF001
+    ctx.execution_state.operations[operation_id] = create_replay_operation(
+        operation_id,
+        OperationStatus.STARTED,
+        OperationType.CONTEXT,
+    )
+    observed_child_replay = None
+
+    async def run_child_context(_func, *, child_context, **_kwargs):
+        nonlocal observed_child_replay
+        observed_child_replay = child_context.is_replaying()
+        return "done"
+
+    monkeypatch.setattr(
+        "async_durable_execution.extension._run_child_context",
+        run_child_context,
+    )
+
+    async def child() -> str:
+        return "unused"
+
+    with bind_current_context(ctx):
+        ctx._set_replay_status_new()  # noqa: SLF001
+        reservation = ExtensionContext(ctx)._reserve_sdk_operation_id(  # noqa: SLF001
+            "late-child",
+            operation_id=operation_id,
+        )
+        assert (
+            await reservation._run_in_child_context(  # noqa: SLF001
+                child,
+                sub_type=OperationSubType.PARALLEL_BRANCH,
+            )
+            == "done"
+        )
+
+    assert observed_child_replay is True
+    assert ctx.is_replaying() is False
+
+
+async def test_pre_reserved_new_child_does_not_inherit_stale_replay(
+    monkeypatch,
+) -> None:
+    ctx = create_replay_context()
+    historical_id = ctx.step_counter._create_id_for_local_id("historical")  # noqa: SLF001
+    ctx.execution_state.operations[historical_id] = create_replay_operation(
+        historical_id,
+        OperationStatus.STARTED,
+        OperationType.CONTEXT,
+    )
+    observed_child_replay = []
+
+    async def run_child_context(_func, *, child_context, **_kwargs):
+        observed_child_replay.append(child_context.is_replaying())
+        return "done"
+
+    monkeypatch.setattr(
+        "async_durable_execution.extension._run_child_context",
+        run_child_context,
+    )
+
+    async def child() -> str:
+        return "unused"
+
+    with bind_current_context(ctx):
+        extension = ExtensionContext(ctx)
+        historical = extension.reserve(
+            "historical",
+            local_operation_id="historical",
+        )
+        new = extension.reserve("new", local_operation_id="new")
+
+        await historical.run_in_child_context(
+            child,
+            sub_type="AcmeContext",
+        )
+        await new.run_in_child_context(
+            child,
+            sub_type="AcmeContext",
+        )
+
+    assert observed_child_replay == [True, False]
+
+
+async def test_virtual_child_keeps_parent_replaying_for_checkpointed_sibling(
+    monkeypatch,
+) -> None:
+    ctx = create_replay_context()
+    sibling_id = ctx.step_counter._create_id_for_local_id("sibling")  # noqa: SLF001
+    ctx.execution_state.operations[sibling_id] = create_replay_operation(
+        sibling_id,
+        OperationStatus.STARTED,
+        OperationType.CONTEXT,
+    )
+    observed_child_replay = []
+
+    async def run_child_context(_func, *, child_context, **_kwargs):
+        observed_child_replay.append(child_context.is_replaying())
+        return "done"
+
+    monkeypatch.setattr(
+        "async_durable_execution.extension._run_child_context",
+        run_child_context,
+    )
+
+    async def child() -> str:
+        return "unused"
+
+    with bind_current_context(ctx):
+        extension = ExtensionContext(ctx)
+        virtual = extension.reserve("virtual")
+        sibling = extension.reserve(
+            "sibling",
+            local_operation_id="sibling",
+        )
+
+        assert (
+            await virtual.run_in_child_context(
+                child,
+                sub_type="AcmeVirtual",
+                is_virtual=True,
+            )
+            == "done"
+        )
+        assert ctx.is_replaying() is True
+        assert (
+            await sibling.run_in_child_context(
+                child,
+                sub_type="AcmeContext",
+            )
+            == "done"
+        )
+
+    assert observed_child_replay == [True, True]
+    assert ctx.is_replaying() is False
+
+
+async def test_replay_tracks_checkpointed_reservations_across_launch_order_gaps(
+    monkeypatch,
+) -> None:
+    ctx = create_replay_context()
+    operation_ids = {
+        local_id: ctx.step_counter._create_id_for_local_id(local_id)  # noqa: SLF001
+        for local_id in ("first", "skipped", "third")
+    }
+    for local_id in ("first", "third"):
+        operation_id = operation_ids[local_id]
+        ctx.execution_state.operations[operation_id] = create_replay_operation(
+            operation_id,
+            OperationStatus.SUCCEEDED,
+            OperationType.WAIT,
+        )
+
+    async def replay_wait(**_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr("async_durable_execution.extension._wait", replay_wait)
+
+    with bind_current_context(ctx):
+        extension = ExtensionContext(ctx)
+        first = extension.reserve("first", local_operation_id="first")
+        extension.reserve("skipped", local_operation_id="skipped")
+        third = extension.reserve("third", local_operation_id="third")
+
+        await first.wait(1, sub_type="AcmeWait")
+        assert ctx.is_replaying() is True
+
+        await third.wait(1, sub_type="AcmeWait")
+
+    assert ctx.is_replaying() is False
+    assert ctx.step_counter._unconsumed_reservations == {  # noqa: SLF001
+        operation_ids["skipped"]: False
+    }
+
+
+async def test_local_ids_must_be_reserved_before_operation_selection(
+    monkeypatch,
+) -> None:
+    ctx = create_replay_context()
+
+    async def run_wait(**_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr("async_durable_execution.extension._wait", run_wait)
+
+    with bind_current_context(ctx):
+        extension = ExtensionContext(ctx)
+        await extension.reserve("first").wait(1, sub_type="AcmeWait")
+
+        with pytest.raises(
+            RuntimeError,
+            match="before any reserved operation is selected",
+        ):
+            extension.reserve("late", local_operation_id="late")
+
+
+async def test_child_claim_marks_selection_before_lazy_task_starts(
+    monkeypatch,
+) -> None:
+    ctx = create_replay_context()
+    child_started = asyncio.Event()
+
+    def create_lazy_task(coro_factory):
+        return asyncio.get_running_loop().create_task(coro_factory())
+
+    async def run_child_context(_func, **_kwargs):
+        child_started.set()
+        return "done"
+
+    monkeypatch.setattr(
+        "async_durable_execution.extension.create_eager_task",
+        create_lazy_task,
+    )
+    monkeypatch.setattr(
+        "async_durable_execution.extension._run_child_context",
+        run_child_context,
+    )
+
+    async def child() -> str:
+        return "unused"
+
+    with bind_current_context(ctx):
+        extension = ExtensionContext(ctx)
+        task = extension.reserve("child").run_in_child_context(
+            child,
+            sub_type="AcmeContext",
+        )
+
+        assert child_started.is_set() is False
+        with pytest.raises(
+            RuntimeError,
+            match="before any reserved operation is selected",
+        ):
+            extension.reserve("late", local_operation_id="late")
+
+        assert await task == "done"
+
+
+async def test_cancelled_lazy_child_consumes_replay_reservation(monkeypatch) -> None:
+    ctx = create_replay_context()
+    child_id = ctx.step_counter._create_id_for_local_id("child")  # noqa: SLF001
+    sibling_id = ctx.step_counter._create_id_for_local_id("sibling")  # noqa: SLF001
+    ctx.execution_state.operations[child_id] = create_replay_operation(
+        child_id,
+        OperationStatus.STARTED,
+        OperationType.CONTEXT,
+    )
+    ctx.execution_state.operations[sibling_id] = create_replay_operation(
+        sibling_id,
+        OperationStatus.SUCCEEDED,
+        OperationType.WAIT,
+    )
+    child_started = False
+
+    def create_lazy_task(coro_factory):
+        return asyncio.get_running_loop().create_task(coro_factory())
+
+    async def run_child_context(_func, **_kwargs):
+        nonlocal child_started
+        child_started = True
+        return "done"
+
+    async def replay_wait(**_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "async_durable_execution.extension.create_eager_task",
+        create_lazy_task,
+    )
+    monkeypatch.setattr(
+        "async_durable_execution.extension._run_child_context",
+        run_child_context,
+    )
+    monkeypatch.setattr("async_durable_execution.extension._wait", replay_wait)
+
+    async def child() -> str:
+        return "unused"
+
+    with bind_current_context(ctx):
+        extension = ExtensionContext(ctx)
+        child_operation = extension.reserve(
+            "child",
+            local_operation_id="child",
+        )
+        sibling = extension.reserve(
+            "sibling",
+            local_operation_id="sibling",
+        )
+        task = child_operation.run_in_child_context(
+            child,
+            sub_type="AcmeContext",
+        )
+        task.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert child_started is False
+        assert ctx.is_replaying() is True
+        await sibling.wait(1, sub_type="AcmeWait")
+
+    assert ctx.is_replaying() is False
+
+
+def test_extension_operation_cannot_be_constructed_directly() -> None:
+    with pytest.raises(
+        TypeError,
+        match=r"created by ExtensionContext\.reserve",
+    ):
+        ExtensionOperation()
+
+
+def test_extension_subtype_strings_cannot_alias_sdk_subtypes() -> None:
+    ctx = create_replay_context()
+
+    with bind_current_context(ctx):
+        reservation = ExtensionContext(ctx).reserve("collision")
+
+        with pytest.raises(ValueError, match="is reserved by the SDK"):
+            reservation.wait(
+                1,
+                sub_type=OperationSubType.WAIT.value,
+            )
+
+
+async def test_sdk_reservations_preserve_legacy_blank_name_behavior(
+    monkeypatch,
+) -> None:
+    ctx = create_replay_context()
+    observed_names = []
+
+    async def run_wait(*, operation_identifier, **_kwargs) -> None:
+        observed_names.append(operation_identifier.name)
+
+    monkeypatch.setattr("async_durable_execution.extension._wait", run_wait)
+
+    with bind_current_context(ctx):
+        extension = ExtensionContext(ctx)
+        await extension._reserve_sdk_operation("")._run_wait(  # noqa: SLF001
+            1,
+            sub_type=OperationSubType.WAIT,
+        )
+        await extension._reserve_sdk_operation("   ")._run_wait(  # noqa: SLF001
+            1,
+            sub_type=OperationSubType.WAIT,
+        )
+
+    assert observed_names == [None, "   "]
+
+
+async def test_sdk_composite_operation_skips_extension_metadata_validation() -> None:
+    from async_durable_execution._operation.with_retry import wait as retry_wait
+
+    ctx = create_replay_context()
+    operation_id = ctx._peek_next_operation_id()  # noqa: SLF001
+    ctx.execution_state.operations[operation_id] = Operation(
+        operation_id=operation_id,
+        operation_type=OperationType.WAIT,
+        status=OperationStatus.SUCCEEDED,
+        sub_type=OperationSubType.WAIT_FOR_CONDITION,
+        name="legacy-name",
+    )
+
+    with bind_current_context(ctx):
+        await retry_wait(1, name="current-name")
 
 
 def test_child_context_refines_replay_status_independently() -> None:

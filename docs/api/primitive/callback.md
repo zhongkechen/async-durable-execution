@@ -1,10 +1,10 @@
 # Callback
 
-Internal implementation module: `async_durable_execution._primitive.callback`.
+Operation module: `async_durable_execution._operation.callback`.
 
 Create a callback when an external system will resume the durable execution.
 
-::: async_durable_execution._primitive.callback
+::: async_durable_execution._operation.callback
     options:
       members:
         - CallbackError

@@ -36,13 +36,13 @@ from ._core import (
 )
 
 # Durable operations
-from ._extension.with_retry import (
+from ._operation.with_retry import (
     WithRetryContext,
     get_with_retry_context,
     with_retry,
 )
-from ._extension.map import MapItemContext, get_map_item_context, map
-from ._extension.flow import (
+from ._operation.map import MapItemContext, get_map_item_context, map
+from ._operation.flow import (
     FlowDefinitionError,
     FlowExecutionError,
     FlowNode,
@@ -56,7 +56,7 @@ from ._extension.flow import (
     get_node_context,
     node,
 )
-from ._extension.parallel import (
+from ._operation.parallel import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
@@ -66,38 +66,46 @@ from ._extension.parallel import (
     CompletionStatus,
     NestingType,
 )
-from ._extension.wait_for_condition import (
+from ._operation.wait_for_condition import (
     PollingStrategy,
     WaitForConditionCheckContext,
     WaitForConditionError,
     get_wait_for_condition_check_context,
     wait_for_condition,
 )
-from ._primitive.invoke import invoke
-from ._extension.recurse import recurse
-from ._extension.parallel import (
+from ._operation.invoke import invoke
+from ._operation.recurse import recurse
+from ._operation.parallel import (
     parallel,
 )
-from ._primitive.callback import (
+from ._operation.callback import (
     Callback,
     CallbackError,
     create_callback,
 )
-from ._extension.wait_for_callback import (
+from ._operation.wait_for_callback import (
     WaitForCallbackContext,
     get_wait_for_callback_context,
     wait_for_callback,
 )
-from ._primitive.child import SummaryGenerator, run_in_child_context
-from ._primitive.step import (
+from ._operation.child import SummaryGenerator, run_in_child_context
+from ._operation.step import (
     StepContext,
     StepInterruptedError,
     StepSemantics,
     get_step_context,
     step,
 )
-from ._extension.replay_safe import now, random, timestamp, uuid
-from ._primitive.wait import wait
+from ._operation.replay_safe import now, random, timestamp, uuid
+from ._operation.wait import wait
+from .extension import (
+    ExtensionContext,
+    ExtensionOperation,
+    ExtensionStepFunction,
+    ExtensionStepResult,
+    ExtensionStepRetryStrategy,
+    get_extension_context,
+)
 from ._runner import (
     DurableFunctionCloudTestRunner,
     DurableFunctionLocalTestRunner,
@@ -119,6 +127,7 @@ __all__ = [
     "flow",
     "get_current_context",
     "get_durable_context",
+    "get_extension_context",
     "get_map_item_context",
     "get_node_context",
     "get_serdes_context",
@@ -159,6 +168,11 @@ __all__ = [
     "DurableExecutionsError",
     "ErrorObject",
     "ExecutionError",
+    "ExtensionContext",
+    "ExtensionOperation",
+    "ExtensionStepFunction",
+    "ExtensionStepResult",
+    "ExtensionStepRetryStrategy",
     "ExtendedTypeSerDes",
     "FlowDefinitionError",
     "FlowExecutionError",

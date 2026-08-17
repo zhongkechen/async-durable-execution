@@ -7,7 +7,7 @@ from async_durable_execution._core.context import (
     get_current_context,
 )
 from async_durable_execution._core.models import OperationIdentifier, OperationSubType
-from async_durable_execution._primitive.step import StepContext
+from async_durable_execution._operation.step import StepContext
 from async_durable_execution._core.state import ExecutionState
 
 

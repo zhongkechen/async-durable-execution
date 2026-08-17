@@ -46,7 +46,25 @@ def test_non_core_packages_import_core_through_package_facade() -> None:
 
 def test_implementation_packages_are_not_public_import_paths() -> None:
     """Only underscore-prefixed implementation package names are available."""
-    for package_name in ("core", "runner", "primitive", "extension"):
+    for package_name in ("core", "operation", "runner", "primitive"):
         assert (
             importlib.util.find_spec(f"async_durable_execution.{package_name}") is None
         )
+
+
+def test_extension_author_module_is_a_public_import_path():
+    assert importlib.util.find_spec("async_durable_execution.extension") is not None
+
+
+def test_extension_step_executor_is_internal_to_primitive_layer() -> None:
+    """The stable SPI delegates stateful STEP execution to an internal executor."""
+    import async_durable_execution.extension as extension
+    from async_durable_execution._primitive.step import (
+        StatefulStepOperationExecutor,
+    )
+
+    assert not hasattr(extension, "_ExtensionStepOperationExecutor")
+    assert (
+        StatefulStepOperationExecutor.__module__
+        == "async_durable_execution._primitive.step"
+    )

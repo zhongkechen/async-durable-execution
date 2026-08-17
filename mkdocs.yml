@@ -46,6 +46,7 @@ nav:
       - Workflow Patterns: workflow-patterns.md
       - Deploy and Invoke: deployment.md
       - Advanced Usage: advanced-usage.md
+      - Custom Durable Operations: custom-operations.md
       - Using Synchronous Code: using-synchronous-code.md
       - Migrating from the Official SDK: migrating-from-official-python-sdk.md
       - Official SDK Comparison: official-python-sdk-comparison.md
@@ -59,6 +60,7 @@ nav:
           - Child Context: api/primitive/child.md
           - Callback: api/primitive/callback.md
       - Extension Operations:
+          - Custom Operation SPI: api/extension/custom_operations.md
           - Flow and DAG Workflows: api/extension/flow.md
           - Map: api/extension/map.md
           - Parallel: api/extension/parallel.md

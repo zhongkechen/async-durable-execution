@@ -7,19 +7,57 @@ from typing import TYPE_CHECKING, Awaitable, Callable, TypeVar
 from .._core import (
     Duration,
     DurableContext,
+    OperationSubType,
     RetryStrategy,
     SerDes,
     bind_current_context,
     get_current_context,
     get_durable_context,
 )
-from .._primitive.child import run_in_child_context
-from .._primitive.wait import wait
+from ..extension import get_extension_context
 
 if TYPE_CHECKING:
-    from .._primitive.child import SummaryGenerator
+    from .child import SummaryGenerator
 
 T = TypeVar("T")
+
+
+def wait(
+    duration: Duration,
+    *,
+    name: str | None = None,
+) -> asyncio.Task[None]:
+    """Run an SDK-owned wait operation through the stable operation SPI."""
+    return (
+        get_extension_context()
+        ._reserve_sdk_operation(name)  # noqa: SLF001
+        ._run_wait(  # noqa: SLF001
+            duration,
+            sub_type=OperationSubType.WAIT,
+        )
+    )
+
+
+def run_in_child_context(
+    func: Callable[[], Awaitable[T]],
+    *,
+    name: str | None = None,
+    serdes: SerDes | None = None,
+    summary_generator: SummaryGenerator | None = None,
+    is_virtual: bool = False,
+) -> asyncio.Task[T]:
+    """Run an SDK-owned retry scope through the stable operation SPI."""
+    return (
+        get_extension_context()
+        ._reserve_sdk_operation(name)  # noqa: SLF001
+        ._run_in_child_context(  # noqa: SLF001
+            func,
+            sub_type=OperationSubType.RUN_IN_CHILD_CONTEXT,
+            serdes=serdes,
+            summary_generator=summary_generator,
+            is_virtual=is_virtual,
+        )
+    )
 
 
 @dataclass(frozen=True)

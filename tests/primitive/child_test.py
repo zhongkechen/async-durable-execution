@@ -31,13 +31,15 @@ from async_durable_execution._core.models import (
     OperationSubType,
     OperationType,
 )
-from async_durable_execution._primitive.child import (
-    ChildOperationExecutor,
+from async_durable_execution._operation.child import (
     SummaryGenerator,
-    _run_in_child_context,
     run_in_child_context,
 )
-from async_durable_execution._primitive.callback import CallbackError
+from async_durable_execution._operation.callback import CallbackError
+from async_durable_execution._primitive.child import (
+    ChildOperationExecutor,
+    _run_in_child_context,
+)
 from async_durable_execution._core.serdes import SerDes
 from async_durable_execution._core.state import ExecutionState
 

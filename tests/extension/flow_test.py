@@ -39,7 +39,7 @@ from async_durable_execution import (
     wait,
 )
 from async_durable_execution._core.context import bind_current_context
-from async_durable_execution._extension.flow import _evaluate_definition
+from async_durable_execution._operation.flow import _evaluate_definition
 from async_durable_execution._core.exceptions import (
     ExecutionError,
     InvocationError,
@@ -55,8 +55,8 @@ from async_durable_execution._core.state import ExecutionState
 
 
 def test_flow_errors_are_defined_by_flow_module() -> None:
-    assert FlowDefinitionError.__module__ == "async_durable_execution._extension.flow"
-    assert FlowExecutionError.__module__ == "async_durable_execution._extension.flow"
+    assert FlowDefinitionError.__module__ == "async_durable_execution._operation.flow"
+    assert FlowExecutionError.__module__ == "async_durable_execution._operation.flow"
 
 
 @durable_node
@@ -1314,7 +1314,7 @@ async def test_any_matching_sibling_runs_before_suspended_branch_resumes(
 
 @no_type_check
 async def test_nested_any_winner_survives_outer_all_partial_replay(monkeypatch) -> None:
-    from async_durable_execution._extension.flow import (
+    from async_durable_execution._operation.flow import (
         _NodeExecutionSerDes,
         _PersistedDependencyResolutionSerDes,
     )
@@ -1428,7 +1428,7 @@ def test_nested_any_does_not_retroactively_change_its_winner() -> None:
         handles.update(a=a, b=b, c=c, d=d)
         return d.outcome
 
-    from async_durable_execution._extension.flow import _evaluate_definition
+    from async_durable_execution._operation.flow import _evaluate_definition
 
     _evaluate_definition(graph())
     expression = handles["d"]._dependency
@@ -1720,7 +1720,7 @@ async def test_mutable_dependency_outcomes_are_isolated_per_consumer() -> None:
 async def test_mutable_dependency_outcome_is_stable_across_partial_replay(
     monkeypatch,
 ) -> None:
-    from async_durable_execution._extension.flow import _NodeExecutionSerDes
+    from async_durable_execution._operation.flow import _NodeExecutionSerDes
 
     monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0")
     mutator_persisted = asyncio.Event()
@@ -1791,7 +1791,7 @@ async def test_mutable_dependency_outcome_is_stable_across_partial_replay(
 async def test_mutable_bound_input_is_isolated_across_partial_replay(
     monkeypatch,
 ) -> None:
-    from async_durable_execution._extension.flow import _NodeExecutionSerDes
+    from async_durable_execution._operation.flow import _NodeExecutionSerDes
 
     monkeypatch.setenv("DURABLE_EXECUTION_TIME_SCALE", "0")
     mutator_persisted = asyncio.Event()
