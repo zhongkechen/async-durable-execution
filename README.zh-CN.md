@@ -39,6 +39,7 @@ AWS Lambda 工作流程。** 自动为状态创建检查点，无需持续计算
 
 - **[异步优先的持久代码](https://zhongkechen.github.io/async-durable-execution/official-python-sdk-comparison.html#programming-model)** - 与官方 AWS SDK 相比，用户提供的持久事件处理程序、步骤、子上下文、`flow` 节点、回调提交器、`map()` 项函数、`parallel()` 分支与等待条件检查都使用 `async def` 编写。
 - **[官方 SDK 未提供的扩展操作](https://zhongkechen.github.io/async-durable-execution/api/extension/replay_safe.html)** - 本 SDK 新增[重放安全辅助操作](https://zhongkechen.github.io/async-durable-execution/api/extension/replay_safe.html)（`random()`、`now()`、`timestamp()` 与 `uuid()`）和[持久自调用](https://zhongkechen.github.io/async-durable-execution/api/extension/recurse.html)（`recurse()`）。
+- **[稳定的自定义操作 SPI](https://zhongkechen.github.io/async-durable-execution/custom-operations.html)** - 第三方软件包可以预留不透明且确定性的原语标识、使用自定义子类型，并在无需导入 SDK 内部模块的情况下构建有状态且重放安全的操作。
 - **[声明式 DAG 工作流](https://zhongkechen.github.io/async-durable-execution/api/extension/flow.html#quick-start)** - 使用带类型的节点输入、推导或条件依赖、失败路由和节点内持久操作来定义无环工作流。SDK 会在执行前验证图，并跳过所选输出不依赖的节点。
 - **[后台操作任务](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#background-operation-tasks)** - `step(...)`、`wait(...)`、`invoke(...)`、`recurse(...)`、`run_in_child_context(...)` 与 `flow(...)` 等持久操作会返回 `asyncio.Task` 对象，因此独立操作可以在后台运行，并通过 `asyncio.gather` 一起等待，无需使用 `parallel()` 或 `map()`。
 - **[符合 Python 习惯的操作参数](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#api-mapping)** - 操作直接使用关键字参数、`datetime.timedelta` 等标准 Python 类型及仅限关键字的名称，无需配置包装对象。
@@ -212,14 +213,17 @@ Lambda 持久性函数示例位于 `examples/`。可以从 `hello_world.py` 开�
 - **[DAG 工作流 API](https://zhongkechen.github.io/async-durable-execution/api/extension/flow.html)** - 使用 `flow()`、带类型的节点输入、条件依赖和失败路由构建声明式工作流
 - **[官方 Python SDK 对比](https://zhongkechen.github.io/async-durable-execution/official-python-sdk-comparison.html)** - 与官方 AWS Durable Execution Python SDK 的并排对比
 - **[迁移指南](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html)** - 从官方同步 Python SDK 迁移到这个异步优先 SDK
+- **[工作流模式](https://zhongkechen.github.io/async-durable-execution/workflow-patterns.html)** - 构建智能体循环、人工审批工作流和补偿事务
+- **[部署与调用](https://zhongkechen.github.io/async-durable-execution/deployment.html)** - 配置 IAM、限定函数标识符、调用、CloudFormation 与 SAM
 - **[使用同步代码](https://zhongkechen.github.io/async-durable-execution/using-synchronous-code.html)** - 安全包装既有同步业务逻辑与阻塞式客户端
 - **[高级用法](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html)** - 了解后台操作任务、批量完成条件、Lambda 客户端与 Lambda 层
+- **[自定义持久操作](https://zhongkechen.github.io/async-durable-execution/custom-operations.html)** - 基于稳定的扩展作者接口构建第三方持久操作库
 - **[运行器架构](https://zhongkechen.github.io/async-durable-execution/runner-architecture.html)** - 本地与云端运行器的执行流程、组件与图表
 - **[贡献指南](https://github.com/zhongkechen/async-durable-execution/blob/main/CONTRIBUTING.md)** - 开发工作流、Hatch 命令、测试与 pull request 指南
 
 ## 参考资料
 
-- **[AWS 耐用执行 SDK 开发人员指南](https://docs.aws.amazon.com/durable-execution/)** - 概念、入门、核心操作、高级主题与 API 参考
+- **[AWS Durable Execution 文档](https://docs.aws.amazon.com/durable-execution/)** - 概念、入门、核心操作、高级主题与 API 参考
 - **[Lambda 持久性函数指南](https://docs.aws.amazon.com/zh_cn/lambda/latest/dg/durable-functions.html)** - Lambda 持久性函数的工作方式
 
 ## 💬 反馈与支持
