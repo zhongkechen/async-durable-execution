@@ -33,6 +33,10 @@ documents when they are affected.
   described in `CONTRIBUTING.md`.
 - Update the authoritative document when behavior, public APIs, deployment
   requirements, or developer workflows change. Keep `AGENTS.md` as an index.
+- Keep `README.md`, `README.zh-CN.md`, and `README.zh-TW.md` synchronized in the
+  same change. Preserve matching section order, list items, links, and code
+  examples across all three files; only translation-specific text, language
+  navigation, explicit anchors, and localized documentation URLs may differ.
 - Run the focused tests first, then the relevant formatting, type, and
   documentation checks from `CONTRIBUTING.md`.
 - Do not edit generated output under `build/`, `site/`, or `dist/`.
