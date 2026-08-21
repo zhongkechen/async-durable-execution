@@ -140,7 +140,7 @@ jobs:
 
       - name: Review pull request with Claude on Amazon Bedrock
         id: review
-        uses: anthropics/claude-code-action@459ad358ae43fea66bfefd0a1f8d840b4b9791fb # v1.0.194
+        uses: anthropics/claude-code-action@d40ddef4c030e508327d6e35a9c45f3368482c50 # v1.0.195
         env:
           AWS_REGION: us-east-1
           CLAUDE_CODE_ATTRIBUTION_HEADER: "0"
