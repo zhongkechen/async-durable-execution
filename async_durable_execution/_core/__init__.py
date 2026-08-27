@@ -3,7 +3,9 @@
 from .client import (
     DurableServiceClient,
     aioboto_is_installed,
+    create_default_async_client,
     create_default_sync_client,
+    httpx_is_installed,
 )
 from .config import (
     Duration,
@@ -51,6 +53,7 @@ from .execution import (
     durable_execution,
 )
 from .models import (
+    AwsApiModel,
     BotoSerializableModel,
     CallbackDetails,
     CallbackOptions,

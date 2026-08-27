@@ -48,7 +48,7 @@ composition, and APIs designed for modern Python applications.
 - **[Background operation tasks](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#background-operation-tasks)** - Durable operations such as `step(...)`, `wait(...)`, `invoke(...)`, `recurse(...)`, `run_in_child_context(...)`, and `flow(...)` return `asyncio.Task` objects, so independent operations can run in the background and be awaited together with `asyncio.gather` without using `parallel()` or `map()`.
 - **[Pythonic operation parameters](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#api-mapping)** - Operations use direct keyword arguments, standard Python types such as `datetime.timedelta`, and keyword-only names instead of configuration wrapper objects.
 - **[Integrated local and cloud runner](https://zhongkechen.github.io/async-durable-execution/api/runner.html)** - Runner functionality now ships through `async_durable_execution`, with separate local and cloud runner factories and typed test result helpers.
-- **[Async Lambda client support](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#lambda-client-selection)** - Install the optional `aioboto` extra to use an async Lambda client; otherwise the SDK uses the bundled sync client through an async adapter.
+- **[Model-free Lambda clients](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#lambda-client-selection)** - The SDK owns its Lambda REST wire format instead of depending on botocore service models. Install the optional `httpx` extra to send requests with HTTPX; otherwise the same requests use botocore's synchronous HTTP transport through an async adapter.
 - **[Replay-aware logging with stdlib logging](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#logging)** - Standard `logging` loggers are enriched by durable context filtering so workflow logs remain replay safe.
 - **[Lambda layer packaging](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#lambda-layer-packaging)** - The repo includes tooling and workflows to build and publish an SDK Lambda layer for functions that do not vendor dependencies directly.
 
@@ -60,13 +60,20 @@ Install the execution SDK:
 pip install async-durable-execution
 ```
 
-For an async Lambda service client, install the optional `aioboto` extra:
+For an async Lambda service client, install the optional `httpx` extra:
 
 ```console
-pip install "async-durable-execution[aioboto]"
+pip install "async-durable-execution[httpx]"
 ```
 
-The `aioboto` extra installs `aiobotocore`, which lets the SDK create an async Lambda client for durable checkpoint and state APIs. Without it, the SDK uses the bundled `botocore` dependency through a threaded async adapter.
+The `httpx` extra installs HTTPX, which the SDK uses for asynchronous
+model-free Lambda REST calls. Without it, the SDK sends the same signed
+requests with botocore's synchronous HTTP transport through a threaded async
+adapter. Botocore continues to provide AWS credentials, endpoint metadata, and
+SigV4 signing, but its generated Lambda service model is not used.
+
+The previous `aioboto` extra remains available as a backward-compatible alias
+for `httpx`.
 
 Create a durable Lambda handler:
 

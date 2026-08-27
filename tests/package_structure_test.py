@@ -68,3 +68,15 @@ def test_extension_step_executor_is_internal_to_primitive_layer() -> None:
         StatefulStepOperationExecutor.__module__
         == "async_durable_execution._primitive.step"
     )
+
+
+def test_httpx_extra_is_canonical_and_aioboto_is_compatible_alias() -> None:
+    pyproject = (PACKAGE_ROOT.parent / "pyproject.toml").read_text(encoding="utf-8")
+    optional_dependencies = pyproject.split(
+        "[project.optional-dependencies]",
+        maxsplit=1,
+    )[1].split("\n[", maxsplit=1)[0]
+
+    dependency = '["httpx>=0.28.1,<1"]'
+    assert f"httpx = {dependency}" in optional_dependencies
+    assert f"aioboto = {dependency}" in optional_dependencies

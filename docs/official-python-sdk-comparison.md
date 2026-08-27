@@ -167,8 +167,8 @@ libraries.
 | Integration scenario | Official Python SDK | `async-durable-execution` |
 | --- | --- | --- |
 | Async HTTP clients such as `httpx.AsyncClient` | Requires sync-to-async bridging | Direct `await` inside durable callables |
-| Async AWS clients | Requires bridging or sync clients | Optional `aioboto` extra for async Lambda client support |
-| Lambda service client | Synchronous botocore-style client usage | Async client when `aioboto` is installed; otherwise a threaded async adapter over the bundled sync client |
+| Async AWS clients | Requires bridging or sync clients | Optional `httpx` extra installs HTTPX for async Lambda REST calls |
+| Lambda service client | Synchronous botocore-style client usage | Project-owned, model-free REST client using HTTPX when `httpx` is installed; otherwise botocore's HTTP transport through a threaded adapter |
 | Async database pools | Harder to share cleanly from sync steps | Natural event-loop usage |
 | AI or agent loops | Often needs wrapper code around model/tool calls | Durable workflow can be written as an async loop |
 | Existing synchronous business logic | Natural fit | Supported by wrapping blocking work with safe sync adapters |
@@ -232,10 +232,13 @@ Deployment concepts do not materially change between the SDKs:
 - Add `lambda:InvokeFunction` permissions for durable invokes.
 - Add callback permissions for external systems that complete callbacks.
 
-This SDK adds repository tooling for building an AWS Lambda layer and supports an
-optional async Lambda client through the `aioboto` extra. Those are packaging and
-runtime integration conveniences; they do not remove the underlying Lambda Durable
-Functions deployment requirements.
+This SDK adds repository tooling for building an AWS Lambda layer and supports
+an optional HTTPX transport through the `httpx` extra. The legacy `aioboto`
+extra remains an equivalent compatibility alias. Both transports use
+the SDK's project-owned Lambda wire mappings rather than botocore's generated
+Lambda service model. These are packaging and runtime integration
+conveniences; they do not remove the underlying Lambda Durable Functions
+deployment requirements.
 
 ## Migration Direction
 

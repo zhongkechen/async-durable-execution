@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import importlib
 import importlib.util
 import logging
 from collections.abc import Awaitable, Mapping
 from typing import Any, Protocol, cast
 
 from botocore.config import Config
-from botocore.session import get_session
+from botocore.session import Session
 
 from ..__about__ import __version__
+from .aws_http import create_botocore_http_client, create_httpx_client
 from .exceptions import CheckpointError, GetExecutionStateError
 from .models import (
     CheckpointOutput,
@@ -71,32 +71,50 @@ def _create_client_config() -> Config:
     )
 
 
-def aioboto_is_installed() -> bool:
-    """Return whether the optional aioboto dependency is available."""
-    return importlib.util.find_spec("aiobotocore") is not None
+def httpx_is_installed() -> bool:
+    """Return whether the optional HTTPX transport is available."""
+    return importlib.util.find_spec("httpx") is not None
 
 
-def create_default_sync_client() -> LambdaApiClient:
-    """Create the default botocore Lambda client used for durable API calls."""
-    session = get_session()
-    return cast(
-        "LambdaApiClient",
-        session.create_client("lambda", config=_create_client_config()),
+# Backward-compatible internal alias for integrations that imported the old name.
+aioboto_is_installed = httpx_is_installed
+
+
+def create_default_sync_client(
+    *,
+    session: Session | None = None,
+    endpoint_url: str | None = None,
+    region_name: str | None = None,
+    config: Config | None = None,
+) -> LambdaApiClient:
+    """Create a model-free Lambda client using botocore's HTTP transport."""
+    return create_botocore_http_client(
+        session=session,
+        endpoint_url=endpoint_url,
+        region_name=region_name,
+        config=config or _create_client_config(),
     )
 
 
-def create_default_async_client() -> AsyncLambdaApiClient:
-    """Create the default aioboto Lambda client used for durable API calls."""
-    aiobotocore_session = importlib.import_module("aiobotocore.session")
-    session = aiobotocore_session.get_session()
-    return _AiobotocoreLambdaApiClient(
-        session.create_client("lambda", config=_create_client_config())
+def create_default_async_client(
+    *,
+    session: Session | None = None,
+    endpoint_url: str | None = None,
+    region_name: str | None = None,
+    config: Config | None = None,
+) -> AsyncLambdaApiClient:
+    """Create a model-free Lambda client using HTTPX."""
+    return create_httpx_client(
+        session=session,
+        endpoint_url=endpoint_url,
+        region_name=region_name,
+        config=config or _create_client_config(),
     )
 
 
 def create_default_client() -> LambdaApiClient | AsyncLambdaApiClient:
-    """Create the default Lambda client, preferring async when aioboto is installed."""
-    if aioboto_is_installed():
+    """Create the default Lambda client, preferring async when HTTPX is installed."""
+    if httpx_is_installed():
         return create_default_async_client()
     return create_default_sync_client()
 
@@ -186,35 +204,8 @@ class ThreadedSyncLambdaClient(DurableServiceClient):
             raise error from None
 
 
-class _AiobotocoreLambdaApiClient:
-    """Lazily enter an aiobotocore Lambda client context for durable API calls."""
-
-    def __init__(self, client_context: Any) -> None:
-        self._client_context = client_context
-        self._client: Any | None = None
-
-    async def _get_client(self) -> Any:
-        if self._client is None:
-            self._client = await self._client_context.__aenter__()
-        return self._client
-
-    async def checkpoint_durable_execution(self, **kwargs: Any) -> Any:
-        client = await self._get_client()
-        return await client.checkpoint_durable_execution(**kwargs)
-
-    async def get_durable_execution_state(self, **kwargs: Any) -> Any:
-        client = await self._get_client()
-        return await client.get_durable_execution_state(**kwargs)
-
-    async def aclose(self) -> None:
-        if self._client is None:
-            return
-        await self._client_context.__aexit__(None, None, None)
-        self._client = None
-
-
 class AsyncLambdaClient(DurableServiceClient):
-    """Adapt an async aioboto Lambda client to the durable service interface."""
+    """Adapt an async Lambda client to the durable service interface."""
 
     def __init__(self, client: AsyncLambdaApiClient) -> None:
         self.client = client

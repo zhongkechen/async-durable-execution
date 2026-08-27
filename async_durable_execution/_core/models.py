@@ -78,17 +78,21 @@ class MappingModel:
         return _model_to_mapping(self)
 
 
-class BotoSerializableModel:
-    """Dataclass serialized as a boto-style mapping with native Python values."""
+class AwsApiModel:
+    """Dataclass serialized as an AWS API mapping with native Python values."""
 
     @classmethod
     def from_dict(cls: type[ModelT], data: Mapping[str, Any]) -> ModelT:
-        """Create a model from a boto-style mapping with native Python values."""
+        """Create a model from an AWS API mapping with native Python values."""
         return _model_from_mapping(cls, data)
 
     def to_dict(self) -> MutableMapping[str, Any]:
-        """Convert the model to a boto-style mapping with native Python values."""
+        """Convert the model to an AWS API mapping with native Python values."""
         return _model_to_mapping(self)
+
+
+# Backward-compatible internal alias retained for extensions importing the old name.
+BotoSerializableModel = AwsApiModel
 
 
 class JsonSerializableModel:
@@ -104,7 +108,7 @@ class JsonSerializableModel:
 
 _MAPPING_MODEL_TYPES = (
     MappingModel,
-    BotoSerializableModel,
+    AwsApiModel,
     JsonSerializableModel,
 )
 
@@ -380,7 +384,7 @@ class InvocationStatus(Enum):
 
 
 @dataclass(frozen=True)
-class ErrorObject(BotoSerializableModel):
+class ErrorObject(AwsApiModel):
     """Serializable representation of an exception captured by the SDK."""
 
     message: str | None = field(
@@ -416,7 +420,7 @@ class ErrorObject(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class DurableExecutionInvocationOutput(BotoSerializableModel):
+class DurableExecutionInvocationOutput(AwsApiModel):
     """Representation the DurableExecutionInvocationOutput. This is what the Durable lambda handler returns.
 
     If the execution has been already completed via an update to the EXECUTION operation via CheckpointDurableExecution,
@@ -437,7 +441,7 @@ class DurableExecutionInvocationOutput(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class ExecutionDetails(BotoSerializableModel):
+class ExecutionDetails(AwsApiModel):
     """Extra fields stored on the root execution operation."""
 
     input_payload: str | None = field(
@@ -447,7 +451,7 @@ class ExecutionDetails(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class ContextDetails(BotoSerializableModel):
+class ContextDetails(AwsApiModel):
     """Checkpoint payload stored for child-context style operations."""
 
     replay_children: ReplayChildren = field(
@@ -462,7 +466,7 @@ class ContextDetails(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class StepDetails(BotoSerializableModel):
+class StepDetails(AwsApiModel):
     """Checkpoint payload stored for durable steps and polling checks."""
 
     attempt: int = field(default=0, metadata=_model_field_metadata(alias="Attempt"))
@@ -481,7 +485,7 @@ class StepDetails(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class WaitDetails(BotoSerializableModel):
+class WaitDetails(AwsApiModel):
     """Checkpoint payload stored for durable waits."""
 
     scheduled_end_timestamp: datetime.datetime | None = field(
@@ -493,7 +497,7 @@ class WaitDetails(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class CallbackDetails(BotoSerializableModel):
+class CallbackDetails(AwsApiModel):
     """Checkpoint payload stored for callbacks and callback results."""
 
     callback_id: str = field(metadata=_model_field_metadata(alias="CallbackId"))
@@ -506,7 +510,7 @@ class CallbackDetails(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class ChainedInvokeDetails(BotoSerializableModel):
+class ChainedInvokeDetails(AwsApiModel):
     """Checkpoint payload stored for durable invokes."""
 
     result: str | None = field(
@@ -518,7 +522,7 @@ class ChainedInvokeDetails(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class StepOptions(BotoSerializableModel):
+class StepOptions(AwsApiModel):
     """Additional options recorded on step retries."""
 
     next_attempt_delay_seconds: int = field(
@@ -528,7 +532,7 @@ class StepOptions(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class WaitOptions(BotoSerializableModel):
+class WaitOptions(AwsApiModel):
     """
     Wait Options provides details regarding suspension.
 
@@ -545,7 +549,7 @@ class WaitOptions(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class CallbackOptions(BotoSerializableModel):
+class CallbackOptions(AwsApiModel):
     """
     Callback options provides details about the callback, wrt timeout
     and heartbeat checks.
@@ -569,7 +573,7 @@ class CallbackOptions(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class ChainedInvokeOptions(BotoSerializableModel):
+class ChainedInvokeOptions(AwsApiModel):
     """
     As of 2025/10/27:
      - Chained invoke options only contains a function name
@@ -582,7 +586,7 @@ class ChainedInvokeOptions(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class ContextOptions(BotoSerializableModel):
+class ContextOptions(AwsApiModel):
     """Extra flags recorded for child-context operations."""
 
     replay_children: ReplayChildren = field(
@@ -592,7 +596,7 @@ class ContextOptions(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class OperationUpdate(BotoSerializableModel):
+class OperationUpdate(AwsApiModel):
     """Update an Operation. Use this to create a checkpoint.
 
     See the various create_ factory class methods to instantiate me.
@@ -848,7 +852,7 @@ class TimestampConverter:
 
 
 @dataclass(frozen=True)
-class Operation(BotoSerializableModel):
+class Operation(AwsApiModel):
     """Represent the Operation type for GetDurableExecutionState and CheckpointDurableExecution."""
 
     operation_id: str = field(metadata=_model_field_metadata(alias="Id"))
@@ -901,7 +905,7 @@ class Operation(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class CheckpointUpdatedExecutionState(BotoSerializableModel):
+class CheckpointUpdatedExecutionState(AwsApiModel):
     """Representation of the CheckpointUpdatedExecutionState structure of the DEX API."""
 
     operations: list[Operation] = field(
@@ -914,7 +918,7 @@ class CheckpointUpdatedExecutionState(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class CheckpointOutput(BotoSerializableModel):
+class CheckpointOutput(AwsApiModel):
     """Representation of the CheckpointDurableExecutionOutput structure of the DEX CheckpointDurableExecution API."""
 
     checkpoint_token: str | None = field(
@@ -928,7 +932,7 @@ class CheckpointOutput(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class StateOutput(BotoSerializableModel):
+class StateOutput(AwsApiModel):
     """Representation of the GetDurableExecutionStateOutput structure of the DEX GetDurableExecutionState API."""
 
     operations: list[Operation] = field(
@@ -941,6 +945,7 @@ class StateOutput(BotoSerializableModel):
 
 
 __all__ = [
+    "AwsApiModel",
     "CallbackDetails",
     "CallbackOptions",
     "CallbackTimeoutType",

@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, Mock, call, patch
 import pytest
 
 
-pytestmark = pytest.mark.aioboto_installed(False)
+pytestmark = pytest.mark.httpx_installed(False)
 
 from async_durable_execution import (
     DurableFunctionCloudTestRunner,
@@ -35,6 +35,7 @@ from async_durable_execution._runner.exceptions import (
     DurableFunctionsTestError,
     ResourceNotFoundException,
 )
+from async_durable_execution._runner.cloud import ThreadedSyncCloudLambdaClient
 from async_durable_execution._runner.local.execution import Execution
 from async_durable_execution._runner.model import (
     GetDurableExecutionHistoryResponse,
@@ -745,7 +746,7 @@ async def test_durable_function_test_result_from_execution_history() -> None:
     assert result.operations[0].name == "test-step"
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_init(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner initialization."""
     from async_durable_execution._runner.cloud import (
@@ -753,7 +754,7 @@ async def test_cloud_runner_init(mock_boto3) -> None:
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     runner = DurableFunctionCloudTestRunner(
         function_name="test-function",
@@ -764,10 +765,10 @@ async def test_cloud_runner_init(mock_boto3) -> None:
     assert runner.function_name == "test-function"
     assert runner.region == "us-west-2"
     assert runner.poll_interval == 0.5
-    mock_boto3.return_value.create_client.assert_called_once()
+    mock_boto3.assert_called_once_with(None, "us-west-2")
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_run_success(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner.run with successful execution."""
     from async_durable_execution import InvocationStatus
@@ -776,7 +777,7 @@ async def test_cloud_runner_run_success(mock_boto3) -> None:
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     mock_client.invoke.return_value = {
         "StatusCode": 200,
@@ -820,13 +821,19 @@ async def test_cloud_runner_run_success(mock_boto3) -> None:
         InvocationType="RequestResponse",
         Payload='"test-input"',
     )
+    mock_client.get_durable_execution.assert_called_once_with(
+        DurableExecutionArn=(
+            "arn:aws:lambda:us-east-1:123456789012:function:test:execution:exec-1"
+        ),
+        IncludeExecutionData=True,
+    )
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_fetch_execution_history_paginates(mock_boto3) -> None:
     """Test cloud history fetching follows NextMarker until all events are loaded."""
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
     mock_client.get_durable_execution_history.side_effect = [
         {
             "Events": [
@@ -866,13 +873,13 @@ async def test_cloud_runner_fetch_execution_history_paginates(mock_boto3) -> Non
     }
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_fetch_execution_history_rejects_repeated_marker(
     mock_boto3,
 ) -> None:
     """Test cloud history fetching fails if pagination does not advance."""
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
     mock_client.get_durable_execution_history.return_value = {
         "Events": [],
         "NextMarker": "same-page",
@@ -884,7 +891,7 @@ async def test_cloud_runner_fetch_execution_history_rejects_repeated_marker(
         await runner._fetch_execution_history("test-arn")
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_run_invoke_failure(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner.run with invoke failure."""
     from async_durable_execution._runner.exceptions import (
@@ -895,7 +902,7 @@ async def test_cloud_runner_run_invoke_failure(mock_boto3) -> None:
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
     mock_client.invoke.side_effect = Exception("Invoke failed")
 
     runner = DurableFunctionCloudTestRunner(
@@ -909,7 +916,7 @@ async def test_cloud_runner_run_invoke_failure(mock_boto3) -> None:
         await runner.run()
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 @patch("async_durable_execution._runner.cloud.time")
 async def test_cloud_runner_wait_for_completion_timeout(mock_time, mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner._wait_for_completion with timeout."""
@@ -918,7 +925,7 @@ async def test_cloud_runner_wait_for_completion_timeout(mock_time, mock_boto3) -
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
     mock_time.time.side_effect = [0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
 
     mock_client.get_durable_execution.return_value = {
@@ -983,7 +990,7 @@ async def test_durable_function_test_result_from_execution_history_with_exceptio
     assert len(result.operations) == 0
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_wait_for_completion_failed_status(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner._wait_for_completion with FAILED status."""
     from async_durable_execution._runner.cloud import (
@@ -991,7 +998,7 @@ async def test_cloud_runner_wait_for_completion_failed_status(mock_boto3) -> Non
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     mock_client.get_durable_execution.return_value = {
         "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:test:execution:exec-1",
@@ -1009,7 +1016,7 @@ async def test_cloud_runner_wait_for_completion_failed_status(mock_boto3) -> Non
     assert result.status == "FAILED"
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_run_bad_status_code(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner.run with bad HTTP status code."""
     from async_durable_execution._runner.exceptions import (
@@ -1020,7 +1027,7 @@ async def test_cloud_runner_run_bad_status_code(mock_boto3) -> None:
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     mock_client.invoke.return_value = {
         "StatusCode": 500,
@@ -1038,7 +1045,7 @@ async def test_cloud_runner_run_bad_status_code(mock_boto3) -> None:
         await runner.run()
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_run_failed_execution(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner.run with a failed execution."""
     from async_durable_execution._runner.cloud import (
@@ -1046,7 +1053,7 @@ async def test_cloud_runner_run_failed_execution(mock_boto3) -> None:
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     mock_client.invoke.return_value = {
         "StatusCode": 200,
@@ -1081,7 +1088,7 @@ async def test_cloud_runner_run_failed_execution(mock_boto3) -> None:
     assert result.status is InvocationStatus.FAILED
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_run_missing_execution_arn(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner.run with missing execution ARN."""
     from async_durable_execution._runner.exceptions import (
@@ -1092,7 +1099,7 @@ async def test_cloud_runner_run_missing_execution_arn(mock_boto3) -> None:
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     mock_client.invoke.return_value = {
         "StatusCode": 200,
@@ -1110,7 +1117,7 @@ async def test_cloud_runner_run_missing_execution_arn(mock_boto3) -> None:
         await runner.run()
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_wait_for_completion_get_execution_failure(
     mock_boto3,
 ) -> None:
@@ -1123,7 +1130,7 @@ async def test_cloud_runner_wait_for_completion_get_execution_failure(
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
     mock_client.get_durable_execution.side_effect = Exception("API error")
 
     runner = DurableFunctionCloudTestRunner(function_name="test-function")
@@ -1134,7 +1141,7 @@ async def test_cloud_runner_wait_for_completion_get_execution_failure(
         await runner._wait_for_completion("test-arn", timeout=10)
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 @patch("async_durable_execution._runner.cloud.asyncio.sleep", new_callable=AsyncMock)
 async def test_cloud_runner_wait_for_completion_retries_resource_not_found(
     mock_sleep, mock_boto3
@@ -1147,7 +1154,7 @@ async def test_cloud_runner_wait_for_completion_retries_resource_not_found(
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
     mock_client.get_durable_execution.side_effect = [
         ClientError(
             error_response={"Error": {"Code": "ResourceNotFoundException"}},
@@ -1348,7 +1355,7 @@ async def test_durable_function_test_result_from_execution_history_failed() -> N
     assert result.error.message == "execution failed"
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_wait_for_completion_timed_out_status(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner._wait_for_completion with TIMED_OUT status."""
     from async_durable_execution._runner.cloud import (
@@ -1356,7 +1363,7 @@ async def test_cloud_runner_wait_for_completion_timed_out_status(mock_boto3) -> 
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     mock_client.get_durable_execution.return_value = {
         "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:test:execution:exec-1",
@@ -1373,7 +1380,7 @@ async def test_cloud_runner_wait_for_completion_timed_out_status(mock_boto3) -> 
     assert result.status == "TIMED_OUT"
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_wait_for_completion_aborted_status(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner._wait_for_completion with ABORTED status."""
     from async_durable_execution._runner.cloud import (
@@ -1381,7 +1388,7 @@ async def test_cloud_runner_wait_for_completion_aborted_status(mock_boto3) -> No
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     mock_client.get_durable_execution.return_value = {
         "DurableExecutionArn": "arn:aws:lambda:us-east-1:123456789012:function:test:execution:exec-1",
@@ -1398,7 +1405,7 @@ async def test_cloud_runner_wait_for_completion_aborted_status(mock_boto3) -> No
     assert result.status == "ABORTED"
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_run_async_success(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner.run_async with successful invocation."""
     from async_durable_execution._runner.cloud import (
@@ -1406,7 +1413,7 @@ async def test_cloud_runner_run_async_success(mock_boto3) -> None:
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     mock_client.invoke.return_value = {
         "StatusCode": 202,
@@ -1431,7 +1438,7 @@ async def test_cloud_runner_run_async_success(mock_boto3) -> None:
     )
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_run_async_with_400(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner.run_async with successful invocation."""
     from async_durable_execution._runner.cloud import (
@@ -1439,7 +1446,7 @@ async def test_cloud_runner_run_async_with_400(mock_boto3) -> None:
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     mock_client.invoke.return_value = {
         "StatusCode": 400,
@@ -1457,7 +1464,7 @@ async def test_cloud_runner_run_async_with_400(mock_boto3) -> None:
         await runner.run_async()
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_run_async_failure(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner.run_async with invocation failure."""
     from async_durable_execution._runner.exceptions import (
@@ -1468,7 +1475,7 @@ async def test_cloud_runner_run_async_failure(mock_boto3) -> None:
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
     mock_client.invoke.side_effect = Exception("Async invoke failed")
 
     runner = DurableFunctionCloudTestRunner(
@@ -1482,7 +1489,7 @@ async def test_cloud_runner_run_async_failure(mock_boto3) -> None:
         await runner.run_async()
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_send_callback_success(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner.send_callback_success."""
     from async_durable_execution._runner.cloud import (
@@ -1490,7 +1497,7 @@ async def test_cloud_runner_send_callback_success(mock_boto3) -> None:
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     runner = DurableFunctionCloudTestRunner(function_name="test-function")
     await runner.send_callback_success("callback-123")
@@ -1500,7 +1507,7 @@ async def test_cloud_runner_send_callback_success(mock_boto3) -> None:
     )
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_send_callback_failure(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner.send_callback_failure."""
     from async_durable_execution._runner.cloud import (
@@ -1508,7 +1515,7 @@ async def test_cloud_runner_send_callback_failure(mock_boto3) -> None:
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     runner = DurableFunctionCloudTestRunner(function_name="test-function")
     await runner.send_callback_failure("callback-123")
@@ -1518,7 +1525,7 @@ async def test_cloud_runner_send_callback_failure(mock_boto3) -> None:
     )
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_send_callback_heartbeat(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner.send_callback_heartbeat."""
     from async_durable_execution._runner.cloud import (
@@ -1526,7 +1533,7 @@ async def test_cloud_runner_send_callback_heartbeat(mock_boto3) -> None:
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     runner = DurableFunctionCloudTestRunner(function_name="test-function")
     await runner.send_callback_heartbeat("callback-123")
@@ -1536,7 +1543,7 @@ async def test_cloud_runner_send_callback_heartbeat(mock_boto3) -> None:
     )
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_send_callback_error(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner callback methods with API errors."""
     from async_durable_execution._runner.exceptions import (
@@ -1547,7 +1554,7 @@ async def test_cloud_runner_send_callback_error(mock_boto3) -> None:
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
     mock_client.send_durable_execution_callback_success.side_effect = Exception(
         "API error"
     )
@@ -1560,7 +1567,7 @@ async def test_cloud_runner_send_callback_error(mock_boto3) -> None:
         await runner.send_callback_success("callback-123")
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_wait_for_callback_success(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner.wait_for_callback success."""
     from async_durable_execution._runner.cloud import (
@@ -1568,7 +1575,7 @@ async def test_cloud_runner_wait_for_callback_success(mock_boto3) -> None:
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     mock_client.get_durable_execution_history.return_value = {
         "Events": [
@@ -1596,7 +1603,7 @@ async def test_cloud_runner_wait_for_callback_success(mock_boto3) -> None:
     assert callback_id == "callback-123"
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_wait_for_callback_none(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner.wait_for_callback none."""
     from async_durable_execution._runner.cloud import (
@@ -1604,7 +1611,7 @@ async def test_cloud_runner_wait_for_callback_none(mock_boto3) -> None:
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     mock_client.get_durable_execution_history.return_value = {
         "Events": [
@@ -1630,7 +1637,7 @@ async def test_cloud_runner_wait_for_callback_none(mock_boto3) -> None:
         await runner.wait_for_callback("test-arn", name="test-callback1", timeout=2)
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_wait_for_callback_success_without_name(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner.wait_for_callback success."""
     from async_durable_execution._runner.cloud import (
@@ -1638,7 +1645,7 @@ async def test_cloud_runner_wait_for_callback_success_without_name(mock_boto3) -
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     mock_client.get_durable_execution_history.return_value = {
         "Events": [
@@ -1664,7 +1671,7 @@ async def test_cloud_runner_wait_for_callback_success_without_name(mock_boto3) -
     assert callback_id == "callback-123"
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_wait_for_callback_waits_for_creator_completion(
     mock_boto3,
 ) -> None:
@@ -1674,7 +1681,7 @@ async def test_cloud_runner_wait_for_callback_waits_for_creator_completion(
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     callback_started_event = {
         "EventType": "CallbackStarted",
@@ -1707,7 +1714,7 @@ async def test_cloud_runner_wait_for_callback_waits_for_creator_completion(
     assert mock_client.get_durable_execution_history.call_count == 2
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_wait_for_callback_all_done_without_name(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner.wait_for_callback all_done_without_name."""
     from async_durable_execution._runner.cloud import (
@@ -1715,7 +1722,7 @@ async def test_cloud_runner_wait_for_callback_all_done_without_name(mock_boto3) 
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     mock_client.get_durable_execution_history.return_value = {
         "Events": [
@@ -1809,7 +1816,7 @@ async def test_local_runner_wait_for_callback_with_resource_not_found_exception(
         await runner.wait_for_callback("test-arn", timeout=2)
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 @patch("async_durable_execution._runner.cloud.time")
 async def test_cloud_runner_wait_for_callback_timeout(mock_time, mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner.wait_for_callback timeout."""
@@ -1818,7 +1825,7 @@ async def test_cloud_runner_wait_for_callback_timeout(mock_time, mock_boto3) -> 
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
     mock_time.time.side_effect = [0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
 
     mock_client.get_durable_execution_history.return_value = {"Events": []}
@@ -1831,7 +1838,7 @@ async def test_cloud_runner_wait_for_callback_timeout(mock_time, mock_boto3) -> 
         await runner.wait_for_callback("test-arn", timeout=2)
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_wait_for_callback_already_completed(mock_boto3) -> None:
     """Test DurableFunctionCloudTestRunner.wait_for_callback already completed."""
     from async_durable_execution._runner.cloud import (
@@ -1839,7 +1846,7 @@ async def test_cloud_runner_wait_for_callback_already_completed(mock_boto3) -> N
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     mock_client.get_durable_execution_history.return_value = {
         "Events": [
@@ -1869,7 +1876,7 @@ async def test_cloud_runner_wait_for_callback_already_completed(mock_boto3) -> N
         await runner.wait_for_callback("test-arn", "test-callback", timeout=2)
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_wait_for_callback_client_error_retryable(
     mock_boto3,
 ) -> None:
@@ -1881,7 +1888,7 @@ async def test_cloud_runner_wait_for_callback_client_error_retryable(
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     # First call raises ResourceNotFoundException, second succeeds
     mock_client.get_durable_execution_history.side_effect = [
@@ -1916,7 +1923,7 @@ async def test_cloud_runner_wait_for_callback_client_error_retryable(
     assert callback_id == "callback-123"
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_wait_for_callback_client_error_non_retryable(
     mock_boto3,
 ) -> None:
@@ -1931,7 +1938,7 @@ async def test_cloud_runner_wait_for_callback_client_error_non_retryable(
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     mock_client.get_durable_execution_history.side_effect = ClientError(
         error_response={"Error": {"Code": "AccessDeniedException"}},
@@ -1946,7 +1953,7 @@ async def test_cloud_runner_wait_for_callback_client_error_non_retryable(
         await runner.wait_for_callback("test-arn", timeout=10)
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_wait_for_callback_generic_exception(mock_boto3) -> None:
     """Test wait_for_callback with generic Exception."""
     from async_durable_execution._runner.exceptions import (
@@ -1957,7 +1964,7 @@ async def test_cloud_runner_wait_for_callback_generic_exception(mock_boto3) -> N
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     mock_client.get_durable_execution_history.side_effect = Exception("Network error")
 
@@ -1969,7 +1976,7 @@ async def test_cloud_runner_wait_for_callback_generic_exception(mock_boto3) -> N
         await runner.wait_for_callback("test-arn", timeout=10)
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 @no_type_check
 async def test_cloud_runner_wait_for_result_fetch_history_exception(mock_boto3) -> None:
     """Test wait_for_result with exception in _fetch_execution_history."""
@@ -1981,7 +1988,7 @@ async def test_cloud_runner_wait_for_result_fetch_history_exception(mock_boto3) 
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     # Mock successful _wait_for_completion
     mock_execution_response = Mock()
@@ -2001,7 +2008,7 @@ async def test_cloud_runner_wait_for_result_fetch_history_exception(mock_boto3) 
         await runner.wait_for_result("test-arn", timeout=60)
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 @no_type_check
 async def test_cloud_runner_wait_for_result_success(mock_boto3) -> None:
     """Test wait_for_result successful execution."""
@@ -2011,7 +2018,7 @@ async def test_cloud_runner_wait_for_result_success(mock_boto3) -> None:
     )
 
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
 
     # Mock successful responses
     mock_execution_response = Mock()
@@ -2220,11 +2227,11 @@ def test_cloud_runner_close_calls_client_close() -> None:
     runner.lambda_client.close.assert_called_once()
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_send_callback_failure_error(mock_boto3) -> None:
     """Test callback failure API errors are wrapped."""
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
     mock_client.send_durable_execution_callback_failure.side_effect = Exception(
         "API error"
     )
@@ -2236,11 +2243,11 @@ async def test_cloud_runner_send_callback_failure_error(mock_boto3) -> None:
         await runner.send_callback_failure("callback-123")
 
 
-@patch("async_durable_execution._runner.cloud.get_session")
+@patch("async_durable_execution._runner.cloud.create_lambda_client")
 async def test_cloud_runner_send_callback_heartbeat_error(mock_boto3) -> None:
     """Test callback heartbeat API errors are wrapped."""
     mock_client = Mock()
-    mock_boto3.return_value.create_client.return_value = mock_client
+    mock_boto3.return_value = ThreadedSyncCloudLambdaClient(mock_client)
     mock_client.send_durable_execution_callback_heartbeat.side_effect = Exception(
         "API error"
     )

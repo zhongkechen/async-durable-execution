@@ -44,7 +44,7 @@ AWS Lambda 工作流程。** 自動為狀態建立檢查點，無需持續運算
 - **[背景操作任務](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#background-operation-tasks)** - `step(...)`、`wait(...)`、`invoke(...)`、`recurse(...)`、`run_in_child_context(...)` 與 `flow(...)` 等耐用操作會傳回 `asyncio.Task` 物件，因此獨立操作可以在背景執行，並透過 `asyncio.gather` 一起等待，無需使用 `parallel()` 或 `map()`。
 - **[符合 Python 慣例的操作參數](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#api-mapping)** - 操作直接使用關鍵字引數、`datetime.timedelta` 等標準 Python 型別及僅限關鍵字的名稱，無需組態包裝物件。
 - **[整合本機與雲端執行器](https://zhongkechen.github.io/async-durable-execution/api/runner.html)** - 執行器功能現在透過 `async_durable_execution` 提供，包含獨立的本機與雲端執行器 factory，以及具型別的測試結果輔助物件。
-- **[支援非同步 Lambda 用戶端](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#lambda-client-selection)** - 安裝選用的 `aioboto` extra 即可使用非同步 Lambda 用戶端；否則 SDK 會透過非同步配接器使用內建的同步用戶端。
+- **[不依賴模型的 Lambda 用戶端](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#lambda-client-selection)** - SDK 自主管理 Lambda REST 線路格式，不依賴 botocore 服務模型。安裝選用的 `httpx` extra 後使用 HTTPX 傳送請求；否則相同請求會透過非同步配接器使用 botocore 的同步 HTTP 傳輸。
 - **[以標準函式庫 logging 提供重播感知記錄](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#logging)** - 標準 `logging` logger 會由耐用內容篩選器強化，讓工作流程記錄在重播時保持安全。
 - **[Lambda 層打包](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#lambda-layer-packaging)** - 儲存庫包含建置與發布 SDK Lambda 層的工具和工作流程，適用於不直接封裝相依套件的函式。
 
@@ -58,13 +58,18 @@ AWS Lambda 工作流程。** 自動為狀態建立檢查點，無需持續運算
 pip install async-durable-execution
 ```
 
-如需非同步 Lambda 服務用戶端，請安裝選用的 `aioboto` extra：
+如需非同步 Lambda 服務用戶端，請安裝選用的 `httpx` extra：
 
 ```console
-pip install "async-durable-execution[aioboto]"
+pip install "async-durable-execution[httpx]"
 ```
 
-`aioboto` extra 會安裝 `aiobotocore`，讓 SDK 能為持久性執行的檢查點與狀態 API 建立非同步 Lambda 用戶端。若未安裝，SDK 會透過執行緒化的非同步配接器使用內建的 `botocore` 相依套件。
+`httpx` extra 會安裝 HTTPX，SDK 使用它進行非同步且不依賴模型的
+Lambda REST 呼叫。若未安裝，SDK 會透過執行緒化非同步配接器，使用
+botocore 的同步 HTTP 傳輸傳送相同的簽署請求。Botocore 仍提供 AWS
+憑證、端點中繼資料和 SigV4 簽署，但不會使用其產生的 Lambda 服務模型。
+
+先前的 `aioboto` extra 會繼續作為 `httpx` 的向後相容別名提供。
 
 建立 Lambda 耐用函數的事件處理常式：
 

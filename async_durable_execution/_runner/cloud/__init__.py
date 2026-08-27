@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import importlib
 import inspect
 import json
 import logging
@@ -10,14 +9,15 @@ from typing import Any, cast
 from uuid import uuid4
 
 from botocore.config import Config
-from botocore.exceptions import ClientError
 from botocore.session import get_session
 
 from ..._core import (
     DurableExecutionInvocationInput,
     DurableExecutionInvocationOutput,
     ErrorObject,
-    aioboto_is_installed,
+    create_default_async_client,
+    create_default_sync_client,
+    httpx_is_installed,
 )
 from ..exceptions import (
     DurableFunctionsTestError,
@@ -102,7 +102,7 @@ class ThreadedSyncCloudLambdaClient:
 
 
 class AsyncCloudLambdaClient:
-    """Adapt an async aioboto Lambda client to the cloud runner interface."""
+    """Adapt an async Lambda client to the cloud runner interface."""
 
     def __init__(self, client: Any) -> None:
         self._client_context = client if hasattr(client, "__aenter__") else None
@@ -196,6 +196,57 @@ def adapt_lambda_client(client: Any) -> Any:
     if _cloud_lambda_client_is_async(client):
         return AsyncCloudLambdaClient(client)
     return ThreadedSyncCloudLambdaClient(client)
+
+
+_KNOWN_LAMBDA_ERROR_CODES = (
+    "ResourceNotFoundException",
+    "InvalidParameterValueException",
+    "TooManyRequestsException",
+    "ServiceException",
+    "ResourceConflictException",
+    "InvalidRequestContentException",
+    "RequestTooLargeException",
+    "UnsupportedMediaTypeException",
+    "InvalidRuntimeException",
+    "InvalidZipFileException",
+    "ResourceNotReadyException",
+    "SnapStartTimeoutException",
+    "SnapStartNotReadyException",
+    "SnapStartException",
+    "RecursiveInvocationException",
+    "InvalidSecurityGroupIDException",
+    "EC2ThrottledException",
+    "EFSMountConnectivityException",
+    "SubnetIPAddressLimitReachedException",
+    "EC2UnexpectedException",
+    "InvalidSubnetIDException",
+    "EC2AccessDeniedException",
+    "EFSIOException",
+    "ENILimitReachedException",
+    "EFSMountTimeoutException",
+    "EFSMountFailureException",
+    "KMSAccessDeniedException",
+    "KMSDisabledException",
+    "KMSNotFoundException",
+    "KMSInvalidStateException",
+    "DurableExecutionAlreadyStartedException",
+)
+
+
+def _aws_error_code(error: Exception, client: Any = None) -> str:
+    response = getattr(error, "response", None)
+    if isinstance(response, dict):
+        aws_error = response.get("Error")
+        if isinstance(aws_error, dict) and aws_error.get("Code"):
+            return str(aws_error["Code"])
+
+    exceptions = getattr(client, "exceptions", None)
+    if exceptions is not None:
+        for error_code in _KNOWN_LAMBDA_ERROR_CODES:
+            exception_type = getattr(exceptions, error_code, None)
+            if isinstance(exception_type, type) and isinstance(error, exception_type):
+                return error_code
+    return type(error).__name__
 
 
 def create_cloud_runner(
@@ -385,12 +436,15 @@ class DurableFunctionCloudTestRunner:
         while time.time() - start_time < timeout:
             try:
                 execution_dict = await self.lambda_client.get_durable_execution(
-                    DurableExecutionArn=execution_arn
+                    DurableExecutionArn=execution_arn,
+                    IncludeExecutionData=True,
                 )
                 execution = GetDurableExecutionResponse.from_dict(execution_dict)
-            except ClientError as e:
-                error_code = e.response.get("Error", {}).get("Code")
-                if error_code == "ResourceNotFoundException":
+            except Exception as e:
+                if (
+                    _aws_error_code(e, self.lambda_client)
+                    == "ResourceNotFoundException"
+                ):
                     logger.info(
                         "Execution status not available yet for %s; retrying",
                         execution_arn,
@@ -398,9 +452,6 @@ class DurableFunctionCloudTestRunner:
                 else:
                     msg = f"Failed to get execution status: {e}"
                     raise DurableFunctionsTestError(msg) from e
-            except Exception as e:
-                msg = f"Failed to get execution status: {e}"
-                raise DurableFunctionsTestError(msg) from e
             else:
                 # Log status changes
                 if execution.status != last_status:
@@ -486,19 +537,16 @@ class DurableFunctionCloudTestRunner:
                 )
                 if callback_id:
                     return callback_id
-            except ClientError as e:
-                error_code = e.response["Error"]["Code"]
-                # retryable error, the execution may not start yet in async invoke situation
-                if error_code in ["ResourceNotFoundException"]:
-                    pass
-                else:
-                    msg = f"Failed to fetch execution history: {e}"
-                    raise DurableFunctionsTestError(msg) from e
             except DurableFunctionsTestError:
                 raise
             except Exception as e:
-                msg = f"Failed to fetch execution history: {e}"
-                raise DurableFunctionsTestError(msg) from e
+                # Retry while an asynchronously invoked execution is not yet visible.
+                if (
+                    _aws_error_code(e, self.lambda_client)
+                    != "ResourceNotFoundException"
+                ):
+                    msg = f"Failed to fetch execution history: {e}"
+                    raise DurableFunctionsTestError(msg) from e
 
             await asyncio.sleep(self.poll_interval)
 
@@ -519,7 +567,7 @@ class DurableFunctionCloudTestRunner:
             GetDurableExecutionHistoryResponse with typed Event objects
 
         Raises:
-            ClientError: If lambda client encounter error
+            Exception: If the Lambda API client encounters an error
         """
         events = []
         next_marker: str | None = None
@@ -660,6 +708,7 @@ class LambdaInvoker:
             request_id = (
                 headers.get("x-amzn-RequestId")
                 or headers.get("x-amzn-request-id")
+                or headers.get("x-amzn-requestid")
                 or f"local-{uuid4()}"
             )
 
@@ -667,55 +716,55 @@ class LambdaInvoker:
             output = DurableExecutionInvocationOutput.from_dict(response_dict)
             return InvokeResponse(invocation_output=output, request_id=request_id)
 
-        except client.exceptions.ResourceNotFoundException as e:
-            msg = f"Function not found: {function_name}"
-            raise ResourceNotFoundException(msg) from e
-        except client.exceptions.InvalidParameterValueException as e:
-            msg = f"Invalid parameter: {e}"
-            raise InvalidParameterValueException(msg) from e
-        except (
-            client.exceptions.TooManyRequestsException,
-            client.exceptions.ServiceException,
-            client.exceptions.ResourceConflictException,
-            client.exceptions.InvalidRequestContentException,
-            client.exceptions.RequestTooLargeException,
-            client.exceptions.UnsupportedMediaTypeException,
-            client.exceptions.InvalidRuntimeException,
-            client.exceptions.InvalidZipFileException,
-            client.exceptions.ResourceNotReadyException,
-            client.exceptions.SnapStartTimeoutException,
-            client.exceptions.SnapStartNotReadyException,
-            client.exceptions.SnapStartException,
-            client.exceptions.RecursiveInvocationException,
-        ) as e:
-            msg = f"Lambda invocation failed: {e}"
-            raise DurableFunctionsTestError(msg) from e
-        except (
-            client.exceptions.InvalidSecurityGroupIDException,
-            client.exceptions.EC2ThrottledException,
-            client.exceptions.EFSMountConnectivityException,
-            client.exceptions.SubnetIPAddressLimitReachedException,
-            client.exceptions.EC2UnexpectedException,
-            client.exceptions.InvalidSubnetIDException,
-            client.exceptions.EC2AccessDeniedException,
-            client.exceptions.EFSIOException,
-            client.exceptions.ENILimitReachedException,
-            client.exceptions.EFSMountTimeoutException,
-            client.exceptions.EFSMountFailureException,
-        ) as e:
-            msg = f"Lambda infrastructure error: {e}"
-            raise DurableFunctionsTestError(msg) from e
-        except (
-            client.exceptions.KMSAccessDeniedException,
-            client.exceptions.KMSDisabledException,
-            client.exceptions.KMSNotFoundException,
-            client.exceptions.KMSInvalidStateException,
-        ) as e:
-            msg = f"Lambda KMS error: {e}"
-            raise DurableFunctionsTestError(msg) from e
         except Exception as e:
-            # Handle any remaining exceptions, including custom ones like DurableExecutionAlreadyStartedException
-            if "DurableExecutionAlreadyStartedException" in str(type(e)):
+            error_code = _aws_error_code(e, client)
+            if error_code == "ResourceNotFoundException":
+                msg = f"Function not found: {function_name}"
+                raise ResourceNotFoundException(msg) from e
+            if error_code == "InvalidParameterValueException":
+                msg = f"Invalid parameter: {e}"
+                raise InvalidParameterValueException(msg) from e
+            if error_code in {
+                "TooManyRequestsException",
+                "ServiceException",
+                "ResourceConflictException",
+                "InvalidRequestContentException",
+                "RequestTooLargeException",
+                "UnsupportedMediaTypeException",
+                "InvalidRuntimeException",
+                "InvalidZipFileException",
+                "ResourceNotReadyException",
+                "SnapStartTimeoutException",
+                "SnapStartNotReadyException",
+                "SnapStartException",
+                "RecursiveInvocationException",
+            }:
+                msg = f"Lambda invocation failed: {e}"
+                raise DurableFunctionsTestError(msg) from e
+            if error_code in {
+                "InvalidSecurityGroupIDException",
+                "EC2ThrottledException",
+                "EFSMountConnectivityException",
+                "SubnetIPAddressLimitReachedException",
+                "EC2UnexpectedException",
+                "InvalidSubnetIDException",
+                "EC2AccessDeniedException",
+                "EFSIOException",
+                "ENILimitReachedException",
+                "EFSMountTimeoutException",
+                "EFSMountFailureException",
+            }:
+                msg = f"Lambda infrastructure error: {e}"
+                raise DurableFunctionsTestError(msg) from e
+            if error_code in {
+                "KMSAccessDeniedException",
+                "KMSDisabledException",
+                "KMSNotFoundException",
+                "KMSInvalidStateException",
+            }:
+                msg = f"Lambda KMS error: {e}"
+                raise DurableFunctionsTestError(msg) from e
+            if error_code == "DurableExecutionAlreadyStartedException":
                 msg = f"Durable execution already started: {e}"
                 raise DurableFunctionsTestError(msg) from e
             msg = f"Unexpected error during Lambda invocation: {e}"
@@ -724,10 +773,9 @@ class LambdaInvoker:
 
 def create_sync_lambda_client(endpoint_url: str | None, region_name: str) -> Any:
     """Create a sync Lambda client adapted for cloud runner calls."""
-    session = get_session()
     return ThreadedSyncCloudLambdaClient(
-        session.create_client(
-            "lambda",
+        create_default_sync_client(
+            session=get_session(),
             endpoint_url=endpoint_url,
             region_name=region_name,
             config=_LAMBDA_CLIENT_CONFIG,
@@ -737,11 +785,9 @@ def create_sync_lambda_client(endpoint_url: str | None, region_name: str) -> Any
 
 def create_async_lambda_client(endpoint_url: str | None, region_name: str) -> Any:
     """Create an async Lambda client adapted for cloud runner calls."""
-    aiobotocore_session = importlib.import_module("aiobotocore.session")
-    session = aiobotocore_session.get_session()
     return AsyncCloudLambdaClient(
-        session.create_client(
-            "lambda",
+        create_default_async_client(
+            session=get_session(),
             endpoint_url=endpoint_url,
             region_name=region_name,
             config=_LAMBDA_CLIENT_CONFIG,
@@ -750,8 +796,8 @@ def create_async_lambda_client(endpoint_url: str | None, region_name: str) -> An
 
 
 def create_lambda_client(endpoint_url: str | None, region_name: str) -> Any:
-    """Create a Lambda client, preferring aioboto when installed."""
-    if aioboto_is_installed():
+    """Create a Lambda client, preferring HTTPX when installed."""
+    if httpx_is_installed():
         return create_async_lambda_client(endpoint_url, region_name)
     return create_sync_lambda_client(endpoint_url, region_name)
 

@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 
-pytestmark = pytest.mark.aioboto_installed(False)
+pytestmark = pytest.mark.httpx_installed(False)
 
 from async_durable_execution._core.context import get_current_context
 from async_durable_execution import (
