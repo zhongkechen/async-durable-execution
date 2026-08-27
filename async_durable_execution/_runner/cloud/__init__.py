@@ -439,7 +439,8 @@ class DurableFunctionCloudTestRunner:
         while time.time() - start_time < timeout:
             try:
                 execution_dict = await self.lambda_client.get_durable_execution(
-                    DurableExecutionArn=execution_arn
+                    DurableExecutionArn=execution_arn,
+                    IncludeExecutionData=True,
                 )
                 execution = GetDurableExecutionResponse.from_dict(execution_dict)
             except Exception as e:

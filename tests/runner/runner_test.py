@@ -821,6 +821,12 @@ async def test_cloud_runner_run_success(mock_boto3) -> None:
         InvocationType="RequestResponse",
         Payload='"test-input"',
     )
+    mock_client.get_durable_execution.assert_called_once_with(
+        DurableExecutionArn=(
+            "arn:aws:lambda:us-east-1:123456789012:function:test:execution:exec-1"
+        ),
+        IncludeExecutionData=True,
+    )
 
 
 @patch("async_durable_execution._runner.cloud.create_lambda_client")

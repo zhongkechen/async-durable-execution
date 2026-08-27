@@ -5,11 +5,17 @@ from __future__ import annotations
 import datetime
 import json
 from urllib.parse import parse_qs, urlsplit
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
 from botocore.awsrequest import AWSRequest
-from botocore.exceptions import ClientError
+from botocore.config import Config
+from botocore.exceptions import (
+    ClientError,
+    NoCredentialsError,
+    NoRegionError,
+    UnknownEndpointError,
+)
 from botocore.session import Session
 
 from async_durable_execution.__about__ import __version__
@@ -17,6 +23,9 @@ from async_durable_execution._core.aws_http import (
     BotocoreHttpLambdaClient,
     HttpxLambdaClient,
     LambdaHttpRequestFactory,
+    _resolve_max_attempts,
+    create_botocore_http_client,
+    create_httpx_client,
     parse_lambda_response,
 )
 
@@ -91,6 +100,97 @@ def test_state_request_serializes_query_parameters() -> None:
         "MaxItems": ["1000"],
     }
     assert request.body is None
+
+
+def test_get_execution_forwards_include_execution_data() -> None:
+    request = _request_factory().prepare(
+        "GetDurableExecution",
+        {
+            "DurableExecutionArn": "arn/test",
+            "IncludeExecutionData": False,
+        },
+    )
+
+    assert parse_qs(urlsplit(request.url).query) == {"IncludeExecutionData": ["false"]}
+
+
+def test_region_only_resolves_lambda_endpoint() -> None:
+    factory = LambdaHttpRequestFactory(session=_session())
+
+    assert factory.endpoint_url == "https://lambda.us-west-2.amazonaws.com"
+
+
+@patch.dict(
+    "os.environ",
+    {"AWS_ENDPOINT_URL_LAMBDA": "http://localhost:3000"},
+)
+def test_service_endpoint_environment_variable_is_used() -> None:
+    factory = LambdaHttpRequestFactory(session=_session())
+
+    assert factory.endpoint_url == "http://localhost:3000"
+
+
+@patch.dict(
+    "os.environ",
+    {"AWS_ENDPOINT_URL_LAMBDA": "http://localhost:3000"},
+)
+def test_configured_endpoint_can_be_ignored() -> None:
+    session = _session()
+    session.set_config_variable("ignore_configured_endpoint_urls", True)
+
+    factory = LambdaHttpRequestFactory(session=session)
+
+    assert factory.endpoint_url == "https://lambda.us-west-2.amazonaws.com"
+
+
+@patch.dict(
+    "os.environ",
+    {"AWS_DEFAULT_REGION": "", "AWS_REGION": ""},
+)
+def test_missing_region_is_rejected() -> None:
+    session = Session()
+    session.set_credentials("access-key", "secret-key")
+
+    with pytest.raises(NoRegionError):
+        LambdaHttpRequestFactory(session=session)
+
+
+def test_unknown_endpoint_is_rejected() -> None:
+    with patch(
+        "async_durable_execution._core.aws_http.EndpointResolver.construct_endpoint",
+        return_value=None,
+    ):
+        with pytest.raises(UnknownEndpointError):
+            LambdaHttpRequestFactory(session=_session())
+
+
+def test_missing_credentials_are_rejected_when_preparing_request() -> None:
+    session = _session()
+    factory = LambdaHttpRequestFactory(
+        session=session,
+        endpoint_url="https://lambda.us-west-2.amazonaws.com",
+    )
+
+    with patch.object(session, "get_credentials", return_value=None):
+        with pytest.raises(NoCredentialsError):
+            factory.prepare(
+                "GetDurableExecution",
+                {"DurableExecutionArn": "arn"},
+            )
+
+
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        (Config(), 5),
+        (Config(retries={"mode": "standard"}), 3),
+        (Config(retries={"max_attempts": 0}), 1),
+        (Config(retries={"max_attempts": 2}), 3),
+        (Config(retries={"total_max_attempts": 4}), 4),
+    ],
+)
+def test_retry_attempt_configuration(config: Config, expected: int) -> None:
+    assert _resolve_max_attempts(_session(), config) == expected
 
 
 @pytest.mark.parametrize(
@@ -261,6 +361,63 @@ def test_parse_error_response_raises_botocore_client_error() -> None:
     assert error.value.response["ResponseMetadata"]["HTTPStatusCode"] == 400
 
 
+def test_botocore_client_retries_and_reuses_checkpoint_client_token() -> None:
+    request = AWSRequest(
+        method="POST",
+        url="https://example.com",
+        data=b"body",
+    ).prepare()
+    request_factory = Mock()
+    request_factory.prepare.return_value = request
+    http_session = Mock()
+    http_session.send.side_effect = [
+        Mock(
+            status_code=503,
+            headers={"x-amzn-requestid": "first"},
+            content=b'{"message":"busy"}',
+        ),
+        Mock(
+            status_code=200,
+            headers={"x-amzn-requestid": "second"},
+            content=(
+                b'{"CheckpointToken":"next","NewExecutionState":{"Operations":[]}}'
+            ),
+        ),
+    ]
+    client = BotocoreHttpLambdaClient(
+        request_factory=request_factory,
+        http_session=http_session,
+        max_attempts=2,
+    )
+
+    with (
+        patch(
+            "async_durable_execution._core.aws_http.uuid4",
+            return_value="generated-token",
+        ),
+        patch("async_durable_execution._core.aws_http.time.sleep") as sleep,
+    ):
+        result = client.checkpoint_durable_execution(
+            DurableExecutionArn="arn",
+            CheckpointToken="checkpoint",
+            Updates=[],
+        )
+
+    expected_params = {
+        "DurableExecutionArn": "arn",
+        "CheckpointToken": "checkpoint",
+        "Updates": [],
+        "ClientToken": "generated-token",
+    }
+    assert request_factory.prepare.call_args_list == [
+        call("CheckpointDurableExecution", expected_params),
+        call("CheckpointDurableExecution", expected_params),
+    ]
+    sleep.assert_called_once()
+    assert result["CheckpointToken"] == "next"
+    assert result["ResponseMetadata"]["RetryAttempts"] == 1
+
+
 def test_botocore_http_client_sends_prepared_request() -> None:
     request = AWSRequest(
         method="GET",
@@ -294,6 +451,17 @@ def test_botocore_http_client_sends_prepared_request() -> None:
     http_session.close.assert_called_once_with()
 
 
+def test_botocore_factory_applies_configured_retries() -> None:
+    client = create_botocore_http_client(
+        session=_session(),
+        endpoint_url="https://lambda.us-west-2.amazonaws.com",
+        config=Config(retries={"max_attempts": 2}),
+    )
+
+    assert client._max_attempts == 3  # noqa: SLF001
+    client.close()
+
+
 async def test_httpx_client_sends_prepared_request_asynchronously() -> None:
     request = AWSRequest(
         method="POST",
@@ -316,11 +484,18 @@ async def test_httpx_client_sends_prepared_request_asynchronously() -> None:
         http_client=http_client,
     )
 
-    result = await client.checkpoint_durable_execution(CheckpointToken="token")
+    with patch(
+        "async_durable_execution._core.aws_http.uuid4",
+        return_value="generated-token",
+    ):
+        result = await client.checkpoint_durable_execution(CheckpointToken="token")
 
     request_factory.prepare.assert_called_once_with(
         "CheckpointDurableExecution",
-        {"CheckpointToken": "token"},
+        {
+            "CheckpointToken": "token",
+            "ClientToken": "generated-token",
+        },
     )
     http_client.request.assert_awaited_once_with(
         "POST",
@@ -332,3 +507,51 @@ async def test_httpx_client_sends_prepared_request_asynchronously() -> None:
 
     await client.aclose()
     http_client.aclose.assert_awaited_once_with()
+
+
+async def test_httpx_client_retries_transport_errors() -> None:
+    request = AWSRequest(
+        method="GET",
+        url="https://example.com",
+        data=b"",
+    ).prepare()
+    request_factory = Mock()
+    request_factory.prepare.return_value = request
+    response = Mock(
+        status_code=200,
+        headers={"x-amzn-requestid": "request-id"},
+        content=b'{"Operations":[]}',
+    )
+    http_client = Mock()
+    http_client.request = AsyncMock(side_effect=[RuntimeError("temporary"), response])
+    http_client.aclose = AsyncMock()
+    client = HttpxLambdaClient(
+        request_factory=request_factory,
+        http_client=http_client,
+        max_attempts=2,
+    )
+
+    with patch(
+        "async_durable_execution._core.aws_http.asyncio.sleep",
+        new=AsyncMock(),
+    ) as sleep:
+        result = await client.get_durable_execution_state(
+            DurableExecutionArn="arn",
+            CheckpointToken="token",
+        )
+
+    assert http_client.request.await_count == 2
+    sleep.assert_awaited_once()
+    assert result["Operations"] == []
+    assert result["ResponseMetadata"]["RetryAttempts"] == 1
+
+
+async def test_httpx_factory_applies_configured_retries() -> None:
+    client = create_httpx_client(
+        session=_session(),
+        endpoint_url="https://lambda.us-west-2.amazonaws.com",
+        config=Config(retries={"max_attempts": 0}),
+    )
+
+    assert client._max_attempts == 1  # noqa: SLF001
+    await client.aclose()

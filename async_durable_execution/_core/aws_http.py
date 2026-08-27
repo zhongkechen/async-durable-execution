@@ -12,10 +12,13 @@ import asyncio
 import datetime
 import importlib
 import json
+import random
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 from urllib.parse import quote, urlencode
+from uuid import uuid4
 
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSPreparedRequest, AWSRequest
@@ -42,6 +45,19 @@ _INVOKE_API_VERSION = "2015-03-31"
 _DEFAULT_CONNECT_TIMEOUT_SECONDS = 5
 _DEFAULT_READ_TIMEOUT_SECONDS = 50
 _DEFAULT_MAX_POOL_CONNECTIONS = 10
+_DEFAULT_LEGACY_MAX_ATTEMPTS = 5
+_DEFAULT_STANDARD_MAX_ATTEMPTS = 3
+_MAX_RETRY_DELAY_SECONDS = 20.0
+_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504, 509})
+_RETRYABLE_ERROR_CODES = frozenset(
+    {
+        "Throttling",
+        "ThrottlingException",
+        "ThrottledException",
+        "RequestThrottledException",
+        "ProvisionedThroughputExceededException",
+    }
+)
 
 
 class _SyncHttpSession(Protocol):
@@ -182,7 +198,10 @@ def _request_spec(operation_name: str, params: Mapping[str, Any]) -> _RequestSpe
         return _RequestSpec(
             method="GET",
             path=f"/{_DURABLE_API_VERSION}/durable-executions/{execution_arn}",
-            query={},
+            query=_body_params(
+                params,
+                excluded=frozenset({"DurableExecutionArn"}),
+            ),
             headers={},
             body=b"",
         )
@@ -296,6 +315,65 @@ def _resolve_endpoint_url(
         )
     protocols = endpoint.get("protocols") or ["https"]
     return f"{protocols[0]}://{endpoint['hostname']}"
+
+
+def _resolve_max_attempts(session: Session, config: Config) -> int:
+    config_values = cast("Any", config)
+    configured_retries = config_values.retries or {}
+
+    total_max_attempts = configured_retries.get("total_max_attempts")
+    if total_max_attempts is not None:
+        return max(1, int(total_max_attempts))
+
+    max_attempts = configured_retries.get("max_attempts")
+    if max_attempts is not None:
+        return max(1, int(max_attempts) + 1)
+
+    session_max_attempts = session.get_config_variable("max_attempts")
+    if session_max_attempts is not None:
+        return max(1, int(session_max_attempts))
+
+    retry_mode = (
+        configured_retries.get("mode")
+        or session.get_config_variable("retry_mode")
+        or "legacy"
+    )
+    if retry_mode in {"standard", "adaptive"}:
+        return _DEFAULT_STANDARD_MAX_ATTEMPTS
+    return _DEFAULT_LEGACY_MAX_ATTEMPTS
+
+
+def _retry_delay_seconds(retry_index: int) -> float:
+    exponential_ceiling = min(2**retry_index, _MAX_RETRY_DELAY_SECONDS)
+    return random.random() * exponential_ceiling  # noqa: S311
+
+
+def _response_is_retryable(
+    *,
+    status_code: int,
+    headers: Mapping[str, Any],
+    content: bytes,
+) -> bool:
+    if status_code in _RETRYABLE_STATUS_CODES:
+        return True
+    if status_code < 400:
+        return False
+
+    normalized_headers = _normalized_headers(headers)
+    try:
+        body = _decode_json_body(content)
+    except (UnicodeDecodeError, ValueError, json.JSONDecodeError):
+        body = {}
+    return _error_code(normalized_headers, body) in _RETRYABLE_ERROR_CODES
+
+
+def _checkpoint_params_with_client_token(
+    params: Mapping[str, Any],
+) -> dict[str, Any]:
+    resolved = dict(params)
+    if resolved.get("ClientToken") is None:
+        resolved["ClientToken"] = str(uuid4())
+    return resolved
 
 
 class LambdaHttpRequestFactory:
@@ -421,10 +499,12 @@ def parse_lambda_response(
     status_code: int,
     headers: Mapping[str, Any],
     content: bytes,
+    retry_attempts: int = 0,
 ) -> dict[str, Any]:
     """Parse a Lambda REST response into the established AWS API mapping."""
 
     metadata = _response_metadata(status_code, headers)
+    metadata["RetryAttempts"] = retry_attempts
     normalized_headers = cast(dict[str, str], metadata["HTTPHeaders"])
 
     if status_code < 200 or status_code >= 300:
@@ -477,22 +557,47 @@ class BotocoreHttpLambdaClient:
         *,
         request_factory: LambdaHttpRequestFactory,
         http_session: _SyncHttpSession,
+        max_attempts: int = 1,
     ) -> None:
         self._request_factory = request_factory
         self._http_session = http_session
+        self._max_attempts = max_attempts
 
     def _call(self, operation_name: str, **kwargs: Any) -> dict[str, Any]:
-        request = self._request_factory.prepare(operation_name, kwargs)
-        response = self._http_session.send(request)
-        return parse_lambda_response(
-            operation_name=operation_name,
-            status_code=response.status_code,
-            headers=response.headers,
-            content=response.content,
-        )
+        for attempt in range(self._max_attempts):
+            request = self._request_factory.prepare(operation_name, kwargs)
+            try:
+                response = self._http_session.send(request)
+            except Exception:
+                if attempt + 1 >= self._max_attempts:
+                    raise
+                time.sleep(_retry_delay_seconds(attempt))
+                continue
+
+            if attempt + 1 < self._max_attempts and _response_is_retryable(
+                status_code=response.status_code,
+                headers=response.headers,
+                content=response.content,
+            ):
+                time.sleep(_retry_delay_seconds(attempt))
+                continue
+
+            return parse_lambda_response(
+                operation_name=operation_name,
+                status_code=response.status_code,
+                headers=response.headers,
+                content=response.content,
+                retry_attempts=attempt,
+            )
+
+        msg = "Lambda HTTP retry loop exited without a response"
+        raise RuntimeError(msg)
 
     def checkpoint_durable_execution(self, **kwargs: Any) -> dict[str, Any]:
-        return self._call("CheckpointDurableExecution", **kwargs)
+        return self._call(
+            "CheckpointDurableExecution",
+            **_checkpoint_params_with_client_token(kwargs),
+        )
 
     def get_durable_execution_state(self, **kwargs: Any) -> dict[str, Any]:
         return self._call("GetDurableExecutionState", **kwargs)
@@ -529,31 +634,56 @@ class HttpxLambdaClient:
         *,
         request_factory: LambdaHttpRequestFactory,
         http_client: _AsyncHttpClient,
+        max_attempts: int = 1,
     ) -> None:
         self._request_factory = request_factory
         self._http_client = http_client
+        self._max_attempts = max_attempts
 
     async def _call(self, operation_name: str, **kwargs: Any) -> dict[str, Any]:
-        request = await asyncio.to_thread(
-            self._request_factory.prepare,
-            operation_name,
-            kwargs,
-        )
-        response = await self._http_client.request(
-            request.method,
-            request.url,
-            content=cast(bytes, request.body or b""),
-            headers=cast(Mapping[str, str], request.headers),
-        )
-        return parse_lambda_response(
-            operation_name=operation_name,
-            status_code=response.status_code,
-            headers=response.headers,
-            content=response.content,
-        )
+        for attempt in range(self._max_attempts):
+            request = await asyncio.to_thread(
+                self._request_factory.prepare,
+                operation_name,
+                kwargs,
+            )
+            try:
+                response = await self._http_client.request(
+                    request.method,
+                    request.url,
+                    content=cast(bytes, request.body or b""),
+                    headers=cast(Mapping[str, str], request.headers),
+                )
+            except Exception:
+                if attempt + 1 >= self._max_attempts:
+                    raise
+                await asyncio.sleep(_retry_delay_seconds(attempt))
+                continue
+
+            if attempt + 1 < self._max_attempts and _response_is_retryable(
+                status_code=response.status_code,
+                headers=response.headers,
+                content=response.content,
+            ):
+                await asyncio.sleep(_retry_delay_seconds(attempt))
+                continue
+
+            return parse_lambda_response(
+                operation_name=operation_name,
+                status_code=response.status_code,
+                headers=response.headers,
+                content=response.content,
+                retry_attempts=attempt,
+            )
+
+        msg = "Lambda HTTP retry loop exited without a response"
+        raise RuntimeError(msg)
 
     async def checkpoint_durable_execution(self, **kwargs: Any) -> dict[str, Any]:
-        return await self._call("CheckpointDurableExecution", **kwargs)
+        return await self._call(
+            "CheckpointDurableExecution",
+            **_checkpoint_params_with_client_token(kwargs),
+        )
 
     async def get_durable_execution_state(self, **kwargs: Any) -> dict[str, Any]:
         return await self._call("GetDurableExecutionState", **kwargs)
@@ -626,6 +756,7 @@ def create_botocore_http_client(
     return BotocoreHttpLambdaClient(
         request_factory=request_factory,
         http_session=http_session,
+        max_attempts=_resolve_max_attempts(resolved_session, resolved_config),
     )
 
 
@@ -676,6 +807,7 @@ def create_httpx_client(
     return HttpxLambdaClient(
         request_factory=request_factory,
         http_client=http_client,
+        max_attempts=_resolve_max_attempts(resolved_session, resolved_config),
     )
 
 
