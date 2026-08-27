@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import json
+from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 from unittest.mock import AsyncMock, Mock, call, patch
 
@@ -235,17 +236,32 @@ def test_retry_attempt_configuration(config: Config, expected: int) -> None:
     assert _resolve_max_attempts(_session(), config) == expected
 
 
-def test_adaptive_retry_mode_is_rejected() -> None:
+@pytest.mark.parametrize(
+    "retries",
+    [
+        {"mode": "adaptive"},
+        {"mode": "adaptive", "max_attempts": 2},
+        {"mode": "adaptive", "total_max_attempts": 3},
+    ],
+)
+def test_adaptive_retry_mode_is_rejected(retries: dict[str, object]) -> None:
     with pytest.raises(
         InvalidRetryConfigurationError,
         match="mode=adaptive",
     ):
-        _resolve_max_attempts(_session(), Config(retries={"mode": "adaptive"}))
+        _resolve_max_attempts(
+            _session(),
+            Config(retries=cast("Any", retries)),
+        )
 
 
-def test_unknown_retry_mode_is_rejected() -> None:
+@pytest.mark.parametrize("attempt_key", [None, "max_attempts", "total_max_attempts"])
+def test_unknown_retry_mode_is_rejected(attempt_key: str | None) -> None:
     config = Config()
-    setattr(config, "retries", {"mode": "future"})
+    retries: dict[str, object] = {"mode": "future"}
+    if attempt_key is not None:
+        retries[attempt_key] = 2
+    setattr(config, "retries", retries)
 
     with pytest.raises(InvalidRetryModeError, match="future"):
         _resolve_max_attempts(_session(), config)
@@ -520,6 +536,26 @@ def test_botocore_factory_applies_configured_retries() -> None:
     client.close()
 
 
+@patch("async_durable_execution._core.aws_http.URLLib3Session")
+@patch("async_durable_execution._core.aws_http.get_environ_proxies")
+def test_botocore_factory_preserves_disabled_proxies(
+    get_environ_proxies,
+    http_session_class,
+) -> None:
+    client = create_botocore_http_client(
+        session=_session(),
+        endpoint_url="https://lambda.us-west-2.amazonaws.com",
+        config=Config(
+            proxies={},
+            retries={"max_attempts": 0},
+        ),
+    )
+
+    get_environ_proxies.assert_not_called()
+    assert http_session_class.call_args.kwargs["proxies"] == {}
+    client.close()
+
+
 def test_botocore_factory_uses_config_region() -> None:
     session = Session()
     session.set_credentials("access-key", "secret-key")
@@ -675,6 +711,42 @@ async def test_httpx_factory_applies_configured_retries() -> None:
     )
 
     assert client._max_attempts == 1  # noqa: SLF001
+    await client.aclose()
+
+
+@pytest.mark.parametrize(
+    ("proxies", "expected_options"),
+    [
+        ({}, {"trust_env": False}),
+        (
+            {"https": "http://proxy.example:8080"},
+            {
+                "trust_env": False,
+                "proxy": "http://proxy.example:8080",
+            },
+        ),
+    ],
+)
+async def test_httpx_factory_honors_configured_proxies(
+    proxies: dict[str, str],
+    expected_options: dict[str, object],
+) -> None:
+    http_client = Mock()
+    http_client.aclose = AsyncMock()
+    with patch("httpx.AsyncClient", return_value=http_client) as async_client:
+        client = create_httpx_client(
+            session=_session(),
+            endpoint_url="https://lambda.us-west-2.amazonaws.com",
+            config=Config(
+                proxies=proxies,
+                retries={"max_attempts": 0},
+            ),
+        )
+
+    for option, value in expected_options.items():
+        assert async_client.call_args.kwargs[option] == value
+    if "proxy" not in expected_options:
+        assert "proxy" not in async_client.call_args.kwargs
     await client.aclose()
 
 

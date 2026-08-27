@@ -17,7 +17,7 @@ import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, urlencode, urlsplit
 from uuid import uuid4
 
 from botocore.auth import SigV4Auth
@@ -369,18 +369,6 @@ def _resolve_max_attempts(session: Session, config: Config) -> int:
     config_values = cast("Any", config)
     configured_retries = config_values.retries or {}
 
-    total_max_attempts = configured_retries.get("total_max_attempts")
-    if total_max_attempts is not None:
-        return max(1, int(total_max_attempts))
-
-    max_attempts = configured_retries.get("max_attempts")
-    if max_attempts is not None:
-        return max(1, int(max_attempts) + 1)
-
-    session_max_attempts = session.get_config_variable("max_attempts")
-    if session_max_attempts is not None:
-        return max(1, int(session_max_attempts))
-
     retry_mode = (
         configured_retries.get("mode")
         or session.get_config_variable("retry_mode")
@@ -396,6 +384,19 @@ def _resolve_max_attempts(session: Session, config: Config) -> int:
             retry_config_option="mode=adaptive",
             valid_options="mode=legacy, mode=standard",
         )
+
+    total_max_attempts = configured_retries.get("total_max_attempts")
+    if total_max_attempts is not None:
+        return max(1, int(total_max_attempts))
+
+    max_attempts = configured_retries.get("max_attempts")
+    if max_attempts is not None:
+        return max(1, int(max_attempts) + 1)
+
+    session_max_attempts = session.get_config_variable("max_attempts")
+    if session_max_attempts is not None:
+        return max(1, int(session_max_attempts))
+
     if retry_mode == "standard":
         return _DEFAULT_STANDARD_MAX_ATTEMPTS
     return _DEFAULT_LEGACY_MAX_ATTEMPTS
@@ -814,10 +815,15 @@ def create_botocore_http_client(
     )
     ca_bundle = resolved_session.get_config_variable("ca_bundle")
     verify: bool | str = ca_bundle if isinstance(ca_bundle, str) else True
+    configured_proxies = config_values.proxies
+    proxies = (
+        get_environ_proxies(request_factory.endpoint_url)
+        if configured_proxies is None
+        else configured_proxies
+    )
     http_session = cast("Any", URLLib3Session)(
         verify=verify,
-        proxies=config_values.proxies
-        or get_environ_proxies(request_factory.endpoint_url),
+        proxies=proxies,
         timeout=(
             config_values.connect_timeout,
             config_values.read_timeout,
@@ -866,6 +872,15 @@ def create_httpx_client(
         import ssl
 
         verify = ssl.create_default_context(cafile=ca_bundle)
+    configured_proxies = config_values.proxies
+    httpx_options: dict[str, Any] = {
+        "trust_env": configured_proxies is None,
+    }
+    if configured_proxies:
+        endpoint_scheme = urlsplit(request_factory.endpoint_url).scheme
+        proxy_url = configured_proxies.get(endpoint_scheme)
+        if proxy_url:
+            httpx_options["proxy"] = proxy_url
     http_client = httpx.AsyncClient(
         timeout=httpx.Timeout(
             config_values.read_timeout,
@@ -881,6 +896,7 @@ def create_httpx_client(
         ),
         verify=verify,
         follow_redirects=False,
+        **httpx_options,
     )
     return HttpxLambdaClient(
         request_factory=request_factory,
