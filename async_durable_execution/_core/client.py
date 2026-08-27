@@ -71,9 +71,13 @@ def _create_client_config() -> Config:
     )
 
 
-def aioboto_is_installed() -> bool:
-    """Return whether the optional aioboto dependency is available."""
+def httpx_is_installed() -> bool:
+    """Return whether the optional HTTPX transport is available."""
     return importlib.util.find_spec("httpx") is not None
+
+
+# Backward-compatible internal alias for integrations that imported the old name.
+aioboto_is_installed = httpx_is_installed
 
 
 def create_default_sync_client(
@@ -109,8 +113,8 @@ def create_default_async_client(
 
 
 def create_default_client() -> LambdaApiClient | AsyncLambdaApiClient:
-    """Create the default Lambda client, preferring async when aioboto is installed."""
-    if aioboto_is_installed():
+    """Create the default Lambda client, preferring async when HTTPX is installed."""
+    if httpx_is_installed():
         return create_default_async_client()
     return create_default_sync_client()
 

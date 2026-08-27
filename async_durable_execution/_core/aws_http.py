@@ -3,7 +3,7 @@
 The clients in this module deliberately bypass botocore's generated Lambda
 service model. Botocore remains responsible for credential discovery, endpoint
 metadata, SigV4 signing, and the synchronous HTTP transport. The optional
-``aioboto`` extra supplies HTTPX as the asynchronous transport.
+``httpx`` extra supplies HTTPX as the asynchronous transport.
 """
 
 from __future__ import annotations

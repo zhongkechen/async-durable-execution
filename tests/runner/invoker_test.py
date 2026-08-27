@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 
 
-pytestmark = pytest.mark.aioboto_installed(False)
+pytestmark = pytest.mark.httpx_installed(False)
 
 from async_durable_execution import (
     DurableContext,
@@ -663,13 +663,13 @@ def test_create_lambda_client_uses_configured_timeout(
 
 @patch("async_durable_execution._runner.cloud.create_default_async_client")
 @patch("async_durable_execution._runner.cloud.get_session")
-def test_create_lambda_client_prefers_async_when_aioboto_installed(
+def test_create_lambda_client_prefers_async_when_httpx_installed(
     mock_get_session,
     mock_create_client,
     monkeypatch,
 ) -> None:
-    """The aioboto extra selects the model-free HTTPX client."""
-    monkeypatch.setattr(cloud_module, "aioboto_is_installed", lambda: True)
+    """The HTTPX extra selects the model-free HTTPX client."""
+    monkeypatch.setattr(cloud_module, "httpx_is_installed", lambda: True)
     mock_client = MagicMock()
     mock_create_client.return_value = mock_client
 

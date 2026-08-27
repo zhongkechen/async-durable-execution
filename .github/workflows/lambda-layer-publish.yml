@@ -54,7 +54,7 @@ jobs:
         layer:
           - artifact_name: async-durable-execution-layer
             python_version: "3.11"
-            sdk_source: ".[aioboto]"
+            sdk_source: ".[httpx]"
             zip_name: async-durable-execution-layer.zip
 
     steps:

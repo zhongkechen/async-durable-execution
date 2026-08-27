@@ -45,6 +45,7 @@ from async_durable_execution._core.client import (
     AsyncLambdaClient,
     ThreadedSyncLambdaClient,
     aioboto_is_installed,
+    httpx_is_installed,
     create_default_async_client,
     create_default_client,
     create_default_service_client,
@@ -464,9 +465,9 @@ async def test_create_default_sync_client_builds_lambda_client_with_expected_con
 
 
 @patch("async_durable_execution._core.client.create_default_async_client")
-@patch("async_durable_execution._core.client.aioboto_is_installed", return_value=True)
-async def test_create_default_client_uses_async_client_when_aioboto_is_installed(
-    _mock_aioboto_is_installed,
+@patch("async_durable_execution._core.client.httpx_is_installed", return_value=True)
+async def test_create_default_client_uses_async_client_when_httpx_is_installed(
+    _mock_httpx_is_installed,
     mock_create_default_async_client,
 ) -> None:
     """Test create_default_client prefers the async Lambda client when available."""
@@ -480,9 +481,9 @@ async def test_create_default_client_uses_async_client_when_aioboto_is_installed
 
 
 @patch("async_durable_execution._core.client.create_default_sync_client")
-@patch("async_durable_execution._core.client.aioboto_is_installed", return_value=False)
-async def test_create_default_client_uses_sync_client_when_aioboto_is_missing(
-    _mock_aioboto_is_installed,
+@patch("async_durable_execution._core.client.httpx_is_installed", return_value=False)
+async def test_create_default_client_uses_sync_client_when_httpx_is_missing(
+    _mock_httpx_is_installed,
     mock_create_default_sync_client,
 ) -> None:
     """Test create_default_client falls back to the sync Lambda client."""
@@ -601,24 +602,28 @@ def test_lambda_api_client_is_async_detects_sync_and_async_methods() -> None:
     ("find_spec_result", "expected"), [(object(), True), (None, False)]
 )
 @patch("async_durable_execution._core.client.importlib.util.find_spec")
-def test_aioboto_is_installed_checks_for_httpx(
+def test_httpx_is_installed_checks_for_httpx(
     mock_find_spec,
     find_spec_result,
     expected,
 ) -> None:
     mock_find_spec.return_value = find_spec_result
 
-    assert aioboto_is_installed() is expected
+    assert httpx_is_installed() is expected
     mock_find_spec.assert_called_once_with("httpx")
 
 
+def test_aioboto_install_check_remains_compatibility_alias() -> None:
+    assert aioboto_is_installed is httpx_is_installed
+
+
 @patch("async_durable_execution._core.client.create_default_client")
-@patch("async_durable_execution._core.client.aioboto_is_installed", return_value=True)
-async def test_create_default_service_client_uses_aioboto_when_installed(
-    _mock_aioboto_is_installed,
+@patch("async_durable_execution._core.client.httpx_is_installed", return_value=True)
+async def test_create_default_service_client_uses_httpx_when_installed(
+    _mock_httpx_is_installed,
     mock_create_default_client,
 ) -> None:
-    """Test create_default_service_client uses aioboto by default when installed."""
+    """Test create_default_service_client uses HTTPX by default when installed."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution = AsyncMock()
     mock_create_default_client.return_value = mock_client
@@ -630,9 +635,9 @@ async def test_create_default_service_client_uses_aioboto_when_installed(
     mock_create_default_client.assert_called_once_with()
 
 
-@patch("async_durable_execution._core.client.aioboto_is_installed", return_value=True)
+@patch("async_durable_execution._core.client.httpx_is_installed", return_value=True)
 async def test_create_default_service_client_uses_explicit_botocore_client(
-    _mock_aioboto_is_installed,
+    _mock_httpx_is_installed,
 ) -> None:
     """Test explicit botocore clients keep using the sync adapter."""
     mock_client = Mock()
@@ -644,12 +649,12 @@ async def test_create_default_service_client_uses_explicit_botocore_client(
 
 
 @patch("async_durable_execution._core.client.create_default_client")
-@patch("async_durable_execution._core.client.aioboto_is_installed", return_value=False)
-async def test_create_default_service_client_uses_sync_client_when_aioboto_missing(
-    _mock_aioboto_is_installed,
+@patch("async_durable_execution._core.client.httpx_is_installed", return_value=False)
+async def test_create_default_service_client_uses_sync_client_when_httpx_missing(
+    _mock_httpx_is_installed,
     mock_create_default_client,
 ) -> None:
-    """Test default service client falls back to botocore when aioboto is missing."""
+    """Test default service client falls back to botocore when HTTPX is missing."""
     mock_client = Mock()
     mock_create_default_client.return_value = mock_client
 
@@ -660,9 +665,9 @@ async def test_create_default_service_client_uses_sync_client_when_aioboto_missi
     mock_create_default_client.assert_called_once_with()
 
 
-@patch("async_durable_execution._core.client.aioboto_is_installed", return_value=False)
+@patch("async_durable_execution._core.client.httpx_is_installed", return_value=False)
 async def test_create_default_service_client_uses_explicit_async_client(
-    _mock_aioboto_is_installed,
+    _mock_httpx_is_installed,
 ) -> None:
     """Test explicit async Lambda clients use the async adapter."""
     mock_client = Mock()

@@ -14,12 +14,14 @@ This guide creates and locally tests a durable order workflow. You need Python
 === "Async Lambda client"
 
     ```console
-    pip install "async-durable-execution[aioboto]"
+    pip install "async-durable-execution[httpx]"
     ```
 
-    The `aioboto` extra installs HTTPX for asynchronous model-free Lambda REST
+    The `httpx` extra installs HTTPX for asynchronous model-free Lambda REST
     calls. Without it, the SDK sends the same signed requests with botocore's
     synchronous HTTP transport through an async adapter.
+
+    The legacy `aioboto` extra remains a backward-compatible alias for `httpx`.
 
 ## Create a Workflow
 

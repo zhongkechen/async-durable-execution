@@ -34,6 +34,8 @@ classifiers = [
 dependencies = ["botocore>=1.42.90,<1.43.1"]
 
 [project.optional-dependencies]
+httpx = ["httpx>=0.28.1,<1"]
+# Backward-compatible alias for releases that documented the old extra name.
 aioboto = ["httpx>=0.28.1,<1"]
 typing = ["botocore-stubs>=1.42.40,<1.43.0"]
 
@@ -60,7 +62,7 @@ packages = ["async_durable_execution"]
 "NOTICE" = "NOTICE"
 
 [tool.hatch.envs.test]
-features = ["aioboto"]
+features = ["httpx"]
 dependencies = [
   "coverage[toml]",
   "mypy>=1.0.0",
@@ -92,7 +94,7 @@ testpaths = [
     "scripts/test_scripts",
 ]
 markers = [
-  "aioboto_installed(value): override whether tests see HTTPX as installed",
+  "httpx_installed(value): override whether tests see HTTPX as installed",
 ]
 asyncio_mode = "auto"
 
@@ -135,13 +137,13 @@ dependencies = [
 test = "python scripts/run_pypi_example_tests.py {args}"
 
 [tool.hatch.envs.examples]
-features = ["aioboto"]
+features = ["httpx"]
 
 [tool.hatch.envs.examples.scripts]
 pip = "python -m pip {args}"
 generate-sam-template = "python scripts/generate_sam_template.py {args}"
 build = "python scripts/build_examples.py"
-build-layer = "python scripts/build_layer.py --sdk-source '.[aioboto]' --output dist/async-durable-execution-layer.zip {args}"
+build-layer = "python scripts/build_layer.py --sdk-source '.[httpx]' --output dist/async-durable-execution-layer.zip {args}"
 clean = "rm -rf build/lambda .aws-sam template.generated.json dist"
 
 [tool.hatch.envs.conformance.scripts]

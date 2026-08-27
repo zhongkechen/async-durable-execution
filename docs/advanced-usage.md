@@ -411,12 +411,14 @@ installed dependencies. Botocore supplies AWS credential resolution, endpoint
 metadata, and SigV4 signing in both modes; the generated botocore Lambda
 service model is not loaded.
 
-With the optional `aioboto` extra, the SDK installs HTTPX and creates an async
+With the optional `httpx` extra, the SDK installs HTTPX and creates an async
 Lambda client by default:
 
 ```console
-pip install "async-durable-execution[aioboto]"
+pip install "async-durable-execution[httpx]"
 ```
+
+The previous `aioboto` extra remains available as a backward-compatible alias.
 
 Without the extra, the SDK uses botocore's synchronous HTTP session through a
 threaded async adapter.
@@ -452,7 +454,7 @@ hatch run python scripts/build_layer.py \
 ```
 
 You can also use a prebuilt layer published by GitHub Actions. The layer
-includes the `aioboto` extra and supports Python 3.10 through 3.15. The layer
+includes the `httpx` extra and supports Python 3.10 through 3.15. The layer
 ARNs are shown in the summary of the [Lambda layer publish workflow](https://github.com/zhongkechen/async-durable-execution/actions/workflows/lambda-layer-publish.yml).
 
 Publish the zip as an `AWS::Serverless::LayerVersion` or `AWS::Lambda::LayerVersion`, then add the layer ARN to Python durable functions.

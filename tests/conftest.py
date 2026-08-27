@@ -15,13 +15,13 @@ def default_to_async_lambda_client(
     monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
 ) -> None:
     """Keep tests deterministic when optional async dependencies are missing."""
-    marker = request.node.get_closest_marker("aioboto_installed")
+    marker = request.node.get_closest_marker("httpx_installed")
     installed = True if marker is None else bool(marker.args[0])
     monkeypatch.setattr(
-        "async_durable_execution._core.client.aioboto_is_installed", lambda: installed
+        "async_durable_execution._core.client.httpx_is_installed", lambda: installed
     )
     monkeypatch.setattr(
-        "async_durable_execution._runner.cloud.aioboto_is_installed",
+        "async_durable_execution._runner.cloud.httpx_is_installed",
         lambda: installed,
     )
 

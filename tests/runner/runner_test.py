@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, Mock, call, patch
 import pytest
 
 
-pytestmark = pytest.mark.aioboto_installed(False)
+pytestmark = pytest.mark.httpx_installed(False)
 
 from async_durable_execution import (
     DurableFunctionCloudTestRunner,

@@ -58,7 +58,7 @@ The workflow runs on the `release: [published]` event, so it fires whenever a re
 
 Creating a GitHub Release also triggers the [`lambda-layer-publish.yml`](.github/workflows/lambda-layer-publish.yml) workflow automatically. The workflow:
 
-1. **Builds** a Lambda layer zip from the release tag with the `aioboto` HTTPX extra.
+1. **Builds** a Lambda layer zip from the release tag with the `httpx` extra.
 2. **Discovers** all enabled commercial and China AWS Regions in the publishing accounts, unless Regions are provided explicitly.
 3. **Publishes** the layer for compatible runtimes `python3.10` through `python3.15`.
 4. **Shares** each layer version with the account ID configured in the `AWS_ACCOUNT_ID` secret, with the China account ID configured in `AWS_ACCOUNT_ID_CN` for China Regions, with principals entered in the manual workflow dispatch form, or with principals configured in `LAMBDA_LAYER_SHARE_PRINCIPALS`.

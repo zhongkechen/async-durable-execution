@@ -5,6 +5,7 @@ from .client import (
     aioboto_is_installed,
     create_default_async_client,
     create_default_sync_client,
+    httpx_is_installed,
 )
 from .config import (
     Duration,

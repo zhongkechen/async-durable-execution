@@ -15,9 +15,9 @@ from ..._core import (
     DurableExecutionInvocationInput,
     DurableExecutionInvocationOutput,
     ErrorObject,
-    aioboto_is_installed,
     create_default_async_client,
     create_default_sync_client,
+    httpx_is_installed,
 )
 from ..exceptions import (
     DurableFunctionsTestError,
@@ -796,8 +796,8 @@ def create_async_lambda_client(endpoint_url: str | None, region_name: str) -> An
 
 
 def create_lambda_client(endpoint_url: str | None, region_name: str) -> Any:
-    """Create a Lambda client, preferring aioboto when installed."""
-    if aioboto_is_installed():
+    """Create a Lambda client, preferring HTTPX when installed."""
+    if httpx_is_installed():
         return create_async_lambda_client(endpoint_url, region_name)
     return create_sync_lambda_client(endpoint_url, region_name)
 
