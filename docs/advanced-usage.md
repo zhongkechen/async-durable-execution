@@ -421,6 +421,11 @@ pip install "async-durable-execution[aioboto]"
 Without the extra, the SDK uses botocore's synchronous HTTP session through a
 threaded async adapter.
 
+Both transports honor botocore's `legacy` and `standard` retry counts while
+reusing one checkpoint idempotency token across attempts. The model-free
+transport rejects `adaptive` retry mode because it cannot preserve botocore's
+client-side adaptive rate limiter without using the generated client stack.
+
 Explicitly provided Lambda API clients are detected as sync or async and wrapped accordingly. Code that must force the sync `botocore` client can create one explicitly and pass it to the durable handler:
 
 ```python

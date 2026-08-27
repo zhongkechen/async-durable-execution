@@ -12,6 +12,8 @@ from botocore.awsrequest import AWSRequest
 from botocore.config import Config
 from botocore.exceptions import (
     ClientError,
+    InvalidRetryConfigurationError,
+    InvalidRetryModeError,
     NoCredentialsError,
     NoRegionError,
     UnknownEndpointError,
@@ -120,6 +122,46 @@ def test_region_only_resolves_lambda_endpoint() -> None:
     assert factory.endpoint_url == "https://lambda.us-west-2.amazonaws.com"
 
 
+@pytest.mark.parametrize("region_name", ["fips-us-west-2", "us-west-2-fips"])
+@pytest.mark.parametrize("endpoint_url", [None, "https://example.com"])
+def test_legacy_fips_region_uses_endpoint_signing_scope(
+    region_name: str,
+    endpoint_url: str | None,
+) -> None:
+    session = Session()
+    session.set_config_variable("region", region_name)
+    session.set_credentials("access-key", "secret-key")
+
+    factory = LambdaHttpRequestFactory(
+        session=session,
+        endpoint_url=endpoint_url,
+    )
+    request = factory.prepare(
+        "GetDurableExecution",
+        {"DurableExecutionArn": "arn"},
+    )
+
+    assert factory.region_name == "us-west-2"
+    assert factory.endpoint_url == (
+        endpoint_url or "https://lambda-fips.us-west-2.amazonaws.com"
+    )
+    assert "/us-west-2/lambda/aws4_request" in request.headers["Authorization"]
+
+
+def test_legacy_fips_region_combines_with_dualstack() -> None:
+    session = Session()
+    session.set_config_variable("region", "fips-us-west-2")
+    session.set_credentials("access-key", "secret-key")
+
+    factory = LambdaHttpRequestFactory(
+        session=session,
+        use_dualstack_endpoint=True,
+    )
+
+    assert factory.region_name == "us-west-2"
+    assert factory.endpoint_url == "https://lambda-fips.us-west-2.api.aws"
+
+
 @patch.dict(
     "os.environ",
     {"AWS_ENDPOINT_URL_LAMBDA": "http://localhost:3000"},
@@ -191,6 +233,22 @@ def test_missing_credentials_are_rejected_when_preparing_request() -> None:
 )
 def test_retry_attempt_configuration(config: Config, expected: int) -> None:
     assert _resolve_max_attempts(_session(), config) == expected
+
+
+def test_adaptive_retry_mode_is_rejected() -> None:
+    with pytest.raises(
+        InvalidRetryConfigurationError,
+        match="mode=adaptive",
+    ):
+        _resolve_max_attempts(_session(), Config(retries={"mode": "adaptive"}))
+
+
+def test_unknown_retry_mode_is_rejected() -> None:
+    config = Config()
+    setattr(config, "retries", {"mode": "future"})
+
+    with pytest.raises(InvalidRetryModeError, match="future"):
+        _resolve_max_attempts(_session(), config)
 
 
 @pytest.mark.parametrize(
@@ -503,6 +561,7 @@ def test_botocore_factory_uses_config_endpoint_variant(
     )
 
     assert client._request_factory.endpoint_url == expected_endpoint  # noqa: SLF001
+    assert client._request_factory.region_name == "us-west-2"  # noqa: SLF001
     client.close()
 
 

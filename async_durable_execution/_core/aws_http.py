@@ -26,6 +26,8 @@ from botocore.config import Config
 from botocore.configprovider import ConfiguredEndpointProvider
 from botocore.exceptions import (
     ClientError,
+    InvalidRetryConfigurationError,
+    InvalidRetryModeError,
     NoCredentialsError,
     NoRegionError,
     UnknownEndpointError,
@@ -86,6 +88,13 @@ class _RequestSpec:
     query: Mapping[str, Any]
     headers: Mapping[str, str]
     body: bytes
+
+
+@dataclass(frozen=True)
+class _EndpointResolution:
+    endpoint_url: str
+    signing_region: str
+    signing_name: str
 
 
 def _quote_path_value(value: Any) -> str:
@@ -297,7 +306,15 @@ def _resolve_region(session: Session, region_name: str | None) -> str:
     return cast(str, resolved_region)
 
 
-def _resolve_endpoint_url(
+def _normalize_fips_region(region_name: str) -> tuple[str, bool]:
+    if region_name.startswith("fips-"):
+        return region_name.removeprefix("fips-"), True
+    if region_name.endswith("-fips"):
+        return region_name.removesuffix("-fips"), True
+    return region_name, False
+
+
+def _resolve_endpoint(
     session: Session,
     *,
     region_name: str,
@@ -305,13 +322,11 @@ def _resolve_endpoint_url(
     use_dualstack_endpoint: bool | None = None,
     use_fips_endpoint: bool | None = None,
     ignore_configured_endpoint_urls: bool | None = None,
-) -> str:
+) -> _EndpointResolution:
     resolved_endpoint = endpoint_url or _configured_endpoint_url(
         session,
         ignore_configured_endpoint_urls=ignore_configured_endpoint_urls,
     )
-    if resolved_endpoint:
-        return resolved_endpoint.rstrip("/")
 
     if use_dualstack_endpoint is None:
         use_dualstack_endpoint = ensure_boolean(
@@ -327,13 +342,27 @@ def _resolve_endpoint_url(
         use_dualstack_endpoint=use_dualstack_endpoint,
         use_fips_endpoint=use_fips_endpoint,
     )
-    if endpoint is None:
+    if endpoint is None and not resolved_endpoint:
         raise UnknownEndpointError(
             service_name=_LAMBDA_SERVICE_NAME,
             region_name=region_name,
         )
-    protocols = endpoint.get("protocols") or ["https"]
-    return f"{protocols[0]}://{endpoint['hostname']}"
+
+    credential_scope = endpoint.get("credentialScope", {}) if endpoint else {}
+    signing_region = credential_scope.get("region", region_name)
+    signing_name = credential_scope.get("service", _LAMBDA_SERVICE_NAME)
+    if resolved_endpoint:
+        resolved_url = resolved_endpoint.rstrip("/")
+    else:
+        assert endpoint is not None
+        protocols = endpoint.get("protocols") or ["https"]
+        resolved_url = f"{protocols[0]}://{endpoint['hostname']}"
+
+    return _EndpointResolution(
+        endpoint_url=resolved_url,
+        signing_region=signing_region,
+        signing_name=signing_name,
+    )
 
 
 def _resolve_max_attempts(session: Session, config: Config) -> int:
@@ -357,7 +386,17 @@ def _resolve_max_attempts(session: Session, config: Config) -> int:
         or session.get_config_variable("retry_mode")
         or "legacy"
     )
-    if retry_mode in {"standard", "adaptive"}:
+    if retry_mode not in {"legacy", "standard", "adaptive"}:
+        raise InvalidRetryModeError(
+            provided_retry_mode=retry_mode,
+            valid_modes="legacy, standard, adaptive",
+        )
+    if retry_mode == "adaptive":
+        raise InvalidRetryConfigurationError(
+            retry_config_option="mode=adaptive",
+            valid_options="mode=legacy, mode=standard",
+        )
+    if retry_mode == "standard":
         return _DEFAULT_STANDARD_MAX_ATTEMPTS
     return _DEFAULT_LEGACY_MAX_ATTEMPTS
 
@@ -410,15 +449,23 @@ class LambdaHttpRequestFactory:
         ignore_configured_endpoint_urls: bool | None = None,
     ) -> None:
         self.session = session or get_session()
-        self.region_name = _resolve_region(self.session, region_name)
-        self.endpoint_url = _resolve_endpoint_url(
+        configured_region = _resolve_region(self.session, region_name)
+        configured_region, legacy_fips_region = _normalize_fips_region(
+            configured_region
+        )
+        if legacy_fips_region:
+            use_fips_endpoint = True
+        endpoint = _resolve_endpoint(
             self.session,
-            region_name=self.region_name,
+            region_name=configured_region,
             endpoint_url=endpoint_url,
             use_dualstack_endpoint=use_dualstack_endpoint,
             use_fips_endpoint=use_fips_endpoint,
             ignore_configured_endpoint_urls=ignore_configured_endpoint_urls,
         )
+        self.endpoint_url = endpoint.endpoint_url
+        self.region_name = endpoint.signing_region
+        self.signing_name = endpoint.signing_name
         self.user_agent = f"durable-execution-sdk-python/{__version__}-async"
         if user_agent_extra and self.user_agent not in user_agent_extra:
             self.user_agent = f"{self.user_agent} {user_agent_extra}"
@@ -456,7 +503,7 @@ class LambdaHttpRequestFactory:
         )
         SigV4Auth(
             frozen_credentials,
-            _LAMBDA_SERVICE_NAME,
+            self.signing_name,
             self.region_name,
         ).add_auth(request)
         return request.prepare()
