@@ -639,44 +639,46 @@ async def test_lambda_invoker_invoke_unexpected_exception() -> None:
         await invoker.invoke("test-function", input_data)
 
 
-def test_create_lambda_client_uses_configured_timeout() -> None:
-    """Test create_lambda_client passes the durable test runner config to botocore."""
-    with patch("async_durable_execution._runner.cloud.get_session") as mock_session:
-        mock_client = Mock()
-        mock_session.return_value.create_client.return_value = mock_client
+@patch("async_durable_execution._runner.cloud.create_default_sync_client")
+@patch("async_durable_execution._runner.cloud.get_session")
+def test_create_lambda_client_uses_configured_timeout(
+    mock_get_session,
+    mock_create_client,
+) -> None:
+    """The cloud runner configures the model-free botocore HTTP client."""
+    mock_client = Mock()
+    mock_create_client.return_value = mock_client
 
-        result = create_lambda_client("http://localhost:3001", "us-west-2")
+    result = create_lambda_client("http://localhost:3001", "us-west-2")
 
     assert isinstance(result, ThreadedSyncCloudLambdaClient)
     assert result.client is mock_client
-    mock_session.return_value.create_client.assert_called_once_with(
-        "lambda",
+    mock_create_client.assert_called_once_with(
+        session=mock_get_session.return_value,
         endpoint_url="http://localhost:3001",
         region_name="us-west-2",
         config=_LAMBDA_CLIENT_CONFIG,
     )
 
 
-@patch("async_durable_execution._runner.cloud.importlib.import_module")
+@patch("async_durable_execution._runner.cloud.create_default_async_client")
+@patch("async_durable_execution._runner.cloud.get_session")
 def test_create_lambda_client_prefers_async_when_aioboto_installed(
-    mock_import_module, monkeypatch
+    mock_get_session,
+    mock_create_client,
+    monkeypatch,
 ) -> None:
-    """Test create_lambda_client prefers an aioboto client when available."""
+    """The aioboto extra selects the model-free HTTPX client."""
     monkeypatch.setattr(cloud_module, "aioboto_is_installed", lambda: True)
-    mock_context = MagicMock()
-    mock_session = Mock()
-    mock_session.create_client.return_value = mock_context
-    mock_aiobotocore_session = Mock()
-    mock_aiobotocore_session.get_session.return_value = mock_session
-    mock_import_module.return_value = mock_aiobotocore_session
+    mock_client = MagicMock()
+    mock_create_client.return_value = mock_client
 
     result = create_lambda_client("http://localhost:3001", "us-west-2")
 
     assert isinstance(result, AsyncCloudLambdaClient)
-    assert result._client_context is mock_context  # noqa: SLF001
-    mock_import_module.assert_called_once_with("aiobotocore.session")
-    mock_session.create_client.assert_called_once_with(
-        "lambda",
+    assert result._client_context is mock_client  # noqa: SLF001
+    mock_create_client.assert_called_once_with(
+        session=mock_get_session.return_value,
         endpoint_url="http://localhost:3001",
         region_name="us-west-2",
         config=_LAMBDA_CLIENT_CONFIG,

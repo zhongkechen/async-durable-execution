@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Any, Protocol, TYPE_CHECKING
 
 from .._core import (
-    BotoSerializableModel,
+    AwsApiModel,
     CallbackDetails,
     CallbackOptions,
     ChainedInvokeDetails,
@@ -81,7 +81,7 @@ TERMINAL_STATUSES: set[OperationStatus] = {
 
 
 @dataclass(frozen=True)
-class GetDurableExecutionResponse(BotoSerializableModel):
+class GetDurableExecutionResponse(AwsApiModel):
     """Response containing durable execution details."""
 
     durable_execution_arn: str = field(metadata={"alias": "DurableExecutionArn"})
@@ -102,7 +102,7 @@ class GetDurableExecutionResponse(BotoSerializableModel):
 
 # Event-related structures from Smithy model
 @dataclass(frozen=True)
-class EventInput(BotoSerializableModel):
+class EventInput(AwsApiModel):
     """Event input structure."""
 
     payload: str | None = field(default=None, metadata={"alias": "Payload"})
@@ -131,7 +131,7 @@ class EventInput(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class EventResult(BotoSerializableModel):
+class EventResult(AwsApiModel):
     """Event result structure."""
 
     payload: str | None = field(default=None, metadata={"alias": "Payload"})
@@ -159,7 +159,7 @@ class EventResult(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class EventError(BotoSerializableModel):
+class EventError(AwsApiModel):
     """Event error structure."""
 
     payload: ErrorObject | None = field(default=None, metadata={"alias": "Payload"})
@@ -186,7 +186,7 @@ class EventError(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class RetryDetails(BotoSerializableModel):
+class RetryDetails(AwsApiModel):
     """Retry details structure."""
 
     current_attempt: int = field(default=0, metadata={"alias": "CurrentAttempt"})
@@ -197,7 +197,7 @@ class RetryDetails(BotoSerializableModel):
 
 # Event detail structures
 @dataclass(frozen=True)
-class ExecutionStartedDetails(BotoSerializableModel):
+class ExecutionStartedDetails(AwsApiModel):
     """Execution started event details."""
 
     input: EventInput | None = field(default=None, metadata={"alias": "Input"})
@@ -207,54 +207,54 @@ class ExecutionStartedDetails(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class ExecutionSucceededDetails(BotoSerializableModel):
+class ExecutionSucceededDetails(AwsApiModel):
     """Execution succeeded event details."""
 
     result: EventResult | None = field(default=None, metadata={"alias": "Result"})
 
 
 @dataclass(frozen=True)
-class ExecutionFailedDetails(BotoSerializableModel):
+class ExecutionFailedDetails(AwsApiModel):
     """Execution failed event details."""
 
     error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class ExecutionTimedOutDetails(BotoSerializableModel):
+class ExecutionTimedOutDetails(AwsApiModel):
     """Execution timed out event details."""
 
     error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class ExecutionStoppedDetails(BotoSerializableModel):
+class ExecutionStoppedDetails(AwsApiModel):
     """Execution stopped event details."""
 
     error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class ContextStartedDetails(BotoSerializableModel):
+class ContextStartedDetails(AwsApiModel):
     """Context started event details."""
 
 
 @dataclass(frozen=True)
-class ContextSucceededDetails(BotoSerializableModel):
+class ContextSucceededDetails(AwsApiModel):
     """Context succeeded event details."""
 
     result: EventResult | None = field(default=None, metadata={"alias": "Result"})
 
 
 @dataclass(frozen=True)
-class ContextFailedDetails(BotoSerializableModel):
+class ContextFailedDetails(AwsApiModel):
     """Context failed event details."""
 
     error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class WaitStartedDetails(BotoSerializableModel):
+class WaitStartedDetails(AwsApiModel):
     """Wait started event details."""
 
     duration: int | None = field(default=None, metadata={"alias": "Duration"})
@@ -265,26 +265,26 @@ class WaitStartedDetails(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class WaitSucceededDetails(BotoSerializableModel):
+class WaitSucceededDetails(AwsApiModel):
     """Wait succeeded event details."""
 
     duration: int | None = field(default=None, metadata={"alias": "Duration"})
 
 
 @dataclass(frozen=True)
-class WaitCancelledDetails(BotoSerializableModel):
+class WaitCancelledDetails(AwsApiModel):
     """Wait cancelled event details."""
 
     error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class StepStartedDetails(BotoSerializableModel):
+class StepStartedDetails(AwsApiModel):
     """Step started event details."""
 
 
 @dataclass(frozen=True)
-class StepSucceededDetails(BotoSerializableModel):
+class StepSucceededDetails(AwsApiModel):
     """Step succeeded event details."""
 
     result: EventResult | None = field(default=None, metadata={"alias": "Result"})
@@ -294,7 +294,7 @@ class StepSucceededDetails(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class StepFailedDetails(BotoSerializableModel):
+class StepFailedDetails(AwsApiModel):
     """Step failed event details."""
 
     error: EventError | None = field(default=None, metadata={"alias": "Error"})
@@ -304,7 +304,7 @@ class StepFailedDetails(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class ChainedInvokePendingDetails(BotoSerializableModel):
+class ChainedInvokePendingDetails(AwsApiModel):
     """Chained Invoke Pending event details."""
 
     input: EventInput | None = field(default=None, metadata={"alias": "Input"})
@@ -312,7 +312,7 @@ class ChainedInvokePendingDetails(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class ChainedInvokeStartedDetails(BotoSerializableModel):
+class ChainedInvokeStartedDetails(AwsApiModel):
     """Chained invoke started event details."""
 
     durable_execution_arn: str | None = field(
@@ -321,35 +321,35 @@ class ChainedInvokeStartedDetails(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class ChainedInvokeSucceededDetails(BotoSerializableModel):
+class ChainedInvokeSucceededDetails(AwsApiModel):
     """Chained invoke succeeded event details."""
 
     result: EventResult | None = field(default=None, metadata={"alias": "Result"})
 
 
 @dataclass(frozen=True)
-class ChainedInvokeFailedDetails(BotoSerializableModel):
+class ChainedInvokeFailedDetails(AwsApiModel):
     """Chained invoke failed event details."""
 
     error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class ChainedInvokeTimedOutDetails(BotoSerializableModel):
+class ChainedInvokeTimedOutDetails(AwsApiModel):
     """Chained invoke timed out event details."""
 
     error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class ChainedInvokeStoppedDetails(BotoSerializableModel):
+class ChainedInvokeStoppedDetails(AwsApiModel):
     """Chained invoke stopped event details."""
 
     error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class CallbackStartedDetails(BotoSerializableModel):
+class CallbackStartedDetails(AwsApiModel):
     """Callback started event details."""
 
     callback_id: str | None = field(default=None, metadata={"alias": "CallbackId"})
@@ -360,28 +360,28 @@ class CallbackStartedDetails(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class CallbackSucceededDetails(BotoSerializableModel):
+class CallbackSucceededDetails(AwsApiModel):
     """Callback succeeded event details."""
 
     result: EventResult | None = field(default=None, metadata={"alias": "Result"})
 
 
 @dataclass(frozen=True)
-class CallbackFailedDetails(BotoSerializableModel):
+class CallbackFailedDetails(AwsApiModel):
     """Callback failed event details."""
 
     error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class CallbackTimedOutDetails(BotoSerializableModel):
+class CallbackTimedOutDetails(AwsApiModel):
     """Callback timed out event details."""
 
     error: EventError | None = field(default=None, metadata={"alias": "Error"})
 
 
 @dataclass(frozen=True)
-class InvocationCompletedDetails(BotoSerializableModel):
+class InvocationCompletedDetails(AwsApiModel):
     """Invocation completed event details."""
 
     start_timestamp: datetime.datetime = field(
@@ -444,7 +444,7 @@ class EventCreationContext:
 
 
 @dataclass(frozen=True)
-class Event(BotoSerializableModel):
+class Event(AwsApiModel):
     """Event structure from Smithy model."""
 
     event_type: str = field(metadata={"alias": "EventType"})
@@ -1727,7 +1727,7 @@ def events_to_operations(events: list[Event]) -> list[Operation]:
 
 
 @dataclass(frozen=True)
-class GetDurableExecutionHistoryResponse(BotoSerializableModel):
+class GetDurableExecutionHistoryResponse(AwsApiModel):
     """Response containing durable execution history events."""
 
     events: list[Event] = field(default_factory=list, metadata={"alias": "Events"})

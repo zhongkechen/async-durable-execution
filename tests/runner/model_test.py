@@ -8,7 +8,7 @@ import datetime
 import pytest
 
 from async_durable_execution._core.models import (
-    BotoSerializableModel,
+    AwsApiModel,
     CheckpointUpdatedExecutionState,
     OperationStatus,
     OperationSubType,
@@ -136,7 +136,7 @@ DEFAULT_START_DURABLE_EXECUTION_INPUT_DATA = {
     ],
 )
 def test_runner_boto_models_use_shared_serialization(model_type) -> None:
-    assert issubclass(model_type, BotoSerializableModel)
+    assert issubclass(model_type, AwsApiModel)
     assert hasattr(model_type, "from_dict")
     assert hasattr(model_type, "to_dict")
     assert not hasattr(model_type, "from_boto")

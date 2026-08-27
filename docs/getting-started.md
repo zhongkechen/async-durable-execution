@@ -17,9 +17,9 @@ This guide creates and locally tests a durable order workflow. You need Python
     pip install "async-durable-execution[aioboto]"
     ```
 
-    The `aioboto` extra uses `aiobotocore` for Lambda checkpoint and state API
-    calls. Without it, the SDK runs its bundled synchronous client through an
-    async adapter.
+    The `aioboto` extra installs HTTPX for asynchronous model-free Lambda REST
+    calls. Without it, the SDK sends the same signed requests with botocore's
+    synchronous HTTP transport through an async adapter.
 
 ## Create a Workflow
 

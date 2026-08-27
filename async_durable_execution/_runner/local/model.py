@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol, cast
 
 from ..._core import (
-    BotoSerializableModel,
+    AwsApiModel,
     CheckpointUpdatedExecutionState,
     DurableExecutionInvocationInput,
     LambdaContext as LambdaContextProtocol,
@@ -42,7 +42,7 @@ class LambdaContext(LambdaContextProtocol):
 
 
 @dataclass(frozen=True)
-class StartDurableExecutionInput(BotoSerializableModel):
+class StartDurableExecutionInput(AwsApiModel):
     """Input for starting a local durable execution."""
 
     account_id: str = field(metadata={"alias": "AccountId"})
@@ -91,14 +91,14 @@ class StartDurableExecutionInput(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class StartDurableExecutionOutput(BotoSerializableModel):
+class StartDurableExecutionOutput(AwsApiModel):
     """Output from starting a local durable execution."""
 
     execution_arn: str | None = field(default=None, metadata={"alias": "ExecutionArn"})
 
 
 @dataclass(frozen=True)
-class GetDurableExecutionStateResponse(BotoSerializableModel):
+class GetDurableExecutionStateResponse(AwsApiModel):
     """Local response containing durable execution state operations."""
 
     operations: list[Operation] = field(
@@ -108,22 +108,22 @@ class GetDurableExecutionStateResponse(BotoSerializableModel):
 
 
 @dataclass(frozen=True)
-class SendDurableExecutionCallbackSuccessResponse(BotoSerializableModel):
+class SendDurableExecutionCallbackSuccessResponse(AwsApiModel):
     """Response from sending local callback success."""
 
 
 @dataclass(frozen=True)
-class SendDurableExecutionCallbackFailureResponse(BotoSerializableModel):
+class SendDurableExecutionCallbackFailureResponse(AwsApiModel):
     """Response from sending local callback failure."""
 
 
 @dataclass(frozen=True)
-class SendDurableExecutionCallbackHeartbeatResponse(BotoSerializableModel):
+class SendDurableExecutionCallbackHeartbeatResponse(AwsApiModel):
     """Response from sending local callback heartbeat."""
 
 
 @dataclass(frozen=True)
-class CheckpointDurableExecutionResponse(BotoSerializableModel):
+class CheckpointDurableExecutionResponse(AwsApiModel):
     """Local response from checkpointing a durable execution."""
 
     checkpoint_token: str | None = field(

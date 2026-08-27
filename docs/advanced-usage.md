@@ -394,24 +394,32 @@ result = await wait_for_condition(
 )
 ```
 
-## AWS Model Mappings
+## AWS Wire Mappings
 
-Core durable dataclass models expose `to_dict()` and `from_dict()`. AWS service
-models preserve botocore-native values, while Lambda invocation input models
-encode timestamps as Unix milliseconds. Invocation state serializers recursively
-convert their nested `Operation` models using the JSON representation.
+Core durable dataclass models expose `to_dict()` and `from_dict()`. The SDK
+owns the Lambda REST routes and JSON mappings used by those models, so new
+fields can be supported without waiting for a botocore Lambda service-model
+release. AWS API mappings preserve native Python values, while Lambda
+invocation input models encode timestamps as Unix milliseconds. Invocation
+state serializers recursively convert their nested `Operation` models using
+the JSON representation.
 
 ## Lambda Client Selection
 
-The SDK chooses a Lambda API client for durable checkpoint and state APIs based on the installed dependencies.
+The SDK chooses a transport for its model-free Lambda REST client based on the
+installed dependencies. Botocore supplies AWS credential resolution, endpoint
+metadata, and SigV4 signing in both modes; the generated botocore Lambda
+service model is not loaded.
 
-With the optional `aioboto` extra, the SDK creates an async Lambda client by default:
+With the optional `aioboto` extra, the SDK installs HTTPX and creates an async
+Lambda client by default:
 
 ```console
 pip install "async-durable-execution[aioboto]"
 ```
 
-Without the extra, the SDK uses the bundled `botocore` dependency through a threaded async adapter.
+Without the extra, the SDK uses botocore's synchronous HTTP session through a
+threaded async adapter.
 
 Explicitly provided Lambda API clients are detected as sync or async and wrapped accordingly. Code that must force the sync `botocore` client can create one explicitly and pass it to the durable handler:
 
@@ -438,10 +446,8 @@ hatch run python scripts/build_layer.py \
   --output dist/async-durable-execution-layer.zip
 ```
 
-You can also use a prebuilt layer published by GitHub Actions. The standard
-layer includes the `aioboto` extra and supports Python 3.10 through 3.14. While
-Python 3.15 is in preview, the workflow also publishes a Botocore-only layer
-named `async-durable-execution-python315-preview`. The layer ARNs are shown in
-the summary of the [Lambda layer publish workflow](https://github.com/zhongkechen/async-durable-execution/actions/workflows/lambda-layer-publish.yml).
+You can also use a prebuilt layer published by GitHub Actions. The layer
+includes the `aioboto` extra and supports Python 3.10 through 3.15. The layer
+ARNs are shown in the summary of the [Lambda layer publish workflow](https://github.com/zhongkechen/async-durable-execution/actions/workflows/lambda-layer-publish.yml).
 
 Publish the zip as an `AWS::Serverless::LayerVersion` or `AWS::Lambda::LayerVersion`, then add the layer ARN to Python durable functions.

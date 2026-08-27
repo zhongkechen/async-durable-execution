@@ -44,7 +44,6 @@ from async_durable_execution._core.models import (
 from async_durable_execution._core.client import (
     AsyncLambdaClient,
     ThreadedSyncLambdaClient,
-    _AiobotocoreLambdaApiClient,
     aioboto_is_installed,
     create_default_async_client,
     create_default_client,
@@ -68,8 +67,7 @@ def reset_lambda_client_cache() -> Iterator[None]:
     ThreadedSyncLambdaClient._cached_boto_client = None  # noqa: SLF001
 
 
-@patch("async_durable_execution._core.client.get_session")
-async def test_lambda_client_checkpoint(_mock_get_session) -> None:
+async def test_lambda_client_checkpoint() -> None:
     """Test ThreadedSyncLambdaClient.checkpoint method."""
     mock_client = Mock()
     mock_client.checkpoint_durable_execution.return_value = {
@@ -445,23 +443,18 @@ async def test_async_lambda_client_get_execution_state_rejects_missing_token(
     mock_client.get_durable_execution_state.assert_not_awaited()
 
 
-@patch.dict("os.environ", {}, clear=True)
-@patch("async_durable_execution._core.client.get_session")
+@patch("async_durable_execution._core.client.create_botocore_http_client")
 async def test_create_default_sync_client_builds_lambda_client_with_expected_config(
-    mock_get_session, reset_lambda_client_cache
+    mock_create_http_client, reset_lambda_client_cache
 ) -> None:
-    """Test create_default_sync_client builds a lambda botocore client with expected config."""
+    """The default sync factory builds the model-free botocore HTTP client."""
     mock_client = Mock()
-    mock_get_session.return_value.create_client.return_value = mock_client
+    mock_create_http_client.return_value = mock_client
 
     client = create_default_sync_client()
 
-    mock_get_session.assert_called_once_with()
-    mock_get_session.return_value.create_client.assert_called_once()
-    call_args = mock_get_session.return_value.create_client.call_args
-    assert call_args[0][0] == "lambda"
-    assert "config" in call_args[1]
-    config = call_args[1]["config"]
+    mock_create_http_client.assert_called_once()
+    config = mock_create_http_client.call_args.kwargs["config"]
     assert config.connect_timeout == 5
     assert config.read_timeout == 50
     assert (
@@ -502,86 +495,25 @@ async def test_create_default_client_uses_sync_client_when_aioboto_is_missing(
     mock_create_default_sync_client.assert_called_once_with()
 
 
-@patch("async_durable_execution._core.client.importlib.import_module")
+@patch("async_durable_execution._core.client.create_httpx_client")
 @no_type_check
 async def test_create_default_async_client_builds_lambda_client_with_expected_config(
-    mock_import_module,
+    mock_create_http_client,
 ) -> None:
-    """Test create_default_async_client builds a lambda aioboto client."""
+    """The default async factory builds the model-free HTTPX client."""
     mock_client = Mock()
-    mock_session = Mock()
-    mock_aiobotocore_session = Mock()
-    mock_aiobotocore_session.get_session.return_value = mock_session
-    mock_session.create_client.return_value = mock_client
-    mock_import_module.return_value = mock_aiobotocore_session
+    mock_create_http_client.return_value = mock_client
 
     client = create_default_async_client()
 
-    mock_import_module.assert_called_once_with("aiobotocore.session")
-    mock_aiobotocore_session.get_session.assert_called_once_with()
-    mock_session.create_client.assert_called_once()
-    call_args = mock_session.create_client.call_args
-    assert call_args[0][0] == "lambda"
-    assert "config" in call_args[1]
-    config = call_args[1]["config"]
+    mock_create_http_client.assert_called_once()
+    config = mock_create_http_client.call_args.kwargs["config"]
     assert config.connect_timeout == 5
     assert config.read_timeout == 50
     assert (
         config.user_agent_extra == f"durable-execution-sdk-python/{__version__}-async"
     )
-    assert client._client_context is mock_client  # noqa: SLF001
-
-
-async def test_aiobotocore_lambda_api_client_closes_entered_context() -> None:
-    """Test aiobotocore client context is exited after async client use."""
-    entered_client = Mock()
-    entered_client.checkpoint_durable_execution = AsyncMock(
-        return_value={
-            "CheckpointToken": "new-token",
-            "NewExecutionState": {"Operations": []},
-        }
-    )
-    client_context = Mock()
-    client_context.__aenter__ = AsyncMock(return_value=entered_client)
-    client_context.__aexit__ = AsyncMock()
-    client = _AiobotocoreLambdaApiClient(client_context)
-
-    await client.checkpoint_durable_execution()
-    await client.aclose()
-
-    client_context.__aenter__.assert_awaited_once_with()
-    client_context.__aexit__.assert_awaited_once_with(None, None, None)
-    assert client._client is None  # noqa: SLF001
-
-
-async def test_aiobotocore_lambda_api_client_reuses_context_for_state_requests() -> (
-    None
-):
-    entered_client = Mock()
-    entered_client.get_durable_execution_state = AsyncMock(
-        return_value={"Operations": []}
-    )
-    client_context = Mock()
-    client_context.__aenter__ = AsyncMock(return_value=entered_client)
-    client = _AiobotocoreLambdaApiClient(client_context)
-
-    result = await client.get_durable_execution_state(CheckpointToken="token")
-
-    assert result == {"Operations": []}
-    entered_client.get_durable_execution_state.assert_awaited_once_with(
-        CheckpointToken="token"
-    )
-    client_context.__aenter__.assert_awaited_once_with()
-
-
-async def test_aiobotocore_lambda_api_client_close_before_enter_is_noop() -> None:
-    client_context = Mock()
-    client_context.__aexit__ = AsyncMock()
-    client = _AiobotocoreLambdaApiClient(client_context)
-
-    await client.aclose()
-
-    client_context.__aexit__.assert_not_called()
+    assert client is mock_client
 
 
 async def test_async_lambda_client_closes_wrapped_client() -> None:
@@ -669,7 +601,7 @@ def test_lambda_api_client_is_async_detects_sync_and_async_methods() -> None:
     ("find_spec_result", "expected"), [(object(), True), (None, False)]
 )
 @patch("async_durable_execution._core.client.importlib.util.find_spec")
-def test_aioboto_is_installed_checks_for_aiobotocore(
+def test_aioboto_is_installed_checks_for_httpx(
     mock_find_spec,
     find_spec_result,
     expected,
@@ -677,7 +609,7 @@ def test_aioboto_is_installed_checks_for_aiobotocore(
     mock_find_spec.return_value = find_spec_result
 
     assert aioboto_is_installed() is expected
-    mock_find_spec.assert_called_once_with("aiobotocore")
+    mock_find_spec.assert_called_once_with("httpx")
 
 
 @patch("async_durable_execution._core.client.create_default_client")
@@ -742,27 +674,25 @@ async def test_create_default_service_client_uses_explicit_async_client(
     assert service_client.client is mock_client
 
 
-@patch.dict("os.environ", {"AWS_ENDPOINT_URL_LAMBDA": "http://localhost:3000"})
-@patch("async_durable_execution._core.client.get_session")
+@patch("async_durable_execution._core.client.create_botocore_http_client")
 async def test_create_default_sync_client_builds_botocore_client_with_lambda_endpoint_env(
-    mock_get_session, reset_lambda_client_cache
+    mock_create_http_client, reset_lambda_client_cache
 ) -> None:
-    """Test create_default_sync_client delegates endpoint handling to botocore."""
+    """The public sync factory delegates endpoint handling to the raw client."""
     mock_client = Mock()
-    mock_get_session.return_value.create_client.return_value = mock_client
+    mock_create_http_client.return_value = mock_client
 
-    client = create_default_sync_client()
+    client = create_default_sync_client(endpoint_url="http://localhost:3000")
 
-    mock_get_session.assert_called_once_with()
-    mock_get_session.return_value.create_client.assert_called_once()
-    call_args = mock_get_session.return_value.create_client.call_args
-    assert call_args[0][0] == "lambda"
-    assert "config" in call_args[1]
-    config = call_args[1]["config"]
+    config = mock_create_http_client.call_args.kwargs["config"]
     assert config.connect_timeout == 5
     assert config.read_timeout == 50
     assert (
         config.user_agent_extra == f"durable-execution-sdk-python/{__version__}-async"
+    )
+    assert (
+        mock_create_http_client.call_args.kwargs["endpoint_url"]
+        == "http://localhost:3000"
     )
     assert client is mock_client
 

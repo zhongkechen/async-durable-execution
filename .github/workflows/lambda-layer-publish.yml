@@ -14,7 +14,7 @@ on:
         required: false
         default: ""
       layer-name:
-        description: Stable Lambda layer name (maximum 122 characters); the Python 3.15 preview layer adds a -python315-preview suffix
+        description: Stable Lambda layer name (maximum 140 characters)
         required: true
         default: async-durable-execution
       share-principals:
@@ -56,10 +56,6 @@ jobs:
             python_version: "3.11"
             sdk_source: ".[aioboto]"
             zip_name: async-durable-execution-layer.zip
-          - artifact_name: async-durable-execution-python315-preview-layer
-            python_version: "3.15"
-            sdk_source: "."
-            zip_name: async-durable-execution-python315-preview-layer.zip
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -213,13 +209,9 @@ jobs:
         aws-region: ${{ fromJson(needs.resolve-regions.outputs.regions) }}
         layer:
           - artifact_name: async-durable-execution-layer
-            compatible_runtimes: python3.10 python3.11 python3.12 python3.13 python3.14
+            compatible_runtimes: python3.10 python3.11 python3.12 python3.13 python3.14 python3.15
             name_suffix: ""
             zip_name: async-durable-execution-layer.zip
-          - artifact_name: async-durable-execution-python315-preview-layer
-            compatible_runtimes: python3.15
-            name_suffix: -python315-preview
-            zip_name: async-durable-execution-python315-preview-layer.zip
 
     steps:
       - name: Download layer zip artifact
@@ -275,7 +267,7 @@ jobs:
           layer_zip="dist/${{ matrix.layer.zip_name }}"
 
           if [ "${#layer_name}" -gt 140 ]; then
-            echo "Lambda layer name '${layer_name}' exceeds the 140-character limit. Set the base layer name to at most 122 characters." >&2
+            echo "Lambda layer name '${layer_name}' exceeds the 140-character limit." >&2
             exit 1
           fi
 

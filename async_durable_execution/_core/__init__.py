@@ -3,6 +3,7 @@
 from .client import (
     DurableServiceClient,
     aioboto_is_installed,
+    create_default_async_client,
     create_default_sync_client,
 )
 from .config import (
@@ -51,6 +52,7 @@ from .execution import (
     durable_execution,
 )
 from .models import (
+    AwsApiModel,
     BotoSerializableModel,
     CallbackDetails,
     CallbackOptions,
