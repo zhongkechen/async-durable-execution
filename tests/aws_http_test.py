@@ -462,6 +462,68 @@ def test_botocore_factory_applies_configured_retries() -> None:
     client.close()
 
 
+def test_botocore_factory_uses_config_region() -> None:
+    session = Session()
+    session.set_credentials("access-key", "secret-key")
+    client = create_botocore_http_client(
+        session=session,
+        config=Config(
+            region_name="us-west-2",
+            retries={"max_attempts": 0},
+        ),
+    )
+
+    assert client._request_factory.region_name == "us-west-2"  # noqa: SLF001
+    assert (  # noqa: SLF001
+        client._request_factory.endpoint_url == "https://lambda.us-west-2.amazonaws.com"
+    )
+    client.close()
+
+
+@pytest.mark.parametrize(
+    ("config", "expected_endpoint"),
+    [
+        (
+            Config(use_fips_endpoint=True, retries={"max_attempts": 0}),
+            "https://lambda-fips.us-west-2.amazonaws.com",
+        ),
+        (
+            Config(use_dualstack_endpoint=True, retries={"max_attempts": 0}),
+            "https://lambda.us-west-2.api.aws",
+        ),
+    ],
+)
+def test_botocore_factory_uses_config_endpoint_variant(
+    config: Config,
+    expected_endpoint: str,
+) -> None:
+    client = create_botocore_http_client(
+        session=_session(),
+        config=config,
+    )
+
+    assert client._request_factory.endpoint_url == expected_endpoint  # noqa: SLF001
+    client.close()
+
+
+@patch.dict(
+    "os.environ",
+    {"AWS_ENDPOINT_URL_LAMBDA": "http://localhost:3000"},
+)
+def test_botocore_factory_uses_config_ignore_endpoint_override() -> None:
+    config = Config(retries={"max_attempts": 0})
+    setattr(config, "ignore_configured_endpoint_urls", True)
+    client = create_botocore_http_client(
+        session=_session(),
+        config=config,
+    )
+
+    assert (  # noqa: SLF001
+        client._request_factory.endpoint_url == "https://lambda.us-west-2.amazonaws.com"
+    )
+    client.close()
+
+
 async def test_httpx_client_sends_prepared_request_asynchronously() -> None:
     request = AWSRequest(
         method="POST",
@@ -554,4 +616,24 @@ async def test_httpx_factory_applies_configured_retries() -> None:
     )
 
     assert client._max_attempts == 1  # noqa: SLF001
+    await client.aclose()
+
+
+async def test_httpx_factory_uses_config_region_and_fips() -> None:
+    session = Session()
+    session.set_credentials("access-key", "secret-key")
+    client = create_httpx_client(
+        session=session,
+        config=Config(
+            region_name="us-west-2",
+            use_fips_endpoint=True,
+            retries={"max_attempts": 0},
+        ),
+    )
+
+    assert client._request_factory.region_name == "us-west-2"  # noqa: SLF001
+    assert (  # noqa: SLF001
+        client._request_factory.endpoint_url
+        == "https://lambda-fips.us-west-2.amazonaws.com"
+    )
     await client.aclose()

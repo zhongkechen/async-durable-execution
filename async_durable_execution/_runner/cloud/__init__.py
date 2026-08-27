@@ -240,10 +240,7 @@ def _aws_error_code(error: Exception, client: Any = None) -> str:
         if isinstance(aws_error, dict) and aws_error.get("Code"):
             return str(aws_error["Code"])
 
-    try:
-        exceptions = getattr(client, "exceptions", None)
-    except AttributeError:
-        exceptions = None
+    exceptions = getattr(client, "exceptions", None)
     if exceptions is not None:
         for error_code in _KNOWN_LAMBDA_ERROR_CODES:
             exception_type = getattr(exceptions, error_code, None)

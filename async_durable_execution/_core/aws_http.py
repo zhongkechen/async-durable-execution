@@ -270,8 +270,17 @@ def _request_spec(operation_name: str, params: Mapping[str, Any]) -> _RequestSpe
     raise ValueError(msg)
 
 
-def _configured_endpoint_url(session: Session) -> str | None:
-    if ensure_boolean(session.get_config_variable("ignore_configured_endpoint_urls")):
+def _configured_endpoint_url(
+    session: Session,
+    *,
+    ignore_configured_endpoint_urls: bool | None = None,
+) -> str | None:
+    ignore_configured = ignore_configured_endpoint_urls
+    if ignore_configured is None:
+        ignore_configured = ensure_boolean(
+            session.get_config_variable("ignore_configured_endpoint_urls")
+        )
+    if ignore_configured:
         return None
     provider = ConfiguredEndpointProvider(
         full_config=session.full_config,
@@ -293,20 +302,30 @@ def _resolve_endpoint_url(
     *,
     region_name: str,
     endpoint_url: str | None,
+    use_dualstack_endpoint: bool | None = None,
+    use_fips_endpoint: bool | None = None,
+    ignore_configured_endpoint_urls: bool | None = None,
 ) -> str:
-    resolved_endpoint = endpoint_url or _configured_endpoint_url(session)
+    resolved_endpoint = endpoint_url or _configured_endpoint_url(
+        session,
+        ignore_configured_endpoint_urls=ignore_configured_endpoint_urls,
+    )
     if resolved_endpoint:
         return resolved_endpoint.rstrip("/")
 
+    if use_dualstack_endpoint is None:
+        use_dualstack_endpoint = ensure_boolean(
+            session.get_config_variable("use_dualstack_endpoint")
+        )
+    if use_fips_endpoint is None:
+        use_fips_endpoint = ensure_boolean(
+            session.get_config_variable("use_fips_endpoint")
+        )
     endpoint = EndpointResolver(session.get_data("endpoints")).construct_endpoint(
         _LAMBDA_SERVICE_NAME,
         region_name,
-        use_dualstack_endpoint=ensure_boolean(
-            session.get_config_variable("use_dualstack_endpoint")
-        ),
-        use_fips_endpoint=ensure_boolean(
-            session.get_config_variable("use_fips_endpoint")
-        ),
+        use_dualstack_endpoint=use_dualstack_endpoint,
+        use_fips_endpoint=use_fips_endpoint,
     )
     if endpoint is None:
         raise UnknownEndpointError(
@@ -386,6 +405,9 @@ class LambdaHttpRequestFactory:
         region_name: str | None = None,
         endpoint_url: str | None = None,
         user_agent_extra: str | None = None,
+        use_dualstack_endpoint: bool | None = None,
+        use_fips_endpoint: bool | None = None,
+        ignore_configured_endpoint_urls: bool | None = None,
     ) -> None:
         self.session = session or get_session()
         self.region_name = _resolve_region(self.session, region_name)
@@ -393,6 +415,9 @@ class LambdaHttpRequestFactory:
             self.session,
             region_name=self.region_name,
             endpoint_url=endpoint_url,
+            use_dualstack_endpoint=use_dualstack_endpoint,
+            use_fips_endpoint=use_fips_endpoint,
+            ignore_configured_endpoint_urls=ignore_configured_endpoint_urls,
         )
         self.user_agent = f"durable-execution-sdk-python/{__version__}-async"
         if user_agent_extra and self.user_agent not in user_agent_extra:
@@ -733,9 +758,12 @@ def create_botocore_http_client(
     config_values = cast("Any", resolved_config)
     request_factory = LambdaHttpRequestFactory(
         session=resolved_session,
-        region_name=region_name,
+        region_name=region_name or config_values.region_name,
         endpoint_url=endpoint_url,
         user_agent_extra=config_values.user_agent_extra,
+        use_dualstack_endpoint=config_values.use_dualstack_endpoint,
+        use_fips_endpoint=config_values.use_fips_endpoint,
+        ignore_configured_endpoint_urls=(config_values.ignore_configured_endpoint_urls),
     )
     ca_bundle = resolved_session.get_config_variable("ca_bundle")
     verify: bool | str = ca_bundle if isinstance(ca_bundle, str) else True
@@ -778,9 +806,12 @@ def create_httpx_client(
     config_values = cast("Any", resolved_config)
     request_factory = LambdaHttpRequestFactory(
         session=resolved_session,
-        region_name=region_name,
+        region_name=region_name or config_values.region_name,
         endpoint_url=endpoint_url,
         user_agent_extra=config_values.user_agent_extra,
+        use_dualstack_endpoint=config_values.use_dualstack_endpoint,
+        use_fips_endpoint=config_values.use_fips_endpoint,
+        ignore_configured_endpoint_urls=(config_values.ignore_configured_endpoint_urls),
     )
     ca_bundle = resolved_session.get_config_variable("ca_bundle")
     verify: Any = True
