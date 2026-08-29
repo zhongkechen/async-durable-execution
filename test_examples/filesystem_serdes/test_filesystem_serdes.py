@@ -96,6 +96,7 @@ async def test_filesystem_serdes_always_round_trips_across_replay(
         order_payload = order_file.read_bytes()
         order_digest = hashlib.sha256(order_payload).hexdigest()
         assert order_digest == order_envelope["payloadDigest"]
+        assert len(order_payload) == order_envelope["payloadSizeBytes"]
         stored_order = json.loads(order_payload)
         assert stored_order["order_id"] == "order-e2e-1"
         assert len(stored_order["items"]) == 12
@@ -143,6 +144,7 @@ async def test_filesystem_serdes_overflow_replays_inline_and_file_payloads(
         assert payload_file.is_file()
         payload = payload_file.read_bytes()
         assert hashlib.sha256(payload).hexdigest() == file_envelope["payloadDigest"]
+        assert len(payload) == file_envelope["payloadSizeBytes"]
         stored_result = json.loads(payload)
         assert len(stored_result["records"]) == 300
         assert stored_result["records"][299]["id"] == 299

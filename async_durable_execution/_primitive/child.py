@@ -20,6 +20,7 @@ from .._core import (
     OperationIdentifier,
     OperationStatus,
     OperationSubTypeValue,
+    OperationType,
     OperationUpdate,
     SerDes,
     _encode_sdk_control_error_data,
@@ -48,6 +49,8 @@ CHECKPOINT_SIZE_LIMIT = 256 * 1024
 
 class ChildOperationExecutor(OperationExecutor[T]):
     """Executor for child context operations."""
+
+    SERDES_OPERATION_TYPE = OperationType.CONTEXT
 
     def __init__(
         self,
@@ -107,6 +110,10 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 operation_id=self.operation_id,
                 durable_execution_arn=self.durable_execution_arn,
                 recursive_level=self.state.recursive_level,
+                operation_name=operation.name,
+                parent_id=operation.parent_id,
+                operation_type=operation.operation_type,
+                operation_sub_type=operation.sub_type,
             )
             return result
 
@@ -168,6 +175,10 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 operation_id=self.operation_id,
                 durable_execution_arn=self.durable_execution_arn,
                 recursive_level=self.state.recursive_level,
+                operation_name=self.operation_identifier.name,
+                parent_id=self.operation_identifier.parent_id,
+                operation_type=self.SERDES_OPERATION_TYPE,
+                operation_sub_type=self.operation_identifier.sub_type,
             )
 
             # Check payload size and use ReplayChildren mode if needed
@@ -224,6 +235,10 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 operation_id=self.operation_id,
                 durable_execution_arn=self.durable_execution_arn,
                 recursive_level=self.state.recursive_level,
+                operation_name=self.operation_identifier.name,
+                parent_id=self.operation_identifier.parent_id,
+                operation_type=self.SERDES_OPERATION_TYPE,
+                operation_sub_type=self.operation_identifier.sub_type,
             )
         except Exception as e:
             if isinstance(e, InvocationError) and e.is_retryable():

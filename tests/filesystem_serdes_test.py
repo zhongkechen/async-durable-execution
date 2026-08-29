@@ -94,6 +94,7 @@ async def test_filesystem_stage_roundtrips_immutable_file_with_preview(
     assert envelope["__durable_execution_filesystem_serdes"] == 1
     assert envelope["preview"] == {"id": "order-1"}
     assert file_path.read_text() == json.dumps(value)
+    assert envelope["payloadSizeBytes"] == len(file_path.read_bytes())
     assert (
         envelope["payloadDigest"] == hashlib.sha256(file_path.read_bytes()).hexdigest()
     )
@@ -215,9 +216,16 @@ async def test_stage_rejects_tampered_file_and_wrong_owner(
     context = _context()
     serialized = await stage.serialize("trusted", context)
     envelope = json.loads(serialized)
-    Path(envelope["file"]).write_text("tampered")
+    Path(envelope["file"]).write_text("corrupt")
 
     with pytest.raises(SerDesError, match="digest"):
+        await stage.deserialize(serialized, context)
+
+    serialized = await stage.serialize("trusted", context)
+    envelope = json.loads(serialized)
+    Path(envelope["file"]).write_bytes(b"x" * (1024 * 1024))
+
+    with pytest.raises(SerDesError, match="size"):
         await stage.deserialize(serialized, context)
 
     serialized = await stage.serialize("trusted", context)

@@ -21,6 +21,7 @@ from .._core import (
     OperationIdentifier,
     OperationStatus,
     OperationSubType,
+    OperationType,
     OperationUpdate,
     SerDes,
     ValidationError,
@@ -103,6 +104,8 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
     imports retain their original behavior during the package migration.
     """
 
+    SERDES_OPERATION_TYPE = OperationType.STEP
+
     def __init__(
         self,
         check: Callable[[T | None], Awaitable[T]],
@@ -153,6 +156,12 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             return await self.deserialize_value(
                 data=result,
                 serdes=self.serdes,
+                operation=operation,
+                attempt=(
+                    operation.step_details.attempt
+                    if operation.step_details is not None
+                    else None
+                ),
             )
 
         if operation.status is OperationStatus.FAILED:
@@ -226,6 +235,8 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 current_state = await self.deserialize_value(
                     data=operation_details.result,
                     serdes=self.serdes,
+                    operation=operation,
+                    attempt=operation_details.attempt,
                 )
             else:
                 current_state = self.initial_state
@@ -246,6 +257,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             serialized_state = await self.serialize_value(
                 value=new_state,
                 serdes=self.serdes,
+                attempt=attempt,
             )
 
             logger.debug(
@@ -271,6 +283,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 return await self.deserialize_value(
                     data=serialized_state,
                     serdes=self.serdes,
+                    attempt=attempt,
                 )
 
             delay_seconds = suspend_delay_seconds

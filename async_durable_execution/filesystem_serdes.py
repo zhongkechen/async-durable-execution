@@ -109,11 +109,13 @@ class FileSystemSerDesStage:
         self._require_context(context)
         payload = value.encode("utf-8")
         digest = hashlib.sha256(payload).hexdigest()
+        payload_size = len(payload)
 
         if self._config.storage_mode is FileSystemSerDesMode.OVERFLOW:
             inline_envelope = self._encode_envelope(
                 context=context,
                 digest=digest,
+                payload_size=payload_size,
                 data=value,
             )
             if self._fits_checkpoint(inline_envelope):
@@ -124,6 +126,7 @@ class FileSystemSerDesStage:
         file_envelope = self._encode_envelope(
             context=context,
             digest=digest,
+            payload_size=payload_size,
             file_path=file_path,
             preview=preview,
         )
@@ -175,13 +178,16 @@ class FileSystemSerDesStage:
 
         parsed = self._validate_envelope(envelope, context)
         digest = parsed["payloadDigest"]
+        payload_size = parsed["payloadSizeBytes"]
         owner_arn = parsed["ownerDurableExecutionArn"]
         owner_entity_id = parsed["ownerEntityId"]
         self._validate_owner(owner_arn, owner_entity_id, context)
 
         inline_data = parsed.get("data")
         if isinstance(inline_data, str):
-            self._verify_digest(inline_data.encode("utf-8"), digest, context)
+            inline_payload = inline_data.encode("utf-8")
+            self._verify_payload_size(inline_payload, payload_size, context)
+            self._verify_digest(inline_payload, digest, context)
             return inline_data
 
         file_path = self._validate_file_path(
@@ -195,6 +201,7 @@ class FileSystemSerDesStage:
                 _FILESYSTEM_EXECUTOR,
                 _read_payload,
                 file_path,
+                payload_size,
             )
         except OSError as error:
             msg = (
@@ -243,6 +250,7 @@ class FileSystemSerDesStage:
         *,
         context: SerDesContext,
         digest: str,
+        payload_size: int,
         data: str | None = None,
         file_path: Path | None = None,
         preview: dict[str, Any] | None = None,
@@ -253,6 +261,7 @@ class FileSystemSerDesStage:
             "ownerEntityId": self._entity_id(context),
             "payloadType": _PAYLOAD_TYPE,
             "payloadDigest": digest,
+            "payloadSizeBytes": payload_size,
         }
         if data is not None:
             envelope["data"] = data
@@ -291,6 +300,7 @@ class FileSystemSerDesStage:
             "ownerEntityId",
             "payloadType",
             "payloadDigest",
+            "payloadSizeBytes",
             "data" if has_data else "file",
         }
         if has_preview:
@@ -306,6 +316,9 @@ class FileSystemSerDesStage:
             and envelope.get("payloadType") == _PAYLOAD_TYPE
             and isinstance(envelope.get("payloadDigest"), str)
             and bool(_SHA256_PATTERN.fullmatch(envelope["payloadDigest"]))
+            and isinstance(envelope.get("payloadSizeBytes"), int)
+            and not isinstance(envelope.get("payloadSizeBytes"), bool)
+            and envelope["payloadSizeBytes"] >= 0
             and (
                 not has_preview or (has_file and isinstance(envelope["preview"], dict))
             )
@@ -368,6 +381,19 @@ class FileSystemSerDesStage:
             msg = (
                 "Filesystem SerDes payload digest does not match stored "
                 f"content for entity {self._entity_id(context)!r}."
+            )
+            raise SerDesError(msg)
+
+    def _verify_payload_size(
+        self,
+        payload: bytes,
+        expected_size: int,
+        context: SerDesContext,
+    ) -> None:
+        if len(payload) != expected_size:
+            msg = (
+                "Filesystem SerDes payload size does not match the envelope "
+                f"for entity {self._entity_id(context)!r}."
             )
             raise SerDesError(msg)
 
@@ -556,7 +582,7 @@ def _write_payload(file_path: Path, payload: bytes) -> None:
         os.close(directory_fd)
 
 
-def _read_payload(file_path: Path) -> bytes:
+def _read_payload(file_path: Path, expected_size: int) -> bytes:
     directory_fd = _open_directory_path(file_path.parent, create=False)
     file_fd: int | None = None
     try:
@@ -569,9 +595,22 @@ def _read_payload(file_path: Path) -> bytes:
         if not stat.S_ISREG(file_stat.st_mode):
             msg = "Filesystem SerDes envelope does not reference a regular file."
             raise SerDesError(msg)
+        if file_stat.st_size != expected_size:
+            msg = "Filesystem SerDes payload size does not match the envelope."
+            raise SerDesError(msg)
+
         chunks: list[bytes] = []
-        while chunk := os.read(file_fd, 1024 * 1024):
+        remaining = expected_size
+        while remaining:
+            chunk = os.read(file_fd, min(remaining, 1024 * 1024))
+            if not chunk:
+                msg = "Filesystem SerDes payload ended before its declared size."
+                raise SerDesError(msg)
             chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(file_fd, 1):
+            msg = "Filesystem SerDes payload exceeds its declared size."
+            raise SerDesError(msg)
         return b"".join(chunks)
     finally:
         if file_fd is not None:

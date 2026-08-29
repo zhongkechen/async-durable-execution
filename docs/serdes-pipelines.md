@@ -107,9 +107,11 @@ and offloads larger values.
 
 Payload files are immutable and uniquely named. The envelope records the
 producer execution and entity, content digest, payload type, and either inline
-data or a file path. Deserialization validates the envelope, ownership, path,
-file type, symbolic-link boundaries, and SHA-256 digest before returning the
-stored string. Input without the reserved filesystem marker passes through
+data or a file path. It also records the exact UTF-8 payload size so
+deserialization can reject oversized replacements before reading them into
+memory. Deserialization validates the envelope, ownership, path, file type,
+symbolic-link boundaries, declared size, and SHA-256 digest before returning
+the stored string. Input without the reserved filesystem marker passes through
 unchanged.
 
 `FileSystemPathEncoding.URI` creates human-readable execution paths.

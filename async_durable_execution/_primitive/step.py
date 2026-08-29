@@ -21,6 +21,7 @@ from .._core import (
     OperationContext,
     OperationIdentifier,
     OperationStatus,
+    OperationType,
     OperationUpdate,
     RetryStrategy,
     SerDes,
@@ -86,6 +87,8 @@ class StepSemantics(Enum):
 class StepOperationExecutor(OperationExecutor[T]):
     """Executor for step operations."""
 
+    SERDES_OPERATION_TYPE = OperationType.STEP
+
     def __init__(
         self,
         func: Callable[[], Awaitable[T]],
@@ -138,6 +141,12 @@ class StepOperationExecutor(OperationExecutor[T]):
             result: T = await self.deserialize_value(
                 data=result_payload,
                 serdes=self.serdes,
+                operation=operation,
+                attempt=(
+                    operation.step_details.attempt
+                    if operation.step_details is not None
+                    else None
+                ),
             )
             return result
 
@@ -212,6 +221,7 @@ class StepOperationExecutor(OperationExecutor[T]):
             serialized_result: str = await self.serialize_value(
                 value=raw_result,
                 serdes=self.serdes,
+                attempt=attempt,
             )
 
             success_operation: OperationUpdate = OperationUpdate.create_step_succeed(
@@ -232,6 +242,7 @@ class StepOperationExecutor(OperationExecutor[T]):
             return await self.deserialize_value(
                 data=serialized_result,
                 serdes=self.serdes,
+                attempt=attempt,
             )
         except Exception as e:
             if isinstance(e, ExecutionError):
@@ -381,6 +392,8 @@ class StepOperationExecutor(OperationExecutor[T]):
 class StatefulStepOperationExecutor(OperationExecutor[T]):
     """Executor for stateful extension-authored step operations."""
 
+    SERDES_OPERATION_TYPE = OperationType.STEP
+
     def __init__(
         self,
         func: ExtensionStepFunction[T],
@@ -414,7 +427,16 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
             payload = operation.step_details.result if operation.step_details else None
             if payload is None:
                 return cast("T", None)
-            return await self.deserialize_value(payload, self.serdes)
+            return await self.deserialize_value(
+                payload,
+                self.serdes,
+                operation=operation,
+                attempt=(
+                    operation.step_details.attempt
+                    if operation.step_details is not None
+                    else None
+                ),
+            )
 
         if operation.status is OperationStatus.FAILED:
             self._raise_failed_operation(operation)
@@ -486,10 +508,18 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
                 raise TypeError(msg)
 
             if outcome.is_retry:
-                delay_seconds, payload = await self._prepare_retry(outcome)
+                delay_seconds, payload = await self._prepare_retry(outcome, attempt)
             else:
-                payload = await self.serialize_value(outcome.value, self.serdes)
-                result = await self.deserialize_value(payload, self.serdes)
+                payload = await self.serialize_value(
+                    outcome.value,
+                    self.serdes,
+                    attempt=attempt,
+                )
+                result = await self.deserialize_value(
+                    payload,
+                    self.serdes,
+                    attempt=attempt,
+                )
         except InvocationError as error:
             if error.is_retryable():
                 raise
@@ -520,6 +550,8 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
             return await self.deserialize_value(
                 operation.step_details.result,
                 self.serdes,
+                operation=operation,
+                attempt=operation.step_details.attempt,
             )
         return self.initial_state
 
@@ -555,7 +587,7 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
             return await self._fail(TypeError(msg))
 
         try:
-            delay_seconds, payload = await self._prepare_retry(decision)
+            delay_seconds, payload = await self._prepare_retry(decision, attempt)
         except Exception as retry_error:
             return await self._fail(retry_error)
 
@@ -567,13 +599,18 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
     async def _prepare_retry(
         self,
         outcome: ExtensionStepResult[T],
+        attempt: int,
     ) -> tuple[int, str]:
         assert outcome.retry_delay is not None
         delay_seconds = max(
             1,
             duration_to_seconds(outcome.retry_delay, "retry delay"),
         )
-        payload = await self.serialize_value(outcome.value, self.serdes)
+        payload = await self.serialize_value(
+            outcome.value,
+            self.serdes,
+            attempt=attempt,
+        )
         return delay_seconds, payload
 
     async def _schedule_retry(

@@ -1432,6 +1432,10 @@ class ParallelExecutor(
                         operation_id=operation_id,
                         durable_execution_arn=execution_state.durable_execution_arn,
                         recursive_level=execution_state.recursive_level,
+                        operation_name=operation.name,
+                        parent_id=operation.parent_id,
+                        operation_type=operation.operation_type,
+                        operation_sub_type=operation.sub_type,
                     )
             elif operation is not None and operation.status is OperationStatus.FAILED:
                 error = (
