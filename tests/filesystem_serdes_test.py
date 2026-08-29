@@ -171,21 +171,21 @@ async def test_filesystem_io_errors_are_classified_for_retry(
 ) -> None:
     stage = FileSystemSerDesStage(tmp_path)
 
-    def fail_write(_path: Path, _payload: bytes) -> None:
+    def fail_write(_base_path: Path, _path: Path, _payload: bytes) -> None:
         raise OSError(errno.EIO, "transient mount failure")
 
     monkeypatch.setattr(filesystem_serdes_module, "_write_payload", fail_write)
     with pytest.raises(RetryableSerDesError, match="Failed to store"):
         await stage.serialize("trusted", _context())
 
-    def deny_write(_path: Path, _payload: bytes) -> None:
+    def deny_write(_base_path: Path, _path: Path, _payload: bytes) -> None:
         raise OSError(errno.EACCES, "permission denied")
 
     monkeypatch.setattr(filesystem_serdes_module, "_write_payload", deny_write)
     with pytest.raises(SerDesError, match="Failed to store"):
         await stage.serialize("trusted", _context())
 
-    def reject_symlink(_path: Path, _payload: bytes) -> None:
+    def reject_symlink(_base_path: Path, _path: Path, _payload: bytes) -> None:
         raise OSError(errno.ELOOP, "symbolic link rejected")
 
     monkeypatch.setattr(filesystem_serdes_module, "_write_payload", reject_symlink)
@@ -245,6 +245,18 @@ async def test_stage_requires_durable_context_and_bounded_file_envelope(
     )
     with pytest.raises(SerDesError, match="exceeds"):
         await stage.serialize("value", _context())
+
+
+async def test_stage_does_not_create_missing_configured_base_path(
+    tmp_path: Path,
+) -> None:
+    missing_base = tmp_path / "missing-mount"
+    stage = FileSystemSerDesStage(missing_base)
+
+    with pytest.raises(SerDesError, match="base path does not exist"):
+        await stage.serialize("trusted", _context())
+
+    assert not missing_base.exists()
 
 
 async def test_stage_rejects_tampered_file_and_wrong_owner(
@@ -457,6 +469,7 @@ async def test_stage_syncs_each_new_directory_entry(
     ("failure_call", "error_number", "expected_error"),
     [
         (1, errno.EIO, RetryableSerDesError),
+        (1, errno.EOPNOTSUPP, SerDesError),
         (2, errno.EROFS, SerDesError),
     ],
 )

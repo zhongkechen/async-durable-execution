@@ -1249,6 +1249,8 @@ class ParallelExecutor(
             exe_state.suspend()
         except InvocationError as error:
             if error.is_retryable():
+                if self._completion_decision is not None:
+                    return
                 self._completion_exception = error
                 self._completion_event.set()
                 return

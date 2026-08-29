@@ -162,8 +162,12 @@ Filesystem data must outlive every checkpoint that references it. The SDK does
 not delete files automatically because it cannot know when execution history
 retention has expired. Cleanup tooling can use
 `stage.execution_directory(durable_execution_arn)` and remove that directory
-only after the execution is terminal and its configured retention period has
-elapsed.
+only after every execution whose checkpoints reference files in that directory
+is terminal and its configured retention period has elapsed. When a
+`cross_execution_reference_policy` permits a consumer to use a producer-owned
+file, retain the producer directory through the consumer's history-retention
+window as well. If cleanup tooling cannot track those dependencies, it must not
+delete producer directories that can be shared across executions.
 
 ## Structured previews
 

@@ -42,6 +42,8 @@ _NON_RETRYABLE_FILESYSTEM_ERRNOS = {
     errno.ENAMETOOLONG,
     errno.ENOSPC,
     errno.ENOTDIR,
+    getattr(errno, "EOPNOTSUPP", errno.EINVAL),
+    getattr(errno, "ENOTSUP", getattr(errno, "EOPNOTSUPP", errno.EINVAL)),
     errno.EPERM,
     errno.EROFS,
 }
@@ -166,6 +168,7 @@ class FileSystemSerDesStage:
             await asyncio.get_running_loop().run_in_executor(
                 _FILESYSTEM_EXECUTOR,
                 _write_payload,
+                self._base_path,
                 file_path,
                 payload,
             )
@@ -225,6 +228,7 @@ class FileSystemSerDesStage:
             payload = await asyncio.get_running_loop().run_in_executor(
                 _FILESYSTEM_EXECUTOR,
                 _read_payload,
+                self._base_path,
                 file_path,
                 payload_size,
             )
@@ -600,15 +604,35 @@ def _directory_open_flags() -> int:
     return os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
 
 
-def _open_directory_path(path: Path, *, create: bool) -> int:
+def _open_directory_path(
+    path: Path,
+    *,
+    create: bool,
+    required_root: Path | None = None,
+) -> int:
     if not path.is_absolute():
         msg = "Filesystem SerDes paths must be absolute."
         raise SerDesError(msg)
 
-    root = Path(path.anchor)
-    directory_fd = os.open(root, _directory_open_flags())
+    if required_root is None:
+        root = Path(path.anchor)
+        parts = path.parts[1:]
+        directory_fd = os.open(root, _directory_open_flags())
+    else:
+        try:
+            relative = path.relative_to(required_root)
+        except ValueError as error:
+            msg = "Filesystem SerDes directory is outside the configured base path."
+            raise SerDesError(msg) from error
+        try:
+            directory_fd = _open_directory_path(required_root, create=False)
+        except FileNotFoundError as error:
+            msg = "Filesystem SerDes configured base path does not exist."
+            raise SerDesError(msg) from error
+        parts = relative.parts
+
     try:
-        for part in path.parts[1:]:
+        for part in parts:
             if create:
                 created = False
                 try:
@@ -627,8 +651,12 @@ def _open_directory_path(path: Path, *, create: bool) -> int:
         raise
 
 
-def _write_payload(file_path: Path, payload: bytes) -> None:
-    directory_fd = _open_directory_path(file_path.parent, create=True)
+def _write_payload(base_path: Path, file_path: Path, payload: bytes) -> None:
+    directory_fd = _open_directory_path(
+        file_path.parent,
+        create=True,
+        required_root=base_path,
+    )
     file_fd: int | None = None
     created = False
     try:
@@ -659,8 +687,12 @@ def _write_payload(file_path: Path, payload: bytes) -> None:
         os.close(directory_fd)
 
 
-def _read_payload(file_path: Path, expected_size: int) -> bytes:
-    directory_fd = _open_directory_path(file_path.parent, create=False)
+def _read_payload(base_path: Path, file_path: Path, expected_size: int) -> bytes:
+    directory_fd = _open_directory_path(
+        file_path.parent,
+        create=False,
+        required_root=base_path,
+    )
     file_fd: int | None = None
     try:
         file_fd = os.open(
