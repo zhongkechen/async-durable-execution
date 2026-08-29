@@ -16,6 +16,7 @@ from async_durable_execution._core.exceptions import (
     CallableRuntimeError,
     ExecutionError,
     InvocationError,
+    RetryableSerDesError,
     SerDesError,
     SuspendExecution,
     TerminationReason,
@@ -90,6 +91,14 @@ class FailingDeserializeSerDes(SerDes[str]):
 
     async def deserialize(self, data: str) -> str:
         raise ValueError("cannot deserialize")
+
+
+class RetryableFailingDeserializeSerDes(SerDes[str]):
+    async def serialize(self, value: str) -> str:
+        return value
+
+    async def deserialize(self, data: str) -> str:
+        raise RetryableSerDesError("transient read failure")
 
 
 class NonRetryableInvocationError(InvocationError):
@@ -195,9 +204,26 @@ async def test_stateful_step_serialization_failure_is_checkpointed(
     assert actions == [OperationAction.START, OperationAction.FAIL]
 
 
-async def test_stateful_step_deserialization_failure_precedes_success_checkpoint() -> (
-    None
-):
+@pytest.mark.parametrize(
+    ("serdes", "expected_error", "message"),
+    [
+        (
+            FailingDeserializeSerDes(),
+            ExecutionError,
+            "Deserialization failed",
+        ),
+        (
+            RetryableFailingDeserializeSerDes(),
+            RetryableSerDesError,
+            "transient read failure",
+        ),
+    ],
+)
+async def test_stateful_step_deserialization_failure_follows_success_checkpoint(
+    serdes: SerDes[str],
+    expected_error: type[Exception],
+    message: str,
+) -> None:
     state = Mock(spec=ExecutionState)
     state.durable_execution_arn = "arn:test"
     state.operations.get.return_value = None
@@ -218,17 +244,17 @@ async def test_stateful_step_deserialization_failure_precedes_success_checkpoint
         initial_state=None,
         retry_strategy=None,
         step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY,
-        serdes=FailingDeserializeSerDes(),
+        serdes=serdes,
     )
 
-    with pytest.raises(ExecutionError, match="Deserialization failed"):
+    with pytest.raises(expected_error, match=message):
         await executor.process()
 
     actions = [
         call.kwargs["operation_update"].action
         for call in state.create_checkpoint.await_args_list
     ]
-    assert actions == [OperationAction.START, OperationAction.FAIL]
+    assert actions == [OperationAction.START, OperationAction.SUCCEED]
 
 
 @pytest.mark.parametrize(

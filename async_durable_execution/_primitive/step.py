@@ -519,11 +519,6 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
                     self.serdes,
                     attempt=attempt,
                 )
-                result = await self.deserialize_value(
-                    payload,
-                    self.serdes,
-                    attempt=attempt,
-                )
         except InvocationError as error:
             if error.is_retryable():
                 raise
@@ -543,7 +538,11 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
                 payload,
             )
         )
-        return result
+        return await self.deserialize_value(
+            payload,
+            self.serdes,
+            attempt=attempt,
+        )
 
     async def _load_state(self, operation: Operation | None) -> T | None:
         if (

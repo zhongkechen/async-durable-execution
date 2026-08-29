@@ -233,7 +233,7 @@ class FileSystemSerDesStage:
                 "Failed to load filesystem payload for entity "
                 f"{self._entity_id(context)!r}."
             )
-            _raise_filesystem_error(msg, error)
+            _raise_filesystem_error(msg, error, missing_is_permanent=True)
         self._verify_digest(payload, digest, context)
         try:
             return payload.decode("utf-8")
@@ -517,8 +517,15 @@ def create_file_system_serdes_stage(
     return FileSystemSerDesStage(base_path, config)
 
 
-def _raise_filesystem_error(message: str, error: OSError) -> None:
-    if error.errno in _NON_RETRYABLE_FILESYSTEM_ERRNOS:
+def _raise_filesystem_error(
+    message: str,
+    error: OSError,
+    *,
+    missing_is_permanent: bool = False,
+) -> None:
+    if error.errno in _NON_RETRYABLE_FILESYSTEM_ERRNOS or (
+        missing_is_permanent and error.errno == errno.ENOENT
+    ):
         raise SerDesError(message) from error
     raise RetryableSerDesError(message) from error
 
@@ -603,10 +610,14 @@ def _open_directory_path(path: Path, *, create: bool) -> int:
     try:
         for part in path.parts[1:]:
             if create:
+                created = False
                 try:
                     os.mkdir(part, mode=0o700, dir_fd=directory_fd)
+                    created = True
                 except FileExistsError:
                     pass
+                if created:
+                    os.fsync(directory_fd)
             next_fd = os.open(part, _directory_open_flags(), dir_fd=directory_fd)
             os.close(directory_fd)
             directory_fd = next_fd

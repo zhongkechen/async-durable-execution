@@ -299,6 +299,18 @@ async def test_stage_rejects_tampered_file_and_wrong_owner(
         await stage.deserialize(serialized, chained_consumer)
 
 
+async def test_stage_treats_missing_checkpoint_payload_as_permanent(
+    tmp_path: Path,
+) -> None:
+    stage = FileSystemSerDesStage(tmp_path)
+    context = _context()
+    serialized = await stage.serialize("trusted", context)
+    Path(json.loads(serialized)["file"]).unlink()
+
+    with pytest.raises(SerDesError, match="Failed to load"):
+        await stage.deserialize(serialized, context)
+
+
 async def test_chained_invoke_can_resolve_cross_execution_owner(
     tmp_path: Path,
 ) -> None:
@@ -398,6 +410,8 @@ async def test_stage_syncs_payload_and_directory_before_returning_envelope(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    stage = FileSystemSerDesStage(tmp_path)
+    stage.execution_directory(EXECUTION_ARN).mkdir(parents=True)
     sync_targets: list[str] = []
     real_fsync = os.fsync
 
@@ -408,9 +422,35 @@ async def test_stage_syncs_payload_and_directory_before_returning_envelope(
 
     monkeypatch.setattr(filesystem_serdes_module.os, "fsync", record_sync)
 
-    await FileSystemSerDesStage(tmp_path).serialize("trusted", _context())
+    await stage.serialize("trusted", _context())
 
     assert sync_targets == ["file", "directory"]
+
+
+async def test_stage_syncs_each_new_directory_entry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stage = FileSystemSerDesStage(tmp_path)
+    execution_directory = stage.execution_directory(EXECUTION_ARN)
+    sync_targets: list[str] = []
+    real_fsync = os.fsync
+
+    def record_sync(file_descriptor: int) -> None:
+        mode = os.fstat(file_descriptor).st_mode
+        sync_targets.append("directory" if stat.S_ISDIR(mode) else "file")
+        real_fsync(file_descriptor)
+
+    monkeypatch.setattr(filesystem_serdes_module.os, "fsync", record_sync)
+
+    await stage.serialize("trusted", _context())
+
+    new_directory_count = len(execution_directory.relative_to(tmp_path).parts)
+    assert sync_targets == [
+        *(["directory"] * new_directory_count),
+        "file",
+        "directory",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -427,6 +467,8 @@ async def test_stage_classifies_sync_failures_and_removes_unpublished_payload(
     error_number: int,
     expected_error: type[Exception],
 ) -> None:
+    stage = FileSystemSerDesStage(tmp_path)
+    stage.execution_directory(EXECUTION_ARN).mkdir(parents=True)
     sync_calls = 0
     real_fsync = os.fsync
 
@@ -440,7 +482,7 @@ async def test_stage_classifies_sync_failures_and_removes_unpublished_payload(
     monkeypatch.setattr(filesystem_serdes_module.os, "fsync", fail_sync)
 
     with pytest.raises(expected_error, match="Failed to store"):
-        await FileSystemSerDesStage(tmp_path).serialize("trusted", _context())
+        await stage.serialize("trusted", _context())
 
     assert list(tmp_path.rglob("*.payload")) == []
 
