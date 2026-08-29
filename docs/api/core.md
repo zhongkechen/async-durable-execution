@@ -98,6 +98,7 @@ than one context type.
         - InvalidStateError
         - UserlandError
         - CallableRuntimeError
+        - RetryableSerDesError
         - SerDesError
         - SerDesPipelineError
 

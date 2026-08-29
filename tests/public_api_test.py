@@ -247,6 +247,7 @@ def test_core_public_api_is_reexported_from_core_package() -> None:
         "OperationSubType",
         "OperationType",
         "RetryStrategy",
+        "RetryableSerDesError",
         "SerDes",
         "SerDesContext",
         "SerDesError",

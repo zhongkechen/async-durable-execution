@@ -119,6 +119,14 @@ unchanged.
 `FileSystemPathEncoding.URI` creates human-readable execution paths.
 `FileSystemPathEncoding.HASH` uses fixed-length SHA-256 path segments.
 
+Transient filesystem failures are raised as `RetryableSerDesError`. A durable
+step applies its configured retry strategy to these failures, while
+serialization outside step retry handling causes the Lambda invocation to be
+retried. Permanent configuration errors such as an unwritable or read-only
+mount remain normal `SerDesError` failures. Keep filesystem side effects
+idempotent; the built-in stage uses content-addressed immutable files for this
+reason.
+
 Cross-execution references are rejected by default, including chained invoke
 results. A caller that intentionally shares filesystem payloads across durable
 executions must provide a `cross_execution_reference_policy` that verifies the

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import hashlib
 import inspect
 import json
@@ -19,7 +20,7 @@ from typing import Any
 from urllib.parse import quote
 
 from ._core.context import SerDesContext
-from ._core.exceptions import SerDesError
+from ._core.exceptions import RetryableSerDesError, SerDesError
 from ._core.models import OperationType
 from .preview import PreviewConfig, build_preview
 
@@ -32,6 +33,17 @@ _DURABLE_EXECUTION_ARN_PATTERN = re.compile(
     r"([^:/]+):[^:/]+/durable-execution/([^/]+)/([^/]+)$"
 )
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_NON_RETRYABLE_FILESYSTEM_ERRNOS = {
+    errno.EACCES,
+    getattr(errno, "EDQUOT", errno.ENOSPC),
+    errno.EINVAL,
+    errno.EISDIR,
+    errno.ENAMETOOLONG,
+    errno.ENOSPC,
+    errno.ENOTDIR,
+    errno.EPERM,
+    errno.EROFS,
+}
 _FILESYSTEM_EXECUTOR = ThreadPoolExecutor(
     max_workers=4,
     thread_name_prefix="durable-filesystem-serdes",
@@ -160,7 +172,7 @@ class FileSystemSerDesStage:
                 "Failed to store filesystem payload for entity "
                 f"{self._entity_id(context)!r}."
             )
-            raise SerDesError(msg) from error
+            _raise_filesystem_error(msg, error)
         return file_envelope
 
     async def deserialize(self, data: str, context: SerDesContext) -> str:
@@ -219,7 +231,7 @@ class FileSystemSerDesStage:
                 "Failed to load filesystem payload for entity "
                 f"{self._entity_id(context)!r}."
             )
-            raise SerDesError(msg) from error
+            _raise_filesystem_error(msg, error)
         self._verify_digest(payload, digest, context)
         try:
             return payload.decode("utf-8")
@@ -477,6 +489,12 @@ def create_file_system_serdes_stage(
 ) -> FileSystemSerDesStage:
     """Create a filesystem stage for a composable SerDes pipeline."""
     return FileSystemSerDesStage(base_path, config)
+
+
+def _raise_filesystem_error(message: str, error: OSError) -> None:
+    if error.errno in _NON_RETRYABLE_FILESYSTEM_ERRNOS:
+        raise SerDesError(message) from error
+    raise RetryableSerDesError(message) from error
 
 
 def _strict_json_loads(data: str) -> Any:

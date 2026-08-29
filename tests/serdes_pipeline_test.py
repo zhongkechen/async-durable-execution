@@ -11,6 +11,7 @@ from async_durable_execution import (
     ComposableSerDes,
     JsonSerDes,
     OperationType,
+    RetryableSerDesError,
     SerDesContext,
     SerDesPipelineError,
     create_serdes_pipeline,
@@ -222,3 +223,33 @@ async def test_pipeline_does_not_wrap_task_cancellation() -> None:
 
     with pytest.raises(asyncio.CancelledError):
         await JsonSerDes[str]().then(CancelledStage()).serialize("value")
+
+
+async def test_pipeline_preserves_retryable_serdes_failures() -> None:
+    class RetryableStage:
+        async def serialize(
+            self,
+            value: str,
+            context: SerDesContext,
+        ) -> str:
+            raise RetryableSerDesError("transient")
+
+        async def deserialize(
+            self,
+            data: str,
+            context: SerDesContext,
+        ) -> str:
+            return data
+
+    pipeline = JsonSerDes[str]().then(RetryableStage())
+
+    with pytest.raises(
+        RetryableSerDesError,
+        match=r"pipeline stage 1 .* failed to serialize",
+    ):
+        await serialize(
+            pipeline,
+            "value",
+            "operation-1",
+            "arn:test",
+        )

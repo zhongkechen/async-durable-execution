@@ -37,6 +37,7 @@ from .context import SerDesContext, bind_current_context, get_current_context
 from .exceptions import (
     DurableExecutionsError,
     ExecutionError,
+    RetryableSerDesError,
     SerDesError,
 )
 from .models import OperationSubTypeValue, OperationType
@@ -505,6 +506,10 @@ class ComposableSerDes(SerDes[T]):
                 if not isinstance(current, str):
                     msg = "Stage returned a non-string value."
                     raise TypeError(msg)
+            except RetryableSerDesError as error:
+                raise RetryableSerDesError(
+                    _pipeline_failure_message(index, "serialize", stage)
+                ) from error
             except Exception as error:
                 raise SerDesPipelineError(index, "serialize", stage) from error
         return current
@@ -520,6 +525,10 @@ class ComposableSerDes(SerDes[T]):
                 if not isinstance(current, str):
                     msg = "Stage returned a non-string value."
                     raise TypeError(msg)
+            except RetryableSerDesError as error:
+                raise RetryableSerDesError(
+                    _pipeline_failure_message(index + 1, "deserialize", stage)
+                ) from error
             except Exception as error:
                 raise SerDesPipelineError(
                     index + 1,
@@ -535,12 +544,20 @@ class ComposableSerDes(SerDes[T]):
                 msg = "Value codec returned a non-string value."
                 raise TypeError(msg)
             return result
+        except RetryableSerDesError as error:
+            raise RetryableSerDesError(
+                _pipeline_failure_message(0, "serialize", self._value_codec)
+            ) from error
         except Exception as error:
             raise SerDesPipelineError(0, "serialize", self._value_codec) from error
 
     async def _invoke_value_codec_deserialize(self, data: str) -> T:
         try:
             return await self._value_codec.deserialize(data)
+        except RetryableSerDesError as error:
+            raise RetryableSerDesError(
+                _pipeline_failure_message(0, "deserialize", self._value_codec)
+            ) from error
         except Exception as error:
             raise SerDesPipelineError(0, "deserialize", self._value_codec) from error
 
@@ -569,6 +586,15 @@ def _current_or_empty_serdes_context() -> SerDesContext:
         return get_serdes_context()
     except RuntimeError:
         return SerDesContext()
+
+
+def _pipeline_failure_message(
+    stage_index: int,
+    action: Literal["serialize", "deserialize"],
+    stage: object,
+) -> str:
+    component_name = f"{type(stage).__module__}.{type(stage).__qualname__}"
+    return f"SerDes pipeline stage {stage_index} ({component_name}) failed to {action}"
 
 
 class PassThroughSerDes(SerDes[T]):
@@ -729,6 +755,12 @@ async def serialize(
     try:
         with bind_current_context(serdes_context):
             return await serialize_value()
+    except RetryableSerDesError:
+        logger.exception(
+            "⚠️ Retryable serialization failure for id: %s",
+            operation_id,
+        )
+        raise
     except Exception as e:
         logger.exception(
             "⚠️ Serialization failed for id: %s",
@@ -785,6 +817,12 @@ async def deserialize(
     try:
         with bind_current_context(serdes_context):
             return await deserialize_value()
+    except RetryableSerDesError:
+        logger.exception(
+            "⚠️ Retryable deserialization failure for id: %s",
+            operation_id,
+        )
+        raise
     except Exception as e:
         logger.exception("⚠️ Deserialization failed for id: %s", operation_id)
         msg = f"Deserialization failed for id: {operation_id}"

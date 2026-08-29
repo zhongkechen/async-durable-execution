@@ -23,6 +23,7 @@ from async_durable_execution._core.exceptions import (
     InvocationError,
     NonDeterministicExecutionError,
     OrphanedChildException,
+    RetryableSerDesError,
     SerDesError,
     SuspendExecution,
     TerminationReason,
@@ -46,6 +47,7 @@ def test_user_facing_exceptions_importable_from_package_root() -> None:
         "ExecutionError": ExecutionError,
         "InvalidStateError": InvalidStateError,
         "InvocationError": InvocationError,
+        "RetryableSerDesError": RetryableSerDesError,
         "SerDesError": SerDesError,
         "StepInterruptedError": StepInterruptedError,
         "UserlandError": UserlandError,
@@ -55,6 +57,14 @@ def test_user_facing_exceptions_importable_from_package_root() -> None:
     for name, exception_type in expected_exports.items():
         assert getattr(ade, name) is exception_type
         assert name in ade.__all__
+
+
+def test_retryable_serdes_error_is_retryable_invocation_error() -> None:
+    error = RetryableSerDesError("transient filesystem failure")
+
+    assert isinstance(error, InvocationError)
+    assert error.is_retryable()
+    assert error.termination_reason is TerminationReason.SERIALIZATION_ERROR
 
 
 def test_internal_exceptions_not_exported_from_package_root() -> None:

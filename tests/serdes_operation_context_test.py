@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, Mock
 
+import pytest
+
 from async_durable_execution import (
     FileSystemSerDesStage,
     FileSystemSerDesStageConfig,
@@ -14,8 +16,10 @@ from async_durable_execution import (
     OperationStatus,
     OperationSubType,
     OperationType,
+    RetryableSerDesError,
     SerDesContext,
 )
+from async_durable_execution._core.exceptions import TimedSuspendExecution
 from async_durable_execution._core.models import (
     CallbackDetails,
     ChainedInvokeDetails,
@@ -42,6 +46,16 @@ class CapturingStage:
 
     async def deserialize(self, data: str, context: SerDesContext) -> str:
         self.calls.append(("deserialize", context))
+        return data
+
+
+class RetryableStage:
+    """Stage that simulates a transient storage failure."""
+
+    async def serialize(self, value: str, context: SerDesContext) -> str:
+        raise RetryableSerDesError("transient storage failure")
+
+    async def deserialize(self, data: str, context: SerDesContext) -> str:
         return data
 
 
@@ -125,6 +139,35 @@ async def test_child_context_serdes_context_uses_context_metadata() -> None:
         assert context.operation_name == "child-name"
         assert context.parent_id == "parent-id"
         assert context.attempt is None
+
+
+async def test_step_retry_strategy_receives_retryable_serdes_failure() -> None:
+    retry_calls: list[tuple[Exception, int]] = []
+
+    def retry_strategy(error: Exception, attempt: int) -> int:
+        retry_calls.append((error, attempt))
+        return 1
+
+    executor = StepOperationExecutor(
+        lambda: _return_value({"value": 1}),
+        _state(),
+        OperationIdentifier(
+            "step-id",
+            OperationSubType.STEP,
+            None,
+            "step-name",
+        ),
+        retry_strategy=retry_strategy,
+        serdes=JsonSerDes[dict[str, int]]().then(RetryableStage()),
+    )
+
+    with pytest.raises(TimedSuspendExecution):
+        await executor.execute(None)
+
+    assert len(retry_calls) == 1
+    error, attempt = retry_calls[0]
+    assert isinstance(error, RetryableSerDesError)
+    assert attempt == 1
 
 
 async def test_callback_result_serdes_context_uses_checkpoint_metadata() -> None:

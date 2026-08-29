@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import hashlib
 import json
 from dataclasses import replace
@@ -11,6 +12,7 @@ from typing import Any
 
 import pytest
 
+import async_durable_execution.filesystem_serdes as filesystem_serdes_module
 from async_durable_execution import (
     FileSystemPathEncoding,
     FileSystemSerDesMode,
@@ -20,6 +22,7 @@ from async_durable_execution import (
     PreviewConfig,
     PreviewField,
     PreviewMode,
+    RetryableSerDesError,
     SerDesContext,
     SerDesError,
     OperationType,
@@ -186,6 +189,27 @@ async def test_content_addressed_publication_is_concurrently_idempotent(
 
     assert len(set(serialized)) == 1
     assert len(list(tmp_path.rglob("*.payload"))) == 1
+
+
+async def test_filesystem_io_errors_are_classified_for_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stage = FileSystemSerDesStage(tmp_path)
+
+    def fail_write(_path: Path, _payload: bytes) -> None:
+        raise OSError(errno.EIO, "transient mount failure")
+
+    monkeypatch.setattr(filesystem_serdes_module, "_write_payload", fail_write)
+    with pytest.raises(RetryableSerDesError, match="Failed to store"):
+        await stage.serialize("trusted", _context())
+
+    def deny_write(_path: Path, _payload: bytes) -> None:
+        raise OSError(errno.EACCES, "permission denied")
+
+    monkeypatch.setattr(filesystem_serdes_module, "_write_payload", deny_write)
+    with pytest.raises(SerDesError, match="Failed to store"):
+        await stage.serialize("trusted", _context())
 
 
 async def test_stage_passes_unrecognized_input_through(tmp_path: Path) -> None:
