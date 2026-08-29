@@ -36,6 +36,7 @@ _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _NON_RETRYABLE_FILESYSTEM_ERRNOS = {
     errno.EACCES,
     getattr(errno, "EDQUOT", errno.ENOSPC),
+    errno.EFBIG,
     errno.ELOOP,
     errno.EINVAL,
     errno.EISDIR,
@@ -381,8 +382,22 @@ class FileSystemSerDesStage:
             and policy is not None
         ):
             try:
-                if policy(owner_arn, owner_entity_id, context):
+                decision = policy(owner_arn, owner_entity_id, context)
+                if inspect.isawaitable(decision):
+                    if inspect.iscoroutine(decision):
+                        decision.close()
+                    msg = (
+                        "Filesystem SerDes cross-execution policy must return "
+                        "a bool synchronously."
+                    )
+                    raise SerDesError(msg)
+                if not isinstance(decision, bool):
+                    msg = "Filesystem SerDes cross-execution policy must return a bool."
+                    raise SerDesError(msg)
+                if decision:
                     return
+            except SerDesError:
+                raise
             except Exception as error:
                 msg = "Filesystem SerDes cross-execution policy failed."
                 raise SerDesError(msg) from error

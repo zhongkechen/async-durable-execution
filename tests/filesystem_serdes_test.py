@@ -192,6 +192,13 @@ async def test_filesystem_io_errors_are_classified_for_retry(
     with pytest.raises(SerDesError, match="Failed to store"):
         await stage.serialize("trusted", _context())
 
+    def reject_oversized(_base_path: Path, _path: Path, _payload: bytes) -> None:
+        raise OSError(errno.EFBIG, "file too large")
+
+    monkeypatch.setattr(filesystem_serdes_module, "_write_payload", reject_oversized)
+    with pytest.raises(SerDesError, match="Failed to store"):
+        await stage.serialize("trusted", _context())
+
 
 async def test_stage_passes_unrecognized_input_through(tmp_path: Path) -> None:
     stage = FileSystemSerDesStage(tmp_path)
@@ -359,6 +366,55 @@ async def test_chained_invoke_can_resolve_cross_execution_owner(
     assert trusted_owners == [
         (EXECUTION_ARN, "operation/operation-1/result"),
     ]
+
+
+@pytest.mark.parametrize(
+    "policy_result",
+    [1, "yes", object()],
+)
+async def test_cross_execution_policy_requires_bool(
+    tmp_path: Path,
+    policy_result: object,
+) -> None:
+    producer = FileSystemSerDesStage(tmp_path)
+    serialized = await producer.serialize("trusted", _context())
+    consumer = FileSystemSerDesStage(
+        tmp_path,
+        FileSystemSerDesStageConfig(
+            cross_execution_reference_policy=lambda *_args: policy_result,  # type: ignore[arg-type]
+        ),
+    )
+    consumer_context = replace(
+        _context(entity_id="operation/consumer", arn="arn:consumer"),
+        operation_type=OperationType.CHAINED_INVOKE,
+    )
+
+    with pytest.raises(SerDesError, match="must return a bool"):
+        await consumer.deserialize(serialized, consumer_context)
+
+
+async def test_cross_execution_policy_rejects_awaitable_result(
+    tmp_path: Path,
+) -> None:
+    producer = FileSystemSerDesStage(tmp_path)
+    serialized = await producer.serialize("trusted", _context())
+
+    async def async_policy(*_args: object) -> bool:
+        return True
+
+    consumer = FileSystemSerDesStage(
+        tmp_path,
+        FileSystemSerDesStageConfig(
+            cross_execution_reference_policy=async_policy,  # type: ignore[arg-type]
+        ),
+    )
+    consumer_context = replace(
+        _context(entity_id="operation/consumer", arn="arn:consumer"),
+        operation_type=OperationType.CHAINED_INVOKE,
+    )
+
+    with pytest.raises(SerDesError, match="synchronously"):
+        await consumer.deserialize(serialized, consumer_context)
 
 
 def test_execution_directory_supports_retention_cleanup(tmp_path: Path) -> None:

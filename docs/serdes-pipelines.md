@@ -147,7 +147,7 @@ def trust_orders_service(
 ) -> bool:
     return (
         owner_arn.startswith(orders_execution_arn_prefix)
-        and owner_entity_id.endswith("/result")
+        and owner_entity_id in trusted_orders_entity_ids
     )
 
 
@@ -158,6 +158,12 @@ stage = FileSystemSerDesStage(
     ),
 )
 ```
+
+SDK primitive payloads use entity IDs in the form
+`operation/{operation_id}`. Populate `trusted_orders_entity_ids` from the
+specific producer operations the consumer is allowed to read; role-qualified
+suffixes such as `/result` require a custom operation that explicitly supplies
+that entity identity.
 
 Filesystem data must outlive every checkpoint that references it. The SDK does
 not delete files automatically because it cannot know when execution history
