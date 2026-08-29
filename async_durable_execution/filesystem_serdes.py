@@ -634,14 +634,11 @@ def _open_directory_path(
     try:
         for part in parts:
             if create:
-                created = False
                 try:
                     os.mkdir(part, mode=0o700, dir_fd=directory_fd)
-                    created = True
                 except FileExistsError:
                     pass
-                if created:
-                    os.fsync(directory_fd)
+                os.fsync(directory_fd)
             next_fd = os.open(part, _directory_open_flags(), dir_fd=directory_fd)
             os.close(directory_fd)
             directory_fd = next_fd

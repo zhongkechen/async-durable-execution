@@ -106,8 +106,9 @@ versioned envelope inline while it fits the configured checkpoint byte limit
 and offloads larger values.
 
 Payload files are immutable, uniquely named, and published with one
-create-new write. Each newly created directory entry is synchronized in its
-parent, and the envelope is returned only after the file contents and final
+create-new write. Each traversed execution-directory entry is synchronized in
+its parent, including entries already created by a concurrent or retried
+writer. The envelope is returned only after the file contents and final
 execution-directory metadata are synchronized. An interrupted write can leave
 an unreferenced orphan but cannot poison a path used by another serialization
 attempt. The envelope records the producer execution and entity, content

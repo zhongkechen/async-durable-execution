@@ -423,7 +423,8 @@ async def test_stage_syncs_payload_and_directory_before_returning_envelope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stage = FileSystemSerDesStage(tmp_path)
-    stage.execution_directory(EXECUTION_ARN).mkdir(parents=True)
+    execution_directory = stage.execution_directory(EXECUTION_ARN)
+    execution_directory.mkdir(parents=True)
     sync_targets: list[str] = []
     real_fsync = os.fsync
 
@@ -436,7 +437,12 @@ async def test_stage_syncs_payload_and_directory_before_returning_envelope(
 
     await stage.serialize("trusted", _context())
 
-    assert sync_targets == ["file", "directory"]
+    traversed_directory_count = len(execution_directory.relative_to(tmp_path).parts)
+    assert sync_targets == [
+        *(["directory"] * traversed_directory_count),
+        "file",
+        "directory",
+    ]
 
 
 async def test_stage_syncs_each_new_directory_entry(
@@ -460,6 +466,46 @@ async def test_stage_syncs_each_new_directory_entry(
     new_directory_count = len(execution_directory.relative_to(tmp_path).parts)
     assert sync_targets == [
         *(["directory"] * new_directory_count),
+        "file",
+        "directory",
+    ]
+
+
+async def test_stage_resyncs_existing_directory_after_failed_parent_sync(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stage = FileSystemSerDesStage(tmp_path)
+    execution_directory = stage.execution_directory(EXECUTION_ARN)
+    real_fsync = os.fsync
+    sync_calls = 0
+
+    def fail_first_sync(file_descriptor: int) -> None:
+        nonlocal sync_calls
+        sync_calls += 1
+        if sync_calls == 1:
+            raise OSError(errno.EIO, "parent sync failed")
+        real_fsync(file_descriptor)
+
+    monkeypatch.setattr(filesystem_serdes_module.os, "fsync", fail_first_sync)
+    with pytest.raises(RetryableSerDesError, match="Failed to store"):
+        await stage.serialize("trusted", _context())
+
+    assert (tmp_path / execution_directory.relative_to(tmp_path).parts[0]).is_dir()
+
+    sync_targets: list[str] = []
+
+    def record_sync(file_descriptor: int) -> None:
+        mode = os.fstat(file_descriptor).st_mode
+        sync_targets.append("directory" if stat.S_ISDIR(mode) else "file")
+        real_fsync(file_descriptor)
+
+    monkeypatch.setattr(filesystem_serdes_module.os, "fsync", record_sync)
+    await stage.serialize("trusted", _context())
+
+    traversed_directory_count = len(execution_directory.relative_to(tmp_path).parts)
+    assert sync_targets == [
+        *(["directory"] * traversed_directory_count),
         "file",
         "directory",
     ]

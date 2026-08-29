@@ -74,6 +74,14 @@ class EmptyStringSerDes(SerDes[str]):
         return "checkpointed"
 
 
+class FailingDeserializeSerDes(SerDes[str]):
+    async def serialize(self, value: str) -> str:
+        return value
+
+    async def deserialize(self, data: str) -> str:
+        raise ValueError("cannot deserialize")
+
+
 def test_wait_for_condition_signature_accepts_config_fields_directly() -> None:
     """The public wait_for_condition API exposes config fields directly."""
     parameters = inspect.signature(wait_for_condition).parameters
@@ -390,6 +398,33 @@ async def test_wait_for_condition_returns_deserialized_serialized_custom_serdes_
     success_operation = success_call[1]["operation_update"]
     assert success_operation.payload == "HELLO"
     assert result == "HELLO"
+
+
+async def test_wait_for_condition_does_not_fail_after_successful_transition() -> None:
+    state = Mock(spec=ExecutionState)
+    state.durable_execution_arn = "arn:aws:test"
+    state.operations.get.return_value = None
+    operation_identifier = OperationIdentifier(
+        "op-result",
+        OperationSubType.WAIT_FOR_CONDITION,
+        None,
+        "result",
+    )
+
+    with pytest.raises(ExecutionError, match="Deserialization failed"):
+        await wait_for_condition_handler(
+            state=state,
+            operation_identifier=operation_identifier,
+            check=lambda _state: "done",
+            polling_strategy=lambda _state, _attempt: None,
+            serdes=FailingDeserializeSerDes(),
+        )
+
+    actions = [
+        call.kwargs["operation_update"].action
+        for call in state.create_checkpoint.await_args_list
+    ]
+    assert actions == [OperationAction.START, OperationAction.SUCCEED]
 
 
 async def test_wait_for_condition_new_condition_uses_delay_only_strategy() -> None:
