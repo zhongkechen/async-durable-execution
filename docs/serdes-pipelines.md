@@ -105,11 +105,12 @@ result = await step(
 versioned envelope inline while it fits the configured checkpoint byte limit
 and offloads larger values.
 
-Payload files are immutable and content-addressed by entity and SHA-256 digest,
-so replay and repeated serialization reuse the same file without overwriting
-checkpointed content. The envelope records the producer execution and entity,
-content digest, payload type, and either inline data or a file path. It also
-records the exact UTF-8 payload size so
+Payload files are immutable, uniquely named, and published with one
+create-new write. The envelope is returned only after the file is closed, so an
+interrupted write can leave an unreferenced orphan but cannot poison a path
+used by another serialization attempt. The envelope records the producer
+execution and entity, content digest, payload type, and either inline data or a
+file path. It also records the exact UTF-8 payload size so
 deserialization can reject oversized replacements before reading them into
 memory. Deserialization validates the envelope, ownership, path, file type,
 symbolic-link boundaries, declared size, and SHA-256 digest before returning
@@ -124,8 +125,8 @@ step applies its configured retry strategy to these failures, while
 serialization outside step retry handling causes the Lambda invocation to be
 retried. Permanent configuration errors such as an unwritable or read-only
 mount remain normal `SerDesError` failures. Keep filesystem side effects
-idempotent; the built-in stage uses content-addressed immutable files for this
-reason.
+idempotent; the built-in stage never overwrites files referenced by earlier
+checkpoints.
 
 Cross-execution references are rejected by default, including chained invoke
 results. A caller that intentionally shares filesystem payloads across durable

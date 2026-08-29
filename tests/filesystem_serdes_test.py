@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import errno
 import hashlib
 import json
@@ -19,13 +18,13 @@ from async_durable_execution import (
     FileSystemSerDesStage,
     FileSystemSerDesStageConfig,
     JsonSerDes,
+    OperationType,
     PreviewConfig,
     PreviewField,
     PreviewMode,
     RetryableSerDesError,
     SerDesContext,
     SerDesError,
-    OperationType,
     create_file_system_serdes_stage,
 )
 from async_durable_execution._core.serdes import deserialize, serialize
@@ -124,9 +123,9 @@ async def test_filesystem_stage_roundtrips_immutable_file_with_preview(
         EXECUTION_ARN,
         entity_id="operation/operation-1/result",
     )
-    assert json.loads(second)["file"] == str(file_path)
+    assert json.loads(second)["file"] != str(file_path)
     assert file_path.exists()
-    assert list(tmp_path.rglob("*.payload")) == [file_path]
+    assert len(list(tmp_path.rglob("*.payload"))) == 2
 
 
 async def test_overflow_mode_keeps_small_values_inline(tmp_path: Path) -> None:
@@ -162,33 +161,6 @@ async def test_overflow_mode_offloads_large_values(tmp_path: Path) -> None:
 
     assert "file" in envelope
     assert await stage.deserialize(serialized, context) == "x" * 2000
-
-
-async def test_content_addressed_publication_rejects_existing_mismatch(
-    tmp_path: Path,
-) -> None:
-    stage = FileSystemSerDesStage(tmp_path)
-    context = _context()
-    serialized = await stage.serialize("trusted", context)
-    envelope = json.loads(serialized)
-    Path(envelope["file"]).write_text("corrupt")
-
-    with pytest.raises(SerDesError, match="content-addressed"):
-        await stage.serialize("trusted", context)
-
-
-async def test_content_addressed_publication_is_concurrently_idempotent(
-    tmp_path: Path,
-) -> None:
-    stage = FileSystemSerDesStage(tmp_path)
-    context = _context()
-
-    serialized = await asyncio.gather(
-        *(stage.serialize("trusted", context) for _index in range(4))
-    )
-
-    assert len(set(serialized)) == 1
-    assert len(list(tmp_path.rglob("*.payload"))) == 1
 
 
 async def test_filesystem_io_errors_are_classified_for_retry(
@@ -362,6 +334,16 @@ def test_execution_directory_supports_retention_cleanup(tmp_path: Path) -> None:
     assert stage.execution_directory(EXECUTION_ARN) == (
         tmp_path / "test" / "run" / "invocation"
     )
+    with pytest.raises(SerDesError, match="must not be empty"):
+        stage.execution_directory(" ")
+
+    hostile_arn = (
+        "arn:aws:lambda:us-east-1:123456789012:function:..:1/durable-execution/../.."
+    )
+    hostile_directory = stage.execution_directory(hostile_arn)
+    assert hostile_directory.is_relative_to(tmp_path)
+    assert hostile_directory != tmp_path
+    assert ".." not in hostile_directory.relative_to(tmp_path).parts
 
 
 async def test_stage_rejects_symlinked_execution_directory(

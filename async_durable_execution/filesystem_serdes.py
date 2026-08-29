@@ -10,7 +10,7 @@ import json
 import os
 import re
 import stat
-import time
+import uuid
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -107,7 +107,7 @@ class FileSystemSerDesStage:
     Do not use Lambda's ephemeral ``/tmp`` directory. Use a shared durable
     mount such as Amazon EFS or S3 Files.
 
-    Payload files are immutable and content-addressed. The
+    Payload files are immutable and uniquely named. The
     versioned checkpoint envelope records ownership and a SHA-256 digest.
     Unrecognized input passes through unchanged.
     """
@@ -395,8 +395,9 @@ class FileSystemSerDesStage:
         expected_directory = self._resolve_execution_directory(owner_arn)
         encoded_entity = self._encode(owner_entity_id)
         expected_name = re.compile(
-            rf"^{re.escape(encoded_entity)}-{digest}"
-            r"(?:-[A-Za-z0-9_-]+)?\.payload$"
+            rf"^{re.escape(encoded_entity)}-{digest}-"
+            r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-"
+            r"[0-9a-f]{4}-[0-9a-f]{12}\.payload$"
         )
         if file_path.parent != expected_directory or not expected_name.fullmatch(
             file_path.name
@@ -437,22 +438,45 @@ class FileSystemSerDesStage:
         digest: str,
     ) -> Path:
         directory = self._resolve_execution_directory(context.durable_execution_arn)
-        filename = f"{self._encode(self._entity_id(context))}-{digest}.payload"
+        filename = (
+            f"{self._encode(self._entity_id(context))}-{digest}-{uuid.uuid4()}.payload"
+        )
         return directory / filename
 
     def _resolve_execution_directory(self, durable_execution_arn: str) -> Path:
+        if not durable_execution_arn.strip():
+            msg = "durable_execution_arn must not be empty."
+            raise SerDesError(msg)
+
         if self._config.path_encoding is FileSystemPathEncoding.URI:
             match = _DURABLE_EXECUTION_ARN_PATTERN.fullmatch(durable_execution_arn)
             if match is not None:
-                return self._base_path.joinpath(
+                directory = self._base_path.joinpath(
                     *(self._encode(part) for part in match.groups())
                 )
-        return self._base_path / self._encode(durable_execution_arn)
+                return self._require_strict_descendant(directory)
+        directory = self._base_path / self._encode(durable_execution_arn)
+        return self._require_strict_descendant(directory)
 
     def _encode(self, value: str) -> str:
         if self._config.path_encoding is FileSystemPathEncoding.HASH:
             return hashlib.sha256(value.encode("utf-8")).hexdigest()
-        return quote(value, safe="-._~")
+        encoded = quote(value, safe="-._~")
+        if encoded in {".", ".."}:
+            return "".join(f"%{byte:02X}" for byte in value.encode("utf-8"))
+        return encoded
+
+    def _require_strict_descendant(self, directory: Path) -> Path:
+        normalized = Path(os.path.abspath(directory))
+        try:
+            relative = normalized.relative_to(self._base_path)
+        except ValueError as error:
+            msg = "Filesystem SerDes execution directory is outside the base path."
+            raise SerDesError(msg) from error
+        if not relative.parts:
+            msg = "Filesystem SerDes execution directory must be below the base path."
+            raise SerDesError(msg)
+        return normalized
 
     def _fits_checkpoint(self, envelope: str) -> bool:
         return (
@@ -596,16 +620,12 @@ def _write_payload(file_path: Path, payload: bytes) -> None:
     created = False
     try:
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-        try:
-            file_fd = os.open(
-                file_path.name,
-                flags,
-                mode=0o600,
-                dir_fd=directory_fd,
-            )
-        except FileExistsError:
-            _reuse_existing_payload(file_path, payload)
-            return
+        file_fd = os.open(
+            file_path.name,
+            flags,
+            mode=0o600,
+            dir_fd=directory_fd,
+        )
         created = True
         view = memoryview(payload)
         while view:
@@ -622,25 +642,6 @@ def _write_payload(file_path: Path, payload: bytes) -> None:
         if file_fd is not None:
             os.close(file_fd)
         os.close(directory_fd)
-
-
-def _reuse_existing_payload(file_path: Path, payload: bytes) -> None:
-    for retry in range(6):
-        try:
-            existing = _read_payload(file_path, len(payload))
-        except (FileNotFoundError, SerDesError):
-            if retry == 5:
-                raise
-            time.sleep(0.01 * (2**retry))
-            continue
-
-        if existing != payload:
-            msg = (
-                "Filesystem SerDes content-addressed payload does not match "
-                "the existing file."
-            )
-            raise SerDesError(msg)
-        return
 
 
 def _read_payload(file_path: Path, expected_size: int) -> bytes:

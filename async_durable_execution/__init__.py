@@ -136,6 +136,7 @@ from ._runner import (
 
 __all__ = [
     "__version__",
+    "build_preview",
     "create_callback",
     "create_cloud_runner",
     "create_default_sync_client",
@@ -242,5 +243,4 @@ __all__ = [
     "WaitForConditionCheckContext",
     "WaitForConditionError",
     "WithRetryContext",
-    "build_preview",
 ]

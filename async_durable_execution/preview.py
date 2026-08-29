@@ -33,6 +33,9 @@ class PreviewField:
         if not self.name:
             msg = "PreviewField.name must not be empty."
             raise ValueError(msg)
+        if not isinstance(self.match, FieldMatchMode):
+            msg = "PreviewField.match must be a FieldMatchMode."
+            raise TypeError(msg)
 
 
 @dataclass(frozen=True)
@@ -49,6 +52,9 @@ class PreviewConfig:
     max_depth: int = 64
 
     def __post_init__(self) -> None:
+        if not isinstance(self.mode, PreviewMode):
+            msg = "PreviewConfig.mode must be a PreviewMode."
+            raise TypeError(msg)
         if self.max_preview_bytes <= 0:
             msg = "max_preview_bytes must be positive."
             raise ValueError(msg)

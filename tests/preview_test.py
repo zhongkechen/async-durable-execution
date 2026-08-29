@@ -71,6 +71,10 @@ def test_preview_returns_none_for_non_mapping_or_no_visible_fields() -> None:
 def test_preview_validates_field_and_budget_configuration() -> None:
     with pytest.raises(ValueError, match="name"):
         PreviewField("")
+    with pytest.raises(TypeError, match="FieldMatchMode"):
+        PreviewField("secret", match="PATH")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="PreviewMode"):
+        PreviewConfig(mode="INCLUDE_ALL")  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="positive"):
         PreviewConfig(
             mode=PreviewMode.INCLUDE_ALL,
