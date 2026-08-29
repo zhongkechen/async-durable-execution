@@ -5,6 +5,8 @@ from __future__ import annotations
 import errno
 import hashlib
 import json
+import os
+import stat
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -339,10 +341,29 @@ def test_execution_directory_supports_retention_cleanup(tmp_path: Path) -> None:
     stage = FileSystemSerDesStage(tmp_path)
 
     assert stage.execution_directory(EXECUTION_ARN) == (
-        tmp_path / "test" / "run" / "invocation"
+        tmp_path
+        / "aws"
+        / "us-east-1"
+        / "123456789012"
+        / "test"
+        / "1"
+        / "run"
+        / "invocation"
     )
     with pytest.raises(SerDesError, match="must not be empty"):
         stage.execution_directory(" ")
+
+    arn_variants = (
+        EXECUTION_ARN.replace("arn:aws:", "arn:aws-cn:"),
+        EXECUTION_ARN.replace("us-east-1", "us-west-2"),
+        EXECUTION_ARN.replace("123456789012", "210987654321"),
+        EXECUTION_ARN.replace("function:test:1", "function:other:1"),
+        EXECUTION_ARN.replace("function:test:1", "function:test:2"),
+    )
+    assert all(
+        stage.execution_directory(variant) != stage.execution_directory(EXECUTION_ARN)
+        for variant in arn_variants
+    )
 
     hostile_arn = (
         "arn:aws:lambda:us-east-1:123456789012:function:..:1/durable-execution/../.."
@@ -371,6 +392,57 @@ async def test_stage_rejects_symlinked_execution_directory(
 
     with pytest.raises(SerDesError):
         await stage.deserialize(serialized, context)
+
+
+async def test_stage_syncs_payload_and_directory_before_returning_envelope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sync_targets: list[str] = []
+    real_fsync = os.fsync
+
+    def record_sync(file_descriptor: int) -> None:
+        mode = os.fstat(file_descriptor).st_mode
+        sync_targets.append("directory" if stat.S_ISDIR(mode) else "file")
+        real_fsync(file_descriptor)
+
+    monkeypatch.setattr(filesystem_serdes_module.os, "fsync", record_sync)
+
+    await FileSystemSerDesStage(tmp_path).serialize("trusted", _context())
+
+    assert sync_targets == ["file", "directory"]
+
+
+@pytest.mark.parametrize(
+    ("failure_call", "error_number", "expected_error"),
+    [
+        (1, errno.EIO, RetryableSerDesError),
+        (2, errno.EROFS, SerDesError),
+    ],
+)
+async def test_stage_classifies_sync_failures_and_removes_unpublished_payload(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_call: int,
+    error_number: int,
+    expected_error: type[Exception],
+) -> None:
+    sync_calls = 0
+    real_fsync = os.fsync
+
+    def fail_sync(file_descriptor: int) -> None:
+        nonlocal sync_calls
+        sync_calls += 1
+        if sync_calls == failure_call:
+            raise OSError(error_number, "sync failed")
+        real_fsync(file_descriptor)
+
+    monkeypatch.setattr(filesystem_serdes_module.os, "fsync", fail_sync)
+
+    with pytest.raises(expected_error, match="Failed to store"):
+        await FileSystemSerDesStage(tmp_path).serialize("trusted", _context())
+
+    assert list(tmp_path.rglob("*.payload")) == []
 
 
 async def test_hash_path_encoding_uses_fixed_length_segments(

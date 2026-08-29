@@ -226,20 +226,6 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 self.operation_identifier.operation_id,
                 self.operation_identifier.name,
             )
-            if replay_children:
-                return raw_result
-
-            return await deserialize(
-                serdes=self.serdes,
-                data=serialized_result,
-                operation_id=self.operation_id,
-                durable_execution_arn=self.durable_execution_arn,
-                recursive_level=self.state.recursive_level,
-                operation_name=self.operation_identifier.name,
-                parent_id=self.operation_identifier.parent_id,
-                operation_type=self.SERDES_OPERATION_TYPE,
-                operation_sub_type=self.operation_identifier.sub_type,
-            )
         except Exception as e:
             if isinstance(e, InvocationError) and e.is_retryable():
                 raise
@@ -279,6 +265,23 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 if control_error is not None:
                     raise control_error from e
             raise CallableRuntimeError.from_error_object(error_object) from e
+
+        if replay_children:
+            return raw_result
+
+        # SUCCEED is already durable. Deserialization failures must propagate
+        # without attempting a terminal FAIL transition for the same context.
+        return await deserialize(
+            serdes=self.serdes,
+            data=serialized_result,
+            operation_id=self.operation_id,
+            durable_execution_arn=self.durable_execution_arn,
+            recursive_level=self.state.recursive_level,
+            operation_name=self.operation_identifier.name,
+            parent_id=self.operation_identifier.parent_id,
+            operation_type=self.SERDES_OPERATION_TYPE,
+            operation_sub_type=self.operation_identifier.sub_type,
+        )
 
     @staticmethod
     def _is_replay_children(operation: Operation | None) -> bool:

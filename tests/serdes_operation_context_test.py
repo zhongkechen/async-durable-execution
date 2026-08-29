@@ -18,8 +18,12 @@ from async_durable_execution import (
     OperationType,
     RetryableSerDesError,
     SerDesContext,
+    SerDesError,
 )
-from async_durable_execution._core.exceptions import TimedSuspendExecution
+from async_durable_execution._core.exceptions import (
+    ExecutionError,
+    TimedSuspendExecution,
+)
 from async_durable_execution._core.models import (
     CallbackDetails,
     ChainedInvokeDetails,
@@ -68,6 +72,16 @@ class RetryableDeserializeStage:
 
     async def deserialize(self, data: str, context: SerDesContext) -> str:
         raise RetryableSerDesError("transient checkpoint read failure")
+
+
+class PermanentDeserializeStage:
+    """Stage that permanently rejects a checkpointed value."""
+
+    async def serialize(self, value: str, context: SerDesContext) -> str:
+        return value
+
+    async def deserialize(self, data: str, context: SerDesContext) -> str:
+        raise SerDesError("invalid checkpoint payload")
 
 
 def _state(execution_arn: str = "arn:test") -> Mock:
@@ -151,6 +165,28 @@ async def test_child_context_serdes_context_uses_context_metadata() -> None:
         assert context.operation_name == "child-name"
         assert context.parent_id == "parent-id"
         assert context.attempt is None
+
+
+async def test_child_does_not_checkpoint_fail_after_successful_transition() -> None:
+    state = _state()
+    executor = ChildOperationExecutor(
+        lambda: _return_value({"value": 1}),
+        state,
+        OperationIdentifier(
+            "child-id",
+            OperationSubType.RUN_IN_CHILD_CONTEXT,
+            "parent-id",
+            "child-name",
+        ),
+        serdes=JsonSerDes[dict[str, int]]().then(PermanentDeserializeStage()),
+    )
+
+    with pytest.raises(ExecutionError, match="Deserialization failed"):
+        await executor.execute(None)
+
+    state.create_checkpoint.assert_awaited_once()
+    update = state.create_checkpoint.await_args.kwargs["operation_update"]
+    assert update.action is OperationAction.SUCCEED
 
 
 async def test_step_retry_strategy_receives_retryable_serdes_failure() -> None:

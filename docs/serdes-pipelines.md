@@ -106,11 +106,12 @@ versioned envelope inline while it fits the configured checkpoint byte limit
 and offloads larger values.
 
 Payload files are immutable, uniquely named, and published with one
-create-new write. The envelope is returned only after the file is closed, so an
-interrupted write can leave an unreferenced orphan but cannot poison a path
-used by another serialization attempt. The envelope records the producer
-execution and entity, content digest, payload type, and either inline data or a
-file path. It also records the exact UTF-8 payload size so
+create-new write. The envelope is returned only after the file contents and
+execution-directory metadata are synchronized, so an interrupted write can
+leave an unreferenced orphan but cannot poison a path used by another
+serialization attempt. The envelope records the producer execution and entity,
+content digest, payload type, and either inline data or a file path. It also
+records the exact UTF-8 payload size so
 deserialization can reject oversized replacements before reading them into
 memory. Deserialization validates the envelope, ownership, path, file type,
 symbolic-link boundaries, declared size, and SHA-256 digest before returning
@@ -119,6 +120,9 @@ unchanged.
 
 `FileSystemPathEncoding.URI` creates human-readable execution paths.
 `FileSystemPathEncoding.HASH` uses fixed-length SHA-256 path segments.
+Readable execution paths include the partition, region, account, function,
+qualifier, execution name, and invocation ID so retention cleanup cannot
+overlap another execution sharing the same filesystem root.
 
 Transient filesystem failures are raised as `RetryableSerDesError`. A durable
 step applies its configured retry strategy to these failures, while

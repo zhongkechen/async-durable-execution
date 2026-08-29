@@ -20,6 +20,7 @@ from .._core import (
     ExecutionState,
     ExtendedTypeSerDes,
     InvalidStateError,
+    InvocationError,
     Operation,
     OperationIdentifier,
     OperationStatus,
@@ -1246,6 +1247,13 @@ class ParallelExecutor(
             scheduler.schedule_resume(exe_state, tse.scheduled_timestamp)
         except SuspendExecution:
             exe_state.suspend()
+        except InvocationError as error:
+            if error.is_retryable():
+                self._completion_exception = error
+                self._completion_event.set()
+                return
+            exe_state.fail(error)
+            self.counters.fail_task()
         except Exception as e:  # noqa: BLE001
             exe_state.fail(e)
             self.counters.fail_task()

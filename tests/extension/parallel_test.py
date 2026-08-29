@@ -35,7 +35,14 @@ from async_durable_execution._core.context import (
     reset_current_context,
     set_current_context,
 )
-from async_durable_execution import durable_callable, parallel, DurableContext
+from async_durable_execution import (
+    DurableContext,
+    JsonSerDes,
+    RetryableSerDesError,
+    SerDesContext,
+    durable_callable,
+    parallel,
+)
 from async_durable_execution._core.models import OperationIdentifier
 from async_durable_execution._core.models import OperationSubType
 from async_durable_execution._operation.parallel import CompletionConfig, NestingType
@@ -49,6 +56,16 @@ from async_durable_execution._core.serdes import ExtendedTypeSerDes, serialize
 from async_durable_execution._core.state import ExecutionState
 
 from ..serdes_test import CustomStrSerDes
+
+
+class RetryableItemStage:
+    """Fail item publication so batch retry propagation is exercised."""
+
+    async def serialize(self, value: str, context: SerDesContext) -> str:
+        raise RetryableSerDesError("transient item storage failure")
+
+    async def deserialize(self, data: str, context: SerDesContext) -> str:
+        return data
 
 
 async def _invoke_maybe_async(func, *args, **kwargs) -> Any:
@@ -774,6 +791,39 @@ async def test_parallel_handler_with_serdes() -> None:
     )()
 
     assert result.all[0].result == "result1"
+
+
+async def test_parallel_propagates_retryable_item_serdes_failure() -> None:
+    async def branch() -> str:
+        return "result"
+
+    execution_state = create_mock_execution_state()
+    operation_identifier = OperationIdentifier(
+        "test_op",
+        OperationSubType.PARALLEL,
+        "parent",
+        "test_parallel",
+    )
+    executor_context = Mock()
+    executor_context.step_counter = Mock()
+    executor_context.step_counter._create_step_id_for_logical_step = Mock(  # noqa: SLF001
+        return_value="child"
+    )
+    executor_context.create_child_context = Mock(
+        return_value=create_mock_child_context(execution_state)
+    )
+
+    with pytest.raises(
+        RetryableSerDesError,
+        match="failed to serialize",
+    ):
+        await parallel_handler(
+            [branch],
+            execution_state,
+            executor_context,
+            operation_identifier,
+            item_serdes=JsonSerDes[str]().then(RetryableItemStage()),
+        )()
 
 
 async def test_parallel_handler_with_summary_generator() -> None:

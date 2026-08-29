@@ -29,8 +29,8 @@ _ENVELOPE_VERSION = 1
 _PAYLOAD_TYPE = "STRING"
 _DEFAULT_CHECKPOINT_ENVELOPE_LIMIT_BYTES = 256 * 1024 - 1024
 _DURABLE_EXECUTION_ARN_PATTERN = re.compile(
-    r"^arn:[^:]*:lambda:[^:]*:[^:]*:function:"
-    r"([^:/]+):[^:/]+/durable-execution/([^/]+)/([^/]+)$"
+    r"^arn:([^:]+):lambda:([^:]+):([^:]+):function:"
+    r"([^:/]+):([^:/]+)/durable-execution/([^/]+)/([^/]+)$"
 )
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _NON_RETRYABLE_FILESYSTEM_ERRNOS = {
@@ -108,8 +108,9 @@ class FileSystemSerDesStage:
     Do not use Lambda's ephemeral ``/tmp`` directory. Use a shared durable
     mount such as Amazon EFS or S3 Files.
 
-    Payload files are immutable and uniquely named. The
-    versioned checkpoint envelope records ownership and a SHA-256 digest.
+    Payload files are immutable and uniquely named. File contents and
+    directory metadata are synchronized before the versioned checkpoint
+    envelope is returned. The envelope records ownership and a SHA-256 digest.
     Unrecognized input passes through unchanged.
     """
 
@@ -632,6 +633,8 @@ def _write_payload(file_path: Path, payload: bytes) -> None:
         while view:
             written = os.write(file_fd, view)
             view = view[written:]
+        os.fsync(file_fd)
+        os.fsync(directory_fd)
     except BaseException:
         if created:
             try:
