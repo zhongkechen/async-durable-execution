@@ -24,6 +24,7 @@ from async_durable_execution._core.models import (
     CallbackDetails,
     ChainedInvokeDetails,
     Operation,
+    OperationAction,
     OperationIdentifier,
     StepDetails,
 )
@@ -57,6 +58,16 @@ class RetryableStage:
 
     async def deserialize(self, data: str, context: SerDesContext) -> str:
         return data
+
+
+class RetryableDeserializeStage:
+    """Stage that fails only while reading a checkpointed value."""
+
+    async def serialize(self, value: str, context: SerDesContext) -> str:
+        return value
+
+    async def deserialize(self, data: str, context: SerDesContext) -> str:
+        raise RetryableSerDesError("transient checkpoint read failure")
 
 
 def _state(execution_arn: str = "arn:test") -> Mock:
@@ -99,7 +110,7 @@ async def test_step_serdes_context_uses_effective_type_and_attempt() -> None:
         operation_id="step-id",
         operation_type=OperationType.STEP,
         status=OperationStatus.SUCCEEDED,
-        sub_type=OperationSubType.STEP,
+        sub_type=None,
         parent_id="checkpoint-parent",
         name="checkpoint-name",
         step_details=StepDetails(
@@ -112,6 +123,7 @@ async def test_step_serdes_context_uses_effective_type_and_attempt() -> None:
     action, context = stage.calls.pop()
     assert action == "deserialize"
     assert context.operation_type is OperationType.STEP
+    assert context.operation_sub_type is None
     assert context.operation_name == "checkpoint-name"
     assert context.parent_id == "checkpoint-parent"
     assert context.attempt == 3
@@ -168,6 +180,36 @@ async def test_step_retry_strategy_receives_retryable_serdes_failure() -> None:
     error, attempt = retry_calls[0]
     assert isinstance(error, RetryableSerDesError)
     assert attempt == 1
+
+
+async def test_step_does_not_checkpoint_retry_after_successful_transition() -> None:
+    retry_calls: list[tuple[Exception, int]] = []
+    state = _state()
+
+    def retry_strategy(error: Exception, attempt: int) -> int:
+        retry_calls.append((error, attempt))
+        return 1
+
+    executor = StepOperationExecutor(
+        lambda: _return_value({"value": 1}),
+        state,
+        OperationIdentifier(
+            "step-id",
+            OperationSubType.STEP,
+            None,
+            "step-name",
+        ),
+        retry_strategy=retry_strategy,
+        serdes=JsonSerDes[dict[str, int]]().then(RetryableDeserializeStage()),
+    )
+
+    with pytest.raises(RetryableSerDesError, match="failed to deserialize"):
+        await executor.execute(None)
+
+    assert retry_calls == []
+    state.create_checkpoint.assert_awaited_once()
+    update = state.create_checkpoint.await_args.kwargs["operation_update"]
+    assert update.action is OperationAction.SUCCEED
 
 
 async def test_callback_result_serdes_context_uses_checkpoint_metadata() -> None:

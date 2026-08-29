@@ -239,11 +239,6 @@ class StepOperationExecutor(OperationExecutor[T]):
                 self.operation_identifier.operation_id,
                 self.operation_identifier.name,
             )
-            return await self.deserialize_value(
-                data=serialized_result,
-                serdes=self.serdes,
-                attempt=attempt,
-            )
         except Exception as e:
             if isinstance(e, ExecutionError):
                 # No retry on fatal - e.g checkpoint exception
@@ -266,6 +261,15 @@ class StepOperationExecutor(OperationExecutor[T]):
             # weird state, and should crash terminate the execution
             msg = "retry handler should have raised an exception, but did not."
             raise ExecutionError(msg) from None
+
+        # SUCCEED is already durable. A retryable read failure must retry the
+        # invocation and replay this completed step, not checkpoint RETRY/FAIL
+        # after the terminal operation transition.
+        return await self.deserialize_value(
+            data=serialized_result,
+            serdes=self.serdes,
+            attempt=attempt,
+        )
 
     async def retry_handler(
         self,

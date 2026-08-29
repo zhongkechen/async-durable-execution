@@ -125,7 +125,7 @@ class OperationExecutor(ABC, Generic[T]):
             ),
             operation_sub_type=(
                 operation.sub_type
-                if operation is not None and operation.sub_type is not None
+                if operation is not None
                 else self.operation_identifier.sub_type
             ),
             attempt=attempt,

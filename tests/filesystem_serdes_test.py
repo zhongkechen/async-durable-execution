@@ -183,6 +183,13 @@ async def test_filesystem_io_errors_are_classified_for_retry(
     with pytest.raises(SerDesError, match="Failed to store"):
         await stage.serialize("trusted", _context())
 
+    def reject_symlink(_path: Path, _payload: bytes) -> None:
+        raise OSError(errno.ELOOP, "symbolic link rejected")
+
+    monkeypatch.setattr(filesystem_serdes_module, "_write_payload", reject_symlink)
+    with pytest.raises(SerDesError, match="Failed to store"):
+        await stage.serialize("trusted", _context())
+
 
 async def test_stage_passes_unrecognized_input_through(tmp_path: Path) -> None:
     stage = FileSystemSerDesStage(tmp_path)

@@ -36,6 +36,7 @@ _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _NON_RETRYABLE_FILESYSTEM_ERRNOS = {
     errno.EACCES,
     getattr(errno, "EDQUOT", errno.ENOSPC),
+    errno.ELOOP,
     errno.EINVAL,
     errno.EISDIR,
     errno.ENAMETOOLONG,
