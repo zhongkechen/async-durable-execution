@@ -9,7 +9,7 @@ import json
 import os
 import re
 import stat
-import uuid
+import time
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -41,6 +41,7 @@ PreviewGenerator = Callable[
     [str, SerDesContext],
     dict[str, Any] | None | Awaitable[dict[str, Any] | None],
 ]
+CrossExecutionReferencePolicy = Callable[[str, str, SerDesContext], bool]
 
 
 class FileSystemSerDesMode(str, Enum):
@@ -66,6 +67,7 @@ class FileSystemSerDesStageConfig:
     checkpoint_envelope_limit_bytes: int = _DEFAULT_CHECKPOINT_ENVELOPE_LIMIT_BYTES
     generate_preview: PreviewGenerator | None = None
     preview_config: PreviewConfig | None = None
+    cross_execution_reference_policy: CrossExecutionReferencePolicy | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.storage_mode, FileSystemSerDesMode):
@@ -80,6 +82,11 @@ class FileSystemSerDesStageConfig:
         if self.generate_preview is not None and self.preview_config is not None:
             msg = "Configure either generate_preview or preview_config, not both."
             raise ValueError(msg)
+        if self.cross_execution_reference_policy is not None and not callable(
+            self.cross_execution_reference_policy
+        ):
+            msg = "cross_execution_reference_policy must be callable."
+            raise TypeError(msg)
 
 
 class FileSystemSerDesStage:
@@ -88,7 +95,7 @@ class FileSystemSerDesStage:
     Do not use Lambda's ephemeral ``/tmp`` directory. Use a shared durable
     mount such as Amazon EFS or S3 Files.
 
-    Payload files are immutable, uniquely named, and content hashed. The
+    Payload files are immutable and content-addressed. The
     versioned checkpoint envelope records ownership and a SHA-256 digest.
     Unrecognized input passes through unchanged.
     """
@@ -103,6 +110,10 @@ class FileSystemSerDesStage:
             raise ValueError(msg)
         self._base_path = Path(os.path.abspath(os.fspath(base_path)))
         self._config = config or FileSystemSerDesStageConfig()
+
+    def execution_directory(self, durable_execution_arn: str) -> Path:
+        """Return the directory eligible for cleanup after history retention."""
+        return self._resolve_execution_directory(durable_execution_arn)
 
     async def serialize(self, value: str, context: SerDesContext) -> str:
         """Store or inline ``value`` and return a versioned envelope."""
@@ -343,12 +354,23 @@ class FileSystemSerDesStage:
             if isinstance(operation_type, OperationType)
             else operation_type
         )
+        if same_owner:
+            return
+
+        policy = self._config.cross_execution_reference_policy
         if (
-            not same_owner
-            and operation_type_value != OperationType.CHAINED_INVOKE.value
+            operation_type_value == OperationType.CHAINED_INVOKE.value
+            and policy is not None
         ):
-            msg = "Filesystem SerDes file belongs to a different durable entity."
-            raise SerDesError(msg)
+            try:
+                if policy(owner_arn, owner_entity_id, context):
+                    return
+            except Exception as error:
+                msg = "Filesystem SerDes cross-execution policy failed."
+                raise SerDesError(msg) from error
+
+        msg = "Filesystem SerDes file belongs to a different durable entity."
+        raise SerDesError(msg)
 
     def _validate_file_path(
         self,
@@ -403,9 +425,7 @@ class FileSystemSerDesStage:
         digest: str,
     ) -> Path:
         directory = self._resolve_execution_directory(context.durable_execution_arn)
-        filename = (
-            f"{self._encode(self._entity_id(context))}-{digest}-{uuid.uuid4()}.payload"
-        )
+        filename = f"{self._encode(self._entity_id(context))}-{digest}.payload"
         return directory / filename
 
     def _resolve_execution_directory(self, durable_execution_arn: str) -> Path:
@@ -558,12 +578,16 @@ def _write_payload(file_path: Path, payload: bytes) -> None:
     created = False
     try:
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-        file_fd = os.open(
-            file_path.name,
-            flags,
-            mode=0o600,
-            dir_fd=directory_fd,
-        )
+        try:
+            file_fd = os.open(
+                file_path.name,
+                flags,
+                mode=0o600,
+                dir_fd=directory_fd,
+            )
+        except FileExistsError:
+            _reuse_existing_payload(file_path, payload)
+            return
         created = True
         view = memoryview(payload)
         while view:
@@ -580,6 +604,25 @@ def _write_payload(file_path: Path, payload: bytes) -> None:
         if file_fd is not None:
             os.close(file_fd)
         os.close(directory_fd)
+
+
+def _reuse_existing_payload(file_path: Path, payload: bytes) -> None:
+    for retry in range(6):
+        try:
+            existing = _read_payload(file_path, len(payload))
+        except (FileNotFoundError, SerDesError):
+            if retry == 5:
+                raise
+            time.sleep(0.01 * (2**retry))
+            continue
+
+        if existing != payload:
+            msg = (
+                "Filesystem SerDes content-addressed payload does not match "
+                "the existing file."
+            )
+            raise SerDesError(msg)
+        return
 
 
 def _read_payload(file_path: Path, expected_size: int) -> bytes:

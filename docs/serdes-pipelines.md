@@ -105,9 +105,11 @@ result = await step(
 versioned envelope inline while it fits the configured checkpoint byte limit
 and offloads larger values.
 
-Payload files are immutable and uniquely named. The envelope records the
-producer execution and entity, content digest, payload type, and either inline
-data or a file path. It also records the exact UTF-8 payload size so
+Payload files are immutable and content-addressed by entity and SHA-256 digest,
+so replay and repeated serialization reuse the same file without overwriting
+checkpointed content. The envelope records the producer execution and entity,
+content digest, payload type, and either inline data or a file path. It also
+records the exact UTF-8 payload size so
 deserialization can reject oversized replacements before reading them into
 memory. Deserialization validates the envelope, ownership, path, file type,
 symbolic-link boundaries, declared size, and SHA-256 digest before returning
@@ -117,11 +119,44 @@ unchanged.
 `FileSystemPathEncoding.URI` creates human-readable execution paths.
 `FileSystemPathEncoding.HASH` uses fixed-length SHA-256 path segments.
 
+Cross-execution references are rejected by default, including chained invoke
+results. A caller that intentionally shares filesystem payloads across durable
+executions must provide a `cross_execution_reference_policy` that verifies the
+declared producer execution and entity:
+
+```python
+def trust_orders_service(
+    owner_arn: str,
+    owner_entity_id: str,
+    context: SerDesContext,
+) -> bool:
+    return (
+        owner_arn.startswith(orders_execution_arn_prefix)
+        and owner_entity_id.endswith("/result")
+    )
+
+
+stage = FileSystemSerDesStage(
+    "/mnt/efs/durable-payloads",
+    FileSystemSerDesStageConfig(
+        cross_execution_reference_policy=trust_orders_service,
+    ),
+)
+```
+
+Filesystem data must outlive every checkpoint that references it. The SDK does
+not delete files automatically because it cannot know when execution history
+retention has expired. Cleanup tooling can use
+`stage.execution_directory(durable_execution_arn)` and remove that directory
+only after the execution is terminal and its configured retention period has
+elapsed.
+
 ## Structured previews
 
 A file envelope can include a small structured preview for observability.
 Preview rules can include, exclude, or mask fields and enforce a UTF-8 byte
-budget.
+budget. Traversal is also bounded by `max_traversal_nodes` and `max_depth`,
+which default to 10,000 nodes and 64 levels.
 
 ```python
 from async_durable_execution import (

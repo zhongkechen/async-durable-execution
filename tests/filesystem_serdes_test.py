@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from dataclasses import replace
@@ -57,6 +58,10 @@ def test_filesystem_stage_validates_configuration() -> None:
         FileSystemSerDesStageConfig(
             generate_preview=lambda _value, _context: None,
             preview_config=PreviewConfig(mode=PreviewMode.INCLUDE_ALL),
+        )
+    with pytest.raises(TypeError, match="cross_execution_reference_policy"):
+        FileSystemSerDesStageConfig(
+            cross_execution_reference_policy=True,  # type: ignore[arg-type]
         )
     with pytest.raises(ValueError, match="base_path"):
         FileSystemSerDesStage("")
@@ -116,8 +121,9 @@ async def test_filesystem_stage_roundtrips_immutable_file_with_preview(
         EXECUTION_ARN,
         entity_id="operation/operation-1/result",
     )
-    assert json.loads(second)["file"] != str(file_path)
+    assert json.loads(second)["file"] == str(file_path)
     assert file_path.exists()
+    assert list(tmp_path.rglob("*.payload")) == [file_path]
 
 
 async def test_overflow_mode_keeps_small_values_inline(tmp_path: Path) -> None:
@@ -153,6 +159,33 @@ async def test_overflow_mode_offloads_large_values(tmp_path: Path) -> None:
 
     assert "file" in envelope
     assert await stage.deserialize(serialized, context) == "x" * 2000
+
+
+async def test_content_addressed_publication_rejects_existing_mismatch(
+    tmp_path: Path,
+) -> None:
+    stage = FileSystemSerDesStage(tmp_path)
+    context = _context()
+    serialized = await stage.serialize("trusted", context)
+    envelope = json.loads(serialized)
+    Path(envelope["file"]).write_text("corrupt")
+
+    with pytest.raises(SerDesError, match="content-addressed"):
+        await stage.serialize("trusted", context)
+
+
+async def test_content_addressed_publication_is_concurrently_idempotent(
+    tmp_path: Path,
+) -> None:
+    stage = FileSystemSerDesStage(tmp_path)
+    context = _context()
+
+    serialized = await asyncio.gather(
+        *(stage.serialize("trusted", context) for _index in range(4))
+    )
+
+    assert len(set(serialized)) == 1
+    assert len(list(tmp_path.rglob("*.payload"))) == 1
 
 
 async def test_stage_passes_unrecognized_input_through(tmp_path: Path) -> None:
@@ -220,6 +253,7 @@ async def test_stage_rejects_tampered_file_and_wrong_owner(
 
     with pytest.raises(SerDesError, match="digest"):
         await stage.deserialize(serialized, context)
+    Path(envelope["file"]).unlink()
 
     serialized = await stage.serialize("trusted", context)
     envelope = json.loads(serialized)
@@ -227,6 +261,7 @@ async def test_stage_rejects_tampered_file_and_wrong_owner(
 
     with pytest.raises(SerDesError, match="size"):
         await stage.deserialize(serialized, context)
+    Path(envelope["file"]).unlink()
 
     serialized = await stage.serialize("trusted", context)
     with pytest.raises(SerDesError, match="different durable entity"):
@@ -248,11 +283,39 @@ async def test_stage_rejects_tampered_file_and_wrong_owner(
             _context(entity_id="operation/other/result"),
         )
 
+    chained_consumer = replace(
+        _context(
+            entity_id="operation/consumer/result",
+            arn="arn:consumer",
+        ),
+        operation_type=OperationType.CHAINED_INVOKE,
+    )
+    with pytest.raises(SerDesError, match="different durable entity"):
+        await stage.deserialize(serialized, chained_consumer)
+
 
 async def test_chained_invoke_can_resolve_cross_execution_owner(
     tmp_path: Path,
 ) -> None:
-    stage = FileSystemSerDesStage(tmp_path)
+    trusted_owners: list[tuple[str, str]] = []
+
+    def trust_producer(
+        owner_arn: str,
+        owner_entity_id: str,
+        _context: SerDesContext,
+    ) -> bool:
+        trusted_owners.append((owner_arn, owner_entity_id))
+        return (
+            owner_arn == EXECUTION_ARN
+            and owner_entity_id == "operation/operation-1/result"
+        )
+
+    stage = FileSystemSerDesStage(
+        tmp_path,
+        FileSystemSerDesStageConfig(
+            cross_execution_reference_policy=trust_producer,
+        ),
+    )
     serialized = await stage.serialize("trusted", _context())
     consumer = _context(
         entity_id="operation/consumer/result",
@@ -264,6 +327,17 @@ async def test_chained_invoke_can_resolve_cross_execution_owner(
     )
 
     assert await stage.deserialize(serialized, consumer) == "trusted"
+    assert trusted_owners == [
+        (EXECUTION_ARN, "operation/operation-1/result"),
+    ]
+
+
+def test_execution_directory_supports_retention_cleanup(tmp_path: Path) -> None:
+    stage = FileSystemSerDesStage(tmp_path)
+
+    assert stage.execution_directory(EXECUTION_ARN) == (
+        tmp_path / "test" / "run" / "invocation"
+    )
 
 
 async def test_stage_rejects_symlinked_execution_directory(

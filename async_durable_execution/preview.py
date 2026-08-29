@@ -45,10 +45,18 @@ class PreviewConfig:
     mask: tuple[PreviewField, ...] = field(default_factory=tuple)
     mask_string: str = "***"
     max_preview_bytes: int = 4096
+    max_traversal_nodes: int = 10_000
+    max_depth: int = 64
 
     def __post_init__(self) -> None:
         if self.max_preview_bytes <= 0:
             msg = "max_preview_bytes must be positive."
+            raise ValueError(msg)
+        if self.max_traversal_nodes <= 0:
+            msg = "max_traversal_nodes must be positive."
+            raise ValueError(msg)
+        if self.max_depth <= 0:
+            msg = "max_depth must be positive."
             raise ValueError(msg)
 
 
@@ -75,17 +83,53 @@ def build_preview(
     if not isinstance(value, dict):
         return None
 
-    pairs: list[tuple[str, Any]] = []
+    accepted: dict[str, Any] = {}
+    visited_nodes = 0
+    stopped = False
 
-    def collect(current: Any, path_prefix: str) -> None:
+    def visit_node() -> bool:
+        nonlocal stopped, visited_nodes
+        visited_nodes += 1
+        if visited_nodes > config.max_traversal_nodes:
+            stopped = True
+        return not stopped
+
+    def add_value(path: str, preview_value: Any) -> None:
+        nonlocal stopped
+        missing = object()
+        previous = accepted.get(path, missing)
+        accepted[path] = preview_value
+        candidate_preview = _paths_to_nested_dict(accepted)
+        encoded = json.dumps(
+            candidate_preview,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        if len(encoded) <= config.max_preview_bytes:
+            return
+
+        if previous is missing:
+            del accepted[path]
+        else:
+            accepted[path] = previous
+        stopped = True
+
+    def collect(current: Any, path_prefix: str, depth: int) -> None:
+        nonlocal stopped
+        if stopped or depth > config.max_depth or not visit_node():
+            return
         if isinstance(current, list):
             for item in current:
-                collect(item, path_prefix)
+                collect(item, path_prefix, depth + 1)
+                if stopped:
+                    break
             return
         if not isinstance(current, dict):
             return
 
         for raw_key, child in current.items():
+            if stopped or not visit_node():
+                break
             key = str(raw_key)
             if "." in key:
                 continue
@@ -100,41 +144,25 @@ def build_preview(
             )
 
             if not visible:
-                if not excluded:
-                    collect(child, path)
+                if not excluded and isinstance(child, dict | list):
+                    collect(child, path, depth + 1)
                 continue
             if masked:
-                pairs.append((path, config.mask_string))
+                add_value(path, config.mask_string)
             elif isinstance(child, dict | list):
-                collect(child, path)
+                collect(child, path, depth + 1)
             else:
-                pairs.append((path, child))
+                add_value(path, child)
 
-    collect(value, "")
-    if not pairs:
-        return None
-
-    accepted: list[tuple[str, Any]] = []
-    for path, preview_value in pairs:
-        candidate = [*accepted, (path, preview_value)]
-        candidate_preview = _pairs_to_nested_dict(candidate)
-        encoded = json.dumps(
-            candidate_preview,
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ).encode("utf-8")
-        if len(encoded) > config.max_preview_bytes:
-            break
-        accepted = candidate
-
+    collect(value, "", 0)
     if not accepted:
         return None
-    return _pairs_to_nested_dict(accepted)
+    return _paths_to_nested_dict(accepted)
 
 
-def _pairs_to_nested_dict(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+def _paths_to_nested_dict(paths: dict[str, Any]) -> dict[str, Any]:
     result: dict[str, Any] = {}
-    for path, value in pairs:
+    for path, value in paths.items():
         parts = path.split(".")
         node = result
         for part in parts[:-1]:

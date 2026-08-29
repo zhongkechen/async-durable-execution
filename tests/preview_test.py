@@ -76,6 +76,16 @@ def test_preview_validates_field_and_budget_configuration() -> None:
             mode=PreviewMode.INCLUDE_ALL,
             max_preview_bytes=0,
         )
+    with pytest.raises(ValueError, match="max_traversal_nodes"):
+        PreviewConfig(
+            mode=PreviewMode.INCLUDE_ALL,
+            max_traversal_nodes=0,
+        )
+    with pytest.raises(ValueError, match="max_depth"):
+        PreviewConfig(
+            mode=PreviewMode.INCLUDE_ALL,
+            max_depth=0,
+        )
 
 
 def test_preview_exclusion_wins_and_arrays_merge_visible_fields() -> None:
@@ -96,3 +106,27 @@ def test_preview_exclusion_wins_and_arrays_merge_visible_fields() -> None:
     )
 
     assert preview == {"items": {"id": "second"}}
+
+
+def test_preview_bounds_large_repeated_array_traversal() -> None:
+    class GuardedList(list):
+        def __iter__(self):
+            for index, item in enumerate(super().__iter__()):
+                if index >= 100:
+                    msg = "preview traversed beyond its configured node budget"
+                    raise AssertionError(msg)
+                yield item
+
+    preview = build_preview(
+        {
+            "items": GuardedList({"id": index} for index in range(1000)),
+        },
+        PreviewConfig(
+            mode=PreviewMode.EXCLUDE_ALL,
+            include=(PreviewField("id"),),
+            max_traversal_nodes=20,
+        ),
+    )
+
+    assert preview is not None
+    assert 0 <= preview["items"]["id"] < 100

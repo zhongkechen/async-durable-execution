@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, Mock
 
 from async_durable_execution import (
     FileSystemSerDesStage,
+    FileSystemSerDesStageConfig,
     JsonSerDes,
     OperationStatus,
     OperationSubType,
@@ -162,7 +163,16 @@ async def test_callback_result_serdes_context_uses_checkpoint_metadata() -> None
 async def test_invoke_result_can_follow_cross_execution_filesystem_reference(
     tmp_path: Path,
 ) -> None:
-    filesystem_stage = FileSystemSerDesStage(tmp_path)
+    filesystem_stage = FileSystemSerDesStage(
+        tmp_path,
+        FileSystemSerDesStageConfig(
+            cross_execution_reference_policy=(
+                lambda owner_arn, _owner_entity_id, _context: (
+                    owner_arn == "arn:producer"
+                )
+            ),
+        ),
+    )
     producer_context = SerDesContext(
         operation_id="producer-id",
         durable_execution_arn="arn:producer",
