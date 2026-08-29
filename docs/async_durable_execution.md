@@ -34,6 +34,7 @@ checkpoint conventions.
 
 ## Core API
 
+- [SerDes pipelines and filesystem storage](serdes-pipelines.md)
 - [Execution, context, configuration, serialization, models, exceptions, and
   service client](api/core.md)
 

@@ -27,11 +27,11 @@ import logging
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Generic, Protocol, TypeVar, cast
+from typing import Any, Generic, Literal, Protocol, TypeVar, cast
 
 from .context import SerDesContext, bind_current_context, get_current_context
 from .exceptions import (
@@ -39,6 +39,7 @@ from .exceptions import (
     ExecutionError,
     SerDesError,
 )
+from .models import OperationSubTypeValue, OperationType
 
 logger = logging.getLogger(__name__)
 
@@ -407,6 +408,10 @@ class SerDes(ABC, Generic[T]):
         """Reconstruct a Python value from the durable wire format."""
         pass
 
+    def then(self, stage: SerDesStage) -> ComposableSerDes[T]:
+        """Return an immutable pipeline with ``stage`` appended."""
+        return ComposableSerDes(self, (stage,))
+
     @staticmethod
     def is_primitive(obj: Any) -> bool:
         """Check if object contains only JSON-serializable primitives."""
@@ -415,6 +420,155 @@ class SerDes(ABC, Generic[T]):
         if isinstance(obj, list):
             return all(SerDes.is_primitive(item) for item in obj)
         return False
+
+
+class SerDesStage(Protocol):
+    """A reversible, self-identifying string transformation.
+
+    During deserialization, a stage must reverse recognized valid input,
+    reject recognized malformed or unsupported input, and return unrecognized
+    input unchanged.
+    """
+
+    async def serialize(self, value: str, context: SerDesContext) -> str:
+        """Transform the preceding pipeline stage's string."""
+        ...
+
+    async def deserialize(self, data: str, context: SerDesContext) -> str:
+        """Reverse this stage or return unrecognized input unchanged."""
+        ...
+
+
+class SerDesPipelineError(SerDesError):
+    """Identifies the pipeline component and action that failed."""
+
+    def __init__(
+        self,
+        stage_index: int,
+        action: Literal["serialize", "deserialize"],
+        stage: object,
+    ) -> None:
+        self.stage_index = stage_index
+        self.action = action
+        self.stage = stage
+        component_name = f"{type(stage).__module__}.{type(stage).__qualname__}"
+        super().__init__(
+            f"SerDes pipeline stage {stage_index} ({component_name}) failed to {action}"
+        )
+
+
+class ComposableSerDes(SerDes[T]):
+    """Immutable SerDes pipeline with one value codec and string stages."""
+
+    def __init__(
+        self,
+        value_codec: SerDes[T],
+        stages: tuple[SerDesStage, ...] = (),
+    ) -> None:
+        if value_codec is None:
+            msg = "value_codec must not be None."
+            raise TypeError(msg)
+        if any(stage is None for stage in stages):
+            msg = "pipeline stages must not be None."
+            raise TypeError(msg)
+        if isinstance(value_codec, ComposableSerDes):
+            self._value_codec = value_codec.value_codec
+            self._stages = (*value_codec.stages, *stages)
+        else:
+            self._value_codec = value_codec
+            self._stages = stages
+
+    @property
+    def value_codec(self) -> SerDes[T]:
+        """Return the root value codec."""
+        return self._value_codec
+
+    @property
+    def stages(self) -> tuple[SerDesStage, ...]:
+        """Return the ordered immutable string stages."""
+        return self._stages
+
+    def then(self, stage: SerDesStage) -> ComposableSerDes[T]:
+        """Return a new pipeline with ``stage`` appended."""
+        if stage is None:
+            msg = "stage must not be None."
+            raise TypeError(msg)
+        return ComposableSerDes(self._value_codec, (*self._stages, stage))
+
+    async def serialize(self, value: T) -> str:
+        context = _current_or_empty_serdes_context()
+        stage_context = replace(context, original_value=value)
+        current = await self._invoke_value_codec_serialize(value)
+        for index, stage in enumerate(self._stages, start=1):
+            try:
+                current = await stage.serialize(current, stage_context)
+                if not isinstance(current, str):
+                    msg = "Stage returned a non-string value."
+                    raise TypeError(msg)
+            except Exception as error:
+                raise SerDesPipelineError(index, "serialize", stage) from error
+        return current
+
+    async def deserialize(self, data: str) -> T:
+        context = _current_or_empty_serdes_context()
+        stage_context = replace(context, original_value=None)
+        current = data
+        for index in range(len(self._stages) - 1, -1, -1):
+            stage = self._stages[index]
+            try:
+                current = await stage.deserialize(current, stage_context)
+                if not isinstance(current, str):
+                    msg = "Stage returned a non-string value."
+                    raise TypeError(msg)
+            except Exception as error:
+                raise SerDesPipelineError(
+                    index + 1,
+                    "deserialize",
+                    stage,
+                ) from error
+        return await self._invoke_value_codec_deserialize(current)
+
+    async def _invoke_value_codec_serialize(self, value: T) -> str:
+        try:
+            result = await self._value_codec.serialize(value)
+            if not isinstance(result, str):
+                msg = "Value codec returned a non-string value."
+                raise TypeError(msg)
+            return result
+        except Exception as error:
+            raise SerDesPipelineError(0, "serialize", self._value_codec) from error
+
+    async def _invoke_value_codec_deserialize(self, data: str) -> T:
+        try:
+            return await self._value_codec.deserialize(data)
+        except Exception as error:
+            raise SerDesPipelineError(0, "deserialize", self._value_codec) from error
+
+
+def create_serdes_pipeline(
+    value_codec: SerDes[T],
+    *stages: SerDesStage,
+) -> ComposableSerDes[T]:
+    """Create an immutable value-codec and string-stage pipeline."""
+    if value_codec is None:
+        msg = "value_codec must not be None."
+        raise TypeError(msg)
+    if any(stage is None for stage in stages):
+        msg = "pipeline stages must not be None."
+        raise TypeError(msg)
+    return ComposableSerDes(value_codec, tuple(stages))
+
+
+def is_composable_serdes(serdes: SerDes[Any]) -> bool:
+    """Return whether ``serdes`` is an SDK composable pipeline."""
+    return isinstance(serdes, ComposableSerDes)
+
+
+def _current_or_empty_serdes_context() -> SerDesContext:
+    try:
+        return get_serdes_context()
+    except RuntimeError:
+        return SerDesContext()
 
 
 class PassThroughSerDes(SerDes[T]):
@@ -534,6 +688,13 @@ async def serialize(
     operation_id: str,
     durable_execution_arn: str,
     recursive_level: int = 0,
+    *,
+    entity_id: str | None = None,
+    operation_name: str | None = None,
+    parent_id: str | None = None,
+    operation_type: OperationType | None = None,
+    operation_sub_type: OperationSubTypeValue | None = None,
+    attempt: int | None = None,
 ) -> str:
     """Serialize value using provided or default serializer.
 
@@ -553,6 +714,12 @@ async def serialize(
         operation_id,
         durable_execution_arn,
         recursive_level,
+        entity_id=entity_id or f"operation/{operation_id}",
+        operation_name=operation_name,
+        parent_id=parent_id,
+        operation_type=operation_type,
+        operation_sub_type=operation_sub_type,
+        attempt=attempt,
     )
     active_serdes: SerDes[T] = serdes or EXTENDED_TYPES_SERDES
 
@@ -577,6 +744,13 @@ async def deserialize(
     operation_id: str,
     durable_execution_arn: str,
     recursive_level: int = 0,
+    *,
+    entity_id: str | None = None,
+    operation_name: str | None = None,
+    parent_id: str | None = None,
+    operation_type: OperationType | None = None,
+    operation_sub_type: OperationSubTypeValue | None = None,
+    attempt: int | None = None,
 ) -> T:
     """Deserialize data using provided or default serializer.
 
@@ -596,6 +770,12 @@ async def deserialize(
         operation_id,
         durable_execution_arn,
         recursive_level,
+        entity_id=entity_id or f"operation/{operation_id}",
+        operation_name=operation_name,
+        parent_id=parent_id,
+        operation_type=operation_type,
+        operation_sub_type=operation_sub_type,
+        attempt=attempt,
     )
     active_serdes: SerDes[T] = serdes or EXTENDED_TYPES_SERDES
 

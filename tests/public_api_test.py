@@ -230,6 +230,7 @@ def test_core_public_api_is_reexported_from_core_package() -> None:
 
     expected_exports = {
         "CallableRuntimeError",
+        "ComposableSerDes",
         "DurableContext",
         "DurableExecutionsError",
         "DurableServiceClient",
@@ -249,14 +250,18 @@ def test_core_public_api_is_reexported_from_core_package() -> None:
         "SerDes",
         "SerDesContext",
         "SerDesError",
+        "SerDesPipelineError",
+        "SerDesStage",
         "UserlandError",
         "ValidationError",
         "create_default_sync_client",
+        "create_serdes_pipeline",
         "durable_callable",
         "durable_execution",
         "get_current_context",
         "get_durable_context",
         "get_serdes_context",
+        "is_composable_serdes",
     }
 
     assert set(core.__all__) == expected_exports

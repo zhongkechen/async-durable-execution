@@ -72,6 +72,10 @@ class OperationExecutor(ABC, Generic[T]):
             operation_id=self.operation_id,
             durable_execution_arn=self.durable_execution_arn,
             recursive_level=self.state.recursive_level,
+            operation_name=self.operation_identifier.name,
+            parent_id=self.operation_identifier.parent_id,
+            operation_type=self.operation_identifier.operation_type,
+            operation_sub_type=self.operation_identifier.sub_type,
         )
 
     async def deserialize_value(self, data: str, serdes: SerDes[S] | None) -> S:
@@ -82,6 +86,10 @@ class OperationExecutor(ABC, Generic[T]):
             operation_id=self.operation_id,
             durable_execution_arn=self.durable_execution_arn,
             recursive_level=self.state.recursive_level,
+            operation_name=self.operation_identifier.name,
+            parent_id=self.operation_identifier.parent_id,
+            operation_type=self.operation_identifier.operation_type,
+            operation_sub_type=self.operation_identifier.sub_type,
         )
 
     @abstractmethod
