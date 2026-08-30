@@ -85,6 +85,14 @@ class FailingSerDes(SerDes[str]):
         return data
 
 
+class RetryableFailingSerializeSerDes(SerDes[str]):
+    async def serialize(self, value: str) -> str:
+        raise RetryableSerDesError("transient write failure")
+
+    async def deserialize(self, data: str) -> str:
+        return data
+
+
 class FailingDeserializeSerDes(SerDes[str]):
     async def serialize(self, value: str) -> str:
         return value
@@ -202,6 +210,42 @@ async def test_stateful_step_serialization_failure_is_checkpointed(
         for call in state.create_checkpoint.await_args_list
     ]
     assert actions == [OperationAction.START, OperationAction.FAIL]
+
+
+async def test_stateful_step_retry_state_serialization_preserves_retryable_error() -> (
+    None
+):
+    state = Mock(spec=ExecutionState)
+    state.durable_execution_arn = "arn:test"
+    state.operations.get.return_value = None
+
+    async def work(_state):
+        raise RuntimeError("temporary failure")
+
+    executor = StatefulStepOperationExecutor(
+        func=work,
+        state=state,
+        operation_identifier=OperationIdentifier(
+            "op-1",
+            "AcmeStep",
+            None,
+            "custom",
+            operation_type=OperationType.STEP,
+        ),
+        initial_state="initial",
+        retry_strategy=Mock(return_value=ExtensionStepResult.retry("retry-state", 1)),
+        step_semantics=StepSemantics.AT_LEAST_ONCE_PER_RETRY,
+        serdes=RetryableFailingSerializeSerDes(),
+    )
+
+    with pytest.raises(RetryableSerDesError, match="transient write failure"):
+        await executor.process()
+
+    actions = [
+        call.kwargs["operation_update"].action
+        for call in state.create_checkpoint.await_args_list
+    ]
+    assert actions == [OperationAction.START]
 
 
 @pytest.mark.parametrize(

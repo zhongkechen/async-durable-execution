@@ -263,6 +263,8 @@ class FileSystemSerDesStage:
                 )
             else:
                 preview = None
+        except RetryableSerDesError:
+            raise
         except Exception as error:
             msg = (
                 "Failed to generate filesystem payload preview for entity "

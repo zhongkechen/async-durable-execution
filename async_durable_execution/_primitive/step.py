@@ -591,6 +591,10 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
 
         try:
             delay_seconds, payload = await self._prepare_retry(decision, attempt)
+        except InvocationError as retry_error:
+            if retry_error.is_retryable():
+                raise
+            return await self._fail(retry_error)
         except Exception as retry_error:
             return await self._fail(retry_error)
 
