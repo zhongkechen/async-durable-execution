@@ -21,6 +21,7 @@ from .._core import (
     OperationIdentifier,
     OperationStatus,
     OperationSubType,
+    OperationType,
     OperationUpdate,
     SerDes,
     ValidationError,
@@ -103,6 +104,8 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
     imports retain their original behavior during the package migration.
     """
 
+    SERDES_OPERATION_TYPE = OperationType.STEP
+
     def __init__(
         self,
         check: Callable[[T | None], Awaitable[T]],
@@ -153,6 +156,12 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             return await self.deserialize_value(
                 data=result,
                 serdes=self.serdes,
+                operation=operation,
+                attempt=(
+                    operation.step_details.attempt
+                    if operation.step_details is not None
+                    else None
+                ),
             )
 
         if operation.status is OperationStatus.FAILED:
@@ -226,6 +235,8 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                 current_state = await self.deserialize_value(
                     data=operation_details.result,
                     serdes=self.serdes,
+                    operation=operation,
+                    attempt=operation_details.attempt,
                 )
             else:
                 current_state = self.initial_state
@@ -246,6 +257,7 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             serialized_state = await self.serialize_value(
                 value=new_state,
                 serdes=self.serdes,
+                attempt=attempt,
             )
 
             logger.debug(
@@ -268,42 +280,38 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
                     self.operation_identifier.operation_id,
                     self.operation_name,
                 )
-                return await self.deserialize_value(
-                    data=serialized_state,
-                    serdes=self.serdes,
+            else:
+                delay_seconds = suspend_delay_seconds
+
+                # We enforce a minimum delay second of 1, to match model behaviour.
+                if delay_seconds < 1:
+                    logger.warning(
+                        (
+                            "wait_for_condition delay_seconds step for id: %s, name: %s,"
+                            "is %d < 1. Setting to minimum of 1 seconds."
+                        ),
+                        self.operation_identifier.operation_id,
+                        self.operation_identifier.name,
+                        delay_seconds,
+                    )
+                    delay_seconds = 1
+
+                retry_operation = OperationUpdate.create_step_retry(
+                    self.operation_identifier,
+                    error=None,
+                    payload=serialized_state,
+                    next_attempt_delay_seconds=delay_seconds,
                 )
 
-            delay_seconds = suspend_delay_seconds
+                # Checkpoint RETRY operation with blocking (is_sync=True, default).
+                # Must ensure the current state and next attempt timestamp are persisted before suspending.
+                # This guarantees the polling state is durable and will resume correctly on the next invocation.
+                await self.create_checkpoint(retry_operation)
 
-            # We enforce a minimum delay second of 1, to match model behaviour.
-            if delay_seconds < 1:
-                logger.warning(
-                    (
-                        "wait_for_condition delay_seconds step for id: %s, name: %s,"
-                        "is %d < 1. Setting to minimum of 1 seconds."
-                    ),
-                    self.operation_identifier.operation_id,
-                    self.operation_identifier.name,
-                    delay_seconds,
+                suspend_with_optional_resume_delay(
+                    msg=f"wait_for_condition {self.operation_identifier.name or self.operation_identifier.operation_id} will retry in {suspend_delay_seconds} seconds",
+                    delay_seconds=suspend_delay_seconds,
                 )
-                delay_seconds = 1
-
-            retry_operation = OperationUpdate.create_step_retry(
-                self.operation_identifier,
-                error=None,
-                payload=serialized_state,
-                next_attempt_delay_seconds=delay_seconds,
-            )
-
-            # Checkpoint RETRY operation with blocking (is_sync=True, default).
-            # Must ensure the current state and next attempt timestamp are persisted before suspending.
-            # This guarantees the polling state is durable and will resume correctly on the next invocation.
-            await self.create_checkpoint(retry_operation)
-
-            suspend_with_optional_resume_delay(
-                msg=f"wait_for_condition {self.operation_identifier.name or self.operation_identifier.operation_id} will retry in {suspend_delay_seconds} seconds",
-                delay_seconds=suspend_delay_seconds,
-            )
 
         except Exception as e:
             if isinstance(e, InvocationError) and e.is_retryable():
@@ -337,8 +345,13 @@ class WaitForConditionOperationExecutor(OperationExecutor[T]):
             await self.create_checkpoint(fail_operation)
             raise
 
-        msg: str = "wait_for_condition should never reach this point"
-        raise ExecutionError(msg)
+        # SUCCEED is already durable. Deserialization failures must propagate
+        # without attempting a terminal FAIL transition for the same operation.
+        return await self.deserialize_value(
+            data=serialized_state,
+            serdes=self.serdes,
+            attempt=attempt,
+        )
 
     def _resolve_delay_seconds(self, new_state: T, attempt: int) -> int | None:
         polling_strategy = self.polling_strategy or self.default_polling_strategy

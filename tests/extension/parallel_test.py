@@ -20,8 +20,11 @@ from async_durable_execution._operation.parallel import (
     BatchItem,
     BatchItemStatus,
     BatchResult,
+    BranchStatus,
+    CompletionDecision,
     CompletionReason,
     Executable,
+    ExecutableWithState,
 )
 
 # Mock the executor.execute method to return a BatchResult
@@ -35,7 +38,14 @@ from async_durable_execution._core.context import (
     reset_current_context,
     set_current_context,
 )
-from async_durable_execution import durable_callable, parallel, DurableContext
+from async_durable_execution import (
+    DurableContext,
+    JsonSerDes,
+    RetryableSerDesError,
+    SerDesContext,
+    durable_callable,
+    parallel,
+)
 from async_durable_execution._core.models import OperationIdentifier
 from async_durable_execution._core.models import OperationSubType
 from async_durable_execution._operation.parallel import CompletionConfig, NestingType
@@ -49,6 +59,16 @@ from async_durable_execution._core.serdes import ExtendedTypeSerDes, serialize
 from async_durable_execution._core.state import ExecutionState
 
 from ..serdes_test import CustomStrSerDes
+
+
+class RetryableItemStage:
+    """Fail item publication so batch retry propagation is exercised."""
+
+    async def serialize(self, value: str, context: SerDesContext) -> str:
+        raise RetryableSerDesError("transient item storage failure")
+
+    async def deserialize(self, data: str, context: SerDesContext) -> str:
+        return data
 
 
 async def _invoke_maybe_async(func, *args, **kwargs) -> Any:
@@ -774,6 +794,79 @@ async def test_parallel_handler_with_serdes() -> None:
     )()
 
     assert result.all[0].result == "result1"
+
+
+async def test_parallel_propagates_retryable_item_serdes_failure() -> None:
+    async def branch() -> str:
+        return "result"
+
+    execution_state = create_mock_execution_state()
+    operation_identifier = OperationIdentifier(
+        "test_op",
+        OperationSubType.PARALLEL,
+        "parent",
+        "test_parallel",
+    )
+    executor_context = Mock()
+    executor_context.step_counter = Mock()
+    executor_context.step_counter._create_step_id_for_logical_step = Mock(  # noqa: SLF001
+        return_value="child"
+    )
+    executor_context.create_child_context = Mock(
+        return_value=create_mock_child_context(execution_state)
+    )
+
+    with pytest.raises(
+        RetryableSerDesError,
+        match="failed to serialize",
+    ):
+        await parallel_handler(
+            [branch],
+            execution_state,
+            executor_context,
+            operation_identifier,
+            item_serdes=JsonSerDes[str]().then(RetryableItemStage()),
+        )()
+
+
+async def test_parallel_preserves_completed_threshold_after_late_retry_error() -> None:
+    executor = create_parallel_executor(
+        executables=[Executable(index=0, func=lambda: None)],
+        max_concurrency=None,
+        completion_config=CompletionConfig.first_successful(),
+        top_level_sub_type=OperationSubType.PARALLEL,
+        iteration_sub_type=OperationSubType.PARALLEL_BRANCH,
+        name_prefix="parallel-branch-",
+        serdes=None,
+    )
+    decision = CompletionDecision.complete(
+        CompletionReason.MIN_SUCCESSFUL_REACHED,
+    )
+    executor._completion_decision = decision  # noqa: SLF001
+    executor._completion_event.set()  # noqa: SLF001
+
+    async def fail_late() -> str:
+        raise RetryableSerDesError("late transient failure")
+
+    task = asyncio.create_task(fail_late())
+    executable: ExecutableWithState[Callable[[], None], str] = ExecutableWithState(
+        Executable(index=1, func=lambda: None),
+    )
+    executable.run(task)
+    executor.executables_with_state = [executable]
+    await asyncio.sleep(0)
+
+    await executor._on_task_complete(  # noqa: SLF001
+        executable,
+        task,
+        Mock(),
+    )
+
+    assert executor._completion_decision is decision  # noqa: SLF001
+    assert executor._completion_exception is None  # noqa: SLF001
+    assert executable.status is BranchStatus.RUNNING
+    executor._cancel_unfinished_executables()  # noqa: SLF001
+    assert executable.status is BranchStatus.CANCELLED
 
 
 async def test_parallel_handler_with_summary_generator() -> None:

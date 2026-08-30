@@ -291,6 +291,16 @@ class InvocationError(UnrecoverableError):
         return {}
 
 
+class RetryableSerDesError(InvocationError):
+    """Transient serialization failure that should enter retry handling."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(
+            message,
+            termination_reason=TerminationReason.SERIALIZATION_ERROR,
+        )
+
+
 class DurableApiErrorCategory(Enum):
     """Whether a durable API failure should retry the Lambda or fail execution."""
 

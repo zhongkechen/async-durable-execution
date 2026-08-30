@@ -57,8 +57,22 @@ than one context type.
         - SerDesContext
         - get_serdes_context
         - SerDes
+        - SerDesStage
+        - ComposableSerDes
+        - create_serdes_pipeline
+        - is_composable_serdes
         - JsonSerDes
         - ExtendedTypeSerDes
+        - FileSystemSerDesStage
+        - FileSystemSerDesStageConfig
+        - FileSystemSerDesMode
+        - FileSystemPathEncoding
+        - create_file_system_serdes_stage
+        - PreviewMode
+        - FieldMatchMode
+        - PreviewField
+        - PreviewConfig
+        - build_preview
 
 ## Models
 
@@ -84,7 +98,9 @@ than one context type.
         - InvalidStateError
         - UserlandError
         - CallableRuntimeError
+        - RetryableSerDesError
         - SerDesError
+        - SerDesPipelineError
 
 ## Durable Service Client
 

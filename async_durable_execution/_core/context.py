@@ -7,7 +7,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from .exceptions import InvalidStateError
 from .models import (
@@ -15,6 +15,8 @@ from .models import (
     OperationIdentifier,
     OperationStatus,
     OperationSubType,
+    OperationSubTypeValue,
+    OperationType,
 )
 
 if TYPE_CHECKING:
@@ -27,11 +29,24 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class SerDesContext:
-    """Context for serialization operations."""
+    """Context for serialization operations and composable SerDes stages.
+
+    The first three fields retain the original public construction order.
+    Pipeline stages additionally receive durable operation metadata and the
+    root value being serialized through ``original_value``. Deserialization
+    stages always receive ``original_value=None``.
+    """
 
     operation_id: str = ""
     durable_execution_arn: str = ""
     recursive_level: int = 0
+    entity_id: str = ""
+    operation_name: str | None = None
+    parent_id: str | None = None
+    operation_type: OperationType | None = None
+    operation_sub_type: OperationSubTypeValue | None = None
+    attempt: int | None = None
+    original_value: Any = None
 
 
 class OperationIdGenerator:

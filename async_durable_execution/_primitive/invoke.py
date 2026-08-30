@@ -18,6 +18,7 @@ from .._core import (
     Operation,
     OperationIdentifier,
     OperationStatus,
+    OperationType,
     OperationUpdate,
     SerDes,
     suspend_with_optional_resume_delay,
@@ -31,6 +32,8 @@ logger = logging.getLogger(__name__)
 
 class InvokeOperationExecutor(OperationExecutor[R]):
     """Executor for invoke operations."""
+
+    SERDES_OPERATION_TYPE = OperationType.CHAINED_INVOKE
 
     def __init__(
         self,
@@ -94,6 +97,7 @@ class InvokeOperationExecutor(OperationExecutor[R]):
             result: R = await self.deserialize_value(
                 data=result_data,
                 serdes=self.serdes_result or DEFAULT_JSON_SERDES,
+                operation=operation,
             )
             return result
 

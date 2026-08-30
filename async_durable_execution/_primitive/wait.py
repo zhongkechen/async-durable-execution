@@ -13,6 +13,7 @@ from .._core import (
     Operation,
     OperationIdentifier,
     OperationStatus,
+    OperationType,
     OperationUpdate,
     WaitOptions,
     suspend_with_optional_resume_delay,
@@ -23,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 class WaitOperationExecutor(OperationExecutor[None]):
     """Executor for wait operations."""
+
+    SERDES_OPERATION_TYPE = OperationType.WAIT
 
     def __init__(
         self,

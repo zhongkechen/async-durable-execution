@@ -33,6 +33,7 @@ from .exceptions import (
     InvalidStateError,
     InvocationError,
     OrphanedChildException,
+    RetryableSerDesError,
     SerDesError,
     SuspendExecution,
     TerminationReason,
@@ -86,16 +87,21 @@ from .models import (
     WaitOptions,
 )
 from .serdes import (
+    ComposableSerDes,
     DEFAULT_JSON_SERDES,
     EncodedValue,
     ExtendedTypeSerDes,
     JsonSerDes,
     PassThroughSerDes,
     SerDes,
+    SerDesPipelineError,
+    SerDesStage,
     TypeCodecExtension,
     TypeTag,
+    create_serdes_pipeline,
     deserialize,
     get_serdes_context,
+    is_composable_serdes,
     serialize,
 )
 from .state import RECURSIVE_LEVEL_INPUT_FIELD, ExecutionState
@@ -103,6 +109,7 @@ from .task import create_eager_task
 
 __all__ = [
     "CallableRuntimeError",
+    "ComposableSerDes",
     "DurableContext",
     "DurableExecutionsError",
     "DurableServiceClient",
@@ -119,15 +126,20 @@ __all__ = [
     "OperationSubType",
     "OperationType",
     "RetryStrategy",
+    "RetryableSerDesError",
     "SerDes",
     "SerDesContext",
     "SerDesError",
+    "SerDesPipelineError",
+    "SerDesStage",
     "UserlandError",
     "ValidationError",
     "create_default_sync_client",
+    "create_serdes_pipeline",
     "durable_callable",
     "durable_execution",
     "get_current_context",
     "get_durable_context",
     "get_serdes_context",
+    "is_composable_serdes",
 ]

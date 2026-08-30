@@ -246,6 +246,7 @@ Cloud test configuration:
 | `LAMBDA_ENDPOINT` | Optional Lambda endpoint URL for testing. |
 | `PYTEST_FUNCTION_NAME_PREFIX` | Prefix used to derive deployed qualified function names for all examples. |
 | `QUALIFIED_FUNCTION_NAME` | Optional fallback for single-function cloud runs. |
+| `FILESYSTEM_SERDES_CLOUD_MOUNT_PATH` | Optional durable EFS or S3 Files mount used by filesystem SerDes example tests. The deployed functions must have the mount configured. |
 | `--runner-mode` | Pytest mode: `local` or `cloud`. |
 
 Additional deployment helpers:

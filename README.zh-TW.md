@@ -43,6 +43,7 @@ AWS Lambda 工作流程。** 自動為狀態建立檢查點，無需持續運算
 - **[宣告式 DAG 工作流程](https://zhongkechen.github.io/async-durable-execution/api/extension/flow.html#quick-start)** - 使用具型別的節點輸入、推導或條件相依性、失敗路由和節點內耐用操作來定義無環工作流程。SDK 會在執行前驗證圖，並略過所選輸出未相依的節點。
 - **[背景操作任務](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#background-operation-tasks)** - `step(...)`、`wait(...)`、`invoke(...)`、`recurse(...)`、`run_in_child_context(...)` 與 `flow(...)` 等耐用操作會傳回 `asyncio.Task` 物件，因此獨立操作可以在背景執行，並透過 `asyncio.gather` 一起等待，無需使用 `parallel()` 或 `map()`。
 - **[符合 Python 慣例的操作參數](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#api-mapping)** - 操作直接使用關鍵字引數、`datetime.timedelta` 等標準 Python 型別及僅限關鍵字的名稱，無需組態包裝物件。
+- **[可組合 SerDes 管線](https://zhongkechen.github.io/async-durable-execution/serdes-pipelines.html)** - 串接非同步字串轉換，並將大型檢查點承載資料卸載至 EFS 或 S3 Files，同時提供有界預覽與經驗證的不可變儲存。
 - **[整合本機與雲端執行器](https://zhongkechen.github.io/async-durable-execution/api/runner.html)** - 執行器功能現在透過 `async_durable_execution` 提供，包含獨立的本機與雲端執行器 factory，以及具型別的測試結果輔助物件。
 - **[不依賴模型的 Lambda 用戶端](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#lambda-client-selection)** - SDK 自主管理 Lambda REST 線路格式，不依賴 botocore 服務模型。安裝選用的 `httpx` extra 後使用 HTTPX 傳送請求；否則相同請求會透過非同步配接器使用 botocore 的同步 HTTP 傳輸。
 - **[以標準函式庫 logging 提供重播感知記錄](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#logging)** - 標準 `logging` logger 會由耐用內容篩選器強化，讓工作流程記錄在重播時保持安全。

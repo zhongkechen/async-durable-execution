@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
+from typing import ClassVar, Generic, TypeVar
 
 from .._core import (
     ExecutionState,
@@ -11,6 +11,7 @@ from .._core import (
     Operation,
     OperationContext,
     OperationIdentifier,
+    OperationType,
     OperationUpdate,
     SerDes,
     deserialize,
@@ -23,6 +24,8 @@ S = TypeVar("S")
 
 class OperationExecutor(ABC, Generic[T]):
     """Base class for durable operations with shared state and serdes helpers."""
+
+    SERDES_OPERATION_TYPE: ClassVar[OperationType | None] = None
 
     def __init__(
         self,
@@ -64,7 +67,13 @@ class OperationExecutor(ABC, Generic[T]):
             is_sync=is_sync,
         )
 
-    async def serialize_value(self, value: S, serdes: SerDes[S] | None) -> str:
+    async def serialize_value(
+        self,
+        value: S,
+        serdes: SerDes[S] | None,
+        *,
+        attempt: int | None = None,
+    ) -> str:
         """Serialize a value using operation-scoped metadata."""
         return await serialize(
             serdes=serdes,
@@ -72,9 +81,23 @@ class OperationExecutor(ABC, Generic[T]):
             operation_id=self.operation_id,
             durable_execution_arn=self.durable_execution_arn,
             recursive_level=self.state.recursive_level,
+            operation_name=self.operation_identifier.name,
+            parent_id=self.operation_identifier.parent_id,
+            operation_type=(
+                self.operation_identifier.operation_type or self.SERDES_OPERATION_TYPE
+            ),
+            operation_sub_type=self.operation_identifier.sub_type,
+            attempt=attempt,
         )
 
-    async def deserialize_value(self, data: str, serdes: SerDes[S] | None) -> S:
+    async def deserialize_value(
+        self,
+        data: str,
+        serdes: SerDes[S] | None,
+        *,
+        operation: Operation | None = None,
+        attempt: int | None = None,
+    ) -> S:
         """Deserialize a value using operation-scoped metadata."""
         return await deserialize(
             serdes=serdes,
@@ -82,6 +105,30 @@ class OperationExecutor(ABC, Generic[T]):
             operation_id=self.operation_id,
             durable_execution_arn=self.durable_execution_arn,
             recursive_level=self.state.recursive_level,
+            operation_name=(
+                operation.name
+                if operation is not None
+                else self.operation_identifier.name
+            ),
+            parent_id=(
+                operation.parent_id
+                if operation is not None
+                else self.operation_identifier.parent_id
+            ),
+            operation_type=(
+                operation.operation_type
+                if operation is not None
+                else (
+                    self.operation_identifier.operation_type
+                    or self.SERDES_OPERATION_TYPE
+                )
+            ),
+            operation_sub_type=(
+                operation.sub_type
+                if operation is not None
+                else self.operation_identifier.sub_type
+            ),
+            attempt=attempt,
         )
 
     @abstractmethod

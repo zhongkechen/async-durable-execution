@@ -46,6 +46,7 @@ nav:
       - Workflow Patterns: workflow-patterns.md
       - Deploy and Invoke: deployment.md
       - Advanced Usage: advanced-usage.md
+      - SerDes Pipelines: serdes-pipelines.md
       - Custom Durable Operations: custom-operations.md
       - Using Synchronous Code: using-synchronous-code.md
       - Migrating from the Official SDK: migrating-from-official-python-sdk.md
