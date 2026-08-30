@@ -659,3 +659,21 @@ async def test_preview_generator_failures_are_serdes_errors(tmp_path: Path) -> N
 
     with pytest.raises(SerDesError, match="dict or None"):
         await stage.serialize("value", _context())
+
+
+async def test_preview_generator_preserves_retryable_serdes_errors(
+    tmp_path: Path,
+) -> None:
+    async def retryable_preview(
+        value: str,
+        context: SerDesContext,
+    ) -> dict[str, Any]:
+        raise RetryableSerDesError("transient preview failure")
+
+    stage = FileSystemSerDesStage(
+        tmp_path,
+        FileSystemSerDesStageConfig(generate_preview=retryable_preview),
+    )
+
+    with pytest.raises(RetryableSerDesError, match="transient preview failure"):
+        await stage.serialize("value", _context())
