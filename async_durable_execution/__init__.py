@@ -108,6 +108,14 @@ from ._operation.wait_for_callback import (
     get_wait_for_callback_context,
     wait_for_callback,
 )
+from ._operation.terminal_scope import (
+    DurableTerminalActions,
+    TerminalFailure,
+    TerminalFailurePhase,
+    TerminalScopeConfig,
+    TerminalScopeError,
+    terminal_scope,
+)
 from ._operation.child import SummaryGenerator, run_in_child_context
 from ._operation.step import (
     StepContext,
@@ -168,6 +176,7 @@ __all__ = [
     "recurse",
     "run_in_child_context",
     "step",
+    "terminal_scope",
     "timestamp",
     "uuid",
     "wait",
@@ -186,11 +195,12 @@ __all__ = [
     "CompletionReason",
     "CompletionStatus",
     "DurableContext",
+    "DurableExecutionsError",
     "DurableFunctionCloudTestRunner",
     "DurableFunctionLocalTestRunner",
     "DurableFunctionTestResult",
     "DurableServiceClient",
-    "DurableExecutionsError",
+    "DurableTerminalActions",
     "ErrorObject",
     "ExecutionError",
     "ExtensionContext",
@@ -237,6 +247,10 @@ __all__ = [
     "StepInterruptedError",
     "StepSemantics",
     "SummaryGenerator",
+    "TerminalFailure",
+    "TerminalFailurePhase",
+    "TerminalScopeConfig",
+    "TerminalScopeError",
     "UserlandError",
     "ValidationError",
     "WaitForCallbackContext",

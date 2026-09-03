@@ -41,7 +41,8 @@ AWS Lambda 工作流程。** 自動為狀態建立檢查點，無需持續運算
 - **[官方 SDK 未提供的擴充操作](https://zhongkechen.github.io/async-durable-execution/api/extension/replay_safe.html)** - 本 SDK 新增[重播安全輔助操作](https://zhongkechen.github.io/async-durable-execution/api/extension/replay_safe.html)（`random()`、`now()`、`timestamp()` 與 `uuid()`）和[耐用自我呼叫](https://zhongkechen.github.io/async-durable-execution/api/extension/recurse.html)（`recurse()`）。
 - **[穩定的自訂操作 SPI](https://zhongkechen.github.io/async-durable-execution/custom-operations.html)** - 第三方套件可以保留不透明且具確定性的原語識別碼、使用自訂子型別，並在不匯入 SDK 內部模組的情況下建置具狀態且可安全重播的操作。
 - **[宣告式 DAG 工作流程](https://zhongkechen.github.io/async-durable-execution/api/extension/flow.html#quick-start)** - 使用具型別的節點輸入、推導或條件相依性、失敗路由和節點內耐用操作來定義無環工作流程。SDK 會在執行前驗證圖，並略過所選輸出未相依的節點。
-- **[背景操作任務](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#background-operation-tasks)** - `step(...)`、`wait(...)`、`invoke(...)`、`recurse(...)`、`run_in_child_context(...)` 與 `flow(...)` 等耐用操作會傳回 `asyncio.Task` 物件，因此獨立操作可以在背景執行，並透過 `asyncio.gather` 一起等待，無需使用 `parallel()` 或 `map()`。
+- **[感知暫停的清理與補償](https://zhongkechen.github.io/async-durable-execution/terminal-scopes.html)** - 註冊耐用清理與反向補償，使其只在邏輯完成或失敗時執行，而不會在等待、回呼、重試或分支僅暫停時觸發。
+- **[背景操作任務](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html#background-operation-tasks)** - `step(...)`、`wait(...)`、`invoke(...)`、`recurse(...)`、`run_in_child_context(...)`、`terminal_scope(...)` 與 `flow(...)` 等耐用操作會傳回 `asyncio.Task` 物件，因此獨立操作可以在背景執行，並透過 `asyncio.gather` 一起等待，無需使用 `parallel()` 或 `map()`。
 - **[符合 Python 慣例的操作參數](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html#api-mapping)** - 操作直接使用關鍵字引數、`datetime.timedelta` 等標準 Python 型別及僅限關鍵字的名稱，無需組態包裝物件。
 - **[可組合 SerDes 管線](https://zhongkechen.github.io/async-durable-execution/serdes-pipelines.html)** - 串接非同步字串轉換，並將大型檢查點承載資料卸載至 EFS 或 S3 Files，同時提供有界預覽與經驗證的不可變儲存。
 - **[整合本機與雲端執行器](https://zhongkechen.github.io/async-durable-execution/api/runner.html)** - 執行器功能現在透過 `async_durable_execution` 提供，包含獨立的本機與雲端執行器 factory，以及具型別的測試結果輔助物件。
@@ -209,6 +210,7 @@ Lambda 耐用函數範例位於 `examples/`。可以從 `hello_world.py` 開始�
 - `step/`、`wait/`、`wait_for_callback/` 與 `wait_for_condition/` 用於核心耐用操作
 - `step/steps_with_gather.py` 展示如何啟動多個步驟任務，並透過 `asyncio.gather` 一起等待
 - `flow/`、`map/`、`parallel/` 與 `run_in_child_context/` 用於組合模式
+- `terminal_scope/` 用於回呼安全的清理與失敗補償
 - `invoke/`（包括 `invoke/recurse.py`）、`with_retry/`、`callback/` 與 `logger_example/` 用於整合與執行行為
 
 如需了解執行或部署範例整合測試的開發者工作流程，請參閱[貢獻指南](https://github.com/zhongkechen/async-durable-execution/blob/main/CONTRIBUTING.md#example-integration-tests-and-deployment)。
@@ -220,6 +222,7 @@ Lambda 耐用函數範例位於 `examples/`。可以從 `hello_world.py` 開始�
 - **[官方 Python SDK 比較](https://zhongkechen.github.io/async-durable-execution/official-python-sdk-comparison.html)** - 與官方 AWS Durable Execution Python SDK 的並排比較
 - **[遷移指南](https://zhongkechen.github.io/async-durable-execution/migrating-from-official-python-sdk.html)** - 從官方同步 Python SDK 遷移到這個非同步優先 SDK
 - **[工作流程模式](https://zhongkechen.github.io/async-durable-execution/workflow-patterns.html)** - 建構代理式迴圈、人工核准工作流程與補償交易
+- **[耐用終止範圍](https://zhongkechen.github.io/async-durable-execution/terminal-scopes.html)** - 在邏輯終止結果時執行清理與補償，而不把暫停視為失敗
 - **[部署與呼叫](https://zhongkechen.github.io/async-durable-execution/deployment.html)** - 設定 IAM、限定函式識別碼、呼叫、CloudFormation 與 SAM
 - **[使用同步程式碼](https://zhongkechen.github.io/async-durable-execution/using-synchronous-code.html)** - 安全包裝既有同步業務邏輯與阻塞式用戶端
 - **[進階用法](https://zhongkechen.github.io/async-durable-execution/advanced-usage.html)** - 瞭解背景操作任務、批次完成條件、Lambda 用戶端與 Lambda 層

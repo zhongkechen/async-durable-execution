@@ -44,6 +44,7 @@ nav:
   - Getting Started: getting-started.md
   - Guides:
       - Workflow Patterns: workflow-patterns.md
+      - Durable Terminal Scopes: terminal-scopes.md
       - Deploy and Invoke: deployment.md
       - Advanced Usage: advanced-usage.md
       - SerDes Pipelines: serdes-pipelines.md
@@ -52,6 +53,8 @@ nav:
       - Migrating from the Official SDK: migrating-from-official-python-sdk.md
       - Official SDK Comparison: official-python-sdk-comparison.md
       - Runner Architecture: runner-architecture.md
+  - Design:
+      - "RFC 0001: Durable Terminal Scopes": rfcs/0001-durable-terminal-scopes.md
   - API Reference:
       - Overview: async_durable_execution.md
       - Primitive Operations:
@@ -68,6 +71,7 @@ nav:
           - Wait for Callback: api/extension/wait_for_callback.md
           - Wait for Condition: api/extension/wait_for_condition.md
           - Retry Durable Work: api/extension/with_retry.md
+          - Durable Terminal Scope: api/extension/terminal_scope.md
           - Recursive Invocation: api/extension/recurse.md
           - Replay-Safe Values: api/extension/replay_safe.md
       - Core API: api/core.md

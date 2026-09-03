@@ -16,6 +16,7 @@ from async_durable_execution import (
     DurableFunctionCloudTestRunner,
     DurableFunctionLocalTestRunner,
     DurableFunctionTestResult,
+    DurableTerminalActions,
     ExtensionContext,
     ExtensionOperation,
     ExtensionStepResult,
@@ -26,6 +27,10 @@ from async_durable_execution import (
     FlowNodeResult,
     FlowNodeStatus,
     FlowResult,
+    TerminalFailure,
+    TerminalFailurePhase,
+    TerminalScopeConfig,
+    TerminalScopeError,
     WaitForConditionError,
     WithRetryContext,
     create_callback,
@@ -48,6 +53,7 @@ from async_durable_execution import (
     now,
     node,
     step,
+    terminal_scope,
     wait,
     parallel,
     random as durable_random,
@@ -81,6 +87,9 @@ from async_durable_execution._operation.child import (
 )
 from async_durable_execution._operation.invoke import invoke as module_invoke
 from async_durable_execution._operation.step import step as module_step
+from async_durable_execution._operation.terminal_scope import (
+    terminal_scope as module_terminal_scope,
+)
 from async_durable_execution._operation.wait import wait as module_wait
 from async_durable_execution._operation.with_retry import (
     WithRetryContext as ModuleWithRetryContext,
@@ -123,6 +132,7 @@ def test_user_facing_primitives_are_owned_by_operation_modules() -> None:
     assert invoke is module_invoke
     assert run_in_child_context is module_run_in_child_context
     assert step is module_step
+    assert terminal_scope is module_terminal_scope
     assert wait is module_wait
 
 
@@ -166,6 +176,7 @@ def test_additional_public_types_importable_from_package_root() -> None:
         "DurableFunctionCloudTestRunner": DurableFunctionCloudTestRunner,
         "DurableFunctionLocalTestRunner": DurableFunctionLocalTestRunner,
         "DurableFunctionTestResult": DurableFunctionTestResult,
+        "DurableTerminalActions": DurableTerminalActions,
         "DurableContext": ModuleDurableContext,
         "ExtendedTypeSerDes": ExtendedTypeSerDes,
         "ExtensionContext": ExtensionContext,
@@ -183,6 +194,10 @@ def test_additional_public_types_importable_from_package_root() -> None:
         "OperationSubType": OperationSubType,
         "RetryStrategy": RetryStrategy,
         "SummaryGenerator": SummaryGenerator,
+        "TerminalFailure": TerminalFailure,
+        "TerminalFailurePhase": TerminalFailurePhase,
+        "TerminalScopeConfig": TerminalScopeConfig,
+        "TerminalScopeError": TerminalScopeError,
         "CompletionDecision": CompletionDecision,
         "CompletionStatus": CompletionStatus,
         "WithRetryContext": ModuleWithRetryContext,
@@ -207,6 +222,7 @@ def test_additional_public_types_importable_from_package_root() -> None:
         "node": node,
         "random": durable_random,
         "recurse": recurse,
+        "terminal_scope": terminal_scope,
         "timestamp": timestamp,
         "uuid": durable_uuid,
     }

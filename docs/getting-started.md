@@ -136,9 +136,19 @@ result = await run_in_child_context(
 Handlers and child contexts compose durable operations. Step bodies perform the
 nondeterministic work that should be checkpointed atomically.
 
+### Clean Up at Logical Completion
+
+Do not put durable cleanup in `finally`, `with`, or `async with` around an
+operation that can suspend. Python executes lexical cleanup while the SDK
+unwinds the current invocation for a wait, callback, retry, or replay boundary.
+
+Use [`terminal_scope()`](terminal-scopes.md) to register durable cleanup and
+failure-only compensation that runs at the logical end of the scope.
+
 ## Continue
 
 - [API reference](async_durable_execution.md)
+- [Durable terminal scopes](terminal-scopes.md)
 - [Declarative DAG workflows](api/extension/flow.md)
 - [Workflow patterns](workflow-patterns.md)
 - [Deploy and invoke](deployment.md)

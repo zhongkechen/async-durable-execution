@@ -24,6 +24,7 @@ difference is the Python programming model.
 | Async library integration | Requires bridging async code from sync call sites | Native `await` for async clients and services |
 | Fan-out concurrency | SDK fan-out helpers such as `context.parallel()` and `context.map()` | `parallel()`, `map()`, and normal `asyncio.gather()` over operation tasks |
 | Declarative DAG workflows | No direct equivalent | `flow()` with typed node inputs, conditional dependencies, and failure routes |
+| Suspension-aware cleanup and compensation | No released direct equivalent | `terminal_scope()` with durable cleanup, reverse-order compensation, and explicit cancellation policy |
 | Logging | Context logger APIs | Standard `logging.getLogger(...)` with SDK replay filtering |
 | Test runner | Separate testing package | Local and cloud runners included in the main package |
 | Documentation | AWS official documentation | Generated API reference, migration guide, and async-focused guides |
@@ -156,6 +157,8 @@ Use `map()` when you want item-level result aggregation, completion thresholds, 
 bounded fan-out semantics. Use `parallel()` when you want explicit durable branches.
 Use `flow()` when a static DAG benefits from inferred data dependencies, conditional
 routes, and graph validation before execution.
+Use `terminal_scope()` when cleanup or compensation belongs to logical completion
+rather than Python stack unwinding.
 Use `asyncio.gather()` when independent durable operations fit normal async task
 composition.
 
@@ -201,6 +204,8 @@ adds async-focused project documentation:
 - A migration guide for moving from the official synchronous Python SDK.
 - Async-focused examples, including `asyncio.gather()` over durable operation tasks.
 - Declarative DAG examples covering fan-out/fan-in and failure recovery.
+- Durable terminal-scope examples covering callback suspension, cleanup, and
+  compensation.
 - Local/cloud runner examples and typed result inspection patterns.
 - Expanded test coverage and published coverage reporting for this repository.
 - Repository scripts and CI workflows for packaging the SDK as an AWS Lambda layer.

@@ -46,6 +46,8 @@ running again.
   bodies.
 - **Normal asyncio composition**: durable operations return `asyncio.Task`
   objects and work with `asyncio.gather()`.
+- **Logical-terminal cleanup**: `terminal_scope()` runs durable cleanup and
+  compensation after success or failure without firing at suspension boundaries.
 - **[Custom operation SPI](custom-operations.md)**: third-party packages can
   reserve stable primitive identities and build replay-safe durable operations
   without importing SDK internals.
@@ -108,6 +110,7 @@ clock reads, and other side effects inside checkpointed steps. Standard
 
 - Follow the [getting-started guide](getting-started.md).
 - Apply common [workflow patterns](workflow-patterns.md).
+- Manage cleanup and compensation with [durable terminal scopes](terminal-scopes.md).
 - [Deploy and invoke](deployment.md) a durable Lambda function.
 - Learn the [advanced asyncio patterns](advanced-usage.md).
 - Build [custom durable operations](custom-operations.md).

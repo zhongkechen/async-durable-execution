@@ -4,8 +4,8 @@
 
 Durable operation helpers such as `step()`, `wait()`, `invoke()`, `recurse()`,
 `run_in_child_context()`, `wait_for_callback()`, `wait_for_condition()`,
-`with_retry()`, and `flow()` return `asyncio.Task` objects. Awaiting an operation
-directly still works:
+`with_retry()`, `terminal_scope()`, and `flow()` return `asyncio.Task` objects.
+Awaiting an operation directly still works:
 
 ```python
 result = await step(fetch_order(order_id), name="fetch-order")

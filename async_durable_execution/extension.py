@@ -397,6 +397,10 @@ class ExtensionOperation:
         serdes: SerDes[T] | None = None,
         summary_generator: SummaryGenerator[T] | None = None,
         is_virtual: bool = False,
+        before_result_checkpoint: Callable[[T], Awaitable[None]] | None = None,
+        on_result_preparation_error: (
+            Callable[[Exception], Awaitable[None]] | None
+        ) = None,
     ) -> asyncio.Task[T]:
         """Use this reservation for an SDK-owned CONTEXT primitive."""
         identifier = self._claim(
@@ -411,6 +415,8 @@ class ExtensionOperation:
             summary_generator=summary_generator,
             is_virtual=is_virtual,
             replay_aware=True,
+            before_result_checkpoint=before_result_checkpoint,
+            on_result_preparation_error=on_result_preparation_error,
         )
 
     def _restart_child_context(
@@ -448,6 +454,10 @@ class ExtensionOperation:
         is_virtual: bool,
         replay_aware: bool = False,
         replaying: bool | None = None,
+        before_result_checkpoint: Callable[[T], Awaitable[None]] | None = None,
+        on_result_preparation_error: (
+            Callable[[Exception], Awaitable[None]] | None
+        ) = None,
     ) -> asyncio.Task[T]:
         child_context = self._context.create_child_context(
             operation_id=self._operation_id,
@@ -466,6 +476,8 @@ class ExtensionOperation:
                 serdes=serdes,
                 summary_generator=summary_generator,
                 is_virtual=is_virtual,
+                before_result_checkpoint=before_result_checkpoint,
+                on_result_preparation_error=on_result_preparation_error,
             )
 
         async def run_child_context() -> T:
