@@ -64,7 +64,7 @@ nested scopes, retries, concurrent branches, and cancellation.
 - Guarantee cleanup after hard infrastructure termination when no invocation
   can execute user code.
 - Replace leases, TTLs, resource reapers, or reconciliation.
-- provide exactly-once external side effects.
+- Provide exactly-once external side effects.
 - Make arbitrary context managers suspension aware.
 - Encourage applications to catch SDK suspension signals.
 - Add a backend-visible operation state machine in the first version.

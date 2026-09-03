@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -19,6 +20,13 @@ from async_durable_execution import (
     parallel,
     wait,
     with_retry,
+)
+from async_durable_execution._core.context import DurableContext
+from async_durable_execution._core.models import OperationIdentifier, OperationSubType
+from async_durable_execution._core.state import ExecutionState
+from async_durable_execution.extension import (
+    ExtensionOperation,
+    _create_extension_operation,
 )
 
 
@@ -41,6 +49,66 @@ async def _run(handler):
         timeout=10,
     ) as runner:
         return await runner.run()
+
+
+def test_restart_child_context_forwards_result_lifecycle_hooks() -> None:
+    state = Mock(spec=ExecutionState)
+    state.durable_execution_arn = "arn:test:execution"
+    context = DurableContext(
+        execution_state=state,
+        operation_identifier=OperationIdentifier(
+            operation_id=None,
+            sub_type=OperationSubType.EXECUTION,
+            parent_id="parent",
+        ),
+    )
+    operation = _create_extension_operation(
+        context,
+        "operation-id",
+        "operation-name",
+        has_checkpoint=True,
+    )
+    identifier = OperationIdentifier(
+        operation_id="operation-id",
+        sub_type=OperationSubType.RUN_IN_CHILD_CONTEXT,
+        parent_id="parent",
+        name="operation-name",
+    )
+    operation._identifier = identifier  # noqa: SLF001
+    operation._claimed_operation_type = OperationType.CONTEXT  # noqa: SLF001
+
+    async def func() -> str:
+        return "result"
+
+    async def before_result_checkpoint(_result: str) -> None:
+        return None
+
+    async def on_result_preparation_error(_error: Exception) -> None:
+        return None
+
+    expected_task = Mock()
+    with patch.object(
+        ExtensionOperation,
+        "_create_child_context_task",
+        return_value=expected_task,
+    ) as create_task:
+        task = operation._restart_child_context(  # noqa: SLF001
+            func,
+            before_result_checkpoint=before_result_checkpoint,
+            on_result_preparation_error=on_result_preparation_error,
+        )
+
+    assert task is expected_task
+    create_task.assert_called_once_with(
+        identifier,
+        func,
+        serdes=None,
+        summary_generator=None,
+        is_virtual=False,
+        replaying=True,
+        before_result_checkpoint=before_result_checkpoint,
+        on_result_preparation_error=on_result_preparation_error,
+    )
 
 
 async def test_reserved_operations_keep_ids_when_launch_order_changes(monkeypatch):

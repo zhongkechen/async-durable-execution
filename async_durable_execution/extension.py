@@ -426,6 +426,10 @@ class ExtensionOperation:
         serdes: SerDes[T] | None = None,
         summary_generator: SummaryGenerator[T] | None = None,
         is_virtual: bool = False,
+        before_result_checkpoint: Callable[[T], Awaitable[None]] | None = None,
+        on_result_preparation_error: (
+            Callable[[Exception], Awaitable[None]] | None
+        ) = None,
     ) -> asyncio.Task[T]:
         """Re-enter an SDK-owned child operation after an in-process suspension."""
         identifier = self._identifier
@@ -442,6 +446,8 @@ class ExtensionOperation:
             summary_generator=summary_generator,
             is_virtual=is_virtual,
             replaying=True,
+            before_result_checkpoint=before_result_checkpoint,
+            on_result_preparation_error=on_result_preparation_error,
         )
 
     def _create_child_context_task(
