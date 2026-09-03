@@ -341,6 +341,9 @@ class _DurableTerminalActions:
                 )
             except InvocationError as error:
                 if error.is_retryable():
+                    # Checkpoint/SerDes interruptions take precedence over an
+                    # in-flight asyncio cancellation. Lambda must retry before
+                    # the scope can claim a durable terminal outcome.
                     raise
                 failures.append(
                     _failure_from_exception(
@@ -413,57 +416,75 @@ def _terminal_scope_error_message(
     return f"{prefix}; {count} {suffix}."
 
 
-async def _execute_terminal_scope(
-    body: Callable[[DurableTerminalActions], Awaitable[T]],
-    config: TerminalScopeConfig,
-) -> T:
-    actions = _DurableTerminalActions(get_durable_context())
-    try:
-        result = await body(actions)
-    except asyncio.CancelledError as cancellation:
-        actions._close()
-        failures = await _run_terminal_actions(
-            actions,
-            compensate=config.compensate_on_cancellation,
-            cleanup=config.cleanup_on_cancellation,
-        )
-        if failures:
-            cancellation_failure = _failure_from_exception(
-                cancellation,
-                phase=TerminalFailurePhase.BODY,
-            )
-            terminal_error = TerminalScopeError(
-                _terminal_scope_error_message(cancellation_failure, failures),
-                body_failure=cancellation_failure,
-                action_failures=failures,
-                body_error=cancellation,
-            )
-            raise cancellation from terminal_error
-        raise
-    except Exception as body_error:
-        actions._close()
-        if isinstance(body_error, InvocationError) and body_error.is_retryable():
-            raise
+class _TerminalScopeLifecycle:
+    """Coordinate body, result preparation, and terminal action phases."""
 
-        failures = await _run_terminal_actions(
-            actions,
-            compensate=True,
-            cleanup=True,
-        )
-        if failures:
-            body_failure = _failure_from_exception(
-                body_error,
-                phase=TerminalFailurePhase.BODY,
+    def __init__(self, config: TerminalScopeConfig) -> None:
+        self.config = config
+        self.actions: _DurableTerminalActions | None = None
+
+    def _require_actions(self) -> _DurableTerminalActions:
+        if self.actions is None:
+            msg = "Terminal scope body has not initialized its action registry."
+            raise RuntimeError(msg)
+        return self.actions
+
+    async def run_body(
+        self,
+        body: Callable[[DurableTerminalActions], Awaitable[T]],
+    ) -> T:
+        actions = _DurableTerminalActions(get_durable_context())
+        self.actions = actions
+        try:
+            result = await body(actions)
+        except asyncio.CancelledError as cancellation:
+            actions._close()
+            failures = await _run_terminal_actions(
+                actions,
+                compensate=self.config.compensate_on_cancellation,
+                cleanup=self.config.cleanup_on_cancellation,
             )
-            raise TerminalScopeError(
-                _terminal_scope_error_message(body_failure, failures),
-                body_failure=body_failure,
-                action_failures=failures,
-                body_error=body_error,
-            ) from body_error
-        raise
-    else:
-        actions._close()
+            if failures:
+                cancellation_failure = _failure_from_exception(
+                    cancellation,
+                    phase=TerminalFailurePhase.BODY,
+                )
+                terminal_error = TerminalScopeError(
+                    _terminal_scope_error_message(cancellation_failure, failures),
+                    body_failure=cancellation_failure,
+                    action_failures=failures,
+                    body_error=cancellation,
+                )
+                raise cancellation from terminal_error
+            raise
+        except Exception as body_error:
+            actions._close()
+            if isinstance(body_error, InvocationError) and body_error.is_retryable():
+                raise
+
+            failures = await _run_terminal_actions(
+                actions,
+                compensate=True,
+                cleanup=True,
+            )
+            if failures:
+                body_failure = _failure_from_exception(
+                    body_error,
+                    phase=TerminalFailurePhase.BODY,
+                )
+                raise TerminalScopeError(
+                    _terminal_scope_error_message(body_failure, failures),
+                    body_failure=body_failure,
+                    action_failures=failures,
+                    body_error=body_error,
+                ) from body_error
+            raise
+        else:
+            actions._close()
+            return result
+
+    async def before_result_checkpoint(self, _result: object) -> None:
+        actions = self._require_actions()
         failures = await _run_terminal_actions(
             actions,
             compensate=False,
@@ -474,7 +495,40 @@ async def _execute_terminal_scope(
                 _terminal_scope_error_message(None, failures),
                 action_failures=failures,
             )
-        return result
+
+    async def on_result_preparation_error(self, error: Exception) -> None:
+        actions = self._require_actions()
+        if isinstance(error, InvocationError) and error.is_retryable():
+            raise error
+
+        failures = await _run_terminal_actions(
+            actions,
+            compensate=True,
+            cleanup=True,
+        )
+        if failures:
+            body_failure = _failure_from_exception(
+                error,
+                phase=TerminalFailurePhase.BODY,
+            )
+            raise TerminalScopeError(
+                _terminal_scope_error_message(body_failure, failures),
+                body_failure=body_failure,
+                action_failures=failures,
+                body_error=error,
+            ) from error
+        raise error
+
+
+async def _execute_terminal_scope(
+    body: Callable[[DurableTerminalActions], Awaitable[T]],
+    config: TerminalScopeConfig,
+) -> T:
+    """Execute a complete terminal lifecycle without a child result boundary."""
+    lifecycle = _TerminalScopeLifecycle(config)
+    result = await lifecycle.run_body(body)
+    await lifecycle.before_result_checkpoint(result)
+    return result
 
 
 def terminal_scope(
@@ -500,9 +554,10 @@ def terminal_scope(
 
     scope_name = name if name is not None else getattr(body, "__name__", None)
     active_config = config or TerminalScopeConfig()
+    lifecycle = _TerminalScopeLifecycle(active_config)
 
     async def run_scope() -> T:
-        return await _execute_terminal_scope(body, active_config)
+        return await lifecycle.run_body(body)
 
     return (
         get_extension_context()
@@ -512,6 +567,8 @@ def terminal_scope(
             sub_type=OperationSubType.TERMINAL_SCOPE,
             serdes=serdes,
             summary_generator=summary_generator,
+            before_result_checkpoint=lifecycle.before_result_checkpoint,
+            on_result_preparation_error=lifecycle.on_result_preparation_error,
         )
     )
 

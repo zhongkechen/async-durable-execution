@@ -573,6 +573,28 @@ async def test_retryable_invocation_error_from_action_interrupts_terminal_pass(
     assert raised.value is error
 
 
+async def test_retryable_invocation_error_during_cancellation_takes_precedence(
+    immediate_extension: _ImmediateExtensionContext,
+) -> None:
+    context = _create_context()
+    error = InvocationError("retry cancellation cleanup")
+
+    async def cleanup() -> None:
+        raise error
+
+    async def body(actions: DurableTerminalActions) -> None:
+        actions.cleanup(cleanup, name="cleanup")
+        raise asyncio.CancelledError
+
+    with bind_current_context(context), pytest.raises(InvocationError) as raised:
+        await _execute_terminal_scope(
+            body,
+            TerminalScopeConfig(cleanup_on_cancellation=True),
+        )
+
+    assert raised.value is error
+
+
 async def test_non_retryable_invocation_error_from_action_is_recorded(
     immediate_extension: _ImmediateExtensionContext,
 ) -> None:

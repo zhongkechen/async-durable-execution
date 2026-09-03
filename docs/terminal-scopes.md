@@ -208,6 +208,12 @@ tradeoff is appropriate.
 If the body fails and every terminal action succeeds, the original body
 exception is re-raised unchanged.
 
+Before a successful body runs cleanup, the SDK serializes the scope result and
+prepares any oversized-result summary. A non-retryable result serialization or
+summary failure is therefore a logical scope failure: compensation runs,
+followed by cleanup. A retryable SerDes failure remains an invocation
+interruption and runs no terminal action until Lambda retries.
+
 If one or more terminal actions fail:
 
 - all remaining ordinary compensation and cleanup actions are attempted;

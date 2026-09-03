@@ -15,6 +15,7 @@ from async_durable_execution import (
     OperationStatus,
     OperationSubType,
     RetryStrategy,
+    SerDes,
     TerminalFailurePhase,
     TerminalScopeError,
     create_callback,
@@ -449,4 +450,92 @@ async def test_multiple_terminal_failures_are_checkpointed_and_restored() -> Non
     assert [failure.phase for failure in restored.action_failures] == [
         TerminalFailurePhase.COMPENSATION,
         TerminalFailurePhase.CLEANUP,
+    ]
+
+
+async def test_result_serialization_failure_runs_compensation_and_cleanup() -> None:
+    events: list[str] = []
+
+    class FailingResultSerDes(SerDes[str]):
+        async def serialize(self, _value: str) -> str:
+            events.append("serialize")
+            msg = "result serialization failed"
+            raise ValueError(msg)
+
+        async def deserialize(self, data: str) -> str:
+            return data
+
+    @durable_callable
+    async def record(value: str) -> None:
+        events.append(value)
+
+    async def scoped(actions: DurableTerminalActions) -> str:
+        actions.compensate(record("compensate"), name="compensate")
+        actions.cleanup(record("cleanup"), name="cleanup")
+        return "result"
+
+    @durable_execution
+    async def handler(_event: Any) -> str:
+        return await terminal_scope(
+            scoped,
+            name="serialization-failure-scope",
+            serdes=FailingResultSerDes(),
+        )
+
+    async with DurableFunctionLocalTestRunner(
+        handler=handler,
+        input=None,
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.FAILED
+    assert events == ["serialize", "compensate", "cleanup"]
+
+    scope = result.get_context("serialization-failure-scope")
+    assert [operation.name for operation in result.get_child_operations(scope)] == [
+        "compensate",
+        "cleanup",
+    ]
+
+
+async def test_summary_generation_failure_runs_compensation_and_cleanup() -> None:
+    events: list[str] = []
+
+    @durable_callable
+    async def record(value: str) -> None:
+        events.append(value)
+
+    async def scoped(actions: DurableTerminalActions) -> str:
+        actions.compensate(record("compensate"), name="compensate")
+        actions.cleanup(record("cleanup"), name="cleanup")
+        return "large" * (256 * 1024)
+
+    def fail_summary(_result: str) -> str:
+        events.append("summary")
+        msg = "summary generation failed"
+        raise RuntimeError(msg)
+
+    @durable_execution
+    async def handler(_event: Any) -> str:
+        return await terminal_scope(
+            scoped,
+            name="summary-failure-scope",
+            summary_generator=fail_summary,
+        )
+
+    async with DurableFunctionLocalTestRunner(
+        handler=handler,
+        input=None,
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.FAILED
+    assert events == ["summary", "compensate", "cleanup"]
+
+    scope = result.get_context("summary-failure-scope")
+    assert [operation.name for operation in result.get_child_operations(scope)] == [
+        "compensate",
+        "cleanup",
     ]

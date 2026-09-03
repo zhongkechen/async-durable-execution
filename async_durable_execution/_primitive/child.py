@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
-from typing import TYPE_CHECKING, TypeAlias, TypeVar, cast
+from collections.abc import Awaitable, Callable
+from typing import TypeAlias, TypeVar, cast
 
 from .base import OperationExecutor
 from .._core import (
@@ -31,9 +31,6 @@ from .._core import (
     get_durable_context,
     serialize,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Awaitable
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +58,10 @@ class ChildOperationExecutor(OperationExecutor[T]):
         serdes: SerDes | None = None,
         summary_generator: SummaryGenerator | None = None,
         is_virtual: bool = False,
+        before_result_checkpoint: Callable[[T], Awaitable[None]] | None = None,
+        on_result_preparation_error: (
+            Callable[[Exception], Awaitable[None]] | None
+        ) = None,
     ) -> None:
         """Initialize the child operation executor.
 
@@ -71,12 +72,18 @@ class ChildOperationExecutor(OperationExecutor[T]):
             serdes: Optional serializer for the child context result.
             summary_generator: Optional summary generator for large child results.
             is_virtual: Whether this child context should skip lifecycle checkpoints.
+            before_result_checkpoint: Optional hook after result serialization and
+                summary preparation but before the success checkpoint.
+            on_result_preparation_error: Optional hook for serialization or summary
+                failures before the child context records failure.
         """
         super().__init__(state=state, operation_identifier=operation_identifier)
         self.func = func
         self.serdes = serdes
         self.summary_generator = summary_generator
         self.is_virtual = is_virtual
+        self.before_result_checkpoint = before_result_checkpoint
+        self.on_result_preparation_error = on_result_preparation_error
 
     async def start(self) -> T:
         """Start a new child context operation."""
@@ -168,45 +175,55 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 )
                 return raw_result
 
-            # Serialize result
-            serialized_result: str = await serialize(
-                serdes=self.serdes,
-                value=raw_result,
-                operation_id=self.operation_id,
-                durable_execution_arn=self.durable_execution_arn,
-                recursive_level=self.state.recursive_level,
-                operation_name=self.operation_identifier.name,
-                parent_id=self.operation_identifier.parent_id,
-                operation_type=self.SERDES_OPERATION_TYPE,
-                operation_sub_type=self.operation_identifier.sub_type,
-            )
+            try:
+                # Serialize result
+                serialized_result: str = await serialize(
+                    serdes=self.serdes,
+                    value=raw_result,
+                    operation_id=self.operation_id,
+                    durable_execution_arn=self.durable_execution_arn,
+                    recursive_level=self.state.recursive_level,
+                    operation_name=self.operation_identifier.name,
+                    parent_id=self.operation_identifier.parent_id,
+                    operation_type=self.SERDES_OPERATION_TYPE,
+                    operation_sub_type=self.operation_identifier.sub_type,
+                )
 
-            # Check payload size and use ReplayChildren mode if needed
-            # Summary Generator Logic:
-            # When the serialized result exceeds 256KB, we use ReplayChildren mode to avoid
-            # checkpointing large payloads. Instead, we checkpoint a compact summary and mark
-            # the operation for replay. This matches the TypeScript implementation behavior.
-            #
-            # See TypeScript reference:
-            # - aws-durable-execution-sdk-js/src/handlers/run-in-child-context-handler/run-in-child-context-handler.ts (lines ~200-220)
-            #
-            # The summary generator creates a JSON summary with metadata (type, counts, status)
-            # instead of the full BatchResult. During replay, the child context is re-executed
-            # to reconstruct the full result rather than deserializing from the checkpoint.
-            replay_children: bool = False
-            if len(serialized_result) > CHECKPOINT_SIZE_LIMIT:
-                logger.debug(
-                    "Large payload detected, using ReplayChildren mode: id: %s, name: %s, payload_size: %d, limit: %d",
-                    self.operation_identifier.operation_id,
-                    self.operation_identifier.name,
-                    len(serialized_result),
-                    CHECKPOINT_SIZE_LIMIT,
-                )
-                replay_children = True
-                # Use summary generator if provided, otherwise use empty string (matches TypeScript)
-                serialized_result = (
-                    self.summary_generator(raw_result) if self.summary_generator else ""
-                )
+                # Check payload size and use ReplayChildren mode if needed
+                # Summary Generator Logic:
+                # When the serialized result exceeds 256KB, we use ReplayChildren mode to avoid
+                # checkpointing large payloads. Instead, we checkpoint a compact summary and mark
+                # the operation for replay. This matches the TypeScript implementation behavior.
+                #
+                # See TypeScript reference:
+                # - aws-durable-execution-sdk-js/src/handlers/run-in-child-context-handler/run-in-child-context-handler.ts (lines ~200-220)
+                #
+                # The summary generator creates a JSON summary with metadata (type, counts, status)
+                # instead of the full BatchResult. During replay, the child context is re-executed
+                # to reconstruct the full result rather than deserializing from the checkpoint.
+                replay_children: bool = False
+                if len(serialized_result) > CHECKPOINT_SIZE_LIMIT:
+                    logger.debug(
+                        "Large payload detected, using ReplayChildren mode: id: %s, name: %s, payload_size: %d, limit: %d",
+                        self.operation_identifier.operation_id,
+                        self.operation_identifier.name,
+                        len(serialized_result),
+                        CHECKPOINT_SIZE_LIMIT,
+                    )
+                    replay_children = True
+                    # Use summary generator if provided, otherwise use empty string (matches TypeScript)
+                    serialized_result = (
+                        self.summary_generator(raw_result)
+                        if self.summary_generator
+                        else ""
+                    )
+            except Exception as result_error:
+                if self.on_result_preparation_error is not None:
+                    await self.on_result_preparation_error(result_error)
+                raise
+
+            if self.before_result_checkpoint is not None:
+                await self.before_result_checkpoint(raw_result)
 
             # Checkpoint SUCCEED
             success_operation: OperationUpdate = OperationUpdate.create_context_succeed(
@@ -430,10 +447,26 @@ async def _run_child_context(
     serdes: SerDes | None = None,
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
+    before_result_checkpoint: Callable[[T], Awaitable[None]] | None = None,
+    on_result_preparation_error: Callable[[Exception], Awaitable[None]] | None = None,
 ) -> T:
     async def callable_with_child_context() -> T:
         with bind_current_context(child_context):
             return await func()
+
+    async def before_result_checkpoint_with_child_context(result: T) -> None:
+        if before_result_checkpoint is None:
+            return
+        with bind_current_context(child_context):
+            await before_result_checkpoint(result)
+
+    async def result_preparation_error_with_child_context(
+        error: Exception,
+    ) -> None:
+        if on_result_preparation_error is None:
+            return
+        with bind_current_context(child_context):
+            await on_result_preparation_error(error)
 
     executor: ChildOperationExecutor[T] = ChildOperationExecutor(
         callable_with_child_context,
@@ -442,5 +475,15 @@ async def _run_child_context(
         serdes=serdes,
         summary_generator=summary_generator,
         is_virtual=is_virtual,
+        before_result_checkpoint=(
+            before_result_checkpoint_with_child_context
+            if before_result_checkpoint is not None
+            else None
+        ),
+        on_result_preparation_error=(
+            result_preparation_error_with_child_context
+            if on_result_preparation_error is not None
+            else None
+        ),
     )
     return await executor.process()

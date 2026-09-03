@@ -132,8 +132,9 @@ invocation interruption.
 
 | Outcome | Compensation | Cleanup | Propagation |
 | --- | --- | --- | --- |
-| Success | No | Yes | Return body result unless cleanup fails |
+| Success after result serialization/summary preparation | No | Yes | Return body result unless cleanup fails |
 | Ordinary body failure | Yes | Yes | Re-raise body error, or raise `TerminalScopeError` when actions also fail |
+| Non-retryable result serialization or summary failure | Yes | Yes | Preserve preparation failure semantics |
 | Non-retryable invocation/control failure | Yes | Yes | Preserve failure semantics |
 | Retryable `InvocationError` | No | No | Propagate for Lambda retry |
 | `SuspendExecution` or `TimedSuspendExecution` | No | No | Propagate suspension |
@@ -167,8 +168,9 @@ results. Registration does not persist arbitrary Python objects.
 `terminal_scope()` reserves one normal child-context operation with subtype
 `TerminalScope`.
 
-Body operations allocate identities in that child context. After a terminal
-path is selected, registered actions allocate subsequent step identities in
+Body operations allocate identities in that child context. After the body
+returns, the child context serializes its result and prepares any oversized
+summary. Only then do registered actions allocate subsequent step identities in
 deterministic execution order:
 
 1. compensations in reverse registration order;
@@ -205,6 +207,12 @@ ordering, partial failure, and deterministic diagnostics.
 
 If a body fails and every terminal action succeeds, the original exception is
 re-raised unchanged.
+
+If result serialization or oversized-summary generation fails before the
+success checkpoint, the failure is classified like a body failure:
+compensation and cleanup run before the child context records failure.
+Retryable SerDes errors remain invocation interruptions and bypass terminal
+actions.
 
 If terminal actions fail, the scope raises `TerminalScopeError`, an
 `ExecutionError` with:
@@ -243,7 +251,9 @@ and reapers remain required for unconditional eventual reclamation.
 ### Serialization
 
 The scope result supports the same `serdes` and oversized-result
-`summary_generator` behavior as `run_in_child_context()`.
+`summary_generator` behavior as `run_in_child_context()`. Serialization and
+summary preparation complete before success cleanup. The prepared payload is
+then reused by the child success checkpoint without a second serialization.
 
 Terminal action results are typed as `None` and use normal step serialization.
 `TerminalScopeError` stores compact JSON control metadata in the failed context
@@ -326,6 +336,7 @@ The implementation is accepted only with coverage for:
 - success cleanup and failure compensation/cleanup order;
 - suspension and timed suspension bypass;
 - callback suspension before cleanup;
+- non-retryable result serialization and summary failures before compensation;
 - retryable invocation interruption bypass;
 - fatal `BaseException` propagation;
 - cancellation default and opt-in policies;
