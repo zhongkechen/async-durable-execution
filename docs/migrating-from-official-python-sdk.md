@@ -46,6 +46,7 @@ from `async_durable_execution`.
 | `context.map(...)` | `await map(func=..., items=..., ...)` |
 | `context.parallel(...)` | `await parallel(branches=[...], ...)` |
 | No direct declarative DAG equivalent | `await flow(my_dag(...), name="...")` |
+| No released terminal-scope equivalent | `await terminal_scope(body, name="...")` |
 | `context.logger` or `step_context.logger` | standard `logging.getLogger(__name__)` |
 
 This SDK binds the active durable context internally while your async callable runs. If
@@ -255,6 +256,52 @@ approval = await wait_for_callback(
 
 The external system still completes callbacks through the Lambda
 `SendDurableExecutionCallbackSuccess` and `SendDurableExecutionCallbackFailure` APIs.
+
+## Cleanup and Compensation
+
+Do not translate cleanup in `finally`, context managers, `ExitStack`, or
+`AsyncExitStack` directly around async durable operations. Those constructs run
+when the current invocation unwinds for suspension.
+
+Use `terminal_scope()` to register logical-terminal cleanup and failure-only
+compensation:
+
+```python
+from async_durable_execution import (
+    DurableTerminalActions,
+    durable_callable,
+    step,
+    terminal_scope,
+)
+
+
+@durable_callable
+async def acquire_resource():
+    return await resource_service.acquire()
+
+
+@durable_callable
+async def release_resource(resource_id: str) -> None:
+    await resource_service.release(resource_id)
+
+
+@durable_callable
+async def undo_business_action(resource_id: str) -> None:
+    await business_service.undo(resource_id)
+
+
+async def body(terminal: DurableTerminalActions) -> str:
+    resource = await step(acquire_resource(), name="acquire-resource")
+    terminal.cleanup(release_resource(resource.id), name="release-resource")
+    terminal.compensate(undo_business_action(resource.id), name="undo-action")
+    return await perform_durable_work(resource)
+
+
+result = await terminal_scope(body, name="resource-work")
+```
+
+See [Durable Terminal Scopes](terminal-scopes.md) for replay, retries, ordering,
+error aggregation, and cancellation policy.
 
 ## Child Contexts, Parallel, and Map
 

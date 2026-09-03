@@ -29,6 +29,7 @@ checkpoint conventions.
 - [Wait for callback](api/extension/wait_for_callback.md)
 - [Wait for condition](api/extension/wait_for_condition.md)
 - [Retry durable work](api/extension/with_retry.md)
+- [Durable terminal scope](api/extension/terminal_scope.md)
 - [Recursive invocation](api/extension/recurse.md)
 - [Replay-safe values](api/extension/replay_safe.md)
 

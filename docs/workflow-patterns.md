@@ -128,14 +128,21 @@ in [Deploy and Invoke](deployment.md#iam-permissions).
 
 ## Saga Compensation
 
-Record compensation decisions in deterministic workflow state. Completed
-forward steps are restored from history on replay, so the compensation list is
-rebuilt before the original failure is raised again.
+Use `terminal_scope()` to register reverse-order compensation after each
+forward operation succeeds. The scope reconstructs registrations during replay,
+runs compensation only after failure, and runs cleanup after both success and
+failure. Suspension does not trigger either phase.
 
 ```python
 from typing import Any
 
-from async_durable_execution import durable_callable, durable_execution, step
+from async_durable_execution import (
+    DurableTerminalActions,
+    durable_callable,
+    durable_execution,
+    step,
+    terminal_scope,
+)
 
 
 @durable_callable
@@ -158,31 +165,33 @@ async def cancel_hotel(request: dict[str, Any]) -> None:
     await hotel_service.cancel(request)
 
 
+async def book_trip(
+    event: dict[str, Any],
+    terminal: DurableTerminalActions,
+) -> dict[str, bool]:
+    await step(book_flight(event), name="book-flight")
+    terminal.compensate(cancel_flight(event), name="cancel-flight")
+
+    await step(book_hotel(event), name="book-hotel")
+    terminal.compensate(cancel_hotel(event), name="cancel-hotel")
+    return {"success": True}
+
+
 @durable_execution
 async def handler(event: dict[str, Any]) -> dict[str, bool]:
-    compensations: list[str] = []
+    async def scoped(terminal: DurableTerminalActions) -> dict[str, bool]:
+        return await book_trip(event, terminal)
 
-    try:
-        await step(book_flight(event), name="book-flight")
-        compensations.append("cancel-flight")
-
-        await step(book_hotel(event), name="book-hotel")
-        compensations.append("cancel-hotel")
-    except Exception:
-        for compensation in reversed(compensations):
-            if compensation == "cancel-hotel":
-                await step(cancel_hotel(event), name=compensation)
-            elif compensation == "cancel-flight":
-                await step(cancel_flight(event), name=compensation)
-        raise
-
-    return {"success": True}
+    return await terminal_scope(scoped, name="book-trip")
 ```
 
 Prefer idempotent booking and cancellation APIs. A remote side effect can
 succeed immediately before its step checkpoint fails, so applications that
 cannot tolerate ambiguity need service-specific idempotency keys or
 reconciliation.
+
+See [Durable Terminal Scopes](terminal-scopes.md) for cleanup, retries,
+cancellation policy, nested scopes, and the `finally` hazard.
 
 For simpler sequential workflows, start with the
 [getting-started example](getting-started.md#create-a-workflow). For static

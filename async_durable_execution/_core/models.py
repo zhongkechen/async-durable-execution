@@ -333,6 +333,9 @@ class OperationSubType(Enum):
     WAIT_FOR_CALLBACK = "WaitForCallback"
     WAIT_FOR_CONDITION = "WaitForCondition"
     CHAINED_INVOKE = "ChainedInvoke"
+    TERMINAL_SCOPE = "TerminalScope"
+    TERMINAL_COMPENSATION = "TerminalCompensation"
+    TERMINAL_CLEANUP = "TerminalCleanup"
     EXECUTION = "Execution"
 
 
