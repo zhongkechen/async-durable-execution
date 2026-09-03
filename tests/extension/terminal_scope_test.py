@@ -606,7 +606,6 @@ async def test_cancellation_action_failure_is_attached_as_cause(
     immediate_extension: _ImmediateExtensionContext,
 ) -> None:
     context = _create_context()
-    started = asyncio.Event()
 
     async def cleanup() -> None:
         msg = "cleanup failed"
@@ -614,21 +613,13 @@ async def test_cancellation_action_failure_is_attached_as_cause(
 
     async def body(actions: DurableTerminalActions) -> None:
         actions.cleanup(cleanup, name="cleanup")
-        started.set()
-        await asyncio.Event().wait()
+        raise asyncio.CancelledError
 
-    async def run() -> None:
-        with bind_current_context(context):
-            await _execute_terminal_scope(
-                body,
-                TerminalScopeConfig(cleanup_on_cancellation=True),
-            )
-
-    task = asyncio.create_task(run())
-    await started.wait()
-    task.cancel()
-    with pytest.raises(asyncio.CancelledError) as raised:
-        await task
+    with bind_current_context(context), pytest.raises(asyncio.CancelledError) as raised:
+        await _execute_terminal_scope(
+            body,
+            TerminalScopeConfig(cleanup_on_cancellation=True),
+        )
 
     assert isinstance(raised.value.__cause__, TerminalScopeError)
     assert raised.value.__cause__.body_failure is not None
