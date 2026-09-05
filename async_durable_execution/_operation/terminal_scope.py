@@ -507,7 +507,7 @@ class _TerminalScopeLifecycle:
         actions = self._require_actions()
         if isinstance(error, asyncio.CancelledError):
             await self._raise_cancellation(error)
-        if isinstance(error, InvocationError) and error.is_retryable():
+        elif isinstance(error, InvocationError) and error.is_retryable():
             raise error
 
         failures = await _run_terminal_actions(

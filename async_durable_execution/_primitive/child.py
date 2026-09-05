@@ -75,8 +75,9 @@ class ChildOperationExecutor(OperationExecutor[T]):
             is_virtual: Whether this child context should skip lifecycle checkpoints.
             before_result_checkpoint: Optional hook after result serialization and
                 summary preparation but before the success checkpoint.
-            on_result_preparation_error: Optional hook for serialization or summary
-                failures before the child context records failure.
+            on_result_preparation_error: Optional hook for serialization,
+                deserialization, summary failures, or cancellation before the child
+                context records failure.
             deserialize_result_before_checkpoint: Whether deserialization belongs
                 to result preparation before the success checkpoint.
         """
