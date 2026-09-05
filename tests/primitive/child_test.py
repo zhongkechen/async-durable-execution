@@ -975,6 +975,41 @@ async def test_child_handler_custom_serdes_not_start() -> None:
     assert success_operation.payload == expected_checkpoointed_result
 
 
+async def test_result_preparation_cancellation_calls_child_hook() -> None:
+    class CancellingSerDes(SerDes[str]):
+        async def serialize(self, _value: str) -> str:
+            raise asyncio.CancelledError
+
+        async def deserialize(self, data: str) -> str:
+            return data
+
+    mock_state = Mock(spec=ExecutionState)
+    mock_state.durable_execution_arn = "test_arn"
+    mock_state.operations.get.return_value = None
+    cancellations: list[BaseException] = []
+
+    async def on_result_preparation_error(error: BaseException) -> None:
+        cancellations.append(error)
+
+    with pytest.raises(asyncio.CancelledError):
+        await child_handler(
+            Mock(return_value="result"),
+            mock_state,
+            OperationIdentifier(
+                "cancel-result",
+                OperationSubType.RUN_IN_CHILD_CONTEXT,
+                None,
+                "cancel-result",
+            ),
+            serdes=CancellingSerDes(),
+            on_result_preparation_error=on_result_preparation_error,
+        )
+
+    assert len(cancellations) == 1
+    assert isinstance(cancellations[0], asyncio.CancelledError)
+    assert mock_state.create_checkpoint.call_count == 1
+
+
 async def test_child_handler_returns_deserialized_serialized_custom_serdes_result() -> (
     None
 ):

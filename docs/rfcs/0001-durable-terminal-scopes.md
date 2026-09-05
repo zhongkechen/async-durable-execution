@@ -64,7 +64,7 @@ nested scopes, retries, concurrent branches, and cancellation.
 - Guarantee cleanup after hard infrastructure termination when no invocation
   can execute user code.
 - Replace leases, TTLs, resource reapers, or reconciliation.
-- provide exactly-once external side effects.
+- Provide exactly-once external side effects.
 - Make arbitrary context managers suspension aware.
 - Encourage applications to catch SDK suspension signals.
 - Add a backend-visible operation state machine in the first version.
@@ -132,9 +132,9 @@ invocation interruption.
 
 | Outcome | Compensation | Cleanup | Propagation |
 | --- | --- | --- | --- |
-| Success after result serialization/summary preparation | No | Yes | Return body result unless cleanup fails |
+| Success after result serialization/deserialization/summary preparation | No | Yes | Return body result unless cleanup fails |
 | Ordinary body failure | Yes | Yes | Re-raise body error, or raise `TerminalScopeError` when actions also fail |
-| Non-retryable result serialization or summary failure | Yes | Yes | Preserve preparation failure semantics |
+| Non-retryable result serialization, deserialization, or summary failure | Yes | Yes | Preserve preparation failure semantics |
 | Non-retryable invocation/control failure | Yes | Yes | Preserve failure semantics |
 | Retryable `InvocationError` | No | No | Propagate for Lambda retry |
 | `SuspendExecution` or `TimedSuspendExecution` | No | No | Propagate suspension |
@@ -169,9 +169,9 @@ results. Registration does not persist arbitrary Python objects.
 `TerminalScope`.
 
 Body operations allocate identities in that child context. After the body
-returns, the child context serializes its result and prepares any oversized
-summary. Only then do registered actions allocate subsequent step identities in
-deterministic execution order:
+returns, the child context serializes and deserializes its result and prepares
+any oversized summary. Only then do registered actions allocate subsequent step
+identities in deterministic execution order:
 
 1. compensations in reverse registration order;
 2. cleanups in reverse registration order.
@@ -205,14 +205,18 @@ ordering, partial failure, and deterministic diagnostics.
 
 ### Error Model
 
-If a body fails and every terminal action succeeds, the original exception is
-re-raised unchanged.
+If a body fails and every terminal action succeeds, the terminal child context
+checkpoints the original failure and exposes the standard child-context
+`CallableRuntimeError` to its caller. The wrapper retains the checkpointed body
+error type and message. SDK control errors retain their normal control
+semantics.
 
-If result serialization or oversized-summary generation fails before the
-success checkpoint, the failure is classified like a body failure:
+If result serialization, deserialization, or oversized-summary generation fails
+before the success checkpoint, the failure is classified like a body failure:
 compensation and cleanup run before the child context records failure.
 Retryable SerDes errors remain invocation interruptions and bypass terminal
-actions.
+actions. Cancellation during result preparation follows the configured
+cancellation policy.
 
 If terminal actions fail, the scope raises `TerminalScopeError`, an
 `ExecutionError` with:
@@ -251,9 +255,10 @@ and reapers remain required for unconditional eventual reclamation.
 ### Serialization
 
 The scope result supports the same `serdes` and oversized-result
-`summary_generator` behavior as `run_in_child_context()`. Serialization and
-summary preparation complete before success cleanup. The prepared payload is
-then reused by the child success checkpoint without a second serialization.
+`summary_generator` behavior as `run_in_child_context()`. Serialization,
+deserialization, and summary preparation complete before success cleanup. The
+prepared payload and value are then reused by the child success checkpoint and
+return path without a second round trip.
 
 Terminal action results are typed as `None` and use normal step serialization.
 `TerminalScopeError` stores compact JSON control metadata in the failed context
@@ -336,7 +341,9 @@ The implementation is accepted only with coverage for:
 - success cleanup and failure compensation/cleanup order;
 - suspension and timed suspension bypass;
 - callback suspension before cleanup;
-- non-retryable result serialization and summary failures before compensation;
+- non-retryable result serialization, deserialization, and summary failures
+  before compensation;
+- cancellation during result preparation;
 - retryable invocation interruption bypass;
 - fatal `BaseException` propagation;
 - cancellation default and opt-in policies;

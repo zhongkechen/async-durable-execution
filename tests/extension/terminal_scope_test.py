@@ -38,6 +38,7 @@ from async_durable_execution._core.exceptions import (
 from async_durable_execution._core.state import ExecutionState
 from async_durable_execution._operation.terminal_scope import (
     _DurableTerminalActions,
+    _TerminalScopeLifecycle,
     _encode_terminal_scope_error_payload,
     _execute_terminal_scope,
     _failure_from_exception,
@@ -593,6 +594,34 @@ async def test_retryable_invocation_error_during_cancellation_takes_precedence(
         )
 
     assert raised.value is error
+
+
+async def test_result_preparation_cancellation_uses_configured_policy(
+    immediate_extension: _ImmediateExtensionContext,
+) -> None:
+    context = _create_context()
+    events: list[str] = []
+
+    async def record(value: str) -> None:
+        events.append(value)
+
+    async def body(actions: DurableTerminalActions) -> str:
+        actions.compensate(lambda: record("compensate"), name="compensate")
+        actions.cleanup(lambda: record("cleanup"), name="cleanup")
+        return "result"
+
+    lifecycle = _TerminalScopeLifecycle(
+        TerminalScopeConfig(
+            compensate_on_cancellation=True,
+            cleanup_on_cancellation=True,
+        )
+    )
+    with bind_current_context(context):
+        assert await lifecycle.run_body(body) == "result"
+        with pytest.raises(asyncio.CancelledError):
+            await lifecycle.on_result_preparation_error(asyncio.CancelledError())
+
+    assert events == ["compensate", "cleanup"]
 
 
 async def test_non_retryable_invocation_error_from_action_is_recorded(
