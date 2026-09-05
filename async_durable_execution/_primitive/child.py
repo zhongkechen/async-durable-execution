@@ -60,8 +60,9 @@ class ChildOperationExecutor(OperationExecutor[T]):
         is_virtual: bool = False,
         before_result_checkpoint: Callable[[T], Awaitable[None]] | None = None,
         on_result_preparation_error: (
-            Callable[[Exception], Awaitable[None]] | None
+            Callable[[BaseException], Awaitable[None]] | None
         ) = None,
+        deserialize_result_before_checkpoint: bool = False,
     ) -> None:
         """Initialize the child operation executor.
 
@@ -76,6 +77,8 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 summary preparation but before the success checkpoint.
             on_result_preparation_error: Optional hook for serialization or summary
                 failures before the child context records failure.
+            deserialize_result_before_checkpoint: Whether deserialization belongs
+                to result preparation before the success checkpoint.
         """
         super().__init__(state=state, operation_identifier=operation_identifier)
         self.func = func
@@ -84,6 +87,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
         self.is_virtual = is_virtual
         self.before_result_checkpoint = before_result_checkpoint
         self.on_result_preparation_error = on_result_preparation_error
+        self.deserialize_result_before_checkpoint = deserialize_result_before_checkpoint
 
     async def start(self) -> T:
         """Start a new child context operation."""
@@ -217,13 +221,31 @@ class ChildOperationExecutor(OperationExecutor[T]):
                         if self.summary_generator
                         else ""
                     )
+
+                prepared_result: T = raw_result
+                if self.deserialize_result_before_checkpoint and not replay_children:
+                    prepared_result = await deserialize(
+                        serdes=self.serdes,
+                        data=serialized_result,
+                        operation_id=self.operation_id,
+                        durable_execution_arn=self.durable_execution_arn,
+                        recursive_level=self.state.recursive_level,
+                        operation_name=self.operation_identifier.name,
+                        parent_id=self.operation_identifier.parent_id,
+                        operation_type=self.SERDES_OPERATION_TYPE,
+                        operation_sub_type=self.operation_identifier.sub_type,
+                    )
+            except asyncio.CancelledError as result_cancellation:
+                if self.on_result_preparation_error is not None:
+                    await self.on_result_preparation_error(result_cancellation)
+                raise
             except Exception as result_error:
                 if self.on_result_preparation_error is not None:
                     await self.on_result_preparation_error(result_error)
                 raise
 
             if self.before_result_checkpoint is not None:
-                await self.before_result_checkpoint(raw_result)
+                await self.before_result_checkpoint(prepared_result)
 
             # Checkpoint SUCCEED
             success_operation: OperationUpdate = OperationUpdate.create_context_succeed(
@@ -243,6 +265,8 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 self.operation_identifier.operation_id,
                 self.operation_identifier.name,
             )
+            if self.deserialize_result_before_checkpoint:
+                return prepared_result
         except Exception as e:
             if isinstance(e, InvocationError) and e.is_retryable():
                 raise
@@ -286,8 +310,8 @@ class ChildOperationExecutor(OperationExecutor[T]):
         if replay_children:
             return raw_result
 
-        # SUCCEED is already durable. Deserialization failures must propagate
-        # without attempting a terminal FAIL transition for the same context.
+        # Default child contexts preserve the established behavior of making
+        # SUCCEED durable before deserializing the returned value.
         return await deserialize(
             serdes=self.serdes,
             data=serialized_result,
@@ -448,7 +472,10 @@ async def _run_child_context(
     summary_generator: SummaryGenerator | None = None,
     is_virtual: bool = False,
     before_result_checkpoint: Callable[[T], Awaitable[None]] | None = None,
-    on_result_preparation_error: Callable[[Exception], Awaitable[None]] | None = None,
+    on_result_preparation_error: (
+        Callable[[BaseException], Awaitable[None]] | None
+    ) = None,
+    deserialize_result_before_checkpoint: bool = False,
 ) -> T:
     async def callable_with_child_context() -> T:
         with bind_current_context(child_context):
@@ -461,7 +488,7 @@ async def _run_child_context(
             await before_result_checkpoint(result)
 
     async def result_preparation_error_with_child_context(
-        error: Exception,
+        error: BaseException,
     ) -> None:
         if on_result_preparation_error is None:
             return
@@ -485,5 +512,6 @@ async def _run_child_context(
             if on_result_preparation_error is not None
             else None
         ),
+        deserialize_result_before_checkpoint=deserialize_result_before_checkpoint,
     )
     return await executor.process()

@@ -399,8 +399,9 @@ class ExtensionOperation:
         is_virtual: bool = False,
         before_result_checkpoint: Callable[[T], Awaitable[None]] | None = None,
         on_result_preparation_error: (
-            Callable[[Exception], Awaitable[None]] | None
+            Callable[[BaseException], Awaitable[None]] | None
         ) = None,
+        deserialize_result_before_checkpoint: bool = False,
     ) -> asyncio.Task[T]:
         """Use this reservation for an SDK-owned CONTEXT primitive."""
         identifier = self._claim(
@@ -417,6 +418,7 @@ class ExtensionOperation:
             replay_aware=True,
             before_result_checkpoint=before_result_checkpoint,
             on_result_preparation_error=on_result_preparation_error,
+            deserialize_result_before_checkpoint=deserialize_result_before_checkpoint,
         )
 
     def _restart_child_context(
@@ -428,8 +430,9 @@ class ExtensionOperation:
         is_virtual: bool = False,
         before_result_checkpoint: Callable[[T], Awaitable[None]] | None = None,
         on_result_preparation_error: (
-            Callable[[Exception], Awaitable[None]] | None
+            Callable[[BaseException], Awaitable[None]] | None
         ) = None,
+        deserialize_result_before_checkpoint: bool = False,
     ) -> asyncio.Task[T]:
         """Re-enter an SDK-owned child operation after an in-process suspension."""
         identifier = self._identifier
@@ -448,6 +451,7 @@ class ExtensionOperation:
             replaying=True,
             before_result_checkpoint=before_result_checkpoint,
             on_result_preparation_error=on_result_preparation_error,
+            deserialize_result_before_checkpoint=deserialize_result_before_checkpoint,
         )
 
     def _create_child_context_task(
@@ -462,8 +466,9 @@ class ExtensionOperation:
         replaying: bool | None = None,
         before_result_checkpoint: Callable[[T], Awaitable[None]] | None = None,
         on_result_preparation_error: (
-            Callable[[Exception], Awaitable[None]] | None
+            Callable[[BaseException], Awaitable[None]] | None
         ) = None,
+        deserialize_result_before_checkpoint: bool = False,
     ) -> asyncio.Task[T]:
         child_context = self._context.create_child_context(
             operation_id=self._operation_id,
@@ -484,6 +489,9 @@ class ExtensionOperation:
                 is_virtual=is_virtual,
                 before_result_checkpoint=before_result_checkpoint,
                 on_result_preparation_error=on_result_preparation_error,
+                deserialize_result_before_checkpoint=(
+                    deserialize_result_before_checkpoint
+                ),
             )
 
         async def run_child_context() -> T:

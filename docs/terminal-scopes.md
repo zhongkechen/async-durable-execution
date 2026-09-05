@@ -205,14 +205,18 @@ tradeoff is appropriate.
 
 ## Failure Semantics
 
-If the body fails and every terminal action succeeds, the original body
-exception is re-raised unchanged.
+`terminal_scope()` is a durable child context. If its body fails and every
+terminal action succeeds, the child checkpoints the original failure and the
+caller receives the standard `CallableRuntimeError`; its `error_type`,
+`message`, and checkpoint metadata describe the original body failure. SDK
+control errors retain their normal control semantics.
 
-Before a successful body runs cleanup, the SDK serializes the scope result and
-prepares any oversized-result summary. A non-retryable result serialization or
-summary failure is therefore a logical scope failure: compensation runs,
-followed by cleanup. A retryable SerDes failure remains an invocation
-interruption and runs no terminal action until Lambda retries.
+Before a successful body runs cleanup, the SDK serializes and deserializes the
+scope result and prepares any oversized-result summary. A non-retryable result
+serialization, deserialization, or summary failure is therefore a logical scope
+failure: compensation runs, followed by cleanup. A retryable SerDes failure
+remains an invocation interruption and runs no terminal action until Lambda
+retries. Cancellation during result preparation follows `TerminalScopeConfig`.
 
 If one or more terminal actions fail:
 

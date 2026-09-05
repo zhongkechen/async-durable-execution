@@ -499,6 +499,53 @@ async def test_result_serialization_failure_runs_compensation_and_cleanup() -> N
     ]
 
 
+async def test_result_deserialization_failure_runs_compensation_and_cleanup() -> None:
+    events: list[str] = []
+
+    class FailingResultSerDes(SerDes[str]):
+        async def serialize(self, value: str) -> str:
+            events.append("serialize")
+            return value
+
+        async def deserialize(self, _data: str) -> str:
+            events.append("deserialize")
+            msg = "result deserialization failed"
+            raise ValueError(msg)
+
+    @durable_callable
+    async def record(value: str) -> None:
+        events.append(value)
+
+    async def scoped(actions: DurableTerminalActions) -> str:
+        actions.compensate(record("compensate"), name="compensate")
+        actions.cleanup(record("cleanup"), name="cleanup")
+        return "result"
+
+    @durable_execution
+    async def handler(_event: Any) -> str:
+        return await terminal_scope(
+            scoped,
+            name="deserialization-failure-scope",
+            serdes=FailingResultSerDes(),
+        )
+
+    async with DurableFunctionLocalTestRunner(
+        handler=handler,
+        input=None,
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.FAILED
+    assert events == ["serialize", "deserialize", "compensate", "cleanup"]
+
+    scope = result.get_context("deserialization-failure-scope")
+    assert [operation.name for operation in result.get_child_operations(scope)] == [
+        "compensate",
+        "cleanup",
+    ]
+
+
 async def test_summary_generation_failure_runs_compensation_and_cleanup() -> None:
     events: list[str] = []
 
@@ -539,3 +586,35 @@ async def test_summary_generation_failure_runs_compensation_and_cleanup() -> Non
         "compensate",
         "cleanup",
     ]
+
+
+async def test_ordinary_body_failure_uses_child_context_error_contract() -> None:
+    @durable_callable
+    async def cleanup() -> None:
+        return None
+
+    async def scoped(actions: DurableTerminalActions) -> None:
+        actions.cleanup(cleanup(), name="cleanup")
+        msg = "direct body failure"
+        raise ValueError(msg)
+
+    @durable_execution
+    async def handler(_event: Any) -> None:
+        await terminal_scope(scoped, name="direct-failure-scope")
+
+    async with DurableFunctionLocalTestRunner(
+        handler=handler,
+        input=None,
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.FAILED
+    assert result.error is not None
+    assert result.error.type == "CallableRuntimeError"
+    assert result.error.message == "direct body failure"
+
+    scope = result.get_context("direct-failure-scope")
+    assert scope.context_details is not None
+    assert scope.context_details.error is not None
+    assert scope.context_details.error.type == "ValueError"

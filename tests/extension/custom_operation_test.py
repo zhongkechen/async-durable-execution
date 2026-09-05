@@ -83,7 +83,7 @@ def test_restart_child_context_forwards_result_lifecycle_hooks() -> None:
     async def before_result_checkpoint(_result: str) -> None:
         return None
 
-    async def on_result_preparation_error(_error: Exception) -> None:
+    async def on_result_preparation_error(_error: BaseException) -> None:
         return None
 
     expected_task = Mock()
@@ -96,6 +96,7 @@ def test_restart_child_context_forwards_result_lifecycle_hooks() -> None:
             func,
             before_result_checkpoint=before_result_checkpoint,
             on_result_preparation_error=on_result_preparation_error,
+            deserialize_result_before_checkpoint=True,
         )
 
     assert task is expected_task
@@ -108,6 +109,7 @@ def test_restart_child_context_forwards_result_lifecycle_hooks() -> None:
         replaying=True,
         before_result_checkpoint=before_result_checkpoint,
         on_result_preparation_error=on_result_preparation_error,
+        deserialize_result_before_checkpoint=True,
     )
 
 

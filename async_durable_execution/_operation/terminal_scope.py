@@ -7,7 +7,7 @@ import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Protocol, TypeVar
+from typing import Any, NoReturn, Protocol, TypeVar
 
 from .._core import (
     CallableRuntimeError,
@@ -429,6 +429,30 @@ class _TerminalScopeLifecycle:
             raise RuntimeError(msg)
         return self.actions
 
+    async def _raise_cancellation(
+        self,
+        cancellation: asyncio.CancelledError,
+    ) -> NoReturn:
+        actions = self._require_actions()
+        failures = await _run_terminal_actions(
+            actions,
+            compensate=self.config.compensate_on_cancellation,
+            cleanup=self.config.cleanup_on_cancellation,
+        )
+        if failures:
+            cancellation_failure = _failure_from_exception(
+                cancellation,
+                phase=TerminalFailurePhase.BODY,
+            )
+            terminal_error = TerminalScopeError(
+                _terminal_scope_error_message(cancellation_failure, failures),
+                body_failure=cancellation_failure,
+                action_failures=failures,
+                body_error=cancellation,
+            )
+            raise cancellation from terminal_error
+        raise cancellation
+
     async def run_body(
         self,
         body: Callable[[DurableTerminalActions], Awaitable[T]],
@@ -439,24 +463,7 @@ class _TerminalScopeLifecycle:
             result = await body(actions)
         except asyncio.CancelledError as cancellation:
             actions._close()
-            failures = await _run_terminal_actions(
-                actions,
-                compensate=self.config.compensate_on_cancellation,
-                cleanup=self.config.cleanup_on_cancellation,
-            )
-            if failures:
-                cancellation_failure = _failure_from_exception(
-                    cancellation,
-                    phase=TerminalFailurePhase.BODY,
-                )
-                terminal_error = TerminalScopeError(
-                    _terminal_scope_error_message(cancellation_failure, failures),
-                    body_failure=cancellation_failure,
-                    action_failures=failures,
-                    body_error=cancellation,
-                )
-                raise cancellation from terminal_error
-            raise
+            await self._raise_cancellation(cancellation)
         except Exception as body_error:
             actions._close()
             if isinstance(body_error, InvocationError) and body_error.is_retryable():
@@ -496,8 +503,10 @@ class _TerminalScopeLifecycle:
                 action_failures=failures,
             )
 
-    async def on_result_preparation_error(self, error: Exception) -> None:
+    async def on_result_preparation_error(self, error: BaseException) -> None:
         actions = self._require_actions()
+        if isinstance(error, asyncio.CancelledError):
+            await self._raise_cancellation(error)
         if isinstance(error, InvocationError) and error.is_retryable():
             raise error
 
@@ -569,6 +578,7 @@ def terminal_scope(
             summary_generator=summary_generator,
             before_result_checkpoint=lifecycle.before_result_checkpoint,
             on_result_preparation_error=lifecycle.on_result_preparation_error,
+            deserialize_result_before_checkpoint=True,
         )
     )
 
