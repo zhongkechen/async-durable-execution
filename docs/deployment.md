@@ -22,6 +22,12 @@ require AnyIO `>=4.14.2,<4.15`. Rebuild existing Lambda layers using the updated
 SDK requirements. This constraint does not apply to other Python versions and
 can be revisited when the Lambda runtime includes the required builtin.
 
+Pip evaluates Python-version markers using the build interpreter. For the shared
+release layer advertised for Python 3.10–3.15, the release workflow therefore
+pins AnyIO 4.14.2 explicitly while building on Python 3.10. It tests the resulting
+ZIP on every advertised runtime before publication. Building a layer on another
+Python version does not automatically apply the Python 3.15 package constraint.
+
 ## IAM Permissions
 
 Attach the AWS managed
