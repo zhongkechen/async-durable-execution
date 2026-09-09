@@ -34,9 +34,16 @@ classifiers = [
 dependencies = ["botocore>=1.42.90,<1.43.1"]
 
 [project.optional-dependencies]
-httpx = ["httpx>=0.28.1,<1"]
+# Lambda's Python 3.15 preview lacks the builtin sentinel assumed by AnyIO 4.15.
+httpx = [
+  "httpx>=0.28.1,<1",
+  "anyio>=4.14.2,<4.15; python_version == '3.15'",
+]
 # Backward-compatible alias for releases that documented the old extra name.
-aioboto = ["httpx>=0.28.1,<1"]
+aioboto = [
+  "httpx>=0.28.1,<1",
+  "anyio>=4.14.2,<4.15; python_version == '3.15'",
+]
 typing = ["botocore-stubs>=1.42.40,<1.43.0"]
 
 [project.urls]

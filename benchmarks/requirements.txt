@@ -8,7 +8,9 @@ six==1.17.0
 urllib3==2.7.0
 httpx==0.28.1
 httpcore==1.0.9
-anyio==4.15.1
+# Match the SDK's compatibility constraint for the Lambda 3.15 preview.
+anyio==4.15.1; python_version != "3.15"
+anyio==4.14.2; python_version == "3.15"
 certifi==2026.7.22
 idna==3.19
 h11==0.16.0

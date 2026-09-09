@@ -11,6 +11,17 @@ Deploying a durable function requires more than uploading the handler:
 Use numbered versions or aliases for production. Reserve `$LATEST` for
 development and testing.
 
+## Python 3.15 Lambda Preview
+
+The Python 3.15 Lambda preview currently lacks the built-in `sentinel` that
+AnyIO 4.15 assumes is available on Python 3.15. With that dependency combination,
+HTTPX initialization or cleanup can raise `NameError: name 'sentinel' is not defined`.
+
+For Python 3.15, the SDK's `httpx` extra and legacy `aioboto` alias therefore
+require AnyIO `>=4.14.2,<4.15`. Rebuild existing Lambda layers using the updated
+SDK requirements. This constraint does not apply to other Python versions and
+can be revisited when the Lambda runtime includes the required builtin.
+
 ## IAM Permissions
 
 Attach the AWS managed
