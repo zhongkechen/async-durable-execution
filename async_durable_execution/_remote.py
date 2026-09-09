@@ -126,7 +126,8 @@ class AsyncAws:
                 if index + 1 >= attempts:
                     raise
             else:
-                headers = dict(response.headers)
+                # Modeled header names may use different casing from HTTPX's keys.
+                headers = response.headers
                 parsed = create_parser(self.client.meta.service_model.protocol).parse(
                     {
                         "status_code": response.status_code,
@@ -135,6 +136,7 @@ class AsyncAws:
                     },
                     model.output_shape,
                 )
+                parsed["ResponseMetadata"]["HTTPHeaders"] = dict(headers)
                 if response.status_code < 300:
                     if operation == "Invoke":
                         parsed["Payload"] = response.content

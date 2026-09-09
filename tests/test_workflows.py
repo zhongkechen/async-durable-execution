@@ -595,3 +595,63 @@ async def test_callback_delivered_inside_submitter_is_visible_immediately():
         result = await runner.run()
     assert result.status is InvocationStatus.SUCCEEDED, result.error
     assert result.get_deserialized_result() == "immediate" and len(submitted) == 1
+
+
+async def test_child_replay_flag_distinguishes_first_entry_from_resume():
+    outer_entries = []
+    inner_entries = []
+    effects = []
+
+    async def work():
+        effects.append("work")
+        return 9
+
+    async def inner():
+        inner_entries.append(get_durable_context().is_replaying())
+        return await step(work, name="work")
+
+    async def outer():
+        outer_entries.append(get_durable_context().is_replaying())
+        value = await run_in_child_context(inner, name="inner")
+        await wait(1, name="pause")
+        return value
+
+    async def handler(event):
+        return await run_in_child_context(outer, name="outer")
+
+    result = await execute(handler)
+    assert result.get_deserialized_result() == 9
+    assert outer_entries == [False, True]
+    assert inner_entries == [False]
+    assert effects == ["work"]
+
+
+async def test_child_interrupted_before_step_completion_reenters_as_replay():
+    entries = []
+    attempts = []
+
+    async def child():
+        replaying = get_durable_context().is_replaying()
+        entries.append(replaying)
+
+        async def crashable():
+            attempts.append(replaying)
+            if not replaying:
+                raise InvocationError("simulated invocation interruption")
+            return "recovered"
+
+        return await step(
+            crashable, name="interrupted", retry_strategy=RetryStrategy.none()
+        )
+
+    async def handler(event):
+        return await run_in_child_context(child, name="child")
+
+    result = await execute(handler)
+    assert result.get_deserialized_result() == "recovered"
+    assert entries == [False, True]
+    assert attempts == [False, True]
+    operations = result.get_child_operations(result.get_context("child"))
+    assert len(operations) == 1
+    assert operations[0].name == "interrupted"
+    assert operations[0].status is OperationStatus.SUCCEEDED
