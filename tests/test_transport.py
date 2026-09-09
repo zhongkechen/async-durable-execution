@@ -324,3 +324,34 @@ async def test_httpx_transport_preserves_modeled_invoke_header_fields(monkeypatc
     assert result["Payload"] == payload
     assert result["ResponseMetadata"]["RequestId"] == "request-id"
     assert isinstance(result["ResponseMetadata"]["HTTPHeaders"], dict)
+
+
+def test_httpx_backend_initializes_without_lambda_preview_sentinel():
+    import subprocess
+    import sys
+
+    # Lambda's Python 3.15 preview lacks a builtin present in the CI interpreter.
+    # Use a fresh process so pytest's AnyIO plugin cannot pre-import the backend.
+    program = """
+import asyncio
+import builtins
+import sys
+import httpx
+
+# Load this interpreter's stdlib first; Lambda ships an older stdlib build.
+if sys.version_info[:2] == (3, 15) and hasattr(builtins, "sentinel"):
+    del builtins.sentinel
+
+async def close_client():
+    async with httpx.AsyncClient():
+        pass
+
+asyncio.run(close_client())
+"""
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", program],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr

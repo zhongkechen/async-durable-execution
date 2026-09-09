@@ -168,6 +168,9 @@ hatch run test:all --pdb
 
 Run example-related commands from the repository root.
 
+The cloud E2E workflow runs one Python runtime job at a time to avoid concurrent
+CloudFormation stacks exhausting Lambda's layer-publication request rate.
+
 The examples include pytest coverage that can run against either the local
 in-memory runner or deployed AWS Lambda durable functions. Local mode is the
 default and does not require AWS credentials:
