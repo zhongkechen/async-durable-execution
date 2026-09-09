@@ -61,6 +61,15 @@ packages = ["async_durable_execution"]
 "LICENSE" = "LICENSE"
 "NOTICE" = "NOTICE"
 
+# Benchmarks build SDK revisions in a separate shared runtime environment.
+[tool.hatch.envs.benchmarks]
+detached = true
+python = "3.13"
+dependencies = ["hatchling==1.32.0"]
+
+[tool.hatch.envs.benchmarks.scripts]
+compare = "python -m benchmarks.run {args}"
+
 [tool.hatch.envs.test]
 features = ["httpx"]
 dependencies = [
@@ -84,7 +93,7 @@ runner = "pytest tests/test_workflows.py tests/test_transport.py {args}"
 runner-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=async_durable_execution._testing --cov=async_durable_execution._remote --cov=async_durable_execution._views --cov-fail-under=95 tests/test_workflows.py tests/test_transport.py {args}"
 examples = "pytest test_examples {args}"
 examples-integration = "pytest --runner-mode=cloud test_examples -v {args}"
-typecheck = "mypy --install-types --non-interactive --warn-unused-ignores --check-untyped-defs {args:async_durable_execution tests scripts}"
+typecheck = "mypy --install-types --non-interactive --warn-unused-ignores --check-untyped-defs {args:async_durable_execution tests scripts benchmarks}"
 
 [tool.pytest.ini_options]
 # Declare custom markers to avoid warnings with --strict-markers
@@ -220,3 +229,8 @@ lines-after-imports = 2
   "SIM117",
   "TRY301",
 ]
+
+# The official SDK is installed only inside benchmark targets, not the test env.
+[[tool.mypy.overrides]]
+module = ["aws_durable_execution_sdk_python.*"]
+ignore_missing_imports = true
