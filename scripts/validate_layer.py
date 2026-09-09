@@ -31,6 +31,9 @@ for module in (async_durable_execution, httpx, anyio):
     if not Path(module.__file__).resolve().is_relative_to(layer):
         raise RuntimeError(f"{module.__name__} was imported outside the layer")
 
+# Resolve metadata while this interpreter's stdlib can initialize its own sentinels.
+anyio_version = importlib.metadata.version("anyio")
+
 # Bootstrap this interpreter's stdlib before emulating the Lambda 3.15 preview.
 if sys.version_info[:2] == (3, 15) and hasattr(builtins, "sentinel"):
     del builtins.sentinel
@@ -42,7 +45,7 @@ async def smoke():
 asyncio.run(smoke())
 print(json.dumps({"python": sys.version.split()[0],
                   "sdk": async_durable_execution.__version__,
-                  "anyio": importlib.metadata.version("anyio")}))
+                  "anyio": anyio_version}))
 """
 
 
