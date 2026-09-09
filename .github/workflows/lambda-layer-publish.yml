@@ -1,0 +1,338 @@
+name: Publish Lambda Layer
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      sdk-ref:
+        description: Git ref to build into the layer, such as main or v2.0.0a2
+        required: true
+        default: main
+      aws-regions:
+        description: Optional comma, space, or newline-separated AWS Regions; empty publishes to all enabled commercial and China regions
+        required: false
+        default: ""
+      layer-name:
+        description: Stable Lambda layer name (maximum 140 characters)
+        required: true
+        default: async-durable-execution
+      share-principals:
+        description: Comma, space, or newline-separated AWS account IDs, organization IDs, or * for public sharing
+        required: false
+        default: ""
+      description:
+        description: Lambda layer version description
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: lambda-layer-publish-${{ github.event.release.tag_name || inputs['sdk-ref'] || github.ref }}
+  cancel-in-progress: false
+
+env:
+  SDK_REF: ${{ inputs['sdk-ref'] || github.event.release.tag_name || github.ref_name }}
+  REQUESTED_AWS_REGIONS: ${{ inputs['aws-regions'] || vars.LAMBDA_LAYER_AWS_REGIONS }}
+  DEFAULT_AWS_REGION: us-east-1
+  DEFAULT_AWS_REGION_CN: cn-north-1
+  LAYER_NAME: ${{ inputs['layer-name'] || vars.LAMBDA_LAYER_NAME || 'async-durable-execution' }}
+  LAYER_DESCRIPTION: ${{ inputs.description }}
+  SHARE_PRINCIPALS: ${{ inputs['share-principals'] || secrets.AWS_ACCOUNT_ID || vars.LAMBDA_LAYER_SHARE_PRINCIPALS }}
+  SHARE_PRINCIPALS_CN: ${{ inputs['share-principals'] || secrets.AWS_ACCOUNT_ID_CN }}
+  ROLE_TO_ASSUME: ${{ secrets.ACTIONS_LAYER_PUBLISH_ROLE_ARN || secrets.ACTIONS_INTEGRATION_ROLE_NAME }}
+  ROLE_TO_ASSUME_CN: ${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME_CN }}
+
+jobs:
+  build-layer:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        layer:
+          - artifact_name: async-durable-execution-layer
+            python_version: "3.11"
+            sdk_source: ".[httpx]"
+            zip_name: async-durable-execution-layer.zip
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SDK_REF }}
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.layer.python_version }}
+          allow-prereleases: ${{ matrix.layer.python_version == '3.15' }}
+
+      - name: Install Hatch
+        run: python -m pip install --upgrade hatch==1.16.5
+
+      - name: Build Lambda layer zip
+        run: |
+          hatch run python scripts/build_layer.py \
+            --sdk-source "${{ matrix.layer.sdk_source }}" \
+            --output "dist/${{ matrix.layer.zip_name }}" \
+            --verbose
+
+      - name: Upload layer zip artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.layer.artifact_name }}
+          path: dist/${{ matrix.layer.zip_name }}
+
+  resolve-regions:
+    runs-on: ubuntu-latest
+    outputs:
+      regions: ${{ steps.regions.outputs.regions }}
+
+    steps:
+      - name: Resolve requested AWS Regions
+        id: requested-regions
+        run: |
+          set -euo pipefail
+
+          regions_json="$(
+            python3 -c 'import json, os, re; regions = [r for r in re.split(r"[\s,]+", os.environ.get("REQUESTED_AWS_REGIONS", "").strip()) if r]; print(json.dumps(regions))'
+          )"
+
+          if [ "$regions_json" = "[]" ]; then
+            echo "has-requested-regions=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-requested-regions=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "regions=${regions_json}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify AWS publish roles are configured for Region discovery
+        if: steps.requested-regions.outputs.has-requested-regions == 'false'
+        run: |
+          if [ -z "$ROLE_TO_ASSUME" ]; then
+            echo "Set ACTIONS_LAYER_PUBLISH_ROLE_ARN or ACTIONS_INTEGRATION_ROLE_NAME to discover commercial regions, or provide aws-regions explicitly." >&2
+            exit 1
+          fi
+
+          if [ -z "$ROLE_TO_ASSUME_CN" ]; then
+            echo "Set ACTIONS_INTEGRATION_ROLE_NAME_CN to discover China regions, or provide aws-regions explicitly." >&2
+            exit 1
+          fi
+
+      - name: Configure commercial AWS credentials
+        if: steps.requested-regions.outputs.has-requested-regions == 'false'
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d # v6.2.2
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          role-session-name: asyncDurableExecutionLayerRegionDiscovery
+          aws-region: ${{ env.DEFAULT_AWS_REGION }}
+
+      - name: Resolve commercial AWS Regions
+        id: commercial-regions
+        if: steps.requested-regions.outputs.has-requested-regions == 'false'
+        run: |
+          set -euo pipefail
+
+          regions_json="$(
+            aws ec2 describe-regions \
+              --all-regions \
+              --filters Name=opt-in-status,Values=opt-in-not-required,opted-in \
+              --query 'sort_by(Regions, &RegionName)[].RegionName' \
+              --output json |
+              jq -c .
+          )"
+
+          echo "regions=${regions_json}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure China AWS credentials
+        if: steps.requested-regions.outputs.has-requested-regions == 'false'
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d # v6.2.2
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME_CN }}
+          role-session-name: asyncDurableExecutionLayerChinaRegionDiscovery
+          aws-region: ${{ env.DEFAULT_AWS_REGION_CN }}
+          audience: sts.amazonaws.com.cn
+          unset-current-credentials: true
+
+      - name: Resolve China AWS Regions
+        id: china-regions
+        if: steps.requested-regions.outputs.has-requested-regions == 'false'
+        run: |
+          set -euo pipefail
+
+          regions_json="$(
+            aws ec2 describe-regions \
+              --all-regions \
+              --filters Name=opt-in-status,Values=opt-in-not-required,opted-in \
+              --query 'sort_by(Regions, &RegionName)[].RegionName' \
+              --output json |
+              jq -c .
+          )"
+
+          echo "regions=${regions_json}" >> "$GITHUB_OUTPUT"
+
+      - name: Select publish Regions
+        id: regions
+        run: |
+          set -euo pipefail
+
+          if [ "${{ steps.requested-regions.outputs.has-requested-regions }}" = "true" ]; then
+            regions_json='${{ steps.requested-regions.outputs.regions }}'
+          else
+            commercial_regions='${{ steps.commercial-regions.outputs.regions }}'
+            china_regions='${{ steps.china-regions.outputs.regions }}'
+            commercial_regions="${commercial_regions:-[]}"
+            china_regions="${china_regions:-[]}"
+
+            regions_json="$(
+              COMMERCIAL_REGIONS="$commercial_regions" CHINA_REGIONS="$china_regions" python3 -c 'import json, os; regions = json.loads(os.environ["COMMERCIAL_REGIONS"]) + json.loads(os.environ["CHINA_REGIONS"]); print(json.dumps(regions))'
+            )"
+          fi
+
+          if [ "$regions_json" = "[]" ]; then
+            echo "No AWS Regions resolved for Lambda layer publishing." >&2
+            exit 1
+          fi
+
+          echo "regions=${regions_json}" >> "$GITHUB_OUTPUT"
+          echo "Publishing to regions: ${regions_json}"
+
+  publish-layer:
+    runs-on: ubuntu-latest
+    needs:
+      - build-layer
+      - resolve-regions
+    strategy:
+      fail-fast: false
+      matrix:
+        aws-region: ${{ fromJson(needs.resolve-regions.outputs.regions) }}
+        layer:
+          - artifact_name: async-durable-execution-layer
+            compatible_runtimes: python3.10 python3.11 python3.12 python3.13 python3.14 python3.15
+            name_suffix: ""
+            zip_name: async-durable-execution-layer.zip
+
+    steps:
+      - name: Download layer zip artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ matrix.layer.artifact_name }}
+          path: dist/
+
+      - name: Select AWS credentials for Region
+        id: aws-auth
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ matrix.aws-region }}" == cn-* ]]; then
+            role_to_assume="${ROLE_TO_ASSUME_CN:-}"
+            share_principals="${SHARE_PRINCIPALS_CN:-}"
+            audience="sts.amazonaws.com.cn"
+            role_secret_name="ACTIONS_INTEGRATION_ROLE_NAME_CN"
+          else
+            role_to_assume="${ROLE_TO_ASSUME:-}"
+            share_principals="${SHARE_PRINCIPALS:-}"
+            audience="sts.amazonaws.com"
+            role_secret_name="ACTIONS_LAYER_PUBLISH_ROLE_ARN or ACTIONS_INTEGRATION_ROLE_NAME"
+          fi
+
+          if [ -z "$role_to_assume" ]; then
+            echo "Set ${role_secret_name} before publishing a layer in ${{ matrix.aws-region }}." >&2
+            exit 1
+          fi
+
+          echo "audience=${audience}" >> "$GITHUB_OUTPUT"
+          {
+            echo "PUBLISH_SHARE_PRINCIPALS<<EOF"
+            printf '%s\n' "$share_principals"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d # v6.2.2
+        with:
+          role-to-assume: ${{ startsWith(matrix.aws-region, 'cn-') && env.ROLE_TO_ASSUME_CN || env.ROLE_TO_ASSUME }}
+          role-session-name: asyncDurableExecutionLayerPublish
+          aws-region: ${{ matrix.aws-region }}
+          audience: ${{ steps.aws-auth.outputs.audience }}
+
+      - name: Publish Lambda layer version
+        id: publish
+        run: |
+          set -euo pipefail
+
+          description="${LAYER_DESCRIPTION:-async-durable-execution SDK ${SDK_REF}}"
+          layer_name="${LAYER_NAME}${{ matrix.layer.name_suffix }}"
+          layer_zip="dist/${{ matrix.layer.zip_name }}"
+
+          if [ "${#layer_name}" -gt 140 ]; then
+            echo "Lambda layer name '${layer_name}' exceeds the 140-character limit." >&2
+            exit 1
+          fi
+
+          read -r version layer_version_arn < <(
+            aws lambda publish-layer-version \
+              --layer-name "$layer_name" \
+              --description "$description" \
+              --zip-file "fileb://${layer_zip}" \
+              --compatible-runtimes ${{ matrix.layer.compatible_runtimes }} \
+              --compatible-architectures x86_64 arm64 \
+              --license-info Apache-2.0 \
+              --query '[Version, LayerVersionArn]' \
+              --output text
+          )
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "layer-version-arn=${layer_version_arn}" >> "$GITHUB_OUTPUT"
+          echo "layer-name=${layer_name}" >> "$GITHUB_OUTPUT"
+          echo "Published ${layer_version_arn}"
+
+      - name: Share Lambda layer version
+        run: |
+          set -euo pipefail
+
+          if [ -z "${PUBLISH_SHARE_PRINCIPALS:-}" ]; then
+            echo "No share principals configured for ${{ matrix.aws-region }}; skipping layer sharing."
+            exit 0
+          fi
+
+          normalized_principals="${PUBLISH_SHARE_PRINCIPALS//,/ }"
+          normalized_principals="${normalized_principals//$'\n'/ }"
+          read -r -a principals <<< "$normalized_principals"
+
+          for principal in "${principals[@]}"; do
+            statement_id="share-${{ steps.publish.outputs.version }}-$(printf '%s' "$principal" | tr -c '[:alnum:]' '-' | cut -c1-80)"
+
+            if [[ "$principal" == o-* ]]; then
+              aws lambda add-layer-version-permission \
+                --layer-name "${{ steps.publish.outputs.layer-name }}" \
+                --version-number "${{ steps.publish.outputs.version }}" \
+                --statement-id "$statement_id" \
+                --action lambda:GetLayerVersion \
+                --principal "*" \
+                --organization-id "$principal"
+            else
+              aws lambda add-layer-version-permission \
+                --layer-name "${{ steps.publish.outputs.layer-name }}" \
+                --version-number "${{ steps.publish.outputs.version }}" \
+                --statement-id "$statement_id" \
+                --action lambda:GetLayerVersion \
+                --principal "$principal"
+            fi
+
+            echo "Shared layer version ${{ steps.publish.outputs.version }} with ${principal}"
+          done
+
+      - name: Summarize published layer
+        run: |
+          {
+            echo "### Published Lambda layer"
+            echo ""
+            echo "- Layer name: \`${{ steps.publish.outputs.layer-name }}\`"
+            echo "- Layer ARN: \`${{ steps.publish.outputs.layer-version-arn }}\`"
+            echo "- Version: \`${{ steps.publish.outputs.version }}\`"
+            echo "- Source ref: \`${SDK_REF}\`"
+            echo "- Region: \`${{ matrix.aws-region }}\`"
+            echo "- Shared with: \`${PUBLISH_SHARE_PRINCIPALS:-not shared}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,46 @@
+"""Example demonstrating parallel operations for concurrent execution."""
+
+from datetime import timedelta
+from typing import Any
+
+from async_durable_execution import (
+    durable_callable,
+    step,
+    NestingType,
+    durable_execution,
+    parallel,
+    wait,
+)
+
+
+@durable_execution
+async def handler(_event: Any) -> list[str]:
+    """Execute multiple operations in parallel using parallel()."""
+
+    async def task1() -> str:
+        @durable_callable
+        async def run() -> str:
+            return "task 1 completed"
+
+        return await step(run(), name="task1")
+
+    async def task2() -> str:
+        @durable_callable
+        async def run() -> str:
+            return "task 2 completed"
+
+        return await step(run(), name="task2")
+
+    async def task3() -> str:
+        await wait(timedelta(seconds=1), name="wait_in_task3")
+        return "task 3 completed after wait"
+
+    # Use parallel() to execute branches concurrently and extract results immediately
+    return (
+        await parallel(
+            branches=[task1, task2, task3],
+            name="parallel_operation",
+            max_concurrency=2,
+            nesting_type=NestingType.FLAT,
+        )
+    ).get_results()

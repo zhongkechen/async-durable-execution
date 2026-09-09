@@ -1,0 +1,47 @@
+"""Demonstrates waitForCallback with submitter function that fails."""
+
+import asyncio
+from datetime import timedelta
+from typing import Any
+
+from async_durable_execution import (
+    durable_callable,
+    durable_execution,
+    RetryStrategy,
+    wait_for_callback,
+)
+
+
+@durable_execution
+async def handler(_event: Any) -> dict[str, Any]:
+    """Handler demonstrating waitForCallback with failing submitter."""
+
+    @durable_callable
+    async def submitter() -> None:
+        """Submitter function that fails after a delay."""
+        await asyncio.sleep(0.05)
+        # Submitter fails
+        raise Exception("Submitter failed")
+
+    try:
+        result: str = await wait_for_callback(
+            submitter(),
+            name="failing-submitter-callback",
+            timeout=timedelta(seconds=3),
+            heartbeat_timeout=timedelta(seconds=3),
+            retry_strategy=RetryStrategy(
+                max_attempts=3,
+                initial_delay=timedelta(seconds=1),
+                max_delay=timedelta(seconds=1),
+            ),
+        )
+
+        return {
+            "callbackResult": result,
+            "success": True,
+        }
+    except Exception as error:
+        return {
+            "success": False,
+            "error": str(error),
+        }

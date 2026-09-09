@@ -1,0 +1,222 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Modified fork metadata for async-durable-execution; upstream Apache-2.0 notices are preserved in the repository LICENSE and NOTICE files.
+[project]
+name = "async-durable-execution"
+dynamic = ["version"]
+description = "Community-maintained durable execution SDK for AWS Lambda in Python"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+keywords = [
+  "asyncio",
+  "aws",
+  "durable-execution",
+  "lambda",
+  "serverless",
+  "workflow",
+]
+authors = [{ name = "Zhongke Chen" }]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = ["botocore>=1.42.90,<1.43.1"]
+
+[project.optional-dependencies]
+httpx = ["httpx>=0.28.1,<1"]
+# Backward-compatible alias for releases that documented the old extra name.
+aioboto = ["httpx>=0.28.1,<1"]
+typing = ["botocore-stubs>=1.42.40,<1.43.0"]
+
+[project.urls]
+Documentation = "https://github.com/zhongkechen/async-durable-execution#readme"
+Issues = "https://github.com/zhongkechen/async-durable-execution/issues"
+Source = "https://github.com/zhongkechen/async-durable-execution"
+
+[tool.hatch.version]
+path = "async_durable_execution/__about__.py"
+
+[tool.hatch.build.targets.sdist]
+packages = ["async_durable_execution"]
+
+[tool.hatch.build.targets.sdist.force-include]
+"LICENSE" = "LICENSE"
+"NOTICE" = "NOTICE"
+
+[tool.hatch.build.targets.wheel]
+packages = ["async_durable_execution"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"LICENSE" = "LICENSE"
+"NOTICE" = "NOTICE"
+
+[tool.hatch.envs.test]
+features = ["httpx"]
+dependencies = [
+  "coverage[toml]",
+  "mypy>=1.0.0",
+  "pytest",
+  "pytest-asyncio",
+  "pytest-cov",
+  "pytest-xdist",
+  "botocore-stubs>=1.42.40,<1.43.0",
+]
+
+[tool.hatch.envs.test.scripts]
+api-contract = "pytest tests/test_public_api.py {args}"
+all = "pytest {args}"
+cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=async_durable_execution {args}"
+cov-html = "pytest --cov-report=term-missing --cov-report=html:site/coverage --cov-report=json:site/coverage/coverage.json --cov-config=pyproject.toml --cov=async_durable_execution {args}"
+sdk = "pytest tests {args}"
+sdk-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=async_durable_execution --cov-fail-under=98 tests {args}"
+runner = "pytest tests/test_workflows.py tests/test_transport.py {args}"
+runner-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=async_durable_execution._testing --cov=async_durable_execution._remote --cov=async_durable_execution._views --cov-fail-under=95 tests/test_workflows.py tests/test_transport.py {args}"
+examples = "pytest test_examples {args}"
+examples-integration = "pytest --runner-mode=cloud test_examples -v {args}"
+typecheck = "mypy --install-types --non-interactive --warn-unused-ignores --check-untyped-defs {args:async_durable_execution tests scripts}"
+
+[tool.pytest.ini_options]
+# Declare custom markers to avoid warnings with --strict-markers
+addopts = "-v --strict-markers --import-mode=importlib"
+testpaths = [
+    "tests",
+    "test_examples",
+    "scripts/test_scripts",
+]
+markers = [
+  "httpx_installed(value): override whether tests see HTTPX as installed",
+]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source_pkgs = ["async_durable_execution"]
+branch = true
+parallel = true
+omit = [
+  "async_durable_execution/__about__.py",
+  "*/test/**",
+  "*/test_*/**",
+  "*/tests/**",
+  "*/tests_*/**",
+  "scripts/test_scripts/**",
+]
+
+[tool.coverage.paths]
+async_durable_execution = [
+  "async_durable_execution",
+  "*/async_durable_execution",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+  'class .+\(Protocol\):',
+]
+
+[tool.hatch.envs.test-pypi-examples]
+skip-install = true
+dependencies = [
+  "async-durable-execution",
+  "pytest",
+  "pytest-asyncio",
+]
+
+[tool.hatch.envs.test-pypi-examples.scripts]
+test = "python scripts/run_pypi_example_tests.py {args}"
+
+[tool.hatch.envs.examples]
+features = ["httpx"]
+
+[tool.hatch.envs.examples.scripts]
+pip = "python -m pip {args}"
+generate-sam-template = "python scripts/generate_sam_template.py {args}"
+build = "python scripts/build_examples.py"
+build-layer = "python scripts/build_layer.py --sdk-source '.[httpx]' --output dist/async-durable-execution-layer.zip {args}"
+clean = "rm -rf build/lambda .aws-sam template.generated.json dist"
+
+[tool.hatch.envs.conformance.scripts]
+generate = "python scripts/generate_conformance_sam_templates.py {args}"
+build = "python scripts/build_conformance.py {args}"
+
+[tool.hatch.envs.docs]
+dependencies = [
+  "mkdocs>=1.6,<2",
+  "mkdocs-material>=9.6,<10",
+  "mkdocstrings[python]>=0.29,<1",
+  "ruff>=0.11,<1",
+]
+
+[tool.hatch.envs.docs.scripts]
+build = "mkdocs build --strict"
+clean = "rm -rf build/docs"
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+exclude = [".github/scripts/*.sh", ".github/workflows"]
+
+[tool.ruff.lint]
+preview = true
+select = []
+
+[tool.ruff.lint.isort]
+known-first-party = [
+  "async_durable_execution",
+  "examples",
+]
+force-single-line = false
+lines-after-imports = 2
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+  "ARG001",
+  "ARG002",
+  "ARG005",
+  "S101",
+  "PLR2004",
+  "PLR6301",
+  "SIM117",
+  "TRY301",
+]
+"test_examples/**" = [
+  "ARG001",
+  "ARG002",
+  "ARG005",
+  "S101",
+  "PLR2004",
+  "PLR6301",
+  "SIM117",
+  "TRY301",
+]
+"**/tests*/**" = [
+  "ARG001",
+  "ARG002",
+  "ARG005",
+  "S101",
+  "PLR2004",
+  "PLR6301",
+  "SIM117",
+  "TRY301",
+]
+"**/test/**" = [
+  "ARG001",
+  "ARG002",
+  "ARG005",
+  "S101",
+  "PLR2004",
+  "SIM117",
+  "TRY301",
+]

@@ -1,0 +1,54 @@
+"""Demonstrates runInChildContext with a failing step followed by a successful wait."""
+
+from datetime import timedelta
+from typing import Any
+
+from async_durable_execution import (
+    durable_callable,
+    step,
+    durable_execution,
+    RetryStrategy,
+    run_in_child_context,
+    wait,
+    durable_callable,
+)
+
+
+@durable_callable
+async def failing_step() -> None:
+    """Step that always fails."""
+    raise Exception("Step failed in child context")
+
+
+@durable_callable
+async def child_with_failure() -> None:
+    """Child context with a failing step."""
+
+    retry_strategy = RetryStrategy(
+        max_attempts=3,
+        initial_delay=timedelta(seconds=1),
+        max_delay=timedelta(seconds=1),
+        backoff_rate=2.0,
+    )
+    await step(
+        failing_step(),
+        name="failing-step",
+        retry_strategy=retry_strategy,
+    )
+
+
+@durable_execution
+async def handler(_event: Any) -> dict[str, bool]:
+    """Handler demonstrating runInChildContext with failing step."""
+    try:
+        await run_in_child_context(
+            child_with_failure(),
+            name="child-with-failure",
+        )
+    except Exception as error:
+        # Catch and ignore child context and step errors
+        result = {"success": True, "error": str(error)}
+
+    await wait(timedelta(seconds=1), name="wait-after-failure")
+
+    return result

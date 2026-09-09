@@ -1,0 +1,4736 @@
+{
+  "baseline": {
+    "revision": "86b680f5502e29254dfa8e89cad5e310a45f0d24",
+    "version": "2.5.0.dev0"
+  },
+  "modules": {
+    "async_durable_execution": {
+      "BatchItem": {
+        "fields": [
+          "index",
+          "status",
+          "result",
+          "error"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {
+          "from_dict": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "data"
+              }
+            ]
+          },
+          "to_dict": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "index"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "status"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "result"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "error"
+            }
+          ]
+        }
+      },
+      "BatchItemStatus": {
+        "kind": "class",
+        "members": {
+          "CANCELLED": "CANCELLED",
+          "FAILED": "FAILED",
+          "STARTED": "STARTED",
+          "SUCCEEDED": "SUCCEEDED"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "BatchResult": {
+        "fields": [
+          "all",
+          "completion_reason"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {
+          "cancelled": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "failed": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "from_dict": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "data"
+              },
+              {
+                "default": null,
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "completion_config"
+              }
+            ]
+          },
+          "from_items": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "items"
+              },
+              {
+                "default": null,
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "completion_config"
+              }
+            ]
+          },
+          "get_errors": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "get_results": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "started": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "succeeded": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "throw_if_error": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "to_dict": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          }
+        },
+        "properties": [
+          "cancelled_count",
+          "failure_count",
+          "has_failure",
+          "started_count",
+          "status",
+          "success_count",
+          "total_count"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "all"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "completion_reason"
+            }
+          ]
+        }
+      },
+      "CallableRuntimeError": {
+        "kind": "class",
+        "methods": {
+          "from_error_object": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "error_object"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "message"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "error_type"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "data"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "stack_trace"
+            }
+          ]
+        }
+      },
+      "Callback": {
+        "kind": "class",
+        "methods": {
+          "result": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "callback_id"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "operation_id"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "state"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "serdes"
+            }
+          ]
+        }
+      },
+      "CallbackError": {
+        "kind": "class",
+        "methods": {},
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "message"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "callback_id"
+            }
+          ]
+        }
+      },
+      "CompletionConfig": {
+        "fields": [
+          "min_successful",
+          "tolerated_failure_count",
+          "should_complete"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {
+          "all_completed": {
+            "parameters": []
+          },
+          "all_successful": {
+            "parameters": []
+          },
+          "completion_decision": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "status"
+              }
+            ]
+          },
+          "custom": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "should_complete"
+              }
+            ]
+          },
+          "first_successful": {
+            "parameters": []
+          },
+          "thresholds": {
+            "parameters": [
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "min_successful"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "tolerated_failure_count"
+              }
+            ]
+          }
+        },
+        "properties": [
+          "has_custom_should_complete"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "min_successful"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "tolerated_failure_count"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "should_complete"
+            }
+          ]
+        }
+      },
+      "CompletionDecision": {
+        "fields": [
+          "should_complete",
+          "completion_reason"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {
+          "complete": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "completion_reason"
+              }
+            ]
+          },
+          "continue_execution": {
+            "parameters": []
+          }
+        },
+        "properties": [
+          "is_succeeded"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "should_complete"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "completion_reason"
+            }
+          ]
+        }
+      },
+      "CompletionReason": {
+        "kind": "class",
+        "members": {
+          "ALL_COMPLETED": "ALL_COMPLETED",
+          "CUSTOM_COMPLETION_FAILED": "CUSTOM_COMPLETION_FAILED",
+          "CUSTOM_COMPLETION_SUCCEEDED": "CUSTOM_COMPLETION_SUCCEEDED",
+          "FAILURE_TOLERANCE_EXCEEDED": "FAILURE_TOLERANCE_EXCEEDED",
+          "MIN_SUCCESSFUL_REACHED": "MIN_SUCCESSFUL_REACHED"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "CompletionStatus": {
+        "fields": [
+          "success_count",
+          "failure_count",
+          "total_count"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {},
+        "properties": [
+          "all_completed",
+          "completed_count"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "success_count"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "failure_count"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "total_count"
+            }
+          ]
+        }
+      },
+      "ComposableSerDes": {
+        "kind": "class",
+        "methods": {
+          "deserialize": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "data"
+              }
+            ]
+          },
+          "is_primitive": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "obj"
+              }
+            ]
+          },
+          "serialize": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "value"
+              }
+            ]
+          },
+          "then": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "stage"
+              }
+            ]
+          }
+        },
+        "properties": [
+          "stages",
+          "value_codec"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "value_codec"
+            },
+            {
+              "default": [],
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "stages"
+            }
+          ]
+        }
+      },
+      "DurableContext": {
+        "fields": [
+          "execution_state",
+          "operation_identifier",
+          "step_id_prefix",
+          "replaying"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {
+          "create_child_context": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "operation_id"
+              },
+              {
+                "default": false,
+                "kind": "KEYWORD_ONLY",
+                "name": "is_virtual"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "replaying"
+              }
+            ]
+          },
+          "is_replaying": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          }
+        },
+        "properties": [
+          "durable_execution_arn",
+          "is_virtual",
+          "lambda_context",
+          "operation_id",
+          "operation_id_generator_prefix",
+          "operation_name",
+          "parent_id",
+          "recursive_level"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "execution_state"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "operation_identifier"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "step_id_prefix"
+            },
+            {
+              "default": false,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "replaying"
+            }
+          ]
+        }
+      },
+      "DurableExecutionsError": {
+        "kind": "class",
+        "methods": {},
+        "properties": []
+      },
+      "DurableFunctionCloudTestRunner": {
+        "kind": "class",
+        "methods": {
+          "aclose": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "close": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "run": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "run_async": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "send_callback_failure": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "callback_id"
+              },
+              {
+                "default": null,
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "error"
+              }
+            ]
+          },
+          "send_callback_heartbeat": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "callback_id"
+              }
+            ]
+          },
+          "send_callback_success": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "callback_id"
+              },
+              {
+                "default": null,
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "result"
+              }
+            ]
+          },
+          "wait_for_callback": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "execution_arn"
+              },
+              {
+                "default": null,
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "name"
+              },
+              {
+                "default": 60,
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "timeout"
+              }
+            ]
+          },
+          "wait_for_result": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "execution_arn"
+              },
+              {
+                "default": 60,
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "timeout"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "function_name"
+            },
+            {
+              "default": "us-west-2",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "region"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "lambda_endpoint"
+            },
+            {
+              "default": 1.0,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "poll_interval"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "input"
+            },
+            {
+              "default": 60,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "timeout"
+            }
+          ]
+        }
+      },
+      "DurableFunctionLocalTestRunner": {
+        "kind": "class",
+        "methods": {
+          "close": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "mock_invoke_result": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "function_name"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "result"
+              }
+            ]
+          },
+          "run": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "run_async": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "send_callback_failure": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "callback_id"
+              },
+              {
+                "default": null,
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "error"
+              }
+            ]
+          },
+          "send_callback_heartbeat": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "callback_id"
+              }
+            ]
+          },
+          "send_callback_success": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "callback_id"
+              },
+              {
+                "default": null,
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "result"
+              }
+            ]
+          },
+          "wait_for_callback": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "execution_arn"
+              },
+              {
+                "default": null,
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "name"
+              },
+              {
+                "default": 60,
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "timeout"
+              }
+            ]
+          },
+          "wait_for_result": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "execution_arn"
+              },
+              {
+                "default": 60,
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "timeout"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "handler"
+            },
+            {
+              "default": 1.0,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "poll_interval"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "input"
+            },
+            {
+              "default": 900,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "timeout"
+            },
+            {
+              "default": "test-function",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "function_name"
+            },
+            {
+              "default": "execution-name",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "execution_name"
+            },
+            {
+              "default": "123456789012",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "account_id"
+            }
+          ]
+        }
+      },
+      "DurableFunctionTestResult": {
+        "fields": [
+          "status",
+          "operations",
+          "result",
+          "error"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {
+          "create": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "execution"
+              }
+            ]
+          },
+          "from_execution_history": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "execution_response"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "history_response"
+              }
+            ]
+          },
+          "get_all_operations": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "get_callback": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "name"
+              }
+            ]
+          },
+          "get_child_operations": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "operation"
+              }
+            ]
+          },
+          "get_context": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "name"
+              }
+            ]
+          },
+          "get_deserialized_result": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "default": null,
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "serdes"
+              }
+            ]
+          },
+          "get_execution": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "name"
+              }
+            ]
+          },
+          "get_invoke": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "name"
+              }
+            ]
+          },
+          "get_operation_by_name": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "name"
+              }
+            ]
+          },
+          "get_operation_deserialized_result": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "operation"
+              },
+              {
+                "default": null,
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "serdes"
+              }
+            ]
+          },
+          "get_step": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "name"
+              }
+            ]
+          },
+          "get_wait": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "name"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "status"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "operations"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "result"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "error"
+            },
+            {
+              "default": "<factory>",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "_all_operations"
+            }
+          ]
+        }
+      },
+      "DurableServiceClient": {
+        "kind": "class",
+        "methods": {
+          "checkpoint": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "durable_execution_arn"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "checkpoint_token"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "updates"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "client_token"
+              }
+            ]
+          },
+          "get_execution_state": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "durable_execution_arn"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "checkpoint_token"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "next_marker"
+              },
+              {
+                "default": 1000,
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "max_items"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "VAR_POSITIONAL",
+              "name": "args"
+            },
+            {
+              "kind": "VAR_KEYWORD",
+              "name": "kwargs"
+            }
+          ]
+        }
+      },
+      "DurableTerminalActions": {
+        "kind": "class",
+        "methods": {
+          "cleanup": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "func"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "name"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "retry_strategy"
+              },
+              {
+                "default": {
+                  "enum": "StepSemantics",
+                  "value": "AT_LEAST_ONCE_PER_RETRY"
+                },
+                "kind": "KEYWORD_ONLY",
+                "name": "step_semantics"
+              }
+            ]
+          },
+          "compensate": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "func"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "name"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "retry_strategy"
+              },
+              {
+                "default": {
+                  "enum": "StepSemantics",
+                  "value": "AT_LEAST_ONCE_PER_RETRY"
+                },
+                "kind": "KEYWORD_ONLY",
+                "name": "step_semantics"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "VAR_POSITIONAL",
+              "name": "args"
+            },
+            {
+              "kind": "VAR_KEYWORD",
+              "name": "kwargs"
+            }
+          ]
+        }
+      },
+      "ErrorObject": {
+        "fields": [
+          "message",
+          "type",
+          "data",
+          "stack_trace"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {
+          "from_dict": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "data"
+              }
+            ]
+          },
+          "from_exception": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "exception"
+              }
+            ]
+          },
+          "from_message": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "message"
+              }
+            ]
+          },
+          "to_dict": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "message"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "type"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "data"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "stack_trace"
+            }
+          ]
+        }
+      },
+      "ExecutionError": {
+        "kind": "class",
+        "methods": {},
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "message"
+            },
+            {
+              "default": {
+                "enum": "TerminationReason",
+                "value": "EXECUTION_ERROR"
+              },
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "termination_reason"
+            }
+          ]
+        }
+      },
+      "ExtendedTypeSerDes": {
+        "kind": "class",
+        "methods": {
+          "deserialize": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "data"
+              }
+            ]
+          },
+          "deserialize_sync": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "data"
+              }
+            ]
+          },
+          "is_primitive": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "obj"
+              }
+            ]
+          },
+          "serialize": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "value"
+              }
+            ]
+          },
+          "serialize_sync": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "value"
+              }
+            ]
+          },
+          "then": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "stage"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "default": [],
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "type_codecs"
+            }
+          ]
+        }
+      },
+      "ExtensionContext": {
+        "kind": "class",
+        "methods": {
+          "get_current": {
+            "parameters": []
+          },
+          "is_replaying": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "reserve": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "default": null,
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "name"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "local_operation_id"
+              }
+            ]
+          }
+        },
+        "properties": [
+          "lambda_context",
+          "recursive_level"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "context"
+            }
+          ]
+        }
+      },
+      "ExtensionOperation": {
+        "kind": "class",
+        "methods": {
+          "create_callback": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "KEYWORD_ONLY",
+                "name": "sub_type"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "timeout"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "heartbeat_timeout"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "serdes"
+              }
+            ]
+          },
+          "invoke": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "function_name"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "payload"
+              },
+              {
+                "kind": "KEYWORD_ONLY",
+                "name": "sub_type"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "serdes_payload"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "serdes_result"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "tenant_id"
+              }
+            ]
+          },
+          "run_in_child_context": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "func"
+              },
+              {
+                "kind": "KEYWORD_ONLY",
+                "name": "sub_type"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "serdes"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "summary_generator"
+              },
+              {
+                "default": false,
+                "kind": "KEYWORD_ONLY",
+                "name": "is_virtual"
+              }
+            ]
+          },
+          "step": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "func"
+              },
+              {
+                "kind": "KEYWORD_ONLY",
+                "name": "sub_type"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "initial_state"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "retry_strategy"
+              },
+              {
+                "default": {
+                  "enum": "StepSemantics",
+                  "value": "AT_LEAST_ONCE_PER_RETRY"
+                },
+                "kind": "KEYWORD_ONLY",
+                "name": "step_semantics"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "serdes"
+              }
+            ]
+          },
+          "wait": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "duration"
+              },
+              {
+                "kind": "KEYWORD_ONLY",
+                "name": "sub_type"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": []
+        }
+      },
+      "ExtensionStepFunction": {
+        "kind": "value",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "VAR_POSITIONAL",
+              "name": "args"
+            },
+            {
+              "kind": "VAR_KEYWORD",
+              "name": "kwargs"
+            }
+          ]
+        },
+        "value": "collections.abc.Callable[[typing.Optional[~T]], collections.abc.Awaitable[async_durable_execution.extension.ExtensionStepResult[~T]]]"
+      },
+      "ExtensionStepResult": {
+        "fields": [
+          "value",
+          "retry_delay"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {
+          "retry": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "state"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "delay"
+              }
+            ]
+          },
+          "succeed": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "value"
+              }
+            ]
+          }
+        },
+        "properties": [
+          "is_retry"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "value"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "retry_delay"
+            }
+          ]
+        }
+      },
+      "ExtensionStepRetryStrategy": {
+        "kind": "value",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "VAR_POSITIONAL",
+              "name": "args"
+            },
+            {
+              "kind": "VAR_KEYWORD",
+              "name": "kwargs"
+            }
+          ]
+        },
+        "value": "collections.abc.Callable[[Exception, typing.Optional[~T], int], typing.Optional[async_durable_execution.extension.ExtensionStepResult[~T]]]"
+      },
+      "FieldMatchMode": {
+        "kind": "class",
+        "members": {
+          "ANYWHERE": "ANYWHERE",
+          "PATH": "PATH"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "FileSystemPathEncoding": {
+        "kind": "class",
+        "members": {
+          "HASH": "HASH",
+          "URI": "URI"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "FileSystemSerDesMode": {
+        "kind": "class",
+        "members": {
+          "ALWAYS": "ALWAYS",
+          "OVERFLOW": "OVERFLOW"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "FileSystemSerDesStage": {
+        "kind": "class",
+        "methods": {
+          "deserialize": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "data"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "context"
+              }
+            ]
+          },
+          "execution_directory": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "durable_execution_arn"
+              }
+            ]
+          },
+          "serialize": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "value"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "context"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "base_path"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "config"
+            }
+          ]
+        }
+      },
+      "FileSystemSerDesStageConfig": {
+        "fields": [
+          "storage_mode",
+          "path_encoding",
+          "checkpoint_envelope_limit_bytes",
+          "generate_preview",
+          "preview_config",
+          "cross_execution_reference_policy"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {},
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "default": {
+                "enum": "FileSystemSerDesMode",
+                "value": "ALWAYS"
+              },
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "storage_mode"
+            },
+            {
+              "default": {
+                "enum": "FileSystemPathEncoding",
+                "value": "URI"
+              },
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "path_encoding"
+            },
+            {
+              "default": 261120,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "checkpoint_envelope_limit_bytes"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "generate_preview"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "preview_config"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "cross_execution_reference_policy"
+            }
+          ]
+        }
+      },
+      "FlowDefinitionError": {
+        "kind": "class",
+        "methods": {},
+        "properties": []
+      },
+      "FlowExecutionError": {
+        "kind": "class",
+        "methods": {},
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "message"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "result"
+            }
+          ]
+        }
+      },
+      "FlowNode": {
+        "kind": "class",
+        "methods": {},
+        "properties": [
+          "completed",
+          "error",
+          "failed",
+          "outcome",
+          "result",
+          "status",
+          "succeeded"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "builder"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "index"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "func"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "name"
+            }
+          ]
+        }
+      },
+      "FlowNodeContext": {
+        "fields": [
+          "execution_state",
+          "operation_identifier",
+          "step_id_prefix",
+          "replaying"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {
+          "create_child_context": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "operation_id"
+              },
+              {
+                "default": false,
+                "kind": "KEYWORD_ONLY",
+                "name": "is_virtual"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "replaying"
+              }
+            ]
+          },
+          "get_dependency_result": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "name"
+              }
+            ]
+          },
+          "is_replaying": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "require_dependency_result": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "name"
+              }
+            ]
+          },
+          "result": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "dependency"
+              }
+            ]
+          }
+        },
+        "properties": [
+          "dependency_results",
+          "durable_execution_arn",
+          "is_virtual",
+          "lambda_context",
+          "operation_id",
+          "operation_id_generator_prefix",
+          "operation_name",
+          "parent_id",
+          "recursive_level"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "execution_state"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "operation_identifier"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "step_id_prefix"
+            },
+            {
+              "default": false,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "replaying"
+            },
+            {
+              "default": "<factory>",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "_direct_dependencies"
+            },
+            {
+              "default": "<factory>",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "_dependency_results"
+            }
+          ]
+        }
+      },
+      "FlowNodeResult": {
+        "fields": [
+          "status",
+          "outcome",
+          "error"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {
+          "failed": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "error"
+              }
+            ]
+          },
+          "from_dict": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "data"
+              }
+            ]
+          },
+          "skipped": {
+            "parameters": []
+          },
+          "succeeded": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "outcome"
+              }
+            ]
+          },
+          "to_dict": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "status"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "outcome"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "error"
+            }
+          ]
+        }
+      },
+      "FlowNodeStatus": {
+        "kind": "class",
+        "members": {
+          "FAILED": "FAILED",
+          "SKIPPED": "SKIPPED",
+          "SUCCEEDED": "SUCCEEDED"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "FlowResult": {
+        "fields": [
+          "results",
+          "outputs",
+          "unhandled_failures",
+          "unavailable_outputs"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {
+          "from_dict": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "data"
+              }
+            ]
+          },
+          "get_result": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "name"
+              }
+            ]
+          },
+          "to_dict": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          }
+        },
+        "properties": [
+          "has_unavailable_outputs",
+          "has_unhandled_failures",
+          "output"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "results"
+            },
+            {
+              "default": [],
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "outputs"
+            },
+            {
+              "default": [],
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "unhandled_failures"
+            },
+            {
+              "default": [],
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "unavailable_outputs"
+            },
+            {
+              "default": [],
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "_output_kinds"
+            }
+          ]
+        }
+      },
+      "InvalidStateError": {
+        "kind": "class",
+        "methods": {},
+        "properties": []
+      },
+      "InvocationError": {
+        "kind": "class",
+        "methods": {
+          "build_logger_extras": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "is_retryable": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "message"
+            },
+            {
+              "default": {
+                "enum": "TerminationReason",
+                "value": "INVOCATION_ERROR"
+              },
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "termination_reason"
+            }
+          ]
+        }
+      },
+      "InvocationStatus": {
+        "kind": "class",
+        "members": {
+          "FAILED": "FAILED",
+          "PENDING": "PENDING",
+          "RETRY": "RETRY",
+          "SUCCEEDED": "SUCCEEDED"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "JitterStrategy": {
+        "kind": "class",
+        "members": {
+          "FULL": "FULL",
+          "HALF": "HALF",
+          "NONE": "NONE"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "JsonSerDes": {
+        "kind": "class",
+        "methods": {
+          "deserialize": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "data"
+              }
+            ]
+          },
+          "is_primitive": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "obj"
+              }
+            ]
+          },
+          "serialize": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "value"
+              }
+            ]
+          },
+          "then": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "stage"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": []
+        }
+      },
+      "LambdaContext": {
+        "kind": "class",
+        "methods": {
+          "get_remaining_time_in_millis": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "log": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "msg"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "VAR_POSITIONAL",
+              "name": "args"
+            },
+            {
+              "kind": "VAR_KEYWORD",
+              "name": "kwargs"
+            }
+          ]
+        }
+      },
+      "MapItemContext": {
+        "fields": [
+          "execution_state",
+          "operation_identifier",
+          "step_id_prefix",
+          "replaying",
+          "index",
+          "items"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {
+          "create_child_context": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "operation_id"
+              },
+              {
+                "default": false,
+                "kind": "KEYWORD_ONLY",
+                "name": "is_virtual"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "replaying"
+              }
+            ]
+          },
+          "is_replaying": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          }
+        },
+        "properties": [
+          "durable_execution_arn",
+          "is_virtual",
+          "lambda_context",
+          "operation_id",
+          "operation_id_generator_prefix",
+          "operation_name",
+          "parent_id",
+          "recursive_level"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "execution_state"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "operation_identifier"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "step_id_prefix"
+            },
+            {
+              "default": false,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "replaying"
+            },
+            {
+              "default": 0,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "index"
+            },
+            {
+              "default": "<factory>",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "items"
+            }
+          ]
+        }
+      },
+      "NestingType": {
+        "kind": "class",
+        "members": {
+          "FLAT": "FLAT",
+          "NESTED": "NESTED"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "OperationStatus": {
+        "kind": "class",
+        "members": {
+          "CANCELLED": "CANCELLED",
+          "FAILED": "FAILED",
+          "PENDING": "PENDING",
+          "READY": "READY",
+          "STARTED": "STARTED",
+          "STOPPED": "STOPPED",
+          "SUCCEEDED": "SUCCEEDED",
+          "TIMED_OUT": "TIMED_OUT"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "OperationSubType": {
+        "kind": "class",
+        "members": {
+          "CALLBACK": "Callback",
+          "CHAINED_INVOKE": "ChainedInvoke",
+          "EXECUTION": "Execution",
+          "MAP": "Map",
+          "MAP_ITERATION": "MapIteration",
+          "PARALLEL": "Parallel",
+          "PARALLEL_BRANCH": "ParallelBranch",
+          "RUN_IN_CHILD_CONTEXT": "RunInChildContext",
+          "STEP": "Step",
+          "TERMINAL_CLEANUP": "TerminalCleanup",
+          "TERMINAL_COMPENSATION": "TerminalCompensation",
+          "TERMINAL_SCOPE": "TerminalScope",
+          "WAIT": "Wait",
+          "WAIT_FOR_CALLBACK": "WaitForCallback",
+          "WAIT_FOR_CONDITION": "WaitForCondition"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "OperationType": {
+        "kind": "class",
+        "members": {
+          "CALLBACK": "CALLBACK",
+          "CHAINED_INVOKE": "CHAINED_INVOKE",
+          "CONTEXT": "CONTEXT",
+          "EXECUTION": "EXECUTION",
+          "STEP": "STEP",
+          "WAIT": "WAIT"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "PollingStrategy": {
+        "fields": [
+          "max_attempts",
+          "initial_delay",
+          "max_delay",
+          "backoff_rate",
+          "jitter_strategy",
+          "increment"
+        ],
+        "frozen": false,
+        "kind": "class",
+        "methods": {
+          "calculate_delay": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "attempts_made"
+              }
+            ]
+          }
+        },
+        "properties": [
+          "increment_seconds",
+          "initial_delay_seconds",
+          "max_delay_seconds"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "default": 6,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "max_attempts"
+            },
+            {
+              "default": 5,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "initial_delay"
+            },
+            {
+              "default": 60,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "max_delay"
+            },
+            {
+              "default": 2,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "backoff_rate"
+            },
+            {
+              "default": {
+                "enum": "JitterStrategy",
+                "value": "FULL"
+              },
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "jitter_strategy"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "increment"
+            }
+          ]
+        }
+      },
+      "PreviewConfig": {
+        "fields": [
+          "mode",
+          "include",
+          "exclude",
+          "mask",
+          "mask_string",
+          "max_preview_bytes",
+          "max_traversal_nodes",
+          "max_depth"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {},
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "mode"
+            },
+            {
+              "default": "<factory>",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "include"
+            },
+            {
+              "default": "<factory>",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "exclude"
+            },
+            {
+              "default": "<factory>",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "mask"
+            },
+            {
+              "default": "***",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "mask_string"
+            },
+            {
+              "default": 4096,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "max_preview_bytes"
+            },
+            {
+              "default": 10000,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "max_traversal_nodes"
+            },
+            {
+              "default": 64,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "max_depth"
+            }
+          ]
+        }
+      },
+      "PreviewField": {
+        "fields": [
+          "name",
+          "match"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {},
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "name"
+            },
+            {
+              "default": {
+                "enum": "FieldMatchMode",
+                "value": "ANYWHERE"
+              },
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "match"
+            }
+          ]
+        }
+      },
+      "PreviewMode": {
+        "kind": "class",
+        "members": {
+          "EXCLUDE_ALL": "EXCLUDE_ALL",
+          "INCLUDE_ALL": "INCLUDE_ALL"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "RetryStrategy": {
+        "fields": [
+          "max_attempts",
+          "initial_delay",
+          "max_delay",
+          "backoff_rate",
+          "jitter_strategy",
+          "increment",
+          "retryable_errors",
+          "retryable_error_types"
+        ],
+        "frozen": false,
+        "kind": "class",
+        "methods": {
+          "calculate_delay": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "attempts_made"
+              }
+            ]
+          },
+          "critical": {
+            "parameters": []
+          },
+          "default": {
+            "parameters": []
+          },
+          "linear": {
+            "parameters": []
+          },
+          "none": {
+            "parameters": []
+          },
+          "resource_availability": {
+            "parameters": []
+          },
+          "transient": {
+            "parameters": []
+          }
+        },
+        "properties": [
+          "increment_seconds",
+          "initial_delay_seconds",
+          "max_delay_seconds"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "default": 6,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "max_attempts"
+            },
+            {
+              "default": 5,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "initial_delay"
+            },
+            {
+              "default": 60,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "max_delay"
+            },
+            {
+              "default": 2,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "backoff_rate"
+            },
+            {
+              "default": {
+                "enum": "JitterStrategy",
+                "value": "FULL"
+              },
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "jitter_strategy"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "increment"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "retryable_errors"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "retryable_error_types"
+            }
+          ]
+        }
+      },
+      "RetryableSerDesError": {
+        "kind": "class",
+        "methods": {
+          "build_logger_extras": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "is_retryable": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "message"
+            }
+          ]
+        }
+      },
+      "SerDes": {
+        "kind": "class",
+        "methods": {
+          "deserialize": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "data"
+              }
+            ]
+          },
+          "is_primitive": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "obj"
+              }
+            ]
+          },
+          "serialize": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "value"
+              }
+            ]
+          },
+          "then": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "stage"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": []
+        }
+      },
+      "SerDesContext": {
+        "fields": [
+          "operation_id",
+          "durable_execution_arn",
+          "recursive_level",
+          "entity_id",
+          "operation_name",
+          "parent_id",
+          "operation_type",
+          "operation_sub_type",
+          "attempt",
+          "original_value"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {},
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "default": "",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "operation_id"
+            },
+            {
+              "default": "",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "durable_execution_arn"
+            },
+            {
+              "default": 0,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "recursive_level"
+            },
+            {
+              "default": "",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "entity_id"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "operation_name"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "parent_id"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "operation_type"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "operation_sub_type"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "attempt"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "original_value"
+            }
+          ]
+        }
+      },
+      "SerDesError": {
+        "kind": "class",
+        "methods": {},
+        "properties": []
+      },
+      "SerDesPipelineError": {
+        "kind": "class",
+        "methods": {},
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "stage_index"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "action"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "stage"
+            }
+          ]
+        }
+      },
+      "SerDesStage": {
+        "kind": "class",
+        "methods": {
+          "deserialize": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "data"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "context"
+              }
+            ]
+          },
+          "serialize": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "value"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "context"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "VAR_POSITIONAL",
+              "name": "args"
+            },
+            {
+              "kind": "VAR_KEYWORD",
+              "name": "kwargs"
+            }
+          ]
+        }
+      },
+      "StepContext": {
+        "fields": [
+          "execution_state",
+          "operation_identifier",
+          "attempt"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {
+          "is_replaying": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          }
+        },
+        "properties": [
+          "durable_execution_arn",
+          "lambda_context",
+          "operation_id",
+          "operation_name",
+          "parent_id",
+          "recursive_level"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "execution_state"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "operation_identifier"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "attempt"
+            }
+          ]
+        }
+      },
+      "StepInterruptedError": {
+        "kind": "class",
+        "methods": {
+          "build_logger_extras": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "is_retryable": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "message"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "step_id"
+            }
+          ]
+        }
+      },
+      "StepSemantics": {
+        "kind": "class",
+        "members": {
+          "AT_LEAST_ONCE_PER_RETRY": "AT_LEAST_ONCE_PER_RETRY",
+          "AT_MOST_ONCE_PER_RETRY": "AT_MOST_ONCE_PER_RETRY"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "SummaryGenerator": {
+        "kind": "value",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "VAR_POSITIONAL",
+              "name": "args"
+            },
+            {
+              "kind": "VAR_KEYWORD",
+              "name": "kwargs"
+            }
+          ]
+        },
+        "value": "collections.abc.Callable[[-C_contra], str]"
+      },
+      "TerminalFailure": {
+        "fields": [
+          "phase",
+          "error_type",
+          "message",
+          "name",
+          "stack_trace"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {},
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "phase"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "error_type"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "message"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "name"
+            },
+            {
+              "default": [],
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "stack_trace"
+            }
+          ]
+        }
+      },
+      "TerminalFailurePhase": {
+        "kind": "class",
+        "members": {
+          "BODY": "BODY",
+          "CLEANUP": "CLEANUP",
+          "COMPENSATION": "COMPENSATION"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "TerminalScopeConfig": {
+        "fields": [
+          "compensate_on_cancellation",
+          "cleanup_on_cancellation"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {},
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "default": false,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "compensate_on_cancellation"
+            },
+            {
+              "default": false,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "cleanup_on_cancellation"
+            }
+          ]
+        }
+      },
+      "TerminalScopeError": {
+        "kind": "class",
+        "methods": {},
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "message"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "body_failure"
+            },
+            {
+              "default": [],
+              "kind": "KEYWORD_ONLY",
+              "name": "action_failures"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "body_error"
+            }
+          ]
+        }
+      },
+      "UserlandError": {
+        "kind": "class",
+        "methods": {},
+        "properties": []
+      },
+      "ValidationError": {
+        "kind": "class",
+        "methods": {},
+        "properties": []
+      },
+      "WaitForCallbackContext": {
+        "fields": [
+          "execution_state",
+          "operation_identifier",
+          "callback_id"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {
+          "is_replaying": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          }
+        },
+        "properties": [
+          "durable_execution_arn",
+          "lambda_context",
+          "operation_id",
+          "operation_name",
+          "parent_id",
+          "recursive_level"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "execution_state"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "operation_identifier"
+            },
+            {
+              "default": "",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "callback_id"
+            }
+          ]
+        }
+      },
+      "WaitForConditionCheckContext": {
+        "fields": [
+          "execution_state",
+          "operation_identifier",
+          "attempt"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {
+          "is_replaying": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          }
+        },
+        "properties": [
+          "durable_execution_arn",
+          "lambda_context",
+          "operation_id",
+          "operation_name",
+          "parent_id",
+          "recursive_level"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "execution_state"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "operation_identifier"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "attempt"
+            }
+          ]
+        }
+      },
+      "WaitForConditionError": {
+        "kind": "class",
+        "methods": {},
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "message"
+            },
+            {
+              "default": {
+                "enum": "TerminationReason",
+                "value": "EXECUTION_ERROR"
+              },
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "termination_reason"
+            }
+          ]
+        }
+      },
+      "WithRetryContext": {
+        "fields": [
+          "execution_state",
+          "operation_identifier",
+          "step_id_prefix",
+          "replaying",
+          "attempt"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {
+          "create_child_context": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "operation_id"
+              },
+              {
+                "default": false,
+                "kind": "KEYWORD_ONLY",
+                "name": "is_virtual"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "replaying"
+              }
+            ]
+          },
+          "is_replaying": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          }
+        },
+        "properties": [
+          "durable_execution_arn",
+          "is_virtual",
+          "lambda_context",
+          "operation_id",
+          "operation_id_generator_prefix",
+          "operation_name",
+          "parent_id",
+          "recursive_level"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "execution_state"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "operation_identifier"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "step_id_prefix"
+            },
+            {
+              "default": false,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "replaying"
+            },
+            {
+              "default": 1,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "attempt"
+            }
+          ]
+        }
+      },
+      "build_preview": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "value"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "config"
+            }
+          ]
+        }
+      },
+      "create_callback": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "name"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "timeout"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "heartbeat_timeout"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "serdes"
+            }
+          ]
+        }
+      },
+      "create_cloud_runner": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "KEYWORD_ONLY",
+              "name": "function_name"
+            },
+            {
+              "default": "us-west-2",
+              "kind": "KEYWORD_ONLY",
+              "name": "region"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "lambda_endpoint"
+            },
+            {
+              "default": 1.0,
+              "kind": "KEYWORD_ONLY",
+              "name": "poll_interval"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "input"
+            },
+            {
+              "default": 60,
+              "kind": "KEYWORD_ONLY",
+              "name": "timeout"
+            }
+          ]
+        }
+      },
+      "create_default_sync_client": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "session"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "endpoint_url"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "region_name"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "config"
+            }
+          ]
+        }
+      },
+      "create_file_system_serdes_stage": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "base_path"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "config"
+            }
+          ]
+        }
+      },
+      "create_local_runner": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "KEYWORD_ONLY",
+              "name": "handler"
+            },
+            {
+              "default": 1.0,
+              "kind": "KEYWORD_ONLY",
+              "name": "poll_interval"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "input"
+            },
+            {
+              "default": 60,
+              "kind": "KEYWORD_ONLY",
+              "name": "timeout"
+            }
+          ]
+        }
+      },
+      "create_serdes_pipeline": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "value_codec"
+            },
+            {
+              "kind": "VAR_POSITIONAL",
+              "name": "stages"
+            }
+          ]
+        }
+      },
+      "durable_callable": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "func"
+            }
+          ]
+        }
+      },
+      "durable_dag": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "func"
+            }
+          ]
+        }
+      },
+      "durable_execution": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "default": null,
+              "kind": "POSITIONAL_ONLY",
+              "name": "func"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "boto3_client"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "service_client"
+            }
+          ]
+        }
+      },
+      "durable_node": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "func"
+            }
+          ]
+        }
+      },
+      "flow": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "definition"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "name"
+            }
+          ]
+        }
+      },
+      "get_current_context": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": []
+        }
+      },
+      "get_durable_context": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": []
+        }
+      },
+      "get_extension_context": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": []
+        }
+      },
+      "get_map_item_context": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": []
+        }
+      },
+      "get_node_context": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": []
+        }
+      },
+      "get_serdes_context": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": []
+        }
+      },
+      "get_step_context": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": []
+        }
+      },
+      "get_wait_for_callback_context": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": []
+        }
+      },
+      "get_wait_for_condition_check_context": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": []
+        }
+      },
+      "get_with_retry_context": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": []
+        }
+      },
+      "invoke": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "function_name"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "payload"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "name"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "serdes_payload"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "serdes_result"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "tenant_id"
+            }
+          ]
+        }
+      },
+      "is_composable_serdes": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "serdes"
+            }
+          ]
+        }
+      },
+      "map": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "func"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "items"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "name"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "max_concurrency"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "completion_config"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "serdes"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "item_serdes"
+            },
+            {
+              "default": "<async_durable_execution._operation.map.MapSummaryGenerator object>",
+              "kind": "KEYWORD_ONLY",
+              "name": "summary_generator"
+            },
+            {
+              "default": {
+                "enum": "NestingType",
+                "value": "NESTED"
+              },
+              "kind": "KEYWORD_ONLY",
+              "name": "nesting_type"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "item_namer"
+            }
+          ]
+        }
+      },
+      "node": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "func"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "name"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "dependency"
+            }
+          ]
+        }
+      },
+      "now": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "name"
+            }
+          ]
+        }
+      },
+      "parallel": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "branches"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "name"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "max_concurrency"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "completion_config"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "serdes"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "item_serdes"
+            },
+            {
+              "default": "<async_durable_execution._operation.parallel.ParallelSummaryGenerator object>",
+              "kind": "KEYWORD_ONLY",
+              "name": "summary_generator"
+            },
+            {
+              "default": {
+                "enum": "NestingType",
+                "value": "NESTED"
+              },
+              "kind": "KEYWORD_ONLY",
+              "name": "nesting_type"
+            }
+          ]
+        }
+      },
+      "random": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "name"
+            }
+          ]
+        }
+      },
+      "recurse": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "payload"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "name"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "function_name"
+            },
+            {
+              "default": false,
+              "kind": "KEYWORD_ONLY",
+              "name": "with_recursive_level"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "serdes_payload"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "serdes_result"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "tenant_id"
+            }
+          ]
+        }
+      },
+      "run_in_child_context": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "func"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "name"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "serdes"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "summary_generator"
+            },
+            {
+              "default": false,
+              "kind": "KEYWORD_ONLY",
+              "name": "is_virtual"
+            }
+          ]
+        }
+      },
+      "step": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "func"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "name"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "retry_strategy"
+            },
+            {
+              "default": {
+                "enum": "StepSemantics",
+                "value": "AT_LEAST_ONCE_PER_RETRY"
+              },
+              "kind": "KEYWORD_ONLY",
+              "name": "step_semantics"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "serdes"
+            }
+          ]
+        }
+      },
+      "terminal_scope": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "body"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "name"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "config"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "serdes"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "summary_generator"
+            }
+          ]
+        }
+      },
+      "timestamp": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "name"
+            }
+          ]
+        }
+      },
+      "uuid": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "name"
+            }
+          ]
+        }
+      },
+      "wait": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "duration"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "name"
+            }
+          ]
+        }
+      },
+      "wait_for_callback": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "submitter"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "name"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "timeout"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "heartbeat_timeout"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "serdes"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "retry_strategy"
+            }
+          ]
+        }
+      },
+      "wait_for_condition": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "check"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "initial_state"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "name"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "polling_strategy"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "serdes"
+            }
+          ]
+        }
+      },
+      "with_retry": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "func"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "name"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "retry_strategy"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "serdes"
+            },
+            {
+              "default": null,
+              "kind": "KEYWORD_ONLY",
+              "name": "summary_generator"
+            },
+            {
+              "default": false,
+              "kind": "KEYWORD_ONLY",
+              "name": "is_virtual"
+            }
+          ]
+        }
+      }
+    },
+    "async_durable_execution.extension": {
+      "ExtensionContext": {
+        "kind": "class",
+        "methods": {
+          "get_current": {
+            "parameters": []
+          },
+          "is_replaying": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              }
+            ]
+          },
+          "reserve": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "default": null,
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "name"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "local_operation_id"
+              }
+            ]
+          }
+        },
+        "properties": [
+          "lambda_context",
+          "recursive_level"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "context"
+            }
+          ]
+        }
+      },
+      "ExtensionOperation": {
+        "kind": "class",
+        "methods": {
+          "create_callback": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "KEYWORD_ONLY",
+                "name": "sub_type"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "timeout"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "heartbeat_timeout"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "serdes"
+              }
+            ]
+          },
+          "invoke": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "function_name"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "payload"
+              },
+              {
+                "kind": "KEYWORD_ONLY",
+                "name": "sub_type"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "serdes_payload"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "serdes_result"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "tenant_id"
+              }
+            ]
+          },
+          "run_in_child_context": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "func"
+              },
+              {
+                "kind": "KEYWORD_ONLY",
+                "name": "sub_type"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "serdes"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "summary_generator"
+              },
+              {
+                "default": false,
+                "kind": "KEYWORD_ONLY",
+                "name": "is_virtual"
+              }
+            ]
+          },
+          "step": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "func"
+              },
+              {
+                "kind": "KEYWORD_ONLY",
+                "name": "sub_type"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "initial_state"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "retry_strategy"
+              },
+              {
+                "default": {
+                  "enum": "StepSemantics",
+                  "value": "AT_LEAST_ONCE_PER_RETRY"
+                },
+                "kind": "KEYWORD_ONLY",
+                "name": "step_semantics"
+              },
+              {
+                "default": null,
+                "kind": "KEYWORD_ONLY",
+                "name": "serdes"
+              }
+            ]
+          },
+          "wait": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "duration"
+              },
+              {
+                "kind": "KEYWORD_ONLY",
+                "name": "sub_type"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": []
+        }
+      },
+      "ExtensionStepFunction": {
+        "kind": "value",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "VAR_POSITIONAL",
+              "name": "args"
+            },
+            {
+              "kind": "VAR_KEYWORD",
+              "name": "kwargs"
+            }
+          ]
+        },
+        "value": "collections.abc.Callable[[typing.Optional[~T]], collections.abc.Awaitable[async_durable_execution.extension.ExtensionStepResult[~T]]]"
+      },
+      "ExtensionStepResult": {
+        "fields": [
+          "value",
+          "retry_delay"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {
+          "retry": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "state"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "delay"
+              }
+            ]
+          },
+          "succeed": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "value"
+              }
+            ]
+          }
+        },
+        "properties": [
+          "is_retry"
+        ],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "value"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "retry_delay"
+            }
+          ]
+        }
+      },
+      "ExtensionStepRetryStrategy": {
+        "kind": "value",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "VAR_POSITIONAL",
+              "name": "args"
+            },
+            {
+              "kind": "VAR_KEYWORD",
+              "name": "kwargs"
+            }
+          ]
+        },
+        "value": "collections.abc.Callable[[Exception, typing.Optional[~T], int], typing.Optional[async_durable_execution.extension.ExtensionStepResult[~T]]]"
+      },
+      "get_extension_context": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": []
+        }
+      }
+    },
+    "async_durable_execution.filesystem_serdes": {
+      "FileSystemPathEncoding": {
+        "kind": "class",
+        "members": {
+          "HASH": "HASH",
+          "URI": "URI"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "FileSystemSerDesMode": {
+        "kind": "class",
+        "members": {
+          "ALWAYS": "ALWAYS",
+          "OVERFLOW": "OVERFLOW"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "FileSystemSerDesStage": {
+        "kind": "class",
+        "methods": {
+          "deserialize": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "data"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "context"
+              }
+            ]
+          },
+          "execution_directory": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "durable_execution_arn"
+              }
+            ]
+          },
+          "serialize": {
+            "parameters": [
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "self"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "value"
+              },
+              {
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "name": "context"
+              }
+            ]
+          }
+        },
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "base_path"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "config"
+            }
+          ]
+        }
+      },
+      "FileSystemSerDesStageConfig": {
+        "fields": [
+          "storage_mode",
+          "path_encoding",
+          "checkpoint_envelope_limit_bytes",
+          "generate_preview",
+          "preview_config",
+          "cross_execution_reference_policy"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {},
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "default": {
+                "enum": "FileSystemSerDesMode",
+                "value": "ALWAYS"
+              },
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "storage_mode"
+            },
+            {
+              "default": {
+                "enum": "FileSystemPathEncoding",
+                "value": "URI"
+              },
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "path_encoding"
+            },
+            {
+              "default": 261120,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "checkpoint_envelope_limit_bytes"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "generate_preview"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "preview_config"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "cross_execution_reference_policy"
+            }
+          ]
+        }
+      },
+      "create_file_system_serdes_stage": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "base_path"
+            },
+            {
+              "default": null,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "config"
+            }
+          ]
+        }
+      }
+    },
+    "async_durable_execution.preview": {
+      "FieldMatchMode": {
+        "kind": "class",
+        "members": {
+          "ANYWHERE": "ANYWHERE",
+          "PATH": "PATH"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "PreviewConfig": {
+        "fields": [
+          "mode",
+          "include",
+          "exclude",
+          "mask",
+          "mask_string",
+          "max_preview_bytes",
+          "max_traversal_nodes",
+          "max_depth"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {},
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "mode"
+            },
+            {
+              "default": "<factory>",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "include"
+            },
+            {
+              "default": "<factory>",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "exclude"
+            },
+            {
+              "default": "<factory>",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "mask"
+            },
+            {
+              "default": "***",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "mask_string"
+            },
+            {
+              "default": 4096,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "max_preview_bytes"
+            },
+            {
+              "default": 10000,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "max_traversal_nodes"
+            },
+            {
+              "default": 64,
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "max_depth"
+            }
+          ]
+        }
+      },
+      "PreviewField": {
+        "fields": [
+          "name",
+          "match"
+        ],
+        "frozen": true,
+        "kind": "class",
+        "methods": {},
+        "properties": [],
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "name"
+            },
+            {
+              "default": {
+                "enum": "FieldMatchMode",
+                "value": "ANYWHERE"
+              },
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "match"
+            }
+          ]
+        }
+      },
+      "PreviewMode": {
+        "kind": "class",
+        "members": {
+          "EXCLUDE_ALL": "EXCLUDE_ALL",
+          "INCLUDE_ALL": "INCLUDE_ALL"
+        },
+        "methods": {},
+        "properties": []
+      },
+      "build_preview": {
+        "async": false,
+        "kind": "function",
+        "signature": {
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "value"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "config"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
