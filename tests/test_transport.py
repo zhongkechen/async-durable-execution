@@ -244,3 +244,83 @@ async def test_httpx_transport_signs_model_generated_request(monkeypatch):
     assert result["CheckpointToken"] == "next"
     assert observed[0].headers["authorization"].startswith("AWS4-HMAC-SHA256 ")
     assert b"ClientToken" in observed[0].content
+
+
+@pytest.mark.parametrize("mode", ["Event", "RequestResponse"])
+async def test_cloud_runner_reads_invoke_arn_from_httpx_response_headers(
+    monkeypatch, mode
+):
+    import httpx
+
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing-secret")
+    monkeypatch.setenv("AWS_EC2_METADATA_DISABLED", "true")
+    arn = (
+        "arn:aws:lambda:us-west-2:123456789012:function:fn:1/durable-execution/job/run"
+    )
+    requests = []
+
+    def endpoint(request):
+        requests.append(request)
+        if request.method == "POST":
+            return httpx.Response(
+                202 if mode == "Event" else 200,
+                content=b"8",
+                headers={"x-AmZ-Durable-Execution-Arn": arn},
+            )
+        if request.url.path.endswith("/history"):
+            return httpx.Response(200, json={"Events": []})
+        return httpx.Response(200, json={"Status": "SUCCEEDED", "Result": "8"})
+
+    client_type = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **kwargs: client_type(transport=httpx.MockTransport(endpoint)),
+    )
+    async with create_cloud_runner(
+        function_name="fn:1", lambda_endpoint="https://example.invalid"
+    ) as runner:
+        if mode == "Event":
+            assert await runner.run_async() == arn
+        else:
+            result = await runner.run()
+            assert result.status is InvocationStatus.SUCCEEDED
+            assert result.get_deserialized_result() == 8
+    assert requests[0].headers["x-amz-invocation-type"] == mode
+    assert len(requests) == (1 if mode == "Event" else 3)
+
+
+async def test_httpx_transport_preserves_modeled_invoke_header_fields(monkeypatch):
+    import httpx
+    from async_durable_execution._remote import AsyncAws
+
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing-secret")
+    monkeypatch.setenv("AWS_EC2_METADATA_DISABLED", "true")
+    payload = b'{"errorMessage":"failed"}'
+    headers = {
+        "x-amz-durable-execution-arn": "execution-arn",
+        "x-amz-function-error": "Unhandled",
+        "x-amz-executed-version": "1",
+        "x-amz-log-result": "bG9ncw==",
+        "x-amzn-requestid": "request-id",
+    }
+    client = AsyncAws(region_name="us-west-2", endpoint_url="https://example.invalid")
+    await client.http.aclose()
+    client.http = httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, content=payload, headers=headers)
+        )
+    )
+    try:
+        result = await client.invoke(FunctionName="fn:1", Payload=b"{}")
+    finally:
+        await client.aclose()
+    assert result["DurableExecutionArn"] == "execution-arn"
+    assert result["FunctionError"] == "Unhandled"
+    assert result["ExecutedVersion"] == "1"
+    assert result["LogResult"] == "bG9ncw=="
+    assert result["Payload"] == payload
+    assert result["ResponseMetadata"]["RequestId"] == "request-id"
+    assert isinstance(result["ResponseMetadata"]["HTTPHeaders"], dict)

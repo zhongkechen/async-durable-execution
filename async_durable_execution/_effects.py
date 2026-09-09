@@ -529,9 +529,10 @@ async def scope_effect(
         )
     if saved and saved.status == "FAILED":
         raise_record(saved.error)
+    # Snapshot replay state before this invocation creates the scope's record.
+    child = context or ticket.child(virtual=is_virtual)
     if not is_virtual and saved is None:
         await ticket.write("START")
-    child = context or ticket.child(virtual=is_virtual)
     try:
         with binding(child):
             result = await func()

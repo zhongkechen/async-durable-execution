@@ -89,6 +89,13 @@ credentials.
 On resume, durable workflows run again from the beginning. Completed operations
 return saved results, but ordinary Python code executes again.
 
+For a child using the default `run_in_child_context()` settings,
+`get_durable_context().is_replaying()` is `False` on its first entry. It is `True`
+when an unfinished child is re-entered using history
+from an earlier invocation, until it reaches new work. A new child's start
+checkpoint does not make that first entry a replay. Completed children return
+their saved results without entering the child body again.
+
 !!! warning "Keep replayed code deterministic"
 
     Put API calls, database queries, filesystem access, UUID generation, random
