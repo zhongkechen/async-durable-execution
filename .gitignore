@@ -40,3 +40,5 @@ conformance/generated/
 
 .env
 *.egg-info
+
+/benchmark-results/

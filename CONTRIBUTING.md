@@ -21,6 +21,7 @@ async_durable_execution/  # Journal runtime and public SDK interfaces
 tests/                    # SDK and runner tests
 examples/                 # Example durable functions
 test_examples/            # Local and cloud example tests
+benchmarks/               # Reproducible SDK comparisons and replay checks
 ```
 
 The root `pyproject.toml` contains the SDK package metadata and all Hatch,
@@ -54,6 +55,21 @@ hatch run test:runner
 # Examples
 hatch run test:examples
 ```
+
+### Benchmarks
+
+Run the current SDK, v2, and the official Python SDK through the same public
+workflow and serialization workloads:
+
+```bash
+hatch run benchmarks:compare --output benchmark-results/full
+```
+
+The suite records exact source revisions, uses shared pinned dependencies, and
+writes JSON samples plus a Markdown report. Incorrect replay results produce a
+nonzero exit status and are excluded from timing comparisons. See
+[the benchmark guide](benchmarks/README.md) for a quick smoke run, source pins,
+measurement settings, and limitations.
 
 ### Formatting and linting
 
