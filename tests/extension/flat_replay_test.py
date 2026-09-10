@@ -103,12 +103,15 @@ class LambdaHistory:
         )
         return handler(self.event(), context)
 
-    def legacy_summary(self):
+    def legacy_summary(self, *, absent=False):
         for operation in self.operations.values():
             if operation["Type"] == "CONTEXT" and operation.get(
                 "ContextDetails", {}
             ).get("ReplayChildren"):
-                operation["ContextDetails"]["Result"] = ""
+                if absent:
+                    operation["ContextDetails"].pop("Result", None)
+                else:
+                    operation["ContextDetails"]["Result"] = ""
 
 
 def describe(result):
@@ -123,8 +126,8 @@ def describe(result):
 
 
 @pytest.mark.parametrize("kind", ["map", "parallel"])
-@pytest.mark.parametrize("legacy", [False, True])
-def test_large_flat_result_replays_without_effects_or_checkpoints(kind, legacy):
+@pytest.mark.parametrize("summary_format", ["current", "empty", "absent"])
+def test_large_flat_result_replays_without_effects_or_checkpoints(kind, summary_format):
     api = LambdaHistory()
     effects = []
     body_calls = []
@@ -153,8 +156,8 @@ def test_large_flat_result_replays_without_effects_or_checkpoints(kind, legacy):
     assert first["Status"] == "SUCCEEDED"
     result = json.loads(first["Result"])
     assert result["bytes"] == 320000 and len(result["items"]) == 4
-    if legacy:
-        api.legacy_summary()
+    if summary_format != "current":
+        api.legacy_summary(absent=summary_format == "absent")
     calls = api.calls
     second = api.call(handler)
     assert second == first
@@ -650,3 +653,115 @@ def test_completed_flat_replay_limits_terminal_helpers_and_keeps_item_order(limi
     assert entries == [list(range(4)), list(range(4))]
     assert peaks == [limit, limit]
     assert effects == [1, 3] and api.calls == calls
+
+
+@pytest.mark.parametrize("kind", ["map", "parallel"])
+@pytest.mark.parametrize("legacy", [False, True])
+@pytest.mark.parametrize(
+    ("historical_type", "historical_status"),
+    [
+        ("CALLBACK", "STARTED"),
+        ("CALLBACK", "SUCCEEDED"),
+        ("CHAINED_INVOKE", "STOPPED"),
+        ("CHAINED_INVOKE", "TIMED_OUT"),
+    ],
+)
+def test_completed_flat_replay_rejects_operation_type_mismatches(
+    kind, legacy, historical_type, historical_status
+):
+    api = LambdaHistory()
+    effects = []
+
+    async def branch():
+        async def work():
+            effects.append("work")
+            return "x" * 80000
+
+        return await step(work, name="value")
+
+    @durable_execution(boto3_client=api)
+    async def handler(event):
+        task = (
+            durable_map(lambda _: branch(), range(4), nesting_type=NestingType.FLAT)
+            if kind == "map"
+            else parallel([branch] * 4, nesting_type=NestingType.FLAT)
+        )
+        return describe(await task)
+
+    assert api.call(handler)["Status"] == "SUCCEEDED"
+    if legacy:
+        api.legacy_summary()
+    # Model an operation occupying the same slot after a workflow code change.
+    operation = next(op for op in api.operations.values() if op["Type"] == "STEP")
+    operation.pop("StepDetails")
+    operation.update(Type=historical_type, Status=historical_status)
+    if historical_type == "CALLBACK":
+        operation.update(SubType="Callback", CallbackDetails={"CallbackId": "existing"})
+    else:
+        operation.update(SubType="ChainedInvoke", ChainedInvokeDetails={})
+    calls, history = api.calls, copy.deepcopy(api.operations)
+    replay = api.call(handler)
+    assert replay["Status"] == "FAILED", replay
+    assert replay["Error"]["ErrorType"] == "ExecutionError"
+    assert "operation type mismatch" in replay["Error"]["ErrorMessage"]
+    assert effects == ["work"] * 4 and api.calls == calls
+    assert api.operations == history
+
+
+@pytest.mark.parametrize("kind", ["map", "parallel"])
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "{",
+        " ",
+        "null",
+        '""',
+        "[]",
+        "{}",
+        '{"items":[]}',
+        '{"__ade_flat_replay__":2}',
+        '{"__ade_flat_replay__":true}',
+        '{"__ade_flat_replay__":1,"completionReason":"ALL_COMPLETED","items":null}',
+    ],
+)
+def test_completed_flat_replay_rejects_invalid_nonempty_metadata(kind, payload):
+    api = LambdaHistory()
+    entries = []
+    effects = []
+
+    async def branch():
+        entries.append("branch")
+
+        async def work():
+            effects.append("work")
+            return "x" * 80000
+
+        return await step(work)
+
+    @durable_execution(boto3_client=api)
+    async def handler(event):
+        task = (
+            durable_map(lambda _: branch(), range(4), nesting_type=NestingType.FLAT)
+            if kind == "map"
+            else parallel([branch] * 4, nesting_type=NestingType.FLAT)
+        )
+        return describe(await task)
+
+    assert api.call(handler)["Status"] == "SUCCEEDED"
+    parent = next(
+        op
+        for op in api.operations.values()
+        if op["Type"] == "CONTEXT"
+        and op.get("ContextDetails", {}).get("ReplayChildren")
+    )
+    parent["ContextDetails"]["Result"] = payload
+    calls, history = api.calls, copy.deepcopy(api.operations)
+    replay = api.call(handler)
+    assert replay["Status"] == "FAILED", replay
+    assert replay["Error"]["ErrorType"] == "ExecutionError"
+    assert (
+        "Invalid completed flat aggregate replay metadata"
+        in replay["Error"]["ErrorMessage"]
+    )
+    assert entries == ["branch"] * 4 and effects == ["work"] * 4
+    assert api.calls == calls and api.operations == history

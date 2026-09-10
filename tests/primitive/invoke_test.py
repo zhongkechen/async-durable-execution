@@ -1129,3 +1129,38 @@ async def test_invoke_immediate_response_already_completed() -> None:
     mock_state.create_checkpoint.assert_not_called()
     # Verify direct state lookup was called only once
     assert mock_state.operations.get.call_count == 1
+
+
+@pytest.mark.parametrize("status", [OperationStatus.STOPPED, OperationStatus.TIMED_OUT])
+async def test_completed_flat_replay_preserves_matching_terminal_invoke(status) -> None:
+    """The type guard still permits reading matching cached invoke errors."""
+    from async_durable_execution._primitive.base import _completed_flat_replay
+
+    state = Mock(spec=ExecutionState)
+    state.create_checkpoint = AsyncMock()
+    state.operations = {
+        "invoke": Operation(
+            operation_id="invoke",
+            operation_type=OperationType.CHAINED_INVOKE,
+            status=status,
+            chained_invoke_details=ChainedInvokeDetails(
+                error=ErrorObject(message="recorded failure", type="RemoteError")
+            ),
+        )
+    }
+    executor: InvokeOperationExecutor[str] = InvokeOperationExecutor(
+        function_name="test_function",
+        payload={},
+        state=state,
+        operation_identifier=OperationIdentifier(
+            "invoke", OperationSubType.CHAINED_INVOKE
+        ),
+    )
+    token = _completed_flat_replay.set(True)
+    try:
+        with pytest.raises(CallableRuntimeError, match="recorded failure") as raised:
+            await executor.process()
+        assert raised.value.error_type == "RemoteError"
+    finally:
+        _completed_flat_replay.reset(token)
+    state.create_checkpoint.assert_not_called()

@@ -154,19 +154,33 @@ class OperationExecutor(ABC, Generic[T]):
         """Process the operation, including replay and checkpoint handling."""
         operation = self.state.operations.get(self.operation_id)
         if _completed_flat_replay.get() and not getattr(self, "is_virtual", False):
+            # SDK reservations omit their type for legacy replay compatibility.
+            # Status exceptions must still apply only to the requested primitive.
+            expected_type = (
+                self.operation_identifier.operation_type or self.SERDES_OPERATION_TYPE
+            )
+            if (
+                operation is not None
+                and expected_type is not None
+                and operation.operation_type is not expected_type
+            ):
+                raise ExecutionError(
+                    f"Completed flat aggregate operation type mismatch for {self.operation_id}: "
+                    f"expected {expected_type.value}, found {operation.operation_type.value}"
+                )
             replayable = operation is not None and (
                 operation.status is OperationStatus.SUCCEEDED
                 # Callback creation replays by reading its existing ID, including
                 # callbacks whose result has not been awaited by the branch.
-                or operation.operation_type is OperationType.CALLBACK
+                or expected_type is OperationType.CALLBACK
                 or (
-                    operation.operation_type is OperationType.CHAINED_INVOKE
+                    expected_type is OperationType.CHAINED_INVOKE
                     and operation.status
                     in {OperationStatus.TIMED_OUT, OperationStatus.STOPPED}
                 )
                 or (
                     operation.status is OperationStatus.FAILED
-                    and operation.operation_type
+                    and expected_type
                     in {
                         OperationType.STEP,
                         OperationType.CONTEXT,

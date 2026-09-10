@@ -1477,14 +1477,13 @@ class ParallelExecutor(
         payload = (
             parent.context_details.result if parent and parent.context_details else None
         )
-        try:
-            document = json.loads(payload) if payload else None
-        except (TypeError, ValueError):
-            document = None
         reason = None
         descriptors = None
-        if isinstance(document, dict) and _FLAT_REPLAY_KEY in document:
+        if payload is not None and payload != "":
             try:
+                document = json.loads(payload)
+                if not isinstance(document, dict):
+                    raise ValueError("replay metadata must be an object")
                 if (
                     type(document[_FLAT_REPLAY_KEY]) is not int
                     or document[_FLAT_REPLAY_KEY] != 1
