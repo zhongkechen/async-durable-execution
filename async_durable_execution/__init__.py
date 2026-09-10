@@ -40,14 +40,14 @@ from ._core import (
     get_serdes_context,
     is_composable_serdes,
 )
-from .filesystem_serdes import (
+from ._filesystem_serdes import (
     FileSystemPathEncoding,
     FileSystemSerDesMode,
     FileSystemSerDesStage,
     FileSystemSerDesStageConfig,
     create_file_system_serdes_stage,
 )
-from .preview import (
+from ._preview import (
     FieldMatchMode,
     PreviewConfig,
     PreviewField,
@@ -126,7 +126,7 @@ from ._operation.step import (
 )
 from ._operation.replay_safe import now, random, timestamp, uuid
 from ._operation.wait import wait
-from .extension import (
+from ._extension_api import (
     ExtensionContext,
     ExtensionOperation,
     ExtensionStepFunction,

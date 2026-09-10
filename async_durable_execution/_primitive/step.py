@@ -38,7 +38,7 @@ from .._core import (
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from ..extension import (
+    from .._extension_api import (
         ExtensionStepFunction,
         ExtensionStepResult,
         ExtensionStepRetryStrategy,
@@ -490,7 +490,7 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
         return await self._execute(operation)
 
     async def _execute(self, operation: Operation | None) -> T:
-        from ..extension import ExtensionStepResult
+        from .._extension_api import ExtensionStepResult
 
         state = self.initial_state
         attempt = self._attempt(operation)
@@ -570,7 +570,7 @@ class StatefulStepOperationExecutor(OperationExecutor[T]):
         state: T | None,
         attempt: int,
     ) -> T:
-        from ..extension import ExtensionStepResult
+        from .._extension_api import ExtensionStepResult
 
         if self.retry_strategy is None:
             return await self._fail(error)

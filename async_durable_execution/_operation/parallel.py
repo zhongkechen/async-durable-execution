@@ -42,7 +42,7 @@ from .._core import (
 )
 from .._primitive.base import OperationExecutor, _completed_flat_replay
 from .._primitive.child import ChildOperationExecutor, CHECKPOINT_SIZE_LIMIT
-from ..extension import ExtensionContext, ExtensionOperation, get_extension_context
+from .._extension_api import ExtensionContext, ExtensionOperation, get_extension_context
 
 if TYPE_CHECKING:
     from .child import SummaryGenerator

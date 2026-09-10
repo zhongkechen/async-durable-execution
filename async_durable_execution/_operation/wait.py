@@ -10,7 +10,7 @@ from .._core import (
     ValidationError,
     duration_to_seconds,
 )
-from ..extension import get_extension_context
+from .._extension_api import get_extension_context
 
 
 def wait(duration: Duration, *, name: str | None = None) -> asyncio.Task[None]:

@@ -6,6 +6,8 @@ import ast
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 
 PACKAGE_ROOT = Path(__file__).parents[1] / "async_durable_execution"
 
@@ -52,13 +54,45 @@ def test_implementation_packages_are_not_public_import_paths() -> None:
         )
 
 
-def test_extension_author_module_is_a_public_import_path():
-    assert importlib.util.find_spec("async_durable_execution.extension") is not None
+@pytest.mark.parametrize("module_name", ["extension", "filesystem_serdes", "preview"])
+def test_feature_implementation_modules_are_not_public_import_paths(module_name):
+    import async_durable_execution as sdk
+
+    assert not hasattr(sdk, module_name)
+    assert importlib.util.find_spec(f"async_durable_execution.{module_name}") is None
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module(f"async_durable_execution.{module_name}")
+
+
+def test_feature_apis_remain_available_from_package_root():
+    import async_durable_execution as sdk
+
+    expected = {
+        "ExtensionContext",
+        "ExtensionOperation",
+        "ExtensionStepFunction",
+        "ExtensionStepResult",
+        "ExtensionStepRetryStrategy",
+        "get_extension_context",
+        "FileSystemPathEncoding",
+        "FileSystemSerDesMode",
+        "FileSystemSerDesStage",
+        "FileSystemSerDesStageConfig",
+        "create_file_system_serdes_stage",
+        "FieldMatchMode",
+        "PreviewConfig",
+        "PreviewField",
+        "PreviewMode",
+        "build_preview",
+    }
+    assert expected <= set(sdk.__all__)
+    for name in expected:
+        assert getattr(sdk, name) is not None
 
 
 def test_extension_step_executor_is_internal_to_primitive_layer() -> None:
     """The stable SPI delegates stateful STEP execution to an internal executor."""
-    import async_durable_execution.extension as extension
+    import async_durable_execution._extension_api as extension
     from async_durable_execution._primitive.step import (
         StatefulStepOperationExecutor,
     )

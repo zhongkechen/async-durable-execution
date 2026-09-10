@@ -8,7 +8,7 @@ from typing import TypeVar
 
 from .._core import OperationSubType, SerDes
 from .._primitive.child import SummaryGenerator
-from ..extension import get_extension_context
+from .._extension_api import get_extension_context
 
 T = TypeVar("T")
 
