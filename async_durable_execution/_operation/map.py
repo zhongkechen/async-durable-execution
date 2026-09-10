@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .parallel import _FlatReplaySummary
+
 import asyncio
 import json
 import logging
@@ -289,9 +291,13 @@ def map(
         )
         return await handler()
 
+    summary_options: dict[str, Any] = {}
+    if nesting_type is NestingType.FLAT:
+        summary_options["summary_generator"] = _FlatReplaySummary(summary_generator)
     return _run_in_child_context(
         run_map_handler,
         sub_type=OperationSubType.MAP,
         name=map_name,
         serdes=serdes if serdes is not None else _BATCH_RESULT_SERDES,
+        **summary_options,
     )

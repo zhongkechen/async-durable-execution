@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from contextvars import ContextVar
 from typing import ClassVar, Generic, TypeVar
 
 from .._core import (
     ExecutionState,
+    ExecutionError,
+    OperationStatus,
     InvalidStateError,
     Operation,
     OperationContext,
@@ -20,6 +23,12 @@ from .._core import (
 
 T = TypeVar("T")
 S = TypeVar("S")
+
+# Reconstructing a completed FLAT aggregate may read durable results, but must
+# never start or resume unfinished effects (including legacy histories).
+_completed_flat_replay: ContextVar[bool] = ContextVar(
+    "completed_flat_replay", default=False
+)
 
 
 class OperationExecutor(ABC, Generic[T]):
@@ -144,6 +153,18 @@ class OperationExecutor(ABC, Generic[T]):
     async def process(self) -> T:
         """Process the operation, including replay and checkpoint handling."""
         operation = self.state.operations.get(self.operation_id)
+        if _completed_flat_replay.get() and not getattr(self, "is_virtual", False):
+            if operation is None or operation.status not in {
+                OperationStatus.SUCCEEDED,
+                OperationStatus.FAILED,
+                OperationStatus.CANCELLED,
+                OperationStatus.TIMED_OUT,
+                OperationStatus.STOPPED,
+            }:
+                raise ExecutionError(
+                    "Completed flat aggregate cannot replay an unfinished durable operation: "
+                    f"{self.operation_id}. Its original history cannot be safely reconstructed."
+                )
         if operation is None:
             return await self.start()
         expected_type = self.operation_identifier.operation_type

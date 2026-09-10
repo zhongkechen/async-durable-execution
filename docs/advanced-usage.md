@@ -206,6 +206,22 @@ not settle are cancelled and recorded in the parent `BatchResult` with
 `result.cancelled_count`, are not counted as successes or failures, and remain
 cancelled when the parent result is replayed. Work that never started is omitted.
 
+With `NestingType.FLAT`, an aggregate larger than the context checkpoint limit
+uses a compact replay summary containing each entered branch's terminal status,
+failure details, and the completion reason. A custom `summary_generator` result
+is retained alongside this SDK metadata. Successful branch bodies are replayed
+using their completed durable operations; failed, cancelled, and unstarted
+branches are not run again. As with ordinary replay, side effects belong inside
+`step()` rather than directly in a branch body.
+
+Older oversized flat checkpoints with an empty summary can reconstruct
+all-success groups that have no early-success/custom completion policy. If the
+history is ambiguous, or rebuilding a result would require a new or unfinished
+durable operation, replay raises `ExecutionError` without issuing checkpoints or
+running that effect. Oversized replay metadata itself is rejected before the
+aggregate is marked complete. Nested aggregates and normal result serialization
+retain their existing formats.
+
 For custom policies, use `CompletionConfig.custom()` with a deterministic callback
 that returns a `CompletionDecision`:
 

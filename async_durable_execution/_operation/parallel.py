@@ -18,6 +18,7 @@ from .._core import (
     EncodedValue,
     ErrorObject,
     ExecutionState,
+    ExecutionError,
     ExtendedTypeSerDes,
     InvalidStateError,
     InvocationError,
@@ -39,8 +40,8 @@ from .._core import (
     durable_callable,
     get_durable_context,
 )
-from .._primitive.base import OperationExecutor
-from .._primitive.child import ChildOperationExecutor
+from .._primitive.base import OperationExecutor, _completed_flat_replay
+from .._primitive.child import ChildOperationExecutor, CHECKPOINT_SIZE_LIMIT
 from ..extension import ExtensionContext, ExtensionOperation, get_extension_context
 
 if TYPE_CHECKING:
@@ -1408,6 +1409,8 @@ class ParallelExecutor(
     async def replay_completed(
         self, execution_state: ExecutionState, executor_context: DurableContext
     ) -> BatchResult[ResultType]:
+        if self.nesting_type is NestingType.FLAT:
+            return await self._replay_completed_flat(execution_state, executor_context)
         items: list[BatchItem[ResultType]] = []
         for executable in self.executables:
             if isinstance(self._branch_operations, _BranchOperationReservations):
@@ -1467,6 +1470,98 @@ class ParallelExecutor(
             )
         return BatchResult.from_items(items, self.completion_config)
 
+    async def _replay_completed_flat(
+        self, execution_state: ExecutionState, executor_context: DurableContext
+    ) -> BatchResult[ResultType]:
+        parent = execution_state.operations.get(self.operation_id)
+        payload = (
+            parent.context_details.result if parent and parent.context_details else None
+        )
+        try:
+            document = json.loads(payload) if payload else None
+        except (TypeError, ValueError):
+            document = None
+        reason = None
+        descriptors = None
+        if isinstance(document, dict) and _FLAT_REPLAY_KEY in document:
+            try:
+                if (
+                    type(document[_FLAT_REPLAY_KEY]) is not int
+                    or document[_FLAT_REPLAY_KEY] != 1
+                ):
+                    raise ValueError("unsupported version")
+                reason = CompletionReason(document["completionReason"])
+                descriptors = document["items"]
+                if not isinstance(descriptors, list):
+                    raise ValueError("items must be a list")
+                indexes = set()
+                for item in descriptors:
+                    index = item["index"]
+                    if (
+                        type(index) is not int
+                        or not 0 <= index < len(self.executables)
+                        or index in indexes
+                    ):
+                        raise ValueError("invalid branch index")
+                    indexes.add(index)
+                    status = BatchItemStatus(item["status"])
+                    if status not in {
+                        BatchItemStatus.SUCCEEDED,
+                        BatchItemStatus.FAILED,
+                        BatchItemStatus.CANCELLED,
+                    }:
+                        raise ValueError("non-terminal branch")
+            except (KeyError, TypeError, ValueError) as metadata_error:
+                raise ExecutionError(
+                    "Invalid completed flat aggregate replay metadata"
+                ) from metadata_error
+        # Older checkpoints contain only an empty summary. Read their completed
+        # operations, but fail closed if reconstruction would require new work.
+        legacy = descriptors is None
+        if legacy:
+            if (
+                self.completion_config.has_custom_should_complete
+                or self.completion_config.min_successful is not None
+            ):
+                raise ExecutionError(
+                    "Legacy completed flat aggregate lacks terminal decision metadata"
+                )
+            descriptors = [
+                {"index": exe.index, "status": BatchItemStatus.SUCCEEDED.value}
+                for exe in self.executables
+            ]
+        items: list[BatchItem[ResultType]] = []
+        assert descriptors is not None
+        for descriptor in descriptors:
+            index = descriptor["index"]
+            status = BatchItemStatus(descriptor["status"])
+            result: ResultType | None = None
+            error: ErrorObject | None = None
+            if status is BatchItemStatus.SUCCEEDED:
+                token = _completed_flat_replay.set(True)
+                try:
+                    result = await self._execute_item_in_child_context(
+                        executor_context, self.executables[index]
+                    )
+                except CallableRuntimeError as caught:
+                    raise ExecutionError(
+                        "Completed flat aggregate cannot reconstruct a failed branch without its recorded decision"
+                    ) from caught
+                finally:
+                    _completed_flat_replay.reset(token)
+            elif status is BatchItemStatus.FAILED:
+                error = (
+                    ErrorObject.from_dict(descriptor["error"])
+                    if descriptor.get("error") is not None
+                    else None
+                )
+            items.append(BatchItem(index, status, result=result, error=error))
+        return (
+            BatchResult(items, reason)
+            if reason is not None
+            else BatchResult.from_items(items, self.completion_config)
+        )
+
 
 class ParallelSummaryGenerator:
     """Default summary generator for oversized parallel `BatchResult` payloads."""
@@ -1483,6 +1578,42 @@ class ParallelSummaryGenerator:
         }
 
         return json.dumps(fields)
+
+
+_FLAT_REPLAY_KEY = "__ade_flat_replay__"
+
+
+class _FlatReplaySummary:
+    """Retain terminal branch decisions when a FLAT batch result is oversized."""
+
+    def __init__(self, summary_generator: SummaryGenerator | None) -> None:
+        self.summary_generator = summary_generator
+
+    def __call__(self, result: BatchResult) -> str:
+        summary = self.summary_generator(result) if self.summary_generator else None
+        payload = json.dumps(
+            {
+                _FLAT_REPLAY_KEY: 1,
+                "completionReason": result.completion_reason.value,
+                "items": [
+                    {
+                        "index": item.index,
+                        "status": item.status.value,
+                        "error": item.error.to_dict()
+                        if item.error is not None
+                        else None,
+                    }
+                    for item in result.all
+                ],
+                "summary": summary,
+            },
+            separators=(",", ":"),
+        )
+        if len(payload.encode("utf-8")) > CHECKPOINT_SIZE_LIMIT:
+            raise ExecutionError(
+                "Flat aggregate replay metadata exceeds the checkpoint size limit"
+            )
+        return payload
 
 
 class _BranchOperationReservations(Mapping[int, ExtensionOperation]):
@@ -1698,9 +1829,13 @@ def parallel(
         )
         return await handler()
 
+    summary_options: dict[str, Any] = {}
+    if nesting_type is NestingType.FLAT:
+        summary_options["summary_generator"] = _FlatReplaySummary(summary_generator)
     return _run_in_child_context(
         run_parallel_handler,
         sub_type=OperationSubType.PARALLEL,
         name=name,
         serdes=serdes if serdes is not None else _BATCH_RESULT_SERDES,
+        **summary_options,
     )

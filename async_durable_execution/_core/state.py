@@ -561,7 +561,8 @@ class ExecutionState:
         Processes overflow queue first to maintain FIFO order, then collects from main queue.
         Respects configured size, time, and operation count limits. Blocks for the first
         operation if queues are empty, then collects additional operations within the time
-        window.
+        window. A batch containing a synchronous waiter drains ready updates and
+        flushes after one event-loop yield instead of waiting for the idle timer.
 
         Empty checkpoints (operation_update=None) are coalesced: the first empty checkpoint
         counts toward the batch operation limit, but subsequent empty checkpoints do not.
@@ -624,6 +625,9 @@ class ExecutionState:
             if not batch:
                 return batch
 
+        has_sync_checkpoint = any(q.completion_future is not None for q in batch)
+        yielded_for_ready_updates = False
+
         # Start batching window using configured time
         batch_deadline = time.time() + self._batcher_config.max_batch_time_seconds
 
@@ -640,12 +644,24 @@ class ExecutionState:
                 break
 
             try:
-                additional_op = await asyncio.wait_for(
-                    self._checkpoint_queue.get(), timeout=remaining_time
-                )
+                try:
+                    additional_op = self._checkpoint_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    if has_sync_checkpoint:
+                        # Coalesce producers already ready to run, but never make
+                        # a caller awaiting durability wait for a batching timer.
+                        if not yielded_for_ready_updates:
+                            yielded_for_ready_updates = True
+                            await asyncio.sleep(0)
+                            continue
+                        break
+                    additional_op = await asyncio.wait_for(
+                        self._checkpoint_queue.get(), timeout=remaining_time
+                    )
                 if additional_op is None:
                     continue
 
+                has_sync_checkpoint |= additional_op.completion_future is not None
                 if additional_op.operation_update is None:  # Empty checkpoint
                     batch.append(additional_op)
                     if not has_empty_checkpoint:
