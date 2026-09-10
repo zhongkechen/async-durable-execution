@@ -1531,15 +1531,12 @@ class ParallelExecutor(
                 for exe in self.executables
             ]
         items: list[BatchItem[ResultType]] = []
-        successful: list[tuple[int, int]] = []
         assert descriptors is not None
         for descriptor in descriptors:
             index = descriptor["index"]
             status = BatchItemStatus(descriptor["status"])
             error: ErrorObject | None = None
-            if status is BatchItemStatus.SUCCEEDED:
-                successful.append((len(items), index))
-            elif status is BatchItemStatus.FAILED:
+            if status is BatchItemStatus.FAILED:
                 error = (
                     ErrorObject.from_dict(descriptor["error"])
                     if descriptor.get("error") is not None
@@ -1547,36 +1544,73 @@ class ParallelExecutor(
                 )
             items.append(BatchItem(index, status, error=error))
 
-        # Branch bodies may coordinate with each other even when their durable
-        # effects are cached. Preserve concurrency without running failed or
-        # cancelled branches, and keep result order independent of completion order.
-        pending = iter(successful)
+        # Failed/cancelled branches may have supplied in-memory coordination for
+        # successful ones. Replay entered branches under the same read-only guard,
+        # but retain their recorded outcomes and stop once all results are rebuilt.
+        pending = iter(enumerate(items))
+        remaining = sum(item.status is BatchItemStatus.SUCCEEDED for item in items)
+        completed: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+        stopping = False
 
         async def replay_worker() -> None:
-            for position, index in pending:
+            nonlocal remaining
+            for position, item in pending:
+                if completed.done():
+                    return
                 token = _completed_flat_replay.set(True)
                 try:
                     result = await self._execute_item_in_child_context(
-                        executor_context, self.executables[index]
+                        executor_context, self.executables[item.index]
                     )
-                    items[position] = BatchItem(
-                        index, BatchItemStatus.SUCCEEDED, result=result
-                    )
-                except CallableRuntimeError as caught:
-                    raise ExecutionError(
-                        "Completed flat aggregate cannot reconstruct a failed branch without its recorded decision"
-                    ) from caught
+                except (
+                    CallableRuntimeError,
+                    ExecutionError,
+                    InvocationError,
+                ) as caught:
+                    if item.status is BatchItemStatus.SUCCEEDED:
+                        if isinstance(caught, CallableRuntimeError):
+                            raise ExecutionError(
+                                "Completed flat aggregate cannot reconstruct a failed branch without its recorded decision"
+                            ) from caught
+                        raise
+                    # The helper's failure/cancellation is already recorded. This
+                    # also stops helpers at guarded, unfinished durable operations.
+                except (SuspendExecution, asyncio.CancelledError):
+                    if stopping or item.status is not BatchItemStatus.CANCELLED:
+                        raise
+                else:
+                    if item.status is BatchItemStatus.SUCCEEDED:
+                        items[position] = BatchItem(
+                            item.index, BatchItemStatus.SUCCEEDED, result=result
+                        )
+                        remaining -= 1
+                        if remaining == 0 and not completed.done():
+                            completed.set_result(None)
                 finally:
                     _completed_flat_replay.reset(token)
 
+        def worker_done(worker: asyncio.Task[None]) -> None:
+            if completed.done():
+                return
+            if worker.cancelled():
+                completed.cancel()
+            elif (error := worker.exception()) is not None:
+                completed.set_exception(error)
+
         workers: list[asyncio.Task[None]] = []
         try:
-            for _ in range(
-                min(self.max_concurrency or len(successful), len(successful))
-            ):
-                workers.append(asyncio.create_task(replay_worker()))
-            await asyncio.gather(*workers)
+            if remaining:
+                for _ in range(min(self.max_concurrency or len(items), len(items))):
+                    worker = asyncio.create_task(replay_worker())
+                    workers.append(worker)
+                    worker.add_done_callback(worker_done)
+            else:
+                completed.set_result(None)
+            await completed
         finally:
+            stopping = True
+            if not completed.done():
+                completed.cancel()
             for worker in workers:
                 if not worker.done():
                     worker.cancel()

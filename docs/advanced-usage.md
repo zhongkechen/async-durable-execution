@@ -209,10 +209,14 @@ cancelled when the parent result is replayed. Work that never started is omitted
 With `NestingType.FLAT`, an aggregate larger than the context checkpoint limit
 uses a compact replay summary containing each entered branch's terminal status,
 failure details, and the completion reason. A custom `summary_generator` result
-is retained alongside this SDK metadata. Successful branch bodies are replayed
-concurrently up to `max_concurrency` using their completed durable operations;
-failed, cancelled, and unstarted branches are not run again. Reconstruction
-workers are stopped before a replay failure or cancellation is returned. As with
+is retained alongside this SDK metadata. Entered branch bodies may replay
+concurrently up to `max_concurrency`, including failed and cancelled branches
+that supplied in-memory coordination for successful branches. Replay reads cached
+durable outcomes and stops helpers before they can start or resume unfinished
+durable operations. Recorded failures, cancellations, and completion reasons
+are preserved; unstarted branches stay unstarted. Once successful results are
+reconstructed, remaining helpers are cancelled and awaited. Workers are also
+stopped before a replay failure or caller cancellation is returned. As with
 ordinary replay, side effects belong inside `step()` rather than directly in a
 branch body.
 
