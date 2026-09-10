@@ -206,6 +206,40 @@ not settle are cancelled and recorded in the parent `BatchResult` with
 `result.cancelled_count`, are not counted as successes or failures, and remain
 cancelled when the parent result is replayed. Work that never started is omitted.
 
+With `NestingType.FLAT`, an aggregate larger than the context checkpoint limit
+uses a compact replay summary containing each entered branch's terminal status,
+failure details, and the completion reason. A custom `summary_generator` result
+is retained alongside this SDK metadata. Entered branch bodies may replay
+concurrently up to `max_concurrency`, including failed and cancelled branches
+that supplied in-memory coordination for successful branches. Replay reads cached
+durable outcomes and stops helpers before they can start or resume unfinished
+durable operations. Recorded failures, cancellations, and completion reasons
+are preserved; unstarted branches stay unstarted. Cancelled branches retain their
+concurrency slots until reconstruction finishes, including when they suspend,
+reach unfinished work, or read a late durable outcome. Once successful results are
+reconstructed, remaining helpers are cancelled and awaited. Workers are also
+stopped before a replay failure or caller cancellation is returned. As with
+ordinary replay, side effects belong inside `step()` rather than directly in a
+branch body.
+
+Older oversized flat checkpoints with empty or absent summaries cannot establish
+which branches succeeded, failed, were cancelled, or never started. Replay rejects
+these histories with `ExecutionError` before running any branch, regardless of the
+completion policy. An all-success policy does not prove that the original batch
+actually succeeded. Malformed or unrecognized nonempty summaries, invalid failure
+details, and empty decision lists for nonempty work are rejected at the same
+boundary. Empty workloads remain valid, including when a custom serializer makes
+their result large enough to require a replay summary.
+
+During reconstruction, type or identity mismatches and other integrity errors
+propagate even from failed or cancelled helper branches. Only recorded failures
+and explicit stops at unfinished work in cancelled helpers are suppressed; those
+stops never resume the durable operation. When replaying a completed flat aggregate,
+each durable operation must match the requested primitive type before its cached
+status is considered replayable. Oversized replay metadata itself is rejected
+before the aggregate is marked complete. Nested aggregates and normal result
+serialization retain their existing formats.
+
 For custom policies, use `CompletionConfig.custom()` with a deterministic callback
 that returns a `CompletionDecision`:
 

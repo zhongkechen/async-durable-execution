@@ -6,12 +6,11 @@ import asyncio
 import logging
 from typing import Any, Generic, TypeVar
 
-from .base import OperationExecutor
 from .._core import (
     CallbackOptions,
     CallbackTimeoutType,
-    Duration,
     DurableContext,
+    Duration,
     ExecutionError,
     ExecutionState,
     Operation,
@@ -27,6 +26,8 @@ from .._core import (
     deserialize,
     duration_to_seconds,
 )
+from .base import OperationExecutor, _recorded_flat_replay_failure
+
 
 T = TypeVar("T")  # Result type
 
@@ -232,7 +233,9 @@ class Callback(Generic[T]):
             OperationStatus.STOPPED,
         }:
             msg = _format_callback_error_message(operation)
-            raise CallbackError(message=msg, callback_id=self.callback_id)
+            raise _recorded_flat_replay_failure(
+                CallbackError(message=msg, callback_id=self.callback_id)
+            )
 
         if operation.status is OperationStatus.SUCCEEDED:
             if (

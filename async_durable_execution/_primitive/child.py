@@ -154,8 +154,8 @@ class ChildOperationExecutor(OperationExecutor[T]):
             self.operation_identifier.operation_id,
             self.operation_identifier.name,
         )
+        replaying_children = self._is_replay_children(operation)
         try:
-            replaying_children = self._is_replay_children(operation)
             raw_result: T = await self.func()
 
             if self.is_virtual:
@@ -258,7 +258,7 @@ class ChildOperationExecutor(OperationExecutor[T]):
                 )
 
             # Virtual deliberately does not write checkpoints, but exception still propagates below
-            if not self.is_virtual:
+            if not self.is_virtual and not replaying_children:
                 fail_operation: OperationUpdate = OperationUpdate.create_context_fail(
                     identifier=self.operation_identifier,
                     error=error_object,

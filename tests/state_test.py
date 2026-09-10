@@ -3367,3 +3367,73 @@ async def test_execution_state_close_signals_stop() -> None:
     state.close()
 
     assert state._checkpointing_stopped.is_set()
+
+
+@pytest.mark.parametrize("empty", [False, True])
+async def test_sync_batch_never_waits_for_an_idle_queue(monkeypatch, empty):
+    client, calls = _make_tracking_client()
+    state = _make_state(client)
+    future = asyncio.get_running_loop().create_future()
+    update = (
+        None
+        if empty
+        else OperationUpdate(
+            operation_id="ready",
+            operation_type=OperationType.STEP,
+            action=OperationAction.SUCCEED,
+        )
+    )
+    await state._checkpoint_queue.put(QueuedOperation(update, future))
+    original_get = state._checkpoint_queue.get
+
+    async def get_without_idle_wait():
+        assert not state._checkpoint_queue.empty(), (
+            "A durability waiter must not wait for a batching timer"
+        )
+        return await original_get()
+
+    monkeypatch.setattr(state._checkpoint_queue, "get", get_without_idle_wait)
+    batch = await state._collect_checkpoint_batch()
+    assert len(batch) == 1 and batch[0].completion_future is future
+
+
+async def test_async_start_and_later_sync_completion_share_one_prompt_batch(
+    monkeypatch,
+):
+    client, calls = _make_tracking_client()
+    state = _make_state(client)
+    future = asyncio.get_running_loop().create_future()
+    start = OperationUpdate(
+        operation_id="step",
+        operation_type=OperationType.STEP,
+        action=OperationAction.START,
+    )
+    complete = OperationUpdate(
+        operation_id="step",
+        operation_type=OperationType.STEP,
+        action=OperationAction.SUCCEED,
+    )
+    await state._checkpoint_queue.put(QueuedOperation(start))
+    original_get = state._checkpoint_queue.get
+    completion_queued = False
+
+    async def checked_get():
+        assert not (completion_queued and state._checkpoint_queue.empty()), (
+            "Completion must flush without another idle wait"
+        )
+        return await original_get()
+
+    async def finish_work():
+        nonlocal completion_queued
+        await asyncio.sleep(0)
+        completion_queued = True
+        await state._checkpoint_queue.put(QueuedOperation(complete, future))
+
+    monkeypatch.setattr(state._checkpoint_queue, "get", checked_get)
+    finish = asyncio.create_task(finish_work())
+    batch = await state._collect_checkpoint_batch()
+    await finish
+    assert [item.operation_update.action for item in batch] == [
+        OperationAction.START,
+        OperationAction.SUCCEED,
+    ]

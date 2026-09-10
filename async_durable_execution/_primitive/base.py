@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from contextvars import ContextVar
 from typing import ClassVar, Generic, TypeVar
 
 from .._core import (
+    ExecutionError,
     ExecutionState,
     InvalidStateError,
+    InvocationError,
     Operation,
     OperationContext,
     OperationIdentifier,
+    OperationStatus,
     OperationType,
     OperationUpdate,
     SerDes,
@@ -18,8 +22,26 @@ from .._core import (
     serialize,
 )
 
+
 T = TypeVar("T")
 S = TypeVar("S")
+
+# Reconstructing a completed FLAT aggregate may read durable results, but must
+# never start or resume unfinished effects (including legacy histories).
+_completed_flat_replay: ContextVar[bool] = ContextVar(
+    "completed_flat_replay", default=False
+)
+
+
+def _recorded_flat_replay_failure(error: Exception) -> Exception:
+    """Mark errors read from terminal checkpoints without changing their type."""
+    if _completed_flat_replay.get():
+        error._completed_flat_replay_failure = True  # type: ignore[attr-defined]  # noqa: SLF001
+    return error
+
+
+class _CompletedFlatReplayStop(ExecutionError):
+    """A replayed branch reached a missing or unfinished durable operation."""
 
 
 class OperationExecutor(ABC, Generic[T]):
@@ -144,6 +166,47 @@ class OperationExecutor(ABC, Generic[T]):
     async def process(self) -> T:
         """Process the operation, including replay and checkpoint handling."""
         operation = self.state.operations.get(self.operation_id)
+        if _completed_flat_replay.get() and not getattr(self, "is_virtual", False):
+            # SDK reservations omit their type for legacy replay compatibility.
+            # Status exceptions must still apply only to the requested primitive.
+            expected_type = (
+                self.operation_identifier.operation_type or self.SERDES_OPERATION_TYPE
+            )
+            if (
+                operation is not None
+                and expected_type is not None
+                and operation.operation_type is not expected_type
+            ):
+                raise ExecutionError(
+                    f"Completed flat aggregate operation type mismatch for {self.operation_id}: "
+                    f"expected {expected_type.value}, found {operation.operation_type.value}"
+                )
+            replayable = operation is not None and (
+                operation.status is OperationStatus.SUCCEEDED
+                # Callback creation replays by reading its existing ID, including
+                # callbacks whose result has not been awaited by the branch.
+                or expected_type is OperationType.CALLBACK
+                or (
+                    expected_type is OperationType.CHAINED_INVOKE
+                    and operation.status
+                    in {OperationStatus.TIMED_OUT, OperationStatus.STOPPED}
+                )
+                or (
+                    operation.status is OperationStatus.FAILED
+                    and expected_type
+                    in {
+                        OperationType.STEP,
+                        OperationType.CONTEXT,
+                        OperationType.CALLBACK,
+                        OperationType.CHAINED_INVOKE,
+                    }
+                )
+            )
+            if not replayable:
+                raise _CompletedFlatReplayStop(
+                    "Completed flat aggregate cannot replay an operation without a cached result or error: "
+                    f"{self.operation_id}. Its original history cannot be safely reconstructed."
+                )
         if operation is None:
             return await self.start()
         expected_type = self.operation_identifier.operation_type
@@ -174,5 +237,17 @@ class OperationExecutor(ABC, Generic[T]):
                     f"Reserved extension operation {self.operation_id!r} does "
                     f"not match its checkpoint: {details}"
                 )
+                if _completed_flat_replay.get():
+                    raise ExecutionError(msg)
                 raise InvalidStateError(msg)
-        return await self.replay(operation)
+        try:
+            return await self.replay(operation)
+        except (ExecutionError, InvocationError) as error:
+            # Callback creation only reads an ID; its result errors are marked
+            # separately. Errors while validating identity never reach this path.
+            if (
+                operation.status is OperationStatus.FAILED
+                and operation.operation_type is not OperationType.CALLBACK
+            ):
+                _recorded_flat_replay_failure(error)
+            raise

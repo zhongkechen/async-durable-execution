@@ -8,23 +8,15 @@ import logging
 from dataclasses import dataclass, field
 from typing import (
     TYPE_CHECKING,
-    Generic,
-    TypeVar,
-    Sequence,
-    Iterable,
-    Callable,
     Any,
     Awaitable,
+    Callable,
+    Generic,
+    Iterable,
+    Sequence,
+    TypeVar,
 )
 
-from .parallel import (
-    _BATCH_RESULT_SERDES,
-    BatchResult,
-    CompletionConfig,
-    NestingType,
-    _validate_max_concurrency,
-)
-from .parallel import parallel_handler
 from .._core import (
     DurableContext,
     ExecutionState,
@@ -37,6 +29,16 @@ from .._core import (
     get_durable_context,
 )
 from .._extension_api import get_extension_context
+from .parallel import (
+    _BATCH_RESULT_SERDES,
+    BatchResult,
+    CompletionConfig,
+    NestingType,
+    _FlatReplaySummary,
+    _validate_max_concurrency,
+    parallel_handler,
+)
+
 
 if TYPE_CHECKING:
     from .child import SummaryGenerator
@@ -289,9 +291,13 @@ def map(
         )
         return await handler()
 
+    summary_options: dict[str, Any] = {}
+    if nesting_type is NestingType.FLAT:
+        summary_options["summary_generator"] = _FlatReplaySummary(summary_generator)
     return _run_in_child_context(
         run_map_handler,
         sub_type=OperationSubType.MAP,
         name=map_name,
         serdes=serdes if serdes is not None else _BATCH_RESULT_SERDES,
+        **summary_options,
     )
