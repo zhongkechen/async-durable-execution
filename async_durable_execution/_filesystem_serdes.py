@@ -57,7 +57,10 @@ PreviewGenerator = Callable[
     [str, SerDesContext],
     dict[str, Any] | None | Awaitable[dict[str, Any] | None],
 ]
+"""Callback that builds preview fields from a serialized payload and its context."""
+
 CrossExecutionReferencePolicy = Callable[[str, str, SerDesContext], bool]
+"""Authorize a reference using its owner ARN, owner entity ID, and reader context."""
 
 
 class FileSystemSerDesMode(str, Enum):
