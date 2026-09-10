@@ -19,6 +19,9 @@ from async_durable_execution import (
 )
 ```
 
+The `PreviewGenerator` and `CrossExecutionReferencePolicy` callback types are also
+available from the package root for filesystem SerDes configuration.
+
 ## Install
 
 === "Standard"

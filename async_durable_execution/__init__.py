@@ -41,10 +41,12 @@ from ._core import (
     is_composable_serdes,
 )
 from ._filesystem_serdes import (
+    CrossExecutionReferencePolicy,
     FileSystemPathEncoding,
     FileSystemSerDesMode,
     FileSystemSerDesStage,
     FileSystemSerDesStageConfig,
+    PreviewGenerator,
     create_file_system_serdes_stage,
 )
 from ._preview import (
@@ -194,6 +196,7 @@ __all__ = [
     "CompletionDecision",
     "CompletionReason",
     "CompletionStatus",
+    "CrossExecutionReferencePolicy",
     "DurableContext",
     "DurableExecutionsError",
     "DurableFunctionCloudTestRunner",
@@ -235,6 +238,7 @@ __all__ = [
     "PollingStrategy",
     "PreviewConfig",
     "PreviewField",
+    "PreviewGenerator",
     "PreviewMode",
     "RetryStrategy",
     "RetryableSerDesError",

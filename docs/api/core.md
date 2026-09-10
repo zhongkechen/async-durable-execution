@@ -68,6 +68,8 @@ than one context type.
         - FileSystemSerDesMode
         - FileSystemPathEncoding
         - create_file_system_serdes_stage
+        - PreviewGenerator
+        - CrossExecutionReferencePolicy
         - PreviewMode
         - FieldMatchMode
         - PreviewField

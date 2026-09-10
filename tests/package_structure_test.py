@@ -68,6 +68,7 @@ def test_feature_apis_remain_available_from_package_root():
     import async_durable_execution as sdk
 
     expected = {
+        "CrossExecutionReferencePolicy",
         "ExtensionContext",
         "ExtensionOperation",
         "ExtensionStepFunction",
@@ -82,6 +83,7 @@ def test_feature_apis_remain_available_from_package_root():
         "FieldMatchMode",
         "PreviewConfig",
         "PreviewField",
+        "PreviewGenerator",
         "PreviewMode",
         "build_preview",
     }
