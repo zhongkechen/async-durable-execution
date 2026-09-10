@@ -7,19 +7,21 @@ from contextvars import ContextVar
 from typing import ClassVar, Generic, TypeVar
 
 from .._core import (
-    ExecutionState,
     ExecutionError,
-    OperationStatus,
+    ExecutionState,
     InvalidStateError,
+    InvocationError,
     Operation,
     OperationContext,
     OperationIdentifier,
+    OperationStatus,
     OperationType,
     OperationUpdate,
     SerDes,
     deserialize,
     serialize,
 )
+
 
 T = TypeVar("T")
 S = TypeVar("S")
@@ -29,6 +31,17 @@ S = TypeVar("S")
 _completed_flat_replay: ContextVar[bool] = ContextVar(
     "completed_flat_replay", default=False
 )
+
+
+def _recorded_flat_replay_failure(error: Exception) -> Exception:
+    """Mark errors read from terminal checkpoints without changing their type."""
+    if _completed_flat_replay.get():
+        error._completed_flat_replay_failure = True  # type: ignore[attr-defined]  # noqa: SLF001
+    return error
+
+
+class _CompletedFlatReplayStop(ExecutionError):
+    """A replayed branch reached a missing or unfinished durable operation."""
 
 
 class OperationExecutor(ABC, Generic[T]):
@@ -190,7 +203,7 @@ class OperationExecutor(ABC, Generic[T]):
                 )
             )
             if not replayable:
-                raise ExecutionError(
+                raise _CompletedFlatReplayStop(
                     "Completed flat aggregate cannot replay an operation without a cached result or error: "
                     f"{self.operation_id}. Its original history cannot be safely reconstructed."
                 )
@@ -224,5 +237,17 @@ class OperationExecutor(ABC, Generic[T]):
                     f"Reserved extension operation {self.operation_id!r} does "
                     f"not match its checkpoint: {details}"
                 )
+                if _completed_flat_replay.get():
+                    raise ExecutionError(msg)
                 raise InvalidStateError(msg)
-        return await self.replay(operation)
+        try:
+            return await self.replay(operation)
+        except (ExecutionError, InvocationError) as error:
+            # Callback creation only reads an ID; its result errors are marked
+            # separately. Errors while validating identity never reach this path.
+            if (
+                operation.status is OperationStatus.FAILED
+                and operation.operation_type is not OperationType.CALLBACK
+            ):
+                _recorded_flat_replay_failure(error)
+            raise

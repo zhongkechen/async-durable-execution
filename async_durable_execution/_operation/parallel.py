@@ -8,7 +8,8 @@ import logging
 import time
 from collections import Counter
 from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass, field as dataclass_field
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar, cast
 
@@ -17,11 +18,12 @@ from .._core import (
     DurableContext,
     EncodedValue,
     ErrorObject,
-    ExecutionState,
     ExecutionError,
+    ExecutionState,
     ExtendedTypeSerDes,
     InvalidStateError,
     InvocationError,
+    MappingModel,
     Operation,
     OperationIdentifier,
     OperationStatus,
@@ -34,15 +36,19 @@ from .._core import (
     TimedSuspendExecution,
     TypeTag,
     ValidationError,
-    MappingModel,
     bind_current_context,
     deserialize,
     durable_callable,
     get_durable_context,
 )
-from .._primitive.base import OperationExecutor, _completed_flat_replay
-from .._primitive.child import ChildOperationExecutor, CHECKPOINT_SIZE_LIMIT
 from .._extension_api import ExtensionContext, ExtensionOperation, get_extension_context
+from .._primitive.base import (
+    OperationExecutor,
+    _completed_flat_replay,
+    _CompletedFlatReplayStop,
+)
+from .._primitive.child import CHECKPOINT_SIZE_LIMIT, ChildOperationExecutor
+
 
 if TYPE_CHECKING:
     from .child import SummaryGenerator
@@ -1477,60 +1483,48 @@ class ParallelExecutor(
         payload = (
             parent.context_details.result if parent and parent.context_details else None
         )
-        reason = None
-        descriptors = None
-        if payload is not None and payload != "":
-            try:
-                document = json.loads(payload)
-                if not isinstance(document, dict):
-                    raise ValueError("replay metadata must be an object")
-                if (
-                    type(document[_FLAT_REPLAY_KEY]) is not int
-                    or document[_FLAT_REPLAY_KEY] != 1
-                ):
-                    raise ValueError("unsupported version")
-                reason = CompletionReason(document["completionReason"])
-                descriptors = document["items"]
-                if not isinstance(descriptors, list):
-                    raise ValueError("items must be a list")
-                indexes = set()
-                for item in descriptors:
-                    index = item["index"]
-                    if (
-                        type(index) is not int
-                        or not 0 <= index < len(self.executables)
-                        or index in indexes
-                    ):
-                        raise ValueError("invalid branch index")
-                    indexes.add(index)
-                    status = BatchItemStatus(item["status"])
-                    if status not in {
-                        BatchItemStatus.SUCCEEDED,
-                        BatchItemStatus.FAILED,
-                        BatchItemStatus.CANCELLED,
-                    }:
-                        raise ValueError("non-terminal branch")
-            except (KeyError, TypeError, ValueError) as metadata_error:
-                raise ExecutionError(
-                    "Invalid completed flat aggregate replay metadata"
-                ) from metadata_error
-        # Older checkpoints contain only an empty summary. Read their completed
-        # operations, but fail closed if reconstruction would require new work.
-        legacy = descriptors is None
-        if legacy:
+        if payload is None or payload == "":
+            # No completion policy can prove which branches previously succeeded.
+            # Legacy FLAT histories have no branch contexts or terminal decisions.
+            raise ExecutionError(
+                "Legacy completed flat aggregate lacks terminal decision metadata; "
+                "its original branch outcomes cannot be safely reconstructed"
+            )
+        try:
+            document = json.loads(payload)
+            if not isinstance(document, dict):
+                raise ValueError("replay metadata must be an object")
             if (
-                self.completion_config.has_custom_should_complete
-                or self.completion_config.min_successful is not None
+                type(document[_FLAT_REPLAY_KEY]) is not int
+                or document[_FLAT_REPLAY_KEY] != 1
             ):
-                raise ExecutionError(
-                    "Legacy completed flat aggregate lacks terminal decision metadata"
-                )
-            descriptors = [
-                {"index": exe.index, "status": BatchItemStatus.SUCCEEDED.value}
-                for exe in self.executables
-            ]
+                raise ValueError("unsupported version")
+            reason = CompletionReason(document["completionReason"])
+            descriptors = document["items"]
+            if not isinstance(descriptors, list):
+                raise ValueError("items must be a list")
+            indexes = set()
+            for item in descriptors:
+                index = item["index"]
+                if (
+                    type(index) is not int
+                    or not 0 <= index < len(self.executables)
+                    or index in indexes
+                ):
+                    raise ValueError("invalid branch index")
+                indexes.add(index)
+                status = BatchItemStatus(item["status"])
+                if status not in {
+                    BatchItemStatus.SUCCEEDED,
+                    BatchItemStatus.FAILED,
+                    BatchItemStatus.CANCELLED,
+                }:
+                    raise ValueError("non-terminal branch")
+        except (KeyError, TypeError, ValueError) as metadata_error:
+            raise ExecutionError(
+                "Invalid completed flat aggregate replay metadata"
+            ) from metadata_error
         items: list[BatchItem[ResultType]] = []
-        assert descriptors is not None
         for descriptor in descriptors:
             index = descriptor["index"]
             status = BatchItemStatus(descriptor["status"])
@@ -1553,48 +1547,61 @@ class ParallelExecutor(
 
         async def replay_worker() -> None:
             nonlocal remaining
-            for position, item in pending:
-                if completed.done():
-                    return
-                token = _completed_flat_replay.set(True)
-                try:
-                    result = await self._execute_item_in_child_context(
-                        executor_context, self.executables[item.index]
-                    )
-                except (
-                    CallableRuntimeError,
-                    ExecutionError,
-                    InvocationError,
-                ) as caught:
-                    if item.status is BatchItemStatus.SUCCEEDED:
-                        if isinstance(caught, CallableRuntimeError):
+            try:
+                for position, item in pending:
+                    if completed.done():
+                        return
+                    token = _completed_flat_replay.set(True)
+                    try:
+                        result = await self._execute_item_in_child_context(
+                            executor_context, self.executables[item.index]
+                        )
+                    except _CompletedFlatReplayStop as stopped:
+                        if item.status is not BatchItemStatus.CANCELLED:
+                            raise ExecutionError(str(stopped)) from stopped
+                    except CallableRuntimeError as caught:
+                        if item.status is BatchItemStatus.SUCCEEDED:
                             raise ExecutionError(
                                 "Completed flat aggregate cannot reconstruct a failed branch without its recorded decision"
                             ) from caught
-                        raise
-                    # The helper's failure/cancellation is already recorded. This
-                    # also stops helpers at guarded, unfinished durable operations.
-                except (SuspendExecution, asyncio.CancelledError):
-                    if stopping or item.status is not BatchItemStatus.CANCELLED:
-                        raise
-                else:
-                    if item.status is BatchItemStatus.SUCCEEDED:
-                        items[position] = BatchItem(
-                            item.index, BatchItemStatus.SUCCEEDED, result=result
-                        )
-                        remaining -= 1
-                        if remaining == 0 and not completed.done():
-                            completed.set_result(None)
-                finally:
-                    _completed_flat_replay.reset(token)
-
-        def worker_done(worker: asyncio.Task[None]) -> None:
-            if completed.done():
-                return
-            if worker.cancelled():
-                completed.cancel()
-            elif (error := worker.exception()) is not None:
-                completed.set_exception(error)
+                        if (
+                            item.status is BatchItemStatus.FAILED
+                            and item.error != ErrorObject.from_exception(caught)
+                        ):
+                            raise ExecutionError(
+                                "Completed flat aggregate helper failure differs from its recorded outcome"
+                            ) from caught
+                    except (ExecutionError, InvocationError) as caught:
+                        # Accept cached terminal failures or the same recorded
+                        # branch failure. New integrity/reconstruction errors must
+                        # fail replay even when this branch is only a helper.
+                        if item.status is BatchItemStatus.SUCCEEDED or (
+                            not getattr(caught, "_completed_flat_replay_failure", False)
+                            and (
+                                item.status is not BatchItemStatus.FAILED
+                                or item.error != ErrorObject.from_exception(caught)
+                            )
+                        ):
+                            raise
+                    except (SuspendExecution, asyncio.CancelledError):
+                        if stopping or item.status is not BatchItemStatus.CANCELLED:
+                            raise
+                    else:
+                        if item.status is BatchItemStatus.SUCCEEDED:
+                            items[position] = BatchItem(
+                                item.index, BatchItemStatus.SUCCEEDED, result=result
+                            )
+                            remaining -= 1
+                            if remaining == 0 and not completed.done():
+                                completed.set_result(None)
+                    finally:
+                        _completed_flat_replay.reset(token)
+            except BaseException as error:
+                # Publish immediately: a done callback could lose the race to a
+                # successful worker woken by this helper just before it failed.
+                if not completed.done():
+                    completed.set_exception(error)
+                raise
 
         workers: list[asyncio.Task[None]] = []
         try:
@@ -1602,7 +1609,6 @@ class ParallelExecutor(
                 for _ in range(min(self.max_concurrency or len(items), len(items))):
                     worker = asyncio.create_task(replay_worker())
                     workers.append(worker)
-                    worker.add_done_callback(worker_done)
             else:
                 completed.set_result(None)
             await completed
@@ -1613,12 +1619,14 @@ class ParallelExecutor(
             for worker in workers:
                 if not worker.done():
                     worker.cancel()
-            await asyncio.gather(*workers, return_exceptions=True)
-        return (
-            BatchResult(items, reason)
-            if reason is not None
-            else BatchResult.from_items(items, self.completion_config)
-        )
+            outcomes = await asyncio.gather(*workers, return_exceptions=True)
+        # A helper may also fail while it is being drained after the last result.
+        for outcome in outcomes:
+            if isinstance(outcome, BaseException) and not isinstance(
+                outcome, asyncio.CancelledError
+            ):
+                raise outcome
+        return BatchResult(items, reason)
 
 
 class ParallelSummaryGenerator:

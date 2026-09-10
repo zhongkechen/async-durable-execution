@@ -12,6 +12,7 @@ from async_durable_execution import (
     CompletionConfig,
     CompletionDecision,
     CompletionReason,
+    ExecutionError,
     NestingType,
     create_callback,
     durable_execution,
@@ -126,8 +127,7 @@ def describe(result):
 
 
 @pytest.mark.parametrize("kind", ["map", "parallel"])
-@pytest.mark.parametrize("summary_format", ["current", "empty", "absent"])
-def test_large_flat_result_replays_without_effects_or_checkpoints(kind, summary_format):
+def test_large_flat_result_replays_without_effects_or_checkpoints(kind):
     api = LambdaHistory()
     effects = []
     body_calls = []
@@ -156,8 +156,6 @@ def test_large_flat_result_replays_without_effects_or_checkpoints(kind, summary_
     assert first["Status"] == "SUCCEEDED"
     result = json.loads(first["Result"])
     assert result["bytes"] == 320000 and len(result["items"]) == 4
-    if summary_format != "current":
-        api.legacy_summary(absent=summary_format == "absent")
     calls = api.calls
     second = api.call(handler)
     assert second == first
@@ -248,11 +246,10 @@ def test_large_flat_terminal_decision_does_not_restart_other_effects(policy):
         assert api.calls == calls and effects == before
 
 
-@pytest.mark.parametrize("legacy", [False, True])
 @pytest.mark.parametrize(
     "incomplete", ["missing", "started", "cancelled", "timed_out", "stopped"]
 )
-def test_completed_flat_replay_never_restarts_an_unfinished_step(legacy, incomplete):
+def test_completed_flat_replay_never_restarts_an_unfinished_step(incomplete):
     api = LambdaHistory()
     effects = []
 
@@ -268,8 +265,6 @@ def test_completed_flat_replay_never_restarts_an_unfinished_step(legacy, incompl
         return describe(await parallel([branch] * 4, nesting_type=NestingType.FLAT))
 
     assert api.call(handler)["Status"] == "SUCCEEDED"
-    if legacy:
-        api.legacy_summary()
     step_id = next(
         key for key, value in api.operations.items() if value["Type"] == "STEP"
     )
@@ -303,8 +298,7 @@ def test_completed_flat_branch_can_read_an_existing_pending_callback_id():
 
 
 @pytest.mark.parametrize("kind", ["map", "parallel"])
-@pytest.mark.parametrize("legacy", [False, True])
-def test_completed_flat_replay_preserves_coordinated_branch_concurrency(kind, legacy):
+def test_completed_flat_replay_preserves_coordinated_branch_concurrency(kind):
     api = LambdaHistory()
     entries = []
     effects = []
@@ -348,8 +342,6 @@ def test_completed_flat_replay_preserves_coordinated_branch_concurrency(kind, le
     assert first["Status"] == "SUCCEEDED"
     result = json.loads(first["Result"])
     assert result["bytes"] == 320000 and result["values"] == ["0", "1"]
-    if legacy:
-        api.legacy_summary()
     calls = api.calls
     assert api.call(handler) == first
     assert entries == [[0, 1], [0, 1]]
@@ -402,8 +394,6 @@ def test_completed_flat_replay_respects_max_concurrency(limit):
 @pytest.mark.parametrize("mode", ["failure", "cancel"])
 @pytest.mark.parametrize("terminal_helper", [False, True])
 def test_completed_flat_replay_drains_workers_before_returning(mode, terminal_helper):
-    from async_durable_execution import ExecutionError
-
     api = LambdaHistory()
     effects = []
     replay = False
@@ -481,9 +471,20 @@ def test_completed_flat_replay_drains_workers_before_returning(mode, terminal_he
     ("helper_mode", "late_status"),
     [
         (mode, None)
-        for mode in ("failed", "failed_step", "cancelled", "cancelled_step", "callback")
+        for mode in (
+            "failed",
+            "failed_execution",
+            "failed_step",
+            "cancelled",
+            "cancelled_step",
+            "callback",
+        )
     ]
-    + [("cancelled_step", status) for status in ("SUCCEEDED", "FAILED")],
+    + [
+        (mode, status)
+        for mode in ("cancelled_step", "callback")
+        for status in ("SUCCEEDED", "FAILED")
+    ],
 )
 def test_completed_flat_replay_coordinates_with_terminal_helpers(
     kind, helper_mode, late_status
@@ -513,6 +514,8 @@ def test_completed_flat_replay_coordinates_with_terminal_helpers(
                     ready.set()
                     if helper_mode == "failed":
                         raise ValueError("expected helper failure")
+                    if helper_mode == "failed_execution":
+                        raise ExecutionError("recorded helper execution failure")
                     if helper_mode.endswith("_step"):
 
                         async def helper_effect():
@@ -575,11 +578,11 @@ def test_completed_flat_replay_coordinates_with_terminal_helpers(
     if late_status is not None:
         # A durable outcome arriving after the aggregate stopped must not change
         # the branch's recorded cancellation or contribute another result.
-        operation = next(
-            op for op in api.operations.values() if op.get("Name") == "helper-step"
-        )
+        name = "helper-callback" if helper_mode == "callback" else "helper-step"
+        field = "CallbackDetails" if helper_mode == "callback" else "StepDetails"
+        operation = next(op for op in api.operations.values() if op.get("Name") == name)
         operation["Status"] = late_status
-        operation["StepDetails"].update(
+        operation[field].update(
             {"Result": json.dumps("late helper result")}
             if late_status == "SUCCEEDED"
             else {
@@ -656,7 +659,6 @@ def test_completed_flat_replay_limits_terminal_helpers_and_keeps_item_order(limi
 
 
 @pytest.mark.parametrize("kind", ["map", "parallel"])
-@pytest.mark.parametrize("legacy", [False, True])
 @pytest.mark.parametrize(
     ("historical_type", "historical_status"),
     [
@@ -667,7 +669,7 @@ def test_completed_flat_replay_limits_terminal_helpers_and_keeps_item_order(limi
     ],
 )
 def test_completed_flat_replay_rejects_operation_type_mismatches(
-    kind, legacy, historical_type, historical_status
+    kind, historical_type, historical_status
 ):
     api = LambdaHistory()
     effects = []
@@ -689,8 +691,6 @@ def test_completed_flat_replay_rejects_operation_type_mismatches(
         return describe(await task)
 
     assert api.call(handler)["Status"] == "SUCCEEDED"
-    if legacy:
-        api.legacy_summary()
     # Model an operation occupying the same slot after a workflow code change.
     operation = next(op for op in api.operations.values() if op["Type"] == "STEP")
     operation.pop("StepDetails")
@@ -764,4 +764,209 @@ def test_completed_flat_replay_rejects_invalid_nonempty_metadata(kind, payload):
         in replay["Error"]["ErrorMessage"]
     )
     assert entries == ["branch"] * 4 and effects == ["work"] * 4
+    assert api.calls == calls and api.operations == history
+
+
+@pytest.mark.parametrize("kind", ["map", "parallel"])
+@pytest.mark.parametrize("terminal", ["FAILED", "CANCELLED"])
+@pytest.mark.parametrize("signal_first", [False, True])
+@pytest.mark.parametrize("cause", ["type", "metadata", "execution", "cleanup"])
+def test_completed_flat_replay_propagates_helper_integrity_errors(
+    kind, terminal, signal_first, cause
+):
+    api = LambdaHistory()
+    changed = False
+    effects = []
+
+    @durable_execution(boto3_client=api)
+    async def handler(event):
+        ready = asyncio.Event()
+        finished = []
+
+        async def value():
+            effects.append("value")
+            return "x" * 80000
+
+        async def branch(index):
+            try:
+                if index == 1:
+                    if signal_first:
+                        ready.set()
+                    if cause == "metadata":
+                        await parallel(
+                            [lambda: step(value)] * 4,
+                            name="helper-inner",
+                            nesting_type=NestingType.FLAT,
+                        )
+                    elif changed and cause == "type":
+                        await step(value, name="helper-slot")
+                    else:
+                        await create_callback(name="helper-slot")
+                    if changed and cause == "execution":
+                        raise ExecutionError("new helper reconstruction error")
+                    ready.set()
+                    if terminal == "FAILED":
+                        raise ValueError("recorded helper failure")
+                    await asyncio.Future()
+                await ready.wait()
+                return "".join([await step(value, name=f"part-{i}") for i in range(4)])
+            finally:
+                finished.append(index)
+                if changed and cause == "cleanup" and index == 1:
+                    raise ExecutionError("helper cleanup integrity error")
+
+        config = (
+            CompletionConfig(tolerated_failure_count=1)
+            if terminal == "FAILED"
+            else CompletionConfig.first_successful()
+        )
+        task = (
+            durable_map(
+                branch,
+                range(2),
+                nesting_type=NestingType.FLAT,
+                max_concurrency=2,
+                completion_config=config,
+            )
+            if kind == "map"
+            else parallel(
+                [lambda: branch(0), lambda: branch(1)],
+                nesting_type=NestingType.FLAT,
+                max_concurrency=2,
+                completion_config=config,
+            )
+        )
+        try:
+            return describe(await asyncio.wait_for(task, 1))
+        except ExecutionError:
+            # Cleanup must finish before the wrapper's global task teardown.
+            assert sorted(finished) == [0, 1]
+            raise
+
+    first = api.call(handler)
+    assert first["Status"] == "SUCCEEDED", first
+    if cause == "metadata":
+        parent = next(
+            op for op in api.operations.values() if op.get("Name") == "helper-inner"
+        )
+        assert parent["ContextDetails"]["ReplayChildren"]
+        parent["ContextDetails"]["Result"] = "{"
+    changed = True
+    calls, original_effects = api.calls, list(effects)
+    history = copy.deepcopy(api.operations)
+    result = api.call(handler)
+    assert result["Status"] == "FAILED", result
+    assert result["Error"]["ErrorType"] == "ExecutionError", result
+    expected = {
+        "type": "operation type mismatch",
+        "metadata": "Invalid completed flat",
+        "execution": "new helper reconstruction error",
+        "cleanup": "helper cleanup integrity error",
+    }[cause]
+    assert expected in result["Error"]["ErrorMessage"]
+    assert api.calls == calls and effects == original_effects
+    assert api.operations == history
+
+
+@pytest.mark.parametrize("kind", ["map", "parallel"])
+@pytest.mark.parametrize("absent", [False, True])
+@pytest.mark.parametrize(
+    "policy", ["all_success", "zero_tolerance", "one_tolerated", "no_thresholds"]
+)
+@pytest.mark.parametrize("changed", [False, True])
+def test_legacy_flat_replay_refuses_unverifiable_branch_decisions(
+    kind, absent, policy, changed
+):
+    api = LambdaHistory()
+    repaired = False
+    entries = []
+    effects = []
+
+    async def branch(index):
+        entries.append(index)
+        if index == 0:
+
+            async def value():
+                effects.append("value")
+                return "x" * 80000
+
+            return "".join([await step(value, name=f"part-{i}") for i in range(4)])
+        if index == 1 and policy != "all_success" and not repaired:
+            raise ValueError("original branch failure")
+        return f"pure result {index}"
+
+    config = (
+        CompletionConfig(tolerated_failure_count=1)
+        if policy == "one_tolerated"
+        else CompletionConfig()
+        if policy == "no_thresholds"
+        else CompletionConfig.all_successful()
+    )
+
+    @durable_execution(boto3_client=api)
+    async def handler(event):
+        task = (
+            durable_map(
+                branch,
+                range(4),
+                nesting_type=NestingType.FLAT,
+                max_concurrency=1,
+                completion_config=config,
+            )
+            if kind == "map"
+            else parallel(
+                [lambda i=i: branch(i) for i in range(4)],
+                nesting_type=NestingType.FLAT,
+                max_concurrency=1,
+                completion_config=config,
+            )
+        )
+        return describe(await task)
+
+    first = api.call(handler)
+    assert first["Status"] == "SUCCEEDED", first
+    api.legacy_summary(absent=absent)
+    calls, original_entries, original_effects = api.calls, list(entries), list(effects)
+    history = copy.deepcopy(api.operations)
+    repaired = changed
+    result = api.call(handler)
+    assert result["Status"] == "FAILED", result
+    assert result["Error"]["ErrorType"] == "ExecutionError"
+    assert "lacks terminal decision metadata" in result["Error"]["ErrorMessage"]
+    assert entries == original_entries and effects == original_effects
+    assert api.calls == calls and api.operations == history
+
+
+def test_completed_flat_replay_does_not_suppress_a_required_cached_callback_failure():
+    api = LambdaHistory()
+    read_result = False
+
+    async def branch():
+        callback = await create_callback(name="callback")
+        if read_result:
+            await callback.result()
+        return callback.callback_id + "x" * 80000
+
+    @durable_execution(boto3_client=api)
+    async def handler(event):
+        return describe(
+            await asyncio.wait_for(
+                parallel([branch] * 4, nesting_type=NestingType.FLAT), 1
+            )
+        )
+
+    assert api.call(handler)["Status"] == "SUCCEEDED"
+    for operation in api.operations.values():
+        if operation["Type"] == "CALLBACK":
+            operation["Status"] = "FAILED"
+            operation["CallbackDetails"]["Error"] = {
+                "ErrorMessage": "late callback failure"
+            }
+    calls = api.calls
+    history = copy.deepcopy(api.operations)
+    read_result = True
+    result = api.call(handler)
+    assert result["Status"] == "FAILED", result
+    assert result["Error"]["ErrorType"] == "CallbackError", result
+    assert "late callback failure" in result["Error"]["ErrorMessage"]
     assert api.calls == calls and api.operations == history

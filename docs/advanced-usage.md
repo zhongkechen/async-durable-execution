@@ -220,17 +220,21 @@ stopped before a replay failure or caller cancellation is returned. As with
 ordinary replay, side effects belong inside `step()` rather than directly in a
 branch body.
 
-Older oversized flat checkpoints with an empty summary can reconstruct
-all-success groups that have no configured success threshold or custom completion
-policy. Only empty or absent summaries use this legacy path; malformed or
-unrecognized nonempty summaries raise `ExecutionError` before any branch is replayed.
-If the history is ambiguous, or rebuilding a result would require an operation
-without a cached result or error, replay raises `ExecutionError` without issuing
-checkpoints or running that effect. When replaying a completed flat aggregate,
-each durable operation must also match the requested primitive type before its
-cached status is considered replayable. Oversized replay metadata itself is rejected before the
-aggregate is marked complete. Nested aggregates and normal result serialization
-retain their existing formats.
+Older oversized flat checkpoints with empty or absent summaries cannot establish
+which branches succeeded, failed, were cancelled, or never started. Replay rejects
+these histories with `ExecutionError` before running any branch, regardless of the
+completion policy. An all-success policy does not prove that the original batch
+actually succeeded. Malformed or unrecognized nonempty summaries are rejected at
+the same boundary.
+
+During reconstruction, type or identity mismatches and other integrity errors
+propagate even from failed or cancelled helper branches. Only recorded failures
+and explicit stops at unfinished work in cancelled helpers are suppressed; those
+stops never resume the durable operation. When replaying a completed flat aggregate,
+each durable operation must match the requested primitive type before its cached
+status is considered replayable. Oversized replay metadata itself is rejected
+before the aggregate is marked complete. Nested aggregates and normal result
+serialization retain their existing formats.
 
 For custom policies, use `CompletionConfig.custom()` with a deterministic callback
 that returns a `CompletionDecision`:
