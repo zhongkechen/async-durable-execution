@@ -30,3 +30,9 @@ batching window. Byte/operation limits, FIFO overflow ordering, and coalescing o
 empty checkpoints remain in force. Faster acknowledgement can produce more
 requests for staggered workloads; the scheduler does not hold a blocked caller
 just to wait for unrelated work.
+
+With a positive `max_batch_time_seconds`, synchronous batches get the coalescing
+yield described above. Setting this value to zero disables the collection
+window: the collector flushes after its first queue item or initial overflow
+drain, without yielding to collect more producers. Already-buffered overflow
+still obeys the size and operation limits.

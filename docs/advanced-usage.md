@@ -214,7 +214,9 @@ concurrently up to `max_concurrency`, including failed and cancelled branches
 that supplied in-memory coordination for successful branches. Replay reads cached
 durable outcomes and stops helpers before they can start or resume unfinished
 durable operations. Recorded failures, cancellations, and completion reasons
-are preserved; unstarted branches stay unstarted. Once successful results are
+are preserved; unstarted branches stay unstarted. Cancelled branches retain their
+concurrency slots until reconstruction finishes, including when they suspend,
+reach unfinished work, or read a late durable outcome. Once successful results are
 reconstructed, remaining helpers are cancelled and awaited. Workers are also
 stopped before a replay failure or caller cancellation is returned. As with
 ordinary replay, side effects belong inside `step()` rather than directly in a
@@ -224,8 +226,10 @@ Older oversized flat checkpoints with empty or absent summaries cannot establish
 which branches succeeded, failed, were cancelled, or never started. Replay rejects
 these histories with `ExecutionError` before running any branch, regardless of the
 completion policy. An all-success policy does not prove that the original batch
-actually succeeded. Malformed or unrecognized nonempty summaries are rejected at
-the same boundary.
+actually succeeded. Malformed or unrecognized nonempty summaries, invalid failure
+details, and empty decision lists for nonempty work are rejected at the same
+boundary. Empty workloads remain valid, including when a custom serializer makes
+their result large enough to require a replay summary.
 
 During reconstruction, type or identity mismatches and other integrity errors
 propagate even from failed or cancelled helper branches. Only recorded failures

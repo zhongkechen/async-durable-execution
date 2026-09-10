@@ -14,6 +14,7 @@ from async_durable_execution import (
     CompletionReason,
     ExecutionError,
     NestingType,
+    SerDes,
     create_callback,
     durable_execution,
     map as durable_map,
@@ -392,7 +393,7 @@ def test_completed_flat_replay_respects_max_concurrency(limit):
 
 
 @pytest.mark.parametrize("mode", ["failure", "cancel"])
-@pytest.mark.parametrize("terminal_helper", [False, True])
+@pytest.mark.parametrize("terminal_helper", [False, True, "callback"])
 def test_completed_flat_replay_drains_workers_before_returning(mode, terminal_helper):
     api = LambdaHistory()
     effects = []
@@ -410,6 +411,9 @@ def test_completed_flat_replay_drains_workers_before_returning(mode, terminal_he
                 both_started.set()
             try:
                 if terminal_helper and index == 0:
+                    if terminal_helper == "callback":
+                        callback = await create_callback(name="parked-helper")
+                        await callback.result()
                     await asyncio.Future()
                 if replay:
                     if index == 0 or mode == "cancel":
@@ -424,6 +428,7 @@ def test_completed_flat_replay_drains_workers_before_returning(mode, terminal_he
             finally:
                 finished.append(index)
 
+        initial_tasks = asyncio.all_tasks()
         task = parallel(
             [lambda i=i: branch(i) for i in range(3)],
             nesting_type=NestingType.FLAT,
@@ -449,6 +454,8 @@ def test_completed_flat_replay_drains_workers_before_returning(mode, terminal_he
         # Check before the invocation's global task cleanup can hide leaked workers.
         assert started == [0, 1]
         assert sorted(finished) == [0, 1]
+        if terminal_helper == "callback":
+            assert not asyncio.all_tasks().difference(initial_tasks)
         return "drained"
 
     assert api.call(handler)["Status"] == "SUCCEEDED"
@@ -722,6 +729,7 @@ def test_completed_flat_replay_rejects_operation_type_mismatches(
         '{"__ade_flat_replay__":2}',
         '{"__ade_flat_replay__":true}',
         '{"__ade_flat_replay__":1,"completionReason":"ALL_COMPLETED","items":null}',
+        '{"__ade_flat_replay__":1,"completionReason":"ALL_COMPLETED","items":[]}',
     ],
 )
 def test_completed_flat_replay_rejects_invalid_nonempty_metadata(kind, payload):
@@ -970,3 +978,279 @@ def test_completed_flat_replay_does_not_suppress_a_required_cached_callback_fail
     assert result["Error"]["ErrorType"] == "CallbackError", result
     assert "late callback failure" in result["Error"]["ErrorMessage"]
     assert api.calls == calls and api.operations == history
+
+
+@pytest.mark.parametrize("kind", ["map", "parallel"])
+@pytest.mark.parametrize("helper_kind", ["callback", "step"])
+@pytest.mark.parametrize("late_status", [None, "SUCCEEDED", "FAILED"])
+def test_cancelled_flat_helper_retains_its_concurrency_slot(
+    kind, helper_kind, late_status
+):
+    api = LambdaHistory()
+    effects = []
+    observed = []
+
+    @durable_execution(boto3_client=api)
+    async def handler(event):
+        later_started = False
+
+        async def branch(index):
+            nonlocal later_started
+            if index == 0:
+                if helper_kind == "callback":
+                    callback = await create_callback(name="slot-blocker")
+                    return await callback.result()
+
+                async def pending():
+                    effects.append("pending")
+                    await asyncio.Future()
+
+                return await step(
+                    pending, name="slot-blocker", retry_strategy=lambda *_: None
+                )
+            if index == 2:
+                later_started = True
+
+            async def value():
+                effects.append(index)
+                return "x" * 160000
+
+            payload = await step(value, name="value")
+            await asyncio.sleep(0)
+            if index == 1:
+                observed.append(later_started)
+                return ("early" if later_started else "ordered") + payload
+            return "last" + payload
+
+        config = CompletionConfig(min_successful=2)
+        task = (
+            durable_map(
+                branch,
+                range(3),
+                nesting_type=NestingType.FLAT,
+                max_concurrency=2,
+                completion_config=config,
+            )
+            if kind == "map"
+            else parallel(
+                [lambda i=i: branch(i) for i in range(3)],
+                nesting_type=NestingType.FLAT,
+                max_concurrency=2,
+                completion_config=config,
+            )
+        )
+        batch = await asyncio.wait_for(task, 2)
+        return {
+            "prefixes": [value[:7] for value in batch.get_results()],
+            **describe(batch),
+        }
+
+    first = api.call(handler)
+    assert first["Status"] == "SUCCEEDED", first
+    assert observed == [False]
+    assert [item[1] for item in json.loads(first["Result"])["items"]] == [
+        "CANCELLED",
+        "SUCCEEDED",
+        "SUCCEEDED",
+    ]
+    if late_status is not None:
+        operation = next(
+            op for op in api.operations.values() if op.get("Name") == "slot-blocker"
+        )
+        operation["Status"] = late_status
+        field = "CallbackDetails" if helper_kind == "callback" else "StepDetails"
+        operation[field].update(
+            {"Result": json.dumps("late result")}
+            if late_status == "SUCCEEDED"
+            else {"Error": {"ErrorType": "ValueError", "ErrorMessage": "late failure"}}
+        )
+    calls, original_effects = api.calls, list(effects)
+    history = copy.deepcopy(api.operations)
+    assert api.call(handler) == first
+    assert observed == [False, False]
+    assert effects == original_effects and api.calls == calls
+    assert api.operations == history
+
+
+@pytest.mark.parametrize("kind", ["map", "parallel"])
+@pytest.mark.parametrize(
+    "error_payload",
+    [
+        pytest.param(..., id="missing-error-field"),
+        None,
+        "",
+        "broken",
+        42,
+        False,
+        [],
+        {},
+        {"unknown": "value"},
+        {"ErrorMessage": None},
+        {"ErrorMessage": 42},
+        {"ErrorType": []},
+        {"ErrorData": {}},
+        {"StackTrace": "not a list"},
+        {"StackTrace": [7]},
+    ],
+)
+def test_flat_replay_rejects_invalid_failure_details_before_running_branches(
+    kind, error_payload
+):
+    api = LambdaHistory()
+    entries = []
+    effects = []
+
+    async def branch(index):
+        entries.append(index)
+        if index == 1:
+            raise ValueError("original failure")
+
+        async def value():
+            effects.append("value")
+            return "x" * 80000
+
+        return "".join([await step(value, name=f"part-{i}") for i in range(4)])
+
+    @durable_execution(boto3_client=api)
+    async def handler(event):
+        task = (
+            durable_map(
+                branch, range(2), nesting_type=NestingType.FLAT, max_concurrency=1
+            )
+            if kind == "map"
+            else parallel(
+                [lambda: branch(0), lambda: branch(1)],
+                nesting_type=NestingType.FLAT,
+                max_concurrency=1,
+            )
+        )
+        return describe(await task)
+
+    assert api.call(handler)["Status"] == "SUCCEEDED"
+    parent = next(
+        op
+        for op in api.operations.values()
+        if op["Type"] == "CONTEXT"
+        and op.get("ContextDetails", {}).get("ReplayChildren")
+    )
+    metadata = json.loads(parent["ContextDetails"]["Result"])
+    assert metadata["items"][1]["status"] == "FAILED"
+    if error_payload is ...:
+        del metadata["items"][1]["error"]
+    else:
+        metadata["items"][1]["error"] = error_payload
+    parent["ContextDetails"]["Result"] = json.dumps(metadata)
+    calls, history = api.calls, copy.deepcopy(api.operations)
+    result = api.call(handler)
+    assert result["Status"] == "FAILED", result
+    assert result["Error"]["ErrorType"] == "ExecutionError", result
+    assert (
+        "Invalid completed flat aggregate replay metadata"
+        in result["Error"]["ErrorMessage"]
+    )
+    assert entries == [0, 1] and effects == ["value"] * 4
+    assert api.calls == calls and api.operations == history
+
+
+@pytest.mark.parametrize("kind", ["map", "parallel"])
+def test_empty_flat_workload_can_replay_an_oversized_custom_serialization(kind):
+    class LargeSerDes(SerDes):
+        async def serialize(self, value):
+            return "x" * 300000
+
+        async def deserialize(self, data):
+            raise AssertionError("ReplayChildren reconstructs the result")
+
+    api = LambdaHistory()
+
+    @durable_execution(boto3_client=api)
+    async def handler(event):
+        task = (
+            durable_map(
+                lambda _: None, [], nesting_type=NestingType.FLAT, serdes=LargeSerDes()
+            )
+            if kind == "map"
+            else parallel([], nesting_type=NestingType.FLAT, serdes=LargeSerDes())
+        )
+        return describe(await task)
+
+    first = api.call(handler)
+    assert first["Status"] == "SUCCEEDED", first
+    parent = next(
+        op
+        for op in api.operations.values()
+        if op["Type"] == "CONTEXT"
+        and op.get("ContextDetails", {}).get("ReplayChildren")
+    )
+    assert json.loads(parent["ContextDetails"]["Result"])["items"] == []
+    calls = api.calls
+    assert api.call(handler) == first
+    assert api.calls == calls
+
+
+@pytest.mark.parametrize("kind", ["map", "parallel"])
+@pytest.mark.parametrize(
+    "error_payload",
+    [
+        {
+            "ErrorMessage": "original failure",
+            "ErrorType": "CallableRuntimeError",
+            "ErrorData": "opaque data",
+            "StackTrace": ["frame one", "frame two"],
+        },
+        {"ErrorMessage": "original failure"},
+        {
+            "ErrorMessage": None,
+            "ErrorType": "CallableRuntimeError",
+            "ErrorData": None,
+            "StackTrace": [],
+        },
+    ],
+)
+def test_flat_replay_preserves_valid_failure_details(kind, error_payload):
+    api = LambdaHistory()
+    effects = []
+
+    async def branch(index):
+        if index == 1:
+            raise ValueError("original failure")
+
+        async def value():
+            effects.append("value")
+            return "x" * 80000
+
+        return "".join([await step(value, name=f"part-{i}") for i in range(4)])
+
+    @durable_execution(boto3_client=api)
+    async def handler(event):
+        task = (
+            durable_map(
+                branch, range(2), nesting_type=NestingType.FLAT, max_concurrency=1
+            )
+            if kind == "map"
+            else parallel(
+                [lambda: branch(0), lambda: branch(1)],
+                nesting_type=NestingType.FLAT,
+                max_concurrency=1,
+            )
+        )
+        batch = await task
+        return {"error": batch.all[1].error.to_dict(), **describe(batch)}
+
+    assert api.call(handler)["Status"] == "SUCCEEDED"
+    parent = next(
+        op
+        for op in api.operations.values()
+        if op["Type"] == "CONTEXT"
+        and op.get("ContextDetails", {}).get("ReplayChildren")
+    )
+    metadata = json.loads(parent["ContextDetails"]["Result"])
+    metadata["items"][1]["error"] = error_payload
+    parent["ContextDetails"]["Result"] = json.dumps(metadata)
+    calls = api.calls
+    result = api.call(handler)
+    assert result["Status"] == "SUCCEEDED", result
+    assert json.loads(result["Result"])["error"] == {
+        k: v for k, v in error_payload.items() if v is not None
+    }
+    assert effects == ["value"] * 4 and api.calls == calls

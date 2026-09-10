@@ -1490,6 +1490,7 @@ class ParallelExecutor(
                 "Legacy completed flat aggregate lacks terminal decision metadata; "
                 "its original branch outcomes cannot be safely reconstructed"
             )
+        items: list[BatchItem[ResultType]] = []
         try:
             document = json.loads(payload)
             if not isinstance(document, dict):
@@ -1503,6 +1504,8 @@ class ParallelExecutor(
             descriptors = document["items"]
             if not isinstance(descriptors, list):
                 raise ValueError("items must be a list")
+            if self.executables and not descriptors:
+                raise ValueError("nonempty work requires terminal branch decisions")
             indexes = set()
             for item in descriptors:
                 index = item["index"]
@@ -1520,22 +1523,29 @@ class ParallelExecutor(
                     BatchItemStatus.CANCELLED,
                 }:
                     raise ValueError("non-terminal branch")
+                error: ErrorObject | None = None
+                if status is BatchItemStatus.FAILED:
+                    error_payload = item["error"]
+                    if not isinstance(error_payload, dict):
+                        raise ValueError("failed branches require an error mapping")
+                    for field in ("ErrorMessage", "ErrorType", "ErrorData"):
+                        value = error_payload.get(field)
+                        if value is not None and not isinstance(value, str):
+                            raise ValueError(f"{field} must be a string")
+                    trace = error_payload.get("StackTrace")
+                    if trace is not None and (
+                        not isinstance(trace, list)
+                        or any(not isinstance(line, str) for line in trace)
+                    ):
+                        raise ValueError("StackTrace must be a list of strings")
+                    error = ErrorObject.from_dict(error_payload)
+                    if not error.to_dict():
+                        raise ValueError("failed branches require error details")
+                items.append(BatchItem(index, status, error=error))
         except (KeyError, TypeError, ValueError) as metadata_error:
             raise ExecutionError(
                 "Invalid completed flat aggregate replay metadata"
             ) from metadata_error
-        items: list[BatchItem[ResultType]] = []
-        for descriptor in descriptors:
-            index = descriptor["index"]
-            status = BatchItemStatus(descriptor["status"])
-            error: ErrorObject | None = None
-            if status is BatchItemStatus.FAILED:
-                error = (
-                    ErrorObject.from_dict(descriptor["error"])
-                    if descriptor.get("error") is not None
-                    else None
-                )
-            items.append(BatchItem(index, status, error=error))
 
         # Failed/cancelled branches may have supplied in-memory coordination for
         # successful ones. Replay entered branches under the same read-only guard,
@@ -1596,6 +1606,12 @@ class ParallelExecutor(
                                 completed.set_result(None)
                     finally:
                         _completed_flat_replay.reset(token)
+                    if item.status is BatchItemStatus.CANCELLED:
+                        # Suspended/cancelled branches retained their slot in the
+                        # original run. A cached late outcome must not let later
+                        # branches overtake work still being reconstructed.
+                        await asyncio.shield(completed)
+                        return
             except BaseException as error:
                 # Publish immediately: a done callback could lose the race to a
                 # successful worker woken by this helper just before it failed.

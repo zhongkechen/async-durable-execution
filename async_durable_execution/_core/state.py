@@ -40,7 +40,9 @@ class CheckpointBatcherConfig:
 
     Attributes:
         max_batch_size_bytes: Maximum batch size in bytes (default: 750KB)
-        max_batch_time_seconds: Maximum time to wait before flushing batch (default: 1.0 second)
+        max_batch_time_seconds: Maximum collection time before flushing (default:
+            1.0 second). Zero skips collection after the initial queue item or
+            overflow drain, including the synchronous coalescing yield.
         max_batch_operations: Maximum number of operations per batch (default: 250)
     """
 
