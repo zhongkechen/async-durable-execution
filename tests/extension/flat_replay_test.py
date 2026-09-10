@@ -239,7 +239,9 @@ def test_large_flat_terminal_decision_does_not_restart_other_branches(policy):
 
 
 @pytest.mark.parametrize("legacy", [False, True])
-@pytest.mark.parametrize("incomplete", ["missing", "started"])
+@pytest.mark.parametrize(
+    "incomplete", ["missing", "started", "cancelled", "timed_out", "stopped"]
+)
 def test_completed_flat_replay_never_restarts_an_unfinished_step(legacy, incomplete):
     api = LambdaHistory()
     effects = []
@@ -264,9 +266,9 @@ def test_completed_flat_replay_never_restarts_an_unfinished_step(legacy, incompl
     if incomplete == "missing":
         del api.operations[step_id]
     else:
-        api.operations[step_id]["Status"] = "STARTED"
+        api.operations[step_id]["Status"] = incomplete.upper()
     calls = api.calls
     result = api.call(handler)
     assert result["Status"] == "FAILED"
-    assert "cannot replay an unfinished" in str(result)
+    assert "without a cached result or error" in str(result)
     assert len(effects) == 4 and api.calls == calls

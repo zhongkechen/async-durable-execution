@@ -215,9 +215,10 @@ branches are not run again. As with ordinary replay, side effects belong inside
 `step()` rather than directly in a branch body.
 
 Older oversized flat checkpoints with an empty summary can reconstruct
-all-success groups that have no early-success/custom completion policy. If the
-history is ambiguous, or rebuilding a result would require a new or unfinished
-durable operation, replay raises `ExecutionError` without issuing checkpoints or
+all-success groups that have no configured success threshold or custom completion
+policy. If the
+history is ambiguous, or rebuilding a result would require an operation without
+a cached result or error, replay raises `ExecutionError` without issuing checkpoints or
 running that effect. Oversized replay metadata itself is rejected before the
 aggregate is marked complete. Nested aggregates and normal result serialization
 retain their existing formats.

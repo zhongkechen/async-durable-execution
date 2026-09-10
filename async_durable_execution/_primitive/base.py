@@ -154,15 +154,22 @@ class OperationExecutor(ABC, Generic[T]):
         """Process the operation, including replay and checkpoint handling."""
         operation = self.state.operations.get(self.operation_id)
         if _completed_flat_replay.get() and not getattr(self, "is_virtual", False):
-            if operation is None or operation.status not in {
-                OperationStatus.SUCCEEDED,
-                OperationStatus.FAILED,
-                OperationStatus.CANCELLED,
-                OperationStatus.TIMED_OUT,
-                OperationStatus.STOPPED,
-            }:
+            replayable = operation is not None and (
+                operation.status is OperationStatus.SUCCEEDED
+                or (
+                    operation.status is OperationStatus.FAILED
+                    and operation.operation_type
+                    in {
+                        OperationType.STEP,
+                        OperationType.CONTEXT,
+                        OperationType.CALLBACK,
+                        OperationType.CHAINED_INVOKE,
+                    }
+                )
+            )
+            if not replayable:
                 raise ExecutionError(
-                    "Completed flat aggregate cannot replay an unfinished durable operation: "
+                    "Completed flat aggregate cannot replay an operation without a cached result or error: "
                     f"{self.operation_id}. Its original history cannot be safely reconstructed."
                 )
         if operation is None:
