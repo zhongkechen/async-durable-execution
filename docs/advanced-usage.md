@@ -210,9 +210,11 @@ With `NestingType.FLAT`, an aggregate larger than the context checkpoint limit
 uses a compact replay summary containing each entered branch's terminal status,
 failure details, and the completion reason. A custom `summary_generator` result
 is retained alongside this SDK metadata. Successful branch bodies are replayed
-using their completed durable operations; failed, cancelled, and unstarted
-branches are not run again. As with ordinary replay, side effects belong inside
-`step()` rather than directly in a branch body.
+concurrently up to `max_concurrency` using their completed durable operations;
+failed, cancelled, and unstarted branches are not run again. Reconstruction
+workers are stopped before a replay failure or cancellation is returned. As with
+ordinary replay, side effects belong inside `step()` rather than directly in a
+branch body.
 
 Older oversized flat checkpoints with an empty summary can reconstruct
 all-success groups that have no configured success threshold or custom completion

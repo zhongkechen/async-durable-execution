@@ -296,3 +296,170 @@ def test_completed_flat_branch_can_read_an_existing_pending_callback_id():
     calls = api.calls
     assert api.call(handler) == first
     assert api.calls == calls
+
+
+@pytest.mark.parametrize("kind", ["map", "parallel"])
+@pytest.mark.parametrize("legacy", [False, True])
+def test_completed_flat_replay_preserves_coordinated_branch_concurrency(kind, legacy):
+    api = LambdaHistory()
+    entries = []
+    effects = []
+
+    @durable_execution(boto3_client=api)
+    async def handler(event):
+        ready = asyncio.Event()
+        started = []
+        entries.append(started)
+
+        async def branch(index):
+            started.append(index)
+            if index == 0:
+                await ready.wait()
+            else:
+                ready.set()
+
+            async def work():
+                effects.append(index)
+                return str(index) * 160000
+
+            return await step(work, name="work")
+
+        if kind == "map":
+            task = durable_map(
+                branch, range(2), nesting_type=NestingType.FLAT, max_concurrency=2
+            )
+        else:
+            task = parallel(
+                [lambda: branch(0), lambda: branch(1)],
+                nesting_type=NestingType.FLAT,
+                max_concurrency=2,
+            )
+        batch = await asyncio.wait_for(task, 2)
+        return {
+            "values": [value[0] for value in batch.get_results()],
+            **describe(batch),
+        }
+
+    first = api.call(handler)
+    assert first["Status"] == "SUCCEEDED"
+    result = json.loads(first["Result"])
+    assert result["bytes"] == 320000 and result["values"] == ["0", "1"]
+    if legacy:
+        api.legacy_summary()
+    calls = api.calls
+    assert api.call(handler) == first
+    assert entries == [[0, 1], [0, 1]]
+    assert sorted(effects) == [0, 1] and api.calls == calls
+
+
+@pytest.mark.parametrize("limit", [1, 2, None])
+def test_completed_flat_replay_respects_max_concurrency(limit):
+    api = LambdaHistory()
+    peaks = []
+    effects = []
+
+    @durable_execution(boto3_client=api)
+    async def handler(event):
+        active = peak = 0
+
+        async def branch(index):
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            try:
+                await asyncio.sleep(0)
+
+                async def work():
+                    effects.append(index)
+                    return str(index) * 80000
+
+                return await step(work)
+            finally:
+                active -= 1
+
+        result = await parallel(
+            [lambda i=i: branch(i) for i in range(4)],
+            nesting_type=NestingType.FLAT,
+            max_concurrency=limit,
+        )
+        peaks.append(peak)
+        assert active == 0
+        return [value[0] for value in result.get_results()]
+
+    first = api.call(handler)
+    assert first["Status"] == "SUCCEEDED"
+    assert json.loads(first["Result"]) == ["0", "1", "2", "3"]
+    calls = api.calls
+    assert api.call(handler) == first
+    assert peaks == [limit or 4, limit or 4]
+    assert sorted(effects) == list(range(4)) and api.calls == calls
+
+
+@pytest.mark.parametrize("mode", ["failure", "cancel"])
+def test_completed_flat_replay_drains_workers_before_returning(mode):
+    from async_durable_execution import ExecutionError
+
+    api = LambdaHistory()
+    effects = []
+    replay = False
+
+    @durable_execution(boto3_client=api)
+    async def handler(event):
+        started = []
+        finished = []
+        both_started = asyncio.Event()
+
+        async def branch(index):
+            started.append(index)
+            if len(started) == 2:
+                both_started.set()
+            try:
+                if replay:
+                    if index == 0 or mode == "cancel":
+                        await asyncio.Future()
+                    await both_started.wait()
+
+                async def work():
+                    effects.append(index)
+                    return "x" * 110000
+
+                return await step(work, name=f"work-{index}")
+            finally:
+                finished.append(index)
+
+        task = parallel(
+            [lambda i=i: branch(i) for i in range(3)],
+            nesting_type=NestingType.FLAT,
+            max_concurrency=2,
+        )
+        if not replay:
+            return describe(await task)
+        if mode == "cancel":
+            try:
+                await asyncio.wait_for(both_started.wait(), 2)
+            finally:
+                task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await task
+        else:
+            with pytest.raises(
+                ExecutionError, match="without a cached result or error"
+            ):
+                await asyncio.wait_for(task, 2)
+        # Check before the invocation's global task cleanup can hide leaked workers.
+        assert started == [0, 1]
+        assert sorted(finished) == [0, 1]
+        return "drained"
+
+    assert api.call(handler)["Status"] == "SUCCEEDED"
+    if mode == "failure":
+        key = next(
+            key for key, op in api.operations.items() if op.get("Name") == "work-1"
+        )
+        del api.operations[key]
+    replay = True
+    calls = api.calls
+    result = api.call(handler)
+    assert result["Status"] == "SUCCEEDED", result
+    assert json.loads(result["Result"]) == "drained"
+    assert sorted(effects) == [0, 1, 2] and api.calls == calls

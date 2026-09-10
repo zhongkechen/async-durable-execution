@@ -1531,17 +1531,36 @@ class ParallelExecutor(
                 for exe in self.executables
             ]
         items: list[BatchItem[ResultType]] = []
+        successful: list[tuple[int, int]] = []
         assert descriptors is not None
         for descriptor in descriptors:
             index = descriptor["index"]
             status = BatchItemStatus(descriptor["status"])
-            result: ResultType | None = None
             error: ErrorObject | None = None
             if status is BatchItemStatus.SUCCEEDED:
+                successful.append((len(items), index))
+            elif status is BatchItemStatus.FAILED:
+                error = (
+                    ErrorObject.from_dict(descriptor["error"])
+                    if descriptor.get("error") is not None
+                    else None
+                )
+            items.append(BatchItem(index, status, error=error))
+
+        # Branch bodies may coordinate with each other even when their durable
+        # effects are cached. Preserve concurrency without running failed or
+        # cancelled branches, and keep result order independent of completion order.
+        pending = iter(successful)
+
+        async def replay_worker() -> None:
+            for position, index in pending:
                 token = _completed_flat_replay.set(True)
                 try:
                     result = await self._execute_item_in_child_context(
                         executor_context, self.executables[index]
+                    )
+                    items[position] = BatchItem(
+                        index, BatchItemStatus.SUCCEEDED, result=result
                     )
                 except CallableRuntimeError as caught:
                     raise ExecutionError(
@@ -1549,13 +1568,19 @@ class ParallelExecutor(
                     ) from caught
                 finally:
                     _completed_flat_replay.reset(token)
-            elif status is BatchItemStatus.FAILED:
-                error = (
-                    ErrorObject.from_dict(descriptor["error"])
-                    if descriptor.get("error") is not None
-                    else None
-                )
-            items.append(BatchItem(index, status, result=result, error=error))
+
+        workers: list[asyncio.Task[None]] = []
+        try:
+            for _ in range(
+                min(self.max_concurrency or len(successful), len(successful))
+            ):
+                workers.append(asyncio.create_task(replay_worker()))
+            await asyncio.gather(*workers)
+        finally:
+            for worker in workers:
+                if not worker.done():
+                    worker.cancel()
+            await asyncio.gather(*workers, return_exceptions=True)
         return (
             BatchResult(items, reason)
             if reason is not None
