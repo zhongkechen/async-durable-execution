@@ -39,7 +39,7 @@ from .._core import (
 )
 from .._primitive.base import OperationExecutor
 from .step import StepContext, get_step_context
-from ..extension import ExtensionStepResult, get_extension_context
+from .._extension_api import ExtensionStepResult, get_extension_context
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable

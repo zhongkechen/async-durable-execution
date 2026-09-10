@@ -41,7 +41,7 @@ from .._core import (
 )
 from .._primitive.base import OperationExecutor
 from .._primitive.child import ChildOperationExecutor
-from ..extension import ExtensionContext, ExtensionOperation, get_extension_context
+from .._extension_api import ExtensionContext, ExtensionOperation, get_extension_context
 
 if TYPE_CHECKING:
     from .child import SummaryGenerator

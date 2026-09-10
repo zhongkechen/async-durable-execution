@@ -1,12 +1,12 @@
 # Custom Operation SPI
 
-Public module: `async_durable_execution.extension`.
+Import these public symbols from `async_durable_execution`.
 
 Use these contracts in independently maintained packages that implement reusable
 durable operations. See [Custom Durable Operations](../../custom-operations.md)
 for the extension-author guide and replay compatibility rules.
 
-::: async_durable_execution.extension
+::: async_durable_execution
     options:
       members:
         - ExtensionContext

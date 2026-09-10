@@ -16,6 +16,10 @@
 `async`/`await`.** Checkpoint state automatically, pause without active compute,
 and resume after failures without running a workflow server.
 
+Import all user-facing APIs from `async_durable_execution`. Extension contracts,
+filesystem SerDes stages, and preview helpers are exported at the package root;
+their implementation modules are private.
+
 ## Project Status
 
 **Fully compliant with the

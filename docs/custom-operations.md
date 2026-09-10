@@ -1,7 +1,7 @@
 # Custom Durable Operations
 
 Third-party packages can build reusable durable operations with the public
-extension-author interface in `async_durable_execution.extension`. The interface
+extension-author interface exported from `async_durable_execution`. The interface
 allocates stable operation identities and delegates checkpointing, suspension,
 replay, serialization, and failures to SDK-owned primitive state machines.
 
@@ -17,8 +17,8 @@ isolated under `async_durable_execution._primitive`. The SPI delegates to those
 internal executors rather than duplicating primitive lifecycle behavior. The former
 `async_durable_execution._extension` modules remain import aliases for
 compatibility, but both underscore-prefixed packages are private; third-party
-operations should depend only on `async_durable_execution.extension` and the
-top-level public exports.
+operations should import user-facing symbols only from the package root,
+`async_durable_execution`.
 
 ## Basic Extension
 

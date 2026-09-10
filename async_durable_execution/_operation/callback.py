@@ -6,7 +6,7 @@ import asyncio
 
 from .._core import Duration, OperationSubType, SerDes
 from .._primitive.callback import Callback, CallbackError
-from ..extension import get_extension_context
+from .._extension_api import get_extension_context
 
 
 def create_callback(

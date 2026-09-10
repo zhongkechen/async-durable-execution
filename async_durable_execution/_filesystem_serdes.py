@@ -22,7 +22,7 @@ from urllib.parse import quote
 from ._core.context import SerDesContext
 from ._core.exceptions import RetryableSerDesError, SerDesError
 from ._core.models import OperationType
-from .preview import PreviewConfig, build_preview
+from ._preview import PreviewConfig, build_preview
 
 _ENVELOPE_MARKER = "__durable_execution_filesystem_serdes"
 _ENVELOPE_VERSION = 1

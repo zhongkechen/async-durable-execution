@@ -3,6 +3,22 @@
 This guide creates and locally tests a durable order workflow. You need Python
 3.10 or newer.
 
+Import user-facing APIs from `async_durable_execution`, including extension
+contracts, filesystem SerDes stages, and preview helpers. The former
+`async_durable_execution.extension`, `async_durable_execution.filesystem_serdes`,
+and `async_durable_execution.preview` modules are now private implementation
+modules; their old public import paths are no longer supported. For example:
+
+```python
+from async_durable_execution import (
+    ExtensionStepResult,
+    FileSystemSerDesStage,
+    PreviewConfig,
+    PreviewMode,
+    get_extension_context,
+)
+```
+
 ## Install
 
 === "Standard"
