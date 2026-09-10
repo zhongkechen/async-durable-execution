@@ -156,6 +156,14 @@ class OperationExecutor(ABC, Generic[T]):
         if _completed_flat_replay.get() and not getattr(self, "is_virtual", False):
             replayable = operation is not None and (
                 operation.status is OperationStatus.SUCCEEDED
+                # Callback creation replays by reading its existing ID, including
+                # callbacks whose result has not been awaited by the branch.
+                or operation.operation_type is OperationType.CALLBACK
+                or (
+                    operation.operation_type is OperationType.CHAINED_INVOKE
+                    and operation.status
+                    in {OperationStatus.TIMED_OUT, OperationStatus.STOPPED}
+                )
                 or (
                     operation.status is OperationStatus.FAILED
                     and operation.operation_type

@@ -13,6 +13,7 @@ from async_durable_execution import (
     CompletionDecision,
     CompletionReason,
     NestingType,
+    create_callback,
     durable_execution,
     map as durable_map,
     parallel,
@@ -40,7 +41,7 @@ class LambdaHistory:
         assert request["CheckpointToken"] == self.token
         touched = {}
         for update in request["Updates"]:
-            assert update["Type"] in ("STEP", "CONTEXT")
+            assert update["Type"] in ("STEP", "CONTEXT", "CALLBACK")
             record = self.operations.setdefault(
                 update["Id"], {"Id": update["Id"], "Type": update["Type"]}
             )
@@ -56,9 +57,14 @@ class LambdaHistory:
                 "SUCCEED": "SUCCEEDED",
                 "FAIL": "FAILED",
             }[update["Action"]]
-            details = record.setdefault(
-                "StepDetails" if update["Type"] == "STEP" else "ContextDetails", {}
-            )
+            field = {
+                "STEP": "StepDetails",
+                "CONTEXT": "ContextDetails",
+                "CALLBACK": "CallbackDetails",
+            }[update["Type"]]
+            details = record.setdefault(field, {})
+            if update["Type"] == "CALLBACK":
+                details.setdefault("CallbackId", "callback-" + update["Id"])
             if update["Type"] == "STEP":
                 details["Attempt"] = 1
             if "Payload" in update:
@@ -272,3 +278,21 @@ def test_completed_flat_replay_never_restarts_an_unfinished_step(legacy, incompl
     assert result["Status"] == "FAILED"
     assert "without a cached result or error" in str(result)
     assert len(effects) == 4 and api.calls == calls
+
+
+def test_completed_flat_branch_can_read_an_existing_pending_callback_id():
+    api = LambdaHistory()
+
+    async def branch():
+        callback = await create_callback(name="callback")
+        return callback.callback_id + "x" * 80000
+
+    @durable_execution(boto3_client=api)
+    async def handler(event):
+        return describe(await parallel([branch] * 4, nesting_type=NestingType.FLAT))
+
+    first = api.call(handler)
+    assert first["Status"] == "SUCCEEDED"
+    calls = api.calls
+    assert api.call(handler) == first
+    assert api.calls == calls
