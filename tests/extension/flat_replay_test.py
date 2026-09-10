@@ -2,6 +2,8 @@
 
 import asyncio
 import copy
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 import json
 from types import SimpleNamespace
@@ -392,6 +394,34 @@ def test_completed_flat_replay_respects_max_concurrency(limit):
     assert sorted(effects) == list(range(4)) and api.calls == calls
 
 
+@contextmanager
+def track_created_tasks():
+    """Track tasks in this context without including background queue readers."""
+    loop = asyncio.get_running_loop()
+    previous_factory = loop.get_task_factory()
+    tracking = ContextVar("track_aggregate_tasks", default=False)
+    created = []
+
+    def factory(loop, coro, **kwargs):
+        task = (
+            previous_factory(loop, coro, **kwargs)
+            if previous_factory is not None
+            else asyncio.Task(coro, loop=loop, **kwargs)
+        )
+        context = kwargs.get("context")
+        if context.get(tracking, False) if context is not None else tracking.get():
+            created.append(task)
+        return task
+
+    token = tracking.set(True)
+    loop.set_task_factory(factory)
+    try:
+        yield created
+    finally:
+        loop.set_task_factory(previous_factory)
+        tracking.reset(token)
+
+
 @pytest.mark.parametrize("mode", ["failure", "cancel"])
 @pytest.mark.parametrize("terminal_helper", [False, True, "callback"])
 def test_completed_flat_replay_drains_workers_before_returning(mode, terminal_helper):
@@ -428,35 +458,35 @@ def test_completed_flat_replay_drains_workers_before_returning(mode, terminal_he
             finally:
                 finished.append(index)
 
-        initial_tasks = asyncio.all_tasks()
-        task = parallel(
-            [lambda i=i: branch(i) for i in range(3)],
-            nesting_type=NestingType.FLAT,
-            max_concurrency=2,
-            completion_config=CompletionConfig(min_successful=2)
-            if terminal_helper
-            else None,
-        )
-        if not replay:
-            return describe(await task)
-        if mode == "cancel":
-            try:
-                await asyncio.wait_for(both_started.wait(), 2)
-            finally:
-                task.cancel()
-                with pytest.raises(asyncio.CancelledError):
-                    await task
-        else:
-            with pytest.raises(
-                ExecutionError, match="without a cached result or error"
-            ):
-                await asyncio.wait_for(task, 2)
-        # Check before the invocation's global task cleanup can hide leaked workers.
-        assert started == [0, 1]
-        assert sorted(finished) == [0, 1]
-        if terminal_helper == "callback":
-            assert not asyncio.all_tasks().difference(initial_tasks)
-        return "drained"
+        with track_created_tasks() as aggregate_tasks:
+            task = parallel(
+                [lambda i=i: branch(i) for i in range(3)],
+                nesting_type=NestingType.FLAT,
+                max_concurrency=2,
+                completion_config=CompletionConfig(min_successful=2)
+                if terminal_helper
+                else None,
+            )
+            if not replay:
+                return describe(await task)
+            if mode == "cancel":
+                try:
+                    await asyncio.wait_for(both_started.wait(), 2)
+                finally:
+                    task.cancel()
+                    with pytest.raises(asyncio.CancelledError):
+                        await task
+            else:
+                with pytest.raises(
+                    ExecutionError, match="without a cached result or error"
+                ):
+                    await asyncio.wait_for(task, 2)
+            # Check before the invocation's global task cleanup can hide leaked workers.
+            assert started == [0, 1]
+            assert sorted(finished) == [0, 1]
+            if terminal_helper == "callback":
+                assert aggregate_tasks and all(task.done() for task in aggregate_tasks)
+            return "drained"
 
     assert api.call(handler)["Status"] == "SUCCEEDED"
     if mode == "failure":
