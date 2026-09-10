@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-import async_durable_execution.filesystem_serdes as filesystem_serdes_module
+import async_durable_execution._filesystem_serdes as filesystem_serdes_module
 from async_durable_execution import (
     FileSystemPathEncoding,
     FileSystemSerDesMode,

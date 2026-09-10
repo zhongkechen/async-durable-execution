@@ -13,7 +13,7 @@ from .._core import (
     ValidationError,
     get_durable_context,
 )
-from ..extension import get_extension_context
+from .._extension_api import get_extension_context
 
 
 P = TypeVar("P")

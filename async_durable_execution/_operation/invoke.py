@@ -6,7 +6,7 @@ import asyncio
 from typing import TypeVar
 
 from .._core import OperationSubType, SerDes
-from ..extension import get_extension_context
+from .._extension_api import get_extension_context
 
 P = TypeVar("P")
 R = TypeVar("R")

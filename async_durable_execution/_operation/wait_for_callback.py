@@ -16,7 +16,7 @@ from .._core import (
     durable_callable,
     get_current_context,
 )
-from ..extension import get_extension_context
+from .._extension_api import get_extension_context
 from .callback import Callback, create_callback as _create_callback
 from .step import get_step_context, step as _step
 
