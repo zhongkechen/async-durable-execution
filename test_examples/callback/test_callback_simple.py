@@ -25,7 +25,7 @@ async def test_callback_success(durable_runner) -> None:
     assert result_data == callback_result
 
 
-@pytest.mark.parametrize("payload, expected", [(None, None), (b"", "")])
+@pytest.mark.parametrize("payload, expected", [(None, None), (b"", None)])
 async def test_callback_success_empty_or_missing_result(
     durable_runner, payload, expected
 ) -> None:

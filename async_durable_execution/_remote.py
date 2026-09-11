@@ -358,7 +358,18 @@ class DurableFunctionCloudTestRunner:
             params = {"DurableExecutionArn": arn, "IncludeExecutionData": True}
             if marker:
                 params["Marker"] = marker
-            page = await self._request("get_durable_execution_history", **params)
+            try:
+                page = await self._request("get_durable_execution_history", **params)
+            except ClientError as error:
+                if (
+                    error.response.get("Error", {}).get("Code")
+                    != "ResourceNotFoundException"
+                ):
+                    raise
+                # An invocation ARN can become visible before its history.
+                # Keep this page's marker; the caller bounds retries by its timeout.
+                await asyncio.sleep(self.poll_interval)
+                continue
             events.extend(page.get("Events", ()))
             marker = page.get("NextMarker")
             if not marker:
@@ -369,6 +380,8 @@ class DurableFunctionCloudTestRunner:
 
     async def wait_for_result(self, execution_arn, timeout=60):
         """Poll for terminal execution status, then collect all history pages.
+
+        Execution and history visibility delays are retried within the same deadline.
 
         Args:
             execution_arn (str): Durable execution ARN returned by Lambda.
@@ -411,6 +424,8 @@ class DurableFunctionCloudTestRunner:
 
     async def wait_for_callback(self, execution_arn, name=None, timeout=60):
         """Poll execution history for a matching callback that is still active.
+
+        History visibility delays are retried within the callback discovery deadline.
 
         Args:
             execution_arn (str): Durable execution whose history should be searched.
