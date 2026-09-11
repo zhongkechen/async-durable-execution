@@ -1,0 +1,43 @@
+"""Tests for callback example."""
+
+import pytest
+
+from async_durable_execution import InvocationStatus
+from examples.callback import callback_simple
+
+
+async def test_callback_success(durable_runner) -> None:
+    callback_result = "successful"
+
+    async with durable_runner(
+        handler=callback_simple.handler, input=None, timeout=30
+    ) as runner:
+        execution_arn = await runner.run_async()
+        callback_id = await runner.wait_for_callback(execution_arn=execution_arn)
+        await runner.send_callback_success(
+            callback_id=callback_id, result=callback_result.encode()
+        )
+        result = await runner.wait_for_result(execution_arn=execution_arn)
+
+    assert result.status is InvocationStatus.SUCCEEDED
+
+    result_data = result.get_deserialized_result()
+    assert result_data == callback_result
+
+
+@pytest.mark.parametrize("payload, expected", [(None, None), (b"", None)])
+async def test_callback_success_empty_or_missing_result(
+    durable_runner, payload, expected
+) -> None:
+    async with durable_runner(
+        handler=callback_simple.handler, input=None, timeout=30
+    ) as runner:
+        execution_arn = await runner.run_async()
+        callback_id = await runner.wait_for_callback(execution_arn=execution_arn)
+        await runner.send_callback_success(callback_id=callback_id, result=payload)
+        result = await runner.wait_for_result(execution_arn=execution_arn)
+
+    assert result.status is InvocationStatus.SUCCEEDED
+
+    result_data = result.get_deserialized_result()
+    assert result_data == expected

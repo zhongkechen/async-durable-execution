@@ -1,0 +1,41 @@
+"""Tests for wait_for_callback_submitter_retry_success."""
+
+from async_durable_execution import (
+    InvocationStatus,
+    OperationStatus,
+    OperationType,
+)
+from examples.wait_for_callback import (
+    wait_for_callback_submitter_failure,
+)
+
+
+async def test_fail_after_exhausting_retries_when_submitter_always_fails(
+    durable_runner,
+) -> None:
+    """Test that execution fails after exhausting retries when submitter always fails."""
+    test_payload = {"shouldFail": True}
+
+    async with durable_runner(
+        handler=wait_for_callback_submitter_failure.handler,
+        input=test_payload,
+        timeout=30,
+    ) as runner:
+        execution_arn = await runner.run_async()
+        result = await runner.wait_for_result(execution_arn=execution_arn)
+
+    # Execution should fail after retries are exhausted
+    assert result.status is InvocationStatus.FAILED
+
+    # Verify error details
+    error = result.error
+    assert error is not None
+    assert "Simulated submitter failure" in error.message
+
+    submitter_step = next(
+        operation
+        for operation in result.get_all_operations()
+        if operation.name == "retry-submitter-callback-submitter"
+        and operation.operation_type is OperationType.STEP
+    )
+    assert submitter_step.status is OperationStatus.FAILED

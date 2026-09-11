@@ -161,6 +161,11 @@ hatch run test:all --pdb
   inheritance, or an implementation-specific executor hierarchy.
 - Put consumer example tests under `test_examples/`; their `durable_runner`
   fixture selects the local or cloud public runner.
+- Every deployable example handler must have a test that calls
+  `durable_runner(handler=example_module.handler, ...)`. Add its scenario tests
+  alongside the matching example directory. The handler coverage check in
+  `scripts/test_scripts/test_handlers_test.py` catches missing tests and shares
+  handler discovery with the SAM catalog validation.
 - Keep packaging and deployment-tool tests in `scripts/test_scripts/`.
 - Cover replay, interruption, and cancellation when changing durable behavior.
 

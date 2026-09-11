@@ -497,8 +497,8 @@ class DurableFunctionLocalTestRunner:
 
         Args:
             callback_id (str): Active callback identifier.
-            result (bytes | None): UTF-8 payload, or None for completion without a
-                value.
+            result (bytes | None): UTF-8 payload. None and empty bytes complete
+                without a value, matching AWS callback payload normalization.
 
         Raises:
             ValueError: The callback or its execution has already completed or is
@@ -507,7 +507,7 @@ class DurableFunctionLocalTestRunner:
         entry = self._store().callback(callback_id)
         entry.status, entry.payload, entry.ended = (
             "SUCCEEDED",
-            result.decode() if result is not None else None,
+            result.decode() if result else None,
             self._store().now,
         )
         self._store().changed.set()
