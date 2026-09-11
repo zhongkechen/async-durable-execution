@@ -1,0 +1,85 @@
+"""Tests for recurse example."""
+
+from async_durable_execution import InvocationStatus, OperationStatus
+from examples.invoke import recurse
+
+
+LOCAL_RECURSE_FUNCTION_NAME = (
+    "arn:aws:lambda:us-west-2:123456789012:function:test-function:$LATEST"
+)
+
+
+def _middle_pivot_chain_values(count: int, start: int = 1) -> list[int]:
+    if count <= 0:
+        return []
+    if count == 1:
+        return [start]
+
+    remaining_values = [start, *_middle_pivot_chain_values(count - 2, start + 2)]
+    pivot_index = count // 2
+    return [
+        *remaining_values[:pivot_index],
+        start + 1,
+        *remaining_values[pivot_index:],
+    ]
+
+
+THIRTY_ONE_VALUES = _middle_pivot_chain_values(31)
+
+
+async def test_recurse_base_case_returns_current_recursive_level(
+    durable_runner,
+) -> None:
+    async with durable_runner(
+        handler=recurse.handler,
+        input={"values": [7]},
+        timeout=10,
+    ) as runner:
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert result.get_deserialized_result() == {
+        "sorted": [7],
+        "count": 1,
+        "recursive_level": 0,
+    }
+
+
+async def test_recurse_31_values_does_not_trigger_lambda_recursion_protection(
+    durable_runner,
+    request,
+) -> None:
+    runner_mode = request.config.getoption("--runner-mode")
+
+    async with durable_runner(
+        handler=recurse.handler,
+        # Lambda counts the original invocation too, so SDK recursive level 14
+        # is 15 total Lambda invocations.
+        input={"values": THIRTY_ONE_VALUES},
+        timeout=120,
+    ) as runner:
+        if runner_mode != "cloud":
+            runner.mock_invoke_result(
+                LOCAL_RECURSE_FUNCTION_NAME,
+                {
+                    "sorted": sorted(value for value in THIRTY_ONE_VALUES if value > 2),
+                    "count": len(THIRTY_ONE_VALUES) - 2,
+                    "recursive_level": 14,
+                },
+            )
+        result = await runner.run()
+
+    assert result.status is InvocationStatus.SUCCEEDED
+    assert result.get_deserialized_result() == {
+        "sorted": sorted(THIRTY_ONE_VALUES),
+        "count": len(THIRTY_ONE_VALUES),
+        "recursive_level": 14,
+    }
+
+    first_invoke = result.get_invoke("sort-right-1")
+    assert first_invoke.status is OperationStatus.SUCCEEDED
+    assert result.get_operation_deserialized_result(first_invoke) == {
+        "sorted": sorted(value for value in THIRTY_ONE_VALUES if value > 2),
+        "count": len(THIRTY_ONE_VALUES) - 2,
+        "recursive_level": 14,
+    }

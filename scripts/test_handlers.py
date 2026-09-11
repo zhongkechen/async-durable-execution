@@ -35,7 +35,11 @@ def load_test_handlers_from_file(path: Path) -> set[str]:
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
-        if not _is_durable_execution_marker(node.func):
+        if not (
+            _is_durable_execution_marker(node.func)
+            or isinstance(node.func, ast.Name)
+            and node.func.id == "durable_runner"
+        ):
             continue
 
         handler_name = _get_handler_name(node)

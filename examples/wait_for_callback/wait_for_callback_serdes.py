@@ -28,14 +28,15 @@ class CustomData(TypedDict):
     metadata: CustomDataMetadata
 
 
-class CustomSerdes(SerDes[CustomData]):
+class CustomSerdes(SerDes[CustomData | None]):
     """Custom serialization/deserialization for CustomData."""
 
     @staticmethod
-    async def serialize(data: CustomData) -> str:
+    async def serialize(data: CustomData | None) -> str:
         """Serialize CustomData to JSON string."""
         if data is None:
-            return None
+            # The submitter has no result; it still needs a persisted string.
+            return "null"
 
         serialized_data = {
             "id": data["id"],
@@ -47,12 +48,11 @@ class CustomSerdes(SerDes[CustomData]):
         return json.dumps(serialized_data)
 
     @staticmethod
-    async def deserialize(data_str: str) -> CustomData:
+    async def deserialize(data_str: str) -> CustomData | None:
         """Deserialize JSON string to CustomData."""
-        if data_str is None:
-            return None
-
         parsed = json.loads(data_str)
+        if parsed is None:
+            return None
         return CustomData(
             id=parsed["id"],
             message=parsed["message"],
